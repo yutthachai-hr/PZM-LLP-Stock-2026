@@ -32,7 +32,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={confirm}>
       {children}
       <Modal open={!!opts} onClose={() => close(false)} title={opts?.title ?? 'ยืนยัน'}>
-        <p className="text-sm text-slate-600">{opts?.message}</p>
+        <p className="whitespace-pre-line text-sm text-slate-600">{opts?.message}</p>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={() => close(false)}>
             ยกเลิก

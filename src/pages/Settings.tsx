@@ -364,7 +364,7 @@ function MaintenanceSection() {
 
   async function seed() {
     const ok = await confirm({
-      message: 'นำเข้าสินค้าตัวอย่าง + คลังเริ่มต้น? (ข้ามรายการที่มีอยู่แล้ว)',
+      message: 'นำเข้าแคตตาล็อกสินค้า + คลังเริ่มต้น? (ข้ามถ้ามีข้อมูลอยู่แล้ว)',
       confirmText: 'นำเข้า',
     })
     if (!ok) return
@@ -384,7 +384,7 @@ function MaintenanceSection() {
       <h2 className="mb-3 font-semibold text-slate-800">ดูแลข้อมูล</h2>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={seed} disabled={!!busy}>
-          {busy === 'seed' ? 'กำลังนำเข้า...' : 'นำเข้าข้อมูลตัวอย่าง'}
+          {busy === 'seed' ? 'กำลังนำเข้า...' : 'นำเข้าแคตตาล็อกสินค้า'}
         </Button>
         <Button variant="secondary" onClick={recompute} disabled={!!busy}>
           {busy === 'recompute' ? 'กำลังคำนวณ...' : 'คำนวณยอดคงเหลือใหม่'}

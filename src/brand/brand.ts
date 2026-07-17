@@ -18,8 +18,6 @@ export interface BrandDef {
   emoji: string
   /** default locations seeded on first entry (if the brand has none yet) */
   defaultLocations: { name: string; type: LocationType }[]
-  /** whether the "import sample products" button is offered for this brand */
-  hasSampleProducts: boolean
 }
 
 export const BRANDS: BrandDef[] = [
@@ -27,7 +25,6 @@ export const BRANDS: BrandDef[] = [
     id: 'pizza',
     name: 'Pizza Mania',
     emoji: '🍕',
-    hasSampleProducts: true,
     defaultLocations: [
       { name: 'คลังหลัก', type: 'warehouse' },
       { name: 'สาขาสารสิน', type: 'branch' },
@@ -38,7 +35,6 @@ export const BRANDS: BrandDef[] = [
     id: 'lelapin',
     name: 'Le Lapin Sandwich Delivery',
     emoji: '🥪',
-    hasSampleProducts: false,
     defaultLocations: [
       { name: 'คลังสุขุมวิท', type: 'warehouse' },
       { name: 'คลังสารสิน', type: 'warehouse' },

@@ -26,47 +26,108 @@ import {
   getProductImage,
   type ProductInput,
 } from '../services/products'
-import { seedInitialData } from '../services/seed'
+import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
 import { setStockCount } from '../services/stock'
 import { compressImage } from '../lib/image'
 import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
+
+type SearchIn = 'all' | 'name' | 'sku'
+type StockStatus = 'all' | 'low' | 'out' | 'in'
+type SortKey = 'name-asc' | 'name-desc' | 'sku-asc' | 'sku-desc' | 'qty-desc' | 'qty-asc'
+
+const SORTS: { value: SortKey; label: string }[] = [
+  { value: 'name-asc', label: 'ชื่อ ก→ฮ / A→Z' },
+  { value: 'name-desc', label: 'ชื่อ ฮ→ก / Z→A' },
+  { value: 'sku-asc', label: 'รหัสสินค้า น้อย→มาก' },
+  { value: 'sku-desc', label: 'รหัสสินค้า มาก→น้อย' },
+  { value: 'qty-desc', label: 'คงเหลือ มาก→น้อย' },
+  { value: 'qty-asc', label: 'คงเหลือ น้อย→มาก' },
+]
 
 export function ProductsPage() {
   const { products, locations, qtyAt, loading } = useData()
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast()
+  const confirm = useConfirm()
   const isAdmin = user?.role === 'admin'
-  const hasSample = brand ? brandDef(brand).hasSampleProducts : false
+  const catalogCount = brand ? catalogSize(brand) : 0
 
   const [search, setSearch] = useState('')
+  const [searchIn, setSearchIn] = useState<SearchIn>('all')
   const [cat, setCat] = useState('')
+  const [status, setStatus] = useState<StockStatus>('all')
+  const [locId, setLocId] = useState('')
+  const [sort, setSort] = useState<SortKey>('name-asc')
   const [editing, setEditing] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
   const [seeding, setSeeding] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const categories = useMemo(
     () => [...new Set(products.map((p) => p.category))].sort(),
     [products],
   )
 
-  const totalQty = (productId: string) =>
-    locations.reduce((sum, l) => sum + qtyAt(l.id, productId), 0)
+  // Quantity the list works with: one location when the location filter is set, otherwise
+  // every location added up. Both the "คงเหลือ" column and the qty sorts use this.
+  const shownQty = useMemo(() => {
+    const active = locId ? locations.filter((l) => l.id === locId) : locations
+    return (productId: string) => active.reduce((sum, l) => sum + qtyAt(l.id, productId), 0)
+  }, [locations, locId, qtyAt])
+
+  const filterCount =
+    (search.trim() ? 1 : 0) + (cat ? 1 : 0) + (status !== 'all' ? 1 : 0) + (locId ? 1 : 0)
+
+  function clearFilters() {
+    setSearch('')
+    setSearchIn('all')
+    setCat('')
+    setStatus('all')
+    setLocId('')
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const matches = (p: Product) => {
+      if (!q) return true
+      if (searchIn === 'name') return p.name.toLowerCase().includes(q)
+      if (searchIn === 'sku') return p.sku.toLowerCase().includes(q)
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q)
+      )
+    }
+    const inStatus = (p: Product) => {
+      if (status === 'all') return true
+      const qty = shownQty(p.id)
+      if (status === 'out') return qty <= 0
+      if (status === 'in') return qty > 0
+      return p.minStock > 0 && qty <= p.minStock
+    }
     return products
       .filter((p) => (cat ? p.category === cat : true))
-      .filter(
-        (p) =>
-          !q ||
-          p.name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [products, search, cat])
+      .filter(matches)
+      .filter(inStatus)
+      .sort((a, b) => {
+        switch (sort) {
+          case 'name-desc':
+            return b.name.localeCompare(a.name)
+          case 'sku-asc':
+            return a.sku.localeCompare(b.sku)
+          case 'sku-desc':
+            return b.sku.localeCompare(a.sku)
+          case 'qty-desc':
+            return shownQty(b.id) - shownQty(a.id) || a.name.localeCompare(b.name)
+          case 'qty-asc':
+            return shownQty(a.id) - shownQty(b.id) || a.name.localeCompare(b.name)
+          default:
+            return a.name.localeCompare(b.name)
+        }
+      })
+  }, [products, search, searchIn, cat, status, sort, shownQty])
 
   async function handleSeed() {
     setSeeding(true)
@@ -77,6 +138,29 @@ export function ProductsPage() {
       toast.error('นำเข้าไม่สำเร็จ: ' + (e as Error).message)
     } finally {
       setSeeding(false)
+    }
+  }
+
+  async function handleReset() {
+    const name = brand ? brandDef(brand).name : ''
+    const ok = await confirm({
+      title: 'ล้างและนำเข้าสินค้าใหม่',
+      message:
+        `ลบสินค้าทั้ง ${products.length} รายการของ ${name} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) ` +
+        `แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า ${catalogCount} รายการแทน?\n\n` +
+        'ประวัติการเคลื่อนไหวจะยังอยู่ครบ แต่ยอดคงเหลือที่นับไว้จะหายทั้งหมด — ย้อนกลับไม่ได้',
+      danger: true,
+      confirmText: 'ล้างและนำเข้าใหม่',
+    })
+    if (!ok) return
+    setResetting(true)
+    try {
+      const r = await resetCatalog()
+      toast.success(`ลบ ${r.removed} รายการ, นำเข้าใหม่ ${r.imported} รายการ`)
+    } catch (e) {
+      toast.error('นำเข้าไม่สำเร็จ: ' + (e as Error).message)
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -91,9 +175,14 @@ export function ProductsPage() {
         </div>
         {isAdmin && (
           <div className="flex gap-2">
-            {products.length === 0 && hasSample && (
+            {products.length === 0 && catalogCount > 0 && (
               <Button variant="secondary" onClick={handleSeed} disabled={seeding}>
-                {seeding ? 'กำลังนำเข้า...' : '⬇️ นำเข้าสินค้าตัวอย่าง (Pizza Mania)'}
+                {seeding ? 'กำลังนำเข้า...' : `⬇️ นำเข้าแคตตาล็อกสินค้า (${catalogCount} รายการ)`}
+              </Button>
+            )}
+            {products.length > 0 && catalogCount > 0 && (
+              <Button variant="secondary" onClick={handleReset} disabled={resetting}>
+                {resetting ? 'กำลังนำเข้า...' : '♻️ ล้างและนำเข้าใหม่'}
               </Button>
             )}
             <Button onClick={() => setCreating(true)}>+ เพิ่มสินค้า</Button>
@@ -102,31 +191,103 @@ export function ProductsPage() {
       </div>
 
       <Card className="p-3">
-        <div className="flex flex-wrap gap-3">
-          <Input
-            placeholder="ค้นหาชื่อ / SKU / หมวดหมู่..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs flex-1"
-          />
-          <Select value={cat} onChange={(e) => setCat(e.target.value)} className="max-w-[220px]">
-            <option value="">ทุกหมวดหมู่</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex min-w-[260px] flex-1 gap-2">
+            <Field label="ค้นหา">
+              <Input
+                placeholder={
+                  searchIn === 'sku' ? 'เช่น VGT-01' : searchIn === 'name' ? 'เช่น MOZZARELLA' : 'ชื่อ / รหัส / หมวดหมู่...'
+                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </Field>
+            <Field label="ค้นจาก">
+              <Select
+                value={searchIn}
+                onChange={(e) => setSearchIn(e.target.value as SearchIn)}
+                className="w-[130px]"
+              >
+                <option value="all">ทั้งหมด</option>
+                <option value="name">ชื่อสินค้า</option>
+                <option value="sku">รหัสสินค้า</option>
+              </Select>
+            </Field>
+          </div>
+
+          <Field label="หมวดหมู่">
+            <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-[190px]">
+              <option value="">ทุกหมวดหมู่</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="สถานะ">
+            <Select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as StockStatus)}
+              className="w-[140px]"
+            >
+              <option value="all">ทุกสถานะ</option>
+              <option value="low">ใกล้หมด</option>
+              <option value="out">หมดสต๊อก</option>
+              <option value="in">มีของ</option>
+            </Select>
+          </Field>
+
+          <Field label="ดูคงเหลือของ">
+            <Select value={locId} onChange={(e) => setLocId(e.target.value)} className="w-[170px]">
+              <option value="">ทุกคลังรวมกัน</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.type === 'warehouse' ? '🏭' : '🏬'} {l.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="เรียงตาม">
+            <Select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="w-[190px]"
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-500">
+          <span>
+            แสดง <b className="text-slate-700">{filtered.length}</b> จาก {products.length} รายการ
+          </span>
+          {filterCount > 0 && (
+            <button onClick={clearFilters} className="font-medium text-red-700 hover:underline">
+              ล้างตัวกรอง ({filterCount})
+            </button>
+          )}
         </div>
       </Card>
 
       {filtered.length === 0 ? (
         <Card>
-          <EmptyState
-            icon="📦"
-            title="ยังไม่มีสินค้า"
-            hint={isAdmin ? 'กด “นำเข้าสินค้าตัวอย่าง” หรือ “เพิ่มสินค้า”' : 'ยังไม่มีข้อมูลสินค้า'}
-          />
+          {products.length > 0 ? (
+            <EmptyState icon="🔍" title="ไม่พบสินค้าที่ตรงกับตัวกรอง" hint="ลองล้างตัวกรองแล้วค้นใหม่" />
+          ) : (
+            <EmptyState
+              icon="📦"
+              title="ยังไม่มีสินค้า"
+              hint={isAdmin ? 'กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”' : 'ยังไม่มีข้อมูลสินค้า'}
+            />
+          )}
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -136,7 +297,9 @@ export function ProductsPage() {
                 <tr>
                   <th className="px-3 py-2">สินค้า</th>
                   <th className="px-3 py-2">หมวดหมู่</th>
-                  <th className="px-3 py-2 text-right">คงเหลือรวม</th>
+                  <th className="px-3 py-2 text-right">
+                    {locId ? locations.find((l) => l.id === locId)?.name : 'คงเหลือรวม'}
+                  </th>
                   <th className="px-3 py-2 text-right">ขั้นต่ำ</th>
                   <th className="px-3 py-2">หน่วย</th>
                   <th className="px-3 py-2"></th>
@@ -144,7 +307,7 @@ export function ProductsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((p) => {
-                  const total = totalQty(p.id)
+                  const total = shownQty(p.id)
                   const low = p.minStock > 0 && total <= p.minStock
                   return (
                     <tr key={p.id} className="hover:bg-slate-50">
