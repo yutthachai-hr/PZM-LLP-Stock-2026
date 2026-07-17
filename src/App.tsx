@@ -1,0 +1,83 @@
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './auth/AuthContext'
+import { BrandProvider, useBrand } from './brand/BrandContext'
+import { DataProvider } from './data/DataContext'
+import { ToastProvider } from './components/Toast'
+import { ConfirmProvider } from './components/Confirm'
+import { Spinner } from './components/ui'
+import { Layout } from './components/Layout'
+import { BrandPicker } from './components/BrandPicker'
+import { LoginPage } from './pages/Login'
+import { DashboardPage } from './pages/Dashboard'
+import { ProductsPage } from './pages/Products'
+import { ReceivePage } from './pages/Receive'
+import { IssuePage } from './pages/Issue'
+import { AdjustPage } from './pages/Adjust'
+import { MovementsPage } from './pages/Movements'
+import { ReportsPage } from './pages/Reports'
+import { NotesPage } from './pages/Notes'
+import { SettingsPage } from './pages/Settings'
+import { ensureBrandLocations } from './services/seed'
+
+function Gate() {
+  const { user, loading } = useAuth()
+  const { brand, choose, reset } = useBrand()
+
+  // reset the brand choice on logout so the picker shows again next login
+  useEffect(() => {
+    if (!user) reset()
+  }, [user, reset])
+
+  // make sure the chosen brand has its default locations
+  useEffect(() => {
+    if (user && brand) ensureBrandLocations(brand).catch(() => {})
+  }, [user, brand])
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Spinner label="กำลังโหลด..." />
+      </div>
+    )
+  }
+  if (!user) return <LoginPage />
+  if (!brand) return <BrandPicker onPick={choose} />
+
+  return (
+    <DataProvider key={brand}>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/receive" element={<ReceivePage />} />
+          <Route path="/issue" element={<IssuePage />} />
+          <Route path="/adjust" element={<AdjustPage />} />
+          <Route path="/movements" element={<MovementsPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/notes" element={<NotesPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </DataProvider>
+  )
+}
+
+export function App() {
+  return (
+    <ToastProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <BrandProvider>
+            <BrowserRouter>
+              <Gate />
+            </BrowserRouter>
+          </BrandProvider>
+        </AuthProvider>
+      </ConfirmProvider>
+    </ToastProvider>
+  )
+}
+
+export default App

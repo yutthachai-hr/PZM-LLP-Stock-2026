@@ -1,0 +1,288 @@
+import { useMemo, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { useData } from '../data/DataContext'
+import { Badge, Card, EmptyState, Input, Spinner } from '../components/ui'
+import { ProductThumb } from '../components/ProductThumb'
+import { fmtMoney, fmtQty, formatThaiDate, todayMs } from '../lib/format'
+import type { Product, StockLocation } from '../types'
+
+const ALL = '__all__'
+
+export function DashboardPage() {
+  const { products, locations, qtyAt, minFor, movements, loading } = useData()
+  const [scope, setScope] = useState<string>(ALL)
+  const [search, setSearch] = useState('')
+
+  const scopeLocations = useMemo(
+    () => (scope === ALL ? locations : locations.filter((l) => l.id === scope)),
+    [scope, locations],
+  )
+
+  const totalQtyOf = (p: Product) =>
+    scopeLocations.reduce((s, l) => s + qtyAt(l.id, p.id), 0)
+
+  // low-stock items within the selected scope
+  const lowStock = useMemo(() => {
+    const items: { product: Product; location: StockLocation; qty: number; min: number }[] = []
+    for (const p of products) {
+      for (const l of scopeLocations) {
+        const min = minFor(p, l.id)
+        if (min > 0) {
+          const qty = qtyAt(l.id, p.id)
+          if (qty <= min) items.push({ product: p, location: l, qty, min })
+        }
+      }
+    }
+    return items.sort((a, b) => a.qty - a.min - (b.qty - b.min))
+  }, [products, scopeLocations, qtyAt, minFor])
+
+  const stats = useMemo(() => {
+    let value = 0
+    let outCount = 0
+    for (const p of products) {
+      const q = totalQtyOf(p)
+      value += q * (p.cost ?? 0)
+      if (q <= 0) outCount++
+    }
+    const today = todayMs()
+    const todayMoves = movements.filter((m) => !m.voided && m.date >= today).length
+    return { value, outCount, todayMoves }
+  }, [products, scopeLocations, movements, qtyAt])
+
+  const byCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of products) {
+      const q = totalQtyOf(p)
+      const val = q * (p.cost ?? 0)
+      map.set(p.category, (map.get(p.category) ?? 0) + val)
+    }
+    return [...map.entries()]
+      .map(([category, value]) => ({ category, value: Math.round(value) }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value)
+  }, [products, scopeLocations, qtyAt])
+
+  const tableRows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return products
+      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      .map((p) => ({ p, total: totalQtyOf(p) }))
+      .sort((a, b) => a.p.name.localeCompare(b.p.name))
+  }, [products, search, scopeLocations, qtyAt])
+
+  if (loading) return <Spinner label="กำลังโหลดภาพรวม..." />
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-800">📊 ภาพรวมสต๊อก</h1>
+        <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+          <ScopeTab label="รวมทุกคลัง" active={scope === ALL} onClick={() => setScope(ALL)} />
+          {locations.map((l) => (
+            <ScopeTab
+              key={l.id}
+              label={l.name}
+              active={scope === l.id}
+              onClick={() => setScope(l.id)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* summary cards */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="มูลค่าสต๊อก" value={`฿ ${fmtMoney(stats.value)}`} icon="💰" hint="อิงต้นทุนที่กรอก" />
+        <StatCard label="จำนวนสินค้า" value={`${products.length}`} icon="📦" hint="รายการทั้งหมด" />
+        <StatCard
+          label="ใกล้/ต่ำกว่าขั้นต่ำ"
+          value={`${lowStock.length}`}
+          icon="⚠️"
+          danger={lowStock.length > 0}
+        />
+        <StatCard label="เคลื่อนไหววันนี้" value={`${stats.todayMoves}`} icon="🔄" hint={formatThaiDate(todayMs())} />
+      </div>
+
+      {/* low stock alert */}
+      {lowStock.length > 0 && (
+        <Card className="border-rose-200 bg-rose-50/50 p-4">
+          <div className="mb-2 flex items-center gap-2 font-semibold text-rose-700">
+            ⚠️ แจ้งเตือนสินค้าเหลือน้อย ({lowStock.length})
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lowStock.slice(0, 20).map((it) => (
+              <div
+                key={`${it.location.id}-${it.product.id}`}
+                className="flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm"
+              >
+                <ProductThumb productId={it.product.id} hasImage={it.product.hasImage} size={24} />
+                <span className="font-medium text-slate-700">{it.product.name}</span>
+                <span className="text-rose-600">
+                  {fmtQty(it.qty)}/{fmtQty(it.min)} {it.product.unitType}
+                </span>
+                {scope === ALL && <Badge color="slate">{it.location.name}</Badge>}
+              </div>
+            ))}
+            {lowStock.length > 20 && (
+              <span className="self-center text-sm text-rose-600">
+                และอีก {lowStock.length - 20} รายการ...
+              </span>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* chart */}
+      {byCategory.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-3 font-semibold text-slate-700">มูลค่าสต๊อกตามหมวดหมู่ (บาท)</div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={byCategory} margin={{ left: 10, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+              <XAxis dataKey="category" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v) => `฿ ${fmtMoney(Number(v))}`} />
+              <Bar dataKey="value" fill="#b91c1c" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="mt-1 text-xs text-slate-400">
+            * มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า
+          </p>
+        </Card>
+      )}
+
+      {/* stock table */}
+      <Card className="overflow-hidden">
+        <div className="border-b border-slate-100 p-3">
+          <Input
+            placeholder="🔍 ค้นหาสินค้าในคลังนี้..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
+        {tableRows.length === 0 ? (
+          <EmptyState icon="📦" title="ไม่พบสินค้า" />
+        ) : (
+          <div className="overflow-auto max-h-[calc(100vh-260px)]">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
+                <tr>
+                  <th className="px-3 py-2">สินค้า</th>
+                  {scope === ALL &&
+                    locations.map((l) => (
+                      <th key={l.id} className="px-3 py-2 text-right">
+                        {l.name}
+                      </th>
+                    ))}
+                  <th className="px-3 py-2 text-right">
+                    {scope === ALL ? 'รวม' : 'คงเหลือ'}
+                  </th>
+                  <th className="px-3 py-2 text-right">ขั้นต่ำ</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {tableRows.map(({ p, total }) => {
+                  const min =
+                    scope === ALL ? p.minStock : minFor(p, scope)
+                  const low = min > 0 && total <= min
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-slate-700">{p.name}</div>
+                            <div className="text-xs text-slate-400">{p.category}</div>
+                          </div>
+                        </div>
+                      </td>
+                      {scope === ALL &&
+                        locations.map((l) => (
+                          <td key={l.id} className="px-3 py-2 text-right text-slate-600">
+                            {fmtQty(qtyAt(l.id, p.id))}
+                          </td>
+                        ))}
+                      <td className="px-3 py-2 text-right font-semibold">
+                        <span className={low ? 'text-rose-600' : 'text-slate-800'}>
+                          {fmtQty(total)}
+                        </span>{' '}
+                        <span className="text-xs text-slate-400">{p.unitType}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-500">{fmtQty(min)}</td>
+                      <td className="px-3 py-2 text-right">
+                        {total <= 0 ? (
+                          <Badge color="slate">หมด</Badge>
+                        ) : low ? (
+                          <Badge color="red">ใกล้หมด</Badge>
+                        ) : (
+                          <Badge color="green">ปกติ</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+function ScopeTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+        active ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  hint,
+  danger,
+}: {
+  label: string
+  value: string
+  icon: string
+  hint?: string
+  danger?: boolean
+}) {
+  return (
+    <Card className={`p-4 ${danger ? 'border-rose-200 bg-rose-50/40' : ''}`}>
+      <div className="flex items-start justify-between">
+        <div className="text-sm text-slate-500">{label}</div>
+        <div className="text-xl">{icon}</div>
+      </div>
+      <div className={`mt-1 text-2xl font-bold ${danger ? 'text-rose-600' : 'text-slate-800'}`}>
+        {value}
+      </div>
+      {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
+    </Card>
+  )
+}
