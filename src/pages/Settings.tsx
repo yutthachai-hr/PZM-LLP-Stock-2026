@@ -3,6 +3,7 @@ import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
+import { BackupSection } from '../components/BackupSection'
 import {
   Badge,
   Button,
@@ -43,6 +44,7 @@ export function SettingsPage() {
 
       {isAdmin && <LocationsSection />}
       {isAdmin && <UsersSection currentUserId={user!.id} />}
+      {isAdmin && <BackupSection />}
       {isAdmin && <MaintenanceSection />}
 
       {!isAdmin && (

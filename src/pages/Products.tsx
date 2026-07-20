@@ -158,6 +158,8 @@ export function ProductsPage() {
         t('ประวัติการเคลื่อนไหวจะยังอยู่ครบ แต่ยอดคงเหลือที่นับไว้จะหายทั้งหมด — ย้อนกลับไม่ได้'),
       danger: true,
       confirmText: t("ล้างและนำเข้าใหม่"),
+      // The one action in the app that destroys counted stock with no way back.
+      typeToConfirm: name,
     })
     if (!ok) return
     setResetting(true)

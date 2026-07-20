@@ -1,4 +1,4 @@
-import type { Backend, TxContext } from './types'
+import type { Backend, SubscribeOptions, TxContext } from './types'
 import { resolveCollection } from '../brand/brand'
 
 // localStorage-backed backend with cross-tab real-time via BroadcastChannel + storage events.
@@ -84,17 +84,23 @@ export function createLocalBackend(): Backend {
   return {
     mode: 'local',
 
-    subscribe<T>(collection: string, cb: (docs: T[]) => void): () => void {
+    subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void {
       const c = resolveCollection(collection)
       let set = listeners.get(c)
       if (!set) {
         set = new Set()
         listeners.set(c, set)
       }
-      const listener = cb as Listener
+      // Mirror the cloud backend's `since` window so both modes show the same rows.
+      const since = opts?.since
+      const apply = (docs: unknown[]) =>
+        since
+          ? docs.filter((d) => Number((d as Record<string, unknown>)[since.field] ?? 0) >= since.value)
+          : docs
+      const listener = ((docs: unknown[]) => cb(apply(docs) as T[])) as Listener
       set.add(listener)
       // fire immediately with current data
-      cb(Object.values(loadMap(c)) as T[])
+      cb(apply(Object.values(loadMap(c))) as T[])
       return () => {
         set?.delete(listener)
       }

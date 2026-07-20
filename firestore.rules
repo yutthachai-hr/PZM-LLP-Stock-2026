@@ -1,0 +1,149 @@
+rules_version = '2';
+
+// Server-enforced access control for the stock database.
+//
+// The app also checks roles in the UI, but that only hides buttons: anyone can call the
+// REST API with their own token. These rules are the part an attacker cannot skip, so they
+// re-state every restriction rather than trusting the client.
+//
+// Deploy:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- identity ----
+
+    function authed() {
+      return request.auth != null;
+    }
+
+    function profilePath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    // A signed-in account with no profile document has no access. Deleting a user relies
+    // on that, and it is also the state a brand-new self-signed-up account sits in.
+    function hasProfile() {
+      return authed() && exists(profilePath());
+    }
+
+    function profile() {
+      return get(profilePath()).data;
+    }
+
+    // Staff are created inactive and stay locked out until an admin approves them.
+    function active() {
+      return hasProfile() && profile().active == true;
+    }
+
+    function admin() {
+      return active() && profile().role == 'admin';
+    }
+
+    // True only for the account named by the write-once bootstrap sentinel.
+    function bootstrapClaimant() {
+      return exists(/databases/$(database)/documents/meta/bootstrap)
+        && get(/databases/$(database)/documents/meta/bootstrap).data.claimedBy == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------- brands ----
+
+    // Each brand owns a namespace: "products" for Pizza Mania, "lelapin__products" for
+    // Le Lapin. Permissions are per collection kind, not per brand, so the prefix is
+    // stripped before matching. A new brand has to be added here as well.
+    function base(name) {
+      return name.matches('^lelapin__.*') ? name.split('__')[1] : name;
+    }
+
+    // Recording stock is the everyday job, so any active user may write these.
+    function staffWritable(name) {
+      return base(name) in [
+        'stockMovements',
+        'stockLevels',
+        'counters',
+        'movementImages',
+        'notes'
+      ];
+    }
+
+    // The catalogue and the shape of the warehouse are admin decisions.
+    function adminWritable(name) {
+      return base(name) in [
+        'products',
+        'productImages',
+        'locations',
+        'productMinOverrides'
+      ];
+    }
+
+    function brandData(name) {
+      return staffWritable(name) || adminWritable(name);
+    }
+
+    // Movements are the ledger every balance is rebuilt from, so they are append-only for
+    // everyone, admins included. Voiding and editing are updates that keep the original
+    // row, and nothing in the app deletes one.
+    function ledger(name) {
+      return base(name) == 'stockMovements';
+    }
+
+    // Notes are the only thing staff throw away. Clearing balances and images happens
+    // when an admin deletes a product or a location.
+    function staffDeletable(name) {
+      return base(name) == 'notes';
+    }
+
+    // ---------------------------------------------------------------- users ----
+
+    match /users/{uid} {
+      // Everyone loads their own profile on sign-in; only admins can see the roster.
+      allow get: if authed() && (uid == request.auth.uid || admin());
+      allow list: if admin();
+
+      // Two legitimate ways a profile appears:
+      //  - an admin adds someone, with any role, active straight away;
+      //  - a person signs themselves up, which must produce an INACTIVE STAFF account.
+      // Without that second restriction anyone holding the public API key could mint
+      // themselves an admin, because the client is what picks these fields.
+      // The first-ever account is the exception: it claims the sentinel and owns the data.
+      allow create: if admin()
+        || (uid == request.auth.uid && (
+              bootstrapClaimant()
+                ? (request.resource.data.role == 'admin' && request.resource.data.active == true)
+                : (request.resource.data.role == 'staff' && request.resource.data.active == false)
+           ));
+
+      // role and active ARE the access model — only an admin may change a profile.
+      allow update: if admin();
+
+      // Deleting your own profile would lock you out of your own database.
+      allow delete: if admin() && uid != request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------- bootstrap ----
+
+    // Write-once sentinel naming the first account. `create` only succeeds while the
+    // document is absent, so the first caller wins and later sign-ups cannot rewrite it
+    // to claim admin.
+    match /meta/bootstrap {
+      allow get: if authed();
+      allow create: if authed() && request.resource.data.claimedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------- brand data ----
+
+    // One block for every brand-scoped collection. Anything not named by the functions
+    // above — including /meta and any collection a client invents — falls through to
+    // Firestore's default deny.
+    match /{collection}/{docId} {
+      allow read: if active() && brandData(collection);
+
+      allow create, update: if active() && staffWritable(collection);
+      allow create, update: if admin() && adminWritable(collection);
+
+      allow delete: if active() && staffDeletable(collection);
+      allow delete: if admin() && brandData(collection) && !ledger(collection);
+    }
+  }
+}

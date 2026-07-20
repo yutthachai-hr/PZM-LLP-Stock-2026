@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
+import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
@@ -25,7 +26,7 @@ const TYPE_COLOR: Record<MovementType, 'green' | 'blue' | 'amber' | 'red'> = {
 
 export function MovementsPage() {
   const t = useT()
-  const { movements, locations, products, locationById } = useData()
+  const { movements, locations, products, locationById, ensureMovementsFrom } = useData()
   const { user } = useAuth()
   const toast = useToast() // i18n-key
   const confirm = useConfirm()
@@ -36,6 +37,14 @@ export function MovementsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
+
+  // Picking a date before the loaded window would silently show nothing, so widen it.
+  // Clearing the date does NOT widen: that is the default state, and loading the whole
+  // ledger on every visit is the cost this window exists to avoid. The banner below
+  // says what is loaded and offers to fetch the rest.
+  useEffect(() => {
+    if (fromStr) ensureMovementsFrom(dateInputToMs(fromStr))
+  }, [fromStr, ensureMovementsFrom])
   const [editing, setEditing] = useState<StockMovement | null>(null)
   const [photoDoc, setPhotoDoc] = useState<string | null>(null)
 
@@ -138,6 +147,8 @@ export function MovementsPage() {
           </p>
         )}
       </Card>
+
+      <LedgerWindowNotice />
 
       {filtered.length === 0 ? (
         <Card>

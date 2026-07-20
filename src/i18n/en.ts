@@ -59,6 +59,33 @@ export const EN: Record<string, string> = {
   'บันทึกแล้ว': 'Saved',
   'ลบแล้ว': 'Deleted',
 
+  'พิมพ์ “{phrase}” เพื่อยืนยัน': 'Type “{phrase}” to confirm',
+
+  // ---- backup / restore --------------------------------------------------------
+  'สำรอง / กู้คืนข้อมูล': 'Backup & restore',
+  'ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive':
+    'Download everything in {brand} as a single file and keep it in Google Drive or OneDrive',
+  '💾 ดาวน์โหลดไฟล์สำรอง': '💾 Download backup',
+  '♻️ กู้คืนจากไฟล์': '♻️ Restore from file',
+  'กำลังสำรอง...': 'Backing up…',
+  'กำลังกู้คืน...': 'Restoring…',
+  'สำรองข้อมูลแล้ว {n} รายการ': 'Backed up {n} records',
+  'สำรองข้อมูลไม่สำเร็จ:': 'Backup failed:',
+  กู้คืนข้อมูลจากไฟล์สำรอง: 'Restore from backup',
+  กู้คืน: 'Restore',
+  'กู้คืนแล้ว {n} รายการ': 'Restored {n} records',
+  'กู้คืนไม่สำเร็จ:': 'Restore failed:',
+  ไฟล์นี้ไม่ใช่ไฟล์สำรองข้อมูลของระบบ: 'That file is not a backup from this system',
+  'ไฟล์นี้สำรองจาก {brand} เมื่อ {when} — มี {n} รายการ':
+    'This backup is from {brand}, taken {when} — {n} records',
+  '⚠️ ไฟล์นี้เป็นของคนละแบรนด์กับที่เปิดอยู่ ({current}) — ข้อมูลจะปนกัน':
+    '⚠️ This backup belongs to a different brand than the one you have open ({current}) — the data would be mixed together',
+  'รายการที่มี “รหัส” ตรงกันจะถูกเขียนทับด้วยข้อมูลจากไฟล์ ส่วนรายการที่เพิ่มมาหลังจากสำรองจะไม่ถูกแตะ':
+    'Records with a matching id are overwritten from the file; anything added since the backup is left alone.',
+  '⚠️ แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง':
+    '⚠️ The free Firebase plan has no point-in-time recovery — a mistaken delete cannot be undone. Take a backup at least once a week.',
+  'แสดงประวัติตั้งแต่ {date}': 'History loaded from {date}',
+  โหลดประวัติทั้งหมด: 'Load full history',
   คงเหลือต้นทาง: 'Source on hand',
   คงเหลือปัจจุบัน: 'Current on hand',
   'คงเหลือหลังปรับ:': 'On hand after adjustment:',

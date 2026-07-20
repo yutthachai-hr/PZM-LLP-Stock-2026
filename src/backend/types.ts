@@ -10,10 +10,26 @@ export interface TxContext {
   delete(collection: string, id: string): void
 }
 
+/**
+ * Restricts a subscription to documents whose numeric `field` is at or after `value`.
+ *
+ * The ledger grows forever, and a subscription without this re-reads every movement each
+ * time the app cold-starts on a device — which is charged per document and would eventually
+ * exhaust a day's whole read quota in one load.
+ */
+export interface SinceFilter {
+  field: string
+  value: number
+}
+
+export interface SubscribeOptions {
+  since?: SinceFilter
+}
+
 export interface Backend {
   readonly mode: 'cloud' | 'local'
   /** Live subscription: fires immediately with current docs, then on every change. Returns unsubscribe. */
-  subscribe<T>(collection: string, cb: (docs: T[]) => void): () => void
+  subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void
   getAll<T>(collection: string): Promise<T[]>
   getOne<T>(collection: string, id: string): Promise<T | null>
   /** Auto-generate id. Returns the new id (also written into the doc's `id` field). */

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
+import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { Button, Card, EmptyState, Field, Input, Select } from '../components/ui'
 import {
@@ -23,7 +24,7 @@ type ReportMode = 'movement' | 'snapshot'
 
 export function ReportsPage() {
   const t = useT()
-  const { movements, products, locations, locationById, qtyAt, minFor } = useData()
+  const { movements, products, locations, locationById, qtyAt, minFor, ensureMovementsFrom } = useData()
   const { user } = useAuth()
 
   const [mode, setMode] = useState<ReportMode>('movement')
@@ -32,6 +33,14 @@ export function ReportsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
+
+  // Picking a date before the loaded window would silently show nothing, so widen it.
+  // Clearing the date does NOT widen: that is the default state, and loading the whole
+  // ledger on every visit is the cost this window exists to avoid. The banner below
+  // says what is loaded and offers to fetch the rest.
+  useEffect(() => {
+    if (fromStr) ensureMovementsFrom(dateInputToMs(fromStr))
+  }, [fromStr, ensureMovementsFrom])
 
   // ---------- movement dataset ----------
   const movementRows = useMemo(() => {
@@ -282,6 +291,8 @@ export function ReportsPage() {
           </div>
         </div>
       </Card>
+
+      <LedgerWindowNotice />
 
       {/* preview */}
       {count === 0 ? (

@@ -7,10 +7,12 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  query,
   runTransaction,
+  where,
 } from 'firebase/firestore'
 import { getDb } from '../firebase/app'
-import type { Backend, TxContext } from './types'
+import type { Backend, SubscribeOptions, TxContext } from './types'
 import { resolveCollection } from '../brand/brand'
 
 // Firestore implementation. Real-time across all devices, offline persistence enabled.
@@ -20,11 +22,15 @@ export function createFirestoreBackend(): Backend {
   return {
     mode: 'cloud',
 
-    subscribe<T>(collection: string, cb: (docs: T[]) => void): () => void {
+    subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void {
       const db = getDb()
       const c = resolveCollection(collection)
+      const ref = fbCollection(db, c)
+      // A single-field range filter is served by Firestore's automatic index, so this
+      // needs no composite index to be deployed alongside it.
+      const q = opts?.since ? query(ref, where(opts.since.field, '>=', opts.since.value)) : ref
       const unsub = onSnapshot(
-        fbCollection(db, c),
+        q,
         (snap) => {
           const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T)
           cb(docs)
