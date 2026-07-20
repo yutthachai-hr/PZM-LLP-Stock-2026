@@ -83,9 +83,15 @@ export function backupFilename(b: BackupFile): string {
   return `pzm-stock-${b.brand}-${stamp}.json`
 }
 
-/** Hands the backup to the browser as a download. */
+/**
+ * Hands the backup to the browser as a download.
+ *
+ * Indented on purpose. A backup nobody can read is a backup nobody trusts, and the owner
+ * should be able to open the file and see their own product names in it. The cost is about
+ * 20% more bytes on a file measured in hundreds of KB.
+ */
 export function downloadBackup(b: BackupFile): void {
-  const blob = new Blob([JSON.stringify(b)], { type: 'application/json' })
+  const blob = new Blob([JSON.stringify(b, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
