@@ -13,10 +13,12 @@ import { Badge, Card, EmptyState, Input, Spinner } from '../components/ui'
 import { ProductThumb } from '../components/ProductThumb'
 import { fmtMoney, fmtQty, formatThaiDate, todayMs } from '../lib/format'
 import type { Product, StockLocation } from '../types'
+import { useT } from '../i18n/I18nContext'
 
 const ALL = '__all__'
 
 export function DashboardPage() {
+  const t = useT()
   const { products, locations, qtyAt, minFor, movements, loading } = useData()
   const [scope, setScope] = useState<string>(ALL)
   const [search, setSearch] = useState('')
@@ -78,14 +80,14 @@ export function DashboardPage() {
       .sort((a, b) => a.p.name.localeCompare(b.p.name))
   }, [products, search, scopeLocations, qtyAt])
 
-  if (loading) return <Spinner label="กำลังโหลดภาพรวม..." />
+  if (loading) return <Spinner label={t("กำลังโหลดภาพรวม...")} />
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-800">📊 ภาพรวมสต๊อก</h1>
+        <h1 className="text-2xl font-bold text-slate-800">{t("📊 ภาพรวมสต๊อก")}</h1>
         <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
-          <ScopeTab label="รวมทุกคลัง" active={scope === ALL} onClick={() => setScope(ALL)} />
+          <ScopeTab label={t("รวมทุกคลัง")} active={scope === ALL} onClick={() => setScope(ALL)} />
           {locations.map((l) => (
             <ScopeTab
               key={l.id}
@@ -99,22 +101,22 @@ export function DashboardPage() {
 
       {/* summary cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="มูลค่าสต๊อก" value={`฿ ${fmtMoney(stats.value)}`} icon="💰" hint="อิงต้นทุนที่กรอก" />
-        <StatCard label="จำนวนสินค้า" value={`${products.length}`} icon="📦" hint="รายการทั้งหมด" />
+        <StatCard label={t("มูลค่าสต๊อก")} value={`฿ ${fmtMoney(stats.value)}`} /* ฿ is a currency symbol — i18n-key */ icon="💰" hint={t("อิงต้นทุนที่กรอก")} />
+        <StatCard label={t("จำนวนสินค้า")} value={`${products.length}`} icon="📦" hint={t("รายการทั้งหมด")} />
         <StatCard
-          label="ใกล้/ต่ำกว่าขั้นต่ำ"
+          label={t("ใกล้/ต่ำกว่าขั้นต่ำ")}
           value={`${lowStock.length}`}
           icon="⚠️"
           danger={lowStock.length > 0}
         />
-        <StatCard label="เคลื่อนไหววันนี้" value={`${stats.todayMoves}`} icon="🔄" hint={formatThaiDate(todayMs())} />
+        <StatCard label={t("เคลื่อนไหววันนี้")} value={`${stats.todayMoves}`} icon="🔄" hint={formatThaiDate(todayMs())} />
       </div>
 
       {/* low stock alert */}
       {lowStock.length > 0 && (
         <Card className="border-rose-200 bg-rose-50/50 p-4">
           <div className="mb-2 flex items-center gap-2 font-semibold text-rose-700">
-            ⚠️ แจ้งเตือนสินค้าเหลือน้อย ({lowStock.length})
+            {t('⚠️ แจ้งเตือนสินค้าเหลือน้อย ({n})', { n: lowStock.length })}
           </div>
           <div className="flex flex-wrap gap-2">
             {lowStock.slice(0, 20).map((it) => (
@@ -132,7 +134,7 @@ export function DashboardPage() {
             ))}
             {lowStock.length > 20 && (
               <span className="self-center text-sm text-rose-600">
-                และอีก {lowStock.length - 20} รายการ...
+                {t('และอีก {n} รายการ...', { n: lowStock.length - 20 })}
               </span>
             )}
           </div>
@@ -142,18 +144,18 @@ export function DashboardPage() {
       {/* chart */}
       {byCategory.length > 0 && (
         <Card className="p-4">
-          <div className="mb-3 font-semibold text-slate-700">มูลค่าสต๊อกตามหมวดหมู่ (บาท)</div>
+          <div className="mb-3 font-semibold text-slate-700">{t("มูลค่าสต๊อกตามหมวดหมู่ (บาท)")}</div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={byCategory} margin={{ left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
               <XAxis dataKey="category" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => `฿ ${fmtMoney(Number(v))}`} />
+              <Tooltip formatter={(v) => `฿ ${fmtMoney(Number(v))}`} /* i18n-key */ />
               <Bar dataKey="value" fill="#b91c1c" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <p className="mt-1 text-xs text-slate-400">
-            * มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า
+            {t("* มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า")}
           </p>
         </Card>
       )}
@@ -162,20 +164,20 @@ export function DashboardPage() {
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 p-3">
           <Input
-            placeholder="🔍 ค้นหาสินค้าในคลังนี้..."
+            placeholder={t("🔍 ค้นหาสินค้าในคลังนี้...")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
           />
         </div>
         {tableRows.length === 0 ? (
-          <EmptyState icon="📦" title="ไม่พบสินค้า" />
+          <EmptyState icon="📦" title={t("ไม่พบสินค้า")} />
         ) : (
           <div className="overflow-auto max-h-[calc(100vh-260px)]">
             <table className="w-full min-w-[640px] text-sm">
               <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
                 <tr>
-                  <th className="px-3 py-2">สินค้า</th>
+                  <th className="px-3 py-2">{t("สินค้า")}</th>
                   {scope === ALL &&
                     locations.map((l) => (
                       <th key={l.id} className="px-3 py-2 text-right">
@@ -183,9 +185,9 @@ export function DashboardPage() {
                       </th>
                     ))}
                   <th className="px-3 py-2 text-right">
-                    {scope === ALL ? 'รวม' : 'คงเหลือ'}
+                    {scope === ALL ? t("รวม") : t("คงเหลือ")}
                   </th>
-                  <th className="px-3 py-2 text-right">ขั้นต่ำ</th>
+                  <th className="px-3 py-2 text-right">{t("ขั้นต่ำ")}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -220,11 +222,11 @@ export function DashboardPage() {
                       <td className="px-3 py-2 text-right text-slate-500">{fmtQty(min)}</td>
                       <td className="px-3 py-2 text-right">
                         {total <= 0 ? (
-                          <Badge color="slate">หมด</Badge>
+                          <Badge color="slate">{t("หมด")}</Badge>
                         ) : low ? (
-                          <Badge color="red">ใกล้หมด</Badge>
+                          <Badge color="red">{t("ใกล้หมด")}</Badge>
                         ) : (
-                          <Badge color="green">ปกติ</Badge>
+                          <Badge color="green">{t("ปกติ")}</Badge>
                         )}
                       </td>
                     </tr>

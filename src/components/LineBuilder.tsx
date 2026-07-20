@@ -4,6 +4,7 @@ import { ProductThumb } from './ProductThumb'
 import { QtyInput } from './QtyInput'
 import { Input } from './ui'
 import { fmtQty } from '../lib/format'
+import { useT } from '../i18n/I18nContext'
 
 export interface Line {
   productId: string
@@ -24,6 +25,7 @@ export function LineBuilder({
   /** optional: show current on-hand at source location + block over-issue */
   availableAt?: (productId: string) => number
 }) {
+  const t = useT()
   const [search, setSearch] = useState('')
 
   const matches = useMemo(() => {
@@ -55,7 +57,7 @@ export function LineBuilder({
     <div className="space-y-3">
       <div className="relative">
         <Input
-          placeholder="🔍 ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / SKU)"
+          placeholder={t("🔍 ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / SKU)")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -79,7 +81,7 @@ export function LineBuilder({
 
       {lines.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
-          ยังไม่มีรายการ — ค้นหาด้านบนเพื่อเพิ่มสินค้า
+          {t("ยังไม่มีรายการ — ค้นหาด้านบนเพื่อเพิ่มสินค้า")}
         </div>
       ) : (
         <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
@@ -94,7 +96,7 @@ export function LineBuilder({
                   </div>
                   {avail !== undefined && (
                     <div className={`text-xs ${over ? 'text-rose-600' : 'text-slate-400'}`}>
-                      คงเหลือต้นทาง: {fmtQty(avail)} {l.unit}
+                      {t('คงเหลือต้นทาง')}: {fmtQty(avail)} {l.unit}
                     </div>
                   )}
                 </div>
@@ -111,7 +113,7 @@ export function LineBuilder({
                     type="button"
                     onClick={() => remove(l.productId)}
                     className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                    aria-label="ลบ"
+                    aria-label={t("ลบ")}
                   >
                     ✕
                   </button>

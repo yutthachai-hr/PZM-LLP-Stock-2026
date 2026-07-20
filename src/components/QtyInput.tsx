@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useT } from '../i18n/I18nContext'
 
 // Quantity input that lets the user type in a smaller sub-unit (grams / millilitres) for
 // products measured in KG / L. The VALUE passed to the parent is ALWAYS in the base unit,
@@ -9,11 +10,13 @@ interface SubUnit {
   factor: number // base units per 1 sub-unit (e.g. 1 g = 0.001 kg)
 }
 
+// `unitType` is a code stored on the product ("KG", "ลิตร"), not UI copy — the labels are
+// translation keys, rendered through t() by the <select> below.
 export function subUnitsFor(unitType: string): SubUnit[] {
   const u = (unitType || '').trim().toUpperCase()
-  if (u === 'KG') return [{ label: 'กรัม (g)', factor: 0.001 }]
-  if (u === 'L' || u === 'LT' || u === 'LITER' || u === 'ลิตร')
-    return [{ label: 'มล. (ml)', factor: 0.001 }]
+  if (u === 'KG') return [{ label: 'กรัม (g)', factor: 0.001 }] // i18n-key
+  if (u === 'L' || u === 'LT' || u === 'LITER' || u === 'ลิตร') // i18n-key
+    return [{ label: 'มล. (ml)', factor: 0.001 }] // i18n-key
   return []
 }
 
@@ -21,7 +24,7 @@ function round3(n: number): number {
   return Math.round(n * 1000) / 1000
 }
 
-export function QtyInput({
+export function QtyInput({ // i18n-key
   unitType,
   value,
   onChange,
@@ -34,6 +37,7 @@ export function QtyInput({
   className?: string
   invalid?: boolean
 }) {
+  const t = useT()
   const subs = subUnitsFor(unitType)
   const [factor, setFactor] = useState(1) // 1 = base unit
   const [text, setText] = useState(value ? String(value) : '')
@@ -71,12 +75,12 @@ export function QtyInput({
           value={factor}
           onChange={(e) => setFactor(Number(e.target.value))}
           className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm outline-none focus:border-red-500"
-          title="เลือกหน่วยที่กรอก"
+          title={t("เลือกหน่วยที่กรอก")}
         >
           <option value={1}>{unitType}</option>
           {subs.map((s) => (
             <option key={s.label} value={s.factor}>
-              {s.label}
+              {t(s.label)}
             </option>
           ))}
         </select>

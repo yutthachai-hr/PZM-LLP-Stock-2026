@@ -8,8 +8,11 @@ import { QtyInput } from '../components/QtyInput'
 import { adjustStock } from '../services/stock'
 import { dateInputToMs, fmtQty, msToDateInput, todayMs } from '../lib/format'
 import { ADJUST_REASONS, type Product } from '../types'
+import { useT } from '../i18n/I18nContext'
+import { errText } from '../i18n/AppError'
 
 export function AdjustPage() {
+  const t = useT()
   const { products, locations, qtyAt } = useData()
   const { user } = useAuth()
   const toast = useToast()
@@ -40,9 +43,9 @@ export function AdjustPage() {
   const current = product ? qtyAt(locationId, product.id) : 0
 
   async function submit() {
-    if (!locationId) return toast.error('เลือกคลัง')
-    if (!product) return toast.error('เลือกสินค้า')
-    if (!(qty > 0)) return toast.error('จำนวนต้องมากกว่า 0')
+    if (!locationId) return toast.error(t("เลือกคลัง"))
+    if (!product) return toast.error(t("เลือกสินค้า"))
+    if (!(qty > 0)) return toast.error(t("จำนวนต้องมากกว่า 0"))
     setBusy(true)
     try {
       const docNo = await adjustStock({
@@ -57,13 +60,13 @@ export function AdjustPage() {
         actor: { id: user!.id, name: user!.name },
         note: note.trim() || undefined,
       })
-      toast.success(`ปรับสต๊อกเรียบร้อย (เลขที่ ${docNo})`)
+      toast.success(t('ปรับสต๊อกเรียบร้อย (เลขที่ {docNo})', { docNo }))
       setProduct(null)
       setQty(0)
       setNote('')
       setSearch('')
     } catch (e) {
-      toast.error('บันทึกไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setBusy(false)
     }
@@ -72,13 +75,13 @@ export function AdjustPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">🔧 ปรับสต๊อก</h1>
-        <p className="text-sm text-slate-500">แก้ไขยอดกรณีของหาย เสียหาย หมดอายุ หรือปรับตามการนับจริง</p>
+        <h1 className="text-2xl font-bold text-slate-800">{t("🔧 ปรับสต๊อก")}</h1>
+        <p className="text-sm text-slate-500">{t("แก้ไขยอดกรณีของหาย เสียหาย หมดอายุ หรือปรับตามการนับจริง")}</p>
       </div>
 
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="คลัง/สาขา" required>
+          <Field label={t("คลัง/สาขา")} required>
             <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
               {active.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -87,29 +90,29 @@ export function AdjustPage() {
               ))}
             </Select>
           </Field>
-          <Field label="วันที่" required>
+          <Field label={t("วันที่")} required>
             <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
           </Field>
         </div>
 
-        <Field label="สินค้า" required>
+        <Field label={t("สินค้า")} required>
           {product ? (
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
               <ProductThumb productId={product.id} hasImage={product.hasImage} size={36} />
               <div className="flex-1">
                 <div className="text-sm font-medium">{product.name}</div>
                 <div className="text-xs text-slate-500">
-                  คงเหลือปัจจุบัน: {fmtQty(current)} {product.unitType}
+                  {t('คงเหลือปัจจุบัน')}: {fmtQty(current)} {product.unitType}
                 </div>
               </div>
               <Button variant="ghost" onClick={() => setProduct(null)}>
-                เปลี่ยน
+                {t("เปลี่ยน")}
               </Button>
             </div>
           ) : (
             <div className="relative">
               <Input
-                placeholder="🔍 ค้นหาสินค้า"
+                placeholder={t("🔍 ค้นหาสินค้า")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -137,36 +140,36 @@ export function AdjustPage() {
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="ทิศทาง" required>
+          <Field label={t("ทิศทาง")} required>
             <Select
               value={direction}
               onChange={(e) => setDirection(e.target.value as 'in' | 'out')}
             >
-              <option value="out">ลดออก (−)</option>
-              <option value="in">เพิ่มเข้า (+)</option>
+              <option value="out">{t("ลดออก (−)")}</option>
+              <option value="in">{t("เพิ่มเข้า (+)")}</option>
             </Select>
           </Field>
-          <Field label="จำนวน" required>
+          <Field label={t("จำนวน")} required>
             <QtyInput unitType={product?.unitType ?? ''} value={qty} onChange={setQty} />
           </Field>
-          <Field label="เหตุผล" required>
+          <Field label={t("เหตุผล")} required>
             <Select value={reason} onChange={(e) => setReason(e.target.value)}>
               {ADJUST_REASONS.map((r) => (
                 <option key={r.value} value={r.value}>
-                  {r.label}
+                  {t(r.label)}
                 </option>
               ))}
             </Select>
           </Field>
         </div>
 
-        <Field label="หมายเหตุ (ไม่บังคับ)">
+        <Field label={t("หมายเหตุ (ไม่บังคับ)")}>
           <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
 
         {product && (
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            คงเหลือหลังปรับ:{' '}
+            {t('คงเหลือหลังปรับ:')}{' '}
             <span className="font-semibold text-slate-800">
               {fmtQty(direction === 'in' ? current + qty : current - qty)} {product.unitType}
             </span>
@@ -175,7 +178,7 @@ export function AdjustPage() {
 
         <div className="flex justify-end">
           <Button onClick={submit} disabled={busy}>
-            {busy ? 'กำลังบันทึก...' : 'บันทึกการปรับ'}
+            {busy ? t("กำลังบันทึก...") : t("บันทึกการปรับ")}
           </Button>
         </div>
       </Card>

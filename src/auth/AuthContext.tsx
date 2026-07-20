@@ -16,6 +16,8 @@ import { backend, BACKEND_MODE } from '../backend'
 import { COL, type AppUser } from '../types'
 import { getAuthInstance } from '../firebase/app'
 
+import { AppError } from '../i18n/AppError'
+
 interface AuthState {
   user: AppUser | null
   loading: boolean
@@ -87,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // staff and INACTIVE (must be approved by an admin before they can access data).
             const isFirst = await claimFirstAdmin(fbUser.uid)
             await backend.set(COL.users, fbUser.uid, {
-              name: pendingName.current || fbUser.displayName || fbUser.email || 'ผู้ใช้',
+              name: pendingName.current || fbUser.displayName || fbUser.email || 'ผู้ใช้', // stored profile name, not UI copy — i18n-key
               email: fbUser.email || '',
               role: isFirst ? 'admin' : 'staff',
               active: isFirst,
@@ -101,7 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await ensureSentinel(fbUser.uid)
           }
           if (profile && profile.active === false) {
-            setNotice('บัญชีนี้ยังไม่ถูกเปิดใช้งาน — กรุณาให้ผู้ดูแลระบบอนุมัติก่อนเข้าใช้')
+            // Store the key, not translated text: this callback closes over the language
+            // at subscribe time, and LoginPage runs the notice through t() when it renders.
+            setNotice('บัญชีนี้ยังไม่ถูกเปิดใช้งาน — กรุณาให้ผู้ดูแลระบบอนุมัติก่อนเข้าใช้') // i18n-key
             await fbSignOut(auth)
             setUser(null)
           } else {
@@ -147,9 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const users = await backend.getAll<AppUser>(COL.users)
     const found = users.find((u) => u.email.toLowerCase() === em)
-    if (!found) throw new Error('ไม่พบอีเมลนี้ในระบบ')
-    if (found.active === false) throw new Error('บัญชีนี้ถูกปิดใช้งาน')
-    if (found.localPassword !== password) throw new Error('รหัสผ่านไม่ถูกต้อง')
+    if (!found) throw new AppError('ไม่พบอีเมลนี้ในระบบ')
+    if (found.active === false) throw new AppError('บัญชีนี้ถูกปิดใช้งาน')
+    if (found.localPassword !== password) throw new AppError('รหัสผ่านไม่ถูกต้อง')
     localStorage.setItem(SESSION_KEY, found.id)
     setUser(found)
     setNeedsBootstrap(false)
@@ -170,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // onAuthStateChanged loads the profile and clears loading
     } else {
       const users = await backend.getAll<AppUser>(COL.users)
-      if (users.length > 0) throw new Error('มีผู้ใช้ในระบบแล้ว กรุณาเข้าสู่ระบบ')
+      if (users.length > 0) throw new AppError('มีผู้ใช้ในระบบแล้ว กรุณาเข้าสู่ระบบ')
       const id = await backend.add(COL.users, {
         name: name.trim(),
         email: em,

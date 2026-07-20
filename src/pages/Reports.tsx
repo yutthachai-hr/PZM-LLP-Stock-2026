@@ -10,17 +10,19 @@ import {
   formatThaiDateTime,
 } from '../lib/format'
 import type { MovementType, StockMovement } from '../types'
+import { useT } from '../i18n/I18nContext'
 
 const TYPE_LABEL: Record<MovementType, string> = {
-  receive: 'รับเข้า',
-  issue: 'เบิก/โอน',
-  adjust: 'ปรับ',
-  consume: 'เบิกใช้',
+  receive: 'รับเข้า', // i18n-key
+  issue: 'เบิก/โอน', // i18n-key
+  adjust: 'ปรับ', // i18n-key
+  consume: 'เบิกใช้', // i18n-key
 }
 
 type ReportMode = 'movement' | 'snapshot'
 
 export function ReportsPage() {
+  const t = useT()
   const { movements, products, locations, locationById, qtyAt, minFor } = useData()
   const { user } = useAuth()
 
@@ -91,23 +93,23 @@ export function ReportsPage() {
     return rows.sort((a, b) => a.name.localeCompare(b.name))
   }, [products, locations, productId, locationId, qtyAt, minFor])
 
-  const branchName = locationId ? locationById(locationId)?.name ?? '' : 'ทุกคลัง'
-  const productName = productId ? products.find((p) => p.id === productId)?.name ?? '' : 'ทุกสินค้า'
+  const branchName = locationId ? locationById(locationId)?.name ?? '' : t('ทุกคลัง')
+  const productName = productId ? products.find((p) => p.id === productId)?.name ?? '' : t('ทุกสินค้า')
   const rangeText =
     fromStr || toStr
-      ? `${fromStr ? formatThaiDate(dateInputToMs(fromStr)) : 'เริ่มต้น'} - ${
-          toStr ? formatThaiDate(dateInputToMs(toStr)) : 'ปัจจุบัน'
+      ? `${fromStr ? formatThaiDate(dateInputToMs(fromStr)) : t('เริ่มต้น')} - ${
+          toStr ? formatThaiDate(dateInputToMs(toStr)) : t('ปัจจุบัน')
         }`
-      : 'ทั้งหมด'
+      : t('ทั้งหมด')
 
   const showBalance = !!productId && !!locationId && mode === 'movement'
 
   function metaLines(): string[] {
     return [
-      `คลัง/สาขา: ${branchName}`,
-      `สินค้า: ${productName}`,
-      ...(mode === 'movement' ? [`ช่วงวันที่: ${rangeText}`] : []),
-      `ออกรายงานโดย: ${user?.name ?? ''} เมื่อ ${formatThaiDateTime(Date.now())}`,
+      t('คลัง/สาขา: {name}', { name: branchName }),
+      t('สินค้า: {name}', { name: productName }),
+      ...(mode === 'movement' ? [t('ช่วงวันที่: {range}', { range: rangeText })] : []),
+      t('ออกรายงานโดย: {user} เมื่อ {when}', { user: user?.name ?? '', when: formatThaiDateTime(Date.now()) }),
     ]
   }
 
@@ -116,32 +118,34 @@ export function ReportsPage() {
     const { exportExcel } = await import('../lib/export')
     if (mode === 'movement') {
       const rows = movementRows.map(({ m, inQty, outQty, balance }) => ({
-        วันที่: formatThaiDate(m.date),
-        เลขที่: m.docNo,
-        ประเภท: TYPE_LABEL[m.type],
-        สินค้า: m.productName,
-        จาก: m.fromLocationId ? locationById(m.fromLocationId)?.name ?? '' : '',
-        ไป: m.toLocationId ? locationById(m.toLocationId)?.name ?? '' : '',
-        รับเข้า: inQty || '',
-        เบิกออก: outQty || '',
-        หน่วย: m.unit,
-        ...(showBalance ? { คงเหลือ: balance ?? '' } : {}),
-        ผู้ทำ: m.byUserName,
-        หมายเหตุ: m.note ?? '',
+        [t("วันที่")]: formatThaiDate(m.date),
+        [t("เลขที่")]: m.docNo,
+        [t("ประเภท")]: t(TYPE_LABEL[m.type]),
+        [t("สินค้า")]: m.productName,
+        [t("จาก")]: m.fromLocationId ? locationById(m.fromLocationId)?.name ?? '' : '',
+        [t("ไป")]: m.toLocationId ? locationById(m.toLocationId)?.name ?? '' : '',
+        [t("รับเข้า")]: inQty || '',
+        [t("เบิกออก")]: outQty || '',
+        [t("หน่วย")]: m.unit,
+        ...(showBalance ? { [t("คงเหลือ")]: balance ?? '' } : {}),
+        [t("ผู้ทำ")]: m.byUserName,
+        // A note is free text, except for the constants the services write ("ตั้งยอดคงเหลือ") —
+        // t() translates those and passes anything it does not recognise through unchanged.
+        [t("หมายเหตุ")]: m.note ? t(m.note) : '',
       }))
-      exportExcel(`รายงานการเคลื่อนไหว_${Date.now()}`, 'Movements', rows)
+      exportExcel(t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }), 'Movements', rows)
     } else {
       const rows = snapshotRows.map((r) => ({
-        สินค้า: r.name,
-        หมวดหมู่: r.category,
-        คลัง: r.locationName,
-        คงเหลือ: r.qty,
-        หน่วย: r.unit,
-        ขั้นต่ำ: r.min,
-        สถานะ: r.qty <= 0 ? 'หมด' : r.min > 0 && r.qty <= r.min ? 'ใกล้หมด' : 'ปกติ',
-        มูลค่า: Math.round(r.value),
+        [t("สินค้า")]: r.name,
+        [t("หมวดหมู่")]: r.category,
+        [t("คลัง")]: r.locationName,
+        [t("คงเหลือ")]: r.qty,
+        [t("หน่วย")]: r.unit,
+        [t("ขั้นต่ำ")]: r.min,
+        [t("สถานะ")]: r.qty <= 0 ? t("หมด") : r.min > 0 && r.qty <= r.min ? t("ใกล้หมด") : t("ปกติ"),
+        [t("มูลค่า")]: Math.round(r.value),
       }))
-      exportExcel(`รายงานสต๊อกคงเหลือ_${Date.now()}`, 'Stock', rows)
+      exportExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows)
     }
   }
 
@@ -149,23 +153,23 @@ export function ReportsPage() {
     const { exportReportPdf } = await import('../lib/export')
     if (mode === 'movement') {
       const head = [
-        'วันที่',
-        'เลขที่',
-        'ประเภท',
-        'สินค้า',
-        'จาก',
-        'ไป',
-        'รับเข้า',
-        'เบิกออก',
-        'หน่วย',
-        ...(showBalance ? ['คงเหลือ'] : []),
-        'หมายเหตุ / เลขบิล',
-        'ผู้ทำ',
+        t("วันที่"),
+        t("เลขที่"),
+        t("ประเภท"),
+        t("สินค้า"),
+        t("จาก"),
+        t("ไป"),
+        t("รับเข้า"),
+        t("เบิกออก"),
+        t("หน่วย"),
+        ...(showBalance ? [t("คงเหลือ")] : []),
+        t("หมายเหตุ / เลขบิล"),
+        t("ผู้ทำ"),
       ]
       const body = movementRows.map(({ m, inQty, outQty, balance }) => [
         formatThaiDate(m.date),
         m.docNo,
-        TYPE_LABEL[m.type],
+        t(TYPE_LABEL[m.type]),
         m.productName,
         m.fromLocationId ? locationById(m.fromLocationId)?.name ?? '' : '-',
         m.toLocationId ? locationById(m.toLocationId)?.name ?? '' : '-',
@@ -177,14 +181,14 @@ export function ReportsPage() {
         m.byUserName,
       ])
       exportReportPdf({
-        filename: `รายงานการเคลื่อนไหว_${Date.now()}`,
-        title: 'รายงานการเคลื่อนไหวสต๊อก — Pizza Mania',
+        filename: t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }),
+        title: t("รายงานการเคลื่อนไหวสต๊อก — Pizza Mania"),
         meta: metaLines(),
         head,
         body,
       })
     } else {
-      const head = ['สินค้า', 'หมวดหมู่', 'คลัง', 'คงเหลือ', 'หน่วย', 'ขั้นต่ำ', 'สถานะ', 'มูลค่า']
+      const head = [t("สินค้า"), t("หมวดหมู่"), t("คลัง"), t("คงเหลือ"), t("หน่วย"), t("ขั้นต่ำ"), t("สถานะ"), t("มูลค่า")]
       const body = snapshotRows.map((r) => [
         r.name,
         r.category,
@@ -192,12 +196,12 @@ export function ReportsPage() {
         fmtQty(r.qty),
         r.unit,
         fmtQty(r.min),
-        r.qty <= 0 ? 'หมด' : r.min > 0 && r.qty <= r.min ? 'ใกล้หมด' : 'ปกติ',
+        r.qty <= 0 ? t("หมด") : r.min > 0 && r.qty <= r.min ? t("ใกล้หมด") : t("ปกติ"),
         fmtMoney(r.value),
       ])
       exportReportPdf({
-        filename: `รายงานสต๊อกคงเหลือ_${Date.now()}`,
-        title: 'รายงานสต๊อกคงเหลือ — Pizza Mania',
+        filename: t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }),
+        title: t("รายงานสต๊อกคงเหลือ — Pizza Mania"),
         meta: metaLines(),
         head,
         body,
@@ -210,20 +214,20 @@ export function ReportsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">📄 รายงาน</h1>
-        <p className="text-sm text-slate-500">ดึงรายงานตามสาขา/วันที่/สินค้า แล้วดาวน์โหลดเป็น Excel หรือ PDF</p>
+        <h1 className="text-2xl font-bold text-slate-800">{t("📄 รายงาน")}</h1>
+        <p className="text-sm text-slate-500">{t("ดึงรายงานตามสาขา/วันที่/สินค้า แล้วดาวน์โหลดเป็น Excel หรือ PDF")}</p>
       </div>
 
       <Card className="space-y-4 p-4">
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          <ModeTab label="การเคลื่อนไหว" active={mode === 'movement'} onClick={() => setMode('movement')} />
-          <ModeTab label="สต๊อกคงเหลือ" active={mode === 'snapshot'} onClick={() => setMode('snapshot')} />
+          <ModeTab label={t("การเคลื่อนไหว")} active={mode === 'movement'} onClick={() => setMode('movement')} />
+          <ModeTab label={t("สต๊อกคงเหลือ")} active={mode === 'snapshot'} onClick={() => setMode('snapshot')} />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="คลัง/สาขา">
+          <Field label={t("คลัง/สาขา")}>
             <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              <option value="">ทุกคลัง</option>
+              <option value="">{t("ทุกคลัง")}</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
@@ -231,9 +235,9 @@ export function ReportsPage() {
               ))}
             </Select>
           </Field>
-          <Field label="สินค้า">
+          <Field label={t("สินค้า")}>
             <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">ทุกสินค้า</option>
+              <option value="">{t("ทุกสินค้า")}</option>
               {[...products]
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((p) => (
@@ -244,22 +248,22 @@ export function ReportsPage() {
             </Select>
           </Field>
           {mode === 'movement' && (
-            <Field label="ประเภท">
+            <Field label={t("ประเภท")}>
               <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                <option value="">ทั้งหมด</option>
-                <option value="receive">รับเข้า</option>
-                <option value="issue">เบิก/โอน</option>
-                <option value="consume">เบิกใช้</option>
-                <option value="adjust">ปรับ</option>
+                <option value="">{t("ทั้งหมด")}</option>
+                <option value="receive">{t("รับเข้า")}</option>
+                <option value="issue">{t("เบิก/โอน")}</option>
+                <option value="consume">{t("เบิกใช้")}</option>
+                <option value="adjust">{t("ปรับ")}</option>
               </Select>
             </Field>
           )}
           {mode === 'movement' && (
             <>
-              <Field label="ตั้งแต่วันที่">
+              <Field label={t("ตั้งแต่วันที่")}>
                 <Input type="date" value={fromStr} onChange={(e) => setFromStr(e.target.value)} />
               </Field>
-              <Field label="ถึงวันที่">
+              <Field label={t("ถึงวันที่")}>
                 <Input type="date" value={toStr} onChange={(e) => setToStr(e.target.value)} />
               </Field>
             </>
@@ -267,7 +271,7 @@ export function ReportsPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-          <span className="text-sm text-slate-500">พบ {count} รายการ</span>
+          <span className="text-sm text-slate-500">{t('พบ {n} รายการ', { n: count })}</span>
           <div className="flex gap-2">
             <Button variant="success" onClick={excel} disabled={count === 0}>
               ⬇️ Excel
@@ -282,7 +286,7 @@ export function ReportsPage() {
       {/* preview */}
       {count === 0 ? (
         <Card>
-          <EmptyState icon="📄" title="ไม่มีข้อมูลตามเงื่อนไข" hint="ปรับตัวกรองด้านบน" />
+          <EmptyState icon="📄" title={t("ไม่มีข้อมูลตามเงื่อนไข")} hint={t("ปรับตัวกรองด้านบน")} />
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -291,15 +295,15 @@ export function ReportsPage() {
               <table className="w-full min-w-[900px] text-sm">
                 <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
                   <tr>
-                    <th className="px-3 py-2">วันที่</th>
-                    <th className="px-3 py-2">เลขที่</th>
-                    <th className="px-3 py-2">ประเภท</th>
-                    <th className="px-3 py-2">สินค้า</th>
-                    <th className="px-3 py-2 text-right">รับเข้า</th>
-                    <th className="px-3 py-2 text-right">เบิกออก</th>
-                    {showBalance && <th className="px-3 py-2 text-right">คงเหลือ</th>}
-                    <th className="px-3 py-2">หมายเหตุ / เลขบิล</th>
-                    <th className="px-3 py-2">ผู้ทำ</th>
+                    <th className="px-3 py-2">{t("วันที่")}</th>
+                    <th className="px-3 py-2">{t("เลขที่")}</th>
+                    <th className="px-3 py-2">{t("ประเภท")}</th>
+                    <th className="px-3 py-2">{t("สินค้า")}</th>
+                    <th className="px-3 py-2 text-right">{t("รับเข้า")}</th>
+                    <th className="px-3 py-2 text-right">{t("เบิกออก")}</th>
+                    {showBalance && <th className="px-3 py-2 text-right">{t("คงเหลือ")}</th>}
+                    <th className="px-3 py-2">{t("หมายเหตุ / เลขบิล")}</th>
+                    <th className="px-3 py-2">{t("ผู้ทำ")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -307,7 +311,7 @@ export function ReportsPage() {
                     <tr key={m.id}>
                       <td className="whitespace-nowrap px-3 py-2">{formatThaiDate(m.date)}</td>
                       <td className="px-3 py-2 font-mono text-xs">{m.docNo}</td>
-                      <td className="px-3 py-2">{TYPE_LABEL[m.type]}</td>
+                      <td className="px-3 py-2">{t(TYPE_LABEL[m.type])}</td>
                       <td className="px-3 py-2">{m.productName}</td>
                       <td className="px-3 py-2 text-right text-emerald-700">
                         {inQty ? fmtQty(inQty) : ''}
@@ -328,11 +332,11 @@ export function ReportsPage() {
               <table className="w-full min-w-[640px] text-sm">
                 <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
                   <tr>
-                    <th className="px-3 py-2">สินค้า</th>
-                    <th className="px-3 py-2">คลัง</th>
-                    <th className="px-3 py-2 text-right">คงเหลือ</th>
-                    <th className="px-3 py-2 text-right">ขั้นต่ำ</th>
-                    <th className="px-3 py-2 text-right">มูลค่า</th>
+                    <th className="px-3 py-2">{t("สินค้า")}</th>
+                    <th className="px-3 py-2">{t("คลัง")}</th>
+                    <th className="px-3 py-2 text-right">{t("คงเหลือ")}</th>
+                    <th className="px-3 py-2 text-right">{t("ขั้นต่ำ")}</th>
+                    <th className="px-3 py-2 text-right">{t("มูลค่า")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -353,7 +357,7 @@ export function ReportsPage() {
           </div>
           {count > (mode === 'movement' ? 200 : 300) && (
             <div className="border-t border-slate-100 p-2 text-center text-xs text-slate-400">
-              แสดงตัวอย่าง — ไฟล์ดาวน์โหลดจะมีครบทั้ง {count} รายการ
+              {t('แสดงตัวอย่าง — ไฟล์ดาวน์โหลดจะมีครบทั้ง {n} รายการ', { n: count })}
             </div>
           )}
         </Card>

@@ -27,14 +27,17 @@ import {
   saveFirebaseConfig,
 } from '../firebase/config'
 import type { LocationType, StockLocation, Role } from '../types'
+import { useT } from '../i18n/I18nContext'
+import { errText } from '../i18n/AppError'
 
 export function SettingsPage() {
+  const t = useT()
   const { user, mode } = useAuth()
   const isAdmin = user?.role === 'admin'
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <h1 className="text-2xl font-bold text-slate-800">⚙️ ตั้งค่า</h1>
+      <h1 className="text-2xl font-bold text-slate-800">{t("⚙️ ตั้งค่า")}</h1>
 
       <CloudSection mode={mode} />
 
@@ -44,7 +47,7 @@ export function SettingsPage() {
 
       {!isAdmin && (
         <Card className="p-4 text-sm text-slate-500">
-          การจัดการคลัง ผู้ใช้ และข้อมูล ต้องเป็นสิทธิ์ผู้ดูแลระบบ (Admin)
+          {t("การจัดการคลัง ผู้ใช้ และข้อมูล ต้องเป็นสิทธิ์ผู้ดูแลระบบ (Admin)")}
         </Card>
       )}
     </div>
@@ -53,6 +56,7 @@ export function SettingsPage() {
 
 // ---------------- Cloud connection ----------------
 function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
+  const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
   const [input, setInput] = useState('')
@@ -61,20 +65,20 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
   function connect() {
     const parsed = parseConfigInput(input)
     if (!parsed) {
-      toast.error('อ่านค่า config ไม่ได้ — วางทั้งอ็อบเจกต์ firebaseConfig')
+      toast.error(t("อ่านค่า config ไม่ได้ — วางทั้งอ็อบเจกต์ firebaseConfig"))
       return
     }
     saveFirebaseConfig(parsed)
-    toast.success('บันทึกแล้ว กำลังเชื่อมต่อ Cloud...')
+    toast.success(t("บันทึกแล้ว กำลังเชื่อมต่อ Cloud..."))
     setTimeout(() => window.location.reload(), 800)
   }
 
   async function disconnect() {
     const ok = await confirm({
-      title: 'ตัดการเชื่อมต่อ Cloud',
-      message: 'กลับไปใช้โหมดในเครื่อง? ข้อมูลบน Cloud ยังอยู่ แต่เครื่องนี้จะไม่ซิงก์',
+      title: t("ตัดการเชื่อมต่อ Cloud"),
+      message: t("กลับไปใช้โหมดในเครื่อง? ข้อมูลบน Cloud ยังอยู่ แต่เครื่องนี้จะไม่ซิงก์"),
       danger: true,
-      confirmText: 'ตัดการเชื่อมต่อ',
+      confirmText: t("ตัดการเชื่อมต่อ"),
     })
     if (!ok) return
     clearFirebaseConfig()
@@ -84,24 +88,23 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
   return (
     <Card className="p-4">
       <div className="mb-2 flex items-center gap-2">
-        <h2 className="font-semibold text-slate-800">การเชื่อมต่อ Cloud</h2>
-        {mode === 'cloud' ? <Badge color="green">เชื่อมต่อแล้ว</Badge> : <Badge color="amber">โหมดในเครื่อง</Badge>}
+        <h2 className="font-semibold text-slate-800">{t("การเชื่อมต่อ Cloud")}</h2>
+        {mode === 'cloud' ? <Badge color="green">{t("เชื่อมต่อแล้ว")}</Badge> : <Badge color="amber">{t("โหมดในเครื่อง")}</Badge>}
       </div>
       {mode === 'cloud' ? (
         <div className="space-y-2 text-sm text-slate-600">
           <p>
-            เชื่อมต่อ Firebase project: <span className="font-mono">{cfg?.projectId}</span> — ข้อมูลซิงก์
-            ทุกเครื่องแบบเรียลไทม์
+            {t('เชื่อมต่อ Firebase project:')} <span className="font-mono">{cfg?.projectId}</span>{' '}
+            {t('— ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์')}
           </p>
           <Button variant="secondary" onClick={disconnect}>
-            ตัดการเชื่อมต่อ
+            {t("ตัดการเชื่อมต่อ")}
           </Button>
         </div>
       ) : (
         <div className="space-y-3 text-sm text-slate-600">
           <p>
-            ตอนนี้ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น หากต้องการใช้หลายเครื่องแบบเรียลไทม์ (ฟรี) ให้สร้าง Firebase
-            project แล้ววาง config ด้านล่าง — ดูวิธีใน README
+            {t('ตอนนี้ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น หากต้องการใช้หลายเครื่องแบบเรียลไทม์ (ฟรี) ให้สร้าง Firebase project แล้ววาง config ด้านล่าง — ดูวิธีใน README')}
           </p>
           <textarea
             className="w-full rounded-lg border border-slate-300 p-2 font-mono text-xs"
@@ -110,7 +113,7 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-          <Button onClick={connect}>เชื่อมต่อ Cloud</Button>
+          <Button onClick={connect}>{t("เชื่อมต่อ Cloud")}</Button>
         </div>
       )}
     </Card>
@@ -119,6 +122,7 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
 
 // ---------------- Locations ----------------
 function LocationsSection() {
+  const t = useT()
   const { locations } = useData()
   const toast = useToast()
   const confirm = useConfirm()
@@ -127,22 +131,22 @@ function LocationsSection() {
 
   async function remove(l: StockLocation) {
     const ok = await confirm({
-      title: 'ลบคลัง',
-      message: `ลบ "${l.name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)`,
+      title: t("ลบคลัง"),
+      message: t('ลบ "{name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)', { name: l.name }),
       danger: true,
-      confirmText: 'ลบ',
+      confirmText: t("ลบ"),
     })
     if (!ok) return
     await deleteLocation(l.id)
-    toast.success('ลบแล้ว')
+    toast.success(t("ลบแล้ว"))
   }
 
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold text-slate-800">คลัง / สาขา</h2>
+        <h2 className="font-semibold text-slate-800">{t("คลัง / สาขา")}</h2>
         <Button variant="secondary" onClick={() => setAdding(true)}>
-          + เพิ่มคลัง
+          {t("+ เพิ่มคลัง")}
         </Button>
       </div>
       <div className="divide-y divide-slate-100">
@@ -151,13 +155,13 @@ function LocationsSection() {
             <span className="text-lg">{l.type === 'warehouse' ? '🏭' : '🏬'}</span>
             <span className="flex-1 font-medium text-slate-700">{l.name}</span>
             <Badge color={l.type === 'warehouse' ? 'blue' : 'slate'}>
-              {l.type === 'warehouse' ? 'คลังหลัก' : 'สาขา'}
+              {l.type === 'warehouse' ? t("คลังหลัก") : t("สาขา")}
             </Badge>
             <button onClick={() => setEditing(l)} className="text-sm text-slate-500 hover:text-slate-700">
-              แก้ไข
+              {t("แก้ไข")}
             </button>
             <button onClick={() => remove(l)} className="text-sm text-rose-500 hover:text-rose-700">
-              ลบ
+              {t("ลบ")}
             </button>
           </div>
         ))}
@@ -170,18 +174,19 @@ function LocationsSection() {
 }
 
 function LocationEditor({ location, onClose }: { location: StockLocation | null; onClose: () => void }) {
+  const t = useT()
   const toast = useToast()
   const [name, setName] = useState(location?.name ?? '')
   const [type, setType] = useState<LocationType>(location?.type ?? 'branch')
   const [busy, setBusy] = useState(false)
 
   async function save() {
-    if (!name.trim()) return toast.error('ใส่ชื่อคลัง')
+    if (!name.trim()) return toast.error(t("ใส่ชื่อคลัง"))
     setBusy(true)
     try {
       if (location) await updateLocation(location.id, { name, type })
       else await createLocation(name, type)
-      toast.success('บันทึกแล้ว')
+      toast.success(t("บันทึกแล้ว"))
       onClose()
     } catch (e) {
       toast.error((e as Error).message)
@@ -191,20 +196,20 @@ function LocationEditor({ location, onClose }: { location: StockLocation | null;
   }
 
   return (
-    <Modal open onClose={onClose} title={location ? 'แก้ไขคลัง' : 'เพิ่มคลัง'}>
+    <Modal open onClose={onClose} title={location ? t("แก้ไขคลัง") : t("เพิ่มคลัง")}>
       <div className="space-y-4">
-        <Field label="ชื่อคลัง/สาขา" required>
+        <Field label={t("ชื่อคลัง/สาขา")} required>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="ประเภท">
+        <Field label={t("ประเภท")}>
           <Select value={type} onChange={(e) => setType(e.target.value as LocationType)}>
-            <option value="warehouse">คลังหลัก (Warehouse)</option>
-            <option value="branch">สาขา (Branch)</option>
+            <option value="warehouse">{t("คลังหลัก (Warehouse)")}</option>
+            <option value="branch">{t("สาขา (Branch)")}</option>
           </Select>
         </Field>
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>ยกเลิก</Button>
-          <Button onClick={save} disabled={busy}>บันทึก</Button>
+          <Button variant="secondary" onClick={onClose}>{t("ยกเลิก")}</Button>
+          <Button onClick={save} disabled={busy}>{t("บันทึก")}</Button>
         </div>
       </div>
     </Modal>
@@ -213,6 +218,7 @@ function LocationEditor({ location, onClose }: { location: StockLocation | null;
 
 // ---------------- Users ----------------
 function UsersSection({ currentUserId }: { currentUserId: string }) {
+  const t = useT()
   const { users } = useData()
   const toast = useToast()
   const confirm = useConfirm()
@@ -226,25 +232,25 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
   }
   async function removeUser(u: { id: string; name: string }) {
     const ok = await confirm({
-      title: 'ลบผู้ใช้',
-      message: `ลบผู้ใช้ "${u.name}" ? ผู้ใช้นี้จะเข้าระบบไม่ได้อีก (ประวัติการทำรายการที่ผ่านมายังคงอยู่)`,
+      title: t("ลบผู้ใช้"),
+      message: t('ลบผู้ใช้ "{name}" ? ผู้ใช้นี้จะเข้าระบบไม่ได้อีก (ประวัติการทำรายการที่ผ่านมายังคงอยู่)', { name: u.name }),
       danger: true,
-      confirmText: 'ลบผู้ใช้',
+      confirmText: t("ลบผู้ใช้"),
     })
     if (!ok) return
     try {
       await deleteUser(u.id)
-      toast.success('ลบผู้ใช้แล้ว')
+      toast.success(t("ลบผู้ใช้แล้ว"))
     } catch (e) {
-      toast.error('ลบไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("ลบไม่สำเร็จ:") + ' ' + errText(e, t))
     }
   }
 
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold text-slate-800">ผู้ใช้งาน</h2>
-        <Button variant="secondary" onClick={() => setAdding(true)}>+ เพิ่มผู้ใช้</Button>
+        <h2 className="font-semibold text-slate-800">{t("ผู้ใช้งาน")}</h2>
+        <Button variant="secondary" onClick={() => setAdding(true)}>{t("+ เพิ่มผู้ใช้")}</Button>
       </div>
       <div className="divide-y divide-slate-100">
         {users.map((u) => (
@@ -252,7 +258,7 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
             <div className="min-w-0 flex-1">
               <div className="font-medium text-slate-700">
                 {u.name}
-                {u.id === currentUserId && <span className="ml-1 text-xs text-slate-400">(คุณ)</span>}
+                {u.id === currentUserId && <span className="ml-1 text-xs text-slate-400">{t("(คุณ)")}</span>}
               </div>
               <div className="text-xs text-slate-400">{u.email}</div>
             </div>
@@ -262,12 +268,12 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
               className="w-32"
               disabled={u.id === currentUserId}
             >
-              <option value="admin">ผู้ดูแล</option>
-              <option value="staff">พนักงาน</option>
+              <option value="admin">{t("ผู้ดูแล")}</option>
+              <option value="staff">{t("พนักงาน")}</option>
             </Select>
             {u.active === false ? (
               <button onClick={() => toggleActive(u.id, true)} className="text-sm text-emerald-600">
-                เปิดใช้
+                {t("เปิดใช้")}
               </button>
             ) : (
               <button
@@ -275,7 +281,7 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
                 className="text-sm text-rose-500 disabled:opacity-40"
                 disabled={u.id === currentUserId}
               >
-                ปิดใช้
+                {t("ปิดใช้")}
               </button>
             )}
             {u.id !== currentUserId && (
@@ -283,18 +289,19 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
                 onClick={() => removeUser(u)}
                 className="text-sm font-medium text-rose-600 hover:underline"
               >
-                ลบ
+                {t("ลบ")}
               </button>
             )}
           </div>
         ))}
       </div>
-      {adding && <UserEditor onClose={() => setAdding(false)} onDone={() => toast.success('เพิ่มผู้ใช้แล้ว')} />}
+      {adding && <UserEditor onClose={() => setAdding(false)} onDone={() => toast.success(t("เพิ่มผู้ใช้แล้ว"))} />}
     </Card>
   )
 }
 
 function UserEditor({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const t = useT()
   const toast = useToast()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -304,40 +311,40 @@ function UserEditor({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 
   async function save() {
     if (!name.trim() || !email.trim() || password.length < 6)
-      return toast.error('กรอกชื่อ อีเมล และรหัสผ่าน (≥6 ตัว)')
+      return toast.error(t("กรอกชื่อ อีเมล และรหัสผ่าน (≥6 ตัว)"))
     setBusy(true)
     try {
       await createUser({ name, email, password, role })
       onDone()
       onClose()
     } catch (e) {
-      toast.error('สร้างไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("สร้างไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Modal open onClose={onClose} title="เพิ่มผู้ใช้">
+    <Modal open onClose={onClose} title={t("เพิ่มผู้ใช้")}>
       <div className="space-y-4">
-        <Field label="ชื่อ" required>
+        <Field label={t("ชื่อ")} required>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="อีเมล" required>
+        <Field label={t("อีเมล")} required>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
-        <Field label="รหัสผ่าน" required hint="อย่างน้อย 6 ตัวอักษร">
+        <Field label={t("รหัสผ่าน")} required hint={t("อย่างน้อย 6 ตัวอักษร")}>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
-        <Field label="สิทธิ์">
+        <Field label={t("สิทธิ์")}>
           <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="staff">พนักงาน (รับ/เบิก/ดู)</option>
-            <option value="admin">ผู้ดูแล (จัดการทั้งหมด)</option>
+            <option value="staff">{t("พนักงาน (รับ/เบิก/ดู)")}</option>
+            <option value="admin">{t("ผู้ดูแล (จัดการทั้งหมด)")}</option>
           </Select>
         </Field>
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>ยกเลิก</Button>
-          <Button onClick={save} disabled={busy}>{busy ? 'กำลังสร้าง...' : 'สร้างผู้ใช้'}</Button>
+          <Button variant="secondary" onClick={onClose}>{t("ยกเลิก")}</Button>
+          <Button onClick={save} disabled={busy}>{busy ? t("กำลังสร้าง...") : t("สร้างผู้ใช้")}</Button>
         </div>
       </div>
     </Modal>
@@ -346,6 +353,7 @@ function UserEditor({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 
 // ---------------- Maintenance ----------------
 function MaintenanceSection() {
+  const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState('')
@@ -354,7 +362,7 @@ function MaintenanceSection() {
     setBusy('recompute')
     try {
       await recomputeLevels()
-      toast.success('คำนวณยอดคงเหลือใหม่จากประวัติเรียบร้อย')
+      toast.success(t("คำนวณยอดคงเหลือใหม่จากประวัติเรียบร้อย"))
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -364,14 +372,14 @@ function MaintenanceSection() {
 
   async function seed() {
     const ok = await confirm({
-      message: 'นำเข้าแคตตาล็อกสินค้า + คลังเริ่มต้น? (ข้ามถ้ามีข้อมูลอยู่แล้ว)',
-      confirmText: 'นำเข้า',
+      message: t("นำเข้าแคตตาล็อกสินค้า + คลังเริ่มต้น? (ข้ามถ้ามีข้อมูลอยู่แล้ว)"),
+      confirmText: t("นำเข้า"),
     })
     if (!ok) return
     setBusy('seed')
     try {
       const r = await seedInitialData()
-      toast.success(`นำเข้าสินค้า ${r.products}, คลัง ${r.locations}`)
+      toast.success(t('นำเข้าสินค้า {products}, คลัง {locations}', { products: r.products, locations: r.locations }))
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -381,17 +389,17 @@ function MaintenanceSection() {
 
   return (
     <Card className="p-4">
-      <h2 className="mb-3 font-semibold text-slate-800">ดูแลข้อมูล</h2>
+      <h2 className="mb-3 font-semibold text-slate-800">{t("ดูแลข้อมูล")}</h2>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={seed} disabled={!!busy}>
-          {busy === 'seed' ? 'กำลังนำเข้า...' : 'นำเข้าแคตตาล็อกสินค้า'}
+          {busy === 'seed' ? t("กำลังนำเข้า...") : t("นำเข้าแคตตาล็อกสินค้า")}
         </Button>
         <Button variant="secondary" onClick={recompute} disabled={!!busy}>
-          {busy === 'recompute' ? 'กำลังคำนวณ...' : 'คำนวณยอดคงเหลือใหม่'}
+          {busy === 'recompute' ? t("กำลังคำนวณ...") : t("คำนวณยอดคงเหลือใหม่")}
         </Button>
       </div>
       <p className="mt-2 text-xs text-slate-400">
-        “คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)
+        {t("“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)")}
       </p>
     </Card>
   )

@@ -111,12 +111,13 @@ export const COL = {
   meta: 'meta',
 } as const
 
+// Labels are translation keys — screens render them through t(). i18n-key
 export const ADJUST_REASONS = [
-  { value: 'lost', label: 'ของหาย' },
-  { value: 'broken', label: 'แตก/ชำรุด' },
-  { value: 'expired', label: 'หมดอายุ' },
-  { value: 'damage', label: 'เสียหาย' },
-  { value: 'found', label: 'พบเพิ่ม (นับได้เกิน)' },
-  { value: 'count', label: 'ปรับตามการนับ' },
-  { value: 'opening', label: 'ตั้งยอด/ยอดยกมา' },
+  { value: 'lost', label: 'ของหาย' }, // i18n-key
+  { value: 'broken', label: 'แตก/ชำรุด' }, // i18n-key
+  { value: 'expired', label: 'หมดอายุ' }, // i18n-key
+  { value: 'damage', label: 'เสียหาย' }, // i18n-key
+  { value: 'found', label: 'พบเพิ่ม (นับได้เกิน)' }, // i18n-key
+  { value: 'count', label: 'ปรับตามการนับ' }, // i18n-key
+  { value: 'opening', label: 'ตั้งยอด/ยอดยกมา' }, // i18n-key
 ] as const

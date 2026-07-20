@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { AppError } from '../i18n/AppError'
 import {
   COL,
   type StockMovement,
@@ -52,8 +53,8 @@ export async function receiveStock(params: {
   note?: string
 }): Promise<string> {
   const { lines, toLocationId, date, actor, note } = params
-  if (lines.length === 0) throw new Error('ไม่มีรายการสินค้า')
-  for (const l of lines) if (!(l.qty > 0)) throw new Error('จำนวนต้องมากกว่า 0')
+  if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
+  for (const l of lines) if (!(l.qty > 0)) throw new AppError('จำนวนต้องมากกว่า 0')
 
   return backend.transaction(async (tx) => {
     // ---- reads ----
@@ -105,9 +106,9 @@ export async function issueStock(params: {
   note?: string
 }): Promise<string> {
   const { lines, fromLocationId, toLocationId, date, actor, note } = params
-  if (lines.length === 0) throw new Error('ไม่มีรายการสินค้า')
-  if (fromLocationId === toLocationId) throw new Error('ต้นทางและปลายทางต้องต่างกัน')
-  for (const l of lines) if (!(l.qty > 0)) throw new Error('จำนวนต้องมากกว่า 0')
+  if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
+  if (fromLocationId === toLocationId) throw new AppError('ต้นทางและปลายทางต้องต่างกัน')
+  for (const l of lines) if (!(l.qty > 0)) throw new AppError('จำนวนต้องมากกว่า 0')
 
   return backend.transaction(async (tx) => {
     // ---- reads ----
@@ -123,7 +124,7 @@ export async function issueStock(params: {
     lines.forEach((l, i) => {
       const avail = fromLevels[i]?.qty ?? 0
       if (l.qty > avail) {
-        throw new Error(`สต๊อกไม่พอสำหรับ "${l.productName}" (คงเหลือ ${avail} ${l.unit})`)
+        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: l.unit })
       }
     })
     // ---- writes ----
@@ -181,8 +182,8 @@ export async function consumeStock(params: {
   photoDataUrl?: string
 }): Promise<string> {
   const { lines, fromLocationId, date, actor, note, photoDataUrl } = params
-  if (lines.length === 0) throw new Error('ไม่มีรายการสินค้า')
-  for (const l of lines) if (!(l.qty > 0)) throw new Error('จำนวนต้องมากกว่า 0')
+  if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
+  for (const l of lines) if (!(l.qty > 0)) throw new AppError('จำนวนต้องมากกว่า 0')
 
   const docNo = await backend.transaction(async (tx) => {
     // ---- reads ----
@@ -194,7 +195,7 @@ export async function consumeStock(params: {
     lines.forEach((l, i) => {
       const avail = levels[i]?.qty ?? 0
       if (l.qty > avail) {
-        throw new Error(`สต๊อกไม่พอสำหรับ "${l.productName}" (คงเหลือ ${avail} ${l.unit})`)
+        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: l.unit })
       }
     })
     // ---- writes ----
@@ -256,7 +257,7 @@ export async function adjustStock(params: {
 }): Promise<string> {
   const { productId, productName, unit, locationId, direction, qty, reason, date, actor, note } =
     params
-  if (!(qty > 0)) throw new Error('จำนวนต้องมากกว่า 0')
+  if (!(qty > 0)) throw new AppError('จำนวนต้องมากกว่า 0')
 
   return backend.transaction(async (tx) => {
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
@@ -265,7 +266,7 @@ export async function adjustStock(params: {
     const cur = level?.qty ?? 0
     const delta = direction === 'in' ? qty : -qty
     const next = cur + delta
-    if (next < 0) throw new Error(`สต๊อกไม่พอ (คงเหลือ ${cur} ${unit})`)
+    if (next < 0) throw new AppError('สต๊อกไม่พอ (คงเหลือ {qty} {unit})', { qty: cur, unit })
 
     const docNo = makeDocNo('adjust', seq)
     tx.set(COL.counters, 'adjust', { value: seq })
@@ -311,7 +312,7 @@ export async function setStockCount(params: {
   note?: string
 }): Promise<void> {
   const { productId, productName, unit, locationId, targetQty, actor, note } = params
-  if (targetQty < 0) throw new Error('จำนวนต้องไม่ติดลบ')
+  if (targetQty < 0) throw new AppError('จำนวนต้องไม่ติดลบ')
 
   return backend.transaction(async (tx) => {
     const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
@@ -357,12 +358,12 @@ export async function editMovementQty(params: {
   actor: Actor
 }): Promise<void> {
   const { movementId, newQty, newDate, newNote, actor } = params
-  if (!(newQty > 0)) throw new Error('จำนวนต้องมากกว่า 0')
+  if (!(newQty > 0)) throw new AppError('จำนวนต้องมากกว่า 0')
 
   return backend.transaction(async (tx) => {
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
-    if (!mv) throw new Error('ไม่พบรายการ')
-    if (mv.voided) throw new Error('รายการนี้ถูกยกเลิกแล้ว')
+    if (!mv) throw new AppError('ไม่พบรายการ')
+    if (mv.voided) throw new AppError('รายการนี้ถูกยกเลิกแล้ว')
     const delta = newQty - mv.qty
 
     const fromLevel = mv.fromLocationId
@@ -376,7 +377,7 @@ export async function editMovementQty(params: {
     if (mv.fromLocationId) {
       const cur = fromLevel?.qty ?? 0
       const next = cur - delta // more qty out => lower balance
-      if (next < 0) throw new Error('แก้ไขไม่ได้: สต๊อกต้นทางจะติดลบ')
+      if (next < 0) throw new AppError('แก้ไขไม่ได้: สต๊อกต้นทางจะติดลบ')
       tx.set(COL.stockLevels, levelId(mv.fromLocationId, mv.productId), {
         productId: mv.productId,
         locationId: mv.fromLocationId,
@@ -387,7 +388,7 @@ export async function editMovementQty(params: {
     if (mv.toLocationId) {
       const cur = toLevel?.qty ?? 0
       const next = cur + delta
-      if (next < 0) throw new Error('แก้ไขไม่ได้: สต๊อกปลายทางจะติดลบ')
+      if (next < 0) throw new AppError('แก้ไขไม่ได้: สต๊อกปลายทางจะติดลบ')
       tx.set(COL.stockLevels, levelId(mv.toLocationId, mv.productId), {
         productId: mv.productId,
         locationId: mv.toLocationId,
@@ -410,7 +411,7 @@ export async function editMovementQty(params: {
 export async function voidMovement(movementId: string, actor: Actor): Promise<void> {
   return backend.transaction(async (tx) => {
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
-    if (!mv) throw new Error('ไม่พบรายการ')
+    if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) return
 
     const fromLevel = mv.fromLocationId

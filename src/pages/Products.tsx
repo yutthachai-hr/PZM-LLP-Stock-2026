@@ -31,21 +31,24 @@ import { setStockCount } from '../services/stock'
 import { compressImage } from '../lib/image'
 import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
+import { useT } from '../i18n/I18nContext'
+import { errText } from '../i18n/AppError'
 
 type SearchIn = 'all' | 'name' | 'sku'
 type StockStatus = 'all' | 'low' | 'out' | 'in'
 type SortKey = 'name-asc' | 'name-desc' | 'sku-asc' | 'sku-desc' | 'qty-desc' | 'qty-asc'
 
 const SORTS: { value: SortKey; label: string }[] = [
-  { value: 'name-asc', label: 'ชื่อ ก→ฮ / A→Z' },
-  { value: 'name-desc', label: 'ชื่อ ฮ→ก / Z→A' },
-  { value: 'sku-asc', label: 'รหัสสินค้า น้อย→มาก' },
-  { value: 'sku-desc', label: 'รหัสสินค้า มาก→น้อย' },
-  { value: 'qty-desc', label: 'คงเหลือ มาก→น้อย' },
-  { value: 'qty-asc', label: 'คงเหลือ น้อย→มาก' },
+  { value: 'name-asc', label: 'ชื่อ ก→ฮ / A→Z' }, // i18n-key
+  { value: 'name-desc', label: 'ชื่อ ฮ→ก / Z→A' }, // i18n-key
+  { value: 'sku-asc', label: 'รหัสสินค้า น้อย→มาก' }, // i18n-key
+  { value: 'sku-desc', label: 'รหัสสินค้า มาก→น้อย' }, // i18n-key
+  { value: 'qty-desc', label: 'คงเหลือ มาก→น้อย' }, // i18n-key
+  { value: 'qty-asc', label: 'คงเหลือ น้อย→มาก' }, // i18n-key
 ]
 
 export function ProductsPage() {
+  const t = useT()
   const { products, locations, qtyAt, loading } = useData()
   const { user } = useAuth()
   const { brand } = useBrand()
@@ -133,9 +136,9 @@ export function ProductsPage() {
     setSeeding(true)
     try {
       const r = await seedInitialData()
-      toast.success(`นำเข้าสินค้า ${r.products} รายการ, คลัง ${r.locations} แห่ง`)
+      toast.success(t('นำเข้าสินค้า {products} รายการ, คลัง {locations} แห่ง', { products: r.products, locations: r.locations }))
     } catch (e) {
-      toast.error('นำเข้าไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("นำเข้าไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setSeeding(false)
     }
@@ -144,48 +147,52 @@ export function ProductsPage() {
   async function handleReset() {
     const name = brand ? brandDef(brand).name : ''
     const ok = await confirm({
-      title: 'ล้างและนำเข้าสินค้าใหม่',
+      title: t("ล้างและนำเข้าสินค้าใหม่"),
       message:
-        `ลบสินค้าทั้ง ${products.length} รายการของ ${name} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) ` +
-        `แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า ${catalogCount} รายการแทน?\n\n` +
-        'ประวัติการเคลื่อนไหวจะยังอยู่ครบ แต่ยอดคงเหลือที่นับไว้จะหายทั้งหมด — ย้อนกลับไม่ได้',
+        t('ลบสินค้าทั้ง {count} รายการของ {brand} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า {catalog} รายการแทน?', {
+          count: products.length,
+          brand: name,
+          catalog: catalogCount,
+        }) +
+        '\n\n' +
+        t('ประวัติการเคลื่อนไหวจะยังอยู่ครบ แต่ยอดคงเหลือที่นับไว้จะหายทั้งหมด — ย้อนกลับไม่ได้'),
       danger: true,
-      confirmText: 'ล้างและนำเข้าใหม่',
+      confirmText: t("ล้างและนำเข้าใหม่"),
     })
     if (!ok) return
     setResetting(true)
     try {
       const r = await resetCatalog()
-      toast.success(`ลบ ${r.removed} รายการ, นำเข้าใหม่ ${r.imported} รายการ`)
+      toast.success(t('ลบ {removed} รายการ, นำเข้าใหม่ {imported} รายการ', { removed: r.removed, imported: r.imported }))
     } catch (e) {
-      toast.error('นำเข้าไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("นำเข้าไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setResetting(false)
     }
   }
 
-  if (loading) return <Spinner label="กำลังโหลดสินค้า..." />
+  if (loading) return <Spinner label={t("กำลังโหลดสินค้า...")} />
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">สินค้าคงคลัง</h1>
-          <p className="text-sm text-slate-500">{products.length} รายการ</p>
+          <h1 className="text-2xl font-bold text-slate-800">{t("สินค้าคงคลัง")}</h1>
+          <p className="text-sm text-slate-500">{t('{n} รายการ', { n: products.length })}</p>
         </div>
         {isAdmin && (
           <div className="flex gap-2">
             {products.length === 0 && catalogCount > 0 && (
               <Button variant="secondary" onClick={handleSeed} disabled={seeding}>
-                {seeding ? 'กำลังนำเข้า...' : `⬇️ นำเข้าแคตตาล็อกสินค้า (${catalogCount} รายการ)`}
+                {seeding ? t("กำลังนำเข้า...") : t('⬇️ นำเข้าแคตตาล็อกสินค้า ({n} รายการ)', { n: catalogCount })}
               </Button>
             )}
             {products.length > 0 && catalogCount > 0 && (
               <Button variant="secondary" onClick={handleReset} disabled={resetting}>
-                {resetting ? 'กำลังนำเข้า...' : '♻️ ล้างและนำเข้าใหม่'}
+                {resetting ? t("กำลังนำเข้า...") : t("♻️ ล้างและนำเข้าใหม่")}
               </Button>
             )}
-            <Button onClick={() => setCreating(true)}>+ เพิ่มสินค้า</Button>
+            <Button onClick={() => setCreating(true)}>{t("+ เพิ่มสินค้า")}</Button>
           </div>
         )}
       </div>
@@ -193,31 +200,31 @@ export function ProductsPage() {
       <Card className="p-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex min-w-[260px] flex-1 gap-2">
-            <Field label="ค้นหา">
+            <Field label={t("ค้นหา")}>
               <Input
                 placeholder={
-                  searchIn === 'sku' ? 'เช่น VGT-01' : searchIn === 'name' ? 'เช่น MOZZARELLA' : 'ชื่อ / รหัส / หมวดหมู่...'
+                  searchIn === 'sku' ? t("เช่น VGT-01") : searchIn === 'name' ? t("เช่น MOZZARELLA") : t("ชื่อ / รหัส / หมวดหมู่...")
                 }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </Field>
-            <Field label="ค้นจาก">
+            <Field label={t("ค้นจาก")}>
               <Select
                 value={searchIn}
                 onChange={(e) => setSearchIn(e.target.value as SearchIn)}
                 className="w-[130px]"
               >
-                <option value="all">ทั้งหมด</option>
-                <option value="name">ชื่อสินค้า</option>
-                <option value="sku">รหัสสินค้า</option>
+                <option value="all">{t("ทั้งหมด")}</option>
+                <option value="name">{t("ชื่อสินค้า")}</option>
+                <option value="sku">{t("รหัสสินค้า")}</option>
               </Select>
             </Field>
           </div>
 
-          <Field label="หมวดหมู่">
+          <Field label={t("หมวดหมู่")}>
             <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-[190px]">
-              <option value="">ทุกหมวดหมู่</option>
+              <option value="">{t("ทุกหมวดหมู่")}</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -226,22 +233,22 @@ export function ProductsPage() {
             </Select>
           </Field>
 
-          <Field label="สถานะ">
+          <Field label={t("สถานะ")}>
             <Select
               value={status}
               onChange={(e) => setStatus(e.target.value as StockStatus)}
               className="w-[140px]"
             >
-              <option value="all">ทุกสถานะ</option>
-              <option value="low">ใกล้หมด</option>
-              <option value="out">หมดสต๊อก</option>
-              <option value="in">มีของ</option>
+              <option value="all">{t("ทุกสถานะ")}</option>
+              <option value="low">{t("ใกล้หมด")}</option>
+              <option value="out">{t("หมดสต๊อก")}</option>
+              <option value="in">{t("มีของ")}</option>
             </Select>
           </Field>
 
-          <Field label="ดูคงเหลือของ">
+          <Field label={t("ดูคงเหลือของ")}>
             <Select value={locId} onChange={(e) => setLocId(e.target.value)} className="w-[170px]">
-              <option value="">ทุกคลังรวมกัน</option>
+              <option value="">{t("ทุกคลังรวมกัน")}</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.type === 'warehouse' ? '🏭' : '🏬'} {l.name}
@@ -250,7 +257,7 @@ export function ProductsPage() {
             </Select>
           </Field>
 
-          <Field label="เรียงตาม">
+          <Field label={t("เรียงตาม")}>
             <Select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
@@ -258,7 +265,7 @@ export function ProductsPage() {
             >
               {SORTS.map((s) => (
                 <option key={s.value} value={s.value}>
-                  {s.label}
+                  {t(s.label)}
                 </option>
               ))}
             </Select>
@@ -267,11 +274,11 @@ export function ProductsPage() {
 
         <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-500">
           <span>
-            แสดง <b className="text-slate-700">{filtered.length}</b> จาก {products.length} รายการ
+            {t('แสดง {shown} จาก {total} รายการ', { shown: filtered.length, total: products.length })}
           </span>
           {filterCount > 0 && (
             <button onClick={clearFilters} className="font-medium text-red-700 hover:underline">
-              ล้างตัวกรอง ({filterCount})
+              {t('ล้างตัวกรอง ({n})', { n: filterCount })}
             </button>
           )}
         </div>
@@ -280,12 +287,12 @@ export function ProductsPage() {
       {filtered.length === 0 ? (
         <Card>
           {products.length > 0 ? (
-            <EmptyState icon="🔍" title="ไม่พบสินค้าที่ตรงกับตัวกรอง" hint="ลองล้างตัวกรองแล้วค้นใหม่" />
+            <EmptyState icon="🔍" title={t("ไม่พบสินค้าที่ตรงกับตัวกรอง")} hint={t("ลองล้างตัวกรองแล้วค้นใหม่")} />
           ) : (
             <EmptyState
               icon="📦"
-              title="ยังไม่มีสินค้า"
-              hint={isAdmin ? 'กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”' : 'ยังไม่มีข้อมูลสินค้า'}
+              title={t("ยังไม่มีสินค้า")}
+              hint={isAdmin ? t("กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”") : t("ยังไม่มีข้อมูลสินค้า")}
             />
           )}
         </Card>
@@ -295,13 +302,13 @@ export function ProductsPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
                 <tr>
-                  <th className="px-3 py-2">สินค้า</th>
-                  <th className="px-3 py-2">หมวดหมู่</th>
+                  <th className="px-3 py-2">{t("สินค้า")}</th>
+                  <th className="px-3 py-2">{t("หมวดหมู่")}</th>
                   <th className="px-3 py-2 text-right">
-                    {locId ? locations.find((l) => l.id === locId)?.name : 'คงเหลือรวม'}
+                    {locId ? locations.find((l) => l.id === locId)?.name : t("คงเหลือรวม")}
                   </th>
-                  <th className="px-3 py-2 text-right">ขั้นต่ำ</th>
-                  <th className="px-3 py-2">หน่วย</th>
+                  <th className="px-3 py-2 text-right">{t("ขั้นต่ำ")}</th>
+                  <th className="px-3 py-2">{t("หน่วย")}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -327,7 +334,7 @@ export function ProductsPage() {
                         </span>
                         {low && (
                           <span className="ml-2 align-middle">
-                            <Badge color="red">ใกล้หมด</Badge>
+                            <Badge color="red">{t("ใกล้หมด")}</Badge>
                           </span>
                         )}
                       </td>
@@ -335,7 +342,7 @@ export function ProductsPage() {
                       <td className="px-3 py-2 text-slate-600">{p.unitType}</td>
                       <td className="px-3 py-2 text-right">
                         <Button variant="ghost" onClick={() => setEditing(p)}>
-                          {isAdmin ? 'แก้ไข' : 'ดู'}
+                          {isAdmin ? t("แก้ไข") : t("ดู")}
                         </Button>
                       </td>
                     </tr>
@@ -373,16 +380,18 @@ function ProductEditor({
   canEdit: boolean
   onClose: () => void
 }) {
+  const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
   const { locations, qtyAt } = useData()
   const { user } = useAuth()
+  const { brand } = useBrand()
   const fileRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState<ProductInput>({
     sku: product?.sku ?? '',
     name: product?.name ?? '',
     category: product?.category ?? '',
-    unit: product?.unit ?? 'หน่วย',
+    unit: product?.unit ?? t("หน่วย"),
     unitType: product?.unitType ?? 'EA',
     minStock: product?.minStock ?? 0,
     cost: product?.cost,
@@ -431,13 +440,13 @@ function ProductEditor({
       setNewImg(compressed)
       setRemoveImg(false)
     } catch {
-      toast.error('อ่านรูปไม่สำเร็จ')
+      toast.error(t("อ่านรูปไม่สำเร็จ"))
     }
   }
 
   async function save() {
-    if (!form.name.trim()) return toast.error('กรุณาใส่ชื่อสินค้า')
-    if (!form.category.trim()) return toast.error('กรุณาใส่หมวดหมู่')
+    if (!form.name.trim()) return toast.error(t("กรุณาใส่ชื่อสินค้า"))
+    if (!form.category.trim()) return toast.error(t("กรุณาใส่หมวดหมู่"))
     setBusy(true)
     try {
       let id = product?.id
@@ -470,10 +479,10 @@ function ProductEditor({
           }
         }
       }
-      toast.success(product ? 'บันทึกการแก้ไขแล้ว' : 'เพิ่มสินค้าแล้ว')
+      toast.success(product ? t("บันทึกการแก้ไขแล้ว") : t("เพิ่มสินค้าแล้ว"))
       onClose()
     } catch (e) {
-      toast.error('บันทึกไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setBusy(false)
     }
@@ -482,19 +491,19 @@ function ProductEditor({
   async function remove() {
     if (!product) return
     const ok = await confirm({
-      title: 'ลบสินค้า',
-      message: `ลบ "${product.name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ`,
+      title: t("ลบสินค้า"),
+      message: t('ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ', { name: product.name }),
       danger: true,
-      confirmText: 'ลบ',
+      confirmText: t("ลบ"),
     })
     if (!ok) return
     setBusy(true)
     try {
       await deleteProduct(product.id)
-      toast.success('ลบแล้ว')
+      toast.success(t("ลบแล้ว"))
       onClose()
     } catch (e) {
-      toast.error('ลบไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("ลบไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setBusy(false)
     }
@@ -503,7 +512,7 @@ function ProductEditor({
   const preview = removeImg ? null : (newImg ?? existingImg)
 
   return (
-    <Modal open onClose={onClose} title={product ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า'} wide>
+    <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2 flex items-center gap-4">
           <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -512,7 +521,9 @@ function ProductEditor({
             ) : preview ? (
               <img src={preview} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-3xl text-slate-300">🍕</div>
+              <div className="flex h-full items-center justify-center text-3xl text-slate-300">
+                {brand ? brandDef(brand).productIcon : '📦'}
+              </div>
             )}
           </div>
           {canEdit && (
@@ -526,7 +537,7 @@ function ProductEditor({
                 onChange={pickImage}
               />
               <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-                📷 เลือกรูป / ถ่ายรูป
+                {t("📷 เลือกรูป / ถ่ายรูป")}
               </Button>
               {preview && (
                 <Button
@@ -536,29 +547,29 @@ function ProductEditor({
                     setRemoveImg(true)
                   }}
                 >
-                  ลบรูป
+                  {t("ลบรูป")}
                 </Button>
               )}
-              <p className="text-xs text-slate-400">รูปจะถูกย่อให้เล็กอัตโนมัติ</p>
+              <p className="text-xs text-slate-400">{t("รูปจะถูกย่อให้เล็กอัตโนมัติ")}</p>
             </div>
           )}
         </div>
 
-        <Field label="ชื่อสินค้า" required>
+        <Field label={t("ชื่อสินค้า")} required>
           <Input
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             disabled={!canEdit}
           />
         </Field>
-        <Field label="SKU / รหัส">
+        <Field label={t("SKU / รหัส")}>
           <Input
             value={form.sku}
             onChange={(e) => setForm({ ...form, sku: e.target.value })}
             disabled={!canEdit}
           />
         </Field>
-        <Field label="หมวดหมู่" required>
+        <Field label={t("หมวดหมู่")} required>
           <Input
             list="cat-list"
             value={form.category}
@@ -571,23 +582,23 @@ function ProductEditor({
             ))}
           </datalist>
         </Field>
-        <Field label="หน่วยนับ (แสดงผล)">
+        <Field label={t("หน่วยนับ (แสดงผล)")}>
           <Input
             value={form.unit}
             onChange={(e) => setForm({ ...form, unit: e.target.value })}
-            placeholder="เช่น Kilogram, ขวด, แพ็ค"
+            placeholder={t("เช่น Kilogram, ขวด, แพ็ค")}
             disabled={!canEdit}
           />
         </Field>
-        <Field label="ตัวย่อหน่วย">
+        <Field label={t("ตัวย่อหน่วย")}>
           <Input
             value={form.unitType}
             onChange={(e) => setForm({ ...form, unitType: e.target.value })}
-            placeholder="เช่น KG, EA, Pack"
+            placeholder={t("เช่น KG, EA, Pack")}
             disabled={!canEdit}
           />
         </Field>
-        <Field label="สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อถึง)">
+        <Field label={t("สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อถึง)")}>
           <Input
             type="number"
             step="any"
@@ -597,7 +608,7 @@ function ProductEditor({
             disabled={!canEdit}
           />
         </Field>
-        <Field label="ต้นทุน/หน่วย (ไม่บังคับ)">
+        <Field label={t("ต้นทุน/หน่วย (ไม่บังคับ)")}>
           <Input
             type="number"
             step="any"
@@ -614,10 +625,10 @@ function ProductEditor({
       {product && canEdit && (
         <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
           <div className="mb-1 text-sm font-semibold text-slate-700">
-            ยอดคงเหลือปัจจุบัน (พิมพ์จำนวนที่มีจริง)
+            {t("ยอดคงเหลือปัจจุบัน (พิมพ์จำนวนที่มีจริง)")}
           </div>
           <p className="mb-3 text-xs text-slate-400">
-            แก้ตัวเลขให้ตรงกับของจริงในคลัง — ระบบจะบันทึกเป็นรายการ “ตั้งยอด/ยอดยกมา” ให้อัตโนมัติ (เก็บประวัติครบ)
+            {t("แก้ตัวเลขให้ตรงกับของจริงในคลัง — ระบบจะบันทึกเป็นรายการ “ตั้งยอด/ยอดยกมา” ให้อัตโนมัติ (เก็บประวัติครบ)")}
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {locations.map((l) => (
@@ -644,17 +655,17 @@ function ProductEditor({
         <div>
           {canEdit && product && (
             <Button variant="danger" onClick={remove} disabled={busy}>
-              ลบสินค้า
+              {t("ลบสินค้า")}
             </Button>
           )}
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={onClose}>
-            ปิด
+            {t("ปิด")}
           </Button>
           {canEdit && (
             <Button onClick={save} disabled={busy}>
-              {busy ? 'กำลังบันทึก...' : 'บันทึก'}
+              {busy ? t("กำลังบันทึก...") : t("บันทึก")}
             </Button>
           )}
         </div>

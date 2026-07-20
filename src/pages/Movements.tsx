@@ -7,12 +7,14 @@ import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select } from '..
 import { editMovementQty, voidMovement, getMovementImage } from '../services/stock'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs } from '../lib/format'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
+import { useT } from '../i18n/I18nContext'
+import { errText } from '../i18n/AppError'
 
 const TYPE_LABEL: Record<MovementType, string> = {
-  receive: 'รับเข้า',
-  issue: 'เบิก/โอน',
-  adjust: 'ปรับ',
-  consume: 'เบิกใช้',
+  receive: 'รับเข้า', // i18n-key
+  issue: 'เบิก/โอน', // i18n-key
+  adjust: 'ปรับ', // i18n-key
+  consume: 'เบิกใช้', // i18n-key
 }
 const TYPE_COLOR: Record<MovementType, 'green' | 'blue' | 'amber' | 'red'> = {
   receive: 'green',
@@ -22,9 +24,10 @@ const TYPE_COLOR: Record<MovementType, 'green' | 'blue' | 'amber' | 'red'> = {
 }
 
 export function MovementsPage() {
+  const t = useT()
   const { movements, locations, products, locationById } = useData()
   const { user } = useAuth()
-  const toast = useToast()
+  const toast = useToast() // i18n-key
   const confirm = useConfirm()
   const isAdmin = user?.role === 'admin'
 
@@ -66,34 +69,34 @@ export function MovementsPage() {
 
   async function doVoid(m: StockMovement) {
     const ok = await confirm({
-      title: 'ยกเลิกรายการ',
-      message: `ยกเลิกรายการ ${m.docNo} (${m.productName})? ระบบจะคืนยอดสต๊อกกลับ`,
+      title: t("ยกเลิกรายการ"),
+      message: t('ยกเลิกรายการ {docNo} ({name})? ระบบจะคืนยอดสต๊อกกลับ', { docNo: m.docNo, name: m.productName }),
       danger: true,
-      confirmText: 'ยกเลิกรายการ',
+      confirmText: t("ยกเลิกรายการ"),
     })
     if (!ok) return
     try {
       await voidMovement(m.id, { id: user!.id, name: user!.name })
-      toast.success('ยกเลิกรายการแล้ว (คืนสต๊อก)')
+      toast.success(t("ยกเลิกรายการแล้ว (คืนสต๊อก)"))
     } catch (e) {
-      toast.error('ทำรายการไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("ทำรายการไม่สำเร็จ:") + ' ' + errText(e, t))
     }
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">📜 ประวัติ / Stock Card</h1>
+        <h1 className="text-2xl font-bold text-slate-800">{t("📜 ประวัติ / Stock Card")}</h1>
         <p className="text-sm text-slate-500">
-          ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card
+          {t("ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card")}
         </p>
       </div>
 
       <Card className="p-3">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <Field label="สินค้า">
+          <Field label={t("สินค้า")}>
             <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">ทุกสินค้า</option>
+              <option value="">{t("ทุกสินค้า")}</option>
               {[...products]
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((p) => (
@@ -103,9 +106,9 @@ export function MovementsPage() {
                 ))}
             </Select>
           </Field>
-          <Field label="คลัง/สาขา">
+          <Field label={t("คลัง/สาขา")}>
             <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              <option value="">ทุกคลัง</option>
+              <option value="">{t("ทุกคลัง")}</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
@@ -113,32 +116,32 @@ export function MovementsPage() {
               ))}
             </Select>
           </Field>
-          <Field label="ประเภท">
+          <Field label={t("ประเภท")}>
             <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-              <option value="">ทั้งหมด</option>
-              <option value="receive">รับเข้า</option>
-              <option value="issue">เบิก/โอน</option>
-              <option value="consume">เบิกใช้</option>
-              <option value="adjust">ปรับ</option>
+              <option value="">{t("ทั้งหมด")}</option>
+              <option value="receive">{t("รับเข้า")}</option>
+              <option value="issue">{t("เบิก/โอน")}</option>
+              <option value="consume">{t("เบิกใช้")}</option>
+              <option value="adjust">{t("ปรับ")}</option>
             </Select>
           </Field>
-          <Field label="ตั้งแต่วันที่">
+          <Field label={t("ตั้งแต่วันที่")}>
             <Input type="date" value={fromStr} onChange={(e) => setFromStr(e.target.value)} />
           </Field>
-          <Field label="ถึงวันที่">
+          <Field label={t("ถึงวันที่")}>
             <Input type="date" value={toStr} onChange={(e) => setToStr(e.target.value)} />
           </Field>
         </div>
         {stockCardMode && (
           <p className="mt-2 text-xs text-emerald-700">
-            📗 โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก
+            {t("📗 โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก")}
           </p>
         )}
       </Card>
 
       {filtered.length === 0 ? (
         <Card>
-          <EmptyState icon="📜" title="ไม่พบรายการ" hint="ลองปรับตัวกรอง" />
+          <EmptyState icon="📜" title={t("ไม่พบรายการ")} hint={t("ลองปรับตัวกรอง")} />
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -146,14 +149,14 @@ export function MovementsPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
                 <tr>
-                  <th className="px-3 py-2">วันที่</th>
-                  <th className="px-3 py-2">เลขที่</th>
-                  <th className="px-3 py-2">ประเภท</th>
-                  <th className="px-3 py-2">สินค้า</th>
-                  <th className="px-3 py-2">คลัง</th>
-                  <th className="px-3 py-2 text-right">จำนวน</th>
-                  {stockCardMode && <th className="px-3 py-2 text-right">คงเหลือ</th>}
-                  <th className="px-3 py-2">โดย</th>
+                  <th className="px-3 py-2">{t("วันที่")}</th>
+                  <th className="px-3 py-2">{t("เลขที่")}</th>
+                  <th className="px-3 py-2">{t("ประเภท")}</th>
+                  <th className="px-3 py-2">{t("สินค้า")}</th>
+                  <th className="px-3 py-2">{t("คลัง")}</th>
+                  <th className="px-3 py-2 text-right">{t("จำนวน")}</th>
+                  {stockCardMode && <th className="px-3 py-2 text-right">{t("คงเหลือ")}</th>}
+                  <th className="px-3 py-2">{t("โดย")}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -165,8 +168,8 @@ export function MovementsPage() {
                       <td className="whitespace-nowrap px-3 py-2">{formatThaiDate(m.date)}</td>
                       <td className="px-3 py-2 font-mono text-xs">{m.docNo}</td>
                       <td className="px-3 py-2">
-                        <Badge color={TYPE_COLOR[m.type]}>{TYPE_LABEL[m.type]}</Badge>
-                        {m.voided && <span className="ml-1 text-xs">(ยกเลิก)</span>}
+                        <Badge color={TYPE_COLOR[m.type]}>{t(TYPE_LABEL[m.type])}</Badge>
+                        {m.voided && <span className="ml-1 text-xs">{t("(ยกเลิก)")}</span>}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2 font-medium text-slate-700">
@@ -174,7 +177,7 @@ export function MovementsPage() {
                           {m.hasPhoto && (
                             <button
                               onClick={() => setPhotoDoc(m.docNo)}
-                              title="ดูรูปหลักฐาน"
+                              title={t("ดูรูปหลักฐาน")}
                               className="text-sm"
                             >
                               📷
@@ -183,7 +186,7 @@ export function MovementsPage() {
                         </div>
                         {m.reason && (
                           <div className="text-xs text-slate-400">
-                            {ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason}
+                            {t(ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason)}
                           </div>
                         )}
                       </td>
@@ -207,20 +210,20 @@ export function MovementsPage() {
                       )}
                       <td className="px-3 py-2 text-xs text-slate-500">
                         {m.byUserName}
-                        {m.updatedByName && <div className="text-amber-600">แก้ไข: {m.updatedByName}</div>}
+                        {m.updatedByName && <div className="text-amber-600">{t('แก้ไข:')} {m.updatedByName}</div>}
                       </td>
                       <td className="px-3 py-2 text-right">
                         {!m.voided && (
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" onClick={() => setEditing(m)}>
-                              แก้ไข
+                              {t("แก้ไข")}
                             </Button>
                             {isAdmin && (
                               <button
                                 onClick={() => doVoid(m)}
                                 className="rounded px-2 text-xs text-rose-600 hover:bg-rose-50"
                               >
-                                ยกเลิก
+                                {t("ยกเลิก")}
                               </button>
                             )}
                           </div>
@@ -244,6 +247,7 @@ export function MovementsPage() {
 }
 
 function PhotoModal({ docNo, onClose }: { docNo: string; onClose: () => void }) {
+  const t = useT()
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
@@ -258,13 +262,13 @@ function PhotoModal({ docNo, onClose }: { docNo: string; onClose: () => void }) 
     }
   }, [docNo])
   return (
-    <Modal open onClose={onClose} title={`รูปหลักฐาน — ${docNo}`}>
+    <Modal open onClose={onClose} title={t('รูปหลักฐาน — {docNo}', { docNo })}>
       {loading ? (
-        <div className="p-6 text-center text-sm text-slate-400">กำลังโหลด...</div>
+        <div className="p-6 text-center text-sm text-slate-400">{t("กำลังโหลด...")}</div>
       ) : url ? (
-        <img src={url} alt="หลักฐาน" className="mx-auto max-h-[70vh] rounded-lg" />
+        <img src={url} alt={t('หลักฐาน')} className="mx-auto max-h-[70vh] rounded-lg" />
       ) : (
-        <div className="p-6 text-center text-sm text-slate-400">ไม่พบรูป</div>
+        <div className="p-6 text-center text-sm text-slate-400">{t("ไม่พบรูป")}</div>
       )}
     </Modal>
   )
@@ -277,6 +281,7 @@ function EditMovementModal({
   movement: StockMovement
   onClose: () => void
 }) {
+  const t = useT()
   const { user } = useAuth()
   const toast = useToast()
   const [qty, setQty] = useState(movement.qty)
@@ -285,7 +290,7 @@ function EditMovementModal({
   const [busy, setBusy] = useState(false)
 
   async function save() {
-    if (!(qty > 0)) return toast.error('จำนวนต้องมากกว่า 0')
+    if (!(qty > 0)) return toast.error(t("จำนวนต้องมากกว่า 0"))
     setBusy(true)
     try {
       await editMovementQty({
@@ -295,23 +300,23 @@ function EditMovementModal({
         newNote: note,
         actor: { id: user!.id, name: user!.name },
       })
-      toast.success('แก้ไขรายการแล้ว (ปรับยอดสต๊อกให้อัตโนมัติ)')
+      toast.success(t("แก้ไขรายการแล้ว (ปรับยอดสต๊อกให้อัตโนมัติ)"))
       onClose()
     } catch (e) {
-      toast.error('แก้ไขไม่สำเร็จ: ' + (e as Error).message)
+      toast.error(t("แก้ไขไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Modal open onClose={onClose} title={`แก้ไขรายการ ${movement.docNo}`}>
+    <Modal open onClose={onClose} title={t('แก้ไขรายการ {docNo}', { docNo: movement.docNo })}>
       <div className="space-y-4">
         <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
           <span className="font-medium">{movement.productName}</span>
-          <span className="text-slate-500"> — {TYPE_LABEL[movement.type]}</span>
+          <span className="text-slate-500"> — {t(TYPE_LABEL[movement.type])}</span>
         </div>
-        <Field label="จำนวน" required>
+        <Field label={t("จำนวน")} required>
           <Input
             type="number"
             step="any"
@@ -320,18 +325,18 @@ function EditMovementModal({
             onChange={(e) => setQty(Number(e.target.value))}
           />
         </Field>
-        <Field label="วันที่">
+        <Field label={t("วันที่")}>
           <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
         </Field>
-        <Field label="หมายเหตุ">
+        <Field label={t("หมายเหตุ")}>
           <Input value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            ยกเลิก
+            {t("ยกเลิก")}
           </Button>
           <Button onClick={save} disabled={busy}>
-            {busy ? 'กำลังบันทึก...' : 'บันทึก'}
+            {busy ? t("กำลังบันทึก...") : t("บันทึก")}
           </Button>
         </div>
       </div>

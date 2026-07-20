@@ -5,6 +5,7 @@ import { BrandProvider, useBrand } from './brand/BrandContext'
 import { DataProvider } from './data/DataContext'
 import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/Confirm'
+import { I18nProvider, useT } from './i18n/I18nContext'
 import { Spinner } from './components/ui'
 import { Layout } from './components/Layout'
 import { BrandPicker } from './components/BrandPicker'
@@ -23,6 +24,7 @@ import { ensureBrandLocations } from './services/seed'
 function Gate() {
   const { user, loading } = useAuth()
   const { brand, choose, reset } = useBrand()
+  const t = useT()
 
   // reset the brand choice on logout so the picker shows again next login
   useEffect(() => {
@@ -37,7 +39,7 @@ function Gate() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <Spinner label="กำลังโหลด..." />
+        <Spinner label={t('กำลังโหลด...')} />
       </div>
     )
   }
@@ -66,17 +68,19 @@ function Gate() {
 
 export function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <AuthProvider>
-          <BrandProvider>
-            <BrowserRouter>
-              <Gate />
-            </BrowserRouter>
-          </BrandProvider>
-        </AuthProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+    <I18nProvider>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <BrandProvider>
+              <BrowserRouter>
+                <Gate />
+              </BrowserRouter>
+            </BrandProvider>
+          </AuthProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </I18nProvider>
   )
 }
 

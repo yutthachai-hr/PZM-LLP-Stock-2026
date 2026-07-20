@@ -1,6 +1,7 @@
 import { initializeApp, deleteApp } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
 import { backend, BACKEND_MODE } from '../backend'
+import { AppError } from '../i18n/AppError'
 import { COL, type AppUser, type Role } from '../types'
 import { getFirebaseConfig } from '../firebase/config'
 
@@ -58,7 +59,7 @@ export async function createUser(input: NewUserInput): Promise<string> {
   // local mode
   const existing = await backend.getAll<AppUser>(COL.users)
   if (existing.some((u) => u.email.toLowerCase() === email)) {
-    throw new Error('อีเมลนี้ถูกใช้แล้ว')
+    throw new AppError('อีเมลนี้ถูกใช้แล้ว')
   }
   return backend.add(COL.users, {
     name,

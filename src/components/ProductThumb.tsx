@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getProductImage } from '../services/products'
+import { brandDef } from '../brand/brand'
+import { useBrand } from '../brand/BrandContext'
 
 // Simple in-memory cache so re-renders / list scrolls don't re-fetch the same image.
 const cache = new Map<string, string | null>()
@@ -16,6 +18,7 @@ export function ProductThumb({
   onClick?: () => void
 }) {
   const [url, setUrl] = useState<string | null>(cache.get(productId) ?? null)
+  const { brand } = useBrand()
 
   useEffect(() => {
     let on = true
@@ -54,7 +57,7 @@ export function ProductThumb({
       style={style}
       className="flex shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-slate-300"
     >
-      🍕
+      {brand ? brandDef(brand).productIcon : '📦'}
     </div>
   )
 }

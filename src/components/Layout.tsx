@@ -3,6 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
+import { useT } from '../i18n/I18nContext'
+import { LangToggle } from '../i18n/LangToggle'
 import { Badge } from './ui'
 
 interface NavItem {
@@ -12,21 +14,23 @@ interface NavItem {
   adminOnly?: boolean
 }
 
+// Labels are translation keys — NavItemLink renders them through t(). i18n-key
 const NAV: NavItem[] = [
-  { to: '/', label: 'ภาพรวม', icon: '📊' },
-  { to: '/products', label: 'สินค้าคงคลัง', icon: '📦' },
-  { to: '/receive', label: 'รับสินค้าเข้า', icon: '📥' },
-  { to: '/issue', label: 'เบิก/โอนสาขา', icon: '🚚' },
-  { to: '/adjust', label: 'ปรับสต๊อก', icon: '🔧' },
-  { to: '/movements', label: 'ประวัติ/Stock Card', icon: '📜' },
-  { to: '/reports', label: 'รายงาน', icon: '📄' },
-  { to: '/notes', label: 'บันทึกช่วยจำ', icon: '📝' },
-  { to: '/settings', label: 'ตั้งค่า', icon: '⚙️' },
+  { to: '/', label: 'ภาพรวม', icon: '📊' }, // i18n-key
+  { to: '/products', label: 'สินค้าคงคลัง', icon: '📦' }, // i18n-key
+  { to: '/receive', label: 'รับสินค้าเข้า', icon: '📥' }, // i18n-key
+  { to: '/issue', label: 'เบิก/โอนสาขา', icon: '🚚' }, // i18n-key
+  { to: '/adjust', label: 'ปรับสต๊อก', icon: '🔧' }, // i18n-key
+  { to: '/movements', label: 'ประวัติ/Stock Card', icon: '📜' }, // i18n-key
+  { to: '/reports', label: 'รายงาน', icon: '📄' }, // i18n-key
+  { to: '/notes', label: 'บันทึกช่วยจำ', icon: '📝' }, // i18n-key
+  { to: '/settings', label: 'ตั้งค่า', icon: '⚙️' }, // i18n-key
 ]
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout, mode } = useAuth()
   const { brand, reset } = useBrand()
+  const t = useT()
   const [open, setOpen] = useState(false)
   const location = useLocation()
 
@@ -81,7 +85,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <button
             onClick={() => setOpen(true)}
             className="rounded-md p-1 text-2xl leading-none text-slate-600"
-            aria-label="เมนู"
+            aria-label={t('เมนู')}
           >
             ☰
           </button>
@@ -89,7 +93,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {def?.emoji} {def?.name ?? 'Stock'}
           </span>
           <span className="ml-auto text-sm text-slate-500">
-            {NAV.find((n) => n.to === location.pathname)?.label}
+            {t(NAV.find((n) => n.to === location.pathname)?.label ?? '')}
           </span>
         </header>
 
@@ -106,6 +110,7 @@ function Brand({
   mode: 'cloud' | 'local'
   def: { name: string; emoji: string } | null
 }) {
+  const t = useT()
   return (
     <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-4">
       <span className="text-2xl">{def?.emoji ?? '📦'}</span>
@@ -113,13 +118,13 @@ function Brand({
         <div className="truncate font-bold leading-tight text-red-700">
           {def?.name ?? 'Stock'}
         </div>
-        <div className="text-xs text-slate-400">ระบบบริหารสต๊อก</div>
+        <div className="text-xs text-slate-400">{t('ระบบบริหารสต๊อก')}</div>
       </div>
       <div className="ml-auto">
         {mode === 'cloud' ? (
           <Badge color="green">Cloud</Badge>
         ) : (
-          <Badge color="amber">ในเครื่อง</Badge>
+          <Badge color="amber">{t('ในเครื่อง')}</Badge>
         )}
       </div>
     </div>
@@ -127,6 +132,7 @@ function Brand({
 }
 
 function NavItemLink({ item }: { item: NavItem }) {
+  const t = useT()
   return (
     <NavLink
       to={item.to}
@@ -138,7 +144,7 @@ function NavItemLink({ item }: { item: NavItem }) {
       }
     >
       <span className="text-lg">{item.icon}</span>
-      {item.label}
+      {t(item.label)}
     </NavLink>
   )
 }
@@ -154,28 +160,32 @@ function UserBox({
   onLogout: () => void
   onSwitch: () => void
 }) {
+  const t = useT()
   return (
     <div className="border-t border-slate-200 p-3">
+      <LangToggle className="mb-3" />
       <div className="mb-2 flex items-center gap-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 font-semibold text-red-700">
           {name.charAt(0).toUpperCase() || '?'}
         </div>
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-slate-700">{name}</div>
-          <div className="text-xs text-slate-400">{role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}</div>
+          <div className="text-xs text-slate-400">
+            {role === 'admin' ? t('ผู้ดูแลระบบ') : t('พนักงาน')}
+          </div>
         </div>
       </div>
       <button
         onClick={onSwitch}
         className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
       >
-        🔄 สลับแบรนด์
+        {t('🔄 สลับแบรนด์')}
       </button>
       <button
         onClick={onLogout}
         className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
       >
-        ออกจากระบบ
+        {t('ออกจากระบบ')}
       </button>
     </div>
   )

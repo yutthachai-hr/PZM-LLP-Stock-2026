@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { useT } from '../i18n/I18nContext'
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success'
 
@@ -122,6 +123,7 @@ export function Modal({
   children: ReactNode
   wide?: boolean
 }) {
+  const t = useT()
   if (!open) return null
   return (
     <div
@@ -137,7 +139,7 @@ export function Modal({
           <button
             onClick={onClose}
             className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            aria-label="ปิด"
+            aria-label={t("ปิด")}
           >
             ✕
           </button>

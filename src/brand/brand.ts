@@ -16,6 +16,8 @@ export interface BrandDef {
   id: BrandId
   name: string
   emoji: string
+  /** placeholder shown for products that have no photo yet */
+  productIcon: string
   /** default locations seeded on first entry (if the brand has none yet) */
   defaultLocations: { name: string; type: LocationType }[]
 }
@@ -25,22 +27,24 @@ export const BRANDS: BrandDef[] = [
     id: 'pizza',
     name: 'Pizza Mania',
     emoji: '🍕',
+    productIcon: '🍕',
     defaultLocations: [
-      { name: 'คลังหลัก', type: 'warehouse' },
-      { name: 'สาขาสารสิน', type: 'branch' },
-      { name: 'สาขาอ่อนนุช', type: 'branch' },
+      { name: 'Main Warehouse', type: 'warehouse' },
+      { name: 'Sarasin Branch', type: 'branch' },
+      { name: 'On Nut Branch', type: 'branch' },
     ],
   },
   {
     id: 'lelapin',
     name: 'Le Lapin Sandwich Delivery',
     emoji: '🥪',
+    productIcon: '🥖',
     defaultLocations: [
-      { name: 'คลังสุขุมวิท', type: 'warehouse' },
-      { name: 'คลังสารสิน', type: 'warehouse' },
-      { name: 'สาขาอ่อนนุช', type: 'branch' },
-      { name: 'สาขาสารสิน', type: 'branch' },
-      { name: 'สาขาสุขุมวิท', type: 'branch' },
+      { name: 'Sukhumvit Warehouse', type: 'warehouse' },
+      { name: 'Sarasin Warehouse', type: 'warehouse' },
+      { name: 'On Nut Branch', type: 'branch' },
+      { name: 'Sarasin Branch', type: 'branch' },
+      { name: 'Sukhumvit Branch', type: 'branch' },
     ],
   },
 ]
