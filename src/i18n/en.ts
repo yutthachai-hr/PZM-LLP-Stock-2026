@@ -100,6 +100,9 @@ export const EN: Record<string, string> = {
     'Cannot change the unit: “{name}” still has {qty} {unit} on hand — bring it to 0 first, or create a new product with the right unit',
   'เปลี่ยนหน่วยไม่ได้: "{name}" มีประวัติการเคลื่อนไหวแล้ว การเปลี่ยนหน่วยจะทำให้ตัวเลขเก่าอ่านผิดความหมาย — ให้สร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้องแทน':
     'Cannot change the unit: “{name}” already has movement history, and changing it would make those records mean something else — create a new product with the right unit instead',
+  'มีเวอร์ชันใหม่ของระบบพร้อมใช้งานแล้ว': 'A new version of the system is ready',
+  'อัปเดตตอนนี้': 'Update now',
+  'ไว้ทีหลัง': 'Later',
   'สำรอง / กู้คืนข้อมูล': 'Backup & restore',
   'ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive':
     'Download everything in {brand} as a single file and keep it in Google Drive or OneDrive',

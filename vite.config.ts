@@ -9,7 +9,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate': the app asks before reloading, because reloading under
+      // someone keying in a receipt throws the half-typed form away. src/pwa/UpdateBanner
+      // registers the worker and shows the prompt.
+      registerType: 'prompt',
+      injectRegister: null,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Pizza Mania Stock',

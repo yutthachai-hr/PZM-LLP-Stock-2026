@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/Confirm'
 import { I18nProvider, useT } from './i18n/I18nContext'
 import { Spinner } from './components/ui'
+import { UpdateBanner } from './pwa/UpdateBanner'
 import { Layout } from './components/Layout'
 import { BrandPicker } from './components/BrandPicker'
 import { LoginPage } from './pages/Login'
@@ -83,6 +84,9 @@ export function App() {
             <BrandProvider>
               <BrowserRouter>
                 <Gate />
+                {/* Outside Gate on purpose: a device parked on the sign-in screen is
+                    exactly the one nobody thinks to reload. */}
+                <UpdateBanner />
               </BrowserRouter>
             </BrandProvider>
           </AuthProvider>
