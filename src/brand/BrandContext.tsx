@@ -28,11 +28,13 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     if (!brand) {
       root.style.removeProperty('--brand-accent')
       root.style.removeProperty('--brand-accent-soft')
+      root.style.removeProperty('--brand-accent-vivid')
       return
     }
     const def = brandDef(brand)
     root.style.setProperty('--brand-accent', def.accent)
     root.style.setProperty('--brand-accent-soft', def.accentSoft)
+    root.style.setProperty('--brand-accent-vivid', def.accentVivid)
   }, [brand])
 
   return <Ctx.Provider value={{ brand, choose, reset }}>{children}</Ctx.Provider>

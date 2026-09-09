@@ -126,7 +126,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar (sticky) */}
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-surface px-2 py-2 lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-surface px-2 py-2 shadow-[inset_0_3px_0_0_var(--color-brand-vivid)] lg:hidden">
           <button
             onClick={() => setOpen(true)}
             className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
@@ -158,7 +158,15 @@ function Brand({
 }) {
   const t = useT()
   return (
-    <div className="flex items-center gap-2.5 border-b border-line px-4 py-4">
+    <div className="relative flex items-center gap-2.5 border-b border-line px-4 py-4">
+      {/* The logo colour exactly as drawn, carried as a stripe rather than as text.
+          Le Lapin's orange is 2.28:1 on white and would be unreadable set in type, but
+          as a band of colour at the edge of vision it does the job the brand colour is
+          for: saying which company's books are open. */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-1 bg-brand-vivid"
+      />
       {/* The brand mark stays an emoji: it is the company's identity, at display size,
           and the owner chose 🍕 and 🥖 themselves. */}
       <span className="text-2xl leading-none">{def?.emoji ?? '📦'}</span>

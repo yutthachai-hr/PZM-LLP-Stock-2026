@@ -19,17 +19,30 @@ export interface BrandDef {
   /** placeholder shown for products that have no photo yet */
   productIcon: string
   /**
-   * The brand's own colour, applied to the whole interface while that brand is open.
+   * The brand's colour as the interface uses it — for text, active states and buttons.
    *
    * Not decoration: the two brands are separate companies with separate books, and the
    * only thing that used to say which one you were looking at was a word in the sidebar.
    * Pizza Mania's red was hardcoded across the app, so Le Lapin — a sandwich brand — was
    * rendered in it too. A wrong-brand receipt is expensive to unpick, and colour is the
    * fastest signal there is.
+   *
+   * These are a step deeper than the logo colours on purpose. Measured against white:
+   * the logo orange is 2.28:1 and the logo red 4.78:1, so the orange is unreadable as
+   * text and unusable behind white button text. The values here are 6.47:1 (red) and
+   * 5.18:1 (orange) — same hues, still obviously the brand, and legible for someone
+   * reading a tablet at arm's length under warehouse lighting.
    */
   accent: string
   /** the same colour at fill strength, for tinted backgrounds */
   accentSoft: string
+  /**
+   * The logo colour exactly as drawn, for decoration only.
+   *
+   * Never put text on this or in it — that is what `accent` is for. It exists so the brand
+   * still reads as ITS colour somewhere on screen, rather than only as a darkened cousin.
+   */
+  accentVivid: string
   /** default locations seeded on first entry (if the brand has none yet) */
   defaultLocations: { name: string; type: LocationType }[]
 }
@@ -42,6 +55,7 @@ export const BRANDS: BrandDef[] = [
     productIcon: '🍕',
     accent: '#b91c1c',
     accentSoft: '#fef2f2',
+    accentVivid: '#e01f26',
     defaultLocations: [
       { name: 'Main Warehouse', type: 'warehouse' },
       { name: 'Sarasin Branch', type: 'branch' },
@@ -53,10 +67,10 @@ export const BRANDS: BrandDef[] = [
     name: 'Le Lapin Sandwich Delivery',
     emoji: '🥪',
     productIcon: '🥖',
-    // Deliberately far from Pizza Mania's red on the wheel, and clear of the greens
-    // and reds that mean stock in and stock out, so nothing reads as a direction.
-    accent: '#4338ca',
-    accentSoft: '#eef2ff',
+    // The orange from the brand artwork, deepened until white text on it is legible.
+    accent: '#c2410c',
+    accentSoft: '#fff7ed',
+    accentVivid: '#f7941e',
     defaultLocations: [
       { name: 'Sukhumvit Warehouse', type: 'warehouse' },
       { name: 'Sarasin Warehouse', type: 'warehouse' },

@@ -72,6 +72,9 @@
      which company's books you are in. Falls back to Pizza Mania's red. */
   --color-brand: var(--brand-accent, #b91c1c);
   --color-brand-soft: var(--brand-accent-soft, #fef2f2);
+  /* The logo colour as drawn. Decoration only — it does not meet contrast for text
+     (the Le Lapin orange measures 2.28:1 on white), which is what --color-brand is for. */
+  --color-brand-vivid: var(--brand-accent-vivid, #e01f26);
 }
 
 :root {
