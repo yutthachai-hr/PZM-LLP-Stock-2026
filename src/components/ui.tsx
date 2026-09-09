@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { useT } from '../i18n/I18nContext'
 
@@ -124,6 +125,59 @@ export function Modal({
   wide?: boolean
 }) {
   const t = useT()
+  const panel = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+
+  // A dialog that is only a dialog visually: with no role, screen readers announced it as
+  // ordinary page content; with no focus handling, Tab walked out of it into the page
+  // behind, and Escape did nothing. None of that is visible to someone using a mouse,
+  // which is why it survived this long.
+  useEffect(() => {
+    if (!open) return
+    const returnTo = document.activeElement as HTMLElement | null
+
+    // Focus the first thing worth landing on, so keyboard users start inside the dialog.
+    const focusables = () =>
+      Array.from(
+        panel.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((el) => el.offsetParent !== null)
+
+    focusables()[0]?.focus()
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      // Keep Tab inside: wrap at both ends rather than letting focus escape behind the
+      // overlay, where clicking is blocked but tabbing was not.
+      const items = focusables()
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || !panel.current?.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      // Put focus back where it was, so closing a dialog does not dump the caret at the
+      // top of the page.
+      returnTo?.focus?.()
+    }
+  }, [open, onClose])
+
   if (!open) return null
   return (
     <div
@@ -131,11 +185,17 @@ export function Modal({
       onClick={onClose}
     >
       <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className={`w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl bg-white shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+          <h3 id={titleId} className="text-lg font-semibold text-slate-800">
+            {title}
+          </h3>
           <button
             onClick={onClose}
             className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"

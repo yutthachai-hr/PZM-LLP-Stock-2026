@@ -14,9 +14,11 @@ import {
 } from 'firebase/auth'
 import { backend, BACKEND_MODE } from '../backend'
 import { COL, type AppUser } from '../types'
-import { getAuthInstance } from '../firebase/app'
+import { getAuthInstance, clearLocalCaches } from '../firebase/app'
+import { clearThumbCache } from '../components/ProductThumb'
 
 import { AppError } from '../i18n/AppError'
+import { useIdleLogout } from './useIdleLogout'
 
 interface AuthState {
   user: AppUser | null
@@ -38,6 +40,7 @@ const SESSION_KEY = 'pmstock:v1:session'
 // through t() when it renders.
 const PENDING = 'บัญชีนี้ยังไม่ถูกเปิดใช้งาน — กรุณาให้ผู้ดูแลระบบอนุมัติก่อนเข้าใช้' // i18n-key
 const REVOKED = 'สิทธิ์การเข้าใช้ของบัญชีนี้ถูกยกเลิกแล้ว' // i18n-key
+const IDLE = 'ออกจากระบบอัตโนมัติเพราะไม่มีการใช้งาน {minutes} นาที — เครื่องนี้เป็นเครื่องใช้ร่วมกัน' // i18n-key
 const UNPROVISIONED =
   'ระบบนี้ยังไม่ได้ตั้งค่า — เจ้าของต้องสร้างบัญชีผู้ดูแลคนแรกจาก Firebase Console ก่อน' // i18n-key
 
@@ -48,6 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<string | null>(null)
   // name entered on the sign-up form, used when the profile doc is created
   const pendingName = useRef<string | null>(null)
+
+  // The branches share a tablet, so a session left open belongs to whoever picks the device
+  // up next — and every movement they record is filed under the previous person's name.
+  useIdleLogout(user !== null, () => {
+    setNotice(IDLE)
+    void logout()
+  })
 
   // ---- initial load ----
   useEffect(() => {
@@ -231,6 +241,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNeedsBootstrap(false)
   }
 
+  /**
+   * Sign out and leave nothing readable behind.
+   *
+   * The branches share a tablet, so the next person to pick it up is a different person.
+   * Signing out alone does not help much: Firestore keeps an offline copy of everything
+   * that was loaded, and the app keeps decoded product photos in memory. Both are cleared
+   * here. Clearing the offline copy needs the database shut down first, which is why the
+   * page reloads afterwards.
+   */
   async function logout(): Promise<void> {
     if (BACKEND_MODE === 'cloud') {
       await fbSignOut(getAuthInstance())
@@ -238,6 +257,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(SESSION_KEY)
     }
     setUser(null)
+    clearThumbCache()
+    await clearLocalCaches()
   }
 
   return (

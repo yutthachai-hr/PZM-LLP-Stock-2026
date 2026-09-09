@@ -385,7 +385,20 @@ export async function restoreBackup(
   b: BackupFile,
   mode: RestoreMode = RESTORE_MODES.repair,
 ): Promise<RestoreResult> {
-  const db: Backend = backend.forBrand(getBrand())
+  const brand = getBrand()
+
+  // Two companies, two sets of books. Restoring one brand's file into the other used to be
+  // allowed behind a type-the-brand-name warning, but there is no undo for it: movements
+  // cannot be deleted, so the merged ledger would be permanent and both brands' Cost of
+  // Goods figures would be wrong from then on. A warning is not proportionate to that.
+  if (b.brand !== brand) {
+    throw new AppError(
+      'ไฟล์นี้เป็นข้อมูลของ {file} แต่ตอนนี้เปิด {current} อยู่ — สลับไปที่ {file} ก่อนแล้วค่อยกู้คืน',
+      { file: b.brandName || b.brand, current: brandDef(brand).name },
+    )
+  }
+
+  const db: Backend = backend.forBrand(brand)
   let written = 0
   let kept = 0
   let skipped = 0

@@ -77,8 +77,20 @@ export function BackupSection() {
       return
     }
 
-    // Restoring into the wrong brand would mix two companies' stock together.
-    const crossBrand = parsed.brand !== brand
+    // Restoring into the wrong brand mixes two companies' books together, and there is no
+    // undo: movements cannot be deleted, so the merged ledger would be permanent. This used
+    // to be allowed behind a type-the-brand-name warning, which is not proportionate to a
+    // mistake nobody can walk back.
+    if (parsed.brand !== brand) {
+      toast.error(
+        t('ไฟล์นี้เป็นข้อมูลของ {file} แต่ตอนนี้เปิด {current} อยู่ — สลับไปที่ {file} ก่อนแล้วค่อยกู้คืน', {
+          file: parsed.brandName || parsed.brand,
+          current: brandName,
+        }),
+      )
+      return
+    }
+
     const ok = await confirm({
       title: t('กู้คืนข้อมูลจากไฟล์สำรอง'),
       message:
@@ -88,11 +100,6 @@ export function BackupSection() {
           n: backupSize(parsed),
         }) +
         '\n\n' +
-        (crossBrand
-          ? t('⚠️ ไฟล์นี้เป็นของคนละแบรนด์กับที่เปิดอยู่ ({current}) — ข้อมูลจะปนกัน', {
-              current: brandName,
-            }) + '\n\n'
-          : '') +
         (mode === RESTORE_MODES.overwrite
           ? t('โหมดเขียนทับ: ข้อมูลหลัก (สินค้า คลัง รูป บันทึก) จะถูกเขียนกลับตามไฟล์ ทับการแก้ไขที่ทำหลังสำรอง')
           : t('โหมดเติมที่หาย: เขียนเฉพาะรายการที่หายไป ของที่แก้ไขหลังสำรองจะไม่ถูกแตะ')) +
@@ -100,7 +107,6 @@ export function BackupSection() {
         t('ประวัติการเคลื่อนไหวเป็นข้อมูลที่เพิ่มได้อย่างเดียว รายการที่บันทึกหลังสำรองจะยังอยู่ครบ และยอดคงเหลือกับเลขเอกสารจะถูกสร้างใหม่จากประวัติทั้งหมดหลังกู้คืน'),
       danger: true,
       confirmText: t('กู้คืน'),
-      typeToConfirm: crossBrand ? parsed.brandName : undefined,
     })
     if (!ok) return
 

@@ -104,3 +104,10 @@ export function invalidateThumb(productId: string) {
   }
   for (const notify of [...watchers]) notify()
 }
+
+/** Drop every cached photo. Called on sign-out, since the device is shared. */
+export function clearThumbCache(): void {
+  cache.clear()
+  revision++
+  for (const notify of [...watchers]) notify()
+}

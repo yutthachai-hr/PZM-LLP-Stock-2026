@@ -90,6 +90,16 @@ export const EN: Record<string, string> = {
   'ปักหมุดไม่สำเร็จ:': 'Could not pin that:',
   'ขั้นต่ำต้องเป็นตัวเลขไม่ติดลบ': 'The minimum must be a number that is not negative',
   'ต้นทุนต้องเป็นตัวเลขไม่ติดลบ': 'The cost must be a number that is not negative',
+  'ไฟล์นี้เป็นข้อมูลของ {file} แต่ตอนนี้เปิด {current} อยู่ — สลับไปที่ {file} ก่อนแล้วค่อยกู้คืน':
+    'This file holds {file} data but {current} is open — switch to {file} first, then restore',
+  'ออกจากระบบอัตโนมัติเพราะไม่มีการใช้งาน {minutes} นาที — เครื่องนี้เป็นเครื่องใช้ร่วมกัน':
+    'Signed out automatically after {minutes} minutes of inactivity — this is a shared device',
+  'เปลี่ยนหน่วยไม่ได้เพราะสินค้านี้มีสต๊อกหรือมีประวัติแล้ว — ตัวเลขเก่าจะอ่านผิดความหมาย ถ้าหน่วยผิดให้สร้างสินค้าใหม่':
+    'The unit cannot be changed because this product has stock or history — the existing numbers would change meaning. If the unit is wrong, create a new product.',
+  'เปลี่ยนหน่วยไม่ได้: "{name}" ยังมีสต๊อกคงเหลือ {qty} {unit} — ปรับยอดเป็น 0 ก่อน หรือสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง':
+    'Cannot change the unit: “{name}” still has {qty} {unit} on hand — bring it to 0 first, or create a new product with the right unit',
+  'เปลี่ยนหน่วยไม่ได้: "{name}" มีประวัติการเคลื่อนไหวแล้ว การเปลี่ยนหน่วยจะทำให้ตัวเลขเก่าอ่านผิดความหมาย — ให้สร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้องแทน':
+    'Cannot change the unit: “{name}” already has movement history, and changing it would make those records mean something else — create a new product with the right unit instead',
   'สำรอง / กู้คืนข้อมูล': 'Backup & restore',
   'ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive':
     'Download everything in {brand} as a single file and keep it in Google Drive or OneDrive',
@@ -105,8 +115,6 @@ export const EN: Record<string, string> = {
   ไฟล์นี้ไม่ใช่ไฟล์สำรองข้อมูลของระบบ: 'That file is not a backup from this system',
   'ไฟล์นี้สำรองจาก {brand} เมื่อ {when} — มี {n} รายการ':
     'This backup is from {brand}, taken {when} — {n} records',
-  '⚠️ ไฟล์นี้เป็นของคนละแบรนด์กับที่เปิดอยู่ ({current}) — ข้อมูลจะปนกัน':
-    '⚠️ This backup belongs to a different brand than the one you have open ({current}) — the data would be mixed together',
   '⚠️ แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง':
     '⚠️ The free Firebase plan has no point-in-time recovery — a mistaken delete cannot be undone. Take a backup at least once a week.',
   'แสดงประวัติตั้งแต่ {date}': 'History loaded from {date}',

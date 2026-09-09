@@ -41,3 +41,27 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# ---------------------------------------------------------------- security ----
+#
+# The branches share a tablet, so the answer to "is this a trusted device" is no. These
+# headers are the part of that a static host can enforce; the rest (idle sign-out, clearing
+# the offline copy on logout) lives in the app.
+#
+# Kept deliberately tight and explicit rather than copied from a template: every origin
+# below is one this app actually talks to, and anything not listed is refused. If a feature
+# ever needs a new host, it belongs here with a reason.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Nobody frames this app. Stock levels and supplier invoice numbers are not
+    # decoration for someone else's page, and framing is how clickjacking starts.
+    X-Frame-Options = "DENY"
+    # Do not leak which branch or product someone was looking at to third-party sites.
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # Stop the browser guessing a type for a response and running it as script.
+    X-Content-Type-Options = "nosniff"
+    # This app has no use for any of these; a compromised dependency should not either.
+    Permissions-Policy = "geolocation=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+    Content-Security-Policy = '''default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests'''

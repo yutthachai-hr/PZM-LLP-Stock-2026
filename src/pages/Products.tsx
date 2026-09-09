@@ -418,6 +418,18 @@ function ProductEditor({
   const [busy, setBusy] = useState(false)
   /** Set once this dialog has created a product, so a retry updates it instead of adding another. */
   const [createdId, setCreatedId] = useState<string | null>(null)
+  /**
+   * A product that has been counted or moved cannot change its unit.
+   *
+   * Switching KG to EA does not convert anything: the balance keeps its number and gains a
+   * new meaning, and every past movement still says KG. Only a person knows how many pieces
+   * are in a kilogram of this particular thing, so the app refuses rather than guesses. The
+   * service enforces it; this just stops the form offering something that will be rejected.
+   */
+  const unitLocked = useMemo(() => {
+    if (!product) return false
+    return locations.some((l) => qtyAt(l.id, product.id) !== 0)
+  }, [product, locations, qtyAt])
   // current on-hand quantity per location (editable) + the original values to detect changes
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [origCounts, setOrigCounts] = useState<Record<string, number>>({})
@@ -604,12 +616,15 @@ function ProductEditor({
             ))}
           </datalist>
         </Field>
-        <Field label={t("หน่วยนับ (แสดงผล)")}>
+        <Field
+          label={t("หน่วยนับ (แสดงผล)")}
+          hint={unitLocked ? t("เปลี่ยนหน่วยไม่ได้เพราะสินค้านี้มีสต๊อกหรือมีประวัติแล้ว — ตัวเลขเก่าจะอ่านผิดความหมาย ถ้าหน่วยผิดให้สร้างสินค้าใหม่") : undefined}
+        >
           <Input
             value={form.unit}
             onChange={(e) => setForm({ ...form, unit: e.target.value })}
             placeholder={t("เช่น Kilogram, ขวด, แพ็ค")}
-            disabled={!canEdit}
+            disabled={!canEdit || unitLocked}
           />
         </Field>
         <Field label={t("ตัวย่อหน่วย")}>
@@ -617,7 +632,7 @@ function ProductEditor({
             value={form.unitType}
             onChange={(e) => setForm({ ...form, unitType: e.target.value })}
             placeholder={t("เช่น KG, EA, Pack")}
-            disabled={!canEdit}
+            disabled={!canEdit || unitLocked}
           />
         </Field>
         <Field label={t("สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อถึง)")}>

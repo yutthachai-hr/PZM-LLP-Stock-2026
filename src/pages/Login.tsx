@@ -4,6 +4,7 @@ import { Button, Card, Field, Input } from '../components/ui'
 import { parseConfigInput, saveFirebaseConfig } from '../firebase/config'
 import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
+import { IDLE_MINUTES } from '../auth/useIdleLogout'
 
 export function LoginPage() {
   const t = useT()
@@ -105,7 +106,9 @@ export function LoginPage() {
             </p>
           )}
           {notice && !error && (
-            <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{t(notice)}</div>
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {t(notice, { minutes: IDLE_MINUTES })}
+            </div>
           )}
           {error && (
             <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{t(error)}</div>

@@ -262,3 +262,20 @@ describe('F31 — the file says whether its parts agree', () => {
     expect((raw('stockLevels')[0] as Record<string, unknown>).qty).toBe(5)
   })
 })
+
+describe('policy — a backup belongs to the brand it came from', () => {
+  test('restoring another brand’s file is refused outright', async () => {
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    setActiveBrand('lelapin')
+    // Two companies, two sets of books. Merging them is not a thing anyone can undo:
+    // movements cannot be deleted, so the mixed ledger would be permanent.
+    await expect(restoreBackup(file, RESTORE_MODES.repair)).rejects.toThrow()
+    expect(raw('lelapin__products')).toHaveLength(0)
+    expect(raw('lelapin__stockMovements')).toHaveLength(0)
+  })
+
+  test('restoring into the brand it came from still works', async () => {
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    await expect(restoreBackup(file, RESTORE_MODES.repair)).resolves.toBeTruthy()
+  })
+})

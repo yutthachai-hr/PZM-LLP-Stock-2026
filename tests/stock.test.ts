@@ -301,3 +301,37 @@ describe('F14 — switching brand while an operation is in flight', () => {
     expect(raw('lelapin__stockLevels')).toHaveLength(0)
   })
 })
+
+describe('policy — the unit a product is measured in', () => {
+  test('changing it is refused while there is stock on hand', async () => {
+    const { updateProduct } = await import('../src/services/products')
+    await receiveStock({
+      lines: [line('p1', 5)],
+      toLocationId: MAIN,
+      date: Date.now(),
+      actor: ACTOR,
+    })
+    // 5 KG would silently become 5 pieces, and every past movement keeps saying KG.
+    await expect(updateProduct('p1', { unitType: 'EA', unit: 'Each' })).rejects.toThrow()
+    expect((raw('products').find((p) => p.id === 'p1') as Record<string, unknown>).unitType).toBe('KG')
+  })
+
+  test('changing it is refused once the product has any history, even at zero', async () => {
+    const { updateProduct } = await import('../src/services/products')
+    await receiveStock({ lines: [line('p1', 5)], toLocationId: MAIN, date: Date.now(), actor: ACTOR })
+    await consumeStock({ lines: [line('p1', 5)], fromLocationId: MAIN, date: Date.now(), actor: ACTOR })
+    await expect(updateProduct('p1', { unitType: 'EA' })).rejects.toThrow()
+  })
+
+  test('a product nobody has used yet can still be corrected', async () => {
+    const { updateProduct } = await import('../src/services/products')
+    await expect(updateProduct('p2', { unitType: 'EA', unit: 'Each' })).resolves.toBeUndefined()
+    expect((raw('products').find((p) => p.id === 'p2') as Record<string, unknown>).unitType).toBe('EA')
+  })
+
+  test('renaming a product it has stock of is still fine', async () => {
+    const { updateProduct } = await import('../src/services/products')
+    await receiveStock({ lines: [line('p1', 5)], toLocationId: MAIN, date: Date.now(), actor: ACTOR })
+    await expect(updateProduct('p1', { name: 'Mozzarella (new supplier)' })).resolves.toBeUndefined()
+  })
+})
