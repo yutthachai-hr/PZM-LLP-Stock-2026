@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -19,7 +19,7 @@ import {
   deleteLocation,
 } from '../services/locations'
 import { createUser, updateUserProfile, deleteUser, restoreUser, listRevoked, type RevokedUser } from '../services/users'
-import { recomputeLevels } from '../services/stock'
+import { recomputeLevels, findLevelDrift, type LevelDrift } from '../services/stock'
 import { seedInitialData } from '../services/seed'
 import {
   clearFirebaseConfig,
@@ -45,7 +45,7 @@ export function SettingsPage() {
       {isAdmin && <LocationsSection />}
       {isAdmin && <UsersSection currentUserId={user!.id} />}
       {isAdmin && <BackupSection />}
-      {isAdmin && <MaintenanceSection />}
+      {isAdmin && user && <MaintenanceSection actor={{ id: user.id, name: user.name }} />}
 
       {!isAdmin && (
         <Card className="p-4 text-sm text-slate-500">
@@ -395,19 +395,38 @@ function UserEditor({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 }
 
 // ---------------- Maintenance ----------------
-function MaintenanceSection() {
+function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) {
   const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState('')
+  // null = not checked yet, [] = checked and everything agrees
+  const [drift, setDrift] = useState<LevelDrift[] | null>(null)
+  const { products, locationById } = useData()
+  const productById = useMemo(
+    () => new Map(products.map((p) => [p.id, p])),
+    [products],
+  )
+
+  async function checkIntegrity() {
+    setBusy('check')
+    try {
+      setDrift(await findLevelDrift())
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy('')
+    }
+  }
 
   async function recompute() {
     setBusy('recompute')
     try {
-      await recomputeLevels()
+      await recomputeLevels(actor)
+      setDrift(await findLevelDrift())
       toast.success(t("คำนวณยอดคงเหลือใหม่จากประวัติเรียบร้อย"))
     } catch (e) {
-      toast.error((e as Error).message)
+      toast.error(errText(e, t))
     } finally {
       setBusy('')
     }
@@ -440,10 +459,66 @@ function MaintenanceSection() {
         <Button variant="secondary" onClick={recompute} disabled={!!busy}>
           {busy === 'recompute' ? t("กำลังคำนวณ...") : t("คำนวณยอดคงเหลือใหม่")}
         </Button>
+        <Button variant="secondary" onClick={checkIntegrity} disabled={!!busy}>
+          {busy === 'check' ? t("กำลังตรวจ...") : t("ตรวจความสอดคล้องของยอด")}
+        </Button>
       </div>
       <p className="mt-2 text-xs text-slate-400">
         {t("“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)")}
       </p>
+
+      {drift !== null && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <h3 className="mb-1 text-sm font-semibold text-slate-700">
+            {t("ผลตรวจความสอดคล้องของยอด")}
+          </h3>
+          <p className="mb-3 text-xs text-slate-400">
+            {t("เทียบยอดคงเหลือที่เก็บไว้กับผลรวมจากประวัติ ประวัติคือข้อมูลจริงเสมอ — ระบบตรวจเจอและซ่อมได้ แต่ป้องกันการแก้ยอดตรง ๆ ไม่ได้บนแพ็กเกจฟรี")}
+          </p>
+          {drift.length === 0 ? (
+            <p className="text-sm text-emerald-600">{t("ยอดคงเหลือตรงกับประวัติทุกรายการ")}</p>
+          ) : (
+            <>
+              <p className="mb-2 text-sm text-rose-600">
+                {t("พบ {count} รายการที่ไม่ตรง — กด “คำนวณยอดคงเหลือใหม่” เพื่อซ่อมจากประวัติ", { count: drift.length })}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-400">
+                      <th className="py-1 pr-3">{t("สินค้า")}</th>
+                      <th className="py-1 pr-3">{t("คลัง")}</th>
+                      <th className="py-1 pr-3 text-right">{t("ยอดที่เก็บไว้")}</th>
+                      <th className="py-1 pr-3 text-right">{t("ยอดตามประวัติ")}</th>
+                      <th className="py-1">{t("แก้ล่าสุดโดย")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {drift.slice(0, 50).map((d) => (
+                      <tr key={d.id}>
+                        <td className="py-1 pr-3">
+                          {productById.get(d.productId)?.name ?? d.productId}
+                        </td>
+                        <td className="py-1 pr-3">{locationById(d.locationId)?.name ?? d.locationId}</td>
+                        <td className="py-1 pr-3 text-right font-medium text-rose-600">{d.cached}</td>
+                        <td className="py-1 pr-3 text-right text-slate-700">{d.fromLedger}</td>
+                        <td className="py-1 font-mono text-xs text-slate-400">
+                          {d.updatedBy ?? t("(ไม่ระบุ)")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {drift.length > 50 && (
+                <p className="mt-2 text-xs text-slate-400">
+                  {t("แสดง 50 รายการแรกจาก {count}", { count: drift.length })}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </Card>
   )
 }

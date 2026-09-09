@@ -44,17 +44,90 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users', ADMIN), { name: 'Admin', role: 'admin', active: true })
     await setDoc(doc(db, 'users', STAFF), { name: 'Staff', role: 'staff', active: true })
     await setDoc(doc(db, 'users', PENDING), { name: 'Pending', role: 'staff', active: false })
-    await setDoc(doc(db, 'products/p1'), { sku: 'VGT-01-01-001', name: 'MUSHROOMS' })
-    await setDoc(doc(db, 'lelapin__products/p1'), { sku: 'VGT-LL-01-01-001', name: 'COS' })
-    await setDoc(doc(db, 'stockMovements/m1'), { docNo: 'RCV-00001', qty: 5 })
-    await setDoc(doc(db, 'stockLevels/l1'), { qty: 5 })
-    await setDoc(doc(db, 'notes/n1'), { title: 'note' })
-    await setDoc(doc(db, 'locations/loc1'), { name: 'Main Warehouse' })
+    await setDoc(doc(db, 'products/p1'), product('p1'))
+    await setDoc(
+      doc(db, 'lelapin__products/p1'),
+      product('p1', { sku: 'VGT-LL-01-01-001', name: 'COS' }),
+    )
+    await setDoc(doc(db, 'stockMovements/m1'), movement('m1'))
+    await setDoc(doc(db, 'lelapin__stockMovements/m1'), movement('m1'))
+    await setDoc(doc(db, 'stockLevels/l1'), level('l1'))
+    await setDoc(doc(db, 'notes/n1'), note('n1'))
+    await setDoc(doc(db, 'locations/loc1'), location('loc1'))
   })
 })
 
 const as = (uid: string) => env.authenticatedContext(uid).firestore()
 const anon = () => env.unauthenticatedContext().firestore()
+
+// The rules validate the shape of every document now, so these tests write records that
+// look like the ones src/services actually produce. A skeleton document would be refused
+// for the wrong reason and prove nothing about permissions.
+const ts = () => Date.now()
+
+function movement(id: string, by = STAFF, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    docNo: 'RC-00001',
+    type: 'receive',
+    productId: 'p1',
+    productName: 'MUSHROOMS',
+    unit: 'Kilogram',
+    qty: 5,
+    toLocationId: 'loc1',
+    date: ts(),
+    byUserId: by,
+    byUserName: 'Staff',
+    createdAt: ts(),
+    ...over,
+  }
+}
+
+function level(id: string, by = STAFF, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    productId: 'p1',
+    locationId: 'loc1',
+    qty: 5,
+    updatedAt: ts(),
+    updatedBy: by,
+    ...over,
+  }
+}
+
+function product(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    sku: 'VGT-01-01-001',
+    name: 'MUSHROOMS',
+    category: 'Vegetable',
+    unit: 'Kilogram',
+    unitType: 'KG',
+    minStock: 0,
+    hasImage: false,
+    active: true,
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  }
+}
+
+function location(id: string, over: Record<string, unknown> = {}) {
+  return { id, name: 'Main Warehouse', type: 'warehouse', active: true, createdAt: ts(), ...over }
+}
+
+function note(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    title: 'note',
+    body: '',
+    byUserName: 'Staff',
+    pinned: false,
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  }
+}
 
 describe('outsiders', () => {
   test('signed-out users read nothing', async () => {
@@ -73,7 +146,7 @@ describe('outsiders', () => {
   })
 
   test('an unapproved account cannot write', async () => {
-    await assertFails(setDoc(doc(as(PENDING), 'stockMovements/m9'), { qty: 1 }))
+    await assertFails(setDoc(doc(as(PENDING), 'stockMovements/m9'), movement('m9', PENDING)))
   })
 })
 
@@ -85,20 +158,20 @@ describe('staff', () => {
   })
 
   test('can record stock: movements, balances, counters, notes', async () => {
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m2'), { docNo: 'RCV-2', qty: 1 }))
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockLevels/l2'), { qty: 1 }))
-    await assertSucceeds(setDoc(doc(as(STAFF), 'counters/receive'), { value: 2 }))
-    await assertSucceeds(setDoc(doc(as(STAFF), 'notes/n2'), { title: 'x' }))
+    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m2'), movement('m2')))
+    await assertSucceeds(setDoc(doc(as(STAFF), 'stockLevels/l2'), level('l2')))
+    await assertSucceeds(setDoc(doc(as(STAFF), 'counters/receive'), { id: 'receive', value: 2 }))
+    await assertSucceeds(setDoc(doc(as(STAFF), 'notes/n2'), note('n2')))
     await assertSucceeds(deleteDoc(doc(as(STAFF), 'notes/n1')))
   })
 
   test('cannot touch the catalogue or the warehouse layout', async () => {
-    await assertFails(setDoc(doc(as(STAFF), 'products/p2'), { sku: 'X' }))
+    await assertFails(setDoc(doc(as(STAFF), 'products/p2'), product('p2')))
     await assertFails(updateDoc(doc(as(STAFF), 'products/p1'), { name: 'renamed' }))
     await assertFails(deleteDoc(doc(as(STAFF), 'products/p1')))
-    await assertFails(setDoc(doc(as(STAFF), 'locations/loc2'), { name: 'New' }))
+    await assertFails(setDoc(doc(as(STAFF), 'locations/loc2'), location('loc2')))
     // The other brand's catalogue is no different.
-    await assertFails(setDoc(doc(as(STAFF), 'lelapin__products/p2'), { sku: 'X' }))
+    await assertFails(setDoc(doc(as(STAFF), 'lelapin__products/p2'), product('p2')))
   })
 
   test('cannot see the user roster or promote themselves', async () => {
@@ -115,9 +188,13 @@ describe('staff', () => {
 
 describe('the ledger is append-only', () => {
   test('staff and admins may add and amend movements', async () => {
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m3'), { qty: 1 }))
-    await assertSucceeds(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { voided: true }))
+    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m3'), movement('m3')))
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3 }))
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { qty: 9 }))
+    // Voiding is the one amendment staff may not make. The UI only ever offered the button
+    // to admins; now the database agrees, so the API cannot be used to skip that.
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { voided: true }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true }))
   })
 
   test('nobody may delete a movement — not even an admin', async () => {
@@ -129,9 +206,11 @@ describe('the ledger is append-only', () => {
 
 describe('admins', () => {
   test('own the catalogue, locations and the roster', async () => {
-    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p2'), { sku: 'X' }))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p2'), product('p2')))
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'products/p1')))
-    await assertSucceeds(setDoc(doc(as(ADMIN), 'locations/loc2'), { name: 'New' }))
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'locations/loc2'), location('loc2', { name: 'New' })),
+    )
     await assertSucceeds(getDocs(collection(as(ADMIN), 'users')))
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', PENDING), { active: true }))
     await assertSucceeds(setDoc(doc(as(ADMIN), 'users/uid-new'), { role: 'staff', active: true }))
@@ -223,8 +302,8 @@ describe('collections outside the model', () => {
 
 test('both brands enforce the same rules', async () => {
   await assertSucceeds(getDoc(doc(as(STAFF), 'lelapin__products/p1')))
-  await assertSucceeds(setDoc(doc(as(STAFF), 'lelapin__stockMovements/m1'), { qty: 1 }))
-  await assertFails(setDoc(doc(as(STAFF), 'lelapin__locations/l1'), { name: 'X' }))
-  await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__locations/l1'), { name: 'X' }))
+  await assertSucceeds(setDoc(doc(as(STAFF), 'lelapin__stockMovements/m2'), movement('m2')))
+  await assertFails(setDoc(doc(as(STAFF), 'lelapin__locations/l1'), location('l1')))
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__locations/l1'), location('l1')))
   expect(true).toBe(true)
 })

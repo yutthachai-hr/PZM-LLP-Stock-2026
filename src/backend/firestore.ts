@@ -32,7 +32,7 @@ export function createFirestoreBackend(): Backend {
       const unsub = onSnapshot(
         q,
         (snap) => {
-          const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T)
+          const docs = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
           cb(docs)
         },
         (err) => {
@@ -63,13 +63,13 @@ export function createFirestoreBackend(): Backend {
     async getAll<T>(collection: string): Promise<T[]> {
       const db = getDb()
       const snap = await getDocs(fbCollection(db, resolveCollection(collection)))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T)
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
     async getOne<T>(collection: string, id: string): Promise<T | null> {
       const db = getDb()
       const snap = await getDoc(doc(db, resolveCollection(collection), id))
-      return snap.exists() ? ({ id: snap.id, ...snap.data() } as T) : null
+      return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
     },
 
     async add(collection: string, data: Record<string, unknown>): Promise<string> {
@@ -100,7 +100,7 @@ export function createFirestoreBackend(): Backend {
         const tx: TxContext = {
           async get<T>(collection: string, id: string): Promise<T | null> {
             const snap = await t.get(doc(db, resolveCollection(collection), id))
-            return snap.exists() ? ({ id: snap.id, ...snap.data() } as T) : null
+            return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
           },
           set(collection, id, data) {
             t.set(doc(db, resolveCollection(collection), id), { ...data, id })

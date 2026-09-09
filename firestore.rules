@@ -7,6 +7,7 @@ rules_version = '2';
 // re-state every restriction rather than trusting the client.
 //
 // Deploy:  firebase deploy --only firestore:rules
+// Test:    npm run test:rules
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -52,30 +53,26 @@ service cloud.firestore {
     // ---------------------------------------------------------------- brands ----
 
     // Each brand owns a namespace: "products" for Pizza Mania, "lelapin__products" for
-    // Le Lapin. Permissions are per collection kind, not per brand, so the prefix is
-    // stripped before matching. A new brand has to be added here as well.
-    function base(name) {
-      return name.matches('^lelapin__.*') ? name.split('__')[1] : name;
-    }
+    // Le Lapin. Permissions are per collection kind, so both spellings are listed here in
+    // full. They used to be derived by splitting the name on "__", which quietly let
+    // "lelapin__stockLevels__unregistered" read as "stockLevels" and inherit everything
+    // staff may do to a balance. A new brand has to be added to both lists.
 
     // Recording stock is the everyday job, so any active user may write these.
     function staffWritable(name) {
-      return base(name) in [
-        'stockMovements',
-        'stockLevels',
-        'counters',
-        'movementImages',
-        'notes'
+      return name in [
+        'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
+        'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
+        'lelapin__movementImages', 'lelapin__notes'
       ];
     }
 
     // The catalogue and the shape of the warehouse are admin decisions.
     function adminWritable(name) {
-      return base(name) in [
-        'products',
-        'productImages',
-        'locations',
-        'productMinOverrides'
+      return name in [
+        'products', 'productImages', 'locations', 'productMinOverrides',
+        'lelapin__products', 'lelapin__productImages', 'lelapin__locations',
+        'lelapin__productMinOverrides'
       ];
     }
 
@@ -83,17 +80,204 @@ service cloud.firestore {
       return staffWritable(name) || adminWritable(name);
     }
 
+    // Which kind of record this is, brand aside. Only ever reached for a name that already
+    // matched one of the exact lists above, so the split cannot be used to invent a kind.
+    function kind(name) {
+      return name.matches('^lelapin__.*') ? name.split('__')[1] : name;
+    }
+
     // Movements are the ledger every balance is rebuilt from, so they are append-only for
     // everyone, admins included. Voiding and editing are updates that keep the original
     // row, and nothing in the app deletes one.
     function ledger(name) {
-      return base(name) == 'stockMovements';
+      return kind(name) == 'stockMovements';
     }
 
     // Notes are the only thing staff throw away. Clearing balances and images happens
     // when an admin deletes a product or a location.
     function staffDeletable(name) {
-      return base(name) == 'notes';
+      return kind(name) == 'notes';
+    }
+
+    // ---------------------------------------------------------------- values ----
+
+    // Firestore stores NaN and Infinity as ordinary doubles, so `is number` lets both
+    // through. Every comparison with NaN is false and Infinity fails any finite upper
+    // bound, so a bounded range is what actually rejects them.
+    function positive(v, hi) {
+      return v is number && v > 0 && v <= hi;
+    }
+
+    function nonneg(v, hi) {
+      return v is number && v >= 0 && v <= hi;
+    }
+
+    // A plausible ms epoch: 1970 to 2100. Keeps a typo or a bad import out of the dates
+    // that reports and the ledger window sort by.
+    function epochMs(v) {
+      return nonneg(v, 4102444800000);
+    }
+
+    function text(v, maxLen) {
+      return v is string && v.size() <= maxLen;
+    }
+
+    // ---------------------------------------------------------------- schemas ----
+
+    function movementCore(d) {
+      return d.keys().hasAll([
+          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'qty',
+          'date', 'byUserId', 'byUserName', 'createdAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'qty',
+          'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
+          'date', 'byUserId', 'byUserName', 'createdAt',
+          'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+        ])
+        && d.type in ['receive', 'issue', 'adjust', 'consume']
+        && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
+        && text(d.unit, 40) && text(d.byUserId, 200) && text(d.byUserName, 200)
+        && positive(d.qty, 1000000000)
+        && epochMs(d.date) && epochMs(d.createdAt)
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('reason' in d) || text(d.reason, 60))
+        && (!('hasPhoto' in d) || d.hasPhoto is bool)
+        && (!('voided' in d) || d.voided is bool)
+        && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
+        && (!('toLocationId' in d) || text(d.toLocationId, 200))
+        && (!('updatedBy' in d) || text(d.updatedBy, 200))
+        && (!('updatedByName' in d) || text(d.updatedByName, 200))
+        && (!('updatedAt' in d) || epochMs(d.updatedAt));
+    }
+
+    function validLevel(d) {
+      return d.keys().hasAll(['id', 'productId', 'locationId', 'qty', 'updatedAt', 'updatedBy'])
+        && d.keys().hasOnly(['id', 'productId', 'locationId', 'qty', 'updatedAt', 'updatedBy'])
+        && text(d.productId, 200) && text(d.locationId, 200)
+        && nonneg(d.qty, 1000000000)
+        && epochMs(d.updatedAt)
+        // Balances are the one thing these rules cannot prove correct. That needs a trusted
+        // server checking each write against the ledger, and the free plan has no room for
+        // one. What they can do is make every balance write carry the name of whoever made
+        // it, so drift the integrity check finds has an author instead of a shrug.
+        && d.updatedBy == request.auth.uid;
+    }
+
+    function validCounter(d) {
+      return d.keys().hasAll(['id', 'value'])
+        && d.keys().hasOnly(['id', 'value'])
+        && d.value is int
+        && d.value >= 0
+        && d.value <= 100000000;
+    }
+
+    function validProduct(d) {
+      return d.keys().hasAll([
+          'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock',
+          'hasImage', 'active', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock', 'cost',
+          'hasImage', 'active', 'createdAt', 'updatedAt'
+        ])
+        && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
+        && text(d.unit, 60) && text(d.unitType, 20)
+        && nonneg(d.minStock, 1000000000)
+        && (!('cost' in d) || nonneg(d.cost, 1000000000))
+        && d.hasImage is bool && d.active is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    function validLocation(d) {
+      return d.keys().hasAll(['id', 'name', 'type', 'active', 'createdAt'])
+        && d.keys().hasOnly(['id', 'name', 'type', 'active', 'createdAt'])
+        && text(d.name, 200)
+        && d.type in ['warehouse', 'branch']
+        && d.active is bool
+        && epochMs(d.createdAt);
+    }
+
+    function validNote(d) {
+      return d.keys().hasAll(['id', 'title', 'body', 'byUserName', 'pinned', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'title', 'body', 'byUserName', 'pinned', 'createdAt', 'updatedAt'])
+        && text(d.title, 300) && text(d.body, 20000) && text(d.byUserName, 200)
+        && d.pinned is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    // Photos live in Firestore as base64 because Cloud Storage left the free plan in
+    // February 2026. A document is capped at 1 MiB, so an oversized one fails on write
+    // anyway; stating the limit makes it deliberate rather than incidental.
+    function validImage(d) {
+      return d.keys().hasAll(['id', 'dataUrl'])
+        && d.keys().hasOnly(['id', 'dataUrl'])
+        && d.dataUrl is string
+        && d.dataUrl.size() <= 900000;
+    }
+
+    function validMinOverride(d) {
+      return d.keys().hasAll(['id', 'productId', 'locationId', 'minStock'])
+        && d.keys().hasOnly(['id', 'productId', 'locationId', 'minStock'])
+        && text(d.productId, 200) && text(d.locationId, 200)
+        && nonneg(d.minStock, 1000000000);
+    }
+
+    // A document whose `id` field disagrees with its key makes the UI act on one row while
+    // writing to another, so the two are pinned together here rather than hoped for.
+    function validShape(name, docId, d) {
+      return d.id == docId && (
+        kind(name) == 'stockMovements' ? movementCore(d)
+        : kind(name) == 'stockLevels' ? validLevel(d)
+        : kind(name) == 'counters' ? validCounter(d)
+        : kind(name) == 'products' ? validProduct(d)
+        : kind(name) == 'locations' ? validLocation(d)
+        : kind(name) == 'notes' ? validNote(d)
+        : kind(name) == 'productMinOverrides' ? validMinOverride(d)
+        : validImage(d)
+      );
+    }
+
+    function writer(name) {
+      return (active() && staffWritable(name)) || (admin() && adminWritable(name));
+    }
+
+    function editedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // A new movement is filed under whoever is filing it, and is not born already voided
+    // or already corrected. Without the first check, staff can record stock in a
+    // colleague's name and the ledger's "who" column means nothing.
+    function createdHonestly(name) {
+      return kind(name) != 'stockMovements' || (
+        request.resource.data.byUserId == request.auth.uid
+        && !('voided' in request.resource.data)
+        && !('updatedBy' in request.resource.data)
+      );
+    }
+
+    // Editing a movement means correcting the quantity, the business date or the note —
+    // the things a person genuinely gets wrong. What the movement WAS stays put: its kind,
+    // product, locations, document number, author, and the moment it was recorded. Listing
+    // the fields that may move is what makes replacing the whole row with setDoc equivalent
+    // to editing it, instead of a way around the freeze.
+    //
+    // Counters only ever go forwards, so a replayed or forged write cannot hand out a
+    // document number that has already been used.
+    function editedHonestly(name) {
+      return kind(name) == 'stockMovements' ? movementEdit()
+        : kind(name) == 'counters' ? request.resource.data.value > resource.data.value
+        : true;
+    }
+
+    function movementEdit() {
+      return editedKeys().hasOnly([
+          'qty', 'date', 'note', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+        ])
+        && (!editedKeys().hasAny(['voided']) || admin())
+        && (!('updatedBy' in request.resource.data)
+            || request.resource.data.updatedBy == request.auth.uid);
     }
 
     // ---------------------------------------------------------------- users ----
@@ -164,8 +348,16 @@ service cloud.firestore {
     match /{collection}/{docId} {
       allow read: if active() && brandData(collection);
 
-      allow create, update: if active() && staffWritable(collection);
-      allow create, update: if admin() && adminWritable(collection);
+      // Who may write, and separately, what a written document is allowed to look like.
+      // Type and range checks belong here as well as in the services, because the services
+      // are client code: a caller holding a token skips them entirely.
+      allow create: if writer(collection)
+        && validShape(collection, docId, request.resource.data)
+        && createdHonestly(collection);
+
+      allow update: if writer(collection)
+        && validShape(collection, docId, request.resource.data)
+        && editedHonestly(collection);
 
       allow delete: if active() && staffDeletable(collection);
       allow delete: if admin() && brandData(collection) && !ledger(collection);

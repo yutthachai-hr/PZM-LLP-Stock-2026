@@ -437,6 +437,21 @@ export const EN: Record<string, string> = {
   'ลบผู้ใช้ "{name}" ? ผู้ใช้นี้จะเข้าระบบไม่ได้อีก แม้จะสมัครใหม่ด้วยอีเมลเดิม (ประวัติการทำรายการที่ผ่านมายังคงอยู่)':
     'Delete user “{name}”? They will no longer be able to sign in, even if they sign up again with the same email (their past activity is kept).',
   คำนวณยอดคงเหลือใหม่: 'Recalculate balances',
+  'ตรวจความสอดคล้องของยอด': 'Check balances against history',
+  'กำลังตรวจ...': 'Checking...',
+  'ผลตรวจความสอดคล้องของยอด': 'Balance consistency check',
+  'เทียบยอดคงเหลือที่เก็บไว้กับผลรวมจากประวัติ ประวัติคือข้อมูลจริงเสมอ — ระบบตรวจเจอและซ่อมได้ แต่ป้องกันการแก้ยอดตรง ๆ ไม่ได้บนแพ็กเกจฟรี':
+    'Compares each stored balance with the total from the movement history. The history is always the truth. This finds and repairs disagreements — it cannot prevent someone editing a balance directly, which would need a paid plan.',
+  'ยอดคงเหลือตรงกับประวัติทุกรายการ': 'Every balance matches the history',
+  'พบ {count} รายการที่ไม่ตรง — กด “คำนวณยอดคงเหลือใหม่” เพื่อซ่อมจากประวัติ':
+    '{count} balance(s) disagree with the history — use “Recalculate balances” to rebuild them',
+  'ยอดที่เก็บไว้': 'Stored',
+  'ยอดตามประวัติ': 'From history',
+  'แก้ล่าสุดโดย': 'Last written by',
+  '(ไม่ระบุ)': '(not recorded)',
+  'แสดง 50 รายการแรกจาก {count}': 'Showing the first 50 of {count}',
+  'คำนวณใหม่ไม่ได้: ประวัติทำให้ยอดติดลบ {count} รายการ (เช่น {example}) — ตรวจรายการที่ถูกยกเลิกก่อน':
+    'Cannot recalculate: the history adds up to a negative balance in {count} place(s) (for example {example}) — check the voided movements first',
   คำนวณยอดคงเหลือใหม่จากประวัติเรียบร้อย: 'Balances recalculated from history',
   '“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)':
     '“Recalculate balances” rebuilds every balance from the full movement history — use it if a number looks wrong.',
