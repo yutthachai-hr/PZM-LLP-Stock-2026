@@ -14,6 +14,7 @@ import {
   Field,
   Input,
   Modal,
+  PageHeader,
   Select,
   Spinner,
 } from '../components/ui'
@@ -68,11 +69,9 @@ export function ProductsPage() {
   const [creating, setCreating] = useState(false)
   const [seeding, setSeeding] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
 
-  const categories = useMemo(
-    () => [...new Set(products.map((p) => p.category))].sort(),
-    [products],
-  )
+  const categories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products])
 
   // Quantity the list works with: one location when the location filter is set, otherwise
   // every location added up. Both the "คงเหลือ" column and the qty sorts use this.
@@ -150,7 +149,9 @@ export function ProductsPage() {
     setSeeding(true)
     try {
       const r = await seedInitialData()
-      toast.success(t('นำเข้าสินค้า {products} รายการ, คลัง {locations} แห่ง', { products: r.products, locations: r.locations }))
+      toast.success(
+        t('นำเข้าสินค้า {products} รายการ, คลัง {locations} แห่ง', { products: r.products, locations: r.locations, }),
+      )
     } catch (e) {
       toast.error(t("นำเข้าไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
@@ -163,11 +164,7 @@ export function ProductsPage() {
     const ok = await confirm({
       title: t("ล้างและนำเข้าสินค้าใหม่"),
       message:
-        t('ลบสินค้าทั้ง {count} รายการของ {brand} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า {catalog} รายการแทน?', {
-          count: products.length,
-          brand: name,
-          catalog: catalogCount,
-        }) +
+        t('ลบสินค้าทั้ง {count} รายการของ {brand} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า {catalog} รายการแทน?', { count: products.length, brand: name, catalog: catalogCount, }) +
         '\n\n' +
         t('ประวัติการเคลื่อนไหวจะยังอยู่ครบ แต่ยอดคงเหลือที่นับไว้จะหายทั้งหมด — ย้อนกลับไม่ได้'),
       danger: true,
@@ -179,7 +176,9 @@ export function ProductsPage() {
     setResetting(true)
     try {
       const r = await resetCatalog()
-      toast.success(t('ลบ {removed} รายการ, นำเข้าใหม่ {imported} รายการ', { removed: r.removed, imported: r.imported }))
+      toast.success(
+        t('ลบ {removed} รายการ, นำเข้าใหม่ {imported} รายการ', { removed: r.removed, imported: r.imported, }),
+      )
     } catch (e) {
       toast.error(t("นำเข้าไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
@@ -191,51 +190,57 @@ export function ProductsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink sm:text-2xl">{t("สินค้าคงคลัง")}</h1>
-          <p className="text-sm text-ink-soft">
-            <span className="num">{products.length}</span> {t('รายการ')}
-          </p>
-        </div>
-        {isAdmin && (
-          <div className="flex gap-2">
-            {products.length === 0 && catalogCount > 0 && (
-              <Button variant="secondary" onClick={handleSeed} disabled={seeding}>
-                {seeding ? (
-                  t("กำลังนำเข้า...")
-                ) : (
-                  <>
-                    <Icon name="download" size={16} />
-                    {t('นำเข้าแคตตาล็อกสินค้า ({n} รายการ)', { n: catalogCount })}
-                  </>
-                )}
+      <PageHeader
+        icon="package"
+        title={t("สินค้าคงคลัง")}
+        subtitle={t('{n} รายการ', { n: products.length })}
+        actions={
+          isAdmin ? (
+            <>
+              {products.length === 0 && catalogCount > 0 && (
+                <Button variant="secondary" onClick={handleSeed} disabled={seeding}>
+                  {seeding ? (
+                    t("กำลังนำเข้า...")
+                  ) : (
+                    <>
+                      <Icon name="download" size={16} />
+                      {t('นำเข้าแคตตาล็อกสินค้า ({n} รายการ)', { n: catalogCount, })}
+                    </>
+                  )}
+                </Button>
+              )}
+              {products.length > 0 && catalogCount > 0 && (
+                <Button variant="secondary" onClick={handleReset} disabled={resetting}>
+                  {resetting ? (
+                    t("กำลังนำเข้า...")
+                  ) : (
+                    <>
+                      <Icon name="refresh" size={16} />
+                      {t("ล้างและนำเข้าใหม่")}
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button onClick={() => setCreating(true)}>
+                <Icon name="plus" size={16} />
+                {t("เพิ่มสินค้า")}
               </Button>
-            )}
-            {products.length > 0 && catalogCount > 0 && (
-              <Button variant="secondary" onClick={handleReset} disabled={resetting}>
-                {resetting ? (
-                  t("กำลังนำเข้า...")
-                ) : (
-                  <>
-                    <Icon name="refresh" size={16} />
-                    {t("ล้างและนำเข้าใหม่")}
-                  </>
-                )}
-              </Button>
-            )}
-            <Button onClick={() => setCreating(true)}>{t("+ เพิ่มสินค้า")}</Button>
-          </div>
-        )}
-      </div>
+            </>
+          ) : undefined
+        }
+      />
 
       <Card className="p-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex min-w-[260px] flex-1 gap-2">
-            <Field label={t("ค้นหา")}>
+            <Field label={t("ค้นหา")} className="min-w-0 flex-1">
               <Input
                 placeholder={
-                  searchIn === 'sku' ? t("เช่น VGT-01") : searchIn === 'name' ? t("เช่น MOZZARELLA") : t("ชื่อ / รหัส / หมวดหมู่...")
+                  searchIn === 'sku'
+                    ? t("เช่น VGT-01")
+                    : searchIn === 'name'
+                      ? t("เช่น MOZZARELLA")
+                      : t("ชื่อ / รหัส / หมวดหมู่...")
                 }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -254,6 +259,30 @@ export function ProductsPage() {
             </Field>
           </div>
 
+          <Button
+            variant={showFilters || filterCount > 0 ? 'secondary' : 'ghost'}
+            onClick={() => setShowFilters((v) => !v)}
+            aria-expanded={showFilters}
+            aria-controls="product-filters"
+          >
+            <Icon name="adjust" size={16} />
+            {filterCount > 0 ? t('ตัวกรอง ({n})', { n: filterCount }) : t('ตัวกรอง')}
+            <Icon
+              name="chevronDown"
+              size={14}
+              className={showFilters ? 'rotate-180 transition-transform' : 'transition-transform'}
+            />
+          </Button>
+        </div>
+
+        <div
+          id="product-filters"
+          // `hidden` alone would lose to the `flex` utility, so the collapsed state has to
+          // be the class itself.
+          className={
+            showFilters ? 'mt-3 flex flex-wrap items-end gap-3 border-t border-line pt-3' : 'hidden'
+          }
+        >
           <Field label={t("หมวดหมู่")}>
             <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-[190px]">
               <option value="">{t("ทุกหมวดหมู่")}</option>
@@ -304,12 +333,12 @@ export function ProductsPage() {
           </Field>
         </div>
 
-        <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-500">
+        <div className="mt-3 flex items-center gap-3 border-t border-line pt-2 text-xs text-ink-soft">
           <span>
-            {t('แสดง {shown} จาก {total} รายการ', { shown: filtered.length, total: products.length })}
+            {t('แสดง {shown} จาก {total} รายการ', { shown: filtered.length, total: products.length, })}
           </span>
           {filterCount > 0 && (
-            <button onClick={clearFilters} className="font-medium text-red-700 hover:underline">
+            <button onClick={clearFilters} className="font-medium text-brand hover:underline">
               {t('ล้างตัวกรอง ({n})', { n: filterCount })}
             </button>
           )}
@@ -319,12 +348,20 @@ export function ProductsPage() {
       {filtered.length === 0 ? (
         <Card>
           {products.length > 0 ? (
-            <EmptyState icon="search" title={t("ไม่พบสินค้าที่ตรงกับตัวกรอง")} hint={t("ลองล้างตัวกรองแล้วค้นใหม่")} />
+            <EmptyState
+              icon="search"
+              title={t("ไม่พบสินค้าที่ตรงกับตัวกรอง")}
+              hint={t("ลองล้างตัวกรองแล้วค้นใหม่")}
+            />
           ) : (
             <EmptyState
               icon="package"
               title={t("ยังไม่มีสินค้า")}
-              hint={isAdmin ? t("กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”") : t("ยังไม่มีข้อมูลสินค้า")}
+              hint={
+                isAdmin
+                  ? t("กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”")
+                  : t("ยังไม่มีข้อมูลสินค้า")
+              }
             />
           )}
         </Card>
@@ -332,7 +369,7 @@ export function ProductsPage() {
         <Card className="overflow-hidden">
           <div className="overflow-auto max-h-[calc(100vh-260px)]">
             <table className="w-full min-w-[640px] text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
+              <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
                 <tr>
                   <th className="px-3 py-2">{t("สินค้า")}</th>
                   <th className="px-3 py-2">{t("หมวดหมู่")}</th>
@@ -344,24 +381,24 @@ export function ProductsPage() {
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line">
                 {filtered.map((p) => {
                   const total = shownQty(p.id)
                   const low = minShown(p) > 0 && total <= minShown(p)
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50">
+                    <tr key={p.id} className="hover:bg-sunken">
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-3">
                           <ProductThumb productId={p.id} hasImage={p.hasImage} />
                           <div className="min-w-0">
-                            <div className="truncate font-medium text-slate-800">{p.name}</div>
-                            <div className="text-xs text-slate-400">{p.sku}</div>
+                            <div className="truncate font-medium text-ink">{p.name}</div>
+                            <div className="text-xs text-ink-faint">{p.sku}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{p.category}</td>
-                      <td className="px-3 py-2 text-right font-semibold">
-                        <span className={low ? 'text-rose-600' : 'text-slate-800'}>
+                      <td className="px-3 py-2 text-ink-soft">{p.category}</td>
+                      <td className="num px-3 py-2 text-right font-semibold">
+                        <span className={low ? 'font-semibold text-warn' : 'text-ink'}>
                           {fmtQty(total)}
                         </span>
                         {low && (
@@ -370,8 +407,10 @@ export function ProductsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-500">{fmtQty(minShown(p))}</td>
-                      <td className="px-3 py-2 text-slate-600">{p.unitType}</td>
+                      <td className="num px-3 py-2 text-right text-ink-soft">
+                        {fmtQty(minShown(p))}
+                      </td>
+                      <td className="px-3 py-2 text-ink-soft">{p.unitType}</td>
                       <td className="px-3 py-2 text-right">
                         <Button variant="ghost" onClick={() => setEditing(p)}>
                           {isAdmin ? t("แก้ไข") : t("ดู")}
@@ -543,7 +582,7 @@ function ProductEditor({
     if (!product) return
     const ok = await confirm({
       title: t("ลบสินค้า"),
-      message: t('ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ', { name: product.name }),
+      message: t('ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ', { name: product.name, }),
       danger: true,
       confirmText: t("ลบ"),
     })
@@ -566,13 +605,13 @@ function ProductEditor({
     <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2 flex items-center gap-4">
-          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-line bg-sunken">
             {!imageLoaded ? (
-              <div className="flex h-full items-center justify-center text-slate-300">...</div>
+              <div className="flex h-full items-center justify-center text-ink-faint">...</div>
             ) : preview ? (
               <img src={preview} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-3xl text-slate-300">
+              <div className="flex h-full items-center justify-center text-3xl text-ink-faint">
                 {brand ? brandDef(brand).productIcon : '📦'}
               </div>
             )}
@@ -589,7 +628,7 @@ function ProductEditor({
               />
               <Button variant="secondary" onClick={() => fileRef.current?.click()}>
                 <Icon name="camera" size={16} />
-              {t("เลือกรูป / ถ่ายรูป")}
+                {t("เลือกรูป / ถ่ายรูป")}
               </Button>
               {preview && (
                 <Button
@@ -602,7 +641,7 @@ function ProductEditor({
                   {t("ลบรูป")}
                 </Button>
               )}
-              <p className="text-xs text-slate-400">{t("รูปจะถูกย่อให้เล็กอัตโนมัติ")}</p>
+              <p className="text-xs text-ink-faint">{t("รูปจะถูกย่อให้เล็กอัตโนมัติ")}</p>
             </div>
           )}
         </div>
@@ -636,7 +675,11 @@ function ProductEditor({
         </Field>
         <Field
           label={t("หน่วยนับ (แสดงผล)")}
-          hint={unitLocked ? t("เปลี่ยนหน่วยไม่ได้เพราะสินค้านี้มีสต๊อกหรือมีประวัติแล้ว — ตัวเลขเก่าจะอ่านผิดความหมาย ถ้าหน่วยผิดให้สร้างสินค้าใหม่") : undefined}
+          hint={
+            unitLocked
+              ? t('เปลี่ยนหน่วยไม่ได้เพราะสินค้านี้มีสต๊อกหรือมีประวัติแล้ว — ตัวเลขเก่าจะอ่านผิดความหมาย ถ้าหน่วยผิดให้สร้างสินค้าใหม่')
+              : undefined
+          }
         >
           <Input
             value={form.unit}
@@ -670,7 +713,10 @@ function ProductEditor({
             min={0}
             value={form.cost ?? ''}
             onChange={(e) =>
-              setForm({ ...form, cost: e.target.value === '' ? undefined : Number(e.target.value) })
+              setForm({
+                ...form,
+                cost: e.target.value === '' ? undefined : Number(e.target.value),
+              })
             }
             disabled={!canEdit}
           />
@@ -678,28 +724,26 @@ function ProductEditor({
       </div>
 
       {product && canEdit && (
-        <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
-          <div className="mb-1 text-sm font-semibold text-slate-700">
+        <div className="mt-5 rounded-lg border border-line bg-sunken/60 p-4">
+          <div className="mb-1 text-sm font-semibold text-ink">
             {t("ยอดคงเหลือปัจจุบัน (พิมพ์จำนวนที่มีจริง)")}
           </div>
-          <p className="mb-3 text-xs text-slate-400">
-            {t("แก้ตัวเลขให้ตรงกับของจริงในคลัง — ระบบจะบันทึกเป็นรายการ “ตั้งยอด/ยอดยกมา” ให้อัตโนมัติ (เก็บประวัติครบ)")}
+          <p className="mb-3 text-xs text-ink-faint">
+            {t('แก้ตัวเลขให้ตรงกับของจริงในคลัง — ระบบจะบันทึกเป็นรายการ “ตั้งยอด/ยอดยกมา” ให้อัตโนมัติ (เก็บประวัติครบ)')}
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {locations.map((l) => (
               <div key={l.id} className="flex items-center gap-2">
-                <span className="flex-1 truncate text-sm text-slate-600">
-                  {l.name}
-                </span>
+                <span className="flex-1 truncate text-sm text-ink-soft">{l.name}</span>
                 <input
                   type="number"
                   step="any"
                   min={0}
                   value={counts[l.id] ?? 0}
                   onChange={(e) => setCounts({ ...counts, [l.id]: Number(e.target.value) })}
-                  className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-right text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                  className="num min-h-11 w-28 rounded-lg border border-line-strong px-3 py-2 text-right text-sm outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
                 />
-                <span className="w-10 text-sm text-slate-500">{form.unitType}</span>
+                <span className="w-10 text-sm text-ink-soft">{form.unitType}</span>
               </div>
             ))}
           </div>

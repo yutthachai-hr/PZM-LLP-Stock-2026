@@ -5,13 +5,27 @@ import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { BackupSection } from '../components/BackupSection'
 import { Icon } from '../components/Icon'
-import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select } from '../components/ui'
 import {
-  createLocation,
-  updateLocation,
-  deleteLocation,
-} from '../services/locations'
-import { createUser, updateUserProfile, deleteUser, restoreUser, listRevoked, type RevokedUser } from '../services/users'
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Modal,
+  PageHeader,
+  rowAction,
+  SectionHeader,
+  Select,
+} from '../components/ui'
+import { createLocation, updateLocation, deleteLocation } from '../services/locations'
+import {
+  createUser,
+  updateUserProfile,
+  deleteUser,
+  restoreUser,
+  listRevoked,
+  type RevokedUser,
+} from '../services/users'
 import { recomputeLevels, findLevelDrift, type LevelDrift } from '../services/stock'
 import { seedInitialData } from '../services/seed'
 import {
@@ -41,8 +55,8 @@ export function SettingsPage() {
       {isAdmin && user && <MaintenanceSection actor={{ id: user.id, name: user.name }} />}
 
       {!isAdmin && (
-        <Card className="p-4 text-sm text-slate-500">
-          {t("การจัดการคลัง ผู้ใช้ และข้อมูล ต้องเป็นสิทธิ์ผู้ดูแลระบบ (Admin)")}
+        <Card className="p-4 text-sm text-ink-soft">
+          {t('การจัดการคลัง ผู้ใช้ และข้อมูล ต้องเป็นสิทธิ์ผู้ดูแลระบบ (Admin)')}
         </Card>
       )}
     </div>
@@ -60,7 +74,7 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
   function connect() {
     const parsed = parseConfigInput(input)
     if (!parsed) {
-      toast.error(t("อ่านค่า config ไม่ได้ — วางทั้งอ็อบเจกต์ firebaseConfig"))
+      toast.error(t('อ่านค่า config ไม่ได้ — วางทั้งอ็อบเจกต์ firebaseConfig'))
       return
     }
     saveFirebaseConfig(parsed)
@@ -82,12 +96,20 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
 
   return (
     <Card className="p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <h2 className="font-semibold text-slate-800">{t("การเชื่อมต่อ Cloud")}</h2>
-        {mode === 'cloud' ? <Badge color="green">{t("เชื่อมต่อแล้ว")}</Badge> : <Badge color="amber">{t("โหมดในเครื่อง")}</Badge>}
-      </div>
+      <SectionHeader
+        icon="cloud"
+        title={t("การเชื่อมต่อ Cloud")}
+        description={t('ที่เก็บข้อมูลของแอปนี้')}
+        badge={
+          mode === 'cloud' ? (
+            <Badge color="green">{t("เชื่อมต่อแล้ว")}</Badge>
+          ) : (
+            <Badge color="amber">{t("โหมดในเครื่อง")}</Badge>
+          )
+        }
+      />
       {mode === 'cloud' ? (
-        <div className="space-y-2 text-sm text-slate-600">
+        <div className="space-y-2 text-sm text-ink-soft">
           <p>
             {t('เชื่อมต่อ Firebase project:')} <span className="font-mono">{cfg?.projectId}</span>{' '}
             {t('— ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์')}
@@ -97,9 +119,11 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
           </Button>
         </div>
       ) : (
-        <div className="space-y-3 text-sm text-slate-600">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
-            <p className="font-semibold">{t("โหมดในเครื่องมีไว้ทดลองใช้ ไม่ใช่สำหรับข้อมูลจริง")}</p>
+        <div className="space-y-3 text-sm text-ink-soft">
+          <div className="rounded-lg border border-warn/30 bg-warn-soft p-3 text-warn">
+            <p className="font-semibold">
+              {t("โหมดในเครื่องมีไว้ทดลองใช้ ไม่ใช่สำหรับข้อมูลจริง")}
+            </p>
             <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
               <li>{t("รหัสผ่านเก็บในเบราว์เซอร์แบบไม่เข้ารหัส ใครเปิดเครื่องนี้ได้ก็อ่านได้")}</li>
               <li>{t("ไม่มีเซิร์ฟเวอร์ตรวจสิทธิ์ — สิทธิ์ผู้ดูแล/พนักงานเป็นแค่การซ่อนปุ่ม")}</li>
@@ -111,9 +135,11 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
             {t('ตอนนี้ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น หากต้องการใช้หลายเครื่องแบบเรียลไทม์ (ฟรี) ให้สร้าง Firebase project แล้ววาง config ด้านล่าง — ดูวิธีใน README')}
           </p>
           <textarea
-            className="w-full rounded-lg border border-slate-300 p-2 font-mono text-xs"
+            className="w-full rounded-lg border border-line-strong p-2 font-mono text-xs"
             rows={7}
-            placeholder={'{\n  "apiKey": "...",\n  "authDomain": "xxx.firebaseapp.com",\n  "projectId": "xxx",\n  "appId": "..."\n}'}
+            placeholder={
+              '{\n  "apiKey": "...",\n  "authDomain": "xxx.firebaseapp.com",\n  "projectId": "xxx",\n  "appId": "..."\n}'
+            }
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
@@ -136,7 +162,7 @@ function LocationsSection() {
   async function remove(l: StockLocation) {
     const ok = await confirm({
       title: t("ลบคลัง"),
-      message: t('ลบ "{name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)', { name: l.name }),
+      message: t('ลบ "{name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)', { name: l.name, }),
       danger: true,
       confirmText: t("ลบ"),
     })
@@ -151,41 +177,64 @@ function LocationsSection() {
 
   return (
     <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold text-slate-800">{t("คลัง / สาขา")}</h2>
-        <Button variant="secondary" onClick={() => setAdding(true)}>
-          {t("+ เพิ่มคลัง")}
-        </Button>
-      </div>
-      <div className="divide-y divide-slate-100">
+      <SectionHeader
+        icon="building"
+        title={t("คลัง / สาขา")}
+        description={t('สถานที่ที่นับสต๊อกได้ — ทุกการรับเข้า/เบิกออกต้องระบุคลัง')}
+        actions={
+          <Button variant="secondary" onClick={() => setAdding(true)}>
+            <Icon name="plus" size={16} />
+            {t("เพิ่มคลัง")}
+          </Button>
+        }
+      />
+      <div className="divide-y divide-line">
         {locations.map((l) => (
           <div key={l.id} className="flex items-center gap-3 py-2">
             <Icon
-              name={l.type === 'warehouse' ? 'package' : 'truck'}
+              name={l.type === 'warehouse' ? 'package' : 'building'}
               size={18}
               className="text-ink-faint"
             />
-            <span className="flex-1 font-medium text-slate-700">{l.name}</span>
+            <span className="flex-1 font-medium text-ink">{l.name}</span>
             <Badge color={l.type === 'warehouse' ? 'blue' : 'slate'}>
               {l.type === 'warehouse' ? t("คลังหลัก") : t("สาขา")}
             </Badge>
-            <button onClick={() => setEditing(l)} className="text-sm text-slate-500 hover:text-slate-700">
+            <button
+              onClick={() => setEditing(l)}
+              className={`${rowAction} text-ink-soft hover:bg-sunken hover:text-ink`}
+            >
               {t("แก้ไข")}
             </button>
-            <button onClick={() => remove(l)} className="text-sm text-rose-500 hover:text-rose-700">
+            <button
+              onClick={() => remove(l)}
+              className={`${rowAction} font-medium text-danger hover:bg-danger-soft`}
+            >
               {t("ลบ")}
             </button>
           </div>
         ))}
       </div>
       {(adding || editing) && (
-        <LocationEditor location={editing} onClose={() => { setAdding(false); setEditing(null) }} />
+        <LocationEditor
+          location={editing}
+          onClose={() => {
+            setAdding(false)
+            setEditing(null)
+          }}
+        />
       )}
     </Card>
   )
 }
 
-function LocationEditor({ location, onClose }: { location: StockLocation | null; onClose: () => void }) {
+function LocationEditor({
+  location,
+  onClose,
+}: {
+  location: StockLocation | null
+  onClose: () => void
+}) {
   const t = useT()
   const toast = useToast()
   const [name, setName] = useState(location?.name ?? '')
@@ -216,12 +265,16 @@ function LocationEditor({ location, onClose }: { location: StockLocation | null;
         <Field label={t("ประเภท")}>
           <Select value={type} onChange={(e) => setType(e.target.value as LocationType)}>
             <option value="warehouse">{t("คลังหลัก (Warehouse)")}</option>
-            <option value="branch">{t("สาขา (Branch)")}</option>
+            <option value="branch">{t('สาขา (Branch)')}</option>
           </Select>
         </Field>
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>{t("ยกเลิก")}</Button>
-          <Button onClick={save} disabled={busy}>{t("บันทึก")}</Button>
+          <Button variant="secondary" onClick={onClose}>
+            {t("ยกเลิก")}
+          </Button>
+          <Button onClick={save} disabled={busy}>
+            {t("บันทึก")}
+          </Button>
         </div>
       </div>
     </Modal>
@@ -289,19 +342,28 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
 
   return (
     <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold text-slate-800">{t("ผู้ใช้งาน")}</h2>
-        <Button variant="secondary" onClick={() => setAdding(true)}>{t("+ เพิ่มผู้ใช้")}</Button>
-      </div>
-      <div className="divide-y divide-slate-100">
+      <SectionHeader
+        icon="users"
+        title={t("ผู้ใช้งาน")}
+        description={t('ใครเข้าระบบได้บ้าง และมีสิทธิ์ระดับไหน')}
+        actions={
+          <Button variant="secondary" onClick={() => setAdding(true)}>
+            <Icon name="plus" size={16} />
+            {t("เพิ่มผู้ใช้")}
+          </Button>
+        }
+      />
+      <div className="divide-y divide-line">
         {users.map((u) => (
           <div key={u.id} className="flex flex-wrap items-center gap-3 py-2">
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-slate-700">
+              <div className="font-medium text-ink">
                 {u.name}
-                {u.id === currentUserId && <span className="ml-1 text-xs text-slate-400">{t("(คุณ)")}</span>}
+                {u.id === currentUserId && (
+                  <span className="ml-1 text-xs text-ink-faint">{t("(คุณ)")}</span>
+                )}
               </div>
-              <div className="text-xs text-slate-400">{u.email}</div>
+              <div className="text-xs text-ink-faint">{u.email}</div>
             </div>
             <Select
               value={u.role}
@@ -313,13 +375,16 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
               <option value="staff">{t("พนักงาน")}</option>
             </Select>
             {u.active === false ? (
-              <button onClick={() => toggleActive(u.id, true)} className="text-sm text-emerald-600">
+              <button
+                onClick={() => toggleActive(u.id, true)}
+                className={`${rowAction} font-medium text-in hover:bg-in-soft`}
+              >
                 {t("เปิดใช้")}
               </button>
             ) : (
               <button
                 onClick={() => toggleActive(u.id, false)}
-                className="text-sm text-rose-500 disabled:opacity-40"
+                className={`${rowAction} text-danger hover:bg-danger-soft`}
                 disabled={u.id === currentUserId}
               >
                 {t("ปิดใช้")}
@@ -328,7 +393,7 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
             {u.id !== currentUserId && (
               <button
                 onClick={() => removeUser(u)}
-                className="text-sm font-medium text-rose-600 hover:underline"
+                className={`${rowAction} font-medium text-danger hover:bg-danger-soft`}
               >
                 {t("ลบ")}
               </button>
@@ -337,18 +402,20 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
         ))}
       </div>
       {revoked.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-3">
-          <h3 className="mb-2 text-sm font-semibold text-slate-600">{t("บัญชีที่ถูกถอนสิทธิ์")}</h3>
-          <p className="mb-2 text-xs text-slate-400">
+        <div className="mt-4 border-t border-line pt-3">
+          <h3 className="mb-2 text-sm font-semibold text-ink-soft">{t("บัญชีที่ถูกถอนสิทธิ์")}</h3>
+          <p className="mb-2 text-xs text-ink-faint">
             {t("บัญชีเหล่านี้เข้าระบบไม่ได้และสมัครใหม่ด้วยอีเมลเดิมไม่ได้ จนกว่าจะคืนสิทธิ์")}
           </p>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-line">
             {revoked.map((r) => (
               <div key={r.id} className="flex items-center gap-3 py-2">
-                <div className="min-w-0 flex-1 truncate font-mono text-xs text-slate-500">{r.id}</div>
+                <div className="min-w-0 flex-1 truncate font-mono text-xs text-ink-soft">
+                  {r.id}
+                </div>
                 <button
                   onClick={() => undoRemoval(r)}
-                  className="text-sm font-medium text-emerald-600 hover:underline"
+                  className="text-sm font-medium text-in hover:underline"
                 >
                   {t("คืนสิทธิ์")}
                 </button>
@@ -357,8 +424,13 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
           </div>
         </div>
       )}
-      {revokedErr && <p className="mt-2 text-xs text-rose-600">{revokedErr}</p>}
-      {adding && <UserEditor onClose={() => setAdding(false)} onDone={() => toast.success(t("เพิ่มผู้ใช้แล้ว"))} />}
+      {revokedErr && <p className="mt-2 text-xs text-danger">{revokedErr}</p>}
+      {adding && (
+        <UserEditor
+          onClose={() => setAdding(false)}
+          onDone={() => toast.success(t("เพิ่มผู้ใช้แล้ว"))}
+        />
+      )}
     </Card>
   )
 }
@@ -406,8 +478,12 @@ function UserEditor({ onClose, onDone }: { onClose: () => void; onDone: () => vo
           </Select>
         </Field>
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>{t("ยกเลิก")}</Button>
-          <Button onClick={save} disabled={busy}>{busy ? t("กำลังสร้าง...") : t("สร้างผู้ใช้")}</Button>
+          <Button variant="secondary" onClick={onClose}>
+            {t("ยกเลิก")}
+          </Button>
+          <Button onClick={save} disabled={busy}>
+            {busy ? t("กำลังสร้าง...") : t("สร้างผู้ใช้")}
+          </Button>
         </div>
       </div>
     </Modal>
@@ -423,10 +499,7 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
   // null = not checked yet, [] = checked and everything agrees
   const [drift, setDrift] = useState<LevelDrift[] | null>(null)
   const { products, locationById } = useData()
-  const productById = useMemo(
-    () => new Map(products.map((p) => [p.id, p])),
-    [products],
-  )
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
 
   async function checkIntegrity() {
     setBusy('check')
@@ -461,7 +534,9 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
     setBusy('seed')
     try {
       const r = await seedInitialData()
-      toast.success(t('นำเข้าสินค้า {products}, คลัง {locations}', { products: r.products, locations: r.locations }))
+      toast.success(
+        t('นำเข้าสินค้า {products}, คลัง {locations}', { products: r.products, locations: r.locations, }),
+      )
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
@@ -471,7 +546,11 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
 
   return (
     <Card className="p-4">
-      <h2 className="mb-3 font-semibold text-slate-800">{t("ดูแลข้อมูล")}</h2>
+      <SectionHeader
+        icon="refresh"
+        title={t("ดูแลข้อมูล")}
+        description={t('เครื่องมือซ่อมข้อมูล ใช้เมื่อยอดคงเหลือไม่ตรงกับประวัติ')}
+      />
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={seed} disabled={!!busy}>
           {busy === 'seed' ? t("กำลังนำเข้า...") : t("นำเข้าแคตตาล็อกสินค้า")}
@@ -483,29 +562,27 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
           {busy === 'check' ? t("กำลังตรวจ...") : t("ตรวจความสอดคล้องของยอด")}
         </Button>
       </div>
-      <p className="mt-2 text-xs text-slate-400">
-        {t("“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)")}
+      <p className="mt-2 text-xs text-ink-faint">
+        {t('“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)')}
       </p>
 
       {drift !== null && (
-        <div className="mt-4 border-t border-slate-100 pt-3">
-          <h3 className="mb-1 text-sm font-semibold text-slate-700">
-            {t("ผลตรวจความสอดคล้องของยอด")}
-          </h3>
-          <p className="mb-3 text-xs text-slate-400">
-            {t("เทียบยอดคงเหลือที่เก็บไว้กับผลรวมจากประวัติ ประวัติคือข้อมูลจริงเสมอ — ระบบตรวจเจอและซ่อมได้ แต่ป้องกันการแก้ยอดตรง ๆ ไม่ได้บนแพ็กเกจฟรี")}
+        <div className="mt-4 border-t border-line pt-3">
+          <h3 className="mb-1 text-sm font-semibold text-ink">{t("ผลตรวจความสอดคล้องของยอด")}</h3>
+          <p className="mb-3 text-xs text-ink-faint">
+            {t('เทียบยอดคงเหลือที่เก็บไว้กับผลรวมจากประวัติ ประวัติคือข้อมูลจริงเสมอ — ระบบตรวจเจอและซ่อมได้ แต่ป้องกันการแก้ยอดตรง ๆ ไม่ได้บนแพ็กเกจฟรี')}
           </p>
           {drift.length === 0 ? (
-            <p className="text-sm text-emerald-600">{t("ยอดคงเหลือตรงกับประวัติทุกรายการ")}</p>
+            <p className="text-sm font-medium text-in">{t("ยอดคงเหลือตรงกับประวัติทุกรายการ")}</p>
           ) : (
             <>
-              <p className="mb-2 text-sm text-rose-600">
-                {t("พบ {count} รายการที่ไม่ตรง — กด “คำนวณยอดคงเหลือใหม่” เพื่อซ่อมจากประวัติ", { count: drift.length })}
+              <p className="mb-2 text-sm text-danger">
+                {t('พบ {count} รายการที่ไม่ตรง — กด “คำนวณยอดคงเหลือใหม่” เพื่อซ่อมจากประวัติ', { count: drift.length, })}
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-slate-400">
+                    <tr className="text-left text-xs text-ink-faint">
                       <th className="py-1 pr-3">{t("สินค้า")}</th>
                       <th className="py-1 pr-3">{t("คลัง")}</th>
                       <th className="py-1 pr-3 text-right">{t("ยอดที่เก็บไว้")}</th>
@@ -513,7 +590,7 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
                       <th className="py-1">{t("แก้ล่าสุดโดย")}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-line">
                     {drift.slice(0, 50).map((d) => (
                       <tr key={d.id}>
                         <td className="py-1 pr-3">
@@ -522,17 +599,19 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
                               product, which is the usual reason a balance has no history. */}
                           {productById.get(d.productId)?.name ?? (
                             <>
-                              <span className="text-amber-700">{t('(สินค้าถูกลบไปแล้ว)')}</span>
-                              <span className="ml-1 font-mono text-xs text-slate-400">
+                              <span className="text-warn">{t('(สินค้าถูกลบไปแล้ว)')}</span>
+                              <span className="ml-1 font-mono text-xs text-ink-faint">
                                 {d.productId}
                               </span>
                             </>
                           )}
                         </td>
-                        <td className="py-1 pr-3">{locationById(d.locationId)?.name ?? d.locationId}</td>
-                        <td className="py-1 pr-3 text-right font-medium text-rose-600">{d.cached}</td>
-                        <td className="py-1 pr-3 text-right text-slate-700">{d.fromLedger}</td>
-                        <td className="py-1 font-mono text-xs text-slate-400">
+                        <td className="py-1 pr-3">
+                          {locationById(d.locationId)?.name ?? d.locationId}
+                        </td>
+                        <td className="py-1 pr-3 text-right font-medium text-danger">{d.cached}</td>
+                        <td className="py-1 pr-3 text-right text-ink">{d.fromLedger}</td>
+                        <td className="py-1 font-mono text-xs text-ink-faint">
                           {d.updatedBy ?? t("(ไม่ระบุ)")}
                         </td>
                       </tr>
@@ -541,8 +620,8 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
                 </table>
               </div>
               {drift.length > 50 && (
-                <p className="mt-2 text-xs text-slate-400">
-                  {t("แสดง 50 รายการแรกจาก {count}", { count: drift.length })}
+                <p className="mt-2 text-xs text-ink-faint">
+                  {t('แสดง 50 รายการแรกจาก {count}', { count: drift.length })}
                 </p>
               )}
             </>

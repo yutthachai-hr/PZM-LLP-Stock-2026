@@ -16,11 +16,11 @@ export function LedgerWindowNotice() {
   if (movementsFrom <= 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-slate-500">
+    <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-ink-soft">
       <span>{t('แสดงประวัติตั้งแต่ {date}', { date: formatThaiDate(movementsFrom) })}</span>
       <button
         onClick={() => ensureMovementsFrom(0)}
-        className="font-medium text-red-700 hover:underline"
+        className="font-medium text-brand hover:underline"
       >
         {t('โหลดประวัติทั้งหมด')}
       </button>

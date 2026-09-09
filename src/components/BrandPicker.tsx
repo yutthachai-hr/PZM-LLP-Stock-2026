@@ -8,12 +8,15 @@ export function BrandPicker({ onPick }: { onPick: (b: BrandId) => void }) {
   const t = useT()
   const last = lastBrand()
 
+  // Sign-in and brand choice happen before a brand is picked, so there is no brand
+  // accent to use yet. The gradient is deliberately both brands at once — Pizza Mania
+  // red into Le Lapin orange — rather than a token.
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
         <LangToggle className="mx-auto mb-4 w-32" />
-        <h1 className="text-center text-xl font-bold text-slate-800">{t('เลือกแบรนด์ที่จะจัดการ')}</h1>
-        <p className="mb-5 mt-1 text-center text-sm text-slate-500">
+        <h1 className="text-center text-xl font-bold text-ink">{t('เลือกแบรนด์ที่จะจัดการ')}</h1>
+        <p className="mb-5 mt-1 text-center text-sm text-ink-soft">
           {t('สวัสดี {name} — ข้อมูลสต๊อกของแต่ละแบรนด์แยกกันสมบูรณ์', { name: user?.name ?? '' })}
         </p>
         <div className="space-y-3">
@@ -21,28 +24,28 @@ export function BrandPicker({ onPick }: { onPick: (b: BrandId) => void }) {
             <button
               key={b.id}
               onClick={() => onPick(b.id)}
-              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-colors hover:border-red-400 hover:bg-red-50 ${
-                b.id === last ? 'border-red-300 bg-red-50/40' : 'border-slate-200'
+              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-colors hover:border-brand/50 hover:bg-brand-soft ${
+                b.id === last ? 'border-brand/40 bg-brand-soft/50' : 'border-line'
               }`}
             >
               <span className="text-4xl">{b.emoji}</span>
               <div className="min-w-0">
-                <div className="font-semibold text-slate-800">{b.name}</div>
-                <div className="text-xs text-slate-400">
+                <div className="font-semibold text-ink">{b.name}</div>
+                <div className="text-xs text-ink-faint">
                   {b.id === 'pizza'
                     ? t('ระบบสต๊อกพิซซ่า')
                     : t('ระบบสต๊อกแซนด์วิช (แบรนด์น้อง)')}
                 </div>
               </div>
               {b.id === last && (
-                <span className="ml-auto text-xs font-medium text-red-500">{t('ล่าสุด')}</span>
+                <span className="ml-auto text-xs font-medium text-brand">{t('ล่าสุด')}</span>
               )}
             </button>
           ))}
         </div>
         <button
           onClick={logout}
-          className="mx-auto mt-5 block text-xs text-slate-400 hover:text-slate-600 hover:underline"
+          className="mx-auto mt-5 block text-xs text-ink-faint hover:text-ink-soft hover:underline"
         >
           {t('ออกจากระบบ')}
         </button>

@@ -5,7 +5,7 @@ import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useConfirm } from './Confirm'
 import { useToast } from './Toast'
-import { Button, Card } from './ui'
+import { Button, Card, SectionHeader } from './ui'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import {
@@ -49,9 +49,7 @@ export function BackupSection() {
       // but the owner should know the warehouse has something to look at.
       if (b.integrity.drift > 0) {
         toast.error(
-          t('เตือน: ตอนสำรอง มียอดคงเหลือ {n} รายการไม่ตรงกับประวัติ — กด “ตรวจความสอดคล้องของยอด” ในหน้าตั้งค่า', {
-            n: b.integrity.drift,
-          }),
+          t('เตือน: ตอนสำรอง มียอดคงเหลือ {n} รายการไม่ตรงกับประวัติ — กด “ตรวจความสอดคล้องของยอด” ในหน้าตั้งค่า', { n: b.integrity.drift, }),
         )
       }
     } catch (e) {
@@ -84,10 +82,7 @@ export function BackupSection() {
     // mistake nobody can walk back.
     if (parsed.brand !== brand) {
       toast.error(
-        t('ไฟล์นี้เป็นข้อมูลของ {file} แต่ตอนนี้เปิด {current} อยู่ — สลับไปที่ {file} ก่อนแล้วค่อยกู้คืน', {
-          file: parsed.brandName || parsed.brand,
-          current: brandName,
-        }),
+        t('ไฟล์นี้เป็นข้อมูลของ {file} แต่ตอนนี้เปิด {current} อยู่ — สลับไปที่ {file} ก่อนแล้วค่อยกู้คืน', { file: parsed.brandName || parsed.brand, current: brandName, }),
       )
       return
     }
@@ -95,11 +90,7 @@ export function BackupSection() {
     const ok = await confirm({
       title: t('กู้คืนข้อมูลจากไฟล์สำรอง'),
       message:
-        t('ไฟล์นี้สำรองจาก {brand} เมื่อ {when} — มี {n} รายการ', {
-          brand: parsed.brandName,
-          when: new Date(parsed.createdAt).toLocaleString(),
-          n: backupSize(parsed),
-        }) +
+        t('ไฟล์นี้สำรองจาก {brand} เมื่อ {when} — มี {n} รายการ', { brand: parsed.brandName, when: new Date(parsed.createdAt).toLocaleString(), n: backupSize(parsed), }) +
         '\n\n' +
         (mode === RESTORE_MODES.overwrite
           ? t('โหมดเขียนทับ: ข้อมูลหลัก (สินค้า คลัง รูป บันทึก) จะถูกเขียนกลับตามไฟล์ ทับการแก้ไขที่ทำหลังสำรอง')
@@ -115,16 +106,17 @@ export function BackupSection() {
     try {
       const r = await restoreBackup(parsed, mode)
       toast.success(
-        t('กู้คืนแล้ว: เขียนใหม่ {written} รายการ, คงเดิม {kept} รายการ, สร้างยอดใหม่ {rebuilt} รายการ, ข้าม {skipped} รายการ', {
-          written: r.written,
-          kept: r.kept,
-          rebuilt: r.rebuilt,
-          skipped: r.skipped,
-        }),
+        t('กู้คืนแล้ว: เขียนใหม่ {written} รายการ, คงเดิม {kept} รายการ, สร้างยอดใหม่ {rebuilt} รายการ, ข้าม {skipped} รายการ', { written: r.written, kept: r.kept, rebuilt: r.rebuilt, skipped: r.skipped, }),
       )
     } catch (err) {
       // A restore is idempotent, so the honest advice after a failure is to run it again.
-      toast.error(t('กู้คืนไม่สำเร็จ:') + ' ' + errText(err, t) + ' — ' + t('กดกู้คืนไฟล์เดิมซ้ำได้ ระบบจะทำต่อจากเดิมโดยไม่สร้างข้อมูลซ้ำ'))
+      toast.error(
+        t('กู้คืนไม่สำเร็จ:') +
+          ' ' +
+          errText(err, t) +
+          ' — ' +
+          t('กดกู้คืนไฟล์เดิมซ้ำได้ ระบบจะทำต่อจากเดิมโดยไม่สร้างข้อมูลซ้ำ'),
+      )
     } finally {
       setBusy('')
     }
@@ -132,12 +124,11 @@ export function BackupSection() {
 
   return (
     <Card className="p-4">
-      <h2 className="mb-1 font-semibold text-slate-800">{t('สำรอง / กู้คืนข้อมูล')}</h2>
-      <p className="mb-3 text-xs text-slate-500">
-        {t('ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive', {
-          brand: brandName,
-        })}
-      </p>
+      <SectionHeader
+        icon="download"
+        title={t('สำรอง / กู้คืนข้อมูล')}
+        description={t('ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive', { brand: brandName, })}
+      />
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={download} disabled={!!busy}>
@@ -169,8 +160,8 @@ export function BackupSection() {
         </Button>
       </div>
 
-      <fieldset className="mt-3 space-y-1 text-xs text-slate-600">
-        <legend className="mb-1 font-medium text-slate-700">{t('วิธีกู้คืน')}</legend>
+      <fieldset className="mt-3 space-y-1 text-xs text-ink-soft">
+        <legend className="mb-1 font-medium text-ink">{t('วิธีกู้คืน')}</legend>
         <label className="flex items-start gap-2">
           <input
             type="radio"

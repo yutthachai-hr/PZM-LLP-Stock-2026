@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, FormActions, Input, PageHeader, Select, Textarea } from '../components/ui'
+import {
+  Button,
+  Card,
+  Field,
+  FormActions,
+  Input,
+  PageHeader,
+  Select,
+  Textarea,
+} from '../components/ui'
 import { ProductThumb } from '../components/ProductThumb'
 import { QtyInput } from '../components/QtyInput'
 import { adjustStock } from '../services/stock'
@@ -99,12 +108,13 @@ export function AdjustPage() {
 
         <Field label={t("สินค้า")} required>
           {product ? (
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
+            <div className="flex items-center gap-3 rounded-lg border border-line p-2">
               <ProductThumb productId={product.id} hasImage={product.hasImage} size={36} />
               <div className="flex-1">
                 <div className="text-sm font-medium">{product.name}</div>
-                <div className="text-xs text-slate-500">
-                  {t('คงเหลือปัจจุบัน')}: {fmtQty(current)} {product.unitType}
+                <div className="text-xs text-ink-soft">
+                  {t('คงเหลือปัจจุบัน')}: <span className="num">{fmtQty(current)}</span>{' '}
+                  {product.unitType}
                 </div>
               </div>
               <Button variant="ghost" onClick={() => setProduct(null)}>
@@ -119,7 +129,7 @@ export function AdjustPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
               {matches.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-lg">
                   {matches.map((p) => (
                     <button
                       key={p.id}
@@ -128,11 +138,11 @@ export function AdjustPage() {
                         setProduct(p)
                         setSearch('')
                       }}
-                      className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-sunken"
                     >
                       <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
                       <span className="flex-1 truncate">{p.name}</span>
-                      <span className="text-xs text-slate-400">{p.sku}</span>
+                      <span className="text-xs text-ink-faint">{p.sku}</span>
                     </button>
                   ))}
                 </div>
@@ -170,9 +180,9 @@ export function AdjustPage() {
         </Field>
 
         {product && (
-          <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <div className="rounded-lg bg-sunken px-3 py-2 text-sm text-ink-soft">
             {t('คงเหลือหลังปรับ:')}{' '}
-            <span className="font-semibold text-slate-800">
+            <span className="num font-semibold text-ink">
               {fmtQty(direction === 'in' ? current + qty : current - qty)} {product.unitType}
             </span>
           </div>

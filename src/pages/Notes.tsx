@@ -85,9 +85,9 @@ export function NotesPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {sorted.map((n) => (
-            <Card key={n.id} className={`flex flex-col p-4 ${n.pinned ? 'border-amber-300 bg-amber-50/40' : ''}`}>
+            <Card key={n.id} className={`flex flex-col p-4 ${n.pinned ? 'border-warn/40 bg-warn-soft/50' : ''}`}>
               <div className="mb-1 flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-slate-800">{n.title}</h3>
+                <h3 className="font-semibold text-ink">{n.title}</h3>
                 <button
                   onClick={() => togglePin(n)}
                   className="text-lg"
@@ -96,16 +96,16 @@ export function NotesPage() {
                   <Icon name="pin" size={16} className={n.pinned ? 'text-brand' : ''} />
                 </button>
               </div>
-              <p className="flex-1 whitespace-pre-wrap text-sm text-slate-600">{n.body}</p>
-              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-400">
+              <p className="flex-1 whitespace-pre-wrap text-sm text-ink-soft">{n.body}</p>
+              <div className="mt-3 flex items-center justify-between border-t border-line pt-2 text-xs text-ink-faint">
                 <span>
                   {n.byUserName} · {formatThaiDateTime(n.updatedAt)}
                 </span>
                 <span className="flex gap-2">
-                  <button onClick={() => setEditing(n)} className="text-slate-500 hover:text-slate-700">
+                  <button onClick={() => setEditing(n)} className="text-ink-soft hover:text-ink">
                     {t("แก้ไข")}
                   </button>
-                  <button onClick={() => remove(n)} className="text-rose-500 hover:text-rose-700">
+                  <button onClick={() => remove(n)} className="text-danger hover:underline">
                     {t("ลบ")}
                   </button>
                 </span>

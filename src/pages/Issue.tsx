@@ -3,7 +3,7 @@ import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, FormActions, Input, PageHeader, Select, Textarea } from '../components/ui'
+import { Button, Card, Field, FormActions, Input, PageHeader, SegTab, Select, Textarea } from '../components/ui'
 import { LineBuilder, type Line } from '../components/LineBuilder'
 import { issueStock, consumeStock } from '../services/stock'
 import { compressImage } from '../lib/image'
@@ -27,25 +27,12 @@ export function IssuePage() {
       />
 
       <div className="flex gap-1 rounded-lg bg-sunken p-1">
-        <Tab label={t("โอนไปสาขา (เก็บสต๊อก)")} active={mode === 'transfer'} onClick={() => setMode('transfer')} />
-        <Tab label={t("เบิกใช้ / ตัดออก (หน้าร้าน)")} active={mode === 'consume'} onClick={() => setMode('consume')} />
+        <SegTab label={t("โอนไปสาขา (เก็บสต๊อก)")} active={mode === 'transfer'} onClick={() => setMode('transfer')} />
+        <SegTab label={t("เบิกใช้ / ตัดออก (หน้าร้าน)")} active={mode === 'consume'} onClick={() => setMode('consume')} />
       </div>
 
       {mode === 'transfer' ? <TransferForm /> : <ConsumeForm />}
     </div>
-  )
-}
-
-function Tab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-        active ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600'
-      }`}
-    >
-      {label}
-    </button>
   )
 }
 
@@ -139,7 +126,7 @@ function TransferForm() {
       </div>
 
       <div>
-        <div className="mb-2 text-sm font-medium text-slate-700">{t("รายการสินค้า")}</div>
+        <div className="mb-2 text-sm font-medium text-ink">{t("รายการสินค้า")}</div>
         <LineBuilder
           products={products}
           lines={lines}
@@ -225,7 +212,7 @@ function ConsumeForm() {
 
   return (
     <Card className="space-y-4 p-4">
-      <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <div className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
         {t("เบิกของออกจากคลังไปใช้/ขายหน้าร้าน (เช่น สาขาสุขุมวิทที่อยู่ที่เดียวกับคลัง) — ตัดสต๊อกออก ไม่เพิ่มเข้าสาขาอื่น")}
       </div>
 
@@ -248,7 +235,7 @@ function ConsumeForm() {
       </div>
 
       <div>
-        <div className="mb-2 text-sm font-medium text-slate-700">{t("รายการสินค้าที่เบิก")}</div>
+        <div className="mb-2 text-sm font-medium text-ink">{t("รายการสินค้าที่เบิก")}</div>
         <LineBuilder
           products={products}
           lines={lines}
@@ -276,10 +263,10 @@ function ConsumeForm() {
               <img
                 src={photo}
                 alt={t('หลักฐาน')}
-                className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                className="h-16 w-16 rounded-lg border border-line object-cover"
               />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-300">
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-line-strong text-ink-faint">
                 <Icon name="camera" size={18} />
               </div>
             )}
@@ -291,7 +278,7 @@ function ConsumeForm() {
               {photo && (
                 <button
                   onClick={() => setPhoto(null)}
-                  className="block text-xs text-rose-500 hover:underline"
+                  className="block text-xs text-danger hover:underline"
                 >
                   {t("ลบรูป")}
                 </button>

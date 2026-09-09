@@ -50,17 +50,17 @@ export function UpdateBanner() {
   if (!ready) return null
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[60] flex flex-wrap items-center justify-center gap-3 bg-slate-900 px-4 py-3 text-sm text-white shadow-lg">
+    <div className="fixed inset-x-0 bottom-0 z-[60] flex flex-wrap items-center justify-center gap-3 bg-ink px-4 py-3 text-sm text-white shadow-lg">
       <span>{t('มีเวอร์ชันใหม่ของระบบพร้อมใช้งานแล้ว')}</span>
       <button
         onClick={() => apply?.()}
-        className="rounded-lg bg-white px-3 py-1.5 font-semibold text-slate-900 hover:bg-slate-100"
+        className="min-h-11 cursor-pointer rounded-lg bg-surface px-4 py-2 font-semibold text-ink hover:bg-sunken"
       >
         {t('อัปเดตตอนนี้')}
       </button>
       <button
         onClick={() => setReady(false)}
-        className="rounded-lg px-2 py-1.5 text-slate-300 hover:text-white"
+        className="min-h-11 cursor-pointer rounded-lg px-3 py-2 text-ink-faint hover:text-white"
       >
         {t('ไว้ทีหลัง')}
       </button>

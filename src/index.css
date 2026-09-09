@@ -49,7 +49,11 @@
   --color-sunken: #f8fafc;
   --color-ink: #0f172a;
   --color-ink-soft: #475569;
-  --color-ink-faint: #94a3b8;
+  /* Measured, not eyeballed: the old #94a3b8 came out at 2.56:1 on white, and this is
+     the tier that carries SKUs, hints and the role under a person's name — text people
+     read. #60708a clears 4.5:1 on all three surfaces (5.02 white / 4.80 sunken / 4.58
+     canvas) and still reads a clear step lighter than --color-ink-soft at 7.58:1. */
+  --color-ink-faint: #60708a;
   --color-line: #e2e8f0;
   --color-line-strong: #cbd5e1;
 

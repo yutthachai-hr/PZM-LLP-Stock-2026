@@ -4,7 +4,7 @@ import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, EmptyState, Field, Input, PageHeader, Select } from '../components/ui'
+import { Button, Card, EmptyState, Field, Input, PageHeader, SegTab, Select } from '../components/ui'
 import {
   dateInputToMs,
   dayRange,
@@ -31,8 +31,17 @@ type ReportMode = 'movement' | 'snapshot'
 
 export function ReportsPage() {
   const t = useT()
-  const { movements, products, locations, locationById, qtyAt, minFor, ensureMovementsFrom, loading, movementsFrom } =
-    useData()
+  const {
+    movements,
+    products,
+    locations,
+    locationById,
+    qtyAt,
+    minFor,
+    ensureMovementsFrom,
+    loading,
+    movementsFrom,
+  } = useData()
   const { user } = useAuth()
   const toast = useToast()
   const { brand } = useBrand()
@@ -112,8 +121,10 @@ export function ReportsPage() {
     return rows.sort((a, b) => a.name.localeCompare(b.name))
   }, [products, locations, productId, locationId, qtyAt, minFor])
 
-  const branchName = locationId ? locationById(locationId)?.name ?? '' : t('ทุกคลัง')
-  const productName = productId ? products.find((p) => p.id === productId)?.name ?? '' : t('ทุกสินค้า')
+  const branchName = locationId ? (locationById(locationId)?.name ?? '') : t("ทุกคลัง")
+  const productName = productId
+    ? (products.find((p) => p.id === productId)?.name ?? '')
+    : t("ทุกสินค้า")
   // "All" was a lie by default: the ledger only holds a recent window unless the whole
   // history has been fetched, and the PDF said "all" while showing 90 days.
   const rangeText =
@@ -122,8 +133,8 @@ export function ReportsPage() {
           toStr ? formatThaiDate(dateInputToMs(toStr)) : t('ปัจจุบัน')
         }`
       : movementsFrom > 0
-        ? t('ตั้งแต่ {date} (เท่าที่โหลดไว้)', { date: formatThaiDate(movementsFrom) })
-        : t('ทั้งหมด')
+        ? t('ตั้งแต่ {date} (เท่าที่โหลดไว้)', { date: formatThaiDate(movementsFrom), })
+        : t("ทั้งหมด")
 
   const showBalance = !!productId && !!locationId && mode === 'movement'
 
@@ -132,7 +143,7 @@ export function ReportsPage() {
       t('คลัง/สาขา: {name}', { name: branchName }),
       t('สินค้า: {name}', { name: productName }),
       ...(mode === 'movement' ? [t('ช่วงวันที่: {range}', { range: rangeText })] : []),
-      t('ออกรายงานโดย: {user} เมื่อ {when}', { user: user?.name ?? '', when: formatThaiDateTime(Date.now()) }),
+      t('ออกรายงานโดย: {user} เมื่อ {when}', { user: user?.name ?? '', when: formatThaiDateTime(Date.now()), }),
     ]
   }
 
@@ -168,8 +179,8 @@ export function ReportsPage() {
         [t("เลขที่")]: m.docNo,
         [t("ประเภท")]: t(TYPE_LABEL[m.type]),
         [t("สินค้า")]: m.productName,
-        [t("จาก")]: m.fromLocationId ? locationById(m.fromLocationId)?.name ?? '' : '',
-        [t("ไป")]: m.toLocationId ? locationById(m.toLocationId)?.name ?? '' : '',
+        [t("จาก")]: m.fromLocationId ? (locationById(m.fromLocationId)?.name ?? '') : '',
+        [t("ไป")]: m.toLocationId ? (locationById(m.toLocationId)?.name ?? '') : '',
         [t("รับเข้า")]: inQty || '',
         [t("เบิกออก")]: outQty || '',
         [t("หน่วย")]: m.unit,
@@ -188,7 +199,8 @@ export function ReportsPage() {
         [t("คงเหลือ")]: r.qty,
         [t("หน่วย")]: r.unit,
         [t("ขั้นต่ำ")]: r.min,
-        [t("สถานะ")]: r.qty <= 0 ? t("หมด") : r.min > 0 && r.qty <= r.min ? t("ใกล้หมด") : t("ปกติ"),
+        [t("สถานะ")]:
+          r.qty <= 0 ? t("หมด") : r.min > 0 && r.qty <= r.min ? t("ใกล้หมด") : t("ปกติ"),
         [t("มูลค่า")]: Math.round(r.value),
       }))
       exportExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows)
@@ -217,8 +229,8 @@ export function ReportsPage() {
         m.docNo,
         t(TYPE_LABEL[m.type]),
         m.productName,
-        m.fromLocationId ? locationById(m.fromLocationId)?.name ?? '' : '-',
-        m.toLocationId ? locationById(m.toLocationId)?.name ?? '' : '-',
+        m.fromLocationId ? (locationById(m.fromLocationId)?.name ?? '') : '-',
+        m.toLocationId ? (locationById(m.toLocationId)?.name ?? '') : '-',
         inQty ? fmtQty(inQty) : '',
         outQty ? fmtQty(outQty) : '',
         m.unit,
@@ -234,7 +246,16 @@ export function ReportsPage() {
         body,
       })
     } else {
-      const head = [t("สินค้า"), t("หมวดหมู่"), t("คลัง"), t("คงเหลือ"), t("หน่วย"), t("ขั้นต่ำ"), t("สถานะ"), t("มูลค่า")]
+      const head = [
+        t("สินค้า"),
+        t("หมวดหมู่"),
+        t("คลัง"),
+        t("คงเหลือ"),
+        t("หน่วย"),
+        t("ขั้นต่ำ"),
+        t("สถานะ"),
+        t("มูลค่า"),
+      ]
       const body = snapshotRows.map((r) => [
         r.name,
         r.category,
@@ -266,9 +287,17 @@ export function ReportsPage() {
       />
 
       <Card className="space-y-4 p-4">
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          <ModeTab label={t("การเคลื่อนไหว")} active={mode === 'movement'} onClick={() => setMode('movement')} />
-          <ModeTab label={t("สต๊อกคงเหลือ")} active={mode === 'snapshot'} onClick={() => setMode('snapshot')} />
+        <div className="flex gap-1 rounded-lg bg-sunken p-1">
+          <SegTab
+            label={t("การเคลื่อนไหว")}
+            active={mode === 'movement'}
+            onClick={() => setMode('movement')}
+          />
+          <SegTab
+            label={t("สต๊อกคงเหลือ")}
+            active={mode === 'snapshot'}
+            onClick={() => setMode('snapshot')}
+          />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -317,8 +346,8 @@ export function ReportsPage() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-          <span className="text-sm text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <span className="text-sm text-ink-soft">
             {loading ? t('กำลังโหลดข้อมูล...') : t('พบ {n} รายการ', { n: count })}
           </span>
           <div className="flex gap-2">
@@ -353,14 +382,18 @@ export function ReportsPage() {
       {/* preview */}
       {count === 0 ? (
         <Card>
-          <EmptyState icon="report" title={t("ไม่มีข้อมูลตามเงื่อนไข")} hint={t("ปรับตัวกรองด้านบน")} />
+          <EmptyState
+            icon="report"
+            title={t("ไม่มีข้อมูลตามเงื่อนไข")}
+            hint={t("ปรับตัวกรองด้านบน")}
+          />
         </Card>
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-auto max-h-[calc(100vh-240px)]">
             {mode === 'movement' ? (
               <table className="w-full min-w-[900px] text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
+                <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
                   <tr>
                     <th className="px-3 py-2">{t("วันที่")}</th>
                     <th className="px-3 py-2">{t("เลขที่")}</th>
@@ -373,31 +406,35 @@ export function ReportsPage() {
                     <th className="px-3 py-2">{t("ผู้ทำ")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-line">
                   {movementRows.slice(0, 200).map(({ m, inQty, outQty, balance }) => (
                     <tr key={m.id}>
                       <td className="whitespace-nowrap px-3 py-2">{formatThaiDate(m.date)}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{m.docNo}</td>
+                      <td className="doc-no whitespace-nowrap px-3 py-2 text-xs text-ink-soft">
+                        {m.docNo}
+                      </td>
                       <td className="px-3 py-2">{t(TYPE_LABEL[m.type])}</td>
-                      <td className="px-3 py-2">{m.productName}</td>
-                      <td className="px-3 py-2 text-right text-emerald-700">
+                      <td className="min-w-[200px] px-3 py-2">{m.productName}</td>
+                      <td className="num px-3 py-2 text-right text-in">
                         {inQty ? fmtQty(inQty) : ''}
                       </td>
-                      <td className="px-3 py-2 text-right text-rose-600">
+                      <td className="num px-3 py-2 text-right text-out">
                         {outQty ? fmtQty(outQty) : ''}
                       </td>
                       {showBalance && (
-                        <td className="px-3 py-2 text-right font-semibold">{fmtQty(balance ?? 0)}</td>
+                        <td className="num px-3 py-2 text-right font-semibold">
+                          {fmtQty(balance ?? 0)}
+                        </td>
                       )}
-                      <td className="px-3 py-2 text-xs text-slate-600">{m.note ?? ''}</td>
-                      <td className="px-3 py-2 text-xs text-slate-500">{m.byUserName}</td>
+                      <td className="px-3 py-2 text-xs text-ink-soft">{m.note ?? ''}</td>
+                      <td className="px-3 py-2 text-xs text-ink-soft">{m.byUserName}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
               <table className="w-full min-w-[640px] text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
+                <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
                   <tr>
                     <th className="px-3 py-2">{t("สินค้า")}</th>
                     <th className="px-3 py-2">{t("คลัง")}</th>
@@ -406,16 +443,16 @@ export function ReportsPage() {
                     <th className="px-3 py-2 text-right">{t("มูลค่า")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-line">
                   {snapshotRows.slice(0, 300).map((r, i) => (
                     <tr key={i}>
                       <td className="px-3 py-2">{r.name}</td>
-                      <td className="px-3 py-2 text-slate-500">{r.locationName}</td>
-                      <td className="px-3 py-2 text-right font-semibold">
+                      <td className="px-3 py-2 text-ink-soft">{r.locationName}</td>
+                      <td className="num px-3 py-2 text-right font-semibold">
                         {fmtQty(r.qty)} {r.unit}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-500">{fmtQty(r.min)}</td>
-                      <td className="px-3 py-2 text-right">{fmtMoney(r.value)}</td>
+                      <td className="num px-3 py-2 text-right text-ink-soft">{fmtQty(r.min)}</td>
+                      <td className="num px-3 py-2 text-right">{fmtMoney(r.value)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -423,8 +460,8 @@ export function ReportsPage() {
             )}
           </div>
           {count > (mode === 'movement' ? 200 : 300) && (
-            <div className="border-t border-slate-100 p-2 text-center text-xs text-slate-400">
-              {t('แสดงตัวอย่าง — ไฟล์ดาวน์โหลดจะมีครบทั้ง {n} รายการ', { n: count })}
+            <div className="border-t border-line p-2 text-center text-xs text-ink-faint">
+              {t('แสดงตัวอย่าง — ไฟล์ดาวน์โหลดจะมีครบทั้ง {n} รายการ', { n: count, })}
             </div>
           )}
         </Card>
@@ -433,18 +470,4 @@ export function ReportsPage() {
   )
 }
 
-function ModeTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-        active ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
-
 // in/out helpers relative to a chosen location (or by type if no location)
-

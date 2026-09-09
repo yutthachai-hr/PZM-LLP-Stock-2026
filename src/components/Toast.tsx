@@ -33,9 +33,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }
 
   const style: Record<ToastKind, string> = {
-    success: 'bg-emerald-600',
-    error: 'bg-rose-600',
-    info: 'bg-slate-800',
+    success: 'bg-in',
+    error: 'bg-danger',
+    info: 'bg-ink',
   }
 
   return (

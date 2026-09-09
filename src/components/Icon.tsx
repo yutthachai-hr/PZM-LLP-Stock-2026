@@ -60,6 +60,10 @@ const paths = {
   warning: 'M21.73 18l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3M12 9v4M12 17h.01',
   info: 'M12 16v-4M12 8h.01',
   cloud: 'M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z',
+  users:
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  building:
+    'M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18ZM6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4',
   device:
     'M22 12H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11zM6 16h.01M10 16h.01',
 } as const
@@ -76,6 +80,7 @@ const circles: Partial<Record<IconName, { cx: number; cy: number; r: number }[]>
   search: [{ cx: 11, cy: 11, r: 8 }],
   camera: [{ cx: 12, cy: 13, r: 3 }],
   info: [{ cx: 12, cy: 12, r: 10 }],
+  users: [{ cx: 9, cy: 7, r: 4 }],
 }
 
 /** Icons drawn as solid shapes rather than strokes. */

@@ -1,5 +1,11 @@
 import { useEffect, useId, useRef } from 'react'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react'
 import { useT } from '../i18n/I18nContext'
 import { Icon, type IconName } from './Icon'
 
@@ -76,14 +82,16 @@ export function Field({
   required,
   children,
   hint,
+  className = '',
 }: {
   label: string
   required?: boolean
   children: ReactNode
   hint?: string
+  className?: string
 }) {
   return (
-    <label className="block">
+    <label className={`block ${className}`}>
       <span className="mb-1.5 block text-sm font-medium text-ink">
         {label}
         {required && <span className="text-danger"> *</span>}
@@ -111,7 +119,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   const { className = '', children, ...rest } = props
   return (
-    <select className={`${inputBase} bg-white ${className}`} {...rest}>
+    <select className={`${inputBase} bg-surface ${className}`} {...rest}>
       {children}
     </select>
   )
@@ -142,7 +150,7 @@ export function Badge({
 
 export function Spinner({ label }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-3 p-8 text-slate-500">
+    <div className="flex items-center justify-center gap-3 p-8 text-ink-soft">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
       {label && <span className="text-sm">{label}</span>}
     </div>
@@ -289,7 +297,93 @@ export function PageHeader({
         </h1>
         {subtitle && <p className="text-sm text-ink-soft">{subtitle}</p>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto">{actions}</div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The class for a text action at the end of a list row — "แก้ไข", "ลบ", "ปิดใช้".
+ *
+ * These were bare <button> text at 20px tall. They sit inches from each other in the
+ * locations and users lists, and one of them deletes a location, so the tap has to be
+ * hard to get wrong. The negative margin keeps the row's visual rhythm while the hit
+ * area grows to 44px.
+ */
+export const rowAction =
+  `-my-2 inline-flex min-h-11 cursor-pointer items-center rounded-lg px-2 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
+
+/**
+ * One option in a segmented control.
+ *
+ * The dashboard's location scope, Issue's transfer/consume switch and Reports' report
+ * kind were three copies of the same twelve lines, all 32px tall — below the floor for a
+ * control someone taps standing at a bench with a box in the other hand. One copy, 40px,
+ * and a focus ring that works for a keyboard.
+ */
+export function SegTab({
+  label,
+  active,
+  onClick,
+  grow = true,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+  /** Fill the group evenly. Off when the options are a variable-length list. */
+  grow?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`min-h-10 cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${grow ? 'flex-1' : ''} ${focusRing} ${
+        active ? 'bg-surface text-brand shadow-sm' : 'text-ink-soft hover:text-ink'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+/**
+ * The heading of a section inside a page.
+ *
+ * Settings is five stacked cards and every one of them used to open with the same
+ * `font-semibold` line, so finding "backup" meant reading all five. The icon gives each
+ * section a shape to scan for, and `description` says what the section does so the
+ * buttons underneath do not have to be read to find out.
+ */
+export function SectionHeader({
+  icon,
+  title,
+  description,
+  badge,
+  actions,
+}: {
+  icon: IconName
+  title: string
+  description?: string
+  badge?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-start gap-3">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sunken text-ink-soft">
+        <Icon name={icon} size={17} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-semibold leading-tight text-ink">{title}</h2>
+          {badge}
+        </div>
+        {description && <p className="mt-0.5 text-xs text-ink-soft">{description}</p>}
+      </div>
+      {actions && (
+        <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto">{actions}</div>
+      )}
     </div>
   )
 }

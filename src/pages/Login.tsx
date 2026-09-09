@@ -52,14 +52,17 @@ export function LoginPage() {
     }
   }
 
+  // Sign-in and brand choice happen before a brand is picked, so there is no brand
+  // accent to use yet. The gradient is deliberately both brands at once — Pizza Mania
+  // red into Le Lapin orange — rather than a token.
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 p-4">
       <Card className="w-full max-w-sm p-6">
         <LangToggle className="mx-auto mb-4 w-32" />
         <div className="mb-6 text-center">
           <div className="text-4xl">🍕</div>
-          <h1 className="mt-2 text-xl font-bold text-red-700">Pizza Mania Stock</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="mt-2 text-xl font-bold text-brand">Pizza Mania Stock</h1>
+          <p className="text-sm text-ink-soft">
             {!bootstrap
               ? t("เข้าสู่ระบบบริหารสต๊อก")
               : firstAdmin
@@ -101,17 +104,17 @@ export function LoginPage() {
           </Field>
 
           {bootstrap && !firstAdmin && (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <p className="rounded-lg bg-sunken px-3 py-2 text-xs text-ink-soft">
               {t("บัญชีใหม่จะยังเข้าใช้ข้อมูลไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ")}
             </p>
           )}
           {notice && !error && (
-            <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <div className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
               {t(notice, { minutes: IDLE_MINUTES })}
             </div>
           )}
           {error && (
-            <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{t(error)}</div>
+            <div className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{t(error)}</div>
           )}
 
           <Button type="submit" disabled={busy} className="w-full">
@@ -132,40 +135,40 @@ export function LoginPage() {
               setWantRegister((v) => !v)
               setError('')
             }}
-            className="mt-3 block w-full text-center text-xs text-red-600 hover:underline"
+            className="mt-3 block w-full text-center text-xs text-brand hover:underline"
           >
             {bootstrap ? t("มีบัญชีอยู่แล้ว? เข้าสู่ระบบ") : t("ยังไม่มีบัญชี? ขอสิทธิ์เข้าใช้งาน")}
           </button>
         )}
 
-        <p className="mt-4 text-center text-xs text-slate-400">
+        <p className="mt-4 text-center text-xs text-ink-faint">
           {mode === 'cloud'
             ? t("โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์")
             : t("โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้")}
         </p>
 
         {mode === 'local' && (
-          <div className="mt-3 border-t border-slate-100 pt-3">
+          <div className="mt-3 border-t border-line pt-3">
             {!showCloud ? (
               <button
                 onClick={() => setShowCloud(true)}
-                className="mx-auto block text-xs text-red-600 hover:underline"
+                className="mx-auto block text-xs text-brand hover:underline"
               >
                 {t("เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)")}
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-ink-soft">
                   {t("วางค่า")} <span className="font-mono">firebaseConfig</span> {t("จาก Firebase Console:")}
                 </p>
                 <textarea
-                  className="w-full rounded-lg border border-slate-300 p-2 font-mono text-xs"
+                  className="w-full rounded-lg border border-line-strong p-2 font-mono text-xs"
                   rows={6}
                   placeholder={'{\n  "apiKey": "...",\n  "authDomain": "xxx.firebaseapp.com",\n  "projectId": "xxx",\n  "appId": "..."\n}'}
                   value={cfgText}
                   onChange={(e) => setCfgText(e.target.value)}
                 />
-                {cfgErr && <p className="text-xs text-rose-600">{cfgErr}</p>}
+                {cfgErr && <p className="text-xs text-danger">{cfgErr}</p>}
                 <div className="flex gap-2">
                   <Button onClick={connectCloud} className="flex-1">
                     {t("เชื่อมต่อ Cloud")}

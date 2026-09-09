@@ -1,15 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useData } from '../data/DataContext'
-import { Badge, Card, EmptyState, Input, PageHeader, Spinner } from '../components/ui'
+import { Badge, Card, EmptyState, Input, PageHeader, SegTab, Spinner } from '../components/ui'
 import { ProductThumb } from '../components/ProductThumb'
 import { fmtMoney, fmtQty, formatThaiDate, todayMs } from '../lib/format'
 import type { Product, StockLocation } from '../types'
@@ -35,12 +27,16 @@ export function DashboardPage() {
     [scope, locations],
   )
 
-  const totalQtyOf = (p: Product) =>
-    scopeLocations.reduce((s, l) => s + qtyAt(l.id, p.id), 0)
+  const totalQtyOf = (p: Product) => scopeLocations.reduce((s, l) => s + qtyAt(l.id, p.id), 0)
 
   // low-stock items within the selected scope
   const lowStock = useMemo(() => {
-    const items: { product: Product; location: StockLocation; qty: number; min: number }[] = []
+    const items: {
+      product: Product
+      location: StockLocation
+      qty: number
+      min: number
+    }[] = []
     for (const p of products) {
       for (const l of scopeLocations) {
         const min = minFor(p, l.id)
@@ -106,10 +102,11 @@ export function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader icon="dashboard" title={t("ภาพรวมสต๊อก")} />
         <div className="flex flex-wrap gap-1 rounded-lg bg-sunken p-1">
-          <ScopeTab label={t("รวมทุกคลัง")} active={scope === ALL} onClick={() => setScope(ALL)} />
+          <SegTab grow={false} label={t("รวมทุกคลัง")} active={scope === ALL} onClick={() => setScope(ALL)} />
           {locations.map((l) => (
-            <ScopeTab
+            <SegTab
               key={l.id}
+              grow={false}
               label={l.name}
               active={scope === l.id}
               onClick={() => setScope(l.id)}
@@ -120,21 +117,36 @@ export function DashboardPage() {
 
       {/* summary cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label={t("มูลค่าสต๊อก")} value={`฿ ${fmtMoney(stats.value)}`} /* ฿ is a currency symbol — i18n-key */ icon="report" hint={t("อิงต้นทุนที่กรอก")} />
-        <StatCard label={t("จำนวนสินค้า")} value={`${products.length}`} icon="package" hint={t("รายการทั้งหมด")} />
+        <StatCard
+          label={t("มูลค่าสต๊อก")}
+          value={`฿ ${fmtMoney(stats.value)}`} /* ฿ is a currency symbol — i18n-key */
+          icon="report"
+          hint={t("อิงต้นทุนที่กรอก")}
+        />
+        <StatCard
+          label={t("จำนวนสินค้า")}
+          value={`${products.length}`}
+          icon="package"
+          hint={t("รายการทั้งหมด")}
+        />
         <StatCard
           label={t("ใกล้/ต่ำกว่าขั้นต่ำ")}
           value={`${lowStock.length}`}
           icon="warning"
-          danger={lowStock.length > 0}
+          alert={lowStock.length > 0}
         />
-        <StatCard label={t("เคลื่อนไหววันนี้")} value={`${stats.todayMoves}`} icon="history" hint={formatThaiDate(todayMs())} />
+        <StatCard
+          label={t("เคลื่อนไหววันนี้")}
+          value={`${stats.todayMoves}`}
+          icon="history"
+          hint={formatThaiDate(todayMs())}
+        />
       </div>
 
       {/* low stock alert */}
       {lowStock.length > 0 && (
-        <Card className="border-rose-200 bg-rose-50/50 p-4">
-          <div className="mb-2 flex items-center gap-2 font-semibold text-rose-700">
+        <Card className="border-warn/30 bg-warn-soft p-4">
+          <div className="mb-2 flex items-center gap-2 font-semibold text-warn">
             <Icon name="warning" size={16} />
             {t('แจ้งเตือนสินค้าเหลือน้อย ({n})', { n: lowStock.length })}
           </div>
@@ -142,18 +154,18 @@ export function DashboardPage() {
             {lowStock.slice(0, 20).map((it) => (
               <div
                 key={`${it.location.id}-${it.product.id}`}
-                className="flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm"
+                className="flex items-center gap-2 rounded-lg border border-warn/30 bg-surface px-3 py-1.5 text-sm"
               >
                 <ProductThumb productId={it.product.id} hasImage={it.product.hasImage} size={24} />
-                <span className="font-medium text-slate-700">{it.product.name}</span>
-                <span className="text-rose-600">
+                <span className="font-medium text-ink">{it.product.name}</span>
+                <span className="num font-semibold text-warn">
                   {fmtQty(it.qty)}/{fmtQty(it.min)} {it.product.unitType}
                 </span>
                 {scope === ALL && <Badge color="slate">{it.location.name}</Badge>}
               </div>
             ))}
             {lowStock.length > 20 && (
-              <span className="self-center text-sm text-rose-600">
+              <span className="self-center text-sm text-ink-soft">
                 {t('และอีก {n} รายการ...', { n: lowStock.length - 20 })}
               </span>
             )}
@@ -164,17 +176,24 @@ export function DashboardPage() {
       {/* chart */}
       {byCategory.length > 0 && (
         <Card className="p-4">
-          <div className="mb-3 font-semibold text-slate-700">{t("มูลค่าสต๊อกตามหมวดหมู่ (บาท)")}</div>
+          <div className="mb-3 font-semibold text-ink">{t("มูลค่าสต๊อกตามหมวดหมู่ (บาท)")}</div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={byCategory} margin={{ left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis dataKey="category" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
+              <XAxis
+                dataKey="category"
+                tick={{ fontSize: 11 }}
+                interval={0}
+                angle={-20}
+                textAnchor="end"
+                height={60}
+              />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v) => `฿ ${fmtMoney(Number(v))}`} /* i18n-key */ />
               <Bar dataKey="value" fill="#b91c1c" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-ink-faint">
             {t("* มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า")}
           </p>
         </Card>
@@ -182,7 +201,7 @@ export function DashboardPage() {
 
       {/* stock table */}
       <Card className="overflow-hidden">
-        <div className="border-b border-slate-100 p-3">
+        <div className="border-b border-line p-3">
           <Input
             placeholder={t("ค้นหาสินค้าในคลังนี้…")}
             value={search}
@@ -195,7 +214,7 @@ export function DashboardPage() {
         ) : (
           <div className="overflow-auto max-h-[calc(100vh-260px)]">
             <table className="w-full min-w-[640px] text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
+              <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
                 <tr>
                   <th className="px-3 py-2">{t("สินค้า")}</th>
                   {scope === ALL &&
@@ -211,35 +230,34 @@ export function DashboardPage() {
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line">
                 {tableRows.map(({ p, total }) => {
-                  const min =
-                    scope === ALL ? p.minStock : minFor(p, scope)
+                  const min = scope === ALL ? p.minStock : minFor(p, scope)
                   const low = min > 0 && total <= min
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50">
+                    <tr key={p.id} className="hover:bg-sunken">
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
                           <div className="min-w-0">
-                            <div className="truncate font-medium text-slate-700">{p.name}</div>
-                            <div className="text-xs text-slate-400">{p.category}</div>
+                            <div className="truncate font-medium text-ink">{p.name}</div>
+                            <div className="text-xs text-ink-faint">{p.category}</div>
                           </div>
                         </div>
                       </td>
                       {scope === ALL &&
                         locations.map((l) => (
-                          <td key={l.id} className="px-3 py-2 text-right text-slate-600">
+                          <td key={l.id} className="num px-3 py-2 text-right text-ink-soft">
                             {fmtQty(qtyAt(l.id, p.id))}
                           </td>
                         ))}
-                      <td className="px-3 py-2 text-right font-semibold">
-                        <span className={low ? 'text-rose-600' : 'text-slate-800'}>
+                      <td className="num px-3 py-2 text-right font-semibold">
+                        <span className={low ? 'font-semibold text-warn' : 'text-ink'}>
                           {fmtQty(total)}
                         </span>{' '}
-                        <span className="text-xs text-slate-400">{p.unitType}</span>
+                        <span className="text-xs text-ink-faint">{p.unitType}</span>
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-500">{fmtQty(min)}</td>
+                      <td className="num px-3 py-2 text-right text-ink-soft">{fmtQty(min)}</td>
                       <td className="px-3 py-2 text-right">
                         {total <= 0 ? (
                           <Badge color="slate">{t("หมด")}</Badge>
@@ -261,27 +279,6 @@ export function DashboardPage() {
   )
 }
 
-function ScopeTab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-        active ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
-
 /**
  * One headline figure.
  *
@@ -294,24 +291,21 @@ function StatCard({
   value,
   icon,
   hint,
-  danger,
+  alert,
 }: {
   label: string
   value: string
   icon: IconName
   hint?: string
-  danger?: boolean
+  alert?: boolean
 }) {
   return (
-    <Card
-      tone={danger ? 'plain' : 'plain'}
-      className={`p-4 ${danger ? 'border-danger/30 bg-danger-soft' : ''}`}
-    >
+    <Card tone="plain" className={`p-4 ${alert ? 'border-warn/30 bg-warn-soft' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="text-sm text-ink-soft">{label}</div>
-        <Icon name={icon} size={18} className={danger ? 'text-danger' : 'text-ink-faint'} />
+        <Icon name={icon} size={18} className={alert ? 'text-warn' : 'text-ink-faint'} />
       </div>
-      <div className={`num mt-1 text-3xl font-bold ${danger ? 'text-danger' : 'text-ink'}`}>
+      <div className={`num mt-1 text-3xl font-bold ${alert ? 'text-warn' : 'text-ink'}`}>
         {value}
       </div>
       {hint && <div className="mt-0.5 text-xs text-ink-faint">{hint}</div>}

@@ -59,11 +59,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={confirm}>
       {children}
       <Modal open={!!opts} onClose={() => close(false)} title={opts?.title ?? t('ยืนยัน')}>
-        <p className="whitespace-pre-line text-sm text-slate-600">{opts?.message}</p>
+        <p className="whitespace-pre-line text-sm text-ink-soft">{opts?.message}</p>
 
         {phrase && (
           <div className="mt-4">
-            <label className="mb-1 block text-sm text-slate-700">
+            <label className="mb-1 block text-sm text-ink">
               {t('พิมพ์ “{phrase}” เพื่อยืนยัน', { phrase })}
             </label>
             <Input

@@ -15,15 +15,15 @@ export function LangToggle({ className = '' }: { className?: string }) {
     <div
       role="group"
       aria-label="Language"
-      className={`flex rounded-lg border border-slate-300 p-0.5 ${className}`}
+      className={`flex rounded-lg border border-line-strong bg-surface p-0.5 ${className}`}
     >
       {OPTS.map((o) => (
         <button
           key={o.id}
           onClick={() => setLang(o.id)}
           aria-pressed={lang === o.id}
-          className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-            lang === o.id ? 'bg-red-700 text-white' : 'text-slate-600 hover:bg-slate-100'
+          className={`min-h-9 flex-1 cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
+            lang === o.id ? 'bg-brand text-white' : 'text-ink-soft hover:bg-sunken'
           }`}
         >
           {o.label}

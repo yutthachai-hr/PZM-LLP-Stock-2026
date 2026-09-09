@@ -5,7 +5,17 @@ import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '../components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  Modal,
+  PageHeader,
+  Select,
+} from '../components/ui'
 import { editMovementQty, voidMovement, getMovementImage } from '../services/stock'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs, dayRange } from '../lib/format'
 import { effectAt, effectOverall, stockCard } from '../lib/ledger'
@@ -98,7 +108,7 @@ export function MovementsPage() {
   async function doVoid(m: StockMovement) {
     const ok = await confirm({
       title: t("ยกเลิกรายการ"),
-      message: t('ยกเลิกรายการ {docNo} ({name})? ระบบจะคืนยอดสต๊อกกลับ', { docNo: m.docNo, name: m.productName }),
+      message: t('ยกเลิกรายการ {docNo} ({name})? ระบบจะคืนยอดสต๊อกกลับ', { docNo: m.docNo, name: m.productName, }),
       danger: true,
       confirmText: t("ยกเลิกรายการ"),
     })
@@ -116,7 +126,7 @@ export function MovementsPage() {
       <PageHeader
         icon="history"
         title={t("ประวัติ / Stock Card")}
-        subtitle={t("ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card")}
+        subtitle={t('ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card')}
       />
 
       <Card className="p-3">
@@ -160,9 +170,9 @@ export function MovementsPage() {
           </Field>
         </div>
         {stockCardMode && (
-          <p className="mt-2 text-xs text-emerald-700">
+          <p className="mt-2 text-xs text-in">
             <Icon name="info" size={16} className="mt-0.5 shrink-0" />
-          <span>{t("โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก")}</span>
+            <span>{t("โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก")}</span>
           </p>
         )}
       </Card>
@@ -177,12 +187,12 @@ export function MovementsPage() {
         <Card className="overflow-hidden">
           <div className="overflow-auto max-h-[calc(100vh-240px)]">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 shadow-sm">
+              <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
                 <tr>
                   <th className="px-3 py-2">{t("วันที่")}</th>
                   <th className="px-3 py-2">{t("เลขที่")}</th>
                   <th className="px-3 py-2">{t("ประเภท")}</th>
-                  <th className="px-3 py-2">{t("สินค้า")}</th>
+                  <th className="min-w-[200px] px-3 py-2">{t("สินค้า")}</th>
                   <th className="px-3 py-2">{t("คลัง")}</th>
                   <th className="px-3 py-2 text-right">{t("จำนวน")}</th>
                   {stockCardMode && <th className="px-3 py-2 text-right">{t("คงเหลือ")}</th>}
@@ -190,19 +200,21 @@ export function MovementsPage() {
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line">
                 {filtered.map((m) => {
                   const eff = locationId ? effectAt(m, locationId) : effectOverall(m)
                   return (
-                    <tr key={m.id} className={m.voided ? 'bg-slate-50 text-slate-400' : ''}>
+                    <tr key={m.id} className={m.voided ? 'bg-sunken text-ink-faint' : ''}>
                       <td className="whitespace-nowrap px-3 py-2">{formatThaiDate(m.date)}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{m.docNo}</td>
+                      <td className="doc-no whitespace-nowrap px-3 py-2 text-xs text-ink-soft">
+                        {m.docNo}
+                      </td>
                       <td className="px-3 py-2">
                         <Badge color={TYPE_COLOR[m.type]}>{t(TYPE_LABEL[m.type])}</Badge>
                         {m.voided && <span className="ml-1 text-xs">{t("(ยกเลิก)")}</span>}
                       </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2 font-medium text-slate-700">
+                      <td className="min-w-[200px] px-3 py-2">
+                        <div className="flex items-center gap-2 font-medium text-ink">
                           {m.productName}
                           {m.hasPhoto && (
                             <button
@@ -215,34 +227,42 @@ export function MovementsPage() {
                           )}
                         </div>
                         {m.reason && (
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-ink-faint">
                             {t(ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason)}
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-xs text-slate-500">
+                      <td className="px-3 py-2 text-xs text-ink-soft">
                         {m.fromLocationId && locationById(m.fromLocationId)?.name}
                         {m.fromLocationId && m.toLocationId && (
-                          <Icon name="arrowRight" size={12} className="mx-0.5 inline align-middle" />
+                          <Icon
+                            name="arrowRight"
+                            size={12}
+                            className="mx-0.5 inline align-middle"
+                          />
                         )}
                         {m.toLocationId && locationById(m.toLocationId)?.name}
                       </td>
                       <td
-                        className={`px-3 py-2 text-right font-semibold ${
-                          eff < 0 ? 'text-rose-600' : 'text-emerald-700'
+                        className={`num px-3 py-2 text-right font-semibold ${
+                          eff < 0 ? 'text-out' : 'text-in'
                         }`}
                       >
                         {eff > 0 ? '+' : ''}
                         {fmtQty(eff)} {m.unit}
                       </td>
                       {stockCardMode && (
-                        <td className="px-3 py-2 text-right font-semibold text-slate-800">
+                        <td className="num px-3 py-2 text-right font-semibold text-ink">
                           {fmtQty(balances.get(m.id) ?? 0)}
                         </td>
                       )}
-                      <td className="px-3 py-2 text-xs text-slate-500">
+                      <td className="px-3 py-2 text-xs text-ink-soft">
                         {m.byUserName}
-                        {m.updatedByName && <div className="text-amber-600">{t('แก้ไข:')} {m.updatedByName}</div>}
+                        {m.updatedByName && (
+                          <div className="text-warn">
+                            {t('แก้ไข:')} {m.updatedByName}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right">
                         {!m.voided && (
@@ -253,7 +273,7 @@ export function MovementsPage() {
                             {isAdmin && (
                               <button
                                 onClick={() => doVoid(m)}
-                                className="rounded px-2 text-xs text-rose-600 hover:bg-rose-50"
+                                className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
                               >
                                 {t("ยกเลิก")}
                               </button>
@@ -270,9 +290,7 @@ export function MovementsPage() {
         </Card>
       )}
 
-      {editing && (
-        <EditMovementModal movement={editing} onClose={() => setEditing(null)} />
-      )}
+      {editing && <EditMovementModal movement={editing} onClose={() => setEditing(null)} />}
       {photoDoc && <PhotoModal docNo={photoDoc} onClose={() => setPhotoDoc(null)} />}
     </div>
   )
@@ -303,11 +321,11 @@ function PhotoModal({ docNo, onClose }: { docNo: string; onClose: () => void }) 
   return (
     <Modal open onClose={onClose} title={t('รูปหลักฐาน — {docNo}', { docNo })}>
       {loading ? (
-        <div className="p-6 text-center text-sm text-slate-400">{t("กำลังโหลด...")}</div>
+        <div className="p-6 text-center text-sm text-ink-faint">{t("กำลังโหลด...")}</div>
       ) : url ? (
         <img src={url} alt={t('หลักฐาน')} className="mx-auto max-h-[70vh] rounded-lg" />
       ) : (
-        <div className="p-6 text-center text-sm text-slate-400">{t("ไม่พบรูป")}</div>
+        <div className="p-6 text-center text-sm text-ink-faint">{t("ไม่พบรูป")}</div>
       )}
     </Modal>
   )
@@ -351,9 +369,9 @@ function EditMovementModal({
   return (
     <Modal open onClose={onClose} title={t('แก้ไขรายการ {docNo}', { docNo: movement.docNo })}>
       <div className="space-y-4">
-        <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+        <div className="rounded-lg bg-sunken px-3 py-2 text-sm">
           <span className="font-medium">{movement.productName}</span>
-          <span className="text-slate-500"> — {t(TYPE_LABEL[movement.type])}</span>
+          <span className="text-ink-soft"> — {t(TYPE_LABEL[movement.type])}</span>
         </div>
         <Field label={t("จำนวน")} required>
           <Input
@@ -384,4 +402,3 @@ function EditMovementModal({
 }
 
 /** Effect of a movement on a specific location's balance. */
-

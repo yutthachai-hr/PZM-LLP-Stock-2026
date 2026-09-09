@@ -75,7 +75,7 @@ export function ProductThumb({
         alt=""
         onClick={onClick}
         style={style}
-        className="shrink-0 rounded-lg border border-slate-200 object-cover"
+        className="shrink-0 rounded-lg border border-line object-cover"
       />
     )
   }
@@ -83,7 +83,7 @@ export function ProductThumb({
     <div
       onClick={onClick}
       style={style}
-      className="flex shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-slate-300"
+      className="flex shrink-0 items-center justify-center rounded-lg border border-dashed border-line bg-sunken text-ink-faint"
     >
       {brand ? brandDef(brand).productIcon : '📦'}
     </div>

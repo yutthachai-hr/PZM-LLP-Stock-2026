@@ -17,7 +17,12 @@ export const EN: Record<string, string> = {
   เปลี่ยน: 'Change',
   นำเข้า: 'Import',
   เพิ่มสินค้า: 'Add product',
-  '+ เพิ่มสินค้า': '+ Add product',
+  'ตัวกรอง': 'Filters',
+  'ตัวกรอง ({n})': 'Filters ({n})',
+  'ที่เก็บข้อมูลของแอปนี้': 'Where this app keeps its data',
+  'สถานที่ที่นับสต๊อกได้ — ทุกการรับเข้า/เบิกออกต้องระบุคลัง': 'Places stock can be counted — every receipt and issue names one',
+  'ใครเข้าระบบได้บ้าง และมีสิทธิ์ระดับไหน': 'Who can sign in, and at what level',
+  'เครื่องมือซ่อมข้อมูล ใช้เมื่อยอดคงเหลือไม่ตรงกับประวัติ': 'Repair tools, for when balances disagree with the ledger',
   ค้นหา: 'Search',
   ทั้งหมด: 'All',
   วันที่: 'Date',
@@ -103,7 +108,7 @@ export const EN: Record<string, string> = {
   'มีเวอร์ชันใหม่ของระบบพร้อมใช้งานแล้ว': 'A new version of the system is ready',
   'อัปเดตตอนนี้': 'Update now',
   'ไว้ทีหลัง': 'Later',
-  'รายการ': 'items',
+  '{n} รายการ': '{n} items',
   'ลบ "{name}" ออกจากรายการ': 'Remove “{name}” from this document',
   'สำรอง / กู้คืนข้อมูล': 'Backup & restore',
   'ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive':
@@ -464,7 +469,6 @@ export const EN: Record<string, string> = {
   'การเชื่อมต่อ Cloud': 'Cloud connection',
   'การจัดการคลัง ผู้ใช้ และข้อมูล ต้องเป็นสิทธิ์ผู้ดูแลระบบ (Admin)':
     'Managing locations, users and data requires administrator access',
-  '+ เพิ่มคลัง': '+ Add location',
   เพิ่มคลัง: 'Add location',
   แก้ไขคลัง: 'Edit location',
   ลบคลัง: 'Delete location',
@@ -474,7 +478,6 @@ export const EN: Record<string, string> = {
   'สาขา (Branch)': 'Branch',
   'ลบ "{name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)':
     'Delete “{name}”? Its balances are removed too (history is kept).',
-  '+ เพิ่มผู้ใช้': '+ Add user',
   เพิ่มผู้ใช้: 'Add user',
   เพิ่มผู้ใช้แล้ว: 'User added',
   ลบผู้ใช้: 'Delete user',
