@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="th">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>pizza-stock</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f1f5f9" />
+    <!-- The regular weight is on screen before anything else is; fetching it with
+         the HTML rather than after the stylesheet parses avoids a visible reflow
+         from the fallback face. Bold is not preloaded — it appears below the fold
+         often enough that the swap is not worth the extra request up front. -->
+    <link
+      rel="preload"
+      href="/fonts/LINESeedSansTH_W_Rg.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <title>ระบบบริหารสต๊อก — Pizza Mania & Le Lapin</title>
   </head>
   <body>
     <div id="root"></div>

@@ -148,7 +148,7 @@ export const EN: Record<string, string> = {
   ตั้งค่า: 'Settings',
   ระบบบริหารสต๊อก: 'Stock management',
   ออกจากระบบ: 'Sign out',
-  '🔄 สลับแบรนด์': '🔄 Switch brand',
+  'สลับแบรนด์': '🔄 Switch brand',
   ในเครื่อง: 'Local',
   โหมดในเครื่อง: 'Local mode',
   ผู้ดูแลระบบ: 'Administrator',

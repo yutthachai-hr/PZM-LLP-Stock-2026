@@ -80,7 +80,7 @@ export function NotesPage() {
 
       {sorted.length === 0 ? (
         <Card>
-          <EmptyState icon="📝" title={t("ยังไม่มีบันทึก")} hint={t("กด “บันทึกใหม่” เพื่อเริ่ม")} />
+          <EmptyState icon="note" title={t("ยังไม่มีบันทึก")} hint={t("กด “บันทึกใหม่” เพื่อเริ่ม")} />
         </Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

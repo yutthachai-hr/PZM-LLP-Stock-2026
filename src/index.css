@@ -1,5 +1,79 @@
 @import 'tailwindcss';
 
+/* ---------------------------------------------------------------------------
+   Typeface: LINE Seed Sans TH (SIL OFL 1.1, see public/fonts/OFL.txt)
+
+   The app used to name 'Sarabun' in font-family without ever loading it, so
+   every device picked something different out of its own fallback list — Windows
+   showed Leelawadee UI, phones showed their system face, and the same stock
+   report looked different depending on who opened it.
+
+   Self-hosted rather than pulled from a CDN: the site ships a Content-Security
+   -Policy of `font-src 'self'`, and a CDN would mean widening that. Two weights
+   only, 29 KB each, and the Thai release already carries Latin, Thai digits, ฿
+   and real typographic punctuation (… “ ” — ), so nothing falls back mid-sentence.
+--------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'LINE Seed Sans TH';
+  src: url('/fonts/LINESeedSansTH_W_Rg.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LINE Seed Sans TH';
+  src: url('/fonts/LINESeedSansTH_W_Bd.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------------------------------------------------------------------------
+   Design tokens.
+
+   Declared in @theme so Tailwind generates utilities from them (bg-surface,
+   text-in, border-line …). Colours used to be written straight into components
+   as `red-700` in about sixty places, which is why Le Lapin — a sandwich brand —
+   rendered in Pizza Mania's red.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --font-sans: 'LINE Seed Sans TH', 'Noto Sans Thai', 'Leelawadee UI', system-ui,
+    -apple-system, sans-serif;
+
+  /* Surfaces and text. Industrial slate: quiet, so the numbers carry the page. */
+  --color-canvas: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-sunken: #f8fafc;
+  --color-ink: #0f172a;
+  --color-ink-soft: #475569;
+  --color-ink-faint: #94a3b8;
+  --color-line: #e2e8f0;
+  --color-line-strong: #cbd5e1;
+
+  /* Direction is this app's core idea: everything is stock coming IN or going
+     OUT. Kept to the ledger convention staff already read (in green, out red)
+     rather than something more novel they would have to learn. */
+  --color-in: #047857;
+  --color-in-soft: #ecfdf5;
+  --color-out: #be123c;
+  --color-out-soft: #fff1f2;
+
+  /* Reserved for states, never for direction. Destructive actions are told
+     apart from outbound stock by their FORM — a filled button — not by hue. */
+  --color-warn: #b45309;
+  --color-warn-soft: #fffbeb;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
+
+  /* Set per brand at runtime by BrandContext, so a glance at the screen says
+     which company's books you are in. Falls back to Pizza Mania's red. */
+  --color-brand: var(--brand-accent, #b91c1c);
+  --color-brand-soft: var(--brand-accent-soft, #fef2f2);
+}
+
 :root {
   color-scheme: light;
 }
@@ -12,11 +86,31 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Sarabun', 'Noto Sans Thai', 'Leelawadee UI', Tahoma, system-ui,
-    -apple-system, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* Thai stacks vowels and tone marks above and below the line, so it needs more
+     room between lines than Latin to stay readable at this size. */
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------------------------------------------------------------------------
+   Numbers are the reason this app exists, so they get their own treatment:
+   fixed-width figures line up in a column and stop shifting as a balance
+   changes, which is what makes a stock table scannable.
+--------------------------------------------------------------------------- */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Document numbers (RC-00001) are identifiers off a real delivery note, not
+   prose — spaced out so they read as a code you can match against paper. */
+.doc-no {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
 }
 
 /* Number inputs: hide spinners for cleaner look */
@@ -27,6 +121,32 @@ input[type='number']::-webkit-inner-spin-button {
 }
 input[type='number'] {
   -moz-appearance: textfield;
+}
+
+/* Taps shouldn't wait 300ms or flash a grey box on Android. */
+@media (pointer: coarse) {
+  button,
+  a,
+  [role='button'],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Motion here only ever confirms something the person just did. Anyone who has
+   asked their system to calm down gets the end state with no travel. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media print {

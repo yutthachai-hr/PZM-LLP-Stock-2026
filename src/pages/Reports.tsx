@@ -337,7 +337,7 @@ export function ReportsPage() {
       {/* preview */}
       {count === 0 ? (
         <Card>
-          <EmptyState icon="📄" title={t("ไม่มีข้อมูลตามเงื่อนไข")} hint={t("ปรับตัวกรองด้านบน")} />
+          <EmptyState icon="report" title={t("ไม่มีข้อมูลตามเงื่อนไข")} hint={t("ปรับตัวกรองด้านบน")} />
         </Card>
       ) : (
         <Card className="overflow-hidden">

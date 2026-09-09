@@ -14,6 +14,7 @@ import { ProductThumb } from '../components/ProductThumb'
 import { fmtMoney, fmtQty, formatThaiDate, todayMs } from '../lib/format'
 import type { Product, StockLocation } from '../types'
 import { useT } from '../i18n/I18nContext'
+import { Icon, type IconName } from '../components/Icon'
 
 const ALL = '__all__'
 
@@ -119,15 +120,15 @@ export function DashboardPage() {
 
       {/* summary cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label={t("มูลค่าสต๊อก")} value={`฿ ${fmtMoney(stats.value)}`} /* ฿ is a currency symbol — i18n-key */ icon="💰" hint={t("อิงต้นทุนที่กรอก")} />
-        <StatCard label={t("จำนวนสินค้า")} value={`${products.length}`} icon="📦" hint={t("รายการทั้งหมด")} />
+        <StatCard label={t("มูลค่าสต๊อก")} value={`฿ ${fmtMoney(stats.value)}`} /* ฿ is a currency symbol — i18n-key */ icon="report" hint={t("อิงต้นทุนที่กรอก")} />
+        <StatCard label={t("จำนวนสินค้า")} value={`${products.length}`} icon="package" hint={t("รายการทั้งหมด")} />
         <StatCard
           label={t("ใกล้/ต่ำกว่าขั้นต่ำ")}
           value={`${lowStock.length}`}
-          icon="⚠️"
+          icon="warning"
           danger={lowStock.length > 0}
         />
-        <StatCard label={t("เคลื่อนไหววันนี้")} value={`${stats.todayMoves}`} icon="🔄" hint={formatThaiDate(todayMs())} />
+        <StatCard label={t("เคลื่อนไหววันนี้")} value={`${stats.todayMoves}`} icon="history" hint={formatThaiDate(todayMs())} />
       </div>
 
       {/* low stock alert */}
@@ -189,7 +190,7 @@ export function DashboardPage() {
           />
         </div>
         {tableRows.length === 0 ? (
-          <EmptyState icon="📦" title={t("ไม่พบสินค้า")} />
+          <EmptyState icon="package" title={t("ไม่พบสินค้า")} />
         ) : (
           <div className="overflow-auto max-h-[calc(100vh-260px)]">
             <table className="w-full min-w-[640px] text-sm">
@@ -280,6 +281,13 @@ function ScopeTab({
   )
 }
 
+/**
+ * One headline figure.
+ *
+ * The number is the largest thing in the card and set in fixed-width figures, because the
+ * job of this row is to be read at a glance from standing distance — and because a value
+ * that changes should not shuffle the digits beside it sideways.
+ */
 function StatCard({
   label,
   value,
@@ -289,20 +297,23 @@ function StatCard({
 }: {
   label: string
   value: string
-  icon: string
+  icon: IconName
   hint?: string
   danger?: boolean
 }) {
   return (
-    <Card className={`p-4 ${danger ? 'border-rose-200 bg-rose-50/40' : ''}`}>
-      <div className="flex items-start justify-between">
-        <div className="text-sm text-slate-500">{label}</div>
-        <div className="text-xl">{icon}</div>
+    <Card
+      tone={danger ? 'plain' : 'plain'}
+      className={`p-4 ${danger ? 'border-danger/30 bg-danger-soft' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm text-ink-soft">{label}</div>
+        <Icon name={icon} size={18} className={danger ? 'text-danger' : 'text-ink-faint'} />
       </div>
-      <div className={`mt-1 text-2xl font-bold ${danger ? 'text-rose-600' : 'text-slate-800'}`}>
+      <div className={`num mt-1 text-3xl font-bold ${danger ? 'text-danger' : 'text-ink'}`}>
         {value}
       </div>
-      {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
+      {hint && <div className="mt-0.5 text-xs text-ink-faint">{hint}</div>}
     </Card>
   )
 }

@@ -170,7 +170,7 @@ export function MovementsPage() {
 
       {filtered.length === 0 ? (
         <Card>
-          <EmptyState icon="📜" title={t("ไม่พบรายการ")} hint={t("ลองปรับตัวกรอง")} />
+          <EmptyState icon="history" title={t("ไม่พบรายการ")} hint={t("ลองปรับตัวกรอง")} />
         </Card>
       ) : (
         <Card className="overflow-hidden">

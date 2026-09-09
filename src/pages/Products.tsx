@@ -302,10 +302,10 @@ export function ProductsPage() {
       {filtered.length === 0 ? (
         <Card>
           {products.length > 0 ? (
-            <EmptyState icon="🔍" title={t("ไม่พบสินค้าที่ตรงกับตัวกรอง")} hint={t("ลองล้างตัวกรองแล้วค้นใหม่")} />
+            <EmptyState icon="search" title={t("ไม่พบสินค้าที่ตรงกับตัวกรอง")} hint={t("ลองล้างตัวกรองแล้วค้นใหม่")} />
           ) : (
             <EmptyState
-              icon="📦"
+              icon="package"
               title={t("ยังไม่มีสินค้า")}
               hint={isAdmin ? t("กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”") : t("ยังไม่มีข้อมูลสินค้า")}
             />

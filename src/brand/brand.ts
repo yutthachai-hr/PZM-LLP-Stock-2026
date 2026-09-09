@@ -18,6 +18,18 @@ export interface BrandDef {
   emoji: string
   /** placeholder shown for products that have no photo yet */
   productIcon: string
+  /**
+   * The brand's own colour, applied to the whole interface while that brand is open.
+   *
+   * Not decoration: the two brands are separate companies with separate books, and the
+   * only thing that used to say which one you were looking at was a word in the sidebar.
+   * Pizza Mania's red was hardcoded across the app, so Le Lapin — a sandwich brand — was
+   * rendered in it too. A wrong-brand receipt is expensive to unpick, and colour is the
+   * fastest signal there is.
+   */
+  accent: string
+  /** the same colour at fill strength, for tinted backgrounds */
+  accentSoft: string
   /** default locations seeded on first entry (if the brand has none yet) */
   defaultLocations: { name: string; type: LocationType }[]
 }
@@ -28,6 +40,8 @@ export const BRANDS: BrandDef[] = [
     name: 'Pizza Mania',
     emoji: '🍕',
     productIcon: '🍕',
+    accent: '#b91c1c',
+    accentSoft: '#fef2f2',
     defaultLocations: [
       { name: 'Main Warehouse', type: 'warehouse' },
       { name: 'Sarasin Branch', type: 'branch' },
@@ -39,6 +53,10 @@ export const BRANDS: BrandDef[] = [
     name: 'Le Lapin Sandwich Delivery',
     emoji: '🥪',
     productIcon: '🥖',
+    // Deliberately far from Pizza Mania's red on the wheel, and clear of the greens
+    // and reds that mean stock in and stock out, so nothing reads as a direction.
+    accent: '#4338ca',
+    accentSoft: '#eef2ff',
     defaultLocations: [
       { name: 'Sukhumvit Warehouse', type: 'warehouse' },
       { name: 'Sarasin Warehouse', type: 'warehouse' },
