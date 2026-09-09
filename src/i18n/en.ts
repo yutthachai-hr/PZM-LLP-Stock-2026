@@ -62,6 +62,25 @@ export const EN: Record<string, string> = {
   'พิมพ์ “{phrase}” เพื่อยืนยัน': 'Type “{phrase}” to confirm',
 
   // ---- backup / restore --------------------------------------------------------
+  'กู้คืนแล้ว: เขียนใหม่ {written} รายการ, คงเดิม {kept} รายการ, สร้างยอดใหม่ {rebuilt} รายการ, ข้าม {skipped} รายการ':
+    'Restored: {written} written, {kept} left as they were, {rebuilt} balances and counters rebuilt, {skipped} skipped',
+  'กดกู้คืนไฟล์เดิมซ้ำได้ ระบบจะทำต่อจากเดิมโดยไม่สร้างข้อมูลซ้ำ':
+    'you can restore the same file again; it picks up where it stopped and will not duplicate anything',
+  'วิธีกู้คืน': 'How to restore',
+  'เติมเฉพาะที่หาย — ปลอดภัยที่สุด ใช้เมื่อข้อมูลถูกลบไป':
+    'Only fill in what is missing — safest, for when data was deleted',
+  'เขียนทับข้อมูลหลักด้วย — ใช้เมื่อแก้สินค้า/คลังผิดแล้วอยากย้อนกลับ':
+    'Also overwrite the master data — for undoing a bad edit to products or locations',
+  'โหมดเติมที่หาย: เขียนเฉพาะรายการที่หายไป ของที่แก้ไขหลังสำรองจะไม่ถูกแตะ':
+    'Fill-in mode: only missing records are written; anything edited since the backup is left alone.',
+  'โหมดเขียนทับ: ข้อมูลหลัก (สินค้า คลัง รูป บันทึก) จะถูกเขียนกลับตามไฟล์ ทับการแก้ไขที่ทำหลังสำรอง':
+    'Overwrite mode: master data (products, locations, images, notes) is written back as the file has it, replacing edits made since the backup.',
+  'ประวัติการเคลื่อนไหวเป็นข้อมูลที่เพิ่มได้อย่างเดียว รายการที่บันทึกหลังสำรองจะยังอยู่ครบ และยอดคงเหลือกับเลขเอกสารจะถูกสร้างใหม่จากประวัติทั้งหมดหลังกู้คืน':
+    'The movement history is append-only: anything recorded after the backup is kept, and balances and document numbers are rebuilt from the whole history once the restore finishes.',
+  'เตือน: ตอนสำรอง มียอดคงเหลือ {n} รายการไม่ตรงกับประวัติ — กด “ตรวจความสอดคล้องของยอด” ในหน้าตั้งค่า':
+    'Warning: {n} balance(s) disagreed with the history when this backup was taken — use “Check balances against history” in Settings',
+  'กู้คืนข้อมูลแล้ว แต่สร้างยอดคงเหลือใหม่ไม่ได้: ประวัติทำให้ยอดติดลบ {count} รายการ (เช่น {example})':
+    'The data was restored, but the balances could not be rebuilt: the history totals negative in {count} place(s) (for example {example})',
   'สำรอง / กู้คืนข้อมูล': 'Backup & restore',
   'ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive':
     'Download everything in {brand} as a single file and keep it in Google Drive or OneDrive',
@@ -73,15 +92,12 @@ export const EN: Record<string, string> = {
   'สำรองข้อมูลไม่สำเร็จ:': 'Backup failed:',
   กู้คืนข้อมูลจากไฟล์สำรอง: 'Restore from backup',
   กู้คืน: 'Restore',
-  'กู้คืนแล้ว {n} รายการ': 'Restored {n} records',
   'กู้คืนไม่สำเร็จ:': 'Restore failed:',
   ไฟล์นี้ไม่ใช่ไฟล์สำรองข้อมูลของระบบ: 'That file is not a backup from this system',
   'ไฟล์นี้สำรองจาก {brand} เมื่อ {when} — มี {n} รายการ':
     'This backup is from {brand}, taken {when} — {n} records',
   '⚠️ ไฟล์นี้เป็นของคนละแบรนด์กับที่เปิดอยู่ ({current}) — ข้อมูลจะปนกัน':
     '⚠️ This backup belongs to a different brand than the one you have open ({current}) — the data would be mixed together',
-  'รายการที่มี “รหัส” ตรงกันจะถูกเขียนทับด้วยข้อมูลจากไฟล์ ส่วนรายการที่เพิ่มมาหลังจากสำรองจะไม่ถูกแตะ':
-    'Records with a matching id are overwritten from the file; anything added since the backup is left alone.',
   '⚠️ แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง':
     '⚠️ The free Firebase plan has no point-in-time recovery — a mistaken delete cannot be undone. Take a backup at least once a week.',
   'แสดงประวัติตั้งแต่ {date}': 'History loaded from {date}',

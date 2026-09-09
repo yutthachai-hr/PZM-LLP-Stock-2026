@@ -9,11 +9,13 @@ import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import {
   BackupFormatError,
+  RESTORE_MODES,
   backupSize,
   buildBackup,
   downloadBackup,
   parseBackup,
   restoreBackup,
+  type RestoreMode,
 } from '../services/backup'
 
 /**
@@ -31,6 +33,7 @@ export function BackupSection() {
   const { brand } = useBrand()
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState('')
+  const [mode, setMode] = useState<RestoreMode>(RESTORE_MODES.repair)
 
   const brandName = brand ? brandDef(brand).name : ''
 
@@ -40,6 +43,16 @@ export function BackupSection() {
       const b = await buildBackup(user?.name ?? '')
       downloadBackup(b)
       toast.success(t('สำรองข้อมูลแล้ว {n} รายการ', { n: backupSize(b) }))
+      // Say so if the file was taken over balances that already disagreed with the
+      // history. Restoring rebuilds them from the history, so the file is still usable —
+      // but the owner should know the warehouse has something to look at.
+      if (b.integrity.drift > 0) {
+        toast.error(
+          t('เตือน: ตอนสำรอง มียอดคงเหลือ {n} รายการไม่ตรงกับประวัติ — กด “ตรวจความสอดคล้องของยอด” ในหน้าตั้งค่า', {
+            n: b.integrity.drift,
+          }),
+        )
+      }
     } catch (e) {
       toast.error(t('สำรองข้อมูลไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
@@ -80,7 +93,11 @@ export function BackupSection() {
               current: brandName,
             }) + '\n\n'
           : '') +
-        t('รายการที่มี “รหัส” ตรงกันจะถูกเขียนทับด้วยข้อมูลจากไฟล์ ส่วนรายการที่เพิ่มมาหลังจากสำรองจะไม่ถูกแตะ'),
+        (mode === RESTORE_MODES.overwrite
+          ? t('โหมดเขียนทับ: ข้อมูลหลัก (สินค้า คลัง รูป บันทึก) จะถูกเขียนกลับตามไฟล์ ทับการแก้ไขที่ทำหลังสำรอง')
+          : t('โหมดเติมที่หาย: เขียนเฉพาะรายการที่หายไป ของที่แก้ไขหลังสำรองจะไม่ถูกแตะ')) +
+        '\n\n' +
+        t('ประวัติการเคลื่อนไหวเป็นข้อมูลที่เพิ่มได้อย่างเดียว รายการที่บันทึกหลังสำรองจะยังอยู่ครบ และยอดคงเหลือกับเลขเอกสารจะถูกสร้างใหม่จากประวัติทั้งหมดหลังกู้คืน'),
       danger: true,
       confirmText: t('กู้คืน'),
       typeToConfirm: crossBrand ? parsed.brandName : undefined,
@@ -89,10 +106,18 @@ export function BackupSection() {
 
     setBusy('restore')
     try {
-      const r = await restoreBackup(parsed)
-      toast.success(t('กู้คืนแล้ว {n} รายการ', { n: r.written }))
+      const r = await restoreBackup(parsed, mode)
+      toast.success(
+        t('กู้คืนแล้ว: เขียนใหม่ {written} รายการ, คงเดิม {kept} รายการ, สร้างยอดใหม่ {rebuilt} รายการ, ข้าม {skipped} รายการ', {
+          written: r.written,
+          kept: r.kept,
+          rebuilt: r.rebuilt,
+          skipped: r.skipped,
+        }),
+      )
     } catch (err) {
-      toast.error(t('กู้คืนไม่สำเร็จ:') + ' ' + errText(err, t))
+      // A restore is idempotent, so the honest advice after a failure is to run it again.
+      toast.error(t('กู้คืนไม่สำเร็จ:') + ' ' + errText(err, t) + ' — ' + t('กดกู้คืนไฟล์เดิมซ้ำได้ ระบบจะทำต่อจากเดิมโดยไม่สร้างข้อมูลซ้ำ'))
     } finally {
       setBusy('')
     }
@@ -122,6 +147,30 @@ export function BackupSection() {
           {busy === 'restore' ? t('กำลังกู้คืน...') : t('♻️ กู้คืนจากไฟล์')}
         </Button>
       </div>
+
+      <fieldset className="mt-3 space-y-1 text-xs text-slate-600">
+        <legend className="mb-1 font-medium text-slate-700">{t('วิธีกู้คืน')}</legend>
+        <label className="flex items-start gap-2">
+          <input
+            type="radio"
+            name="restore-mode"
+            className="mt-0.5"
+            checked={mode === RESTORE_MODES.repair}
+            onChange={() => setMode(RESTORE_MODES.repair)}
+          />
+          <span>{t('เติมเฉพาะที่หาย — ปลอดภัยที่สุด ใช้เมื่อข้อมูลถูกลบไป')}</span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input
+            type="radio"
+            name="restore-mode"
+            className="mt-0.5"
+            checked={mode === RESTORE_MODES.overwrite}
+            onChange={() => setMode(RESTORE_MODES.overwrite)}
+          />
+          <span>{t('เขียนทับข้อมูลหลักด้วย — ใช้เมื่อแก้สินค้า/คลังผิดแล้วอยากย้อนกลับ')}</span>
+        </label>
+      </fieldset>
 
       <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
         {t('⚠️ แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง')}
