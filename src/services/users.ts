@@ -43,13 +43,32 @@ export async function createUser(input: NewUserInput): Promise<string> {
         input.password,
       )
       const uid = cred.user.uid
-      await backend.set(COL.users, uid, {
-        name,
-        email,
-        role: input.role,
-        active: true,
-        createdAt: Date.now(),
-      })
+      try {
+        await backend.set(COL.users, uid, {
+          name,
+          email,
+          role: input.role,
+          active: true,
+          createdAt: Date.now(),
+        })
+      } catch (e) {
+        // Two writes, and the first already happened. Without undoing it the email is
+        // taken by an account with no profile: the admin cannot re-add that person
+        // (email-already-in-use) and the person themselves can only sign up as pending
+        // staff, losing the role the admin chose.
+        //
+        // The secondary app is signed in AS the new account, which is the one thing that
+        // can delete it without the Admin SDK the free plan has no room for.
+        try {
+          await cred.user.delete()
+        } catch {
+          throw new AppError(
+            'สร้างบัญชีไม่สำเร็จ และลบบัญชีที่ค้างไม่ได้ — อีเมล {email} ถูกใช้ไปแล้วใน Firebase Authentication กรุณาลบออกจาก Console ก่อนลองใหม่',
+            { email },
+          )
+        }
+        throw e
+      }
       return uid
     } finally {
       await deleteApp(secondary)

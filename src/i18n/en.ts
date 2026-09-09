@@ -169,6 +169,11 @@ export const EN: Record<string, string> = {
   'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ': 'Already have an account? Sign in',
   รูปแบบอีเมลไม่ถูกต้อง: 'That email address is not valid',
   'รหัสผ่านสั้นเกินไป (อย่างน้อย 6 ตัว)': 'Password is too short (at least 6 characters)',
+  'แคตตาล็อกมีรหัสสินค้าซ้ำ: {sku} — แก้ไฟล์ต้นทางก่อนนำเข้า':
+    'The catalogue lists the product code {sku} twice — fix the source workbook before importing',
+  'รหัสสินค้าใช้เป็นคีย์ไม่ได้: {sku}': 'That product code cannot be used as a key: {sku}',
+  'สร้างบัญชีไม่สำเร็จ และลบบัญชีที่ค้างไม่ได้ — อีเมล {email} ถูกใช้ไปแล้วใน Firebase Authentication กรุณาลบออกจาก Console ก่อนลองใหม่':
+    'Could not create the account, and the half-made one could not be removed — {email} is now taken in Firebase Authentication. Delete it from the console before trying again.',
   อีเมลนี้ถูกใช้แล้ว: 'That email is already registered',
   อีเมลหรือรหัสผ่านไม่ถูกต้อง: 'Incorrect email or password',
   ไม่พบอีเมลนี้ในระบบ: 'No account found for that email',

@@ -1,32 +1,65 @@
 // Converts the company's official item-code workbooks into src/seed/catalog.generated.ts.
 //
-//   node scripts/import-items.mjs
+//   npm run import-items -- --pzm "<path to Pizza Mania Items.xls>" \
+//                           --llp "<path to Le Lapin Items.xls>"
+//
+// or set PZM_ITEMS_XLS and LLP_ITEMS_XLS in the environment. The paths used to be one
+// developer's OneDrive folder written into the source, so the documented command could not
+// work on anyone else's machine.
 //
 // SKU and name are copied verbatim from columns A/B (trimmed at the ends only) — they must
-// stay byte-identical to the Cost of Goods workbooks. Category/unit are derived from the
-// SKU prefix; the script cross-checks every derived category against the section heading
-// above the row and aborts on any mismatch, unknown prefix, or duplicate SKU.
+// stay byte-identical to the Cost of Goods workbooks, because the company's accounts are
+// reconciled against them. Category/unit are derived from the SKU prefix; the script
+// cross-checks every derived category against the section heading above the row and aborts
+// on any mismatch or unknown prefix. A SKU listed twice with identical details is kept
+// once; a SKU shared by two DIFFERENT products aborts, because nothing downstream can
+// tell which one a stock movement meant.
 
 import XLSX from 'xlsx'
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const OUT = resolve(HERE, '../src/seed/catalog.generated.ts')
 
+/** Read `--name value` from the command line. */
+function flag(name) {
+  const i = process.argv.indexOf(`--${name}`)
+  return i >= 0 ? process.argv[i + 1] : undefined
+}
+
+/** Resolve a workbook path and fail with something actionable if it is not usable. */
+function workbookPath(label, flagName, envName) {
+  const given = flag(flagName) ?? process.env[envName]
+  if (!given) {
+    console.error(
+      `Missing the ${label} workbook.\n` +
+        `  npm run import-items -- --${flagName} "<path to the .xls>"\n` +
+        `  or set ${envName} in the environment.`,
+    )
+    process.exit(1)
+  }
+  const full = resolve(given)
+  if (!existsSync(full) || !statSync(full).isFile()) {
+    console.error(`The ${label} workbook is not a file: ${full}`)
+    process.exit(1)
+  }
+  return full
+}
+
 const SOURCES = [
   {
     brand: 'PZM',
     export: 'PZM_PRODUCTS',
     label: 'Pizza Mania',
-    file: 'C:/Users/Yutthachai/OneDrive/Documents/รหัสสินค้า Pizza Mania Items.xls',
+    file: workbookPath('Pizza Mania', 'pzm', 'PZM_ITEMS_XLS'),
   },
   {
     brand: 'LLP',
     export: 'LLP_PRODUCTS',
     label: 'Le Lapin',
-    file: 'C:/Users/Yutthachai/OneDrive/Documents/รหัสสินค้า Le Lapin Items.xls',
+    file: workbookPath('Le Lapin', 'llp', 'LLP_ITEMS_XLS'),
   },
 ]
 
@@ -134,11 +167,27 @@ for (const src of SOURCES) {
       errors.push(`${src.brand} row ${line}: ${sku} appears before any section heading`)
     }
 
-    const prev = seen.get(sku)
-    if (prev) console.warn(`  ! duplicate SKU ${sku} (rows ${prev} and ${line}) — importing both`)
-    else seen.set(sku, line)
+    const item = { sku, name, category, unit: def.unit, unitType: def.unitType, minStock: 0 }
 
-    items.push({ sku, name, category, unit: def.unit, unitType: def.unitType, minStock: 0 })
+    // A SKU is the product's identity, so the same one twice is either the same row written
+    // twice — which the workbooks do contain — or two different products fighting over one
+    // code, which nothing downstream can resolve. Collapse the first, refuse the second.
+    // Nothing here rewrites a SKU or a name: both stay exactly as the workbook has them.
+    const prev = seen.get(sku)
+    if (prev) {
+      if (JSON.stringify(prev.item) === JSON.stringify(item)) {
+        console.warn(`  ! ${sku} is listed twice (rows ${prev.line} and ${line}) — identical, keeping one`)
+      } else {
+        errors.push(
+          `${src.brand} row ${line}: ${sku} is already used by a DIFFERENT product on row ${prev.line} ` +
+            `("${prev.item.name}" vs "${name}") — one of them needs its own code in the workbook`,
+        )
+      }
+      return
+    }
+    seen.set(sku, { line, item })
+
+    items.push(item)
   })
 
   const byCat = new Map()

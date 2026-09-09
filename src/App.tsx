@@ -31,9 +31,17 @@ function Gate() {
     if (!user) reset()
   }, [user, reset])
 
-  // make sure the chosen brand has its default locations
+  // Make sure the chosen brand has its default locations.
+  //
+  // Admins only: creating a location is an admin write, so running this for staff produced
+  // a permission error on every sign-in that was then swallowed, hiding real failures along
+  // with it. Staff arriving at a brand with no locations see an empty screen, which is
+  // correct — an admin has to set the warehouse up.
   useEffect(() => {
-    if (user && brand) ensureBrandLocations(brand).catch(() => {})
+    if (user?.role !== 'admin' || !brand) return
+    ensureBrandLocations(brand).catch((e) => {
+      console.error('[app] could not create the default locations', e)
+    })
   }, [user, brand])
 
   if (loading) {

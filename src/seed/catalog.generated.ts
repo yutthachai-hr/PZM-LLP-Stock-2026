@@ -304,7 +304,7 @@ export const PZM_PRODUCTS: SeedProduct[] = [
   { sku: "OFS-01-03-002", name: "THERMAL 60x80mm 65 แกรม (TOP MULTIPRINTS)", category: "Office Supply", unit: "หน่วย", unitType: "EA", minStock: 0 },
 ]
 
-/** Le Lapin — 167 items */
+/** Le Lapin — 166 items */
 export const LLP_PRODUCTS: SeedProduct[] = [
   { sku: "VGT-LL-01-01-006", name: "COS (SIMUMUANG)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
   { sku: "VGT-LL-01-02-007", name: "GREEN OAK (SIMUMUANG)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
@@ -338,7 +338,6 @@ export const LLP_PRODUCTS: SeedProduct[] = [
   { sku: "VGT-LL-01-14-004", name: "LIME (KLONG TOEY)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
   { sku: "VGT-LL-01-14-005", name: "LIME  (SIMUMMUANG)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
   { sku: "VGT-LL-01-15-002", name: "GARLIC (SIMUMMUANG)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
-  { sku: "VGT-LL-01-16-001", name: "CORIANDER (VL)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
   { sku: "VGT-LL-01-16-002", name: "CORIANDER THAI (MAKRO)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
   { sku: "VGT-LL-01-16-003", name: "CORIANDER THAI (CENTRAL)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
   { sku: "VGT-LL-01-16-004", name: "CORIANDER THAI (KLONG TOEY)", category: "Vegetable", unit: "Kilogram", unitType: "KG", minStock: 0 },
