@@ -3,6 +3,8 @@
 //  - local.ts     : localStorage + BroadcastChannel, real-time across tabs on one device
 // The app talks ONLY to this interface, so business logic never depends on which is active.
 
+import type { BrandId } from '../brand/brand'
+
 export interface TxContext {
   get<T = Record<string, unknown>>(collection: string, id: string): Promise<T | null>
   set(collection: string, id: string, data: Record<string, unknown>): void
@@ -28,6 +30,14 @@ export interface SubscribeOptions {
 
 export interface Backend {
   readonly mode: 'cloud' | 'local'
+  /**
+   * The same backend, permanently pointed at one brand.
+   *
+   * Anything that takes more than a single call — a transaction, a backup, a multi-step
+   * service — should take this once at the start and use it throughout, so that switching
+   * brand halfway through cannot split the work across two namespaces.
+   */
+  forBrand(brand: BrandId): Backend
   /** Live subscription: fires immediately with current docs, then on every change. Returns unsubscribe. */
   subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void
   /**

@@ -13,18 +13,23 @@ import {
 } from 'firebase/firestore'
 import { getDb } from '../firebase/app'
 import type { Backend, SubscribeOptions, TxContext } from './types'
-import { resolveCollection } from '../brand/brand'
+import { resolveCollection, type BrandId } from '../brand/brand'
 
 // Firestore implementation. Real-time across all devices, offline persistence enabled.
 // Collection names are brand-scoped via resolveCollection() so brands stay fully isolated.
 
-export function createFirestoreBackend(): Backend {
+export function createFirestoreBackend(brand?: BrandId): Backend {
+  // `brand` undefined means "whatever is selected right now", which is what screens
+  // want. Multi-step work calls forBrand() first and gets a copy pinned to one brand.
+  const resolve = (name: string) => resolveCollection(name, brand)
   return {
+    forBrand: (b: BrandId) => createFirestoreBackend(b),
+
     mode: 'cloud',
 
     subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void {
       const db = getDb()
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       const ref = fbCollection(db, c)
       // A single-field range filter is served by Firestore's automatic index, so this
       // needs no composite index to be deployed alongside it.
@@ -49,7 +54,7 @@ export function createFirestoreBackend(): Backend {
       onError?: (e: unknown) => void,
     ): () => void {
       const db = getDb()
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       return onSnapshot(
         doc(db, c, id),
         (snap) => cb(snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null),
@@ -62,36 +67,36 @@ export function createFirestoreBackend(): Backend {
 
     async getAll<T>(collection: string): Promise<T[]> {
       const db = getDb()
-      const snap = await getDocs(fbCollection(db, resolveCollection(collection)))
+      const snap = await getDocs(fbCollection(db, resolve(collection)))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
     async getOne<T>(collection: string, id: string): Promise<T | null> {
       const db = getDb()
-      const snap = await getDoc(doc(db, resolveCollection(collection), id))
+      const snap = await getDoc(doc(db, resolve(collection), id))
       return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
     },
 
     async add(collection: string, data: Record<string, unknown>): Promise<string> {
       const db = getDb()
-      const ref = doc(fbCollection(db, resolveCollection(collection)))
+      const ref = doc(fbCollection(db, resolve(collection)))
       await setDoc(ref, { ...data, id: ref.id })
       return ref.id
     },
 
     async set(collection: string, id: string, data: Record<string, unknown>): Promise<void> {
       const db = getDb()
-      await setDoc(doc(db, resolveCollection(collection), id), { ...data, id })
+      await setDoc(doc(db, resolve(collection), id), { ...data, id })
     },
 
     async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
       const db = getDb()
-      await updateDoc(doc(db, resolveCollection(collection), id), patch)
+      await updateDoc(doc(db, resolve(collection), id), patch)
     },
 
     async remove(collection: string, id: string): Promise<void> {
       const db = getDb()
-      await deleteDoc(doc(db, resolveCollection(collection), id))
+      await deleteDoc(doc(db, resolve(collection), id))
     },
 
     async transaction<R>(fn: (tx: TxContext) => Promise<R>): Promise<R> {
@@ -99,17 +104,17 @@ export function createFirestoreBackend(): Backend {
       return runTransaction(db, async (t) => {
         const tx: TxContext = {
           async get<T>(collection: string, id: string): Promise<T | null> {
-            const snap = await t.get(doc(db, resolveCollection(collection), id))
+            const snap = await t.get(doc(db, resolve(collection), id))
             return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
           },
           set(collection, id, data) {
-            t.set(doc(db, resolveCollection(collection), id), { ...data, id })
+            t.set(doc(db, resolve(collection), id), { ...data, id })
           },
           update(collection, id, patch) {
-            t.update(doc(db, resolveCollection(collection), id), patch)
+            t.update(doc(db, resolve(collection), id), patch)
           },
           delete(collection, id) {
-            t.delete(doc(db, resolveCollection(collection), id))
+            t.delete(doc(db, resolve(collection), id))
           },
         }
         return fn(tx)

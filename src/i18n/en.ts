@@ -313,6 +313,22 @@ export const EN: Record<string, string> = {
   'หมายเหตุ (ไม่บังคับ)': 'Note (optional)',
   บันทึกการปรับ: 'Save adjustment',
   'ปรับสต๊อกเรียบร้อย (เลขที่ {docNo})': 'Stock adjusted (doc no. {docNo})',
+  'จำนวนมากเกินไป (สูงสุด {max})': 'That quantity is too large (maximum {max})',
+  'จำนวนของ "{name}" น้อยกว่าที่ระบบเก็บได้ (ขั้นต่ำ {step})':
+    'The quantity for “{name}” is smaller than the system can store (minimum {step})',
+  'มีการบันทึกรายการใหม่ระหว่างคำนวณ — ยังไม่ได้แก้ไขข้อมูลใด ๆ กรุณาลองใหม่':
+    'A movement was recorded while the totals were being worked out — nothing has been changed, please try again',
+  'วันที่ไม่ถูกต้อง': 'That date is not valid',
+  'ค่าไม่ถูกต้อง: {value}': 'Not a valid value: {value}',
+  'ข้อมูลไม่ครบ: {what}': 'Missing information: {what}',
+  'ไม่พบสินค้าในระบบแล้ว (อาจถูกลบไป) — โปรดเลือกใหม่':
+    'That product is no longer in the system (it may have been deleted) — please pick another',
+  'สินค้า "{name}" ถูกปิดใช้งานแล้ว': 'The product “{name}” has been deactivated',
+  'ไม่พบคลังในระบบแล้ว (อาจถูกลบไป) — โปรดเลือกใหม่':
+    'That location is no longer in the system (it may have been deleted) — please pick another',
+  'คลัง "{name}" ถูกปิดใช้งานแล้ว': 'The location “{name}” has been deactivated',
+  'ยกเลิกไม่ได้: ของจากรายการนี้ถูกใช้ต่อไปแล้ว (คงเหลือ {qty} จาก {need}) — ให้บันทึกรายการปรับสต๊อกแทน':
+    'Cannot void: the goods from this document have already been passed on ({qty} left of {need}) — record a stock adjustment instead',
   'จำนวนต้องมากกว่า 0': 'Quantity must be greater than 0',
   '🔍 ค้นหาสินค้า': '🔍 Search products',
 

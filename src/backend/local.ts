@@ -1,5 +1,5 @@
 import type { Backend, SubscribeOptions, TxContext } from './types'
-import { resolveCollection } from '../brand/brand'
+import { resolveCollection, type BrandId } from '../brand/brand'
 
 // localStorage-backed backend with cross-tab real-time via BroadcastChannel + storage events.
 // All data lives under one key per collection so it is easy to inspect, export, and back up.
@@ -80,12 +80,17 @@ function commit(collection: string, map: DocMap): void {
   broadcast(collection)
 }
 
-export function createLocalBackend(): Backend {
+export function createLocalBackend(brand?: BrandId): Backend {
+  // `brand` undefined means "whatever is selected right now", which is what screens
+  // want. Multi-step work calls forBrand() first and gets a copy pinned to one brand.
+  const resolve = (name: string) => resolveCollection(name, brand)
   return {
+    forBrand: (b: BrandId) => createLocalBackend(b),
+
     mode: 'local',
 
     subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void {
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       let set = listeners.get(c)
       if (!set) {
         set = new Set()
@@ -107,7 +112,7 @@ export function createLocalBackend(): Backend {
     },
 
     subscribeOne<T>(collection: string, id: string, cb: (d: T | null) => void): () => void {
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       let set = listeners.get(c)
       if (!set) {
         set = new Set()
@@ -124,16 +129,16 @@ export function createLocalBackend(): Backend {
     },
 
     async getAll<T>(collection: string): Promise<T[]> {
-      return Object.values(loadMap(resolveCollection(collection))) as T[]
+      return Object.values(loadMap(resolve(collection))) as T[]
     },
 
     async getOne<T>(collection: string, id: string): Promise<T | null> {
-      const map = loadMap(resolveCollection(collection))
+      const map = loadMap(resolve(collection))
       return (map[id] as T) ?? null
     },
 
     async add(collection: string, data: Record<string, unknown>): Promise<string> {
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       const id = genId()
       const map = loadMap(c)
       map[id] = { ...data, id }
@@ -142,21 +147,21 @@ export function createLocalBackend(): Backend {
     },
 
     async set(collection: string, id: string, data: Record<string, unknown>): Promise<void> {
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       const map = loadMap(c)
       map[id] = { ...data, id }
       commit(c, map)
     },
 
     async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       const map = loadMap(c)
       map[id] = { ...(map[id] ?? { id }), ...patch, id }
       commit(c, map)
     },
 
     async remove(collection: string, id: string): Promise<void> {
-      const c = resolveCollection(collection)
+      const c = resolve(collection)
       const map = loadMap(c)
       delete map[id]
       commit(c, map)
@@ -175,19 +180,19 @@ export function createLocalBackend(): Backend {
       }
       const tx: TxContext = {
         async get<T>(col: string, id: string): Promise<T | null> {
-          const m = load(resolveCollection(col))
+          const m = load(resolve(col))
           return (m[id] as T) ?? null
         },
         set(col, id, data) {
-          load(resolveCollection(col))[id] = { ...data, id }
+          load(resolve(col))[id] = { ...data, id }
         },
         update(col, id, patch) {
-          const c = resolveCollection(col)
+          const c = resolve(col)
           const m = load(c)
           m[id] = { ...(m[id] ?? { id }), ...patch, id }
         },
         delete(col, id) {
-          delete load(resolveCollection(col))[id]
+          delete load(resolve(col))[id]
         },
       }
       const result = await fn(tx)

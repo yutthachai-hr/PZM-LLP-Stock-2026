@@ -85,9 +85,17 @@ export function lastBrand(): BrandId {
   return current
 }
 
-/** Map a logical collection name to its brand-scoped physical name. */
-export function resolveCollection(name: string): string {
+/**
+ * Map a logical collection name to its brand-scoped physical name.
+ *
+ * `brand` defaults to whatever is selected right now, which is what a screen wants. Any
+ * operation made of more than one step must pass it explicitly instead: the user can tap
+ * "switch brand" mid-save, and a Firestore transaction can be retried after they do. Read
+ * afresh each time, this function would then send the second half of one receipt into the
+ * other brand's namespace.
+ */
+export function resolveCollection(name: string, brand: BrandId = current): string {
   if (SHARED.has(name)) return name
-  if (current === 'pizza') return name
-  return `${current}__${name}`
+  if (brand === 'pizza') return name
+  return `${brand}__${name}`
 }
