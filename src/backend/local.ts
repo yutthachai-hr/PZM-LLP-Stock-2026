@@ -106,6 +106,23 @@ export function createLocalBackend(): Backend {
       }
     },
 
+    subscribeOne<T>(collection: string, id: string, cb: (d: T | null) => void): () => void {
+      const c = resolveCollection(collection)
+      let set = listeners.get(c)
+      if (!set) {
+        set = new Set()
+        listeners.set(c, set)
+      }
+      const pick = (docs: unknown[]) =>
+        (docs.find((d) => (d as Record<string, unknown>).id === id) as T) ?? null
+      const listener = ((docs: unknown[]) => cb(pick(docs))) as Listener
+      set.add(listener)
+      cb(pick(Object.values(loadMap(c))))
+      return () => {
+        set?.delete(listener)
+      }
+    },
+
     async getAll<T>(collection: string): Promise<T[]> {
       return Object.values(loadMap(resolveCollection(collection))) as T[]
     },

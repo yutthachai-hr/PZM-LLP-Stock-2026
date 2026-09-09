@@ -79,11 +79,34 @@ export async function updateUserProfile(
 }
 
 /**
- * Delete a user's profile. This removes their access immediately (no profile => the security
- * rules treat them as inactive). Note: in cloud mode the underlying Firebase Auth login still
- * exists (deleting it requires the Admin SDK / a Cloud Function) but without a profile they
- * cannot read or write anything.
+ * Remove a user's access for good.
+ *
+ * Deleting the profile is not enough on its own. In cloud mode the Firebase Auth login
+ * survives (removing it needs the Admin SDK, which the free plan has no room for), and that
+ * account could simply sign up again — landing back as a pending staff member, or worse if
+ * a rule ever loosened. So the tombstone goes first and the profile second, and the rules
+ * refuse to delete a profile that has no tombstone. The tombstone is also what makes the
+ * revocation land on any device the person is still signed in on.
+ *
+ * Re-hiring someone is deliberately an explicit admin action: `restoreUser` below.
  */
-export async function deleteUser(id: string): Promise<void> {
+export async function deleteUser(id: string, by: string): Promise<void> {
+  await backend.set(COL.revokedUsers, id, { revokedAt: Date.now(), revokedBy: by })
   await backend.remove(COL.users, id)
+}
+
+/** Lift a revocation so the person can sign up (or be added) again. */
+export async function restoreUser(id: string): Promise<void> {
+  await backend.remove(COL.revokedUsers, id)
+}
+
+export interface RevokedUser {
+  id: string
+  revokedAt?: number
+  revokedBy?: string
+}
+
+/** Accounts an admin has removed. Admin-only: the rules refuse this listing to anyone else. */
+export async function listRevoked(): Promise<RevokedUser[]> {
+  return backend.getAll<RevokedUser>(COL.revokedUsers)
 }

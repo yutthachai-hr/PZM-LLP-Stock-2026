@@ -9,8 +9,9 @@
     "lint": "oxlint",
     "import-items": "node scripts/import-items.mjs",
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
-    "test:rules": "firebase emulators:exec --only firestore --project pzm-rules-test \"vitest run tests/firestore-rules.test.ts\"",
-    "preview": "vite preview"
+    "test:rules": "firebase emulators:exec --only firestore --project pzm-rules-test \"vitest run --config vitest.rules.config.ts\"",
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "dayjs": "^1.11.21",

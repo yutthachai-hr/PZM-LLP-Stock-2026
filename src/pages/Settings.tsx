@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -18,7 +18,7 @@ import {
   updateLocation,
   deleteLocation,
 } from '../services/locations'
-import { createUser, updateUserProfile, deleteUser } from '../services/users'
+import { createUser, updateUserProfile, deleteUser, restoreUser, listRevoked, type RevokedUser } from '../services/users'
 import { recomputeLevels } from '../services/stock'
 import { seedInitialData } from '../services/seed'
 import {
@@ -222,6 +222,14 @@ function LocationEditor({ location, onClose }: { location: StockLocation | null;
 function UsersSection({ currentUserId }: { currentUserId: string }) {
   const t = useT()
   const { users } = useData()
+  // Removed accounts, so a mistaken removal is undoable. Nothing lets them back in on
+  // their own — an admin has to lift it here first.
+  const [revoked, setRevoked] = useState<RevokedUser[]>([])
+  const [revokedErr, setRevokedErr] = useState('')
+  const reloadRevoked = useCallback(() => {
+    listRevoked().then(setRevoked, (e) => setRevokedErr(errText(e, t)))
+  }, [t])
+  useEffect(reloadRevoked, [reloadRevoked])
   const toast = useToast()
   const confirm = useConfirm()
   const [adding, setAdding] = useState(false)
@@ -235,16 +243,27 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
   async function removeUser(u: { id: string; name: string }) {
     const ok = await confirm({
       title: t("ลบผู้ใช้"),
-      message: t('ลบผู้ใช้ "{name}" ? ผู้ใช้นี้จะเข้าระบบไม่ได้อีก (ประวัติการทำรายการที่ผ่านมายังคงอยู่)', { name: u.name }),
+      message: t('ลบผู้ใช้ "{name}" ? ผู้ใช้นี้จะเข้าระบบไม่ได้อีก แม้จะสมัครใหม่ด้วยอีเมลเดิม (ประวัติการทำรายการที่ผ่านมายังคงอยู่)', { name: u.name }),
       danger: true,
       confirmText: t("ลบผู้ใช้"),
     })
     if (!ok) return
     try {
-      await deleteUser(u.id)
+      await deleteUser(u.id, currentUserId)
+      reloadRevoked()
       toast.success(t("ลบผู้ใช้แล้ว"))
     } catch (e) {
       toast.error(t("ลบไม่สำเร็จ:") + ' ' + errText(e, t))
+    }
+  }
+
+  async function undoRemoval(r: RevokedUser) {
+    try {
+      await restoreUser(r.id)
+      reloadRevoked()
+      toast.success(t("คืนสิทธิ์แล้ว — ผู้ใช้ต้องขอสิทธิ์เข้าใช้งานใหม่อีกครั้ง"))
+    } catch (e) {
+      toast.error(t("คืนสิทธิ์ไม่สำเร็จ:") + ' ' + errText(e, t))
     }
   }
 
@@ -297,6 +316,28 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
           </div>
         ))}
       </div>
+      {revoked.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <h3 className="mb-2 text-sm font-semibold text-slate-600">{t("บัญชีที่ถูกถอนสิทธิ์")}</h3>
+          <p className="mb-2 text-xs text-slate-400">
+            {t("บัญชีเหล่านี้เข้าระบบไม่ได้และสมัครใหม่ด้วยอีเมลเดิมไม่ได้ จนกว่าจะคืนสิทธิ์")}
+          </p>
+          <div className="divide-y divide-slate-100">
+            {revoked.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 py-2">
+                <div className="min-w-0 flex-1 truncate font-mono text-xs text-slate-500">{r.id}</div>
+                <button
+                  onClick={() => undoRemoval(r)}
+                  className="text-sm font-medium text-emerald-600 hover:underline"
+                >
+                  {t("คืนสิทธิ์")}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {revokedErr && <p className="mt-2 text-xs text-rose-600">{revokedErr}</p>}
       {adding && <UserEditor onClose={() => setAdding(false)} onDone={() => toast.success(t("เพิ่มผู้ใช้แล้ว"))} />}
     </Card>
   )

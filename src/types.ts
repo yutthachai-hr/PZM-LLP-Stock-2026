@@ -109,6 +109,7 @@ export const COL = {
   counters: 'counters',
   minOverrides: 'productMinOverrides',
   meta: 'meta',
+  revokedUsers: 'revokedUsers',
 } as const
 
 // Labels are translation keys — screens render them through t(). i18n-key

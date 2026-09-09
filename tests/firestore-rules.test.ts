@@ -135,6 +135,9 @@ describe('admins', () => {
     await assertSucceeds(getDocs(collection(as(ADMIN), 'users')))
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', PENDING), { active: true }))
     await assertSucceeds(setDoc(doc(as(ADMIN), 'users/uid-new'), { role: 'staff', active: true }))
+    // Removing someone is two writes: the tombstone that keeps their auth account out,
+    // then the profile itself.
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'revokedUsers', STAFF), { at: 1, by: ADMIN }))
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'users', STAFF)))
   })
 
@@ -169,25 +172,27 @@ describe('sign-up cannot grant privileges', () => {
 })
 
 describe('the bootstrap sentinel', () => {
-  test('the first account claims it and becomes admin', async () => {
+  test('an empty database cannot be bootstrapped from the client at all', async () => {
+    // The owner is provisioned from the Firebase console, where rules do not apply.
+    // Being first to reach an unprovisioned database proves nothing about owning it.
     await env.clearFirestore()
     const db = as('uid-first')
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(db, 'meta/bootstrap'), { claimedBy: 'uid-first', at: Date.now() }),
     )
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(db, 'users/uid-first'), { name: 'Owner', role: 'admin', active: true }),
     )
   })
 
-  test('it cannot be claimed on behalf of someone else', async () => {
+  test('it cannot be claimed on behalf of someone else either', async () => {
     await env.clearFirestore()
     await assertFails(
       setDoc(doc(as('uid-first'), 'meta/bootstrap'), { claimedBy: 'uid-other', at: 1 }),
     )
   })
 
-  test('once claimed it cannot be rewritten or removed', async () => {
+  test('it cannot be rewritten or removed, not even by an admin', async () => {
     await assertFails(setDoc(doc(as('uid-later'), 'meta/bootstrap'), { claimedBy: 'uid-later' }))
     await assertFails(updateDoc(doc(as(ADMIN), 'meta/bootstrap'), { claimedBy: ADMIN }))
     await assertFails(deleteDoc(doc(as(ADMIN), 'meta/bootstrap')))

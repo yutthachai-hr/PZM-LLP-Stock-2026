@@ -7,7 +7,7 @@ import { LangToggle } from '../i18n/LangToggle'
 
 export function LoginPage() {
   const t = useT()
-  const { login, registerFirstAdmin, needsBootstrap, mode, notice } = useAuth()
+  const { login, signUp, needsBootstrap, mode, notice } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -28,7 +28,11 @@ export function LoginPage() {
   }
 
   const [wantRegister, setWantRegister] = useState(false)
-  const bootstrap = needsBootstrap || wantRegister
+  // Local mode's first account really does become the admin. In cloud mode, signing up
+  // only ever creates a staff account waiting for approval — whoever you are — so the
+  // copy must not promise otherwise.
+  const firstAdmin = needsBootstrap && mode === 'local'
+  const bootstrap = firstAdmin || wantRegister
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -36,7 +40,7 @@ export function LoginPage() {
     setBusy(true)
     try {
       if (bootstrap) {
-        await registerFirstAdmin(name, email, password)
+        await signUp(name, email, password)
       } else {
         await login(email, password)
       }
@@ -55,13 +59,17 @@ export function LoginPage() {
           <div className="text-4xl">🍕</div>
           <h1 className="mt-2 text-xl font-bold text-red-700">Pizza Mania Stock</h1>
           <p className="text-sm text-slate-500">
-            {bootstrap ? t("ตั้งค่าผู้ดูแลระบบคนแรก") : t("เข้าสู่ระบบบริหารสต๊อก")}
+            {!bootstrap
+              ? t("เข้าสู่ระบบบริหารสต๊อก")
+              : firstAdmin
+                ? t("ตั้งค่าผู้ดูแลระบบคนแรก")
+                : t("ขอสิทธิ์เข้าใช้งาน")}
           </p>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
           {bootstrap && (
-            <Field label={t("ชื่อผู้ดูแล")} required>
+            <Field label={firstAdmin ? t("ชื่อผู้ดูแล") : t("ชื่อของคุณ")} required>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -91,6 +99,11 @@ export function LoginPage() {
             />
           </Field>
 
+          {bootstrap && !firstAdmin && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {t("บัญชีใหม่จะยังเข้าใช้ข้อมูลไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ")}
+            </p>
+          )}
           {notice && !error && (
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{t(notice)}</div>
           )}
@@ -99,7 +112,13 @@ export function LoginPage() {
           )}
 
           <Button type="submit" disabled={busy} className="w-full">
-            {busy ? t("กำลังดำเนินการ...") : bootstrap ? t("สร้างบัญชีผู้ดูแล") : t("เข้าสู่ระบบ")}
+            {busy
+              ? t("กำลังดำเนินการ...")
+              : !bootstrap
+                ? t("เข้าสู่ระบบ")
+                : firstAdmin
+                  ? t("สร้างบัญชีผู้ดูแล")
+                  : t("ส่งคำขอเข้าใช้งาน")}
           </Button>
         </form>
 
@@ -112,7 +131,7 @@ export function LoginPage() {
             }}
             className="mt-3 block w-full text-center text-xs text-red-600 hover:underline"
           >
-            {bootstrap ? t("มีบัญชีอยู่แล้ว? เข้าสู่ระบบ") : t("ตั้งค่าครั้งแรก / สร้างบัญชีผู้ดูแล")}
+            {bootstrap ? t("มีบัญชีอยู่แล้ว? เข้าสู่ระบบ") : t("ยังไม่มีบัญชี? ขอสิทธิ์เข้าใช้งาน")}
           </button>
         )}
 

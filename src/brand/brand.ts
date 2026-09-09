@@ -53,8 +53,9 @@ export function brandDef(id: BrandId): BrandDef {
   return BRANDS.find((b) => b.id === id) ?? BRANDS[0]
 }
 
-// Collections that are SHARED across brands (never prefixed).
-const SHARED = new Set(['users', 'meta'])
+// Collections that are SHARED across brands (never prefixed). These are about who may sign
+// in, which is one question for the whole system rather than one per brand.
+const SHARED = new Set(['users', 'meta', 'revokedUsers'])
 
 const LS_KEY = 'pmstock:v1:lastBrand'
 

@@ -40,6 +40,7 @@ npm run preview    # ทดลองเปิดไฟล์ที่ build แ�
 
 ### เข้าใช้งานครั้งแรก
 เปิดเว็บ → หน้าจอจะให้ **สร้างบัญชีผู้ดูแลระบบคนแรก** (ชื่อ + อีเมล + รหัสผ่าน)
+(ในโหมด Cloud บัญชีแรกสร้างจาก Firebase Console แทน — ดู "วิธีเปิดใช้ Cloud" ด้านล่าง)
 จากนั้นไปที่ **สินค้าคงคลัง → นำเข้าสินค้าตัวอย่าง (Pizza Mania)** เพื่อโหลดสินค้า ~150 รายการ
 
 ---
@@ -62,24 +63,47 @@ npm run preview    # ทดลองเปิดไฟล์ที่ build แ�
 2. เมนูซ้าย **Build → Authentication** → Get started → เปิด **Email/Password** → Save
 3. เมนูซ้าย **Build → Firestore Database** → Create database → เลือก **production mode** →
    เลือก location `asia-southeast1` (สิงคโปร์ ใกล้ไทยสุด) → Enable
-4. แท็บ **Rules** ของ Firestore → วางกฎด้านล่าง → Publish
+4. **Deploy กฎความปลอดภัยจากไฟล์ในโปรเจกต์** — อย่าพิมพ์กฎเองในหน้าเว็บ
+   ```bash
+   npx firebase login
+   npx firebase deploy --only firestore:rules
    ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       // อนุญาตเฉพาะผู้ที่ login แล้วเท่านั้น
-       match /{document=**} {
-         allow read, write: if request.auth != null;
-       }
-     }
-   }
-   ```
-5. ไอคอนเฟือง ⚙️ (Project settings) → เลื่อนลงหา **Your apps** → กดไอคอน `</>` (Web)
+   กฎอยู่ที่ [`firestore.rules`](firestore.rules) และเป็นสิ่งเดียวที่กันคนนอกได้จริง
+   (ปุ่มที่ซ่อนใน UI กันไม่ได้ — ใครก็เรียก REST API ด้วย token ตัวเองได้)
+
+   > ⚠️ **ห้ามใช้ `allow read, write: if request.auth != null` ครอบทุก path**
+   > กฎแบบนั้นแปลว่าใครก็ตามที่สมัครบัญชีได้ จะแก้ `users` ของตัวเองเป็น admin
+   > แล้วอ่าน/ลบข้อมูลทั้งระบบได้ทันที
+
+5. **สร้างผู้ดูแลคนแรกจาก Console** (ทำครั้งเดียว) — แอปไม่ยอมให้ใครตั้งตัวเองเป็น admin
+   อีกต่อไป เพราะ "มาถึงก่อน" ไม่ใช่หลักฐานว่าเป็นเจ้าของระบบ
+   1. **Authentication → Users → Add user** ใส่อีเมล/รหัสผ่านของเจ้าของ → คัดลอก **User UID**
+   2. **Firestore → Start collection** ชื่อ `users` → Document ID = UID ที่คัดลอกมา → ใส่ field:
+      | field | type | value |
+      |---|---|---|
+      | `name` | string | ชื่อเจ้าของ |
+      | `email` | string | อีเมลเดียวกับข้อ 1 |
+      | `role` | string | `admin` |
+      | `active` | boolean | `true` |
+      | `createdAt` | number | `0` |
+   3. สร้าง collection `meta` → Document ID = `bootstrap` → field `claimedBy` (string) = UID เดิม
+      เอกสารนี้เป็นเครื่องหมายว่า "ตั้งค่าแล้ว" แอปใช้แยกระหว่าง *ระบบยังไม่ได้ตั้งค่า*
+      กับ *บัญชีคุณรออนุมัติ*
+6. ไอคอนเฟือง ⚙️ (Project settings) → เลื่อนลงหา **Your apps** → กดไอคอน `</>` (Web)
    → ตั้งชื่อ app → Register → จะได้โค้ด `firebaseConfig = { ... }`
-6. **คัดลอกทั้งอ็อบเจกต์** `{ apiKey: ..., authDomain: ..., ... }`
-7. เปิดแอป Pizza Mania → **ตั้งค่า → การเชื่อมต่อ Cloud** → วาง config → กด **เชื่อมต่อ Cloud**
+7. **คัดลอกทั้งอ็อบเจกต์** `{ apiKey: ..., authDomain: ..., ... }`
+8. เปิดแอป Pizza Mania → **ตั้งค่า → การเชื่อมต่อ Cloud** → วาง config → กด **เชื่อมต่อ Cloud**
    - แอปจะรีโหลดและเข้าสู่โหมด Cloud (มุมซ้ายบนขึ้น "Cloud" สีเขียว)
-8. สร้างบัญชีผู้ดูแลคนแรกอีกครั้ง (บน Cloud) แล้วเพิ่มผู้ใช้/นำเข้าสินค้าได้เลย
+9. เข้าสู่ระบบด้วยบัญชีจากข้อ 5 แล้วเพิ่มผู้ใช้/นำเข้าสินค้าได้เลย
+   - พนักงานคนอื่นกด **"ขอสิทธิ์เข้าใช้งาน"** เองได้ แต่จะเข้าข้อมูลไม่ได้จนกว่าผู้ดูแลจะอนุมัติ
+
+#### ตรวจว่ากฎทำงานจริงหลังติดตั้ง
+
+รันชุดทดสอบกฎกับ emulator (ต้องมี Java):
+```bash
+npm run test:rules
+```
+ทดสอบชุดนี้พิสูจน์ว่าคำขอที่ควรถูกปฏิเสธ **ถูกปฏิเสธจริง** ไม่ใช่แค่ปุ่มถูกซ่อน
 
 > เปิดแอปเดียวกันบนมือถือ (ผ่าน URL ที่ deploy) แล้ว login — จะเห็นข้อมูลเดียวกันเรียลไทม์
 

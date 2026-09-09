@@ -21,10 +21,19 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
+    // A tombstone that outlives the profile. Removing someone deletes their profile, but
+    // their Firebase Auth login still exists and could sign in again; this is what makes
+    // the removal stick. Only an admin can lift it.
+    function revoked(uid) {
+      return exists(/databases/$(database)/documents/revokedUsers/$(uid));
+    }
+
     // A signed-in account with no profile document has no access. Deleting a user relies
     // on that, and it is also the state a brand-new self-signed-up account sits in.
+    // A revoked account is treated as having no profile even if the document is still there,
+    // so revocation takes effect on the next request rather than on the next cleanup.
     function hasProfile() {
-      return authed() && exists(profilePath());
+      return authed() && !revoked(request.auth.uid) && exists(profilePath());
     }
 
     function profile() {
@@ -38,12 +47,6 @@ service cloud.firestore {
 
     function admin() {
       return active() && profile().role == 'admin';
-    }
-
-    // True only for the account named by the write-once bootstrap sentinel.
-    function bootstrapClaimant() {
-      return exists(/databases/$(database)/documents/meta/bootstrap)
-        && get(/databases/$(database)/documents/meta/bootstrap).data.claimedBy == request.auth.uid;
     }
 
     // ---------------------------------------------------------------- brands ----
@@ -103,32 +106,54 @@ service cloud.firestore {
       // Two legitimate ways a profile appears:
       //  - an admin adds someone, with any role, active straight away;
       //  - a person signs themselves up, which must produce an INACTIVE STAFF account.
-      // Without that second restriction anyone holding the public API key could mint
-      // themselves an admin, because the client is what picks these fields.
-      // The first-ever account is the exception: it claims the sentinel and owns the data.
-      allow create: if admin()
-        || (uid == request.auth.uid && (
-              bootstrapClaimant()
-                ? (request.resource.data.role == 'admin' && request.resource.data.active == true)
-                : (request.resource.data.role == 'staff' && request.resource.data.active == false)
-           ));
+      // Self-signup can NEVER produce an admin, and never resurrects a revoked account.
+      // There is deliberately no "first caller becomes the owner" path: on an empty
+      // database nobody can create a profile, and the owner is provisioned out of band
+      // (Firebase console) where rules do not apply. Whoever holds the public API key is
+      // not evidence of ownership.
+      // A revoked uid gets no profile from anyone, admin included, until the revocation is
+      // lifted first. Otherwise an admin could re-add someone and hand them a profile that
+      // the revocation check still silently blocks.
+      allow create: if !revoked(uid) && (
+        admin()
+        || (uid == request.auth.uid
+            && request.resource.data.role == 'staff'
+            && request.resource.data.active == false)
+      );
 
-      // role and active ARE the access model — only an admin may change a profile.
-      allow update: if admin();
+      // role and active ARE the access model — only an admin may change a profile, and an
+      // admin may not change their own, so the last admin cannot lock the database's only
+      // way back in. Renaming yourself is still fine.
+      allow update: if admin() && (
+        uid != request.auth.uid
+        || (request.resource.data.role == resource.data.role
+            && request.resource.data.active == resource.data.active)
+      );
 
-      // Deleting your own profile would lock you out of your own database.
-      allow delete: if admin() && uid != request.auth.uid;
+      // Deleting your own profile would lock you out of your own database. The tombstone
+      // has to exist first, so a removal can never be a profile deletion on its own — the
+      // auth account behind it would just sign up again.
+      allow delete: if admin() && uid != request.auth.uid && revoked(uid);
     }
 
     // ---------------------------------------------------------------- bootstrap ----
 
-    // Write-once sentinel naming the first account. `create` only succeeds while the
-    // document is absent, so the first caller wins and later sign-ups cannot rewrite it
-    // to claim admin.
+    // Marker saying this database has been provisioned. The app reads it to tell "nobody
+    // has set this up yet" apart from "your account is waiting for approval". No client
+    // may write it: it is created alongside the first admin from the Firebase console.
     match /meta/bootstrap {
       allow get: if authed();
-      allow create: if authed() && request.resource.data.claimedBy == request.auth.uid;
-      allow update, delete: if false;
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- revocation ----
+
+    // One document per removed account, keyed by uid. Admins add and (to re-hire someone)
+    // remove them; nobody can lift their own.
+    match /revokedUsers/{uid} {
+      allow read: if admin();
+      allow create, delete: if admin() && uid != request.auth.uid;
+      allow update: if false;
     }
 
     // ---------------------------------------------------------------- brand data ----

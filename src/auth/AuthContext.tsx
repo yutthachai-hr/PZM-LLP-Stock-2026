@@ -22,10 +22,10 @@ interface AuthState {
   user: AppUser | null
   loading: boolean
   mode: 'cloud' | 'local'
-  needsBootstrap: boolean // no users exist yet -> show "create first admin"
+  needsBootstrap: boolean // local mode only: no users exist yet -> "create first admin"
   notice: string | null // e.g. "account pending approval"
   login: (email: string, password: string) => Promise<void>
-  registerFirstAdmin: (name: string, email: string, password: string) => Promise<void>
+  signUp: (name: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -33,93 +33,129 @@ const AuthCtx = createContext<AuthState | null>(null)
 
 const SESSION_KEY = 'pmstock:v1:session'
 
-// Claim the "first admin" slot via a one-time bootstrap sentinel doc.
-// Returns true if this uid became the first admin (sentinel did not exist yet).
-async function claimFirstAdmin(uid: string): Promise<boolean> {
-  try {
-    const boot = await backend.getOne(COL.meta, 'bootstrap')
-    if (boot) return false
-    await backend.set(COL.meta, 'bootstrap', { claimedBy: uid, at: Date.now() })
-    return true
-  } catch {
-    return false
-  }
-}
-
-// Make sure the sentinel exists (called when an admin signs in) so later self-sign-ups
-// are never mistaken for the first user.
-async function ensureSentinel(uid: string): Promise<void> {
-  try {
-    const boot = await backend.getOne(COL.meta, 'bootstrap')
-    if (!boot) await backend.set(COL.meta, 'bootstrap', { claimedBy: uid, at: Date.now() })
-  } catch {
-    /* ignore */
-  }
-}
+// Notices are stored as translation keys, not translated text: these are set inside
+// callbacks that close over the language at subscribe time, and LoginPage runs them
+// through t() when it renders.
+const PENDING = 'บัญชีนี้ยังไม่ถูกเปิดใช้งาน — กรุณาให้ผู้ดูแลระบบอนุมัติก่อนเข้าใช้' // i18n-key
+const REVOKED = 'สิทธิ์การเข้าใช้ของบัญชีนี้ถูกยกเลิกแล้ว' // i18n-key
+const UNPROVISIONED =
+  'ระบบนี้ยังไม่ได้ตั้งค่า — เจ้าของต้องสร้างบัญชีผู้ดูแลคนแรกจาก Firebase Console ก่อน' // i18n-key
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [needsBootstrap, setNeedsBootstrap] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  // name entered on the "create first admin" form, used when the profile doc is created
+  // name entered on the sign-up form, used when the profile doc is created
   const pendingName = useRef<string | null>(null)
 
   // ---- initial load ----
   useEffect(() => {
-    let cancelled = false
+    let disposed = false
 
     if (BACKEND_MODE === 'cloud') {
       // IMPORTANT: never read Firestore before authentication — secure rules deny it,
-      // which would hang the app. Wait for the auth state, then read the profile.
+      // which would hang the app. Wait for the auth state, then watch the profile.
       const auth = getAuthInstance()
-      const unsub = onAuthStateChanged(auth, async (fbUser) => {
-        if (cancelled) return
+
+      // Every auth event supersedes the one before it. Signing out, or signing in as
+      // someone else, must not be undone by a slower callback from the previous account
+      // arriving late, so each round carries a generation that is re-checked after every
+      // await and on every snapshot — not only before the first one.
+      let generation = 0
+      let profileUnsub: (() => void) | null = null
+
+      const unsub = onAuthStateChanged(auth, (fbUser) => {
+        generation++
+        const gen = generation
+        profileUnsub?.()
+        profileUnsub = null
+
+        const stale = () =>
+          disposed || gen !== generation || auth.currentUser?.uid !== fbUser?.uid
+
         if (!fbUser) {
           setUser(null)
           setLoading(false)
           return
         }
-        try {
-          let profile = await backend.getOne<AppUser>(COL.users, fbUser.uid)
-          if (!profile) {
-            // Determine the first-ever user by claiming a one-time bootstrap sentinel.
-            // Non-admins can't list the users collection (by design), so we can't count —
-            // the sentinel is the reliable signal. First user => admin+active; others =>
-            // staff and INACTIVE (must be approved by an admin before they can access data).
-            const isFirst = await claimFirstAdmin(fbUser.uid)
-            await backend.set(COL.users, fbUser.uid, {
-              name: pendingName.current || fbUser.displayName || fbUser.email || 'ผู้ใช้', // stored profile name, not UI copy — i18n-key
-              email: fbUser.email || '',
-              role: isFirst ? 'admin' : 'staff',
-              active: isFirst,
+        const uid = fbUser.uid
+
+        // Refuse the session and say why. Signing out also drops anything already loaded.
+        async function reject(why: string) {
+          if (stale()) return
+          setNotice(why)
+          setUser(null)
+          try {
+            await fbSignOut(auth)
+          } catch {
+            /* the notice is the point; the next auth event settles the rest */
+          }
+          setLoading(false)
+        }
+
+        // A signed-in account with no profile is asking for access. Give it the only shape
+        // self-signup is allowed to produce — inactive staff — and let an admin approve it.
+        // For a revoked account, or a database nobody has provisioned, the rules refuse and
+        // the person is told which of the two it is instead of watching a spinner.
+        let requested = false
+        async function requestAccess() {
+          const name =
+            pendingName.current || fbUser?.displayName || fbUser?.email || 'ผู้ใช้' // stored profile name, not UI copy — i18n-key
+          try {
+            await backend.set(COL.users, uid, {
+              name,
+              email: fbUser?.email || '',
+              role: 'staff',
+              active: false,
               createdAt: Date.now(),
             })
+            if (stale()) return
             pendingName.current = null
-            profile = await backend.getOne<AppUser>(COL.users, fbUser.uid)
-          } else if (profile.role === 'admin') {
-            // Self-heal: make sure the sentinel exists so future sign-ups aren't treated
-            // as the first user (covers projects bootstrapped before this safeguard).
-            await ensureSentinel(fbUser.uid)
+            // The subscription reports the new document and decides what happens next.
+          } catch {
+            if (stale()) return
+            const provisioned = await backend.getOne(COL.meta, 'bootstrap').catch(() => null)
+            if (stale()) return
+            await reject(provisioned ? REVOKED : UNPROVISIONED)
           }
-          if (profile && profile.active === false) {
-            // Store the key, not translated text: this callback closes over the language
-            // at subscribe time, and LoginPage runs the notice through t() when it renders.
-            setNotice('บัญชีนี้ยังไม่ถูกเปิดใช้งาน — กรุณาให้ผู้ดูแลระบบอนุมัติก่อนเข้าใช้') // i18n-key
-            await fbSignOut(auth)
-            setUser(null)
-          } else {
+        }
+
+        profileUnsub = backend.subscribeOne<AppUser>(
+          COL.users,
+          uid,
+          (profile) => {
+            if (stale()) return
+            if (!profile) {
+              // Either brand new, or the profile was just deleted under a signed-in user.
+              if (requested) {
+                void reject(REVOKED)
+                return
+              }
+              requested = true
+              void requestAccess()
+              return
+            }
+            if (profile.active === false) {
+              void reject(PENDING)
+              return
+            }
+            // Live, so an admin revoking access takes effect on this screen too, not only
+            // at the next sign-in.
             setNotice(null)
             setUser(profile)
-          }
-        } catch (e) {
-          console.error('[auth] load profile failed', e)
-          setUser(null)
-        }
-        setLoading(false)
+            setLoading(false)
+          },
+          () => {
+            if (stale()) return
+            setUser(null)
+            setLoading(false)
+          },
+        )
       })
       return () => {
-        cancelled = true
+        disposed = true
+        profileUnsub?.()
         unsub()
       }
     }
@@ -127,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // local mode: read users from localStorage (no rules) and restore session
     async function initLocal() {
       const users = await backend.getAll<AppUser>(COL.users)
-      if (cancelled) return
+      if (disposed) return
       if (users.length === 0) setNeedsBootstrap(true)
       const sid = localStorage.getItem(SESSION_KEY)
       if (sid) {
@@ -136,9 +172,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false)
     }
-    initLocal()
+    void initLocal()
     return () => {
-      cancelled = true
+      disposed = true
     }
   }, [])
 
@@ -159,19 +195,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNeedsBootstrap(false)
   }
 
-  async function registerFirstAdmin(
-    name: string,
-    email: string,
-    password: string,
-  ): Promise<void> {
+  /**
+   * Ask for access to the system.
+   *
+   * In cloud mode this creates the Firebase Auth account only; the profile that follows is
+   * always INACTIVE STAFF, whoever asks and however empty the database is. Being first to
+   * reach a database is not evidence of owning it, so the first admin is created by the
+   * owner from the Firebase console instead, where the rules do not apply.
+   *
+   * In local mode there is no server to appeal to, so the first account is the admin — that
+   * mode is for trying the app out, not for real data.
+   */
+  async function signUp(name: string, email: string, password: string): Promise<void> {
     const em = email.trim().toLowerCase()
 
     if (BACKEND_MODE === 'cloud') {
-      // Don't read Firestore first (denied pre-auth). Just create the auth account;
-      // onAuthStateChanged then creates the profile doc (admin if it's the first user).
       pendingName.current = name.trim()
       await createUserWithEmailAndPassword(getAuthInstance(), em, password)
-      // onAuthStateChanged loads the profile and clears loading
+      // onAuthStateChanged creates the pending profile and reports the outcome
     } else {
       const users = await backend.getAll<AppUser>(COL.users)
       if (users.length > 0) throw new AppError('มีผู้ใช้ในระบบแล้ว กรุณาเข้าสู่ระบบ')
@@ -208,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         needsBootstrap,
         notice,
         login,
-        registerFirstAdmin,
+        signUp,
         logout,
       }}
     >

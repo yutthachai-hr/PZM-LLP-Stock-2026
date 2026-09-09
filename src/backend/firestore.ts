@@ -42,6 +42,24 @@ export function createFirestoreBackend(): Backend {
       return unsub
     },
 
+    subscribeOne<T>(
+      collection: string,
+      id: string,
+      cb: (d: T | null) => void,
+      onError?: (e: unknown) => void,
+    ): () => void {
+      const db = getDb()
+      const c = resolveCollection(collection)
+      return onSnapshot(
+        doc(db, c, id),
+        (snap) => cb(snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null),
+        (err) => {
+          console.error(`[firestore] subscribeOne ${c}/${id} failed`, err)
+          onError?.(err)
+        },
+      )
+    },
+
     async getAll<T>(collection: string): Promise<T[]> {
       const db = getDb()
       const snap = await getDocs(fbCollection(db, resolveCollection(collection)))

@@ -135,7 +135,12 @@ export const EN: Record<string, string> = {
   'อย่างน้อย 6 ตัวอักษร': 'At least 6 characters',
   สร้างบัญชีผู้ดูแล: 'Create administrator account',
   ตั้งค่าผู้ดูแลระบบคนแรก: 'Set up the first administrator',
-  'ตั้งค่าครั้งแรก / สร้างบัญชีผู้ดูแล': 'First-time setup / create administrator',
+  'ขอสิทธิ์เข้าใช้งาน': 'Request access',
+  'ชื่อของคุณ': 'Your name',
+  'ส่งคำขอเข้าใช้งาน': 'Request access',
+  'ยังไม่มีบัญชี? ขอสิทธิ์เข้าใช้งาน': 'No account yet? Request access',
+  'บัญชีใหม่จะยังเข้าใช้ข้อมูลไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ':
+    'A new account cannot see any data until an administrator approves it',
   'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ': 'Already have an account? Sign in',
   รูปแบบอีเมลไม่ถูกต้อง: 'That email address is not valid',
   'รหัสผ่านสั้นเกินไป (อย่างน้อย 6 ตัว)': 'Password is too short (at least 6 characters)',
@@ -147,6 +152,9 @@ export const EN: Record<string, string> = {
   บัญชีนี้ถูกปิดใช้งาน: 'This account has been disabled',
   'บัญชีนี้ยังไม่ถูกเปิดใช้งาน — กรุณาให้ผู้ดูแลระบบอนุมัติก่อนเข้าใช้':
     'This account is not active yet — an administrator must approve it before you can sign in',
+  'สิทธิ์การเข้าใช้ของบัญชีนี้ถูกยกเลิกแล้ว': 'This account’s access has been revoked',
+  'ระบบนี้ยังไม่ได้ตั้งค่า — เจ้าของต้องสร้างบัญชีผู้ดูแลคนแรกจาก Firebase Console ก่อน':
+    'This system has not been set up yet — the owner must create the first administrator from the Firebase console',
   'มีผู้ใช้ในระบบแล้ว กรุณาเข้าสู่ระบบ': 'An account already exists — please sign in',
   'โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้':
     'Local mode — data is stored in this browser only',
@@ -418,9 +426,16 @@ export const EN: Record<string, string> = {
   'พนักงาน (รับ/เบิก/ดู)': 'Staff (receive / issue / view)',
   เปิดใช้: 'Enable',
   ปิดใช้: 'Disable',
+  'บัญชีที่ถูกถอนสิทธิ์': 'Revoked accounts',
+  'บัญชีเหล่านี้เข้าระบบไม่ได้และสมัครใหม่ด้วยอีเมลเดิมไม่ได้ จนกว่าจะคืนสิทธิ์':
+    'These accounts cannot sign in, and cannot sign up again with the same email, until their access is restored',
+  'คืนสิทธิ์': 'Restore access',
+  'คืนสิทธิ์แล้ว — ผู้ใช้ต้องขอสิทธิ์เข้าใช้งานใหม่อีกครั้ง':
+    'Access restored — the user needs to request access again',
+  'คืนสิทธิ์ไม่สำเร็จ:': 'Could not restore access:',
   'กรอกชื่อ อีเมล และรหัสผ่าน (≥6 ตัว)': 'Enter a name, email and password (6+ characters)',
-  'ลบผู้ใช้ "{name}" ? ผู้ใช้นี้จะเข้าระบบไม่ได้อีก (ประวัติการทำรายการที่ผ่านมายังคงอยู่)':
-    'Delete user “{name}”? They will no longer be able to sign in (their past activity is kept).',
+  'ลบผู้ใช้ "{name}" ? ผู้ใช้นี้จะเข้าระบบไม่ได้อีก แม้จะสมัครใหม่ด้วยอีเมลเดิม (ประวัติการทำรายการที่ผ่านมายังคงอยู่)':
+    'Delete user “{name}”? They will no longer be able to sign in, even if they sign up again with the same email (their past activity is kept).',
   คำนวณยอดคงเหลือใหม่: 'Recalculate balances',
   คำนวณยอดคงเหลือใหม่จากประวัติเรียบร้อย: 'Balances recalculated from history',
   '“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)':

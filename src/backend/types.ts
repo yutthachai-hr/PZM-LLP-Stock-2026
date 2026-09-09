@@ -30,6 +30,19 @@ export interface Backend {
   readonly mode: 'cloud' | 'local'
   /** Live subscription: fires immediately with current docs, then on every change. Returns unsubscribe. */
   subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void
+  /**
+   * Live subscription to ONE document, reporting null while it does not exist.
+   *
+   * Needed for a document the reader is allowed to `get` but not to `list` — a staff member
+   * watching their own profile, which is how a revoked account finds out it was revoked
+   * instead of carrying on with whatever it had already loaded.
+   */
+  subscribeOne<T>(
+    collection: string,
+    id: string,
+    cb: (doc: T | null) => void,
+    onError?: (e: unknown) => void,
+  ): () => void
   getAll<T>(collection: string): Promise<T[]>
   getOne<T>(collection: string, id: string): Promise<T | null>
   /** Auto-generate id. Returns the new id (also written into the doc's `id` field). */
