@@ -105,6 +105,15 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
         </div>
       ) : (
         <div className="space-y-3 text-sm text-slate-600">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
+            <p className="font-semibold">{t("โหมดในเครื่องมีไว้ทดลองใช้ ไม่ใช่สำหรับข้อมูลจริง")}</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+              <li>{t("รหัสผ่านเก็บในเบราว์เซอร์แบบไม่เข้ารหัส ใครเปิดเครื่องนี้ได้ก็อ่านได้")}</li>
+              <li>{t("ไม่มีเซิร์ฟเวอร์ตรวจสิทธิ์ — สิทธิ์ผู้ดูแล/พนักงานเป็นแค่การซ่อนปุ่ม")}</li>
+              <li>{t("ข้อมูลอยู่แค่เบราว์เซอร์นี้ ล้างข้อมูลเบราว์เซอร์แล้วหายถาวร")}</li>
+            </ul>
+            <p className="mt-2 text-xs">{t("สำหรับสต๊อกจริง ให้เชื่อมต่อ Cloud ด้านล่าง")}</p>
+          </div>
           <p>
             {t('ตอนนี้ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น หากต้องการใช้หลายเครื่องแบบเรียลไทม์ (ฟรี) ให้สร้าง Firebase project แล้ววาง config ด้านล่าง — ดูวิธีใน README')}
           </p>

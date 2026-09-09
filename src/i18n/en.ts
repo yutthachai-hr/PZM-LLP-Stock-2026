@@ -156,6 +156,17 @@ export const EN: Record<string, string> = {
   'ระบบนี้ยังไม่ได้ตั้งค่า — เจ้าของต้องสร้างบัญชีผู้ดูแลคนแรกจาก Firebase Console ก่อน':
     'This system has not been set up yet — the owner must create the first administrator from the Firebase console',
   'มีผู้ใช้ในระบบแล้ว กรุณาเข้าสู่ระบบ': 'An account already exists — please sign in',
+  'โหมดในเครื่องมีไว้ทดลองใช้ ไม่ใช่สำหรับข้อมูลจริง':
+    'Local mode is for trying the app out, not for real data',
+  'รหัสผ่านเก็บในเบราว์เซอร์แบบไม่เข้ารหัส ใครเปิดเครื่องนี้ได้ก็อ่านได้':
+    'Passwords are stored in this browser unencrypted — anyone who can open this device can read them',
+  'ไม่มีเซิร์ฟเวอร์ตรวจสิทธิ์ — สิทธิ์ผู้ดูแล/พนักงานเป็นแค่การซ่อนปุ่ม':
+    'No server checks permissions — the admin and staff roles only hide buttons here',
+  'ข้อมูลอยู่แค่เบราว์เซอร์นี้ ล้างข้อมูลเบราว์เซอร์แล้วหายถาวร':
+    'The data lives only in this browser, and clearing site data deletes it for good',
+  'สำหรับสต๊อกจริง ให้เชื่อมต่อ Cloud ด้านล่าง': 'For real stock, connect to the cloud below',
+  'ข้อมูลในเครื่องของ "{collection}" เสียหาย อ่านไม่ได้ — ระบบหยุดไว้เพื่อไม่ให้เขียนทับ (สำเนาที่เสียถูกเก็บไว้ที่ {key})':
+    'The local data for “{collection}” is damaged and cannot be read — the app stopped rather than write over it (the damaged copy is kept at {key})',
   'โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้':
     'Local mode — data is stored in this browser only',
   '☁️ โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์':
