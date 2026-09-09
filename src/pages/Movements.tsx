@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '../components/ui'
 import { editMovementQty, voidMovement, getMovementImage } from '../services/stock'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs, dayRange } from '../lib/format'
 import { effectAt, effectOverall, stockCard } from '../lib/ledger'
@@ -112,12 +113,11 @@ export function MovementsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">{t("📜 ประวัติ / Stock Card")}</h1>
-        <p className="text-sm text-slate-500">
-          {t("ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card")}
-        </p>
-      </div>
+      <PageHeader
+        icon="history"
+        title={t("ประวัติ / Stock Card")}
+        subtitle={t("ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card")}
+      />
 
       <Card className="p-3">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -161,7 +161,8 @@ export function MovementsPage() {
         </div>
         {stockCardMode && (
           <p className="mt-2 text-xs text-emerald-700">
-            {t("📗 โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก")}
+            <Icon name="info" size={16} className="mt-0.5 shrink-0" />
+          <span>{t("โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก")}</span>
           </p>
         )}
       </Card>
@@ -209,7 +210,7 @@ export function MovementsPage() {
                               title={t("ดูรูปหลักฐาน")}
                               className="text-sm"
                             >
-                              📷
+                              <Icon name="camera" size={16} />
                             </button>
                           )}
                         </div>
@@ -221,7 +222,9 @@ export function MovementsPage() {
                       </td>
                       <td className="px-3 py-2 text-xs text-slate-500">
                         {m.fromLocationId && locationById(m.fromLocationId)?.name}
-                        {m.fromLocationId && m.toLocationId && ' → '}
+                        {m.fromLocationId && m.toLocationId && (
+                          <Icon name="arrowRight" size={12} className="mx-0.5 inline align-middle" />
+                        )}
                         {m.toLocationId && locationById(m.toLocationId)?.name}
                       </td>
                       <td

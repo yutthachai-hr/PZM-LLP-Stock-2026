@@ -248,6 +248,68 @@ export function Modal({
   )
 }
 
+/**
+ * The title block at the top of a screen.
+ *
+ * `tone` colours the icon by what the screen DOES rather than by which brand is open:
+ * receiving is inbound green, issuing is outbound red, adjusting is amber because it is a
+ * correction. Someone who has walked away mid-document and come back can tell which form
+ * they are on without reading it — which matters on a shared tablet where the last person
+ * may have left something half-keyed.
+ */
+export function PageHeader({
+  icon,
+  title,
+  subtitle,
+  tone = 'brand',
+  actions,
+}: {
+  icon: IconName
+  title: string
+  subtitle?: string
+  tone?: 'brand' | 'in' | 'out' | 'warn'
+  actions?: ReactNode
+}) {
+  const tones = {
+    brand: 'bg-brand-soft text-brand',
+    in: 'bg-in-soft text-in',
+    out: 'bg-out-soft text-out',
+    warn: 'bg-warn-soft text-warn',
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <span
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}
+      >
+        <Icon name={icon} size={22} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h1 className="text-balance text-xl font-bold leading-tight text-ink sm:text-2xl">
+          {title}
+        </h1>
+        {subtitle && <p className="text-sm text-ink-soft">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+    </div>
+  )
+}
+
+/**
+ * The commit bar for a keying form.
+ *
+ * On a phone it sticks to the bottom of the viewport, because the forms in this app run
+ * longer than a screen once a few lines are on them and the save button would otherwise
+ * sit below the fold — with the person scrolling back down to find it after every line.
+ * `env(safe-area-inset-bottom)` keeps it clear of the home indicator.
+ */
+export function FormActions({ children }: { children: ReactNode }) {
+  return (
+    <div className="sticky bottom-0 -mx-4 mt-2 flex justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-filter-none [padding-bottom:calc(0.75rem+env(safe-area-inset-bottom))] sm:[padding-bottom:0]">
+      {children}
+    </div>
+  )
+}
+
 export function EmptyState({
   icon,
   title,

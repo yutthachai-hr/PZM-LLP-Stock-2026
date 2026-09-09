@@ -140,7 +140,7 @@ export function LoginPage() {
 
         <p className="mt-4 text-center text-xs text-slate-400">
           {mode === 'cloud'
-            ? t("☁️ โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์")
+            ? t("โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์")
             : t("โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้")}
         </p>
 
@@ -151,7 +151,7 @@ export function LoginPage() {
                 onClick={() => setShowCloud(true)}
                 className="mx-auto block text-xs text-red-600 hover:underline"
               >
-                {t("☁️ เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)")}
+                {t("เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)")}
               </button>
             ) : (
               <div className="space-y-2">

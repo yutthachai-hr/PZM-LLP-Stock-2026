@@ -9,7 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 import { useData } from '../data/DataContext'
-import { Badge, Card, EmptyState, Input, Spinner } from '../components/ui'
+import { Badge, Card, EmptyState, Input, PageHeader, Spinner } from '../components/ui'
 import { ProductThumb } from '../components/ProductThumb'
 import { fmtMoney, fmtQty, formatThaiDate, todayMs } from '../lib/format'
 import type { Product, StockLocation } from '../types'
@@ -104,8 +104,8 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-800">{t("📊 ภาพรวมสต๊อก")}</h1>
-        <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+        <PageHeader icon="dashboard" title={t("ภาพรวมสต๊อก")} />
+        <div className="flex flex-wrap gap-1 rounded-lg bg-sunken p-1">
           <ScopeTab label={t("รวมทุกคลัง")} active={scope === ALL} onClick={() => setScope(ALL)} />
           {locations.map((l) => (
             <ScopeTab
@@ -135,7 +135,8 @@ export function DashboardPage() {
       {lowStock.length > 0 && (
         <Card className="border-rose-200 bg-rose-50/50 p-4">
           <div className="mb-2 flex items-center gap-2 font-semibold text-rose-700">
-            {t('⚠️ แจ้งเตือนสินค้าเหลือน้อย ({n})', { n: lowStock.length })}
+            <Icon name="warning" size={16} />
+            {t('แจ้งเตือนสินค้าเหลือน้อย ({n})', { n: lowStock.length })}
           </div>
           <div className="flex flex-wrap gap-2">
             {lowStock.slice(0, 20).map((it) => (
@@ -183,7 +184,7 @@ export function DashboardPage() {
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 p-3">
           <Input
-            placeholder={t("🔍 ค้นหาสินค้าในคลังนี้...")}
+            placeholder={t("ค้นหาสินค้าในคลังนี้…")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"

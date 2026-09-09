@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, Input, Select, Textarea } from '../components/ui'
+import { Button, Card, Field, FormActions, Input, PageHeader, Select, Textarea } from '../components/ui'
 import { LineBuilder, type Line } from '../components/LineBuilder'
 import { issueStock, consumeStock } from '../services/stock'
 import { compressImage } from '../lib/image'
@@ -18,14 +19,14 @@ export function IssuePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">{t("🚚 เบิก / โอน / ตัดออก")}</h1>
-        <p className="text-sm text-slate-500">
-          {t("โอนของไปเก็บที่สาขา หรือเบิกของออกจากคลังไปใช้/ขายหน้าร้าน — ตัดสต๊อกอัตโนมัติ")}
-        </p>
-      </div>
+      <PageHeader
+        icon="truck"
+        tone="out"
+        title={t("เบิก / โอน / ตัดออก")}
+        subtitle={t("โอนของไปเก็บที่สาขา หรือเบิกของออกจากคลังไปใช้/ขายหน้าร้าน — ตัดสต๊อกอัตโนมัติ")}
+      />
 
-      <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      <div className="flex gap-1 rounded-lg bg-sunken p-1">
         <Tab label={t("โอนไปสาขา (เก็บสต๊อก)")} active={mode === 'transfer'} onClick={() => setMode('transfer')} />
         <Tab label={t("เบิกใช้ / ตัดออก (หน้าร้าน)")} active={mode === 'consume'} onClick={() => setMode('consume')} />
       </div>
@@ -139,18 +140,24 @@ function TransferForm() {
 
       <div>
         <div className="mb-2 text-sm font-medium text-slate-700">{t("รายการสินค้า")}</div>
-        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} />
+        <LineBuilder
+          products={products}
+          lines={lines}
+          onChange={setLines}
+          availableAt={availableAt}
+          direction="out"
+        />
       </div>
 
       <Field label={t("หมายเหตุ (ไม่บังคับ)")}>
         <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
 
-      <div className="flex justify-end">
-        <Button onClick={submit} disabled={busy}>
+      <FormActions>
+        <Button onClick={submit} disabled={busy || lines.length === 0}>
           {busy ? t("กำลังบันทึก...") : t('บันทึกโอนไปสาขา ({n} รายการ)', { n: lines.length })}
         </Button>
-      </div>
+      </FormActions>
     </Card>
   )
 }
@@ -242,7 +249,13 @@ function ConsumeForm() {
 
       <div>
         <div className="mb-2 text-sm font-medium text-slate-700">{t("รายการสินค้าที่เบิก")}</div>
-        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} />
+        <LineBuilder
+          products={products}
+          lines={lines}
+          onChange={setLines}
+          availableAt={availableAt}
+          direction="out"
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -267,12 +280,13 @@ function ConsumeForm() {
               />
             ) : (
               <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-slate-300">
-                📷
+                <Icon name="camera" size={18} />
               </div>
             )}
             <div className="space-y-1">
               <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-                {t("📷 ถ่าย / เลือกรูป")}
+                <Icon name="camera" size={16} />
+            {t("ถ่าย / เลือกรูป")}
               </Button>
               {photo && (
                 <button
@@ -287,11 +301,11 @@ function ConsumeForm() {
         </Field>
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={submit} disabled={busy} variant="danger">
+      <FormActions>
+        <Button onClick={submit} disabled={busy || lines.length === 0} variant="danger">
           {busy ? t("กำลังบันทึก...") : t('บันทึกเบิกใช้ ({n} รายการ)', { n: lines.length })}
         </Button>
-      </div>
+      </FormActions>
     </Card>
   )
 }

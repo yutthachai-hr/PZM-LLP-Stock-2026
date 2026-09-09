@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
-import { Button, Card, EmptyState, Field, Input, Modal, Textarea } from '../components/ui'
+import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Textarea } from '../components/ui'
 import { createNote, updateNote, deleteNote } from '../services/notes'
 import { formatThaiDateTime } from '../lib/format'
 import type { Note } from '../types'
@@ -63,16 +64,15 @@ export function NotesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">{t("📝 บันทึกช่วยจำ")}</h1>
-          <p className="text-sm text-slate-500">{t("จดบันทึกเล็กๆ น้อยๆ หรือเรื่องสำคัญ เรียกดูได้ทุกเครื่อง")}</p>
-        </div>
-        <Button onClick={() => setCreating(true)}>{t("+ บันทึกใหม่")}</Button>
-      </div>
+      <PageHeader
+        icon="note"
+        title={t("บันทึกช่วยจำ")}
+        subtitle={t("จดบันทึกเล็กๆ น้อยๆ หรือเรื่องสำคัญ เรียกดูได้ทุกเครื่อง")}
+        actions={<Button onClick={() => setCreating(true)}>{t("+ บันทึกใหม่")}</Button>}
+      />
 
       <Input
-        placeholder={t("🔍 ค้นหาบันทึก...")}
+        placeholder={t("ค้นหาบันทึก…")}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="max-w-sm"
@@ -93,7 +93,7 @@ export function NotesPage() {
                   className="text-lg"
                   title={n.pinned ? t("เลิกปักหมุด") : t("ปักหมุด")}
                 >
-                  {n.pinned ? '📌' : '📍'}
+                  <Icon name="pin" size={16} className={n.pinned ? 'text-brand' : ''} />
                 </button>
               </div>
               <p className="flex-1 whitespace-pre-wrap text-sm text-slate-600">{n.body}</p>

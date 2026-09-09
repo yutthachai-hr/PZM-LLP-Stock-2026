@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { Icon } from './Icon'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -140,7 +141,14 @@ export function BackupSection() {
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={download} disabled={!!busy}>
-          {busy === 'backup' ? t('กำลังสำรอง...') : t('💾 ดาวน์โหลดไฟล์สำรอง')}
+          {busy === 'backup' ? (
+            t('กำลังสำรอง...')
+          ) : (
+            <>
+              <Icon name="download" size={16} />
+              {t('ดาวน์โหลดไฟล์สำรอง')}
+            </>
+          )}
         </Button>
         <input
           ref={fileRef}
@@ -150,7 +158,14 @@ export function BackupSection() {
           onChange={pickFile}
         />
         <Button variant="secondary" onClick={() => fileRef.current?.click()} disabled={!!busy}>
-          {busy === 'restore' ? t('กำลังกู้คืน...') : t('♻️ กู้คืนจากไฟล์')}
+          {busy === 'restore' ? (
+            t('กำลังกู้คืน...')
+          ) : (
+            <>
+              <Icon name="refresh" size={16} />
+              {t('กู้คืนจากไฟล์')}
+            </>
+          )}
         </Button>
       </div>
 
@@ -178,8 +193,11 @@ export function BackupSection() {
         </label>
       </fieldset>
 
-      <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-        {t('⚠️ แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง')}
+      <p className="mt-3 flex gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+        <Icon name="warning" size={16} className="mt-0.5 shrink-0" />
+        <span>
+          {t('แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง')}
+        </span>
       </p>
     </Card>
   )

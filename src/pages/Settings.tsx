@@ -4,15 +4,8 @@ import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { BackupSection } from '../components/BackupSection'
-import {
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Modal,
-  Select,
-} from '../components/ui'
+import { Icon } from '../components/Icon'
+import { Badge, Button, Card, Field, Input, Modal, PageHeader, Select } from '../components/ui'
 import {
   createLocation,
   updateLocation,
@@ -38,7 +31,7 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <h1 className="text-2xl font-bold text-slate-800">{t("⚙️ ตั้งค่า")}</h1>
+      <PageHeader icon="settings" title={t("ตั้งค่า")} />
 
       <CloudSection mode={mode} />
 
@@ -167,7 +160,11 @@ function LocationsSection() {
       <div className="divide-y divide-slate-100">
         {locations.map((l) => (
           <div key={l.id} className="flex items-center gap-3 py-2">
-            <span className="text-lg">{l.type === 'warehouse' ? '🏭' : '🏬'}</span>
+            <Icon
+              name={l.type === 'warehouse' ? 'package' : 'truck'}
+              size={18}
+              className="text-ink-faint"
+            />
             <span className="flex-1 font-medium text-slate-700">{l.name}</span>
             <Badge color={l.type === 'warehouse' ? 'blue' : 'slate'}>
               {l.type === 'warehouse' ? t("คลังหลัก") : t("สาขา")}

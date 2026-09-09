@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, EmptyState, Field, Input, Select } from '../components/ui'
+import { Button, Card, EmptyState, Field, Input, PageHeader, Select } from '../components/ui'
 import {
   dateInputToMs,
   dayRange,
@@ -258,10 +259,11 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">{t("📄 รายงาน")}</h1>
-        <p className="text-sm text-slate-500">{t("ดึงรายงานตามสาขา/วันที่/สินค้า แล้วดาวน์โหลดเป็น Excel หรือ PDF")}</p>
-      </div>
+      <PageHeader
+        icon="report"
+        title={t("รายงาน")}
+        subtitle={t("ดึงรายงานตามสาขา/วันที่/สินค้า แล้วดาวน์โหลดเป็น Excel หรือ PDF")}
+      />
 
       <Card className="space-y-4 p-4">
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
@@ -323,10 +325,24 @@ export function ReportsPage() {
             {/* Exporting mid-load writes yesterday's numbers into a file that outlives the
                 screen, so the buttons wait for the data to settle. */}
             <Button variant="success" onClick={excel} disabled={count === 0 || loading || !!busy}>
-              {busy === 'excel' ? t('กำลังสร้างไฟล์...') : '⬇️ Excel'}
+              {busy === 'excel' ? (
+                t('กำลังสร้างไฟล์...')
+              ) : (
+                <>
+                  <Icon name="download" size={16} />
+                  Excel
+                </>
+              )}
             </Button>
             <Button variant="danger" onClick={pdf} disabled={count === 0 || loading || !!busy}>
-              {busy === 'pdf' ? t('กำลังสร้างไฟล์...') : '⬇️ PDF'}
+              {busy === 'pdf' ? (
+                t('กำลังสร้างไฟล์...')
+              ) : (
+                <>
+                  <Icon name="download" size={16} />
+                  PDF
+                </>
+              )}
             </Button>
           </div>
         </div>

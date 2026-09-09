@@ -67,23 +67,29 @@ export function QtyInput({ // i18n-key
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-stretch gap-2">
+      {/* The quantity is the number being committed to the books, so it is set larger
+          than the surrounding text and in fixed-width figures — typed on a tablet, held
+          at arm's length, often by someone reading off a paper delivery note. */}
       <input
         type="number"
         step="any"
         min={0}
+        inputMode="decimal"
         value={text}
         onChange={(e) => handleText(e.target.value)}
-        className={`w-full rounded-lg border px-3 py-2 text-right text-sm outline-none focus:ring-2 focus:ring-red-100 ${
-          invalid ? 'border-rose-400' : 'border-slate-300 focus:border-red-500'
+        className={`num min-h-11 w-full rounded-lg border px-3 py-2 text-right text-base font-semibold text-ink outline-none transition-[border-color,box-shadow] duration-150 focus-visible:ring-2 ${
+          invalid
+            ? 'border-danger bg-danger-soft focus-visible:border-danger focus-visible:ring-danger/25'
+            : 'border-line-strong focus-visible:border-brand focus-visible:ring-brand/25'
         } ${className}`}
       />
       {subs.length > 0 ? (
         <select
           value={factor}
           onChange={(e) => setFactor(Number(e.target.value))}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm outline-none focus:border-red-500"
-          title={t("เลือกหน่วยที่กรอก")}
+          className="min-h-11 shrink-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
+          aria-label={t("เลือกหน่วยที่กรอก")}
         >
           <option value={1}>{unitType}</option>
           {subs.map((s) => (
@@ -93,7 +99,7 @@ export function QtyInput({ // i18n-key
           ))}
         </select>
       ) : (
-        <span className="w-12 shrink-0 text-sm text-slate-500">{unitType}</span>
+        <span className="flex w-12 shrink-0 items-center text-sm text-ink-soft">{unitType}</span>
       )}
     </div>
   )

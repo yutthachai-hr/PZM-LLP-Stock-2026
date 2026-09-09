@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, Input, Select, Textarea } from '../components/ui'
+import { Button, Card, Field, FormActions, Input, PageHeader, Select, Textarea } from '../components/ui'
 import { ProductThumb } from '../components/ProductThumb'
 import { QtyInput } from '../components/QtyInput'
 import { adjustStock } from '../services/stock'
@@ -74,10 +74,12 @@ export function AdjustPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">{t("🔧 ปรับสต๊อก")}</h1>
-        <p className="text-sm text-slate-500">{t("แก้ไขยอดกรณีของหาย เสียหาย หมดอายุ หรือปรับตามการนับจริง")}</p>
-      </div>
+      <PageHeader
+        icon="adjust"
+        tone="warn"
+        title={t("ปรับสต๊อก")}
+        subtitle={t("แก้ไขยอดกรณีของหาย เสียหาย หมดอายุ หรือปรับตามการนับจริง")}
+      />
 
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -112,7 +114,7 @@ export function AdjustPage() {
           ) : (
             <div className="relative">
               <Input
-                placeholder={t("🔍 ค้นหาสินค้า")}
+                placeholder={t("ค้นหาสินค้า")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -176,11 +178,11 @@ export function AdjustPage() {
           </div>
         )}
 
-        <div className="flex justify-end">
+        <FormActions>
           <Button onClick={submit} disabled={busy}>
             {busy ? t("กำลังบันทึก...") : t("บันทึกการปรับ")}
           </Button>
-        </div>
+        </FormActions>
       </Card>
     </div>
   )

@@ -103,11 +103,13 @@ export const EN: Record<string, string> = {
   'มีเวอร์ชันใหม่ของระบบพร้อมใช้งานแล้ว': 'A new version of the system is ready',
   'อัปเดตตอนนี้': 'Update now',
   'ไว้ทีหลัง': 'Later',
+  'รายการ': 'items',
+  'ลบ "{name}" ออกจากรายการ': 'Remove “{name}” from this document',
   'สำรอง / กู้คืนข้อมูล': 'Backup & restore',
   'ดาวน์โหลดข้อมูลทั้งหมดของ {brand} เป็นไฟล์เดียว แล้วเก็บไว้ใน Google Drive หรือ OneDrive':
     'Download everything in {brand} as a single file and keep it in Google Drive or OneDrive',
-  '💾 ดาวน์โหลดไฟล์สำรอง': '💾 Download backup',
-  '♻️ กู้คืนจากไฟล์': '♻️ Restore from file',
+  'ดาวน์โหลดไฟล์สำรอง': 'Download backup',
+  'กู้คืนจากไฟล์': 'Restore from file',
   'กำลังสำรอง...': 'Backing up…',
   'กำลังกู้คืน...': 'Restoring…',
   'สำรองข้อมูลแล้ว {n} รายการ': 'Backed up {n} records',
@@ -118,8 +120,8 @@ export const EN: Record<string, string> = {
   ไฟล์นี้ไม่ใช่ไฟล์สำรองข้อมูลของระบบ: 'That file is not a backup from this system',
   'ไฟล์นี้สำรองจาก {brand} เมื่อ {when} — มี {n} รายการ':
     'This backup is from {brand}, taken {when} — {n} records',
-  '⚠️ แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง':
-    '⚠️ The free Firebase plan has no point-in-time recovery — a mistaken delete cannot be undone. Take a backup at least once a week.',
+  'แผนฟรีของ Firebase ไม่มีระบบกู้ข้อมูลย้อนหลัง ถ้าลบผิดจะกู้ไม่ได้เลย — ควรกดสำรองอย่างน้อยสัปดาห์ละครั้ง':
+    'The free Firebase plan has no point-in-time recovery — a mistaken delete cannot be undone. Take a backup at least once a week.',
   'แสดงประวัติตั้งแต่ {date}': 'History loaded from {date}',
   โหลดประวัติทั้งหมด: 'Load full history',
   คงเหลือต้นทาง: 'Source on hand',
@@ -127,7 +129,7 @@ export const EN: Record<string, string> = {
   'คงเหลือหลังปรับ:': 'On hand after adjustment:',
   'แก้ไข:': 'Edited by:',
   คลังหลัก: 'Warehouse',
-  '⚠️ แจ้งเตือนสินค้าเหลือน้อย ({n})': '⚠️ Low stock alerts ({n})',
+  'แจ้งเตือนสินค้าเหลือน้อย ({n})': 'Low stock alerts ({n})',
   'และอีก {n} รายการ...': 'and {n} more…',
   'พบ {n} รายการ': '{n} found',
   'แสดงตัวอย่าง — ไฟล์ดาวน์โหลดจะมีครบทั้ง {n} รายการ':
@@ -148,7 +150,7 @@ export const EN: Record<string, string> = {
   ตั้งค่า: 'Settings',
   ระบบบริหารสต๊อก: 'Stock management',
   ออกจากระบบ: 'Sign out',
-  'สลับแบรนด์': '🔄 Switch brand',
+  'สลับแบรนด์': 'Switch brand',
   ในเครื่อง: 'Local',
   โหมดในเครื่อง: 'Local mode',
   ผู้ดูแลระบบ: 'Administrator',
@@ -210,9 +212,9 @@ export const EN: Record<string, string> = {
     'The local data for “{collection}” is damaged and cannot be read — the app stopped rather than write over it (the damaged copy is kept at {key})',
   'โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้':
     'Local mode — data is stored in this browser only',
-  '☁️ โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์':
-    '☁️ Cloud mode — data syncs across devices in real time',
-  '☁️ เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)': '☁️ Connect to Cloud (multi-device, real time)',
+  'โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์':
+    'Cloud mode — data syncs across devices in real time',
+  'เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)': 'Connect to Cloud (multi-device, real time)',
   'เชื่อมต่อ Cloud': 'Connect to Cloud',
   'จาก Firebase Console:': 'From the Firebase Console:',
   วางค่า: 'Paste config',
@@ -220,7 +222,7 @@ export const EN: Record<string, string> = {
     'Could not read that config — paste the whole object { apiKey: …, projectId: …, appId: … }',
 
   // ---- dashboard ---------------------------------------------------------------
-  '📊 ภาพรวมสต๊อก': '📊 Stock overview',
+  'ภาพรวมสต๊อก': 'Stock overview',
   'กำลังโหลดภาพรวม...': 'Loading dashboard…',
   จำนวนสินค้า: 'Products',
   มูลค่าสต๊อก: 'Stock value',
@@ -231,7 +233,7 @@ export const EN: Record<string, string> = {
   เคลื่อนไหววันนี้: 'Movements today',
   'ใกล้/ต่ำกว่าขั้นต่ำ': 'At or below minimum',
   ไม่พบสินค้า: 'No products found',
-  '🔍 ค้นหาสินค้าในคลังนี้...': '🔍 Search products in this location…',
+  'ค้นหาสินค้าในคลังนี้…': 'Search products in this location…',
   '* มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า':
     '* Value appears once you enter a unit cost on the product page',
 
@@ -265,7 +267,6 @@ export const EN: Record<string, string> = {
   คงเหลือรวม: 'Total on hand',
   'ล้างตัวกรอง ({n})': 'Clear filters ({n})',
   'แสดง {shown} จาก {total} รายการ': 'Showing {shown} of {total}',
-  '{n} รายการ': '{n} items',
   'SKU / รหัส': 'SKU / code',
   แก้ไขสินค้า: 'Edit product',
   ลบสินค้า: 'Delete product',
@@ -275,7 +276,7 @@ export const EN: Record<string, string> = {
   'เช่น KG, EA, Pack': 'e.g. KG, EA, Pack',
   'สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อถึง)': 'Minimum stock (alert threshold)',
   'ต้นทุน/หน่วย (ไม่บังคับ)': 'Cost per unit (optional)',
-  '📷 เลือกรูป / ถ่ายรูป': '📷 Choose or take a photo',
+  'เลือกรูป / ถ่ายรูป': 'Choose or take a photo',
   รูปจะถูกย่อให้เล็กอัตโนมัติ: 'Photos are compressed automatically',
   'ยอดคงเหลือปัจจุบัน (พิมพ์จำนวนที่มีจริง)': 'Current balance (enter the real count)',
   'แก้ตัวเลขให้ตรงกับของจริงในคลัง — ระบบจะบันทึกเป็นรายการ “ตั้งยอด/ยอดยกมา” ให้อัตโนมัติ (เก็บประวัติครบ)':
@@ -286,10 +287,9 @@ export const EN: Record<string, string> = {
   บันทึกการแก้ไขแล้ว: 'Changes saved',
   'ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ':
     'Delete “{name}”? Movement history is kept, but the product leaves the list.',
-  '⬇️ นำเข้าแคตตาล็อกสินค้า ({n} รายการ)': '⬇️ Import product catalogue ({n} items)',
-  '♻️ ล้างและนำเข้าใหม่': '♻️ Reset and re-import',
+  'นำเข้าแคตตาล็อกสินค้า ({n} รายการ)': 'Import product catalogue ({n} items)',
+  'ล้างและนำเข้าใหม่': 'Reset and re-import',
   ล้างและนำเข้าสินค้าใหม่: 'Reset and re-import products',
-  ล้างและนำเข้าใหม่: 'Reset and re-import',
   'ลบสินค้าทั้ง {count} รายการของ {brand} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า {catalog} รายการแทน?':
     'Delete all {count} products in {brand} (including their photos and balances) and import the {catalog} items from the official item-code file instead?',
   'ประวัติการเคลื่อนไหวจะยังอยู่ครบ แต่ยอดคงเหลือที่นับไว้จะหายทั้งหมด — ย้อนกลับไม่ได้':
@@ -304,7 +304,6 @@ export const EN: Record<string, string> = {
   อ่านรูปไม่สำเร็จ: 'Could not read that image',
 
   // ---- receive -----------------------------------------------------------------
-  '📥 รับสินค้าเข้า': '📥 Receive stock',
   'คีย์รับสินค้าใหม่ → เพิ่มเข้าคลังอัตโนมัติ':
     'Record incoming stock — balances update automatically',
   วันที่รับ: 'Received on',
@@ -322,7 +321,7 @@ export const EN: Record<string, string> = {
   'รับสินค้าเข้าเรียบร้อย (เลขที่ {docNo})': 'Stock received (doc no. {docNo})',
 
   // ---- issue / transfer --------------------------------------------------------
-  '🚚 เบิก / โอน / ตัดออก': '🚚 Issue / Transfer / Write-off',
+  'เบิก / โอน / ตัดออก': 'Issue / Transfer / Write-off',
   'โอนของไปเก็บที่สาขา หรือเบิกของออกจากคลังไปใช้/ขายหน้าร้าน — ตัดสต๊อกอัตโนมัติ':
     'Move stock to a branch, or issue it for use and sale — balances update automatically',
   'โอนไปสาขา (เก็บสต๊อก)': 'Transfer to branch (keeps stock)',
@@ -348,13 +347,12 @@ export const EN: Record<string, string> = {
   'เบิก/โอนเรียบร้อย (เลขที่ {docNo})': 'Issue / transfer saved (doc no. {docNo})',
   'สต๊อกไม่พอสำหรับ "{name}"': 'Not enough stock for “{name}”',
   'รูปหลักฐาน (แนบได้ทุกครั้ง)': 'Proof photo (optional every time)',
-  '📷 ถ่าย / เลือกรูป': '📷 Take or choose a photo',
+  'ถ่าย / เลือกรูป': 'Take or choose a photo',
   ลบรูป: 'Remove photo',
   หลักฐาน: 'Proof',
   สุขุมวิท: 'Sukhumvit',
 
   // ---- adjust ------------------------------------------------------------------
-  '🔧 ปรับสต๊อก': '🔧 Adjust stock',
   'แก้ไขยอดกรณีของหาย เสียหาย หมดอายุ หรือปรับตามการนับจริง':
     'Correct balances for loss, damage, expiry, or a physical count',
   'คลัง/สาขา': 'Location',
@@ -382,7 +380,7 @@ export const EN: Record<string, string> = {
   'ยกเลิกไม่ได้: ของจากรายการนี้ถูกใช้ต่อไปแล้ว (คงเหลือ {qty} จาก {need}) — ให้บันทึกรายการปรับสต๊อกแทน':
     'Cannot void: the goods from this document have already been passed on ({qty} left of {need}) — record a stock adjustment instead',
   'จำนวนต้องมากกว่า 0': 'Quantity must be greater than 0',
-  '🔍 ค้นหาสินค้า': '🔍 Search products',
+  'ค้นหาสินค้า': 'Search products',
 
   // ---- adjust reasons (types.ts) ----------------------------------------------
   ของหาย: 'Lost',
@@ -394,11 +392,11 @@ export const EN: Record<string, string> = {
   'ตั้งยอด/ยอดยกมา': 'Opening balance',
 
   // ---- movements / stock card --------------------------------------------------
-  '📜 ประวัติ / Stock Card': '📜 History / Stock card',
+  'ประวัติ / Stock Card': 'History / Stock card',
   'ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card':
     'Every movement is recorded permanently — pick a product and location to see it as a stock card',
-  '📗 โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก':
-    '📗 Stock card mode: running balance for this product at the selected location',
+  'โหมด Stock Card: แสดงยอดคงเหลือสะสมของสินค้านี้ที่คลังที่เลือก':
+    'Stock card mode: running balance for this product at the selected location',
   ทุกสินค้า: 'All products',
   ทุกคลัง: 'All locations',
   ตั้งแต่วันที่: 'From date',
@@ -422,7 +420,6 @@ export const EN: Record<string, string> = {
   ไม่พบรูป: 'No photo found',
 
   // ---- reports -----------------------------------------------------------------
-  '📄 รายงาน': '📄 Reports',
   'ดึงรายงานตามสาขา/วันที่/สินค้า แล้วดาวน์โหลดเป็น Excel หรือ PDF':
     'Build a report by location, date or product, then download it as Excel or PDF',
   สต๊อกคงเหลือ: 'Stock on hand',
@@ -442,7 +439,6 @@ export const EN: Record<string, string> = {
   'รายงานการเคลื่อนไหว_{ts}': 'stock_movements_{ts}',
 
   // ---- notes -------------------------------------------------------------------
-  '📝 บันทึกช่วยจำ': '📝 Notes',
   'จดบันทึกเล็กๆ น้อยๆ หรือเรื่องสำคัญ เรียกดูได้ทุกเครื่อง':
     'Jot down reminders and important details — available on every device',
   '+ บันทึกใหม่': '+ New note',
@@ -459,10 +455,9 @@ export const EN: Record<string, string> = {
   เลิกปักหมุด: 'Unpin',
   '(ไม่มีหัวข้อ)': '(untitled)',
   'ลบ "{title}" ?': 'Delete “{title}”?',
-  '🔍 ค้นหาบันทึก...': '🔍 Search notes…',
+  'ค้นหาบันทึก…': 'Search notes…',
 
   // ---- settings ----------------------------------------------------------------
-  '⚙️ ตั้งค่า': '⚙️ Settings',
   'คลัง / สาขา': 'Locations',
   ผู้ใช้งาน: 'Users',
   ดูแลข้อมูล: 'Data maintenance',
@@ -539,7 +534,7 @@ export const EN: Record<string, string> = {
 
   // ---- line builder / qty input -----------------------------------------------
   'ยังไม่มีรายการ — ค้นหาด้านบนเพื่อเพิ่มสินค้า': 'No items yet — search above to add one',
-  '🔍 ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / SKU)': '🔍 Search a product to add (name / SKU)',
+  'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)': 'Search a product to add (name / SKU)',
   เลือกหน่วยที่กรอก: 'Entry unit',
   'กรัม (g)': 'Grams (g)',
   'มล. (ml)': 'Millilitres (ml)',

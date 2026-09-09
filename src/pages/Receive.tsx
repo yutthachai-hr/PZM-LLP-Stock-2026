@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, Input, Select, Textarea } from '../components/ui'
+import { Button, Card, Field, FormActions, Input, PageHeader, Select, Textarea } from '../components/ui'
 import { LineBuilder, type Line } from '../components/LineBuilder'
 import { receiveStock } from '../services/stock'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
@@ -58,10 +58,12 @@ export function ReceivePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">{t("📥 รับสินค้าเข้า")}</h1>
-        <p className="text-sm text-slate-500">{t("คีย์รับสินค้าใหม่ → เพิ่มเข้าคลังอัตโนมัติ")}</p>
-      </div>
+      <PageHeader
+        icon="receive"
+        tone="in"
+        title={t("รับสินค้าเข้า")}
+        subtitle={t("คีย์รับสินค้าใหม่ → เพิ่มเข้าคลังอัตโนมัติ")}
+      />
 
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -83,8 +85,8 @@ export function ReceivePage() {
         </div>
 
         <div>
-          <div className="mb-2 text-sm font-medium text-slate-700">{t("รายการสินค้า")}</div>
-          <LineBuilder products={products} lines={lines} onChange={setLines} />
+          <div className="mb-2 text-sm font-medium text-ink">{t("รายการสินค้า")}</div>
+          <LineBuilder products={products} lines={lines} onChange={setLines} direction="in" />
         </div>
 
         <Field
@@ -100,11 +102,11 @@ export function ReceivePage() {
           />
         </Field>
 
-        <div className="flex justify-end gap-2">
-          <Button onClick={submit} disabled={busy} variant="success">
+        <FormActions>
+          <Button onClick={submit} disabled={busy || lines.length === 0} variant="success">
             {busy ? t("กำลังบันทึก...") : t('บันทึกรับเข้า ({n} รายการ)', { n: lines.length })}
           </Button>
-        </div>
+        </FormActions>
       </Card>
     </div>
   )

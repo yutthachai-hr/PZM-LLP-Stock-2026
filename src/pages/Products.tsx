@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
@@ -192,19 +193,35 @@ export function ProductsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">{t("สินค้าคงคลัง")}</h1>
-          <p className="text-sm text-slate-500">{t('{n} รายการ', { n: products.length })}</p>
+          <h1 className="text-xl font-bold text-ink sm:text-2xl">{t("สินค้าคงคลัง")}</h1>
+          <p className="text-sm text-ink-soft">
+            <span className="num">{products.length}</span> {t('รายการ')}
+          </p>
         </div>
         {isAdmin && (
           <div className="flex gap-2">
             {products.length === 0 && catalogCount > 0 && (
               <Button variant="secondary" onClick={handleSeed} disabled={seeding}>
-                {seeding ? t("กำลังนำเข้า...") : t('⬇️ นำเข้าแคตตาล็อกสินค้า ({n} รายการ)', { n: catalogCount })}
+                {seeding ? (
+                  t("กำลังนำเข้า...")
+                ) : (
+                  <>
+                    <Icon name="download" size={16} />
+                    {t('นำเข้าแคตตาล็อกสินค้า ({n} รายการ)', { n: catalogCount })}
+                  </>
+                )}
               </Button>
             )}
             {products.length > 0 && catalogCount > 0 && (
               <Button variant="secondary" onClick={handleReset} disabled={resetting}>
-                {resetting ? t("กำลังนำเข้า...") : t("♻️ ล้างและนำเข้าใหม่")}
+                {resetting ? (
+                  t("กำลังนำเข้า...")
+                ) : (
+                  <>
+                    <Icon name="refresh" size={16} />
+                    {t("ล้างและนำเข้าใหม่")}
+                  </>
+                )}
               </Button>
             )}
             <Button onClick={() => setCreating(true)}>{t("+ เพิ่มสินค้า")}</Button>
@@ -266,7 +283,7 @@ export function ProductsPage() {
               <option value="">{t("ทุกคลังรวมกัน")}</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.type === 'warehouse' ? '🏭' : '🏬'} {l.name}
+                  {l.name}
                 </option>
               ))}
             </Select>
@@ -571,7 +588,8 @@ function ProductEditor({
                 onChange={pickImage}
               />
               <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-                {t("📷 เลือกรูป / ถ่ายรูป")}
+                <Icon name="camera" size={16} />
+              {t("เลือกรูป / ถ่ายรูป")}
               </Button>
               {preview && (
                 <Button
@@ -671,7 +689,7 @@ function ProductEditor({
             {locations.map((l) => (
               <div key={l.id} className="flex items-center gap-2">
                 <span className="flex-1 truncate text-sm text-slate-600">
-                  {l.type === 'warehouse' ? '🏭' : '🏬'} {l.name}
+                  {l.name}
                 </span>
                 <input
                   type="number"
