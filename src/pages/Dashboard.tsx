@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -22,6 +22,12 @@ export function DashboardPage() {
   const { products, locations, qtyAt, minFor, movements, loading } = useData()
   const [scope, setScope] = useState<string>(ALL)
   const [search, setSearch] = useState('')
+  // Recomputed on the hour so a screen left open overnight rolls over to the new day.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
 
   const scopeLocations = useMemo(
     () => (scope === ALL ? locations : locations.filter((l) => l.id === scope)),
@@ -54,10 +60,22 @@ export function DashboardPage() {
       value += q * (p.cost ?? 0)
       if (q <= 0) outCount++
     }
+    // `date >= today` had no upper bound, so a receipt dated next week counted as today's
+    // activity, and it ignored the location filter every other number on this screen obeys.
     const today = todayMs()
-    const todayMoves = movements.filter((m) => !m.voided && m.date >= today).length
+    const tomorrow = today + 86_400_000
+    const inScope = new Set(scopeLocations.map((l) => l.id))
+    const todayMoves = movements.filter(
+      (m) =>
+        !m.voided &&
+        m.date >= today &&
+        m.date < tomorrow &&
+        (scope === ALL ||
+          (m.fromLocationId && inScope.has(m.fromLocationId)) ||
+          (m.toLocationId && inScope.has(m.toLocationId))),
+    ).length
     return { value, outCount, todayMoves }
-  }, [products, scopeLocations, movements, qtyAt])
+  }, [products, scopeLocations, movements, qtyAt, scope])
 
   const byCategory = useMemo(() => {
     const map = new Map<string, number>()

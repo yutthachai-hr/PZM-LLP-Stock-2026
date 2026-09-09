@@ -49,7 +49,7 @@ const SORTS: { value: SortKey; label: string }[] = [
 
 export function ProductsPage() {
   const t = useT()
-  const { products, locations, qtyAt, loading } = useData()
+  const { products, locations, qtyAt, minFor, loading } = useData()
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast()
@@ -80,6 +80,18 @@ export function ProductsPage() {
     return (productId: string) => active.reduce((sum, l) => sum + qtyAt(l.id, productId), 0)
   }, [locations, locId, qtyAt])
 
+  /**
+   * The minimum this list should judge a product against.
+   *
+   * With a location chosen, that is the per-location override — the same number the
+   * dashboard and the reports use. This page used the global `minStock` everywhere, so a
+   * product with a global minimum of 5, an override of 20 at the branch and 10 on hand read
+   * as "low" on the dashboard and "normal" here, and the "low stock" filter did not find it.
+   */
+  const minShown = useMemo(() => {
+    return (p: Product) => (locId ? minFor(p, locId) : p.minStock)
+  }, [locId, minFor])
+
   const filterCount =
     (search.trim() ? 1 : 0) + (cat ? 1 : 0) + (status !== 'all' ? 1 : 0) + (locId ? 1 : 0)
 
@@ -108,7 +120,8 @@ export function ProductsPage() {
       const qty = shownQty(p.id)
       if (status === 'out') return qty <= 0
       if (status === 'in') return qty > 0
-      return p.minStock > 0 && qty <= p.minStock
+      const min = minShown(p)
+      return min > 0 && qty <= min
     }
     return products
       .filter((p) => (cat ? p.category === cat : true))
@@ -130,7 +143,7 @@ export function ProductsPage() {
             return a.name.localeCompare(b.name)
         }
       })
-  }, [products, search, searchIn, cat, status, sort, shownQty])
+  }, [products, search, searchIn, cat, status, sort, shownQty, minShown])
 
   async function handleSeed() {
     setSeeding(true)
@@ -317,7 +330,7 @@ export function ProductsPage() {
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((p) => {
                   const total = shownQty(p.id)
-                  const low = p.minStock > 0 && total <= p.minStock
+                  const low = minShown(p) > 0 && total <= minShown(p)
                   return (
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2">
@@ -340,7 +353,7 @@ export function ProductsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-500">{fmtQty(p.minStock)}</td>
+                      <td className="px-3 py-2 text-right text-slate-500">{fmtQty(minShown(p))}</td>
                       <td className="px-3 py-2 text-slate-600">{p.unitType}</td>
                       <td className="px-3 py-2 text-right">
                         <Button variant="ghost" onClick={() => setEditing(p)}>
@@ -403,6 +416,8 @@ function ProductEditor({
   const [imageLoaded, setImageLoaded] = useState(!product?.hasImage)
   const [removeImg, setRemoveImg] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** Set once this dialog has created a product, so a retry updates it instead of adding another. */
+  const [createdId, setCreatedId] = useState<string | null>(null)
   // current on-hand quantity per location (editable) + the original values to detect changes
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [origCounts, setOrigCounts] = useState<Record<string, number>>({})
@@ -451,11 +466,16 @@ function ProductEditor({
     if (!form.category.trim()) return toast.error(t("กรุณาใส่หมวดหมู่"))
     setBusy(true)
     try {
-      let id = product?.id
+      // Saving is several writes: the product, then its image, then a stock count per
+      // location. If a later one failed, the dialog stayed open still believing it was
+      // creating something new, so pressing save again made a SECOND product. Remembering
+      // the id the first attempt created turns a retry into finishing the job.
+      let id = product?.id ?? createdId
       if (id) {
         await updateProduct(id, form)
       } else {
         id = await createProduct(form)
+        setCreatedId(id)
       }
       // image handling
       if (newImg) {

@@ -1,4 +1,4 @@
-import type { Backend, SubscribeOptions, TxContext } from './types'
+import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 
@@ -121,6 +121,19 @@ function commitAll(entries: [string, DocMap][]): void {
 
 function clone<T>(v: T): T {
   return v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T)
+}
+
+/** Apply a patch, honouring DELETE_FIELD so both backends mean the same by "cleared". */
+function applyPatch(
+  existing: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...existing }
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === DELETE_FIELD) delete out[k]
+    else out[k] = clone(v)
+  }
+  return out
 }
 
 function genId(): string {
@@ -304,7 +317,7 @@ export function createLocalBackend(brand?: BrandId): Backend {
       return serialize(async () => {
         const map = loadMap(c)
         const existing = Object.hasOwn(map, id) ? map[id] : { id }
-        map[id] = { ...existing, ...patch, id }
+        map[id] = { ...applyPatch(existing, patch), id }
         commit(c, map)
       })
     },
@@ -351,7 +364,7 @@ export function createLocalBackend(brand?: BrandId): Backend {
             const c = resolve(col)
             const m = load(c)
             const existing = Object.hasOwn(m, id) ? m[id] : { id }
-            m[id] = { ...existing, ...clone(patch), id }
+            m[id] = { ...applyPatch(existing, patch), id }
             dirty.add(c)
           },
           delete(col, id) {

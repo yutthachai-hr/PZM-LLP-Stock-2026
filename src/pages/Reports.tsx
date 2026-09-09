@@ -2,16 +2,22 @@ import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
+import { useToast } from '../components/Toast'
 import { Button, Card, EmptyState, Field, Input, Select } from '../components/ui'
 import {
   dateInputToMs,
+  dayRange,
   fmtMoney,
   fmtQty,
   formatThaiDate,
   formatThaiDateTime,
 } from '../lib/format'
-import type { MovementType, StockMovement } from '../types'
+import { stockCard } from '../lib/ledger'
+import { useBrand } from '../brand/BrandContext'
+import { brandDef } from '../brand/brand'
+import type { MovementType } from '../types'
 import { useT } from '../i18n/I18nContext'
+import { errText } from '../i18n/AppError'
 
 const TYPE_LABEL: Record<MovementType, string> = {
   receive: 'รับเข้า', // i18n-key
@@ -24,8 +30,14 @@ type ReportMode = 'movement' | 'snapshot'
 
 export function ReportsPage() {
   const t = useT()
-  const { movements, products, locations, locationById, qtyAt, minFor, ensureMovementsFrom } = useData()
+  const { movements, products, locations, locationById, qtyAt, minFor, ensureMovementsFrom, loading, movementsFrom } =
+    useData()
   const { user } = useAuth()
+  const toast = useToast()
+  const { brand } = useBrand()
+  // Reports carry the company's name. Both PDFs used to say Pizza Mania whichever brand
+  // was open, so a Le Lapin report went out under the wrong company.
+  const company = brand ? brandDef(brand).name : ''
 
   const [mode, setMode] = useState<ReportMode>('movement')
   const [locationId, setLocationId] = useState('')
@@ -33,6 +45,7 @@ export function ReportsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
+  const [busy, setBusy] = useState('')
 
   // Picking a date before the loaded window would silently show nothing, so widen it.
   // Clearing the date does NOT widen: that is the default state, and loading the whole
@@ -43,34 +56,30 @@ export function ReportsPage() {
   }, [fromStr, ensureMovementsFrom])
 
   // ---------- movement dataset ----------
-  const movementRows = useMemo(() => {
-    const fromMs = fromStr ? dateInputToMs(fromStr) : -Infinity
-    const toMs = toStr ? dateInputToMs(toStr) + 86_400_000 : Infinity
-    const list = movements
-      .filter((m) => !m.voided)
-      .filter((m) => (productId ? m.productId === productId : true))
-      .filter((m) =>
-        locationId ? m.fromLocationId === locationId || m.toLocationId === locationId : true,
-      )
-      .filter((m) => (typeFilter ? m.type === typeFilter : true))
-      .filter((m) => m.date >= fromMs && m.date <= toMs)
-      .sort((a, b) => a.date - b.date || a.createdAt - b.createdAt)
-
-    // running balance only meaningful for a single product + single location
-    const withBalance = !!productId && !!locationId
-    let bal = 0
-    return list.map((m) => {
-      const inQty = inAt(m, locationId, typeFilter)
-      const outQty = outAt(m, locationId, typeFilter)
-      if (withBalance) bal += inQty - outQty
-      return {
-        m,
-        inQty,
-        outQty,
-        balance: withBalance ? bal : null,
-      }
+  // Balances come from every movement in scope, not from the rows that survived the
+  // filters — otherwise a period that opens with stock already on the shelf reports its
+  // first issue as a negative balance.
+  const card = useMemo(() => {
+    const { from, to } = dayRange(fromStr, toStr)
+    return stockCard(movements, {
+      productId: productId || undefined,
+      locationId: locationId || undefined,
+      from,
+      to,
+      type: (typeFilter || '') as MovementType | '',
     })
   }, [movements, productId, locationId, typeFilter, fromStr, toStr])
+
+  const movementRows = useMemo(
+    () =>
+      card.rows.map((r) => ({
+        m: r.movement,
+        inQty: r.inQty,
+        outQty: r.outQty,
+        balance: productId && locationId ? r.balance : null,
+      })),
+    [card, productId, locationId],
+  )
 
   // ---------- snapshot dataset ----------
   const snapshotRows = useMemo(() => {
@@ -104,12 +113,16 @@ export function ReportsPage() {
 
   const branchName = locationId ? locationById(locationId)?.name ?? '' : t('ทุกคลัง')
   const productName = productId ? products.find((p) => p.id === productId)?.name ?? '' : t('ทุกสินค้า')
+  // "All" was a lie by default: the ledger only holds a recent window unless the whole
+  // history has been fetched, and the PDF said "all" while showing 90 days.
   const rangeText =
     fromStr || toStr
       ? `${fromStr ? formatThaiDate(dateInputToMs(fromStr)) : t('เริ่มต้น')} - ${
           toStr ? formatThaiDate(dateInputToMs(toStr)) : t('ปัจจุบัน')
         }`
-      : t('ทั้งหมด')
+      : movementsFrom > 0
+        ? t('ตั้งแต่ {date} (เท่าที่โหลดไว้)', { date: formatThaiDate(movementsFrom) })
+        : t('ทั้งหมด')
 
   const showBalance = !!productId && !!locationId && mode === 'movement'
 
@@ -124,6 +137,29 @@ export function ReportsPage() {
 
   // ---------- exports (libraries lazy-loaded to keep initial load light) ----------
   async function excel() {
+    setBusy('excel')
+    try {
+      await buildExcel()
+    } catch (e) {
+      // An export that fails silently leaves someone waiting for a file that is not coming.
+      toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function pdf() {
+    setBusy('pdf')
+    try {
+      await buildPdf()
+    } catch (e) {
+      toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function buildExcel() {
     const { exportExcel } = await import('../lib/export')
     if (mode === 'movement') {
       const rows = movementRows.map(({ m, inQty, outQty, balance }) => ({
@@ -158,7 +194,7 @@ export function ReportsPage() {
     }
   }
 
-  async function pdf() {
+  async function buildPdf() {
     const { exportReportPdf } = await import('../lib/export')
     if (mode === 'movement') {
       const head = [
@@ -191,7 +227,7 @@ export function ReportsPage() {
       ])
       exportReportPdf({
         filename: t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }),
-        title: t("รายงานการเคลื่อนไหวสต๊อก — Pizza Mania"),
+        title: t('รายงานการเคลื่อนไหวสต๊อก — {company}', { company }),
         meta: metaLines(),
         head,
         body,
@@ -210,7 +246,7 @@ export function ReportsPage() {
       ])
       exportReportPdf({
         filename: t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }),
-        title: t("รายงานสต๊อกคงเหลือ — Pizza Mania"),
+        title: t('รายงานสต๊อกคงเหลือ — {company}', { company }),
         meta: metaLines(),
         head,
         body,
@@ -280,13 +316,17 @@ export function ReportsPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-          <span className="text-sm text-slate-500">{t('พบ {n} รายการ', { n: count })}</span>
+          <span className="text-sm text-slate-500">
+            {loading ? t('กำลังโหลดข้อมูล...') : t('พบ {n} รายการ', { n: count })}
+          </span>
           <div className="flex gap-2">
-            <Button variant="success" onClick={excel} disabled={count === 0}>
-              ⬇️ Excel
+            {/* Exporting mid-load writes yesterday's numbers into a file that outlives the
+                screen, so the buttons wait for the data to settle. */}
+            <Button variant="success" onClick={excel} disabled={count === 0 || loading || !!busy}>
+              {busy === 'excel' ? t('กำลังสร้างไฟล์...') : '⬇️ Excel'}
             </Button>
-            <Button variant="danger" onClick={pdf} disabled={count === 0}>
-              ⬇️ PDF
+            <Button variant="danger" onClick={pdf} disabled={count === 0 || loading || !!busy}>
+              {busy === 'pdf' ? t('กำลังสร้างไฟล์...') : '⬇️ PDF'}
             </Button>
           </div>
         </div>
@@ -391,15 +431,4 @@ function ModeTab({ label, active, onClick }: { label: string; active: boolean; o
 }
 
 // in/out helpers relative to a chosen location (or by type if no location)
-function inAt(m: StockMovement, locationId: string, _typeFilter: string): number {
-  if (locationId) return m.toLocationId === locationId ? m.qty : 0
-  if (m.type === 'receive') return m.qty
-  if (m.toLocationId && !m.fromLocationId) return m.qty // adjust-in
-  return 0
-}
-function outAt(m: StockMovement, locationId: string, _typeFilter: string): number {
-  if (locationId) return m.fromLocationId === locationId ? m.qty : 0
-  if (m.type === 'issue') return m.qty
-  if (m.fromLocationId && !m.toLocationId) return m.qty // adjust-out
-  return 0
-}
+

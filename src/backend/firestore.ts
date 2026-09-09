@@ -10,13 +10,21 @@ import {
   query,
   runTransaction,
   where,
+  deleteField,
 } from 'firebase/firestore'
 import { getDb } from '../firebase/app'
-import type { Backend, SubscribeOptions, TxContext } from './types'
+import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
 
 // Firestore implementation. Real-time across all devices, offline persistence enabled.
 // Collection names are brand-scoped via resolveCollection() so brands stay fully isolated.
+
+/** Turn our DELETE_FIELD marker into Firestore's own. */
+function toFirestorePatch(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(patch)) out[k] = v === DELETE_FIELD ? deleteField() : v
+  return out
+}
 
 export function createFirestoreBackend(brand?: BrandId): Backend {
   // `brand` undefined means "whatever is selected right now", which is what screens
@@ -91,7 +99,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
 
     async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
       const db = getDb()
-      await updateDoc(doc(db, resolve(collection), id), patch)
+      await updateDoc(doc(db, resolve(collection), id), toFirestorePatch(patch))
     },
 
     async remove(collection: string, id: string): Promise<void> {

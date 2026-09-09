@@ -6,7 +6,8 @@ import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select } from '../components/ui'
 import { editMovementQty, voidMovement, getMovementImage } from '../services/stock'
-import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs } from '../lib/format'
+import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs, dayRange } from '../lib/format'
+import { effectAt, effectOverall, stockCard } from '../lib/ledger'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
@@ -50,31 +51,48 @@ export function MovementsPage() {
 
   const stockCardMode = !!productId && !!locationId
 
-  const filtered = useMemo(() => {
-    const fromMs = fromStr ? dateInputToMs(fromStr) : -Infinity
-    const toMs = toStr ? dateInputToMs(toStr) + 86_400_000 : Infinity
+  // The rows to show and the balance each one leaves behind are two different questions.
+  // stockCard() answers the second from EVERY movement in scope, so a date or type filter
+  // changes what is listed without changing what the warehouse actually held.
+  const card = useMemo(() => {
+    const { from, to } = dayRange(fromStr, toStr)
+    return stockCard(movements, {
+      productId: productId || undefined,
+      locationId: locationId || undefined,
+      from,
+      to,
+      type: (typeFilter || '') as MovementType | '',
+    })
+  }, [movements, productId, locationId, typeFilter, fromStr, toStr])
+
+  // Newest first on screen; the balances were worked out oldest first.
+  const rows = useMemo(() => [...card.rows].reverse(), [card])
+
+  const balances = useMemo(
+    () => new Map(card.rows.map((r) => [r.movement.id, r.balance ?? 0])),
+    [card],
+  )
+
+  // Voided rows are still worth seeing in the history, but they carry no balance.
+  const voidedRows = useMemo(() => {
+    const { from, to } = dayRange(fromStr, toStr)
     return movements
+      .filter((m) => m.voided)
       .filter((m) => (productId ? m.productId === productId : true))
       .filter((m) =>
         locationId ? m.fromLocationId === locationId || m.toLocationId === locationId : true,
       )
       .filter((m) => (typeFilter ? m.type === typeFilter : true))
-      .filter((m) => m.date >= fromMs && m.date <= toMs)
-      .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt)
+      .filter((m) => m.date >= from && m.date < to)
   }, [movements, productId, locationId, typeFilter, fromStr, toStr])
 
-  // running balance for stock-card mode (product + location)
-  const balances = useMemo(() => {
-    if (!stockCardMode) return new Map<string, number>()
-    const asc = [...filtered].sort((a, b) => a.date - b.date || a.createdAt - b.createdAt)
-    const map = new Map<string, number>()
-    let bal = 0
-    for (const m of asc) {
-      if (!m.voided) bal += effectAt(m, locationId)
-      map.set(m.id, bal)
-    }
-    return map
-  }, [filtered, stockCardMode, locationId])
+  const filtered = useMemo(
+    () =>
+      [...rows.map((r) => r.movement), ...voidedRows].sort(
+        (a, b) => b.date - a.date || b.createdAt - a.createdAt,
+      ),
+    [rows, voidedRows],
+  )
 
   async function doVoid(m: StockMovement) {
     const ok = await confirm({
@@ -173,7 +191,7 @@ export function MovementsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((m) => {
-                  const eff = locationId ? effectAt(m, locationId) : signedByType(m)
+                  const eff = locationId ? effectAt(m, locationId) : effectOverall(m)
                   return (
                     <tr key={m.id} className={m.voided ? 'bg-slate-50 text-slate-400' : ''}>
                       <td className="whitespace-nowrap px-3 py-2">{formatThaiDate(m.date)}</td>
@@ -263,11 +281,18 @@ function PhotoModal({ docNo, onClose }: { docNo: string; onClose: () => void }) 
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     let on = true
-    getMovementImage(docNo).then((u) => {
-      if (!on) return
-      setUrl(u)
-      setLoading(false)
-    })
+    // The spinner used to stop only on success, so a photo that failed to load left the
+    // dialog saying "loading" for as long as it was open.
+    getMovementImage(docNo)
+      .then((u) => {
+        if (on) setUrl(u)
+      })
+      .catch(() => {
+        if (on) setUrl(null)
+      })
+      .finally(() => {
+        if (on) setLoading(false)
+      })
     return () => {
       on = false
     }
@@ -356,15 +381,4 @@ function EditMovementModal({
 }
 
 /** Effect of a movement on a specific location's balance. */
-function effectAt(m: StockMovement, locationId: string): number {
-  if (m.toLocationId === locationId) return m.qty
-  if (m.fromLocationId === locationId) return -m.qty
-  return 0
-}
 
-/** Signed quantity by type when no location is selected (receive +, issue/adjust-out −). */
-function signedByType(m: StockMovement): number {
-  if (m.type === 'receive') return m.qty
-  if (m.toLocationId && !m.fromLocationId) return m.qty // adjust-in
-  return -m.qty
-}

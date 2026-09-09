@@ -28,8 +28,18 @@ export function NotesPage() {
       .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
   }, [notes, search])
 
+  const [busy, setBusy] = useState('')
+
   async function togglePin(n: Note) {
-    await updateNote(n.id, { pinned: !n.pinned })
+    if (busy) return
+    setBusy(n.id)
+    try {
+      await updateNote(n.id, { pinned: !n.pinned })
+    } catch (e) {
+      toast.error(t('ปักหมุดไม่สำเร็จ:') + ' ' + errText(e, t))
+    } finally {
+      setBusy('')
+    }
   }
 
   async function remove(n: Note) {
@@ -40,8 +50,15 @@ export function NotesPage() {
       confirmText: t("ลบ"),
     })
     if (!ok) return
-    await deleteNote(n.id)
-    toast.success(t("ลบแล้ว"))
+    setBusy(n.id)
+    try {
+      await deleteNote(n.id)
+      toast.success(t("ลบแล้ว"))
+    } catch (e) {
+      toast.error(t("ลบไม่สำเร็จ:") + ' ' + errText(e, t))
+    } finally {
+      setBusy('')
+    }
   }
 
   return (

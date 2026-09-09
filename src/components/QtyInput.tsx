@@ -42,6 +42,14 @@ export function QtyInput({ // i18n-key
   const [factor, setFactor] = useState(1) // 1 = base unit
   const [text, setText] = useState(value ? String(value) : '')
 
+  // Choosing grams for a KG product sets factor to 0.001. The Adjust page reuses this same
+  // component when the product changes, so switching to an EA product left the multiplier
+  // in place with no dropdown to see it: typing 10 recorded 0.01. The multiplier belongs to
+  // the unit, so it resets when the unit does.
+  useEffect(() => {
+    setFactor(1)
+  }, [unitType])
+
   // Re-sync the text when the base value changes for a reason other than typing
   // (e.g. parent reset to 0, or the unit toggle changed the display scale).
   useEffect(() => {

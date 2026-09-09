@@ -3,8 +3,19 @@ import { getProductImage } from '../services/products'
 import { brandDef } from '../brand/brand'
 import { useBrand } from '../brand/BrandContext'
 
-// Simple in-memory cache so re-renders / list scrolls don't re-fetch the same image.
+// In-memory cache so re-renders and list scrolls do not re-fetch the same image.
+//
+// Keyed by brand as well as product: both brands number their products independently, so
+// the same id in Le Lapin used to show Pizza Mania's photo. A revision counter bumps every
+// time an image is replaced, which is what makes thumbnails that are already on screen
+// reload instead of showing the old picture until the page is left and come back to.
 const cache = new Map<string, string | null>()
+let revision = 0
+const watchers = new Set<() => void>()
+
+function cacheKey(brand: string | null | undefined, productId: string): string {
+  return `${brand ?? '-'}::${productId}`
+}
 
 export function ProductThumb({
   productId,
@@ -17,8 +28,19 @@ export function ProductThumb({
   size?: number
   onClick?: () => void
 }) {
-  const [url, setUrl] = useState<string | null>(cache.get(productId) ?? null)
   const { brand } = useBrand()
+  const key = cacheKey(brand, productId)
+  const [url, setUrl] = useState<string | null>(cache.get(key) ?? null)
+  const [rev, setRev] = useState(revision)
+
+  // Re-render this thumbnail when any image is replaced anywhere.
+  useEffect(() => {
+    const notify = () => setRev(revision)
+    watchers.add(notify)
+    return () => {
+      watchers.delete(notify)
+    }
+  }, [])
 
   useEffect(() => {
     let on = true
@@ -26,18 +48,24 @@ export function ProductThumb({
       setUrl(null)
       return
     }
-    if (cache.has(productId)) {
-      setUrl(cache.get(productId) ?? null)
+    if (cache.has(key)) {
+      setUrl(cache.get(key) ?? null)
       return
     }
-    getProductImage(productId).then((u) => {
-      cache.set(productId, u)
-      if (on) setUrl(u)
-    })
+    getProductImage(productId)
+      .then((u) => {
+        // Only cache under the key this request was made for; a brand switch mid-fetch
+        // would otherwise file one brand's photo under the other's.
+        cache.set(key, u)
+        if (on) setUrl(u)
+      })
+      .catch(() => {
+        if (on) setUrl(null)
+      })
     return () => {
       on = false
     }
-  }, [productId, hasImage])
+  }, [productId, hasImage, key, rev])
 
   const style = { width: size, height: size }
   if (url) {
@@ -62,7 +90,17 @@ export function ProductThumb({
   )
 }
 
-/** Clear a cached image after it changes so the new one loads. */
+/**
+ * Forget a cached image after it changes, and tell mounted thumbnails to fetch it again.
+ *
+ * Clearing the map alone was not enough: a thumbnail already on screen has the same product
+ * id and the same hasImage flag, so nothing in its effect changed and it kept the old
+ * picture. The revision counter is the thing that does change.
+ */
 export function invalidateThumb(productId: string) {
-  cache.delete(productId)
+  revision++
+  for (const key of [...cache.keys()]) {
+    if (key.endsWith(`::${productId}`)) cache.delete(key)
+  }
+  for (const notify of [...watchers]) notify()
 }

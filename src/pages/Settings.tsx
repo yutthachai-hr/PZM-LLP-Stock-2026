@@ -148,8 +148,12 @@ function LocationsSection() {
       confirmText: t("ลบ"),
     })
     if (!ok) return
-    await deleteLocation(l.id)
-    toast.success(t("ลบแล้ว"))
+    try {
+      await deleteLocation(l.id)
+      toast.success(t("ลบแล้ว"))
+    } catch (e) {
+      toast.error(t("ลบไม่สำเร็จ:") + ' ' + errText(e, t))
+    }
   }
 
   return (
@@ -243,11 +247,21 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
   const confirm = useConfirm()
   const [adding, setAdding] = useState(false)
 
+  // Changing a role or switching someone off is exactly the kind of write the rules can
+  // refuse. Silently doing nothing left the admin thinking it had worked.
   async function toggleActive(id: string, active: boolean) {
-    await updateUserProfile(id, { active })
+    try {
+      await updateUserProfile(id, { active })
+    } catch (e) {
+      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
+    }
   }
   async function setRole(id: string, role: Role) {
-    await updateUserProfile(id, { role })
+    try {
+      await updateUserProfile(id, { role })
+    } catch (e) {
+      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
+    }
   }
   async function removeUser(u: { id: string; name: string }) {
     const ok = await confirm({
