@@ -514,6 +514,7 @@ export const EN: Record<string, string> = {
   'ยอดที่เก็บไว้': 'Stored',
   'ยอดตามประวัติ': 'From history',
   'แก้ล่าสุดโดย': 'Last written by',
+  '(สินค้าถูกลบไปแล้ว)': '(product was deleted)',
   '(ไม่ระบุ)': '(not recorded)',
   'แสดง 50 รายการแรกจาก {count}': 'Showing the first 50 of {count}',
   'คำนวณใหม่ไม่ได้: ประวัติทำให้ยอดติดลบ {count} รายการ (เช่น {example}) — ตรวจรายการที่ถูกยกเลิกก่อน':

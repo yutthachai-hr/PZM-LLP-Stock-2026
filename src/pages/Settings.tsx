@@ -520,7 +520,17 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
                     {drift.slice(0, 50).map((d) => (
                       <tr key={d.id}>
                         <td className="py-1 pr-3">
-                          {productById.get(d.productId)?.name ?? d.productId}
+                          {/* A balance whose product is gone reads as a bare id, which tells
+                              nobody anything. Say what it is: leftover from a deleted
+                              product, which is the usual reason a balance has no history. */}
+                          {productById.get(d.productId)?.name ?? (
+                            <>
+                              <span className="text-amber-700">{t('(สินค้าถูกลบไปแล้ว)')}</span>
+                              <span className="ml-1 font-mono text-xs text-slate-400">
+                                {d.productId}
+                              </span>
+                            </>
+                          )}
                         </td>
                         <td className="py-1 pr-3">{locationById(d.locationId)?.name ?? d.locationId}</td>
                         <td className="py-1 pr-3 text-right font-medium text-rose-600">{d.cached}</td>
