@@ -335,3 +335,40 @@ describe('policy — the unit a product is measured in', () => {
     await expect(updateProduct('p1', { name: 'Mozzarella (new supplier)' })).resolves.toBeUndefined()
   })
 })
+
+describe('seeding never touches a warehouse that is already set up', () => {
+  test('a brand whose locations were renamed does not get the defaults added back', async () => {
+    const { ensureBrandLocations } = await import('../src/services/seed')
+    resetMemory()
+    // What the live database actually looks like: real locations, named in Thai, nothing
+    // matching the English defaults the code ships with.
+    seed('locations', [
+      { id: 'l1', name: 'คลังหลัก', type: 'warehouse', active: true, createdAt: 1 },
+      { id: 'l2', name: 'สาขาสารสิน', type: 'branch', active: true, createdAt: 1 },
+      { id: 'l3', name: 'สาขาอ่อนนุช', type: 'branch', active: true, createdAt: 1 },
+    ])
+
+    const created = await ensureBrandLocations('pizza')
+
+    expect(created).toBe(0)
+    expect(raw('locations')).toHaveLength(3)
+    expect(raw('locations').map((l) => l.name)).not.toContain('Main Warehouse')
+  })
+
+  test('one renamed location does not bring the other defaults back either', async () => {
+    const { ensureBrandLocations } = await import('../src/services/seed')
+    resetMemory()
+    seed('locations', [
+      { id: 'l1', name: 'คลังกลาง', type: 'warehouse', active: true, createdAt: 1 },
+    ])
+    expect(await ensureBrandLocations('pizza')).toBe(0)
+    expect(raw('locations')).toHaveLength(1)
+  })
+
+  test('a brand with nothing at all still gets its starting locations', async () => {
+    const { ensureBrandLocations } = await import('../src/services/seed')
+    resetMemory()
+    expect(await ensureBrandLocations('pizza')).toBe(3)
+    expect(raw('locations')).toHaveLength(3)
+  })
+})

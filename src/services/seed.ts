@@ -22,16 +22,22 @@ export interface ResetResult {
  */
 export async function ensureBrandLocations(brand: BrandId): Promise<number> {
   const existing = await backend.getAll<StockLocation>(COL.locations)
-  // Match on name, so a run that failed after creating two of three finishes the job next
-  // time instead of seeing "some locations exist" and leaving the third missing forever.
-  const haveName = new Set(existing.map((l) => l.name))
-  let n = 0
-  for (const l of brandDef(brand).defaultLocations) {
-    if (haveName.has(l.name)) continue
-    await createLocation(l.name, l.type)
-    n++
-  }
-  return n
+  // Only ever seed a brand that has NO locations at all.
+  //
+  // This briefly matched the defaults by name instead, so a half-finished first run could
+  // be resumed. That was wrong for a warehouse that is already in use: the defaults are
+  // written in English, the real locations here are named in Thai, and nothing links
+  // "Main Warehouse" to "คลังหลัก" — so the first sign-in after that shipped added three
+  // empty duplicates alongside the real ones, and staff could not tell which to receive
+  // stock into. Renaming a location is normal and must never resurrect the original name.
+  //
+  // The failure it guarded against — a first run dying between two createLocation calls —
+  // leaves a brand-new brand short a location, which an admin can add in Settings in ten
+  // seconds. Duplicating the locations of a live warehouse is far worse.
+  if (existing.length > 0) return 0
+  const defs = brandDef(brand).defaultLocations
+  for (const l of defs) await createLocation(l.name, l.type)
+  return defs.length
 }
 
 /**
