@@ -13,6 +13,15 @@
   # 20.19+/22.12+; 22 is the current LTS.
   NODE_VERSION = "22"
 
+  # Netlify's secret scanner flags src/firebase/config.ts's apiKey as a likely leaked
+  # secret because it starts with "AIza" — it is a Firebase WEB API key, which Google
+  # documents as safe to ship in client code: it names a project, it does not grant
+  # access. Access is gated by firestore.rules and by Firebase's authorized-domains list,
+  # not by hiding this string. Omitting it from the scan (rather than disabling scanning
+  # outright) keeps the check live for anything that would be a real leak — a service
+  # account key, an admin token — while not failing every build on a false positive.
+  SECRETS_SCAN_OMIT_PATHS = "src/firebase/config.ts,dist/**"
+
 # The app is a PWA: the service worker and the HTML that boots it must never be served from
 # cache, or a deploy keeps showing the previous build until the SW happens to update.
 # Everything under /assets/ is content-hashed by Vite, so it is safe to cache forever.
