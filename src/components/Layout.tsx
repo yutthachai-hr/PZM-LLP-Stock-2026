@@ -4,7 +4,6 @@ import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useT } from '../i18n/I18nContext'
-import { LangToggle } from '../i18n/LangToggle'
 import { Icon, type IconName } from './Icon'
 import { isDemoMode } from '../firebase/config'
 import { InstallHint } from '../pwa/InstallHint'
@@ -232,7 +231,6 @@ function UserBox({
   const t = useT()
   return (
     <div className="border-t border-line p-3">
-      <LangToggle className="mb-3" />
       <div className="mb-3 flex items-center gap-2.5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft font-bold text-brand">
           {name.charAt(0).toUpperCase() || '?'}

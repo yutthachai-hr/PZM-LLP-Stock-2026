@@ -674,4 +674,10 @@ export const EN: Record<string, string> = {
   ยังไม่มีมูลค่า: 'No value yet',
   สินค้าใกล้หมด: 'Running low',
   'ไม่มีรายการที่ต่ำกว่าขั้นต่ำ': 'Nothing below its minimum',
+
+  // ---- language switch -----------------------------------------------------------
+  'เปลี่ยนเป็นภาษาอังกฤษ': 'Switch to English',
+  'เปลี่ยนเป็นภาษาไทย': 'Switch to Thai',
+  'เซิร์ฟเวอร์ทดสอบนี้ต่อกับข้อมูลจริง — ใช้ npm run demo':
+    'This dev server is connected to live data — use npm run demo',
 }

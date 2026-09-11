@@ -66,6 +66,9 @@ const paths = {
     'M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18ZM6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4',
   device:
     'M22 12H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11zM6 16h.01M10 16h.01',
+  // The language switch. A globe rather than a flag: the two languages here are Thai and
+  // English, and English is not one country's.
+  globe: 'M2 12h20M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20',
 } as const
 
 export type IconName = keyof typeof paths
@@ -81,6 +84,7 @@ const circles: Partial<Record<IconName, { cx: number; cy: number; r: number }[]>
   camera: [{ cx: 12, cy: 13, r: 3 }],
   info: [{ cx: 12, cy: 12, r: 10 }],
   users: [{ cx: 9, cy: 7, r: 4 }],
+  globe: [{ cx: 12, cy: 12, r: 10 }],
 }
 
 /** Icons drawn as solid shapes rather than strokes. */

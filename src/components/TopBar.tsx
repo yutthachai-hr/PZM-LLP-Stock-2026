@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../data/DataContext'
 import { useT } from '../i18n/I18nContext'
-import { LangToggle } from '../i18n/LangToggle'
 import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
 import { Icon } from './Icon'
+import { LangButton } from './LangButton'
 import { ProductThumb } from './ProductThumb'
 
 /**
@@ -206,7 +206,7 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
             )}
           </button>
 
-          <LangToggle className="hidden w-24 md:block" />
+          <LangButton />
         </div>
       </div>
     </header>
