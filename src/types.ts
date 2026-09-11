@@ -97,6 +97,42 @@ export interface MinOverride {
 }
 
 // Collection name constants — single source of truth
+/** Whether a supplier takes goods back. Shown on the supplier list as a badge. */
+export type SupplierType = 'takingReturn' | 'notTakingReturn'
+
+/**
+ * A company the warehouse buys from.
+ *
+ * What it supplies lives in SupplierItem, not here. The design this screen came from put
+ * one product and one price on the supplier row — but the same supplier appeared several
+ * times in it, which is the tell: those rows are supplier x product pairs. Folding the
+ * product into the supplier would make "this supplier also sells us three other things"
+ * unrepresentable.
+ */
+export interface Supplier {
+  id: string
+  name: string
+  contactNumber: string
+  email: string
+  type: SupplierType
+  note?: string
+  active: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/** One product a supplier sells us, and what we pay for it. */
+export interface SupplierItem {
+  id: string
+  supplierId: string
+  productId: string
+  /** Purchase price per unit of the product's own unitType. Optional: not always known. */
+  buyingPrice?: number
+  active: boolean
+  createdAt: number
+  updatedAt: number
+}
+
 export const COL = {
   users: 'users',
   products: 'products',
@@ -108,6 +144,8 @@ export const COL = {
   notes: 'notes',
   counters: 'counters',
   minOverrides: 'productMinOverrides',
+  suppliers: 'suppliers',
+  supplierItems: 'supplierItems',
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const

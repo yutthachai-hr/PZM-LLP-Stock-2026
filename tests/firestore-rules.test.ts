@@ -129,6 +129,107 @@ function note(id: string, over: Record<string, unknown> = {}) {
   }
 }
 
+function supplier(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    name: 'SIMUMMUANG',
+    contactNumber: '021234567',
+    email: 'order@simummuang.example',
+    type: 'takingReturn',
+    active: true,
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  }
+}
+
+function supplierItem(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    supplierId: 's1',
+    productId: 'p1',
+    active: true,
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  }
+}
+
+describe('suppliers', () => {
+  test('an admin may create one; staff may not', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1')))
+    await assertFails(setDoc(doc(as(STAFF), 'suppliers/s2'), supplier('s2')))
+  })
+
+  test('staff may read them — they are on the receiving screen', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'suppliers/s1'), supplier('s1'))
+    })
+    await assertSucceeds(getDoc(doc(as(STAFF), 'suppliers/s1')))
+    await assertFails(getDoc(doc(as(PENDING), 'suppliers/s1')))
+  })
+
+  test('type is constrained to the two the app knows', async () => {
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { type: 'sometimesMaybe' })),
+    )
+  })
+
+  test('an unknown field is refused, so a rules deploy is never silently skipped', async () => {
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { creditTermDays: 30 })),
+    )
+  })
+
+  test('note is optional, and bounded', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { note: 'ok' })))
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'suppliers/s2'), supplier('s2', { note: 'x'.repeat(2001) })),
+    )
+  })
+
+  test('the id must match the document path', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('somethingElse')))
+  })
+
+  test('both brands are covered', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__suppliers/s1'), supplier('s1')))
+    await assertFails(setDoc(doc(as(STAFF), 'lelapin__suppliers/s2'), supplier('s2')))
+  })
+
+  test('an admin may delete one', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'suppliers/s1'), supplier('s1'))
+    })
+    await assertFails(deleteDoc(doc(as(STAFF), 'suppliers/s1')))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'suppliers/s1')))
+  })
+})
+
+describe('supplier items', () => {
+  test('an admin may link a product; staff may not', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'supplierItems/i1'), supplierItem('i1')))
+    await assertFails(setDoc(doc(as(STAFF), 'supplierItems/i2'), supplierItem('i2')))
+  })
+
+  test('buyingPrice is optional but must be a non-negative number when present', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'supplierItems/i1'), supplierItem('i1', { buyingPrice: 12.5 })),
+    )
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'supplierItems/i2'), supplierItem('i2', { buyingPrice: -1 })),
+    )
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'supplierItems/i3'), supplierItem('i3', { buyingPrice: 'cheap' })),
+    )
+  })
+
+  test('supplierId and productId are required', async () => {
+    const { supplierId: _s, ...noSupplier } = supplierItem('i1')
+    await assertFails(setDoc(doc(as(ADMIN), 'supplierItems/i1'), noSupplier))
+  })
+})
+
 describe('outsiders', () => {
   test('signed-out users read nothing', async () => {
     await assertFails(getDoc(doc(anon(), 'products/p1')))

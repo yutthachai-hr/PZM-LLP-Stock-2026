@@ -26,6 +26,7 @@ const NAV: NavItem[] = [
   { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust' }, // i18n-key
   { to: '/movements', label: 'ประวัติ/Stock Card', icon: 'history' }, // i18n-key
   { to: '/reports', label: 'รายงาน', icon: 'report' }, // i18n-key
+  { to: '/suppliers', label: 'ผู้ขาย', icon: 'users' }, // i18n-key
   { to: '/import', label: 'นำเข้า Excel', icon: 'upload', adminOnly: true }, // i18n-key
   { to: '/notes', label: 'บันทึกช่วยจำ', icon: 'note' }, // i18n-key
   { to: '/settings', label: 'ตั้งค่า', icon: 'settings' }, // i18n-key

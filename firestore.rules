@@ -71,8 +71,10 @@ service cloud.firestore {
     function adminWritable(name) {
       return name in [
         'products', 'productImages', 'locations', 'productMinOverrides',
+        'suppliers', 'supplierItems',
         'lelapin__products', 'lelapin__productImages', 'lelapin__locations',
-        'lelapin__productMinOverrides'
+        'lelapin__productMinOverrides',
+        'lelapin__suppliers', 'lelapin__supplierItems'
       ];
     }
 
@@ -223,6 +225,35 @@ service cloud.firestore {
         && nonneg(d.minStock, 1000000000);
     }
 
+    // Who we buy from. What they sell us is supplierItems, not a field here — the same
+    // supplier sells several things, and one product per supplier cannot say that.
+    function validSupplier(d) {
+      return d.keys().hasAll(['id', 'name', 'contactNumber', 'email', 'type', 'active',
+          'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'name', 'contactNumber', 'email', 'type', 'note',
+          'active', 'createdAt', 'updatedAt'])
+        && text(d.name, 200)
+        && d.contactNumber is string && d.contactNumber.size() <= 40
+        && d.email is string && d.email.size() <= 200
+        && d.type in ['takingReturn', 'notTakingReturn']
+        && d.active is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && (!('note' in d) || d.note is string && d.note.size() <= 2000);
+    }
+
+    // One product a supplier sells us. buyingPrice is optional: it is not always known,
+    // and a zero would read as free rather than as unknown.
+    function validSupplierItem(d) {
+      return d.keys().hasAll(['id', 'supplierId', 'productId', 'active', 'createdAt',
+          'updatedAt'])
+        && d.keys().hasOnly(['id', 'supplierId', 'productId', 'buyingPrice', 'active',
+          'createdAt', 'updatedAt'])
+        && text(d.supplierId, 200) && text(d.productId, 200)
+        && d.active is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && (!('buyingPrice' in d) || nonneg(d.buyingPrice, 1000000000));
+    }
+
     // A document whose `id` field disagrees with its key makes the UI act on one row while
     // writing to another, so the two are pinned together here rather than hoped for.
     function validShape(name, docId, d) {
@@ -234,6 +265,8 @@ service cloud.firestore {
         : kind(name) == 'locations' ? validLocation(d)
         : kind(name) == 'notes' ? validNote(d)
         : kind(name) == 'productMinOverrides' ? validMinOverride(d)
+        : kind(name) == 'suppliers' ? validSupplier(d)
+        : kind(name) == 'supplierItems' ? validSupplierItem(d)
         : validImage(d)
       );
     }
