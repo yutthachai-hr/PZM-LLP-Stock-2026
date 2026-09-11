@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -19,6 +12,7 @@ import { clearThumbCache } from '../components/ProductThumb'
 
 import { AppError } from '../i18n/AppError'
 import { useIdleLogout } from './useIdleLogout'
+import { classifyProfileError, retryDelayMs } from './profileError'
 
 interface AuthState {
   user: AppUser | null
@@ -43,12 +37,51 @@ const REVOKED = 'สิทธิ์การเข้าใช้ของบั
 const IDLE = 'ออกจากระบบอัตโนมัติเพราะไม่มีการใช้งาน {minutes} นาที — เครื่องนี้เป็นเครื่องใช้ร่วมกัน' // i18n-key
 const UNPROVISIONED =
   'ระบบนี้ยังไม่ได้ตั้งค่า — เจ้าของต้องสร้างบัญชีผู้ดูแลคนแรกจาก Firebase Console ก่อน' // i18n-key
+// Shown only when the very first profile read fails, so the sign-in screen says why it is
+// asking rather than appearing for no reason.
+const CONNECTION = 'เชื่อมต่อฐานข้อมูลไม่ได้ — กรุณาลองใหม่อีกครั้ง' // i18n-key
+
+/**
+ * Where a sign-out notice waits out the page reload that follows it.
+ *
+ * logout() ends in clearLocalCaches(), which terminates Firestore and reloads the page so
+ * the offline copy cannot outlive the session on a shared device. That reload also throws
+ * away React state — including the notice explaining why the person was just signed out.
+ * So every automatic sign-out landed on a blank sign-in screen with no reason given, which
+ * reads as the app losing the session at random.
+ *
+ * sessionStorage, not localStorage: the explanation belongs to this tab and this reload,
+ * and should not still be sitting there tomorrow.
+ */
+const NOTICE_KEY = 'pmstock:v1:notice'
+
+function readNotice(): string | null {
+  try {
+    return sessionStorage.getItem(NOTICE_KEY)
+  } catch {
+    return null // private mode; the notice is a courtesy, not a requirement
+  }
+}
+
+function rememberNotice(key: string | null): void {
+  try {
+    if (key) sessionStorage.setItem(NOTICE_KEY, key)
+    else sessionStorage.removeItem(NOTICE_KEY)
+  } catch {
+    /* nothing to remember it in */
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [needsBootstrap, setNeedsBootstrap] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [noticeState, setNoticeState] = useState<string | null>(readNotice)
+  const notice = noticeState
+  const setNotice = useCallback((key: string | null) => {
+    rememberNotice(key)
+    setNoticeState(key)
+  }, [])
   // name entered on the sign-up form, used when the profile doc is created
   const pendingName = useRef<string | null>(null)
 
@@ -74,12 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // await and on every snapshot — not only before the first one.
       let generation = 0
       let profileUnsub: (() => void) | null = null
+      let profileRetry: ReturnType<typeof setTimeout> | null = null
 
       const unsub = onAuthStateChanged(auth, (fbUser) => {
         generation++
         const gen = generation
         profileUnsub?.()
         profileUnsub = null
+        if (profileRetry) clearTimeout(profileRetry)
+        profileRetry = null
 
         const stale = () =>
           disposed || gen !== generation || auth.currentUser?.uid !== fbUser?.uid
@@ -131,40 +167,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        profileUnsub = backend.subscribeOne<AppUser>(
-          COL.users,
-          uid,
-          (profile) => {
-            if (stale()) return
-            if (!profile) {
-              // Either brand new, or the profile was just deleted under a signed-in user.
-              if (requested) {
+        // Whether a profile has ever arrived on this session. A listener that fails before
+        // one does leaves the sign-in screen up, so it has to say why; one that fails after
+        // must not disturb someone who is already working.
+        let everLoaded = false
+        let attempts = 0
+
+        function watchProfile() {
+          profileUnsub = backend.subscribeOne<AppUser>(
+            COL.users,
+            uid,
+            (profile) => {
+              if (stale()) return
+              attempts = 0
+              if (!profile) {
+                // Either brand new, or the profile was just deleted under a signed-in user.
+                if (requested) {
+                  void reject(REVOKED)
+                  return
+                }
+                requested = true
+                void requestAccess()
+                return
+              }
+              if (profile.active === false) {
+                void reject(PENDING)
+                return
+              }
+              // Live, so an admin revoking access takes effect on this screen too, not only
+              // at the next sign-in.
+              everLoaded = true
+              setNotice(null)
+              setUser(profile)
+              setLoading(false)
+            },
+            (err) => {
+              if (stale()) return
+              // A listener that fails is usually a dropped connection or an exhausted daily
+              // read quota, not a decision about this person. Only the rules refusing the
+              // read means access is actually gone.
+              if (classifyProfileError(err) === 'denied') {
                 void reject(REVOKED)
                 return
               }
-              requested = true
-              void requestAccess()
-              return
-            }
-            if (profile.active === false) {
-              void reject(PENDING)
-              return
-            }
-            // Live, so an admin revoking access takes effect on this screen too, not only
-            // at the next sign-in.
-            setNotice(null)
-            setUser(profile)
-            setLoading(false)
-          },
-          () => {
-            if (stale()) return
-            setUser(null)
-            setLoading(false)
-          },
-        )
+              // Firestore's onSnapshot does not retry — the listener is finished — so
+              // re-establish it rather than leaving the app deaf to its own profile.
+              // The session is left alone: dropping to sign-in here is what was throwing
+              // away a half-finished count every time the tablet's wifi hiccuped.
+              setLoading(false)
+              if (!everLoaded) setNotice(CONNECTION)
+              attempts++
+              profileUnsub?.()
+              profileUnsub = null
+              profileRetry = setTimeout(() => {
+                if (stale()) return
+                watchProfile()
+              }, retryDelayMs(attempts))
+            },
+          )
+        }
+
+        watchProfile()
       })
       return () => {
         disposed = true
+        if (profileRetry) clearTimeout(profileRetry)
         profileUnsub?.()
         unsub()
       }
@@ -186,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       disposed = true
     }
-  }, [])
+  }, [setNotice])
 
   async function login(email: string, password: string): Promise<void> {
     const em = email.trim().toLowerCase()

@@ -678,6 +678,13 @@ export const EN: Record<string, string> = {
   // ---- language switch -----------------------------------------------------------
   'เปลี่ยนเป็นภาษาอังกฤษ': 'Switch to English',
   'เปลี่ยนเป็นภาษาไทย': 'Switch to Thai',
+  'เชื่อมต่อฐานข้อมูลไม่ได้ — กรุณาลองใหม่อีกครั้ง':
+    'Could not reach the database — please try again',
+
+  // ---- calendar --------------------------------------------------------------------
+  กรุณากรอกชื่องาน: 'Enter a title',
+  'กำหนดเสร็จต้องไม่อยู่ก่อนวันเริ่ม': 'The deadline cannot be before the start',
+  'ช่วงวันที่ไม่ถูกต้อง': 'Invalid date range',
   'เซิร์ฟเวอร์ทดสอบนี้ต่อกับข้อมูลจริง — ใช้ npm run demo':
     'This dev server is connected to live data — use npm run demo',
 
