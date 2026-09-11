@@ -583,7 +583,6 @@ export const EN: Record<string, string> = {
   'ตัวเลขนี้คือสิ่งที่จะถูกบันทึกจริง': 'These are the numbers that will actually be written',
   จะบันทึก: 'To be written',
   ข้ามไว้: 'Skipped',
-  นับไว้แล้ว: 'Already counted',
   'นำเข้า {n} รายการ': 'Import {n} counts',
   'กำลังนำเข้า {done}/{total}': 'Importing {done}/{total}',
   ดาวน์โหลดรายการที่ข้าม: 'Download skipped rows',
@@ -634,9 +633,9 @@ export const EN: Record<string, string> = {
     'Counts are recorded in the catalog unit. Where the units really differ, the number is wrong.',
   ไฟล์: 'Sheet',
   ระบบ: 'System',
-  'นับไว้แล้วในวันเดียวกัน': 'Already counted on that date',
-  'มียอดนับของสินค้านี้ที่คลังนี้ในวันนั้นอยู่แล้ว จึงไม่บันทึกซ้ำ':
-    'The ledger already has a count for this product at this location on that date, so it is not written again.',
+  'มียอดนับที่ใหม่กว่าอยู่แล้ว': 'A later count already exists',
+  'สินค้านี้ที่คลังนี้มียอดนับวันเดียวกันหรือใหม่กว่าอยู่แล้ว — ลงย้อนหลังจะทับยอดล่าสุด':
+    'This product already has a count at this location on the same day or later. Posting behind it would overwrite the newer figure.',
   'ชีต "{sheet}" ไม่มีหัวตาราง Quantity/Unit — ไม่ใช่ใบสต๊อกคงเหลือ':
     'Sheet “{sheet}” has no Quantity/Unit heading — it is not a stock sheet',
   'ชีต "{sheet}" ไม่มีแถวชื่อสาขาและงวดอยู่เหนือหัวตาราง':
@@ -650,4 +649,14 @@ export const EN: Record<string, string> = {
     'Tap Share in the bottom bar, then “Add to Home Screen”',
   'เปิดเร็วกว่า เต็มจอ และไม่ต้องหาแท็บ': 'Opens faster, full screen, no hunting for a tab',
   ติดตั้ง: 'Install',
+
+  // ---- demo build --------------------------------------------------------------
+  โหมดสาธิต: 'Demo mode',
+  'ลบข้อมูลในเครื่องนี้ทั้งหมด แล้วตั้งค่าใหม่: ผู้ดูแล 1 คน, คลังทั้งสองแบรนด์, และแคตตาล็อกสินค้า':
+    'Wipes everything on this device and sets it up again: one admin, both brands’ locations, and the product catalogs',
+  รีเซ็ตข้อมูลเดโม: 'Reset demo data',
+  'กำลังเตรียม...': 'Setting up…',
+  'เข้าสู่ระบบอัตโนมัติ — บัญชี {email} รหัส {password}':
+    'Signs in automatically — account {email}, password {password}',
+  'รีเซ็ตข้อมูลเดโมได้เฉพาะในโหมดสาธิตเท่านั้น': 'Demo data can only be reset in a demo build',
 }

@@ -18,7 +18,7 @@ vi.mock('../src/backend', async () => {
 })
 
 const { resetMemory, seed, raw } = await import('./helpers/memory-backend')
-const { buildImportPlan, applyImportPlan, loadExistingCounts } = await import(
+const { buildImportPlan, applyImportPlan, loadLatestCounts } = await import(
   '../src/services/importStock',
 )
 const { setActiveBrand } = await import('../src/brand/brand')
@@ -322,10 +322,10 @@ describe('posting the counts', () => {
     seed('locations', LOCATIONS as unknown as Record<string, unknown>[])
   })
 
-  function planFor(rows: (string | number | null)[][], existing?: ReadonlySet<string>) {
+  function planFor(rows: (string | number | null)[][], latest?: ReadonlyMap<string, number>) {
     const { sheets } = parseStockWorkbook(workbook(rows))
     const sheet = sheets[0]
-    return buildImportPlan(sheet, mapAll(sheet, HEADERS), PRODUCTS, LOCATIONS, existing)
+    return buildImportPlan(sheet, mapAll(sheet, HEADERS), PRODUCTS, LOCATIONS, latest)
   }
 
   function movementsFor(productId: string) {
@@ -372,13 +372,105 @@ describe('posting the counts', () => {
     // The second run must not replay July against the balance August already moved. Left to
     // itself that writes a correction down and a correction back up: the closing balance
     // still looks right and the stock card has two movements that never happened.
-    const second = await planFor(rows, await loadExistingCounts())
+    const second = planFor(rows, await loadLatestCounts())
     expect(second.postings).toEqual([])
     expect(second.alreadyCounted).toHaveLength(4)
 
     const result = await applyImportPlan(second, ACTOR, 'นำเข้าจากไฟล์')
     expect(result).toMatchObject({ posted: 0, unchanged: 0, failed: [] })
     expect((raw('stockMovements') as unknown[]).length).toBe(countAfterFirst)
+  })
+
+  test('a count that found nothing changed is not replayed on the next run', async () => {
+    // The one an exact-date rule misses. July says zero, which matches a balance of zero,
+    // so no movement is written and that date leaves no trace in the ledger. August says
+    // five. A second run of the same file would then post July's zero against a balance of
+    // five and take the stock away — the closing balance would be wrong, not just the card.
+    const rows: (string | number | null)[][] = [
+      ['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', 0, 'KG', null, null, 5, 'KG', null, null],
+    ]
+    const first = await applyImportPlan(planFor(rows), ACTOR, 'นำเข้าจากไฟล์')
+    expect(first).toMatchObject({ posted: 1, unchanged: 1 })
+
+    const second = planFor(rows, await loadLatestCounts())
+    expect(second.postings).toEqual([])
+    expect(second.alreadyCounted).toHaveLength(2)
+
+    await applyImportPlan(second, ACTOR, 'นำเข้าจากไฟล์')
+    const level = (raw('stockLevels') as Record<string, unknown>[]).find(
+      (l) => l.id === `${MAIN}__p1`,
+    )
+    expect(level?.qty).toBe(5)
+  })
+
+  test('a newer count is still importable; an older one is refused', async () => {
+    await applyImportPlan(
+      planFor([
+        ['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', null, null, null, null, 9, 'KG', null, null],
+      ]),
+      ACTOR,
+      'นำเข้าจากไฟล์',
+    )
+    // Next month's file goes in as normal.
+    const latest = await loadLatestCounts()
+    const sept = buildImportPlan(
+      parseStockWorkbook(
+        workbook([
+          ['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', 4, 'KG', null, null, null, null, null, null],
+        ]),
+      ).sheets[0],
+      {
+        sheetName: 'PZM',
+        snapshots: [
+          {
+            label: 'Closing Stock. July.26',
+            date: new Date(2026, 8, 30).getTime(),
+            include: true,
+            columns: [{ header: 'SKV.23', qtyCol: 3, unitCol: 4, locationId: MAIN }],
+          },
+        ],
+      },
+      PRODUCTS,
+      LOCATIONS,
+      latest,
+    )
+    expect(sept.postings).toHaveLength(1)
+
+    // A July file arriving after August is recorded is not. Posting it would rewrite the
+    // balance backwards to the older figure and leave the newer count stale.
+    const july = planFor(
+      [['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', 2, 'KG', null, null, null, null, null, null]],
+      latest,
+    )
+    expect(july.postings).toEqual([])
+    expect(july.alreadyCounted).toHaveLength(1)
+  })
+
+  test('the summary promises exactly what the import writes', async () => {
+    // A plan built with the current balances must not count postings that will find
+    // nothing to change. "615 to write" followed by "540 written" reads as a failure.
+    const rows: (string | number | null)[][] = [
+      ['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', 8, 'KG', null, null, 8, 'KG', null, null],
+      ['MES-01-01-002', 'ANCHOVIES 720GR', 'EA', 0, 'EA', null, null, null, null, null, null],
+    ]
+    const { sheets } = parseStockWorkbook(workbook(rows))
+    const sheet = sheets[0]
+    const plan = buildImportPlan(
+      sheet,
+      mapAll(sheet, HEADERS),
+      PRODUCTS,
+      LOCATIONS,
+      new Map(),
+      new Map(), // every balance is zero
+    )
+    // August repeats July's 8, and the anchovies are counted at the zero they already sit
+    // at, so only one of the three is real work.
+    expect(plan.postings).toHaveLength(1)
+    expect(plan.unchanged).toHaveLength(2)
+
+    const result = await applyImportPlan(plan, ACTOR, 'นำเข้าจากไฟล์')
+    expect(result.posted).toBe(plan.postings.length)
+    expect(result.unchanged).toBe(0)
   })
 
   test('a count of zero is posted and empties the balance', async () => {

@@ -22,7 +22,7 @@ import { parseStockWorkbook, type ParsedSheet } from '../lib/stockSheet'
 import {
   applyImportPlan,
   buildImportPlan,
-  loadExistingCounts,
+  loadLatestCounts,
   type ImportPlan,
   type ImportResult,
   type SheetMapping,
@@ -47,7 +47,7 @@ export function ImportPage() {
   const confirm = useConfirm()
   const { user } = useAuth()
   const { brand } = useBrand()
-  const { products, locations } = useData()
+  const { products, locations, levels } = useData()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [fileName, setFileName] = useState('')
@@ -58,7 +58,7 @@ export function ImportPage() {
   const [included, setIncluded] = useState<Record<string, boolean>>({})
   /** Location per column heading. One heading means the same place on every date. */
   const [byHeader, setByHeader] = useState<Record<string, string>>({})
-  const [existingCounts, setExistingCounts] = useState<ReadonlySet<string>>(new Set())
+  const [latestCounts, setLatestCounts] = useState<ReadonlyMap<string, number>>(new Map())
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [open, setOpen] = useState<SkipReason | 'units' | 'already' | null>(null)
@@ -90,7 +90,7 @@ export function ImportPage() {
       const guess =
         parsed.sheets.find((s) => sheetMatchesBrand(s.name, def?.sheetKey)) ?? parsed.sheets[0]
       selectSheet(guess)
-      setExistingCounts(await loadExistingCounts())
+      setLatestCounts(await loadLatestCounts())
     } catch (err) {
       toast.error(errText(err, t))
     }
@@ -117,7 +117,7 @@ export function ImportPage() {
     setDates({})
     setIncluded({})
     setByHeader({})
-    setExistingCounts(new Set())
+    setLatestCounts(new Map())
     setResult(null)
     setProgress(null)
     setOpen(null)
@@ -145,10 +145,17 @@ export function ImportPage() {
     }
   }, [sheet, dates, included, byHeader])
 
+  // Absence means a balance of zero: a product that has never moved at a location has no
+  // stockLevels document at all.
+  const balances = useMemo(
+    () => new Map(levels.map((l) => [`${l.locationId}|${l.productId}`, l.qty])),
+    [levels],
+  )
+
   const plan: ImportPlan | null = useMemo(() => {
     if (!sheet || !mapping) return null
-    return buildImportPlan(sheet, mapping, products, activeLocations, existingCounts)
-  }, [sheet, mapping, products, activeLocations, existingCounts])
+    return buildImportPlan(sheet, mapping, products, activeLocations, latestCounts, balances)
+  }, [sheet, mapping, products, activeLocations, latestCounts, balances])
 
   const mappedAny = headers.some((h) => byHeader[h])
   const canImport = !!plan && plan.postings.length > 0 && !progress
@@ -173,7 +180,7 @@ export function ImportPage() {
         (done, total) => setProgress({ done, total }),
       )
       setResult(res)
-      setExistingCounts(await loadExistingCounts())
+      setLatestCounts(await loadLatestCounts())
       if (res.failed.length === 0) {
         toast.success(t('นำเข้าสำเร็จ {n} รายการ', { n: res.posted }))
       } else {
@@ -382,7 +389,10 @@ export function ImportPage() {
             <Stat label={t('จะบันทึก')} value={plan.postings.length} tone="in" />
             <Stat label={t('จำนวนสินค้า')} value={plan.productCount} />
             <Stat label={t('ข้ามไว้')} value={plan.skipped.length} tone="warn" />
-            <Stat label={t('นับไว้แล้ว')} value={plan.alreadyCounted.length} />
+            <Stat
+              label={t('ยอดตรงอยู่แล้ว')}
+              value={plan.alreadyCounted.length + plan.unchanged.length}
+            />
           </div>
 
           <div className="mt-4 space-y-2">
@@ -439,8 +449,8 @@ export function ImportPage() {
                 open={open === 'already'}
                 onToggle={() => setOpen(open === 'already' ? null : 'already')}
                 tone="plain"
-                title={`${t('นับไว้แล้วในวันเดียวกัน')} — ${plan.alreadyCounted.length}`}
-                hint={t('มียอดนับของสินค้านี้ที่คลังนี้ในวันนั้นอยู่แล้ว จึงไม่บันทึกซ้ำ')}
+                title={`${t('มียอดนับที่ใหม่กว่าอยู่แล้ว')} — ${plan.alreadyCounted.length}`}
+                hint={t('สินค้านี้ที่คลังนี้มียอดนับวันเดียวกันหรือใหม่กว่าอยู่แล้ว — ลงย้อนหลังจะทับยอดล่าสุด')}
               >
                 <ul className="space-y-1">
                   {plan.alreadyCounted.slice(0, 50).map((p) => (

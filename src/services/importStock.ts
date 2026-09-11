@@ -59,32 +59,46 @@ export interface Posting {
 }
 
 /**
- * Counts already in the ledger, keyed date|location|product.
+ * The date of the most recent stock count already recorded, per location and product.
  *
- * Without this, importing the same file twice is not harmless. Each count is posted as the
- * difference from the balance the previous one left, so replaying July against a balance
- * that August has already moved writes a correction down and then a correction back up: the
- * closing balance ends up right, and the stock card grows two movements that never happened.
+ * A count is posted as the difference from the balance the one before it left, so the order
+ * they go in is the whole meaning of the numbers. Two things follow, and both are this map's
+ * job:
  *
- * Reads the whole ledger once, the way buildBackup() does. This runs once a month, by an
- * admin, and the alternative is a per-posting read.
+ *  - Importing the same file twice must not replay it. Left alone, July would be posted
+ *    against a balance August has already moved: a correction down and then a correction
+ *    back up, a closing balance that still looks right, and two movements in the stock card
+ *    that never happened.
+ *  - A count must never be filed behind one that already happened. Posting July after August
+ *    is recorded rewrites the balance backwards to the older figure and leaves the newer
+ *    count stale, which is worse than not importing it.
+ *
+ * So the rule is a date comparison, not an exact match: nothing is posted for a product at a
+ * location that already has a count on or after that day. An exact match alone is not enough
+ * — a count that found the balance unchanged writes no movement and so leaves no trace of
+ * that date, and those are precisely the ones a second run would replay.
+ *
+ * Reads the ledger once, the way buildBackup() does. This runs monthly, by an admin, and
+ * the alternative is a read per posting.
  */
-export async function loadExistingCounts(): Promise<Set<string>> {
+export async function loadLatestCounts(): Promise<Map<string, number>> {
   const db = backend.forBrand(getBrand())
   const movements = await db.getAll<StockMovement>(COL.movements)
-  const keys = new Set<string>()
+  const latest = new Map<string, number>()
   for (const m of movements) {
     if (m.voided) continue
     if (m.type !== 'adjust' || m.reason !== 'opening') continue
     const locationId = m.toLocationId ?? m.fromLocationId
     if (!locationId) continue
-    keys.add(countKey(m.date, locationId, m.productId))
+    const key = countKey(locationId, m.productId)
+    const known = latest.get(key)
+    if (known === undefined || m.date > known) latest.set(key, m.date)
   }
-  return keys
+  return latest
 }
 
-export function countKey(date: number, locationId: string, productId: string): string {
-  return `${date}|${locationId}|${productId}`
+export function countKey(locationId: string, productId: string): string {
+  return `${locationId}|${productId}`
 }
 
 export type SkipReason =
@@ -124,8 +138,16 @@ export interface UnitWarning {
 
 export interface ImportPlan {
   postings: Posting[]
-  /** Counts this ledger already has on that date — posting them again would be a fiction. */
+  /**
+   * Counts this ledger has already moved past: a count for that product at that location
+   * exists on the same day or a later one. Posting them would rewrite history backwards.
+   */
   alreadyCounted: Posting[]
+  /**
+   * Counts the balance already agrees with. Nothing moved, so the ledger records nothing —
+   * separated out so the summary promises the number of movements it will actually write.
+   */
+  unchanged: Posting[]
   skipped: SkippedRow[]
   unitWarnings: UnitWarning[]
   /** Distinct products and locations the postings touch, for the summary. */
@@ -167,7 +189,8 @@ export function buildImportPlan(
   mapping: SheetMapping,
   products: Product[],
   locations: StockLocation[],
-  existingCounts: ReadonlySet<string> = new Set(),
+  latestCounts: ReadonlyMap<string, number> = new Map(),
+  balances?: ReadonlyMap<string, number>,
 ): ImportPlan {
   const bySku = new Map<string, Product>()
   for (const p of products) {
@@ -287,15 +310,16 @@ export function buildImportPlan(
 
   // Drop the postings a later duplicate invalidated.
   const usable = postings.filter((p) => !Number.isNaN(p.targetQty))
-  const alreadyCounted = usable.filter((p) =>
-    existingCounts.has(countKey(p.date, p.locationId, p.productId)),
-  )
-  const kept = usable.filter(
-    (p) => !existingCounts.has(countKey(p.date, p.locationId, p.productId)),
-  )
+  const superseded = (p: Posting) => {
+    const latest = latestCounts.get(countKey(p.locationId, p.productId))
+    return latest !== undefined && latest >= p.date
+  }
+  const alreadyCounted = usable.filter(superseded)
+  const toPost = usable.filter((p) => !superseded(p))
   // Chronological: each count is a delta from the balance the previous one left, so they
-  // have to go in the order they happened for the stock card to read correctly.
-  kept.sort((a, b) => a.date - b.date || a.excelRow - b.excelRow)
+  // have to go in the order they happened for the stock card to read correctly — and for
+  // the simulation below to meet the same balances the import will.
+  toPost.sort((a, b) => a.date - b.date || a.excelRow - b.excelRow)
 
   const rowByNumber = new Map(sheet.rows.map((r) => [r.excelRow, r]))
   const skipped: SkippedRow[] = [...dropped.entries()]
@@ -316,9 +340,33 @@ export function buildImportPlan(
 
   alreadyCounted.sort((a, b) => a.date - b.date || a.excelRow - b.excelRow)
 
+  // Walk the plan against the balances it will actually meet, in the order it will meet
+  // them, and set aside the counts that will find nothing to change. setStockCount writes
+  // no movement for those, so counting them as work would make the summary promise more
+  // than the import delivers — and "615 to write" followed by "540 written" reads as a
+  // failure rather than as two counts agreeing.
+  const unchanged: Posting[] = []
+  const kept: Posting[] = []
+  if (balances) {
+    const simulated = new Map(balances)
+    for (const p of toPost) {
+      const key = countKey(p.locationId, p.productId)
+      const now = simulated.get(key) ?? 0
+      if (roundQty(now) === p.targetQty) {
+        unchanged.push(p)
+        continue
+      }
+      simulated.set(key, p.targetQty)
+      kept.push(p)
+    }
+  } else {
+    kept.push(...toPost)
+  }
+
   return {
     postings: kept,
     alreadyCounted,
+    unchanged,
     skipped,
     unitWarnings: [...unitWarnings.values()],
     productCount: new Set(kept.map((p) => p.productId)).size,
