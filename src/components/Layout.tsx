@@ -6,6 +6,7 @@ import { brandDef } from '../brand/brand'
 import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
 import { Icon, type IconName } from './Icon'
+import { isDemoMode } from '../firebase/config'
 import { Badge } from './ui'
 
 interface NavItem {
@@ -177,7 +178,12 @@ function Brand({
         <div className="text-xs text-ink-faint">{t('ระบบบริหารสต๊อก')}</div>
       </div>
       <div className="ml-auto">
-        {mode === 'cloud' ? (
+        {/* A demo build is in local mode too, but the local badge reads as a network
+            state — it is what the real app shows when the connection is down. A demo has
+            to read as a different system, not a disconnected one. */}
+        {isDemoMode() ? (
+          <Badge color="red">{t('เดโม')}</Badge>
+        ) : mode === 'cloud' ? (
           <Badge color="green">Cloud</Badge>
         ) : (
           <Badge color="amber">{t('ในเครื่อง')}</Badge>

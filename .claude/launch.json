@@ -2,24 +2,21 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "pizza-stock-demo",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "demo"],
+      "port": 5175
+    },
+    {
       "name": "pizza-stock",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["run", "dev"],
       "port": 5173
     },
     {
       "name": "pizza-stock-dist",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "preview",
-        "--",
-        "--port",
-        "4173"
-      ],
+      "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
       "port": 4173
     }
   ]

@@ -31,12 +31,27 @@ const BUILT_IN: FirebaseConfig | null = {
 
 const LS_KEY = 'pmstock:firebaseConfig'
 
+/**
+ * Demo builds run on this device only, never against a real project.
+ *
+ * BUILT_IN above points at the company's live warehouse. Without this flag `npm run dev`
+ * opens the real stock, so there is no way to rehearse a change — or hand someone a build
+ * to click around in — without risking the numbers the branches count against. Set by
+ * `npm run demo` (.env.demo); absent everywhere else, so production is unaffected.
+ */
+export function isDemoMode(): boolean {
+  return import.meta.env.VITE_DEMO_MODE === '1'
+}
+
 function isValid(c: unknown): c is FirebaseConfig {
   const o = c as Partial<FirebaseConfig>
   return !!(o && o.apiKey && o.projectId && o.appId && o.authDomain)
 }
 
 export function getFirebaseConfig(): FirebaseConfig | null {
+  // Checked before localStorage as well as BUILT_IN: a demo device that has previously been
+  // connected to the real project must not quietly reconnect to it.
+  if (isDemoMode()) return null
   try {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) {

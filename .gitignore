@@ -17,6 +17,7 @@ dev-dist
 .env
 .env.*
 !.env.example
+!.env.demo
 
 # Editor directories and files
 .vscode/*

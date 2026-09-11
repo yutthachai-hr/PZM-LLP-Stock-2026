@@ -31,6 +31,7 @@ import { seedInitialData } from '../services/seed'
 import {
   clearFirebaseConfig,
   getFirebaseConfig,
+  isDemoMode,
   parseConfigInput,
   saveFirebaseConfig,
 } from '../firebase/config'
@@ -47,7 +48,9 @@ export function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader icon="settings" title={t("ตั้งค่า")} />
 
-      <CloudSection mode={mode} />
+      {/* Hidden in a demo build: a config saved here is ignored by getFirebaseConfig(),
+          so connecting would silently do nothing. */}
+      {!isDemoMode() && <CloudSection mode={mode} />}
 
       {isAdmin && <LocationsSection />}
       {isAdmin && <UsersSection currentUserId={user!.id} />}

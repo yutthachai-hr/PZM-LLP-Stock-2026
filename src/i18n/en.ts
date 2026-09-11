@@ -158,6 +158,8 @@ export const EN: Record<string, string> = {
   'สลับแบรนด์': 'Switch brand',
   ในเครื่อง: 'Local',
   โหมดในเครื่อง: 'Local mode',
+  เดโม: 'Demo',
+  'โหมดสาธิต — ไม่ใช่สต๊อกจริง': 'Demo mode — not real stock',
   ผู้ดูแลระบบ: 'Administrator',
   พนักงาน: 'Staff',
 

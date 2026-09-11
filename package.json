@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "demo": "vite --mode demo --port 5175 --strictPort",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "import-items": "node scripts/import-items.mjs",

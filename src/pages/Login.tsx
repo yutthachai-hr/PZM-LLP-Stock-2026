@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { Button, Card, Field, Input } from '../components/ui'
-import { parseConfigInput, saveFirebaseConfig } from '../firebase/config'
+import { isDemoMode, parseConfigInput, saveFirebaseConfig } from '../firebase/config'
 import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
 import { IDLE_MINUTES } from '../auth/useIdleLogout'
@@ -147,7 +147,9 @@ export function LoginPage() {
             : t("โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้")}
         </p>
 
-        {mode === 'local' && (
+        {/* Not in a demo build: getFirebaseConfig() ignores a saved config there, so the
+            panel would take a real project's keys and then appear to do nothing. */}
+        {mode === 'local' && !isDemoMode() && (
           <div className="mt-3 border-t border-line pt-3">
             {!showCloud ? (
               <button
