@@ -16,9 +16,27 @@ import {
 import { stockCard } from '../lib/ledger'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
-import type { MovementType } from '../types'
+import { DataTable, type Column } from '../components/DataTable'
+import type { MovementType, StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
+
+interface MovementRow {
+  m: StockMovement
+  inQty: number
+  outQty: number
+  balance: number | null
+}
+
+interface SnapshotRow {
+  name: string
+  category: string
+  locationName: string
+  qty: number
+  unit: string
+  min: number
+  value: number
+}
 
 const TYPE_LABEL: Record<MovementType, string> = {
   receive: 'รับเข้า', // i18n-key
@@ -80,7 +98,7 @@ export function ReportsPage() {
     })
   }, [movements, productId, locationId, typeFilter, fromStr, toStr])
 
-  const movementRows = useMemo(
+  const movementRows = useMemo<MovementRow[]>(
     () =>
       card.rows.map((r) => ({
         m: r.movement,
@@ -92,17 +110,9 @@ export function ReportsPage() {
   )
 
   // ---------- snapshot dataset ----------
-  const snapshotRows = useMemo(() => {
+  const snapshotRows = useMemo<SnapshotRow[]>(() => {
     const scope = locationId ? locations.filter((l) => l.id === locationId) : locations
-    const rows: {
-      name: string
-      category: string
-      locationName: string
-      qty: number
-      unit: string
-      min: number
-      value: number
-    }[] = []
+    const rows: SnapshotRow[] = []
     for (const p of products) {
       if (productId && p.id !== productId) continue
       for (const l of scope) {
@@ -278,6 +288,98 @@ export function ReportsPage() {
 
   const count = mode === 'movement' ? movementRows.length : snapshotRows.length
 
+  const movementColumns = useMemo<Column<MovementRow>[]>(() => {
+    const list: Column<MovementRow>[] = [
+      {
+        key: 'product',
+        header: t('สินค้า'),
+        primary: true,
+        headerClassName: 'min-w-[200px]',
+        cell: ({ m }) => m.productName,
+      },
+      {
+        key: 'date',
+        header: t('วันที่'),
+        className: 'whitespace-nowrap',
+        cell: ({ m }) => formatThaiDate(m.date),
+      },
+      {
+        key: 'docNo',
+        header: t('เลขที่'),
+        className: 'doc-no whitespace-nowrap text-xs text-ink-soft',
+        cell: ({ m }) => m.docNo,
+      },
+      { key: 'type', header: t('ประเภท'), cell: ({ m }) => t(TYPE_LABEL[m.type]) },
+      {
+        key: 'in',
+        header: t('รับเข้า'),
+        align: 'right',
+        className: 'num text-in',
+        cell: ({ inQty }) => (inQty ? fmtQty(inQty) : ''),
+      },
+      {
+        key: 'out',
+        header: t('เบิกออก'),
+        align: 'right',
+        className: 'num text-out',
+        cell: ({ outQty }) => (outQty ? fmtQty(outQty) : ''),
+      },
+    ]
+    if (showBalance) {
+      list.push({
+        key: 'balance',
+        header: t('คงเหลือ'),
+        align: 'right',
+        className: 'num font-semibold',
+        cell: ({ balance }) => fmtQty(balance ?? 0),
+      })
+    }
+    list.push(
+      {
+        key: 'note',
+        header: t('หมายเหตุ / เลขบิล'),
+        className: 'text-xs text-ink-soft',
+        cell: ({ m }) => m.note ?? '',
+      },
+      {
+        key: 'by',
+        header: t('ผู้ทำ'),
+        className: 'text-xs text-ink-soft',
+        cell: ({ m }) => m.byUserName,
+      },
+    )
+    return list
+  }, [t, showBalance])
+
+  const snapshotColumns = useMemo<Column<SnapshotRow>[]>(
+    () => [
+      { key: 'product', header: t('สินค้า'), primary: true, cell: (r) => r.name },
+      { key: 'location', header: t('คลัง'), className: 'text-ink-soft', cell: (r) => r.locationName },
+      {
+        key: 'qty',
+        header: t('คงเหลือ'),
+        align: 'right',
+        className: 'num font-semibold',
+        cell: (r) => `${fmtQty(r.qty)} ${r.unit}`,
+      },
+      {
+        key: 'min',
+        header: t('ขั้นต่ำ'),
+        align: 'right',
+        className: 'num text-ink-soft',
+        cell: (r) => fmtQty(r.min),
+      },
+      {
+        key: 'value',
+        header: t('มูลค่า'),
+        align: 'right',
+        className: 'num',
+        cell: (r) => fmtMoney(r.value),
+      },
+    ],
+    [t],
+  )
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -390,75 +492,23 @@ export function ReportsPage() {
         </Card>
       ) : (
         <Card className="overflow-hidden">
-          <div className="overflow-auto max-h-[calc(100vh-240px)]">
-            {mode === 'movement' ? (
-              <table className="w-full min-w-[900px] text-sm">
-                <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
-                  <tr>
-                    <th className="px-3 py-2">{t("วันที่")}</th>
-                    <th className="px-3 py-2">{t("เลขที่")}</th>
-                    <th className="px-3 py-2">{t("ประเภท")}</th>
-                    <th className="px-3 py-2">{t("สินค้า")}</th>
-                    <th className="px-3 py-2 text-right">{t("รับเข้า")}</th>
-                    <th className="px-3 py-2 text-right">{t("เบิกออก")}</th>
-                    {showBalance && <th className="px-3 py-2 text-right">{t("คงเหลือ")}</th>}
-                    <th className="px-3 py-2">{t("หมายเหตุ / เลขบิล")}</th>
-                    <th className="px-3 py-2">{t("ผู้ทำ")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {movementRows.slice(0, 200).map(({ m, inQty, outQty, balance }) => (
-                    <tr key={m.id}>
-                      <td className="whitespace-nowrap px-3 py-2">{formatThaiDate(m.date)}</td>
-                      <td className="doc-no whitespace-nowrap px-3 py-2 text-xs text-ink-soft">
-                        {m.docNo}
-                      </td>
-                      <td className="px-3 py-2">{t(TYPE_LABEL[m.type])}</td>
-                      <td className="min-w-[200px] px-3 py-2">{m.productName}</td>
-                      <td className="num px-3 py-2 text-right text-in">
-                        {inQty ? fmtQty(inQty) : ''}
-                      </td>
-                      <td className="num px-3 py-2 text-right text-out">
-                        {outQty ? fmtQty(outQty) : ''}
-                      </td>
-                      {showBalance && (
-                        <td className="num px-3 py-2 text-right font-semibold">
-                          {fmtQty(balance ?? 0)}
-                        </td>
-                      )}
-                      <td className="px-3 py-2 text-xs text-ink-soft">{m.note ?? ''}</td>
-                      <td className="px-3 py-2 text-xs text-ink-soft">{m.byUserName}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
-                  <tr>
-                    <th className="px-3 py-2">{t("สินค้า")}</th>
-                    <th className="px-3 py-2">{t("คลัง")}</th>
-                    <th className="px-3 py-2 text-right">{t("คงเหลือ")}</th>
-                    <th className="px-3 py-2 text-right">{t("ขั้นต่ำ")}</th>
-                    <th className="px-3 py-2 text-right">{t("มูลค่า")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {snapshotRows.slice(0, 300).map((r, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-2">{r.name}</td>
-                      <td className="px-3 py-2 text-ink-soft">{r.locationName}</td>
-                      <td className="num px-3 py-2 text-right font-semibold">
-                        {fmtQty(r.qty)} {r.unit}
-                      </td>
-                      <td className="num px-3 py-2 text-right text-ink-soft">{fmtQty(r.min)}</td>
-                      <td className="num px-3 py-2 text-right">{fmtMoney(r.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {mode === 'movement' ? (
+            <DataTable
+              rows={movementRows.slice(0, 200)}
+              columns={movementColumns}
+              rowKey={({ m }) => m.id}
+              minWidth={showBalance ? 960 : 900}
+              maxHeight="calc(100vh - 240px)"
+            />
+          ) : (
+            <DataTable
+              rows={snapshotRows.slice(0, 300)}
+              columns={snapshotColumns}
+              rowKey={(r) => `${r.locationName}-${r.name}`}
+              minWidth={640}
+              maxHeight="calc(100vh - 240px)"
+            />
+          )}
           {count > (mode === 'movement' ? 200 : 300) && (
             <div className="border-t border-line p-2 text-center text-xs text-ink-faint">
               {t('แสดงตัวอย่าง — ไฟล์ดาวน์โหลดจะมีครบทั้ง {n} รายการ', { n: count, })}

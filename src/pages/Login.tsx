@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { Button, Card, Field, Input } from '../components/ui'
-import { parseConfigInput, saveFirebaseConfig } from '../firebase/config'
+import { isDemoMode, parseConfigInput, saveFirebaseConfig } from '../firebase/config'
+import { DEMO_ADMIN, resetDemoData } from '../services/demoSeed'
+import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
 import { IDLE_MINUTES } from '../auth/useIdleLogout'
@@ -60,8 +62,16 @@ export function LoginPage() {
       <Card className="w-full max-w-sm p-6">
         <LangToggle className="mx-auto mb-4 w-32" />
         <div className="mb-6 text-center">
-          <div className="text-4xl">🍕</div>
-          <h1 className="mt-2 text-xl font-bold text-brand">Pizza Mania Stock</h1>
+          {/* The installed icon, not an emoji: this is the screen someone lands on after
+              tapping that icon on their home screen, and it should be the same mark. */}
+          <img
+            src="/pwa-192.png"
+            alt=""
+            width={56}
+            height={56}
+            className="mx-auto rounded-xl"
+          />
+          <h1 className="mt-2 text-xl font-bold text-brand">Inventory Pzm</h1>
           <p className="text-sm text-ink-soft">
             {!bootstrap
               ? t("เข้าสู่ระบบบริหารสต๊อก")
@@ -147,7 +157,11 @@ export function LoginPage() {
             : t("โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้")}
         </p>
 
-        {mode === 'local' && (
+        {isDemoMode() && <DemoSetup />}
+
+        {/* Not in a demo build: getFirebaseConfig() ignores a saved config there, so the
+            panel would take a real project's keys and then appear to do nothing. */}
+        {mode === 'local' && !isDemoMode() && (
           <div className="mt-3 border-t border-line pt-3">
             {!showCloud ? (
               <button
@@ -200,4 +214,56 @@ function humanError(err: unknown): string {
   if (msg.includes('auth/weak-password')) return 'รหัสผ่านสั้นเกินไป (อย่างน้อย 6 ตัว)' // i18n-key
   if (msg.includes('auth/invalid-email')) return 'รูปแบบอีเมลไม่ถูกต้อง' // i18n-key
   return msg
+}
+
+
+/**
+ * Rebuild the demo from nothing, in one tap, and sign in.
+ *
+ * It lives on the sign-in screen because that is where a wiped device leaves you: no
+ * account exists yet, so there is nowhere else to put a control that creates one. The
+ * reload afterwards is not cosmetic — the running app is holding collections that were
+ * just deleted out from under it.
+ */
+function DemoSetup() {
+  const t = useT()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function go() {
+    setBusy(true)
+    setErr('')
+    try {
+      await resetDemoData()
+      window.location.reload()
+    } catch (e) {
+      setErr(errText(e, t))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-warn/30 bg-warn-soft p-3 text-center">
+      <p className="text-xs font-medium text-ink">{t('โหมดสาธิต')}</p>
+      <p className="mt-0.5 text-xs text-ink-soft">
+        {t('ลบข้อมูลในเครื่องนี้ทั้งหมด แล้วตั้งค่าใหม่: ผู้ดูแล 1 คน, คลังทั้งสองแบรนด์, และแคตตาล็อกสินค้า')}
+      </p>
+      <Button
+        variant="secondary"
+        onClick={go}
+        disabled={busy}
+        className="mt-2 w-full"
+        type="button"
+      >
+        {busy ? t('กำลังเตรียม...') : t('รีเซ็ตข้อมูลเดโม')}
+      </Button>
+      <p className="mt-2 text-xs text-ink-faint">
+        {t('เข้าสู่ระบบอัตโนมัติ — บัญชี {email} รหัส {password}', {
+          email: DEMO_ADMIN.email,
+          password: DEMO_ADMIN.password,
+        })}
+      </p>
+      {err && <p className="mt-2 text-xs text-danger">{err}</p>}
+    </div>
+  )
 }

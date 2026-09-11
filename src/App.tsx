@@ -8,6 +8,7 @@ import { ConfirmProvider } from './components/Confirm'
 import { I18nProvider, useT } from './i18n/I18nContext'
 import { Spinner } from './components/ui'
 import { UpdateBanner } from './pwa/UpdateBanner'
+import { DemoBanner } from './components/DemoBanner'
 import { Layout } from './components/Layout'
 import { BrandPicker } from './components/BrandPicker'
 import { LoginPage } from './pages/Login'
@@ -18,6 +19,7 @@ import { IssuePage } from './pages/Issue'
 import { AdjustPage } from './pages/Adjust'
 import { MovementsPage } from './pages/Movements'
 import { ReportsPage } from './pages/Reports'
+import { ImportPage } from './pages/Import'
 import { NotesPage } from './pages/Notes'
 import { SettingsPage } from './pages/Settings'
 import { ensureBrandLocations } from './services/seed'
@@ -66,6 +68,7 @@ function Gate() {
           <Route path="/adjust" element={<AdjustPage />} />
           <Route path="/movements" element={<MovementsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -87,6 +90,9 @@ export function App() {
                 {/* Outside Gate on purpose: a device parked on the sign-in screen is
                     exactly the one nobody thinks to reload. */}
                 <UpdateBanner />
+                {/* Outside Gate too — the sign-in screen is the first thing anyone being
+                    shown the demo sees, and it is already a convincing one. */}
+                <DemoBanner />
               </BrowserRouter>
             </BrandProvider>
           </AuthProvider>

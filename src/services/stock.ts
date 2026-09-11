@@ -441,6 +441,11 @@ export async function adjustStock(params: {
  * Set a location's on-hand balance to an exact target value (e.g. entering opening stock or a
  * physical count). Records the difference as an audited adjustment movement so the ledger stays
  * the single source of truth. No-op if the balance already matches.
+ *
+ * `date` is the business date of the count — when the shelf was actually walked. It defaults
+ * to now, which is right for someone counting at the screen, but a closing-stock sheet being
+ * loaded records counts that happened weeks ago, and filing those under today would put every
+ * month's count on one day in the stock card.
  */
 export async function setStockCount(params: {
   productId: string
@@ -450,11 +455,13 @@ export async function setStockCount(params: {
   targetQty: number
   actor: Actor
   note?: string
-}): Promise<void> {
+  date?: number
+}): Promise<boolean> {
   const { productId, productName, unit, locationId, actor, note } = params
   const targetQty = requireCountQty(params.targetQty)
   requireId(productId, 'productId')
   requireId(locationId, 'locationId')
+  const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
   const db = scoped()
 
   return db.transaction(async (tx) => {
@@ -463,7 +470,7 @@ export async function setStockCount(params: {
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
     const cur = level?.qty ?? 0
     const delta = roundQty(targetQty - cur)
-    if (delta === 0) return
+    if (delta === 0) return false
 
     const seq = (counter?.value ?? 0) + 1
     const now = Date.now()
@@ -483,12 +490,13 @@ export async function setStockCount(params: {
       ...(delta > 0 ? { toLocationId: locationId } : { fromLocationId: locationId }),
       reason: 'opening',
       note: note ?? 'ตั้งยอดคงเหลือ',
-      date: now,
+      date,
       byUserId: actor.id,
       byUserName: actor.name,
       createdAt: now,
     }
     tx.set(COL.movements, genId(), mv as Record<string, unknown>)
+    return true
   })
 }
 
