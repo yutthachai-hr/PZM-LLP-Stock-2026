@@ -7,6 +7,7 @@ import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
 import { Icon, type IconName } from './Icon'
 import { isDemoMode } from '../firebase/config'
+import { InstallHint } from '../pwa/InstallHint'
 import { Badge } from './ui'
 
 interface NavItem {
@@ -145,7 +146,10 @@ export function Layout({ children }: { children: ReactNode }) {
           </span>
         </header>
 
-        <main className="min-w-0 flex-1 p-4 sm:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 sm:p-6">
+          <InstallHint />
+          {children}
+        </main>
       </div>
     </div>
   )
@@ -176,7 +180,8 @@ function Brand({
         <div className="truncate font-bold leading-tight text-brand">
           {def?.name ?? 'Stock'}
         </div>
-        <div className="text-xs text-ink-faint">{t('ระบบบริหารสต๊อก')}</div>
+        {/* The company whose books are open, above the name of the system they are in. */}
+        <div className="text-xs text-ink-faint">Inventory Pzm</div>
       </div>
       <div className="ml-auto">
         {/* A demo build is in local mode too, but the local badge reads as a network

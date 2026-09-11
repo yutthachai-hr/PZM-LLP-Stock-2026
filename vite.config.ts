@@ -16,10 +16,13 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Pizza Mania Stock',
-        short_name: 'PM Stock',
-        description: 'ระบบบริหารสต๊อก Pizza Mania',
-        theme_color: '#b91c1c',
+        name: 'Inventory Pzm',
+        short_name: 'Inventory Pzm',
+        description: 'ระบบบริหารสต๊อก Pizza Mania และ Le Lapin',
+        // Slate, matching index.html. It used to be Pizza Mania red, which tinted an
+        // installed window in one of the two brands' colours whichever set of books was
+        // open — and disagreed with the tab colour besides.
+        theme_color: '#f1f5f9',
         background_color: '#ffffff',
         display: 'standalone',
         // The UI is Thai. Without this the manifest says lang 'en', which is what a store

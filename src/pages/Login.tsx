@@ -60,8 +60,16 @@ export function LoginPage() {
       <Card className="w-full max-w-sm p-6">
         <LangToggle className="mx-auto mb-4 w-32" />
         <div className="mb-6 text-center">
-          <div className="text-4xl">🍕</div>
-          <h1 className="mt-2 text-xl font-bold text-brand">Pizza Mania Stock</h1>
+          {/* The installed icon, not an emoji: this is the screen someone lands on after
+              tapping that icon on their home screen, and it should be the same mark. */}
+          <img
+            src="/pwa-192.png"
+            alt=""
+            width={56}
+            height={56}
+            className="mx-auto rounded-xl"
+          />
+          <h1 className="mt-2 text-xl font-bold text-brand">Inventory Pzm</h1>
           <p className="text-sm text-ink-soft">
             {!bootstrap
               ? t("เข้าสู่ระบบบริหารสต๊อก")

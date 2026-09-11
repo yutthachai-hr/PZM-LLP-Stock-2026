@@ -6,7 +6,18 @@
     <!-- iOS does not read the web manifest; this is the icon a home-screen install uses. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Inventory Pzm — stock management for Pizza Mania and Le Lapin" />
+    <!-- Must match the manifest's theme_color. They disagreed (slate here, Pizza red
+         there), so the browser tab and an installed window tinted differently for the
+         same app. Slate is the app's own chrome, and it is not either brand's colour —
+         which matters, because one install serves two companies. -->
     <meta name="theme-color" content="#f1f5f9" />
+    <!-- iOS reads none of the manifest. Without these an installed icon opens in Safari
+         with its address bar, which is the difference between an app and a bookmark. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Inventory Pzm" />
     <!-- The regular weight is on screen before anything else is; fetching it with
          the HTML rather than after the stylesheet parses avoids a visible reflow
          from the fallback face. Bold is not preloaded — it appears below the fold
@@ -18,7 +29,7 @@
       type="font/woff2"
       crossorigin
     />
-    <title>ระบบบริหารสต๊อก — Pizza Mania & Le Lapin</title>
+    <title>Inventory Pzm</title>
   </head>
   <body>
     <div id="root"></div>

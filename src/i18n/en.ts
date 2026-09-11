@@ -153,7 +153,6 @@ export const EN: Record<string, string> = {
   รายงาน: 'Reports',
   บันทึกช่วยจำ: 'Notes',
   ตั้งค่า: 'Settings',
-  ระบบบริหารสต๊อก: 'Stock management',
   ออกจากระบบ: 'Sign out',
   'สลับแบรนด์': 'Switch brand',
   ในเครื่อง: 'Local',
@@ -644,4 +643,11 @@ export const EN: Record<string, string> = {
     'Sheet “{sheet}” has no location and count rows above its heading',
   'ชีต "{sheet}" มีหัวตารางแต่ไม่มีชื่อสาขาหรือชื่องวด':
     'Sheet “{sheet}” has a heading but no location or count names',
+
+  // ---- install on the home screen ----------------------------------------------
+  ติดตั้งลงหน้าจอโฮม: 'Add to home screen',
+  'กดปุ่มแชร์ในแถบล่าง แล้วเลือก "เพิ่มไปยังหน้าจอโฮม"':
+    'Tap Share in the bottom bar, then “Add to Home Screen”',
+  'เปิดเร็วกว่า เต็มจอ และไม่ต้องหาแท็บ': 'Opens faster, full screen, no hunting for a tab',
+  ติดตั้ง: 'Install',
 }
