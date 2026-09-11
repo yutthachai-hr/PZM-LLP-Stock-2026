@@ -18,11 +18,11 @@ vi.mock('../src/backend', async () => {
 })
 
 const { resetMemory, seed, raw } = await import('./helpers/memory-backend')
-const { buildImportPlan, applyImportPlan, loadLatestCounts } = await import(
+const { buildImportPlan, applyImportPlan, loadLastActivity } = await import(
   '../src/services/importStock',
 )
 const { setActiveBrand } = await import('../src/brand/brand')
-const { setStockCount } = await import('../src/services/stock')
+const { setStockCount, receiveStock } = await import('../src/services/stock')
 
 const ACTOR = { id: 'uid-admin', name: 'Admin' }
 const MAIN = 'loc-main'
@@ -322,7 +322,10 @@ describe('posting the counts', () => {
     seed('locations', LOCATIONS as unknown as Record<string, unknown>[])
   })
 
-  function planFor(rows: (string | number | null)[][], latest?: ReadonlyMap<string, number>) {
+  function planFor(
+    rows: (string | number | null)[][],
+    latest?: ReadonlyMap<string, import('../src/services/importStock').LastActivity>,
+  ) {
     const { sheets } = parseStockWorkbook(workbook(rows))
     const sheet = sheets[0]
     return buildImportPlan(sheet, mapAll(sheet, HEADERS), PRODUCTS, LOCATIONS, latest)
@@ -372,9 +375,9 @@ describe('posting the counts', () => {
     // The second run must not replay July against the balance August already moved. Left to
     // itself that writes a correction down and a correction back up: the closing balance
     // still looks right and the stock card has two movements that never happened.
-    const second = planFor(rows, await loadLatestCounts())
+    const second = planFor(rows, await loadLastActivity())
     expect(second.postings).toEqual([])
-    expect(second.alreadyCounted).toHaveLength(4)
+    expect(second.superseded).toHaveLength(4)
 
     const result = await applyImportPlan(second, ACTOR, 'นำเข้าจากไฟล์')
     expect(result).toMatchObject({ posted: 0, unchanged: 0, failed: [] })
@@ -392,9 +395,9 @@ describe('posting the counts', () => {
     const first = await applyImportPlan(planFor(rows), ACTOR, 'นำเข้าจากไฟล์')
     expect(first).toMatchObject({ posted: 1, unchanged: 1 })
 
-    const second = planFor(rows, await loadLatestCounts())
+    const second = planFor(rows, await loadLastActivity())
     expect(second.postings).toEqual([])
-    expect(second.alreadyCounted).toHaveLength(2)
+    expect(second.superseded).toHaveLength(2)
 
     await applyImportPlan(second, ACTOR, 'นำเข้าจากไฟล์')
     const level = (raw('stockLevels') as Record<string, unknown>[]).find(
@@ -412,7 +415,7 @@ describe('posting the counts', () => {
       'นำเข้าจากไฟล์',
     )
     // Next month's file goes in as normal.
-    const latest = await loadLatestCounts()
+    const latest = await loadLastActivity()
     const sept = buildImportPlan(
       parseStockWorkbook(
         workbook([
@@ -443,7 +446,7 @@ describe('posting the counts', () => {
       latest,
     )
     expect(july.postings).toEqual([])
-    expect(july.alreadyCounted).toHaveLength(1)
+    expect(july.superseded).toHaveLength(1)
   })
 
   test('the summary promises exactly what the import writes', async () => {
@@ -471,6 +474,63 @@ describe('posting the counts', () => {
     const result = await applyImportPlan(plan, ACTOR, 'นำเข้าจากไฟล์')
     expect(result.posted).toBe(plan.postings.length)
     expect(result.unchanged).toBe(0)
+  })
+
+  test('a count is refused once stock has moved since the day it was taken', async () => {
+    // The case that matters against a live warehouse. A count sets the balance to its
+    // figure NOW, whatever date is written on it. Loading August's sheet after September's
+    // receipts are in would set the shelf back to what August found and quietly erase
+    // September from the balance.
+    await receiveStock({
+      lines: [{ productId: 'p1', productName: 'SWISS BROWN MUSHROOMS', unit: 'KG', qty: 20 }],
+      toLocationId: MAIN,
+      date: new Date(2026, 8, 5).getTime(),
+      actor: ACTOR,
+      note: 'INV-9001',
+    })
+
+    const plan = planFor(
+      [['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', 8, 'KG', null, null, null, null, null, null]],
+      await loadLastActivity(),
+    )
+    expect(plan.postings).toEqual([])
+    expect(plan.superseded).toHaveLength(1)
+    // And it says which of the two reasons it was, because they mean different things.
+    expect(plan.superseded[0].by.kind).toBe('movement')
+
+    await applyImportPlan(plan, ACTOR, 'นำเข้าจากไฟล์')
+    const level = (raw('stockLevels') as Record<string, unknown>[]).find(
+      (l) => l.id === `${MAIN}__p1`,
+    )
+    expect(level?.qty).toBe(20)
+  })
+
+  test('a transfer out of a location makes a count there stale too', async () => {
+    await setStockCount({
+      productId: 'p1',
+      productName: 'SWISS BROWN MUSHROOMS',
+      unit: 'KG',
+      locationId: MAIN,
+      targetQty: 30,
+      actor: ACTOR,
+      date: new Date(2026, 6, 1).getTime(),
+    })
+    const { issueStock } = await import('../src/services/stock')
+    await issueStock({
+      lines: [{ productId: 'p1', productName: 'SWISS BROWN MUSHROOMS', unit: 'KG', qty: 5 }],
+      fromLocationId: MAIN,
+      toLocationId: BRANCH,
+      date: new Date(2026, 8, 2).getTime(),
+      actor: ACTOR,
+    })
+    const activity = await loadLastActivity()
+    // Both ends of the transfer are now newer than the sheet's counts.
+    const plan = planFor(
+      [['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', 8, 'KG', 2, 'KG', null, null, null, null]],
+      activity,
+    )
+    expect(plan.postings).toEqual([])
+    expect(plan.superseded.map((s) => s.posting.locationId).sort()).toEqual([MAIN, BRANCH].sort())
   })
 
   test('a count of zero is posted and empties the balance', async () => {

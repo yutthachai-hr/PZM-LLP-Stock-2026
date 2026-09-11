@@ -22,7 +22,8 @@ import { parseStockWorkbook, type ParsedSheet } from '../lib/stockSheet'
 import {
   applyImportPlan,
   buildImportPlan,
-  loadLatestCounts,
+  loadLastActivity,
+  type LastActivity,
   type ImportPlan,
   type ImportResult,
   type SheetMapping,
@@ -58,7 +59,7 @@ export function ImportPage() {
   const [included, setIncluded] = useState<Record<string, boolean>>({})
   /** Location per column heading. One heading means the same place on every date. */
   const [byHeader, setByHeader] = useState<Record<string, string>>({})
-  const [latestCounts, setLatestCounts] = useState<ReadonlyMap<string, number>>(new Map())
+  const [lastActivity, setLastActivity] = useState<ReadonlyMap<string, LastActivity>>(new Map())
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [open, setOpen] = useState<SkipReason | 'units' | 'already' | null>(null)
@@ -90,7 +91,7 @@ export function ImportPage() {
       const guess =
         parsed.sheets.find((s) => sheetMatchesBrand(s.name, def?.sheetKey)) ?? parsed.sheets[0]
       selectSheet(guess)
-      setLatestCounts(await loadLatestCounts())
+      setLastActivity(await loadLastActivity())
     } catch (err) {
       toast.error(errText(err, t))
     }
@@ -117,7 +118,7 @@ export function ImportPage() {
     setDates({})
     setIncluded({})
     setByHeader({})
-    setLatestCounts(new Map())
+    setLastActivity(new Map())
     setResult(null)
     setProgress(null)
     setOpen(null)
@@ -154,8 +155,8 @@ export function ImportPage() {
 
   const plan: ImportPlan | null = useMemo(() => {
     if (!sheet || !mapping) return null
-    return buildImportPlan(sheet, mapping, products, activeLocations, latestCounts, balances)
-  }, [sheet, mapping, products, activeLocations, latestCounts, balances])
+    return buildImportPlan(sheet, mapping, products, activeLocations, lastActivity, balances)
+  }, [sheet, mapping, products, activeLocations, lastActivity, balances])
 
   const mappedAny = headers.some((h) => byHeader[h])
   const canImport = !!plan && plan.postings.length > 0 && !progress
@@ -180,7 +181,7 @@ export function ImportPage() {
         (done, total) => setProgress({ done, total }),
       )
       setResult(res)
-      setLatestCounts(await loadLatestCounts())
+      setLastActivity(await loadLastActivity())
       if (res.failed.length === 0) {
         toast.success(t('นำเข้าสำเร็จ {n} รายการ', { n: res.posted }))
       } else {
@@ -391,7 +392,7 @@ export function ImportPage() {
             <Stat label={t('ข้ามไว้')} value={plan.skipped.length} tone="warn" />
             <Stat
               label={t('ยอดตรงอยู่แล้ว')}
-              value={plan.alreadyCounted.length + plan.unchanged.length}
+              value={plan.superseded.length + plan.unchanged.length}
             />
           </div>
 
@@ -444,21 +445,28 @@ export function ImportPage() {
               </Disclosure>
             )}
 
-            {plan.alreadyCounted.length > 0 && (
+            {plan.superseded.length > 0 && (
               <Disclosure
                 open={open === 'already'}
                 onToggle={() => setOpen(open === 'already' ? null : 'already')}
-                tone="plain"
-                title={`${t('มียอดนับที่ใหม่กว่าอยู่แล้ว')} — ${plan.alreadyCounted.length}`}
-                hint={t('สินค้านี้ที่คลังนี้มียอดนับวันเดียวกันหรือใหม่กว่าอยู่แล้ว — ลงย้อนหลังจะทับยอดล่าสุด')}
+                tone={plan.superseded.some((s) => s.by.kind === 'movement') ? 'warn' : 'plain'}
+                title={`${t('มีความเคลื่อนไหวหลังวันที่นับแล้ว')} — ${plan.superseded.length}`}
+                hint={t('ยอดนับจะตั้งยอดคงเหลือเป็นตัวเลขนั้น "ทันที" ไม่ว่าลงวันที่อะไร — ถ้าของขยับไปหลังวันนับ การลงย้อนหลังจะลบความเคลื่อนไหวที่เกิดทีหลังออกจากยอด')}
               >
                 <ul className="space-y-1">
-                  {plan.alreadyCounted.slice(0, 50).map((p) => (
+                  {plan.superseded.slice(0, 100).map(({ posting: p, by }) => (
                     <li key={`${p.date}-${p.locationId}-${p.productId}`} className="text-xs">
                       <span className="text-ink-faint">{formatThaiDateShort(p.date)}</span>{' '}
                       <span className="font-medium text-ink">{p.sku}</span>{' '}
                       <span className="text-ink-soft">
                         {p.locationName} · {fmtQty(p.targetQty)} {p.unit}
+                      </span>{' '}
+                      <span className={by.kind === 'movement' ? 'text-warn' : 'text-ink-faint'}>
+                        {by.kind === 'movement'
+                          ? t('— มีรายการเคลื่อนไหว {date}', {
+                              date: formatThaiDateShort(by.date),
+                            })
+                          : t('— นับไว้แล้ว {date}', { date: formatThaiDateShort(by.date) })}
                       </span>
                     </li>
                   ))}

@@ -629,9 +629,11 @@ export const EN: Record<string, string> = {
     'Counts are recorded in the catalog unit. Where the units really differ, the number is wrong.',
   ไฟล์: 'Sheet',
   ระบบ: 'System',
-  'มียอดนับที่ใหม่กว่าอยู่แล้ว': 'A later count already exists',
-  'สินค้านี้ที่คลังนี้มียอดนับวันเดียวกันหรือใหม่กว่าอยู่แล้ว — ลงย้อนหลังจะทับยอดล่าสุด':
-    'This product already has a count at this location on the same day or later. Posting behind it would overwrite the newer figure.',
+  'มีความเคลื่อนไหวหลังวันที่นับแล้ว': 'Stock has moved since that count',
+  'ยอดนับจะตั้งยอดคงเหลือเป็นตัวเลขนั้น "ทันที" ไม่ว่าลงวันที่อะไร — ถ้าของขยับไปหลังวันนับ การลงย้อนหลังจะลบความเคลื่อนไหวที่เกิดทีหลังออกจากยอด':
+    'A count sets the balance to its figure immediately, whatever date it carries. If stock moved after the count was taken, posting it would erase everything that happened since from the balance.',
+  '— มีรายการเคลื่อนไหว {date}': '— movement on {date}',
+  '— นับไว้แล้ว {date}': '— counted {date}',
   'ชีต "{sheet}" ไม่มีหัวตาราง Quantity/Unit — ไม่ใช่ใบสต๊อกคงเหลือ':
     'Sheet “{sheet}” has no Quantity/Unit heading — it is not a stock sheet',
   'ชีต "{sheet}" ไม่มีแถวชื่อสาขาและงวดอยู่เหนือหัวตาราง':

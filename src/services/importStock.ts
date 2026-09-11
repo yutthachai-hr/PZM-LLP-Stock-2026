@@ -58,41 +58,49 @@ export interface Posting {
   excelRow: number
 }
 
+/** What last happened to a product at a location, and whether it was a count or a move. */
+export interface LastActivity {
+  date: number
+  kind: 'count' | 'movement'
+}
+
 /**
- * The date of the most recent stock count already recorded, per location and product.
+ * The most recent thing that happened to each product at each location.
  *
- * A count is posted as the difference from the balance the one before it left, so the order
- * they go in is the whole meaning of the numbers. Two things follow, and both are this map's
- * job:
+ * A stock count says "the shelf holds exactly this". Applying one sets the balance to that
+ * figure **now**, whatever date is written on it — so a count can only be applied while
+ * nothing has moved that item since it was taken. Otherwise the count silently undoes
+ * everything that happened in between: importing the August sheet in November sets the
+ * balance back to what August found and quietly erases September and October's receipts
+ * from it.
  *
- *  - Importing the same file twice must not replay it. Left alone, July would be posted
- *    against a balance August has already moved: a correction down and then a correction
- *    back up, a closing balance that still looks right, and two movements in the stock card
- *    that never happened.
- *  - A count must never be filed behind one that already happened. Posting July after August
- *    is recorded rewrites the balance backwards to the older figure and leaves the newer
- *    count stale, which is worse than not importing it.
+ * That is why this looks at every movement and not only at previous counts. Two different
+ * refusals come out of it, and the difference matters to whoever is importing:
  *
- * So the rule is a date comparison, not an exact match: nothing is posted for a product at a
- * location that already has a count on or after that day. An exact match alone is not enough
- * — a count that found the balance unchanged writes no movement and so leaves no trace of
- * that date, and those are precisely the ones a second run would replay.
+ *  - a later **count** means the file has already been loaded, or an older file is being
+ *    loaded over a newer one — usually nothing to worry about;
+ *  - a later **movement** means the sheet is stale relative to the warehouse, which is a
+ *    reason to stop and look rather than to shrug.
  *
  * Reads the ledger once, the way buildBackup() does. This runs monthly, by an admin, and
  * the alternative is a read per posting.
  */
-export async function loadLatestCounts(): Promise<Map<string, number>> {
+export async function loadLastActivity(): Promise<Map<string, LastActivity>> {
   const db = backend.forBrand(getBrand())
   const movements = await db.getAll<StockMovement>(COL.movements)
-  const latest = new Map<string, number>()
+  const latest = new Map<string, LastActivity>()
+  const note = (locationId: string, productId: string, m: StockMovement) => {
+    const key = countKey(locationId, productId)
+    const known = latest.get(key)
+    if (known && known.date >= m.date) return
+    const kind = m.type === 'adjust' && m.reason === 'opening' ? 'count' : 'movement'
+    latest.set(key, { date: m.date, kind })
+  }
   for (const m of movements) {
     if (m.voided) continue
-    if (m.type !== 'adjust' || m.reason !== 'opening') continue
-    const locationId = m.toLocationId ?? m.fromLocationId
-    if (!locationId) continue
-    const key = countKey(locationId, m.productId)
-    const known = latest.get(key)
-    if (known === undefined || m.date > known) latest.set(key, m.date)
+    // A transfer touches both ends, and a count at either one is equally stale afterwards.
+    if (m.fromLocationId) note(m.fromLocationId, m.productId, m)
+    if (m.toLocationId) note(m.toLocationId, m.productId, m)
   }
   return latest
 }
@@ -139,10 +147,11 @@ export interface UnitWarning {
 export interface ImportPlan {
   postings: Posting[]
   /**
-   * Counts this ledger has already moved past: a count for that product at that location
-   * exists on the same day or a later one. Posting them would rewrite history backwards.
+   * Counts the ledger has already moved past — something happened to that product at that
+   * location on the same day or later, so applying the count would overwrite a newer
+   * balance with an older figure.
    */
-  alreadyCounted: Posting[]
+  superseded: { posting: Posting; by: LastActivity }[]
   /**
    * Counts the balance already agrees with. Nothing moved, so the ledger records nothing —
    * separated out so the summary promises the number of movements it will actually write.
@@ -189,7 +198,7 @@ export function buildImportPlan(
   mapping: SheetMapping,
   products: Product[],
   locations: StockLocation[],
-  latestCounts: ReadonlyMap<string, number> = new Map(),
+  lastActivity: ReadonlyMap<string, LastActivity> = new Map(),
   balances?: ReadonlyMap<string, number>,
 ): ImportPlan {
   const bySku = new Map<string, Product>()
@@ -310,12 +319,17 @@ export function buildImportPlan(
 
   // Drop the postings a later duplicate invalidated.
   const usable = postings.filter((p) => !Number.isNaN(p.targetQty))
-  const superseded = (p: Posting) => {
-    const latest = latestCounts.get(countKey(p.locationId, p.productId))
-    return latest !== undefined && latest >= p.date
+  const staleAgainst = (p: Posting): LastActivity | null => {
+    const last = lastActivity.get(countKey(p.locationId, p.productId))
+    return last && last.date >= p.date ? last : null
   }
-  const alreadyCounted = usable.filter(superseded)
-  const toPost = usable.filter((p) => !superseded(p))
+  const superseded: { posting: Posting; by: LastActivity }[] = []
+  const toPost: Posting[] = []
+  for (const p of usable) {
+    const by = staleAgainst(p)
+    if (by) superseded.push({ posting: p, by })
+    else toPost.push(p)
+  }
   // Chronological: each count is a delta from the balance the previous one left, so they
   // have to go in the order they happened for the stock card to read correctly — and for
   // the simulation below to meet the same balances the import will.
@@ -338,7 +352,9 @@ export function buildImportPlan(
     })
     .sort((a, b) => a.excelRow - b.excelRow)
 
-  alreadyCounted.sort((a, b) => a.date - b.date || a.excelRow - b.excelRow)
+  superseded.sort(
+    (a, b) => a.posting.date - b.posting.date || a.posting.excelRow - b.posting.excelRow,
+  )
 
   // Walk the plan against the balances it will actually meet, in the order it will meet
   // them, and set aside the counts that will find nothing to change. setStockCount writes
@@ -365,7 +381,7 @@ export function buildImportPlan(
 
   return {
     postings: kept,
-    alreadyCounted,
+    superseded,
     unchanged,
     skipped,
     unitWarnings: [...unitWarnings.values()],
