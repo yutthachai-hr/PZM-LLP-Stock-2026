@@ -19,6 +19,7 @@ import { IssuePage } from './pages/Issue'
 import { AdjustPage } from './pages/Adjust'
 import { MovementsPage } from './pages/Movements'
 import { ReportsPage } from './pages/Reports'
+import { ImportPage } from './pages/Import'
 import { NotesPage } from './pages/Notes'
 import { SettingsPage } from './pages/Settings'
 import { ensureBrandLocations } from './services/seed'
@@ -67,6 +68,7 @@ function Gate() {
           <Route path="/adjust" element={<AdjustPage />} />
           <Route path="/movements" element={<MovementsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

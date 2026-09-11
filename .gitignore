@@ -34,3 +34,6 @@ dev-dist
 .firebase/
 firebase-debug.log
 firestore-debug.log
+
+# Real company data staged for a local import run. Never commit.
+public/__demo-import.xlsx

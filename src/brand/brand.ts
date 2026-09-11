@@ -45,6 +45,14 @@ export interface BrandDef {
   accentVivid: string
   /** default locations seeded on first entry (if the brand has none yet) */
   defaultLocations: { name: string; type: LocationType }[]
+  /**
+   * The tab this brand occupies in the company's closing-stock workbook.
+   *
+   * One file carries both companies, a sheet each, and the two sets of books must not mix.
+   * The import screen uses this to open on the right sheet instead of asking someone to
+   * remember that PZM is the pizza one.
+   */
+  sheetKey: string
 }
 
 export const BRANDS: BrandDef[] = [
@@ -61,6 +69,7 @@ export const BRANDS: BrandDef[] = [
       { name: 'Sarasin Branch', type: 'branch' },
       { name: 'On Nut Branch', type: 'branch' },
     ],
+    sheetKey: 'PZM',
   },
   {
     id: 'lelapin',
@@ -78,6 +87,7 @@ export const BRANDS: BrandDef[] = [
       { name: 'Sarasin Branch', type: 'branch' },
       { name: 'Sukhumvit Branch', type: 'branch' },
     ],
+    sheetKey: 'LLP',
   },
 ]
 

@@ -555,4 +555,93 @@ export const EN: Record<string, string> = {
     'Not enough stock for “{name}” (on hand {qty} {unit})',
   'แก้ไขไม่ได้: สต๊อกต้นทางจะติดลบ': 'Cannot edit: the source balance would go negative',
   'แก้ไขไม่ได้: สต๊อกปลายทางจะติดลบ': 'Cannot edit: the destination balance would go negative',
+
+  // ---- import from Excel -------------------------------------------------------
+  'นำเข้า Excel': 'Import Excel',
+  'นำเข้าสต๊อกจาก Excel': 'Import stock from Excel',
+  'ลงยอดนับจากไฟล์สต๊อกคงเหลือรายเดือน': 'Post counts from the monthly closing-stock file',
+  เริ่มใหม่: 'Start over',
+  '1. เลือกไฟล์': '1. Choose a file',
+  'ไฟล์ .xlsx ที่มีคอลัมน์ Quantity/Unit ต่อสาขาต่องวด':
+    'An .xlsx with Quantity/Unit columns per location per count',
+  'เลือกไฟล์ Excel': 'Choose an Excel file',
+  เลือกไฟล์อื่น: 'Choose a different file',
+  'ไฟล์นี้ไม่มีชีตที่อ่านเป็นใบสต๊อกคงเหลือได้': 'No sheet in this file reads as a stock sheet',
+  '2. ตรวจการจับคู่': '2. Check the matching',
+  'ระบบเดาให้จากหัวตารางแล้ว — ตรวจก่อนนำเข้า':
+    'Guessed from the sheet headings — check before importing',
+  'ไฟล์นี้มี {n} ชีต': 'This file has {n} sheets',
+  ชีตที่จะนำเข้า: 'Sheet to import',
+  'นำเข้าได้ทีละแบรนด์ — ชีตของอีกแบรนด์ต้องสลับแบรนด์ก่อนแล้วนำเข้าอีกครั้ง':
+    'One brand at a time — for the other brand, switch brand and import again',
+  คอลัมน์สาขา: 'Location columns',
+  '— ไม่นำเข้า —': '— do not import —',
+  งวดที่นับ: 'Counting dates',
+  'วันที่นับของงวด {label}': 'Counting date for {label}',
+  'งวดที่ไม่มีวันที่ในหัวตารางจะเดาไม่ได้ ต้องใส่เอง — ยอดนับจะบันทึกตามวันที่นี้':
+    'A heading with no readable date has to be filled in — counts are recorded on this date',
+  '3. สรุปก่อนนำเข้า': '3. Summary before importing',
+  'ตัวเลขนี้คือสิ่งที่จะถูกบันทึกจริง': 'These are the numbers that will actually be written',
+  จะบันทึก: 'To be written',
+  ข้ามไว้: 'Skipped',
+  นับไว้แล้ว: 'Already counted',
+  'นำเข้า {n} รายการ': 'Import {n} counts',
+  'กำลังนำเข้า {done}/{total}': 'Importing {done}/{total}',
+  ดาวน์โหลดรายการที่ข้าม: 'Download skipped rows',
+  'เริ่มนำเข้า?': 'Start the import?',
+  'จะบันทึกยอดนับ {n} รายการ ที่ {locations} คลัง ลงในสต๊อก — ระบบจะบันทึกเป็นการปรับยอด (ยอดยกมา) ตามวันที่ของแต่ละงวด':
+    'Writes {n} counts across {locations} locations. Each is recorded as an opening-balance adjustment, dated to its own count.',
+  'นำเข้าจากไฟล์ {file}': 'Imported from {file}',
+  'นำเข้าสำเร็จ {n} รายการ': 'Imported {n} counts',
+  'นำเข้าเสร็จแต่มี {n} รายการที่ล้มเหลว': 'Import finished with {n} failures',
+  ผลการนำเข้า: 'Import result',
+  สำเร็จ: 'Done',
+  มีรายการล้มเหลว: 'Some failed',
+  ลงบัญชีแล้ว: 'Written',
+  ยอดตรงอยู่แล้ว: 'Already matched',
+  ล้มเหลว: 'Failed',
+  ยังไม่ได้เลือกไฟล์: 'No file chosen yet',
+  'ไฟล์สต๊อกคงเหลือรายเดือนใช้ได้เลย ไม่ต้องแก้รูปแบบ — ระบบอ่านหัวตารางเองว่าคอลัมน์ไหนเป็นสาขาไหน งวดไหน':
+    'The monthly closing-stock file works as it is. The headings tell the system which column is which location and which count.',
+  เฉพาะผู้ดูแลระบบ: 'Administrators only',
+  'การนำเข้าเขียนทับยอดคงเหลือทุกคลังในไฟล์ จึงจำกัดไว้ที่ผู้ดูแลระบบ':
+    'An import rewrites balances at every location in the file, so it is limited to administrators',
+  แถว: 'Row',
+  'แถวใน Excel': 'Excel row',
+  รหัส: 'Code',
+  ขนาดบรรจุ: 'Pack size',
+  สาเหตุ: 'Reason',
+  'จำนวนช่องที่ข้าม': 'Cells skipped',
+  ตำแหน่ง: 'Where',
+  รายละเอียด: 'Detail',
+  รหัสสินค้าไม่มีในระบบ: 'Code not in the system',
+  ไม่มีรหัสสินค้า: 'No product code',
+  'มีรหัสซ้ำในงวดและคลังเดียวกัน': 'Counted twice at one place on one date',
+  สินค้าถูกปิดใช้งาน: 'Product is disabled',
+  จำนวนติดลบ: 'Negative quantity',
+  'อ่านจำนวนไม่ได้': 'Quantity is not a number',
+  'รหัสต้องมาจากไฟล์รหัสสินค้าของบริษัท ระบบจะไม่สร้างรหัสใหม่เอง':
+    'Codes come from the company item-code file. Nothing here invents one.',
+  'แถวพวกนี้เป็นของระหว่างผลิต (WIP) ที่ยังไม่มีรหัสในไฟล์รหัสสินค้า':
+    'These are work-in-progress rows with no code in the item-code file yet.',
+  'ไฟล์ไม่ได้บอกว่าเป็นของกองเดียวกันหรือคนละกอง — รวมกันก็เกิน เอาอันเดียวก็ขาด':
+    'The file does not say whether this is one pile listed twice or two. Adding them overstates; keeping one loses the other.',
+  'สินค้าถูกปิดใช้งานไว้ ระบบจะไม่เปิดกลับมาเองจากการนำเข้า':
+    'The product is disabled. An import will not quietly bring it back.',
+  'ยอดคงเหลือติดลบไม่ได้': 'A balance cannot be negative.',
+  'ช่องนั้นไม่ใช่ตัวเลข': 'That cell is not a number.',
+  'หน่วยในไฟล์ไม่ตรงกับแคตตาล็อก': 'Unit on the sheet differs from the catalog',
+  'ยอดจะถูกบันทึกด้วยหน่วยของแคตตาล็อก ถ้าหน่วยต่างกันจริง จำนวนจะผิด':
+    'Counts are recorded in the catalog unit. Where the units really differ, the number is wrong.',
+  ไฟล์: 'Sheet',
+  ระบบ: 'System',
+  'นับไว้แล้วในวันเดียวกัน': 'Already counted on that date',
+  'มียอดนับของสินค้านี้ที่คลังนี้ในวันนั้นอยู่แล้ว จึงไม่บันทึกซ้ำ':
+    'The ledger already has a count for this product at this location on that date, so it is not written again.',
+  'ชีต "{sheet}" ไม่มีหัวตาราง Quantity/Unit — ไม่ใช่ใบสต๊อกคงเหลือ':
+    'Sheet “{sheet}” has no Quantity/Unit heading — it is not a stock sheet',
+  'ชีต "{sheet}" ไม่มีแถวชื่อสาขาและงวดอยู่เหนือหัวตาราง':
+    'Sheet “{sheet}” has no location and count rows above its heading',
+  'ชีต "{sheet}" มีหัวตารางแต่ไม่มีชื่อสาขาหรือชื่องวด':
+    'Sheet “{sheet}” has a heading but no location or count names',
 }
