@@ -36,6 +36,7 @@ import {
   saveFirebaseConfig,
 } from '../firebase/config'
 import type { LocationType, StockLocation, Role } from '../types'
+import { DataTable } from '../components/DataTable'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 
@@ -582,46 +583,55 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
               <p className="mb-2 text-sm text-danger">
                 {t('พบ {count} รายการที่ไม่ตรง — กด “คำนวณยอดคงเหลือใหม่” เพื่อซ่อมจากประวัติ', { count: drift.length, })}
               </p>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-ink-faint">
-                      <th className="py-1 pr-3">{t("สินค้า")}</th>
-                      <th className="py-1 pr-3">{t("คลัง")}</th>
-                      <th className="py-1 pr-3 text-right">{t("ยอดที่เก็บไว้")}</th>
-                      <th className="py-1 pr-3 text-right">{t("ยอดตามประวัติ")}</th>
-                      <th className="py-1">{t("แก้ล่าสุดโดย")}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {drift.slice(0, 50).map((d) => (
-                      <tr key={d.id}>
-                        <td className="py-1 pr-3">
-                          {/* A balance whose product is gone reads as a bare id, which tells
-                              nobody anything. Say what it is: leftover from a deleted
-                              product, which is the usual reason a balance has no history. */}
-                          {productById.get(d.productId)?.name ?? (
-                            <>
-                              <span className="text-warn">{t('(สินค้าถูกลบไปแล้ว)')}</span>
-                              <span className="ml-1 font-mono text-xs text-ink-faint">
-                                {d.productId}
-                              </span>
-                            </>
-                          )}
-                        </td>
-                        <td className="py-1 pr-3">
-                          {locationById(d.locationId)?.name ?? d.locationId}
-                        </td>
-                        <td className="py-1 pr-3 text-right font-medium text-danger">{d.cached}</td>
-                        <td className="py-1 pr-3 text-right text-ink">{d.fromLedger}</td>
-                        <td className="py-1 font-mono text-xs text-ink-faint">
-                          {d.updatedBy ?? t("(ไม่ระบุ)")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                rows={drift.slice(0, 50)}
+                columns={[
+                  {
+                    key: 'product',
+                    header: t('สินค้า'),
+                    primary: true,
+                    cell: (d) =>
+                      // A balance whose product is gone reads as a bare id, which tells
+                      // nobody anything. Say what it is: leftover from a deleted product,
+                      // which is the usual reason a balance has no history.
+                      productById.get(d.productId)?.name ?? (
+                        <>
+                          <span className="text-warn">{t('(สินค้าถูกลบไปแล้ว)')}</span>
+                          <span className="ml-1 font-mono text-xs text-ink-faint">
+                            {d.productId}
+                          </span>
+                        </>
+                      ),
+                  },
+                  {
+                    key: 'location',
+                    header: t('คลัง'),
+                    cell: (d) => locationById(d.locationId)?.name ?? d.locationId,
+                  },
+                  {
+                    key: 'cached',
+                    header: t('ยอดที่เก็บไว้'),
+                    align: 'right',
+                    className: 'num font-medium text-danger',
+                    cell: (d) => d.cached,
+                  },
+                  {
+                    key: 'ledger',
+                    header: t('ยอดตามประวัติ'),
+                    align: 'right',
+                    className: 'num text-ink',
+                    cell: (d) => d.fromLedger,
+                  },
+                  {
+                    key: 'by',
+                    header: t('แก้ล่าสุดโดย'),
+                    className: 'font-mono text-xs text-ink-faint',
+                    cell: (d) => d.updatedBy ?? t('(ไม่ระบุ)'),
+                  },
+                ]}
+                rowKey={(d) => d.id}
+                minWidth={520}
+              />
               {drift.length > 50 && (
                 <p className="mt-2 text-xs text-ink-faint">
                   {t('แสดง 50 รายการแรกจาก {count}', { count: drift.length })}

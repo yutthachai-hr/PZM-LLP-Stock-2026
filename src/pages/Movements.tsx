@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
@@ -16,6 +17,7 @@ import {
   PageHeader,
   Select,
 } from '../components/ui'
+import { DataTable, type Column } from '../components/DataTable'
 import { editMovementQty, voidMovement, getMovementImage } from '../services/stock'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs, dayRange } from '../lib/format'
 import { effectAt, effectOverall, stockCard } from '../lib/ledger'
@@ -44,8 +46,20 @@ export function MovementsPage() {
   const confirm = useConfirm()
   const isAdmin = user?.role === 'admin'
 
-  const [productId, setProductId] = useState('')
-  const [locationId, setLocationId] = useState('')
+  // Arriving from the top-bar search or a low-stock link: the point of that link is the
+  // stock card for one product, so the filter it implies has to be on when the page opens.
+  const [params, setParams] = useSearchParams()
+  const [productId, setProductIdState] = useState(params.get('product') ?? '')
+  const [locationId, setLocationId] = useState(params.get('location') ?? '')
+
+  function setProductId(id: string) {
+    setProductIdState(id)
+    // Keep the address bar honest, so the page can be reloaded or shared as it stands.
+    const next = new URLSearchParams(params)
+    if (id) next.set('product', id)
+    else next.delete('product')
+    setParams(next, { replace: true })
+  }
   const [typeFilter, setTypeFilter] = useState('')
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
@@ -121,6 +135,143 @@ export function MovementsPage() {
     }
   }
 
+  const columns = useMemo<Column<StockMovement>[]>(() => {
+    const list: Column<StockMovement>[] = [
+      {
+        key: 'product',
+        header: t('สินค้า'),
+        primary: true,
+        headerClassName: 'min-w-[200px]',
+        cell: (m) => (
+          <>
+            <div className="flex items-center gap-2 font-medium text-ink">
+              {m.productName}
+              {m.hasPhoto && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPhotoDoc(m.docNo)
+                  }}
+                  title={t('ดูรูปหลักฐาน')}
+                  className="text-sm"
+                >
+                  <Icon name="camera" size={16} />
+                </button>
+              )}
+            </div>
+            {m.reason && (
+              <div className="text-xs text-ink-faint">
+                {t(ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason)}
+              </div>
+            )}
+          </>
+        ),
+      },
+      {
+        key: 'date',
+        header: t('วันที่'),
+        className: 'whitespace-nowrap',
+        cell: (m) => formatThaiDate(m.date),
+      },
+      {
+        key: 'docNo',
+        header: t('เลขที่'),
+        className: 'doc-no whitespace-nowrap text-xs text-ink-soft',
+        cell: (m) => m.docNo,
+      },
+      {
+        key: 'type',
+        header: t('ประเภท'),
+        cell: (m) => (
+          <>
+            <Badge color={TYPE_COLOR[m.type]}>{t(TYPE_LABEL[m.type])}</Badge>
+            {m.voided && <span className="ml-1 text-xs">{t('(ยกเลิก)')}</span>}
+          </>
+        ),
+      },
+      {
+        key: 'location',
+        header: t('คลัง'),
+        className: 'text-xs text-ink-soft',
+        cell: (m) => (
+          <>
+            {m.fromLocationId && locationById(m.fromLocationId)?.name}
+            {m.fromLocationId && m.toLocationId && (
+              <Icon name="arrowRight" size={12} className="mx-0.5 inline align-middle" />
+            )}
+            {m.toLocationId && locationById(m.toLocationId)?.name}
+          </>
+        ),
+      },
+      {
+        key: 'qty',
+        header: t('จำนวน'),
+        align: 'right',
+        className: 'num font-semibold',
+        cell: (m) => {
+          const eff = locationId ? effectAt(m, locationId) : effectOverall(m)
+          return (
+            <span className={eff < 0 ? 'text-out' : 'text-in'}>
+              {eff > 0 ? '+' : ''}
+              {fmtQty(eff)} {m.unit}
+            </span>
+          )
+        },
+      },
+    ]
+    if (stockCardMode) {
+      list.push({
+        key: 'balance',
+        header: t('คงเหลือ'),
+        align: 'right',
+        className: 'num font-semibold text-ink',
+        cell: (m) => fmtQty(balances.get(m.id) ?? 0),
+      })
+    }
+    list.push(
+      {
+        key: 'by',
+        header: t('โดย'),
+        className: 'text-xs text-ink-soft',
+        cell: (m) => (
+          <>
+            {m.byUserName}
+            {m.updatedByName && (
+              <div className="text-warn">
+                {t('แก้ไข:')} {m.updatedByName}
+              </div>
+            )}
+          </>
+        ),
+      },
+      {
+        key: 'actions',
+        header: '',
+        align: 'right',
+        tableOnly: true,
+        cell: (m) =>
+          m.voided ? null : (
+            <div className="flex justify-end gap-1">
+              <Button variant="ghost" onClick={() => setEditing(m)}>
+                {t('แก้ไข')}
+              </Button>
+              {isAdmin && (
+                <button
+                  onClick={() => doVoid(m)}
+                  className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
+                >
+                  {t('ยกเลิก')}
+                </button>
+              )}
+            </div>
+          ),
+      },
+    )
+    return list
+    // doVoid closes over the toast/confirm helpers, which are stable for the page's life.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, locationId, stockCardMode, balances, isAdmin, locationById])
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -179,116 +330,31 @@ export function MovementsPage() {
 
       <LedgerWindowNotice />
 
-      {filtered.length === 0 ? (
-        <Card>
-          <EmptyState icon="history" title={t("ไม่พบรายการ")} hint={t("ลองปรับตัวกรอง")} />
-        </Card>
-      ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-auto max-h-[calc(100vh-240px)]">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
-                <tr>
-                  <th className="px-3 py-2">{t("วันที่")}</th>
-                  <th className="px-3 py-2">{t("เลขที่")}</th>
-                  <th className="px-3 py-2">{t("ประเภท")}</th>
-                  <th className="min-w-[200px] px-3 py-2">{t("สินค้า")}</th>
-                  <th className="px-3 py-2">{t("คลัง")}</th>
-                  <th className="px-3 py-2 text-right">{t("จำนวน")}</th>
-                  {stockCardMode && <th className="px-3 py-2 text-right">{t("คงเหลือ")}</th>}
-                  <th className="px-3 py-2">{t("โดย")}</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {filtered.map((m) => {
-                  const eff = locationId ? effectAt(m, locationId) : effectOverall(m)
-                  return (
-                    <tr key={m.id} className={m.voided ? 'bg-sunken text-ink-faint' : ''}>
-                      <td className="whitespace-nowrap px-3 py-2">{formatThaiDate(m.date)}</td>
-                      <td className="doc-no whitespace-nowrap px-3 py-2 text-xs text-ink-soft">
-                        {m.docNo}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Badge color={TYPE_COLOR[m.type]}>{t(TYPE_LABEL[m.type])}</Badge>
-                        {m.voided && <span className="ml-1 text-xs">{t("(ยกเลิก)")}</span>}
-                      </td>
-                      <td className="min-w-[200px] px-3 py-2">
-                        <div className="flex items-center gap-2 font-medium text-ink">
-                          {m.productName}
-                          {m.hasPhoto && (
-                            <button
-                              onClick={() => setPhotoDoc(m.docNo)}
-                              title={t("ดูรูปหลักฐาน")}
-                              className="text-sm"
-                            >
-                              <Icon name="camera" size={16} />
-                            </button>
-                          )}
-                        </div>
-                        {m.reason && (
-                          <div className="text-xs text-ink-faint">
-                            {t(ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-ink-soft">
-                        {m.fromLocationId && locationById(m.fromLocationId)?.name}
-                        {m.fromLocationId && m.toLocationId && (
-                          <Icon
-                            name="arrowRight"
-                            size={12}
-                            className="mx-0.5 inline align-middle"
-                          />
-                        )}
-                        {m.toLocationId && locationById(m.toLocationId)?.name}
-                      </td>
-                      <td
-                        className={`num px-3 py-2 text-right font-semibold ${
-                          eff < 0 ? 'text-out' : 'text-in'
-                        }`}
-                      >
-                        {eff > 0 ? '+' : ''}
-                        {fmtQty(eff)} {m.unit}
-                      </td>
-                      {stockCardMode && (
-                        <td className="num px-3 py-2 text-right font-semibold text-ink">
-                          {fmtQty(balances.get(m.id) ?? 0)}
-                        </td>
-                      )}
-                      <td className="px-3 py-2 text-xs text-ink-soft">
-                        {m.byUserName}
-                        {m.updatedByName && (
-                          <div className="text-warn">
-                            {t('แก้ไข:')} {m.updatedByName}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {!m.voided && (
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" onClick={() => setEditing(m)}>
-                              {t("แก้ไข")}
-                            </Button>
-                            {isAdmin && (
-                              <button
-                                onClick={() => doVoid(m)}
-                                className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
-                              >
-                                {t("ยกเลิก")}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+      <Card className="overflow-hidden">
+        <DataTable
+          rows={filtered}
+          columns={columns}
+          rowKey={(m) => m.id}
+          minWidth={stockCardMode ? 820 : 720}
+          maxHeight="calc(100vh - 260px)"
+          rowClassName={(m) => (m.voided ? 'bg-sunken text-ink-faint' : '')}
+          empty={<EmptyState icon="history" title={t('ไม่พบรายการ')} hint={t('ลองปรับตัวกรอง')} />}
+          cardActions={(m) =>
+            m.voided ? null : (
+              <>
+                <Button variant="secondary" onClick={() => setEditing(m)}>
+                  {t('แก้ไข')}
+                </Button>
+                {isAdmin && (
+                  <Button variant="danger" onClick={() => doVoid(m)}>
+                    {t('ยกเลิก')}
+                  </Button>
+                )}
+              </>
+            )
+          }
+        />
+      </Card>
 
       {editing && <EditMovementModal movement={editing} onClose={() => setEditing(null)} />}
       {photoDoc && <PhotoModal docNo={photoDoc} onClose={() => setPhotoDoc(null)} />}

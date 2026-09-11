@@ -19,6 +19,7 @@ import {
   Spinner,
 } from '../components/ui'
 import { ProductThumb, invalidateThumb } from '../components/ProductThumb'
+import { DataTable, type Column } from '../components/DataTable'
 import {
   createProduct,
   updateProduct,
@@ -51,7 +52,7 @@ const SORTS: { value: SortKey; label: string }[] = [
 
 export function ProductsPage() {
   const t = useT()
-  const { products, locations, qtyAt, minFor, loading } = useData()
+  const { products, locations, qtyAt, minFor, levels, minOverrides, loading } = useData()
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast()
@@ -185,6 +186,75 @@ export function ProductsPage() {
       setResetting(false)
     }
   }
+
+  const columns = useMemo<Column<Product>[]>(
+    () => [
+      {
+        key: 'product',
+        header: t('สินค้า'),
+        primary: true,
+        cell: (p) => (
+          <div className="flex items-center gap-3">
+            <ProductThumb productId={p.id} hasImage={p.hasImage} />
+            <div className="min-w-0">
+              <div className="truncate font-medium text-ink">{p.name}</div>
+              <div className="doc-no text-xs text-ink-faint">{p.sku}</div>
+            </div>
+          </div>
+        ),
+      },
+      { key: 'category', header: t('หมวดหมู่'), className: 'text-ink-soft', cell: (p) => p.category },
+      {
+        key: 'qty',
+        header: locId ? (locations.find((l) => l.id === locId)?.name ?? '') : t('คงเหลือรวม'),
+        align: 'right',
+        className: 'num font-semibold',
+        cell: (p) => {
+          const total = shownQty(p.id)
+          const low = minShown(p) > 0 && total <= minShown(p)
+          return (
+            <>
+              <span className={low ? 'font-semibold text-warn' : 'text-ink'}>{fmtQty(total)}</span>
+              {low && (
+                <span className="ml-2 align-middle">
+                  <Badge color="red">{t('ใกล้หมด')}</Badge>
+                </span>
+              )}
+            </>
+          )
+        },
+      },
+      {
+        key: 'min',
+        header: t('ขั้นต่ำ'),
+        align: 'right',
+        className: 'num text-ink-soft',
+        cell: (p) => fmtQty(minShown(p)),
+      },
+      { key: 'unit', header: t('หน่วย'), className: 'text-ink-soft', cell: (p) => p.unitType },
+      {
+        key: 'actions',
+        header: '',
+        align: 'right',
+        tableOnly: true,
+        cell: (p) => (
+          <Button
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation()
+              setEditing(p)
+            }}
+          >
+            {isAdmin ? t('แก้ไข') : t('ดู')}
+          </Button>
+        ),
+      },
+    ],
+    // shownQty and minShown read the live balances through the data context.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, locId, locations, isAdmin, levels, minOverrides],
+  )
+
 
   if (loading) return <Spinner label={t("กำลังโหลดสินค้า...")} />
 
@@ -367,61 +437,19 @@ export function ProductsPage() {
         </Card>
       ) : (
         <Card className="overflow-hidden">
-          <div className="overflow-auto max-h-[calc(100vh-260px)]">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
-                <tr>
-                  <th className="px-3 py-2">{t("สินค้า")}</th>
-                  <th className="px-3 py-2">{t("หมวดหมู่")}</th>
-                  <th className="px-3 py-2 text-right">
-                    {locId ? locations.find((l) => l.id === locId)?.name : t("คงเหลือรวม")}
-                  </th>
-                  <th className="px-3 py-2 text-right">{t("ขั้นต่ำ")}</th>
-                  <th className="px-3 py-2">{t("หน่วย")}</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {filtered.map((p) => {
-                  const total = shownQty(p.id)
-                  const low = minShown(p) > 0 && total <= minShown(p)
-                  return (
-                    <tr key={p.id} className="hover:bg-sunken">
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-3">
-                          <ProductThumb productId={p.id} hasImage={p.hasImage} />
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-ink">{p.name}</div>
-                            <div className="text-xs text-ink-faint">{p.sku}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-ink-soft">{p.category}</td>
-                      <td className="num px-3 py-2 text-right font-semibold">
-                        <span className={low ? 'font-semibold text-warn' : 'text-ink'}>
-                          {fmtQty(total)}
-                        </span>
-                        {low && (
-                          <span className="ml-2 align-middle">
-                            <Badge color="red">{t("ใกล้หมด")}</Badge>
-                          </span>
-                        )}
-                      </td>
-                      <td className="num px-3 py-2 text-right text-ink-soft">
-                        {fmtQty(minShown(p))}
-                      </td>
-                      <td className="px-3 py-2 text-ink-soft">{p.unitType}</td>
-                      <td className="px-3 py-2 text-right">
-                        <Button variant="ghost" onClick={() => setEditing(p)}>
-                          {isAdmin ? t("แก้ไข") : t("ดู")}
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rows={filtered}
+            columns={columns}
+            rowKey={(p) => p.id}
+            minWidth={640}
+            maxHeight="calc(100vh - 260px)"
+            onRowClick={(p) => setEditing(p)}
+            cardActions={(p) => (
+              <Button variant="secondary" onClick={() => setEditing(p)}>
+                {isAdmin ? t('แก้ไข') : t('ดู')}
+              </Button>
+            )}
+          />
         </Card>
       )}
 

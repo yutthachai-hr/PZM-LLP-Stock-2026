@@ -15,6 +15,10 @@ import { Icon } from './Icon'
  * pushes the document past 100vh. Bottom-left is the one corner nothing else claims —
  * Toast sits bottom-right and UpdateBanner spans the bottom edge only when an update is
  * actually waiting, which a demo build never has.
+ *
+ * It sits below the drawer and the modals rather than above them. Being permanently on
+ * screen is the point, but not at the cost of covering the sign-out button in an open
+ * menu — and anything that covers the page is itself transient.
  */
 export function DemoBanner() {
   const t = useT()
@@ -22,7 +26,7 @@ export function DemoBanner() {
   return (
     <div
       role="status"
-      className="fixed bottom-3 left-3 z-[65] flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
+      className="fixed bottom-3 left-3 z-[35] flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
     >
       <Icon name="warning" size={13} />
       <span>{t('โหมดสาธิต — ไม่ใช่สต๊อกจริง')}</span>

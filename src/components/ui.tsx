@@ -425,3 +425,116 @@ export function EmptyState({
     </div>
   )
 }
+
+/**
+ * A card's title, with room for one action on the right.
+ *
+ * Lighter than SectionHeader, which carries an icon chip and a description and is built for
+ * a settings panel. A panel on a dashboard usually needs a name and a way out of it.
+ */
+export function CardTitle({
+  title,
+  action,
+  className = '',
+}: {
+  title: string
+  action?: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`flex items-center justify-between gap-3 ${className}`}>
+      <h2 className="text-base font-semibold text-ink">{title}</h2>
+      {action}
+    </div>
+  )
+}
+
+/**
+ * One figure in a row of figures.
+ *
+ * The number leads and the label follows, because the row is read at a glance and the
+ * numbers are what someone is glancing at. Figures are tabular so a value that updates does
+ * not shuffle the ones beside it sideways.
+ *
+ * The icon sits in a tinted chip rather than beside the label. At the size these appear it
+ * is the fastest thing on the card to tell apart, which is what carries the row when four of
+ * them sit in a line and the labels are all about the same length.
+ */
+export function StatTile({
+  icon,
+  label,
+  value,
+  hint,
+  tone = 'plain',
+}: {
+  icon: IconName
+  label: string
+  value: string
+  hint?: string
+  tone?: 'plain' | 'brand' | 'in' | 'out' | 'warn'
+}) {
+  const chips = {
+    plain: 'bg-sunken text-ink-soft',
+    brand: 'bg-brand-soft text-brand',
+    in: 'bg-in-soft text-in',
+    out: 'bg-out-soft text-out',
+    warn: 'bg-warn-soft text-warn',
+  }
+  const values = {
+    plain: 'text-ink',
+    brand: 'text-ink',
+    in: 'text-in',
+    out: 'text-out',
+    warn: 'text-warn',
+  }
+  return (
+    <div className="flex min-w-0 items-center gap-3 px-1 py-1">
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${chips[tone]}`}
+      >
+        <Icon name={icon} size={19} />
+      </span>
+      <div className="min-w-0">
+        <div className={`num truncate text-xl font-bold leading-tight ${values[tone]}`}>
+          {value}
+        </div>
+        <div className="truncate text-xs text-ink-soft">{label}</div>
+        {hint && <div className="truncate text-xs text-ink-faint">{hint}</div>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A card holding a row of StatTiles, divided.
+ *
+ * One card rather than one card per figure: four separate boxes read as four separate
+ * things, and these are four readings of the same thing. The dividers only appear once the
+ * tiles are actually side by side — stacked on a phone they would be horizontal rules
+ * between unrelated lines.
+ */
+export function StatGroup({
+  title,
+  action,
+  children,
+  columns = 4,
+}: {
+  title?: string
+  action?: ReactNode
+  children: ReactNode
+  columns?: 2 | 3 | 4
+}) {
+  const grid = {
+    2: 'sm:grid-cols-2 sm:divide-x',
+    3: 'sm:grid-cols-2 xl:grid-cols-3 sm:divide-x',
+    4: 'sm:grid-cols-2 xl:grid-cols-4 sm:divide-x',
+  }
+  return (
+    <Card className="p-4">
+      {title && <CardTitle title={title} action={action} className="mb-3" />}
+      <div className={`grid grid-cols-1 gap-3 divide-y divide-line sm:gap-0 sm:divide-y-0 sm:divide-line ${grid[columns]}`}>
+        {children}
+      </div>
+    </Card>
+  )
+}

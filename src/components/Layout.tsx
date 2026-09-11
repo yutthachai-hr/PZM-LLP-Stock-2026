@@ -8,6 +8,7 @@ import { LangToggle } from '../i18n/LangToggle'
 import { Icon, type IconName } from './Icon'
 import { isDemoMode } from '../firebase/config'
 import { InstallHint } from '../pwa/InstallHint'
+import { TopBar } from './TopBar'
 import { Badge } from './ui'
 
 interface NavItem {
@@ -128,25 +129,20 @@ export function Layout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar (sticky) */}
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-surface px-2 py-2 shadow-[inset_0_3px_0_0_var(--color-brand-vivid)] lg:hidden">
-          <button
-            onClick={() => setOpen(true)}
-            className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
-            aria-label={t('เมนู')}
-            aria-expanded={open}
-          >
-            <Icon name="menu" size={22} />
-          </button>
-          <span className="truncate font-bold text-brand">
-            {def?.emoji} {def?.name ?? 'Stock'}
-          </span>
-          <span className="ml-auto truncate pr-2 text-sm text-ink-soft">
-            {t(NAV.find((n) => n.to === location.pathname)?.label ?? '')}
-          </span>
-        </header>
+        <TopBar
+          onMenu={() => setOpen(true)}
+          title={t(NAV.find((n) => n.to === location.pathname)?.label ?? '')}
+        />
 
-        <main className="min-w-0 flex-1 p-4 sm:p-6">
+        {/* The page column is capped: a stock table stretched across a 27" monitor puts the
+            product name and its quantity at opposite ends of the desk. */}
+        {/* The demo pill is pinned to the bottom-left, so a demo build needs room under the
+            last row for it to sit over nothing. */}
+        <main
+          className={`mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 sm:p-5 lg:p-6 ${
+            isDemoMode() ? 'pb-16 sm:pb-6' : ''
+          }`}
+        >
           <InstallHint />
           {children}
         </main>

@@ -134,8 +134,6 @@ export const EN: Record<string, string> = {
   'คงเหลือหลังปรับ:': 'On hand after adjustment:',
   'แก้ไข:': 'Edited by:',
   คลังหลัก: 'Warehouse',
-  'แจ้งเตือนสินค้าเหลือน้อย ({n})': 'Low stock alerts ({n})',
-  'และอีก {n} รายการ...': 'and {n} more…',
   'พบ {n} รายการ': '{n} found',
   'แสดงตัวอย่าง — ไฟล์ดาวน์โหลดจะมีครบทั้ง {n} รายการ':
     'Preview only — the download contains all {n} rows',
@@ -234,9 +232,7 @@ export const EN: Record<string, string> = {
   มูลค่าสต๊อก: 'Stock value',
   'มูลค่าสต๊อกตามหมวดหมู่ (บาท)': 'Stock value by category (THB)',
   รวมทุกคลัง: 'All locations',
-  รายการทั้งหมด: 'All items',
   อิงต้นทุนที่กรอก: 'Based on entered cost',
-  เคลื่อนไหววันนี้: 'Movements today',
   'ใกล้/ต่ำกว่าขั้นต่ำ': 'At or below minimum',
   ไม่พบสินค้า: 'No products found',
   'ค้นหาสินค้าในคลังนี้…': 'Search products in this location…',
@@ -659,4 +655,21 @@ export const EN: Record<string, string> = {
   'เข้าสู่ระบบอัตโนมัติ — บัญชี {email} รหัส {password}':
     'Signs in automatically — account {email}, password {password}',
   'รีเซ็ตข้อมูลเดโมได้เฉพาะในโหมดสาธิตเท่านั้น': 'Demo data can only be reset in a demo build',
+
+  // ---- shell: top bar, shared table ---------------------------------------------
+  'ค้นหาสินค้า หรือรหัสสินค้า…': 'Search a product or code…',
+  'สินค้าใกล้หมด ({n} รายการ)': 'Low stock ({n} items)',
+  'ตาราง {n} แถว': 'Table, {n} rows',
+
+  // ---- dashboard (rebuilt) ------------------------------------------------------
+  '{n} รายการมีของ': '{n} in stock',
+  'ความเคลื่อนไหว 7 วัน': 'Movements, 7 days',
+  'ล่าสุด {date}': 'Last {date}',
+  ยังไม่มีรายการ: 'Nothing yet',
+  คลังสินค้า: 'Locations',
+  ที่เลือก: 'Selected',
+  รายการที่มีของ: 'Items in stock',
+  ยังไม่มีมูลค่า: 'No value yet',
+  สินค้าใกล้หมด: 'Running low',
+  'ไม่มีรายการที่ต่ำกว่าขั้นต่ำ': 'Nothing below its minimum',
 }
