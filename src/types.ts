@@ -60,9 +60,24 @@ export interface StockLocation {
 
 // Current balance of a product at a location (cached projection of the ledger)
 export interface StockLevel {
-  id: string // `${locationId}__${productId}`
+  /**
+   * `${locationId}__${productId}` for the product's own unit, and that plus `#${unit}` for
+   * anything else someone keyed.
+   *
+   * The unsuffixed form is what every balance written before units were selectable uses, so
+   * it is left exactly as it was rather than migrated.
+   */
+  id: string
   productId: string
   locationId: string
+  /**
+   * The unit this balance is counted in, when it is not the product's own.
+   *
+   * Absent means the product's own unit. Balances are never converted between units: a
+   * delivery keyed as 10 Pack and one keyed as 2 KG are two balances, shown side by side,
+   * because adding them would invent a pack size nobody stated.
+   */
+  unit?: string
   qty: number
   updatedAt: number
 }
@@ -76,7 +91,16 @@ export interface StockMovement {
   type: MovementType
   productId: string
   productName: string // denormalised for easy reporting
+  /** The product's own unit, as it was when this was filed. */
   unit: string
+  /**
+   * The unit the person actually picked, present only when it is not the product's own.
+   *
+   * Nothing is converted between the two: a line keyed as "10 Pack" is filed as 10 Pack and
+   * counted against a Pack balance. Keeping `unit` alongside it is what lets a void find the
+   * same balance the movement first touched.
+   */
+  entryUnit?: string
   qty: number // always positive; direction implied by type + from/to
   fromLocationId?: string // issue/adjust-out
   toLocationId?: string // receive/issue-in/adjust-in

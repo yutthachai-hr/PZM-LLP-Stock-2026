@@ -48,18 +48,22 @@ export function MovementsPage() {
 
   // Arriving from the top-bar search or a low-stock link: the point of that link is the
   // stock card for one product, so the filter it implies has to be on when the page opens.
+  // The address is the filter, rather than a copy of it kept in state. Held in state, the
+  // initial value was read once when the page mounted: searching for a second product while
+  // already on this page changed the address and nothing else, so the search looked broken
+  // for every product after the first.
   const [params, setParams] = useSearchParams()
-  const [productId, setProductIdState] = useState(params.get('product') ?? '')
-  const [locationId, setLocationId] = useState(params.get('location') ?? '')
+  const productId = params.get('product') ?? ''
+  const locationId = params.get('location') ?? ''
 
-  function setProductId(id: string) {
-    setProductIdState(id)
-    // Keep the address bar honest, so the page can be reloaded or shared as it stands.
+  function setParam(key: string, value: string) {
     const next = new URLSearchParams(params)
-    if (id) next.set('product', id)
-    else next.delete('product')
+    if (value) next.set(key, value)
+    else next.delete(key)
     setParams(next, { replace: true })
   }
+  const setProductId = (id: string) => setParam('product', id)
+  const setLocationId = (id: string) => setParam('location', id)
   const [typeFilter, setTypeFilter] = useState('')
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
@@ -213,7 +217,7 @@ export function MovementsPage() {
           return (
             <span className={eff < 0 ? 'text-out' : 'text-in'}>
               {eff > 0 ? '+' : ''}
-              {fmtQty(eff)} {m.unit}
+              {fmtQty(eff)} {m.entryUnit ?? m.unit}
             </span>
           )
         },

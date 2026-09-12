@@ -34,6 +34,9 @@ export function AdjustPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const [direction, setDirection] = useState<'in' | 'out'>('out')
   const [qty, setQty] = useState(0)
+  // What the person picked in the unit box. Empty until they touch it, which means the
+  // product's own unit.
+  const [entryUnit, setEntryUnit] = useState('')
   const [reason, setReason] = useState<string>(ADJUST_REASONS[0].value)
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
@@ -63,6 +66,7 @@ export function AdjustPage() {
         productId: product.id,
         productName: product.name,
         unit: product.unitType,
+        entryUnit: entryUnit || undefined,
         locationId,
         direction,
         qty,
@@ -166,11 +170,12 @@ export function AdjustPage() {
           <Field label={t("จำนวน")} required>
             <QtyInput
               unitType={product?.unitType ?? ''}
-              packSize={product?.packSize}
-              packLabel={product?.packLabel}
               plainUnits={plainUnits}
               value={qty}
-              onChange={setQty}
+              onChange={(v, u) => {
+                setQty(v)
+                setEntryUnit(u)
+              }}
             />
           </Field>
           <Field label={t("เหตุผล")} required>

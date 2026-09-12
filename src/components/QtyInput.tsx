@@ -8,8 +8,15 @@ export interface EntryUnit {
   /** Stable identity, and the <select> value. Several units share the factor 1. */
   key: string
   label: string
-  /** Base units per 1 of this entry unit. */
+  /** Multiplier applied to the typed number. Only grams and millilitres are ever not 1. */
   factor: number
+  /**
+   * The unit the ledger records for this choice.
+   *
+   * Grams convert into the product's own unit, so keying 500 g files 0.5 KG and the row
+   * says KG. Everything else files the label itself, untouched.
+   */
+  records: string
   /** True when the label is a translation key rather than stored data. */
   translate?: boolean
 }
@@ -21,20 +28,21 @@ export interface EntryUnit {
  * product in the world: a gram is a thousandth of a kilo whatever is being weighed.
  */
 export function subUnitsFor(unitType: string): EntryUnit[] {
-  const u = (unitType || '').trim().toUpperCase()
-  if (u === 'KG') return [{ key: 'sub', label: 'กรัม (g)', factor: 0.001, translate: true }] // i18n-key
+  const base = (unitType || '').trim()
+  const u = base.toUpperCase()
+  if (u === 'KG')
+    return [{ key: 'sub', label: 'กรัม (g)', factor: 0.001, translate: true, records: base }] // i18n-key
   if (u === 'L' || u === 'LT' || u === 'LITER' || u === 'ลิตร') // i18n-key
-    return [{ key: 'sub', label: 'มล. (ml)', factor: 0.001, translate: true }] // i18n-key
+    return [{ key: 'sub', label: 'มล. (ml)', factor: 0.001, translate: true, records: base }] // i18n-key
   return []
 }
 
 /**
  * Units printed on the boxes people receive, offered on every product.
  *
- * They carry no size of their own — one Lot is 10 kg from one supplier and 2 kg from
- * another — so they do not convert anything: the number typed beside them is the number
- * recorded. Where a real conversion is wanted, ขนาดบรรจุ on the product supplies it, and
- * that pack is offered above these with its multiplier showing.
+ * Nothing here converts. The owner's rule, stated plainly: the system records the unit the
+ * person keyed and never rewrites it — one Lot is 10 kg from one supplier and 2 kg from
+ * another, so any factor this code invented would be a guess written into the ledger.
  *
  * This is only the starting list. The owner maintains the real one in Settings, which is
  * where Carton and anything else they receive by gets added.
@@ -48,36 +56,20 @@ export const PLAIN_UNITS = ['Lot', 'Pack', 'EA'] as const
  */
 export function entryUnitsFor(
   unitType: string,
-  packSize?: number,
-  packLabel?: string,
   /** The owner's list from Settings. Undefined until it loads; PLAIN_UNITS stands in. */
   plainUnits?: readonly string[],
 ): EntryUnit[] {
-  const hasPack = !!packSize && packSize > 0 && packSize !== 1
-  const out: EntryUnit[] = [{ key: 'base', label: unitType || '-', factor: 1 }]
-  // A configured pack is a real multiplier, so it is offered with its size showing. A pack
-  // of 1, or of nothing, is not a unit — it is a label that would record the same number
-  // twice over.
-  if (hasPack) {
-    out.push({
-      key: 'pack',
-      label: `${packLabel || 'Pack'} (×${packSize})`, // a stored label, not UI copy
-      factor: packSize,
-    })
-  }
+  const base = (unitType || '').trim()
+  const out: EntryUnit[] = [{ key: 'base', label: base || '-', factor: 1, records: base }]
   out.push(...subUnitsFor(unitType))
   // Never list a unit the product already has under its own name.
-  const taken = new Set([(unitType || '').trim().toLowerCase()])
-  if (hasPack) {
-    taken.add('pack')
-    taken.add((packLabel || 'Pack').trim().toLowerCase())
-  }
+  const taken = new Set([base.toLowerCase()])
   for (const raw of plainUnits ?? PLAIN_UNITS) {
     const label = raw.trim()
     const key = label.toLowerCase()
     if (!label || taken.has(key)) continue
     taken.add(key) // a list edited by hand can repeat itself
-    out.push({ key: `plain:${label}`, label, factor: 1 })
+    out.push({ key: `plain:${label}`, label, factor: 1, records: label })
   }
   return out
 }
@@ -88,8 +80,6 @@ function round3(n: number): number {
 
 export function QtyInput({ // i18n-key
   unitType,
-  packSize,
-  packLabel,
   plainUnits,
   value,
   onChange,
@@ -97,21 +87,22 @@ export function QtyInput({ // i18n-key
   invalid = false,
 }: {
   unitType: string
-  /** Base units per pack, from the product. Offers the pack with its size already known. */
-  packSize?: number
-  packLabel?: string
   /** The owner's unit list. Passed in rather than fetched here, so one screen reads once. */
   plainUnits?: readonly string[]
-  value: number // always base units
-  onChange: (baseValue: number) => void
+  value: number
+  /**
+   * The quantity, and the unit it is to be recorded under.
+   *
+   * The unit travels with the number because the screen above files both on the movement.
+   * Handing up only a number is what made this wrong before: the row was always stamped
+   * with the product's own unit, so picking EA changed nothing anyone could see afterwards.
+   */
+  onChange: (qty: number, unit: string) => void
   className?: string
   invalid?: boolean
 }) {
   const t = useT()
-  const units = useMemo(
-    () => entryUnitsFor(unitType, packSize, packLabel, plainUnits),
-    [unitType, packSize, packLabel, plainUnits],
-  )
+  const units = useMemo(() => entryUnitsFor(unitType, plainUnits), [unitType, plainUnits])
   const [unitKey, setUnitKey] = useState('base')
   const unit = units.find((u) => u.key === unitKey) ?? units[0]
   const factor = unit.factor
@@ -123,7 +114,7 @@ export function QtyInput({ // i18n-key
   // unit, so it resets when the unit — or the product behind it — does.
   useEffect(() => {
     setUnitKey('base')
-  }, [unitType, packSize])
+  }, [unitType])
 
   // The list can change under an open screen — someone adds Carton in Settings on another
   // tab — and a select whose value matches no option renders blank.
@@ -141,9 +132,9 @@ export function QtyInput({ // i18n-key
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, factor])
 
-  function commit(nextText: string, nextFactor: number) {
+  function commit(nextText: string, next: EntryUnit) {
     const n = Number(nextText)
-    onChange(Number.isFinite(n) ? round3(n * nextFactor) : 0)
+    onChange(Number.isFinite(n) ? round3(n * next.factor) : 0, next.records)
   }
 
   const converted = factor !== 1 && Number(text) > 0 ? round3(Number(text) * factor) : null
@@ -162,7 +153,7 @@ export function QtyInput({ // i18n-key
           value={text}
           onChange={(e) => {
             setText(e.target.value)
-            commit(e.target.value, factor)
+            commit(e.target.value, unit)
           }}
           className={`num min-h-11 w-full rounded-lg border px-3 py-2 text-right text-base font-semibold text-ink outline-none transition-[border-color,box-shadow] duration-150 focus-visible:ring-2 ${
             invalid
@@ -179,7 +170,7 @@ export function QtyInput({ // i18n-key
           onChange={(e) => {
             const next = units.find((u) => u.key === e.target.value) ?? units[0]
             setUnitKey(next.key)
-            commit(text, next.factor)
+            commit(text, next)
           }}
           className="min-h-11 w-28 shrink-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
           aria-label={t('เลือกหน่วยที่กรอก')}
@@ -191,8 +182,8 @@ export function QtyInput({ // i18n-key
           ))}
         </select>
       </div>
-      {/* What actually goes into the ledger, whenever that is not what was typed. Someone
-          keying 2 cases needs to see the 600 pieces before they save it, not after. */}
+      {/* Grams are the one conversion left, so this is the one case where what is filed is
+          not what was typed. Showing it before saving is the whole point. */}
       {converted !== null && (
         <p className="mt-1 text-right text-xs text-ink-soft">
           = <span className="num font-semibold text-ink">{converted}</span> {unitType}

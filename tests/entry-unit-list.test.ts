@@ -128,14 +128,14 @@ describe('what the dropdown does with it', () => {
   test("the product's own unit is never part of the editable list", () => {
     // Asked directly: "where did KG go?". It comes from the product, is always first, and
     // no edit in Settings can remove it.
-    const units = entryUnitsFor('KG', undefined, undefined, ['Carton'])
+    const units = entryUnitsFor('KG', ['Carton'])
     expect(units.map((u) => u.label)).toEqual(['KG', 'กรัม (g)', 'Carton'])
     expect(units[0].factor).toBe(1)
   })
 
-  test('a custom unit records what was typed, like the built-in ones', () => {
-    const carton = entryUnitsFor('KG', undefined, undefined, ['Carton'])[2]
-    expect(carton.factor).toBe(1)
+  test('a custom unit records what was typed, under its own name', () => {
+    const carton = entryUnitsFor('KG', ['Carton'])[2]
+    expect(carton).toMatchObject({ label: 'Carton', factor: 1, records: 'Carton' })
   })
 
   test('the built-in list stands in until the real one has loaded', () => {
@@ -147,11 +147,11 @@ describe('what the dropdown does with it', () => {
   })
 
   test('a custom unit that repeats the product unit is not listed twice', () => {
-    expect(entryUnitsFor('Carton', undefined, undefined, ['Carton', 'Lot'])).toHaveLength(2)
+    expect(entryUnitsFor('Carton', ['Carton', 'Lot'])).toHaveLength(2)
   })
 
   test('a list that repeats itself still yields distinct options', () => {
-    const keys = entryUnitsFor('KG', undefined, undefined, ['Carton', 'carton']).map((u) => u.key)
+    const keys = entryUnitsFor('KG', ['Carton', 'carton']).map((u) => u.key)
     expect(new Set(keys).size).toBe(keys.length)
   })
 })

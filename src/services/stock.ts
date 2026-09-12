@@ -40,7 +40,10 @@ import {
 export interface MovementLine {
   productId: string
   productName: string
+  /** The product's own unit. */
   unit: string
+  /** What the person picked in the unit box, when it is not the product's own. */
+  entryUnit?: string
   qty: number
   note?: string
 }
@@ -57,8 +60,79 @@ const PREFIX: Record<MovementType, string> = {
   consume: 'CS',
 }
 
-function levelId(locationId: string, productId: string): string {
-  return `${locationId}__${productId}`
+/**
+ * Which balance a movement belongs to.
+ *
+ * A product has one balance per unit anyone has keyed it in. The product's own unit keeps
+ * the plain `location__product` key that every balance written before units were selectable
+ * already uses, so nothing has to be migrated and no existing number moves; any other unit
+ * gets its own row behind a `#`.
+ *
+ * Balances are never added across units. Ten Pack and two KG of the same prawns are two
+ * rows shown side by side, and a person decides what to do about it — summing them would
+ * mean inventing a pack size nobody wrote down.
+ */
+function levelId(locationId: string, productId: string, unit?: string, baseUnit?: string): string {
+  const base = `${locationId}__${productId}`
+  const u = (unit ?? '').trim()
+  return !u || u === (baseUnit ?? '').trim() ? base : `${base}${UNIT_SEP}${u}`
+}
+
+/**
+ * Separator between the product key and the unit.
+ *
+ * Deliberately not `__`: the existing key is split on that, and a unit name containing one
+ * would silently become part of the product id.
+ */
+const UNIT_SEP = '#'
+
+/** The unit a line is filed under — what was keyed, falling back to the product's own. */
+function filedUnit(l: { unit: string; entryUnit?: string }): string {
+  return (l.entryUnit ?? '').trim() || l.unit
+}
+
+/**
+ * The keyed unit, but only when it differs from the product's own.
+ *
+ * This is what gets written — to the movement and to the balance row — so a document that
+ * was keyed in the product's own unit keeps exactly the shape it has always had.
+ */
+function extraUnit(x: { unit: string; entryUnit?: string }): string | undefined {
+  const filed = filedUnit(x)
+  return filed === x.unit ? undefined : filed
+}
+
+/**
+ * The balance row for one line or one movement, and the unit to stamp on it.
+ *
+ * Both shapes carry the product's own unit and, optionally, the one that was keyed, which is
+ * why voiding a movement can find exactly the row it created without reading the product.
+ */
+function levelRef(
+  locationId: string,
+  x: { productId: string; unit: string; entryUnit?: string },
+): { id: string; unit?: string } {
+  return {
+    id: levelId(locationId, x.productId, filedUnit(x), x.unit),
+    unit: extraUnit(x),
+  }
+}
+
+/** Split a balance key back into its parts. The unit is absent for the product's own. */
+export function parseLevelId(id: string): {
+  locationId: string
+  productId: string
+  unit?: string
+} {
+  const hash = id.indexOf(UNIT_SEP)
+  const head = hash === -1 ? id : id.slice(0, hash)
+  const unit = hash === -1 ? undefined : id.slice(hash + 1)
+  const cut = head.indexOf('__')
+  return {
+    locationId: cut === -1 ? head : head.slice(0, cut),
+    productId: cut === -1 ? '' : head.slice(cut + 2),
+    ...(unit ? { unit } : {}),
+  }
 }
 
 /**
@@ -75,10 +149,14 @@ function levelDoc(
   qty: number,
   actor: Actor,
   now: number,
+  unit?: string,
 ): Record<string, unknown> {
   return {
     productId,
     locationId,
+    // Omitted for the product's own unit, so rows written before units were selectable keep
+    // exactly the shape they have.
+    ...(unit ? { unit } : {}),
     qty: roundQty(qty),
     updatedAt: now,
     updatedBy: actor.id,
@@ -181,7 +259,7 @@ export async function receiveStock(params: {
     const counter = await tx.get<{ value: number }>(COL.counters, 'receive')
     const seq = (counter?.value ?? 0) + 1
     const levels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelId(toLocationId, l.productId))),
+      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
     )
     // ---- writes ----
     const docNo = makeDocNo('receive', seq)
@@ -191,8 +269,8 @@ export async function receiveStock(params: {
       const cur = levels[i]?.qty ?? 0
       tx.set(
         COL.stockLevels,
-        levelId(toLocationId, l.productId),
-        levelDoc(toLocationId, l.productId, cur + l.qty, actor, now),
+        levelRef(toLocationId, l).id,
+        levelDoc(toLocationId, l.productId, cur + l.qty, actor, now, levelRef(toLocationId, l).unit),
       )
       const mv: Omit<StockMovement, 'id'> = {
         docNo,
@@ -200,6 +278,7 @@ export async function receiveStock(params: {
         productId: l.productId,
         productName: l.productName,
         unit: l.unit,
+        ...(extraUnit(l) ? { entryUnit: filedUnit(l) } : {}),
         qty: l.qty,
         toLocationId,
         note: l.note ?? note,
@@ -241,16 +320,16 @@ export async function issueStock(params: {
     const counter = await tx.get<{ value: number }>(COL.counters, 'issue')
     const seq = (counter?.value ?? 0) + 1
     const fromLevels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelId(fromLocationId, l.productId))),
+      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
     )
     const toLevels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelId(toLocationId, l.productId))),
+      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
     )
     // validate availability — one line per product, so this is the whole demand for it
     lines.forEach((l, i) => {
       const avail = fromLevels[i]?.qty ?? 0
       if (l.qty > avail) {
-        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: l.unit })
+        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
       }
     })
     // ---- writes ----
@@ -262,13 +341,13 @@ export async function issueStock(params: {
       const toCur = toLevels[i]?.qty ?? 0
       tx.set(
         COL.stockLevels,
-        levelId(fromLocationId, l.productId),
-        levelDoc(fromLocationId, l.productId, fromCur - l.qty, actor, now),
+        levelRef(fromLocationId, l).id,
+        levelDoc(fromLocationId, l.productId, fromCur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
       )
       tx.set(
         COL.stockLevels,
-        levelId(toLocationId, l.productId),
-        levelDoc(toLocationId, l.productId, toCur + l.qty, actor, now),
+        levelRef(toLocationId, l).id,
+        levelDoc(toLocationId, l.productId, toCur + l.qty, actor, now, levelRef(toLocationId, l).unit),
       )
       const mv: Omit<StockMovement, 'id'> = {
         docNo,
@@ -276,6 +355,7 @@ export async function issueStock(params: {
         productId: l.productId,
         productName: l.productName,
         unit: l.unit,
+        ...(extraUnit(l) ? { entryUnit: filedUnit(l) } : {}),
         qty: l.qty,
         fromLocationId,
         toLocationId,
@@ -325,12 +405,12 @@ export async function consumeStock(params: {
     const counter = await tx.get<{ value: number }>(COL.counters, 'consume')
     const seq = (counter?.value ?? 0) + 1
     const levels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelId(fromLocationId, l.productId))),
+      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
     )
     lines.forEach((l, i) => {
       const avail = levels[i]?.qty ?? 0
       if (l.qty > avail) {
-        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: l.unit })
+        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
       }
     })
     // ---- writes ----
@@ -344,8 +424,8 @@ export async function consumeStock(params: {
       const cur = levels[i]?.qty ?? 0
       tx.set(
         COL.stockLevels,
-        levelId(fromLocationId, l.productId),
-        levelDoc(fromLocationId, l.productId, cur - l.qty, actor, now),
+        levelRef(fromLocationId, l).id,
+        levelDoc(fromLocationId, l.productId, cur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
       )
       const mv: Omit<StockMovement, 'id'> = {
         docNo: doc,
@@ -353,6 +433,7 @@ export async function consumeStock(params: {
         productId: l.productId,
         productName: l.productName,
         unit: l.unit,
+        ...(extraUnit(l) ? { entryUnit: filedUnit(l) } : {}),
         qty: l.qty,
         fromLocationId,
         note: l.note ?? note,
@@ -379,6 +460,8 @@ export async function adjustStock(params: {
   productId: string
   productName: string
   unit: string
+  /** What the person picked in the unit box, when it is not the product's own. */
+  entryUnit?: string
   locationId: string
   direction: 'in' | 'out'
   qty: number
@@ -387,7 +470,8 @@ export async function adjustStock(params: {
   actor: Actor
   note?: string
 }): Promise<string> {
-  const { productId, productName, unit, locationId, actor, note } = params
+  const { productId, productName, unit, entryUnit, locationId, actor, note } = params
+  const ref = levelRef(locationId, { productId, unit, entryUnit })
   const qty = requireQty(params.qty, productName)
   const direction = requireOneOf(params.direction, ['in', 'out'] as const)
   const reason = requireOneOf(
@@ -403,19 +487,20 @@ export async function adjustStock(params: {
     await requireMasterData(tx, [productId], [locationId])
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
     const seq = (counter?.value ?? 0) + 1
-    const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
+    const level = await tx.get<StockLevel>(COL.stockLevels, ref.id)
     const cur = level?.qty ?? 0
     const delta = direction === 'in' ? qty : -qty
     const next = roundQty(cur + delta)
-    if (next < 0) throw new AppError('สต๊อกไม่พอ (คงเหลือ {qty} {unit})', { qty: cur, unit })
+    if (next < 0)
+      throw new AppError('สต๊อกไม่พอ (คงเหลือ {qty} {unit})', { qty: cur, unit: ref.unit ?? unit })
 
     const docNo = makeDocNo('adjust', seq)
     tx.set(COL.counters, 'adjust', { value: seq })
     const now = Date.now()
     tx.set(
       COL.stockLevels,
-      levelId(locationId, productId),
-      levelDoc(locationId, productId, next, actor, now),
+      ref.id,
+      levelDoc(locationId, productId, next, actor, now, ref.unit),
     )
     const mv: Omit<StockMovement, 'id'> = {
       docNo,
@@ -423,6 +508,7 @@ export async function adjustStock(params: {
       productId,
       productName,
       unit,
+      ...(ref.unit ? { entryUnit: ref.unit } : {}),
       qty,
       ...(direction === 'in' ? { toLocationId: locationId } : { fromLocationId: locationId }),
       reason,
@@ -466,6 +552,8 @@ export async function setStockCount(params: {
 
   return db.transaction(async (tx) => {
     await requireMasterData(tx, [productId], [locationId])
+    // A count is someone standing in front of the shelf reconciling the product's own
+    // balance, so it always lands on that row — there is no unit box on that screen.
     const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
     const cur = level?.qty ?? 0
@@ -520,10 +608,10 @@ export async function editMovementQty(params: {
     const delta = roundQty(newQty - mv.qty)
 
     const fromLevel = mv.fromLocationId
-      ? await tx.get<StockLevel>(COL.stockLevels, levelId(mv.fromLocationId, mv.productId))
+      ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.fromLocationId, mv).id)
       : null
     const toLevel = mv.toLocationId
-      ? await tx.get<StockLevel>(COL.stockLevels, levelId(mv.toLocationId, mv.productId))
+      ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.toLocationId, mv).id)
       : null
 
     const now = Date.now()
@@ -533,8 +621,8 @@ export async function editMovementQty(params: {
       if (next < 0) throw new AppError('แก้ไขไม่ได้: สต๊อกต้นทางจะติดลบ')
       tx.set(
         COL.stockLevels,
-        levelId(mv.fromLocationId, mv.productId),
-        levelDoc(mv.fromLocationId, mv.productId, next, actor, now),
+        levelRef(mv.fromLocationId, mv).id,
+        levelDoc(mv.fromLocationId, mv.productId, next, actor, now, levelRef(mv.fromLocationId, mv).unit),
       )
     }
     if (mv.toLocationId) {
@@ -543,8 +631,8 @@ export async function editMovementQty(params: {
       if (next < 0) throw new AppError('แก้ไขไม่ได้: สต๊อกปลายทางจะติดลบ')
       tx.set(
         COL.stockLevels,
-        levelId(mv.toLocationId, mv.productId),
-        levelDoc(mv.toLocationId, mv.productId, next, actor, now),
+        levelRef(mv.toLocationId, mv).id,
+        levelDoc(mv.toLocationId, mv.productId, next, actor, now, levelRef(mv.toLocationId, mv).unit),
       )
     }
     tx.update(COL.movements, movementId, {
@@ -576,10 +664,10 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
     if (mv.voided) return
 
     const fromLevel = mv.fromLocationId
-      ? await tx.get<StockLevel>(COL.stockLevels, levelId(mv.fromLocationId, mv.productId))
+      ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.fromLocationId, mv).id)
       : null
     const toLevel = mv.toLocationId
-      ? await tx.get<StockLevel>(COL.stockLevels, levelId(mv.toLocationId, mv.productId))
+      ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.toLocationId, mv).id)
       : null
 
     const now = Date.now()
@@ -588,8 +676,8 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
       const cur = fromLevel?.qty ?? 0
       tx.set(
         COL.stockLevels,
-        levelId(mv.fromLocationId, mv.productId),
-        levelDoc(mv.fromLocationId, mv.productId, cur + mv.qty, actor, now),
+        levelRef(mv.fromLocationId, mv).id,
+        levelDoc(mv.fromLocationId, mv.productId, cur + mv.qty, actor, now, levelRef(mv.fromLocationId, mv).unit),
       )
     }
     if (mv.toLocationId) {
@@ -603,8 +691,8 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
       }
       tx.set(
         COL.stockLevels,
-        levelId(mv.toLocationId, mv.productId),
-        levelDoc(mv.toLocationId, mv.productId, next, actor, now),
+        levelRef(mv.toLocationId, mv).id,
+        levelDoc(mv.toLocationId, mv.productId, next, actor, now, levelRef(mv.toLocationId, mv).unit),
       )
     }
     tx.update(COL.movements, movementId, {
@@ -622,11 +710,11 @@ function balancesFromLedger(movements: StockMovement[]): Map<string, number> {
   for (const m of movements) {
     if (m.voided) continue
     if (m.fromLocationId) {
-      const k = levelId(m.fromLocationId, m.productId)
+      const k = levelRef(m.fromLocationId, m).id
       map.set(k, roundQty((map.get(k) ?? 0) - m.qty))
     }
     if (m.toLocationId) {
-      const k = levelId(m.toLocationId, m.productId)
+      const k = levelRef(m.toLocationId, m).id
       map.set(k, roundQty((map.get(k) ?? 0) + m.qty))
     }
   }
@@ -637,6 +725,8 @@ export interface LevelDrift {
   id: string
   locationId: string
   productId: string
+  /** Which unit's balance drifted, when it is not the product's own. */
+  unit?: string
   /** what stockLevels currently says */
   cached: number
   /** what the ledger adds up to */
@@ -671,12 +761,13 @@ export async function findLevelDrift(): Promise<LevelDrift[]> {
     const actual = cached.get(id)?.qty ?? 0
     // Both sides are rounded to the same precision; anything smaller is float noise.
     if (Math.abs(expected - actual) < QTY_STEP / 2) continue
-    const [locationId, productId] = id.split('__')
+    const parsed = parseLevelId(id)
     const lv = cached.get(id) as (StockLevel & { updatedBy?: string }) | undefined
     out.push({
       id,
-      locationId: lv?.locationId ?? locationId,
-      productId: lv?.productId ?? productId,
+      locationId: lv?.locationId ?? parsed.locationId,
+      productId: lv?.productId ?? parsed.productId,
+      unit: lv?.unit ?? parsed.unit,
       cached: actual,
       fromLedger: expected,
       updatedBy: lv?.updatedBy,
@@ -734,13 +825,17 @@ export async function recomputeLevels(actor: Actor): Promise<void> {
   const now = Date.now()
   // write recomputed
   for (const [id, qty] of map) {
-    const [locationId, productId] = id.split('__')
-    await db.set(COL.stockLevels, id, levelDoc(locationId, productId, qty, actor, now))
+    const { locationId, productId, unit } = parseLevelId(id)
+    await db.set(COL.stockLevels, id, levelDoc(locationId, productId, qty, actor, now, unit))
   }
   // zero-out any existing level not present in the ledger
   for (const lv of levels) {
     if (!map.has(lv.id)) {
-      await db.set(COL.stockLevels, lv.id, levelDoc(lv.locationId, lv.productId, 0, actor, now))
+      await db.set(
+        COL.stockLevels,
+        lv.id,
+        levelDoc(lv.locationId, lv.productId, 0, actor, now, lv.unit ?? parseLevelId(lv.id).unit),
+      )
     }
   }
 }

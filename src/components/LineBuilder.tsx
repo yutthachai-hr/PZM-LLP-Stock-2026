@@ -11,7 +11,15 @@ import { useT } from '../i18n/I18nContext'
 export interface Line {
   productId: string
   productName: string
+  /** The product's own unit. The balance this line belongs to, unless entryUnit says otherwise. */
   unit: string
+  /**
+   * The unit the person actually picked, when it is not the product's own.
+   *
+   * Carried separately so the movement can be filed under what was keyed while the line
+   * still knows which product unit it started from.
+   */
+  entryUnit?: string
   qty: number
 }
 
@@ -59,24 +67,16 @@ export function LineBuilder({
     setSearch('')
   }
 
-  function setQty(id: string, qty: number) {
-    onChange(lines.map((l) => (l.productId === id ? { ...l, qty } : l)))
+  function setQty(id: string, qty: number, entryUnit: string) {
+    onChange(lines.map((l) => (l.productId === id ? { ...l, qty, entryUnit } : l)))
   }
 
   function remove(id: string) {
     onChange(lines.filter((l) => l.productId !== id))
   }
 
-  // The pack multiplier belongs to the product, not to the line — keeping it out of Line
-  // means nothing new can reach a movement document, whose shape the rules pin with hasOnly.
   // Read once for the whole screen, not once per line.
   const plainUnits = useEntryUnits()
-
-  const packOf = useMemo(() => {
-    const map = new Map<string, { packSize?: number; packLabel?: string }>()
-    for (const p of products) map.set(p.id, { packSize: p.packSize, packLabel: p.packLabel })
-    return map
-  }, [products])
 
   const inbound = direction === 'in'
   const sign = inbound ? '+' : '−'
@@ -151,11 +151,9 @@ export function LineBuilder({
                   <div className="w-full sm:w-44">
                     <QtyInput
                       unitType={l.unit}
-                      packSize={packOf.get(l.productId)?.packSize}
-                      packLabel={packOf.get(l.productId)?.packLabel}
                       plainUnits={plainUnits}
                       value={l.qty}
-                      onChange={(v) => setQty(l.productId, v)}
+                      onChange={(v, u) => setQty(l.productId, v, u)}
                       invalid={over}
                     />
                   </div>

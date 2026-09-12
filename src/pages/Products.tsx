@@ -52,7 +52,8 @@ const SORTS: { value: SortKey; label: string }[] = [
 
 export function ProductsPage() {
   const t = useT()
-  const { products, locations, qtyAt, minFor, levels, minOverrides, loading } = useData()
+  const { products, locations, qtyAt, qtyByUnit, minFor, levels, minOverrides, loading } =
+    useData()
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast()
@@ -80,6 +81,28 @@ export function ProductsPage() {
     const active = locId ? locations.filter((l) => l.id === locId) : locations
     return (productId: string) => active.reduce((sum, l) => sum + qtyAt(l.id, productId), 0)
   }, [locations, locId, qtyAt])
+
+  /**
+   * Balances keyed in some other unit, added up over the locations in view.
+   *
+   * These are deliberately kept apart from the number above rather than folded into it. Two
+   * people recording the same delivery — one as "10 Pack", one as "2 KG" — leaves two
+   * balances, and only a person can say which is right; a conversion here would be a guess
+   * written into the stock figure.
+   */
+  const otherUnits = useMemo(() => {
+    const active = locId ? locations.filter((l) => l.id === locId) : locations
+    return (product: Product) => {
+      const totals = new Map<string, number>()
+      for (const l of active) {
+        for (const row of qtyByUnit(l.id, product.id)) {
+          if (row.unit === product.unitType) continue
+          totals.set(row.unit, (totals.get(row.unit) ?? 0) + row.qty)
+        }
+      }
+      return [...totals].map(([unit, qty]) => ({ unit, qty }))
+    }
+  }, [locations, locId, qtyByUnit])
 
   /**
    * The minimum this list should judge a product against.
@@ -212,6 +235,7 @@ export function ProductsPage() {
         cell: (p) => {
           const total = shownQty(p.id)
           const low = minShown(p) > 0 && total <= minShown(p)
+          const others = otherUnits(p)
           return (
             <>
               <span className={low ? 'font-semibold text-warn' : 'text-ink'}>{fmtQty(total)}</span>
@@ -220,6 +244,14 @@ export function ProductsPage() {
                   <Badge color="red">{t('ใกล้หมด')}</Badge>
                 </span>
               )}
+              {/* Someone keyed this product in a unit of its own. Shown, never added. */}
+              {others.map((o) => (
+                <span key={o.unit} className="ml-2 align-middle">
+                  <Badge color="amber">
+                    {fmtQty(o.qty)} {o.unit}
+                  </Badge>
+                </span>
+              ))}
             </>
           )
         },
@@ -494,8 +526,6 @@ function ProductEditor({
     unitType: product?.unitType ?? 'EA',
     minStock: product?.minStock ?? 0,
     cost: product?.cost,
-    packSize: product?.packSize,
-    packLabel: product?.packLabel ?? '',
   })
   const [existingImg, setExistingImg] = useState<string | null>(null)
   const [newImg, setNewImg] = useState<string | null>(null)
@@ -748,36 +778,6 @@ function ProductEditor({
                 cost: e.target.value === '' ? undefined : Number(e.target.value),
               })
             }
-            disabled={!canEdit}
-          />
-        </Field>
-        {/* The pack is an entry convenience, not a second unit: goods arrive by the case
-            but a balance has to stay one number. Filling these in lets the receiving
-            screen accept what the delivery note says and still store base units. Unlike
-            the unit itself this can be changed later — no movement records it. */}
-        <Field
-          label={t("ขนาดบรรจุ (ไม่บังคับ)")}
-          hint={t('เช่น 1 ลัง = 300 ชิ้น ให้ใส่ 300')}
-        >
-          <Input
-            type="number"
-            step="any"
-            min={0}
-            value={form.packSize ?? ''}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                packSize: e.target.value === '' ? undefined : Number(e.target.value),
-              })
-            }
-            disabled={!canEdit}
-          />
-        </Field>
-        <Field label={t("ชื่อหน่วยบรรจุ")} hint={t('เช่น ลัง, กล่อง, Pack, Lot')}>
-          <Input
-            value={form.packLabel ?? ''}
-            onChange={(e) => setForm({ ...form, packLabel: e.target.value })}
-            placeholder={t("เช่น ลัง")}
             disabled={!canEdit}
           />
         </Field>

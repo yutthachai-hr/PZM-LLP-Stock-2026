@@ -35,6 +35,13 @@ interface DataState {
   productById: (id: string) => Product | undefined
   locationById: (id: string) => StockLocation | undefined
   qtyAt: (locationId: string, productId: string) => number
+  /**
+   * Every unit this product has a non-zero balance in at this location, base unit first.
+   *
+   * Usually one row. More than one means two people keyed the same goods differently —
+   * "10 Pack" and "2 KG" — and the screens show both rather than guessing a conversion.
+   */
+  qtyByUnit: (locationId: string, productId: string) => { unit: string; qty: number }[]
   minFor: (product: Product, locationId: string) => number
 }
 
@@ -72,7 +79,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const value = useMemo<DataState>(() => {
     const productMap = new Map(products.map((p) => [p.id, p]))
     const locationMap = new Map(locations.map((l) => [l.id, l]))
-    const levelMap = new Map(levels.map((l) => [`${l.locationId}__${l.productId}`, l.qty]))
+    // Only the product's own unit. A row for a unit someone keyed carries the same
+    // locationId and productId, so keying this map on those alone would let a Pack balance
+    // overwrite the KG one and every total on every screen would quietly be the wrong row.
+    const levelMap = new Map(
+      levels.filter((l) => !l.unit).map((l) => [`${l.locationId}__${l.productId}`, l.qty]),
+    )
+    // Every unit a product has a balance in, per location, base unit first. Balances are
+    // never added across units — ten Pack and two KG are two numbers a person reconciles.
+    const byUnit = new Map<string, { unit: string; qty: number }[]>()
+    for (const l of levels) {
+      if (!l.qty) continue
+      const key = `${l.locationId}__${l.productId}`
+      const unit = l.unit ?? productMap.get(l.productId)?.unitType ?? ''
+      const row = { unit, qty: l.qty }
+      const list = byUnit.get(key)
+      if (!list) byUnit.set(key, [row])
+      else if (l.unit) list.push(row)
+      else list.unshift(row)
+    }
     const overrideMap = new Map(
       minOverrides.map((o) => [`${o.locationId}__${o.productId}`, o.minStock]),
     )
@@ -91,6 +116,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       productById: (id) => productMap.get(id),
       locationById: (id) => locationMap.get(id),
       qtyAt: (locationId, productId) => levelMap.get(`${locationId}__${productId}`) ?? 0,
+      qtyByUnit: (locationId, productId) => byUnit.get(`${locationId}__${productId}`) ?? [],
       minFor: (product, locationId) =>
         overrideMap.get(`${locationId}__${product.id}`) ?? product.minStock ?? 0,
     }

@@ -134,7 +134,7 @@ service cloud.firestore {
           'date', 'byUserId', 'byUserName', 'createdAt'
         ])
         && d.keys().hasOnly([
-          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'qty',
+          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'entryUnit', 'qty',
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'date', 'byUserId', 'byUserName', 'createdAt',
           'updatedBy', 'updatedByName', 'updatedAt', 'voided'
@@ -144,6 +144,9 @@ service cloud.firestore {
         && text(d.unit, 40) && text(d.byUserId, 200) && text(d.byUserName, 200)
         && positive(d.qty, 1000000000)
         && epochMs(d.date) && epochMs(d.createdAt)
+        // Present only when the person keyed a unit other than the product's own. Nothing
+        // is converted between the two; this is what the row is counted in.
+        && (!('entryUnit' in d) || text(d.entryUnit, 20))
         && (!('note' in d) || text(d.note, 2000))
         && (!('reason' in d) || text(d.reason, 60))
         && (!('hasPhoto' in d) || d.hasPhoto is bool)
@@ -157,7 +160,10 @@ service cloud.firestore {
 
     function validLevel(d) {
       return d.keys().hasAll(['id', 'productId', 'locationId', 'qty', 'updatedAt', 'updatedBy'])
-        && d.keys().hasOnly(['id', 'productId', 'locationId', 'qty', 'updatedAt', 'updatedBy'])
+        // `unit` is present only on a balance counted in something other than the product's
+        // own unit, so rows written before units were selectable still validate unchanged.
+        && d.keys().hasOnly(['id', 'productId', 'locationId', 'unit', 'qty', 'updatedAt', 'updatedBy'])
+        && (!('unit' in d) || text(d.unit, 20))
         && text(d.productId, 200) && text(d.locationId, 200)
         && nonneg(d.qty, 1000000000)
         && epochMs(d.updatedAt)

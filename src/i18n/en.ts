@@ -791,10 +791,5 @@ export const EN: Record<string, string> = {
   ส: 'Sa',
 
   // ---- pack size (entry unit conversion) -------------------------------------------
-  'ขนาดบรรจุ (ไม่บังคับ)': 'Pack size (optional)',
-  'เช่น 1 ลัง = 300 ชิ้น ให้ใส่ 300': 'e.g. 1 case = 300 pieces → enter 300',
-  'ชื่อหน่วยบรรจุ': 'Pack name',
-  'เช่น ลัง, กล่อง, Pack, Lot': 'e.g. case, box, Pack, Lot',
-  'เช่น ลัง': 'e.g. case',
   'ขนาดบรรจุต้องมากกว่า 0': 'Pack size must be greater than 0',
 }

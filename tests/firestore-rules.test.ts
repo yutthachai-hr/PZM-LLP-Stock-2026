@@ -527,6 +527,63 @@ describe('the bootstrap sentinel', () => {
   })
 })
 
+describe('a balance counted in a unit somebody keyed', () => {
+  const lvl = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    productId: 'p1',
+    locationId: 'loc1',
+    qty: 10,
+    updatedAt: ts(),
+    updatedBy: STAFF,
+    ...over,
+  })
+
+  test('a balance in the product own unit keeps the shape it always had', async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), 'stockLevels/loc1__p1'), lvl('loc1__p1')))
+  })
+
+  test('a balance in another unit carries that unit', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(STAFF), 'stockLevels/loc1__p1#Pack'), lvl('loc1__p1#Pack', { unit: 'Pack' })),
+    )
+  })
+
+  test('the unit is bounded, like every other stored name', async () => {
+    await assertFails(
+      setDoc(
+        doc(as(STAFF), 'stockLevels/loc1__p1#x'),
+        lvl('loc1__p1#x', { unit: 'x'.repeat(21) }),
+      ),
+    )
+    await assertFails(
+      setDoc(doc(as(STAFF), 'stockLevels/loc1__p1#x'), lvl('loc1__p1#x', { unit: 12 })),
+    )
+  })
+
+  test('a balance still cannot carry anything else, or go negative', async () => {
+    await assertFails(setDoc(doc(as(STAFF), 'stockLevels/loc1__p1'), lvl('loc1__p1', { hmm: 1 })))
+    await assertFails(setDoc(doc(as(STAFF), 'stockLevels/loc1__p1'), lvl('loc1__p1', { qty: -1 })))
+  })
+
+  test('a movement may name the unit it was keyed in', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(STAFF), 'stockMovements/m-pack'), movement('m-pack', STAFF, { entryUnit: 'Pack' })),
+    )
+  })
+
+  test('that name is bounded too, and still cannot be anything else', async () => {
+    await assertFails(
+      setDoc(
+        doc(as(STAFF), 'stockMovements/m-long'),
+        movement('m-long', STAFF, { entryUnit: 'y'.repeat(21) }),
+      ),
+    )
+    await assertFails(
+      setDoc(doc(as(STAFF), 'stockMovements/m-num'), movement('m-num', STAFF, { entryUnit: 7 })),
+    )
+  })
+})
+
 describe('the list of entry units', () => {
   const units = (over: Record<string, unknown> = {}) => ({
     id: 'entryUnits',
