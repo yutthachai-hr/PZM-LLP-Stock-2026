@@ -99,8 +99,6 @@ export const EN: Record<string, string> = {
     'This file holds {file} data but {current} is open — switch to {file} first, then restore',
   'ออกจากระบบอัตโนมัติเพราะไม่มีการใช้งาน {minutes} นาที — เครื่องนี้เป็นเครื่องใช้ร่วมกัน':
     'Signed out automatically after {minutes} minutes of inactivity — this is a shared device',
-  'เปลี่ยนหน่วยไม่ได้เพราะสินค้านี้มีสต๊อกหรือมีประวัติแล้ว — ตัวเลขเก่าจะอ่านผิดความหมาย ถ้าหน่วยผิดให้สร้างสินค้าใหม่':
-    'The unit cannot be changed because this product has stock or history — the existing numbers would change meaning. If the unit is wrong, create a new product.',
   'มีเวอร์ชันใหม่ของระบบพร้อมใช้งานแล้ว': 'A new version of the system is ready',
   'อัปเดตตอนนี้': 'Update now',
   'ไว้ทีหลัง': 'Later',
@@ -270,8 +268,6 @@ export const EN: Record<string, string> = {
   ลบสินค้า: 'Delete product',
   'หน่วยนับ (แสดงผล)': 'Unit (display)',
   ตัวย่อหน่วย: 'Unit code',
-  'เช่น Kilogram, ขวด, แพ็ค': 'e.g. Kilogram, Bottle, Pack',
-  'เช่น KG, EA, Pack': 'e.g. KG, EA, Pack',
   'สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อถึง)': 'Minimum stock (alert threshold)',
   'ต้นทุน/หน่วย (ไม่บังคับ)': 'Cost per unit (optional)',
   'เลือกรูป / ถ่ายรูป': 'Choose or take a photo',
@@ -533,6 +529,8 @@ export const EN: Record<string, string> = {
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)': 'Search a product to add (name / SKU)',
   เลือกหน่วยที่กรอก: 'Entry unit',
   ผู้แก้ไข: 'Edited by',
+  '— เลือกหน่วย —': '— choose a unit —',
+  กรุณาเลือกหน่วย: 'Choose a unit',
   'เปลี่ยนหน่วยแล้ว — ปรับประวัติเก่า {count} รายการ':
     'Unit changed — {count} past movements restamped',
   'สินค้านี้มีประวัติ {count} รายการ มากเกินกว่าจะเปลี่ยนหน่วยทั้งหมดได้ — กรุณาสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง':

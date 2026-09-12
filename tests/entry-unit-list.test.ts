@@ -23,6 +23,7 @@ const {
   saveEntryUnits,
 } = await import('../src/services/entryUnits')
 const { entryUnitsFor } = await import('../src/components/QtyInput')
+const { sameUnit, unitNameFor } = await import('../src/lib/units')
 const { backend } = await import('../src/backend')
 
 beforeEach(() => {
@@ -153,5 +154,38 @@ describe('what the dropdown does with it', () => {
   test('a list that repeats itself still yields distinct options', () => {
     const keys = entryUnitsFor('KG', ['Carton', 'carton']).map((u) => u.key)
     expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('the two unit boxes on the product form', () => {
+  test('an abbreviation has one spelled-out name', () => {
+    expect(unitNameFor('KG')).toBe('kilogram')
+    expect(unitNameFor('EA')).toBe('each')
+    expect(unitNameFor('Lot')).toBe('lot')
+    expect(unitNameFor('Pack')).toBe('pack')
+    expect(unitNameFor('Carton')).toBe('carton')
+  })
+
+  test('the abbreviation is matched however it is capitalised', () => {
+    expect(unitNameFor('kg')).toBe('kilogram')
+    expect(unitNameFor(' Ea ')).toBe('each')
+  })
+
+  test("a unit the owner invented stands for itself rather than getting a made-up name", () => {
+    expect(unitNameFor('ลัง')).toBe('ลัง')
+    expect(unitNameFor('ถุง')).toBe('ถุง')
+  })
+
+  test('two spellings of the same unit are the same unit', () => {
+    // This is what stops opening a product and pressing save from restamping its ledger:
+    // the catalogue holds "Kilogram" where the list now offers "kilogram".
+    expect(sameUnit('Kilogram', 'kilogram')).toBe(true)
+    expect(sameUnit(' EA', 'ea ')).toBe(true)
+    expect(sameUnit(undefined, '')).toBe(true)
+  })
+
+  test('genuinely different units are still different', () => {
+    expect(sameUnit('KG', 'EA')).toBe(false)
+    expect(sameUnit('Pack', '')).toBe(false)
   })
 })

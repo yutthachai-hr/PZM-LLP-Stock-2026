@@ -32,6 +32,8 @@ import {
 } from '../services/products'
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
 import { changeProductUnit, setStockCount } from '../services/stock'
+import { useEntryUnits } from '../services/entryUnits'
+import { sameUnit, unitNameFor } from '../lib/units'
 import { compressImage } from '../lib/image'
 import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
@@ -583,10 +585,23 @@ function ProductEditor({
    * are in a kilogram of this particular thing, so the app refuses rather than guesses. The
    * service enforces it; this just stops the form offering something that will be rejected.
    */
-  const unitLocked = useMemo(() => {
-    if (!product) return false
-    return locations.some((l) => qtyAt(l.id, product.id) !== 0)
-  }, [product, locations, qtyAt])
+  /**
+   * The units this product may be measured in: the owner's list from Settings, plus whatever
+   * this product already uses if that is no longer on it — editing an old product must not
+   * silently change its unit just because the list has moved on.
+   */
+  const plainUnits = useEntryUnits()
+  const unitChoices = useMemo(() => {
+    const out = [...plainUnits]
+    if (form.unitType && !out.some((u) => sameUnit(u, form.unitType))) out.unshift(form.unitType)
+    return out
+  }, [plainUnits, form.unitType])
+
+  /** One choice sets both boxes, because they are two views of the same fact. */
+  function pickUnit(abbreviation: string) {
+    setForm((f) => ({ ...f, unitType: abbreviation, unit: unitNameFor(abbreviation) }))
+  }
+
   // current on-hand quantity per location (editable) + the original values to detect changes
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [origCounts, setOrigCounts] = useState<Record<string, number>>({})
@@ -633,6 +648,8 @@ function ProductEditor({
   async function save() {
     if (!form.name.trim()) return toast.error(t("กรุณาใส่ชื่อสินค้า"))
     if (!form.category.trim()) return toast.error(t("กรุณาใส่หมวดหมู่"))
+    // A product with no unit cannot be received against, counted, or reported on.
+    if (!form.unitType.trim()) return toast.error(t("กรุณาเลือกหน่วย"))
     setBusy(true)
     try {
       // Saving is several writes: the product, then its image, then a stock count per
@@ -644,8 +661,13 @@ function ProductEditor({
         // Correcting the unit restamps every row already filed under the old one, so it is
         // its own operation rather than a field in the patch. It runs first: if it fails,
         // nothing else has been written and the product still reads as it did.
+        // Compared loosely on purpose: the catalogue holds "Kilogram" where the list now
+        // offers "kilogram", and a difference of capitals is not a change of unit. Treating
+        // it as one would restamp a product's whole ledger every time somebody opened it and
+        // pressed save.
         const unitChanged =
-          !!product && (product.unitType !== form.unitType || product.unit !== form.unit)
+          !!product &&
+          (!sameUnit(product.unitType, form.unitType) || !sameUnit(product.unit, form.unit))
         if (unitChanged && user) {
           const touched = await changeProductUnit({
             productId: id,
@@ -790,28 +812,36 @@ function ProductEditor({
             ))}
           </datalist>
         </Field>
-        <Field
-          label={t("หน่วยนับ (แสดงผล)")}
-          hint={
-            unitLocked
-              ? t('เปลี่ยนหน่วยไม่ได้เพราะสินค้านี้มีสต๊อกหรือมีประวัติแล้ว — ตัวเลขเก่าจะอ่านผิดความหมาย ถ้าหน่วยผิดให้สร้างสินค้าใหม่')
-              : undefined
-          }
-        >
-          <Input
-            value={form.unit}
-            onChange={(e) => setForm({ ...form, unit: e.target.value })}
-            placeholder={t("เช่น Kilogram, ขวด, แพ็ค")}
-            disabled={!canEdit || unitLocked}
-          />
-        </Field>
-        <Field label={t("ตัวย่อหน่วย")}>
-          <Input
+        {/* Two boxes for one fact, so they are driven by one list and set together. Typed
+            by hand they drifted — "Kilogram" against "EA", or a unit nobody could receive
+            against because it matched nothing in the entry list. */}
+        <Field label={t("หน่วยนับ (แสดงผล)")} required>
+          <Select
             value={form.unitType}
-            onChange={(e) => setForm({ ...form, unitType: e.target.value })}
-            placeholder={t("เช่น KG, EA, Pack")}
-            disabled={!canEdit || unitLocked}
-          />
+            onChange={(e) => pickUnit(e.target.value)}
+            disabled={!canEdit}
+          >
+            <option value="">{t("— เลือกหน่วย —")}</option>
+            {unitChoices.map((u) => (
+              <option key={u} value={u}>
+                {unitNameFor(u)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={t("ตัวย่อหน่วย")} required>
+          <Select
+            value={form.unitType}
+            onChange={(e) => pickUnit(e.target.value)}
+            disabled={!canEdit}
+          >
+            <option value="">{t("— เลือกหน่วย —")}</option>
+            {unitChoices.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label={t("สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อถึง)")}>
           <Input

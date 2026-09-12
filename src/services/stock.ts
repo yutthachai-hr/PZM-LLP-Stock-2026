@@ -13,6 +13,7 @@ import {
 } from '../types'
 import { genId } from '../lib/id'
 import { getBrand } from '../brand/brand'
+import { sameUnit } from '../lib/units'
 import {
   QTY_STEP,
   requireQty,
@@ -756,7 +757,9 @@ export async function changeProductUnit(params: {
 
   const product = await db.getOne<Product>(COL.products, productId)
   if (!product) throw new AppError('ไม่พบสินค้า')
-  if (product.unitType === unitType && product.unit === unit) return 0
+  // Loose comparison for the same reason the form uses one: "Kilogram" and "kilogram" are
+  // the same unit, and restamping a ledger over a capital letter would be indefensible.
+  if (sameUnit(product.unitType, unitType) && sameUnit(product.unit, unit)) return 0
 
   // One equality read for this product's rows, not the whole ledger.
   const mine = await db.getBy<StockMovement>(COL.movements, 'productId', productId)
@@ -774,7 +777,7 @@ export async function changeProductUnit(params: {
   // again; and a movement already carrying the new unit files to the same balance it did
   // before, so a partial pass cannot leave the books disagreeing.
   for (const mv of mine) {
-    const dropEntry = (mv.entryUnit ?? '') === unitType
+    const dropEntry = sameUnit(mv.entryUnit, unitType) && !!mv.entryUnit
     if (mv.unit === unitType && !dropEntry) continue
     await db.update(COL.movements, mv.id, {
       unit: unitType,
@@ -794,7 +797,7 @@ export async function changeProductUnit(params: {
   const relabelled = mine.map((mv) => ({
     ...mv,
     unit: unitType,
-    entryUnit: (mv.entryUnit ?? '') === unitType ? undefined : mv.entryUnit,
+    entryUnit: sameUnit(mv.entryUnit, unitType) && mv.entryUnit ? undefined : mv.entryUnit,
   }))
   const wanted = balancesFromLedger(relabelled)
   const existing = (await db.getBy<StockLevel>(COL.stockLevels, 'productId', productId)) ?? []
