@@ -8,6 +8,7 @@ import { Icon, type IconName } from './Icon'
 import { isDemoMode } from '../firebase/config'
 import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
+import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
 
 interface NavItem {
@@ -24,6 +25,7 @@ const NAV: NavItem[] = [
   { to: '/receive', label: 'รับสินค้าเข้า', icon: 'receive' }, // i18n-key
   { to: '/issue', label: 'เบิก/โอนสาขา', icon: 'truck' }, // i18n-key
   { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust' }, // i18n-key
+  { to: '/calendar', label: 'ปฏิทินคลัง', icon: 'calendar' }, // i18n-key
   { to: '/movements', label: 'ประวัติ/Stock Card', icon: 'history' }, // i18n-key
   { to: '/reports', label: 'รายงาน', icon: 'report' }, // i18n-key
   { to: '/suppliers', label: 'ผู้ขาย', icon: 'users' }, // i18n-key
@@ -77,6 +79,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const def = brand ? brandDef(brand) : null
   const items = NAV.filter((n) => !n.adminOnly || user?.role === 'admin')
+  // One read per session, shared with the calendar's own cache — see useTodayEventCount.
+  const todayCount = useTodayEventCount(!!user)
 
   return (
     <div className="flex min-h-screen bg-canvas">
@@ -85,7 +89,11 @@ export function Layout({ children }: { children: ReactNode }) {
         <Brand mode={mode} def={def} />
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {items.map((item) => (
-            <NavItemLink key={item.to} item={item} />
+            <NavItemLink
+              key={item.to}
+              item={item}
+              badge={item.to === '/calendar' ? todayCount : 0}
+            />
           ))}
         </nav>
         <UserBox
@@ -115,7 +123,11 @@ export function Layout({ children }: { children: ReactNode }) {
             <Brand mode={mode} def={def} />
             <nav className="flex-1 space-y-1 overflow-y-auto p-3" onClick={() => setOpen(false)}>
               {items.map((item) => (
-                <NavItemLink key={item.to} item={item} />
+                <NavItemLink
+                  key={item.to}
+                  item={item}
+                  badge={item.to === '/calendar' ? todayCount : 0}
+                />
               ))}
             </nav>
             <UserBox
@@ -195,7 +207,7 @@ function Brand({
   )
 }
 
-function NavItemLink({ item }: { item: NavItem }) {
+function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
   const t = useT()
   return (
     <NavLink
@@ -210,7 +222,12 @@ function NavItemLink({ item }: { item: NavItem }) {
       }
     >
       <Icon name={item.icon} />
-      {t(item.label)}
+      <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
+      {badge > 0 && (
+        <span className="num shrink-0 rounded-full bg-brand px-1.5 text-[11px] font-bold leading-5 text-white">
+          {badge}
+        </span>
+      )}
     </NavLink>
   )
 }

@@ -163,12 +163,23 @@ export function Modal({
   title,
   children,
   wide,
+  side,
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
   wide?: boolean
+  /**
+   * Slide in from the right instead of appearing in the middle.
+   *
+   * Same dialog in every respect that matters — focus trap, Escape, overlay, focus
+   * restore — only the geometry differs. A calendar entry is read alongside the calendar,
+   * so covering the middle of the screen with it hides the thing it belongs to; a drawer
+   * leaves the grid visible behind. On a phone there is no "beside", so it takes the
+   * whole width.
+   */
+  side?: boolean
 }) {
   const t = useT()
   const panel = useRef<HTMLDivElement>(null)
@@ -227,7 +238,11 @@ export function Modal({
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/50 p-4 backdrop-blur-[2px] sm:items-center"
+      className={
+        side
+          ? 'fixed inset-0 z-50 flex justify-end overscroll-contain bg-ink/50 backdrop-blur-[2px]'
+          : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/50 p-4 backdrop-blur-[2px] sm:items-center'
+      }
       onClick={onClose}
     >
       <div
@@ -235,10 +250,14 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl bg-surface shadow-2xl`}
+        className={
+          side
+            ? 'flex h-full w-full max-w-md flex-col overflow-y-auto bg-surface shadow-2xl'
+            : `w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl bg-surface shadow-2xl`
+        }
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface px-5 py-3">
           <h3 id={titleId} className="text-balance text-lg font-bold text-ink">
             {title}
           </h3>

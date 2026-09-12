@@ -69,6 +69,8 @@ const paths = {
   // The language switch. A globe rather than a flag: the two languages here are Thai and
   // English, and English is not one country's.
   globe: 'M2 12h20M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20',
+  calendar:
+    'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
 } as const
 
 export type IconName = keyof typeof paths
