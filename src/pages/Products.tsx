@@ -17,6 +17,7 @@ import {
   PageHeader,
   Select,
   Spinner,
+  blurOnWheel,
 } from '../components/ui'
 import { ProductThumb, invalidateThumb } from '../components/ProductThumb'
 import { DataTable, type Column } from '../components/DataTable'
@@ -800,6 +801,7 @@ function ProductEditor({
                   step="any"
                   min={0}
                   value={counts[l.id] ?? 0}
+                  onWheel={blurOnWheel}
                   onChange={(e) => setCounts({ ...counts, [l.id]: Number(e.target.value) })}
                   className="num min-h-11 w-28 rounded-lg border border-line-strong px-3 py-2 text-right text-sm outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
                 />

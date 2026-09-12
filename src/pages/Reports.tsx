@@ -13,12 +13,12 @@ import {
   formatThaiDate,
   formatThaiDateTime,
 } from '../lib/format'
-import { stockCard } from '../lib/ledger'
+import { shownUnit, stockCard } from '../lib/ledger'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { DataTable, type Column } from '../components/DataTable'
 import type { MovementType, StockMovement } from '../types'
-import { useT } from '../i18n/I18nContext'
+import { useT, type TFn } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 
 interface MovementRow {
@@ -34,8 +34,22 @@ interface SnapshotRow {
   locationName: string
   qty: number
   unit: string
-  min: number
-  value: number
+  /**
+   * The minimum and the money, for the product's own unit only.
+   *
+   * Null on a balance someone keyed in another unit: the minimum is set against the
+   * product's unit and the cost is per one of them, so pricing a "10 Pack" row would invent
+   * a pack size and quietly inflate the report's total.
+   */
+  min: number | null
+  value: number | null
+}
+
+/** Shared by the screen, the spreadsheet and the PDF, so the three cannot disagree. */
+function snapshotStatus(r: SnapshotRow, t: TFn): string {
+  if (r.qty <= 0) return t('หมด') // i18n-key
+  if (r.min !== null && r.min > 0 && r.qty <= r.min) return t('ใกล้หมด') // i18n-key
+  return t('ปกติ') // i18n-key
 }
 
 const TYPE_LABEL: Record<MovementType, string> = {
@@ -55,6 +69,7 @@ export function ReportsPage() {
     locations,
     locationById,
     qtyAt,
+    qtyByUnit,
     minFor,
     ensureMovementsFrom,
     loading,
@@ -117,19 +132,19 @@ export function ReportsPage() {
       if (productId && p.id !== productId) continue
       for (const l of scope) {
         const qty = qtyAt(l.id, p.id)
-        rows.push({
-          name: p.name,
-          category: p.category,
-          locationName: l.name,
-          qty,
-          unit: p.unitType,
-          min: minFor(p, l.id),
-          value: qty * (p.cost ?? 0),
-        })
+        const where = { name: p.name, category: p.category, locationName: l.name }
+        rows.push({ ...where, qty, unit: p.unitType, min: minFor(p, l.id), value: qty * (p.cost ?? 0) })
+        // Anything keyed in another unit is its own line rather than folded into the one
+        // above. Leaving it out is how a report can say a product is empty while ten Pack of
+        // it are on the shelf.
+        for (const other of qtyByUnit(l.id, p.id)) {
+          if (other.unit === p.unitType) continue
+          rows.push({ ...where, qty: other.qty, unit: other.unit, min: null, value: null })
+        }
       }
     }
-    return rows.sort((a, b) => a.name.localeCompare(b.name))
-  }, [products, locations, productId, locationId, qtyAt, minFor])
+    return rows.sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit))
+  }, [products, locations, productId, locationId, qtyAt, qtyByUnit, minFor])
 
   const branchName = locationId ? (locationById(locationId)?.name ?? '') : t("ทุกคลัง")
   const productName = productId
@@ -193,12 +208,12 @@ export function ReportsPage() {
         [t("ไป")]: m.toLocationId ? (locationById(m.toLocationId)?.name ?? '') : '',
         [t("รับเข้า")]: inQty || '',
         [t("เบิกออก")]: outQty || '',
-        [t("หน่วย")]: m.unit,
+        [t("หน่วย")]: shownUnit(m),
         ...(showBalance ? { [t("คงเหลือ")]: balance ?? '' } : {}),
         [t("ผู้ทำ")]: m.byUserName,
         // A note is free text, except for the constants the services write ("ตั้งยอดคงเหลือ") —
         // t() translates those and passes anything it does not recognise through unchanged.
-        [t("หมายเหตุ")]: m.note ? t(m.note) : '',
+        [t("หมายเหตุ / เลขบิล")]: m.note ? t(m.note) : '',
       }))
       exportExcel(t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }), 'Movements', rows)
     } else {
@@ -208,10 +223,9 @@ export function ReportsPage() {
         [t("คลัง")]: r.locationName,
         [t("คงเหลือ")]: r.qty,
         [t("หน่วย")]: r.unit,
-        [t("ขั้นต่ำ")]: r.min,
-        [t("สถานะ")]:
-          r.qty <= 0 ? t("หมด") : r.min > 0 && r.qty <= r.min ? t("ใกล้หมด") : t("ปกติ"),
-        [t("มูลค่า")]: Math.round(r.value),
+        [t("ขั้นต่ำ")]: r.min ?? '',
+        [t("สถานะ")]: snapshotStatus(r, t),
+        [t("มูลค่า")]: r.value === null ? '' : Math.round(r.value),
       }))
       exportExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows)
     }
@@ -243,7 +257,7 @@ export function ReportsPage() {
         m.toLocationId ? (locationById(m.toLocationId)?.name ?? '') : '-',
         inQty ? fmtQty(inQty) : '',
         outQty ? fmtQty(outQty) : '',
-        m.unit,
+        shownUnit(m),
         ...(showBalance ? [fmtQty(balance ?? 0)] : []),
         m.note ?? '',
         m.byUserName,
@@ -272,9 +286,9 @@ export function ReportsPage() {
         r.locationName,
         fmtQty(r.qty),
         r.unit,
-        fmtQty(r.min),
-        r.qty <= 0 ? t("หมด") : r.min > 0 && r.qty <= r.min ? t("ใกล้หมด") : t("ปกติ"),
-        fmtMoney(r.value),
+        r.min === null ? '' : fmtQty(r.min),
+        snapshotStatus(r, t),
+        r.value === null ? '' : fmtMoney(r.value),
       ])
       exportReportPdf({
         filename: t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }),
@@ -324,6 +338,12 @@ export function ReportsPage() {
         className: 'num text-out',
         cell: ({ outQty }) => (outQty ? fmtQty(outQty) : ''),
       },
+      {
+        key: 'unit',
+        header: t('หน่วย'),
+        className: 'text-ink-soft',
+        cell: ({ m }) => shownUnit(m),
+      },
     ]
     if (showBalance) {
       list.push({
@@ -367,14 +387,14 @@ export function ReportsPage() {
         header: t('ขั้นต่ำ'),
         align: 'right',
         className: 'num text-ink-soft',
-        cell: (r) => fmtQty(r.min),
+        cell: (r) => (r.min === null ? '' : fmtQty(r.min)),
       },
       {
         key: 'value',
         header: t('มูลค่า'),
         align: 'right',
         className: 'num',
-        cell: (r) => fmtMoney(r.value),
+        cell: (r) => (r.value === null ? '' : fmtMoney(r.value)),
       },
     ],
     [t],
@@ -504,7 +524,7 @@ export function ReportsPage() {
             <DataTable
               rows={snapshotRows.slice(0, 300)}
               columns={snapshotColumns}
-              rowKey={(r) => `${r.locationName}-${r.name}`}
+              rowKey={(r) => `${r.locationName}-${r.name}-${r.unit}`}
               minWidth={640}
               maxHeight="calc(100vh - 240px)"
             />

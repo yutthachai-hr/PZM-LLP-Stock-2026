@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useT } from '../i18n/I18nContext'
+import { blurOnWheel } from './ui'
 
 // Quantity input with the unit beside it. The VALUE handed to the parent is always in the
 // product's base unit, so every balance stays one comparable number.
@@ -151,6 +152,7 @@ export function QtyInput({ // i18n-key
           min={0}
           inputMode="decimal"
           value={text}
+          onWheel={blurOnWheel}
           onChange={(e) => {
             setText(e.target.value)
             commit(e.target.value, unit)

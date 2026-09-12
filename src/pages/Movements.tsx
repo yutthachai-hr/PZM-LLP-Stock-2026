@@ -20,7 +20,7 @@ import {
 import { DataTable, type Column } from '../components/DataTable'
 import { editMovementQty, voidMovement, getMovementImage } from '../services/stock'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs, dayRange } from '../lib/format'
-import { effectAt, effectOverall, stockCard } from '../lib/ledger'
+import { effectAt, effectOverall, shownUnit, stockCard } from '../lib/ledger'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
@@ -217,7 +217,7 @@ export function MovementsPage() {
           return (
             <span className={eff < 0 ? 'text-out' : 'text-in'}>
               {eff > 0 ? '+' : ''}
-              {fmtQty(eff)} {m.entryUnit ?? m.unit}
+              {fmtQty(eff)} {shownUnit(m)}
             </span>
           )
         },

@@ -17,7 +17,9 @@
 // Everything else is a label, recorded exactly as keyed.
 
 import { describe, expect, test } from 'vitest'
+import type { WheelEvent } from 'react'
 import { PLAIN_UNITS, entryUnitsFor, subUnitsFor } from '../src/components/QtyInput'
+import { blurOnWheel } from '../src/components/ui'
 
 const labels = (u: ReturnType<typeof entryUnitsFor>) => u.map((x) => x.label)
 
@@ -109,5 +111,26 @@ describe('what reaches the ledger', () => {
     const pack = entryUnitsFor('KG').find((u) => u.label === 'Pack')!
     expect(keyed(10, pack.factor)).toBe(10)
     expect(pack.records).toBe('Pack')
+  })
+})
+
+describe('the mouse wheel cannot edit a quantity', () => {
+  // Reported from the floor: someone keyed a quantity, scrolled the page to reach the save
+  // button, and the number changed under them. A browser treats a scroll over a focused
+  // number field as a nudge to its value, and nothing about that is visible afterwards.
+  test('a number field is blurred, which hands the scroll back to the page', () => {
+    let blurred = false
+    blurOnWheel({
+      currentTarget: { type: 'number', blur: () => (blurred = true) },
+    } as unknown as WheelEvent<HTMLInputElement>)
+    expect(blurred).toBe(true)
+  })
+
+  test('other fields are left alone — scrolling past a text box is not an edit', () => {
+    let blurred = false
+    blurOnWheel({
+      currentTarget: { type: 'text', blur: () => (blurred = true) },
+    } as unknown as WheelEvent<HTMLInputElement>)
+    expect(blurred).toBe(false)
   })
 })

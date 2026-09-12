@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Product } from '../types'
 import { ProductThumb } from './ProductThumb'
 import { QtyInput } from './QtyInput'
@@ -39,6 +39,7 @@ export function LineBuilder({
   onChange,
   availableAt,
   direction = 'in',
+  focusOn = 0,
 }: {
   products: Product[]
   lines: Line[]
@@ -46,9 +47,22 @@ export function LineBuilder({
   /** optional: show current on-hand at source location + block over-issue */
   availableAt?: (productId: string) => number
   direction?: LineDirection
+  /**
+   * Bump this to put the cursor back in the search box.
+   *
+   * The screen above raises it after a save, because the next thing anybody does with a
+   * delivery note is key the next line off it — and the form has just emptied itself, so
+   * the cursor would otherwise be sitting in a box that is no longer there.
+   */
+  focusOn?: number
 }) {
   const t = useT()
   const [search, setSearch] = useState('')
+  const searchBox = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (focusOn > 0) searchBox.current?.focus()
+  }, [focusOn])
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -89,6 +103,7 @@ export function LineBuilder({
           <Icon name="search" size={18} />
         </span>
         <Input
+          ref={searchBox}
           className="pl-10"
           placeholder={t("ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)")}
           value={search}

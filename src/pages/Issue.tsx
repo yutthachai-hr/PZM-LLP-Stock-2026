@@ -51,6 +51,10 @@ function TransferForm() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
   const [lines, setLines] = useState<Line[]>([])
+  // Raised after a save so the cursor lands back in the product search: the next thing
+  // anyone does with a delivery note is key the next line off it.
+  const [focusOn, setFocusOn] = useState(0)
+
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -85,6 +89,7 @@ function TransferForm() {
       })
       toast.success(t('เบิก/โอนเรียบร้อย (เลขที่ {docNo})', { docNo }))
       setLines([])
+      setFocusOn((n) => n + 1)
       setNote('')
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
@@ -133,6 +138,7 @@ function TransferForm() {
           onChange={setLines}
           availableAt={availableAt}
           direction="out"
+          focusOn={focusOn}
         />
       </div>
 
@@ -164,6 +170,10 @@ function ConsumeForm() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('สุขุมวิท') // prefilled note saved as data, user-editable — i18n-key
   const [lines, setLines] = useState<Line[]>([])
+  // Raised after a save so the cursor lands back in the product search: the next thing
+  // anyone does with a delivery note is key the next line off it.
+  const [focusOn, setFocusOn] = useState(0)
+
   const [photo, setPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -202,6 +212,7 @@ function ConsumeForm() {
       })
       toast.success(t('บันทึกเบิกใช้เรียบร้อย (เลขที่ {docNo})', { docNo }))
       setLines([])
+      setFocusOn((n) => n + 1)
       setPhoto(null)
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
@@ -242,6 +253,7 @@ function ConsumeForm() {
           onChange={setLines}
           availableAt={availableAt}
           direction="out"
+          focusOn={focusOn}
         />
       </div>
 

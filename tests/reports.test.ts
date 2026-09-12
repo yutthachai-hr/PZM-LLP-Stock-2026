@@ -12,6 +12,7 @@ import { describe, expect, test, vi } from 'vitest'
 import {
   effectAt,
   openingBalance,
+  shownUnit,
   stockCard,
 } from '../src/lib/ledger'
 import { dateInputToMs, dayRange, startOfDayMs } from '../src/lib/format'
@@ -160,5 +161,30 @@ describe('F42 — the Thai font in the second PDF of the session', () => {
     registerThaiFont(doc as never)
     registerThaiFont(doc as never)
     expect(doc.addFont).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the unit a report prints', () => {
+  // Reported from the floor: a line keyed as EA came back out of the system as KG, because
+  // every screen and every export stamped the product's unit over what had been selected.
+  test("a line keyed in the product's own unit reads as it always did", () => {
+    expect(shownUnit({ unit: 'KG' })).toBe('KG')
+  })
+
+  test('a line keyed in another unit reports that unit', () => {
+    expect(shownUnit({ unit: 'KG', entryUnit: 'Pack' })).toBe('Pack')
+    expect(shownUnit({ unit: 'KG', entryUnit: 'Carton' })).toBe('Carton')
+  })
+
+  test('an empty or blank entry unit falls back rather than printing nothing', () => {
+    // A column with no unit in it is worse than one showing the product's.
+    expect(shownUnit({ unit: 'KG', entryUnit: '' })).toBe('KG')
+    expect(shownUnit({ unit: 'KG', entryUnit: '   ' })).toBe('KG')
+  })
+
+  test('it reads a real movement, not just a shape built for the test', () => {
+    const m = mv({ unit: 'KG', entryUnit: 'Pack', qty: 10, toLocationId: MAIN })
+    expect(shownUnit(m)).toBe('Pack')
+    expect(effectAt(m, MAIN)).toBe(10)
   })
 })

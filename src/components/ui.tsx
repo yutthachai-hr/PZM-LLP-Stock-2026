@@ -3,8 +3,10 @@ import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
+  Ref,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
+  WheelEvent,
 } from 'react'
 import { useT } from '../i18n/I18nContext'
 import { Icon, type IconName } from './Icon'
@@ -106,9 +108,36 @@ export function Field({
 const inputBase =
   'w-full min-h-11 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25 disabled:bg-sunken disabled:text-ink-soft'
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  const { className = '', ...rest } = props
-  return <input className={`${inputBase} ${className}`} {...rest} />
+/**
+ * Stop a mouse wheel from editing a focused number field.
+ *
+ * A browser treats a scroll over a focused `type="number"` as a nudge to its value. Someone
+ * keyed a quantity, scrolled the page to reach the save button, and the quantity they had
+ * just checked silently became a different one. Blurring hands the scroll back to the page,
+ * which is what the person meant by it.
+ *
+ * Exported so the handful of inputs that are written out by hand can use it too.
+ */
+export function blurOnWheel(e: WheelEvent<HTMLInputElement>): void {
+  if (e.currentTarget.type === 'number') e.currentTarget.blur()
+}
+
+// React 19 passes `ref` to a function component like any other prop; it only has to be
+// declared. The receiving screen uses it to put the cursor back after a save.
+export function Input(
+  props: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> },
+) {
+  const { className = '', onWheel, ...rest } = props
+  return (
+    <input
+      className={`${inputBase} ${className}`}
+      onWheel={(e) => {
+        blurOnWheel(e)
+        onWheel?.(e)
+      }}
+      {...rest}
+    />
+  )
 }
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {

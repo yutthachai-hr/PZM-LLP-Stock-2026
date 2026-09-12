@@ -25,6 +25,10 @@ export function ReceivePage() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
   const [lines, setLines] = useState<Line[]>([])
+  // Raised after a save so the cursor lands back in the product search: the next thing
+  // anyone does with a delivery note is key the next line off it.
+  const [focusOn, setFocusOn] = useState(0)
+
   const [busy, setBusy] = useState(false)
 
   // set the default warehouse once locations have loaded
@@ -48,6 +52,7 @@ export function ReceivePage() {
       })
       toast.success(t('รับสินค้าเข้าเรียบร้อย (เลขที่ {docNo})', { docNo }))
       setLines([])
+      setFocusOn((n) => n + 1)
       setNote('')
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
@@ -86,7 +91,13 @@ export function ReceivePage() {
 
         <div>
           <div className="mb-2 text-sm font-medium text-ink">{t("รายการสินค้า")}</div>
-          <LineBuilder products={products} lines={lines} onChange={setLines} direction="in" />
+          <LineBuilder
+            products={products}
+            lines={lines}
+            onChange={setLines}
+            direction="in"
+            focusOn={focusOn}
+          />
         </div>
 
         <Field

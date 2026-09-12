@@ -164,3 +164,15 @@ export function stockCard(all: StockMovement[], q: StockCardQuery): StockCard {
     closing: rows.length > 0 ? running : opening,
   }
 }
+
+/**
+ * The unit a row is shown and reported in: what the person keyed, not what the product is
+ * measured in.
+ *
+ * One place, because the stock card, the on-screen report, the spreadsheet and the PDF all
+ * have to say the same thing — this went wrong once already, when every one of them printed
+ * the product's unit over the top of whatever had actually been selected.
+ */
+export function shownUnit(m: { unit: string; entryUnit?: string }): string {
+  return (m.entryUnit ?? '').trim() || m.unit
+}
