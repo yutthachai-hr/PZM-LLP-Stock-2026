@@ -43,6 +43,18 @@ interface DataState {
    */
   qtyByUnit: (locationId: string, productId: string) => { unit: string; qty: number }[]
   minFor: (product: Product, locationId: string) => number
+  /**
+   * Whether this location is somewhere this product is actually kept.
+   *
+   * A branch is only responsible for a product once some has been there. Barley that has
+   * never been sent to Sarasin is not "0 of 20 at Sarasin" — it is simply not a Sarasin
+   * line, and counting it as one produced the same shortage three times over, once per
+   * location, and buried the real ones.
+   *
+   * The exception is a product with no stock anywhere: that is a thing to buy, so it is
+   * chased at the main warehouse, once.
+   */
+  tracksProduct: (locationId: string, productId: string) => boolean
 }
 
 const Ctx = createContext<DataState | null>(null)
@@ -102,6 +114,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
       minOverrides.map((o) => [`${o.locationId}__${o.productId}`, o.minStock]),
     )
 
+    // Where a product has ever actually been. A balance row is only written when stock
+    // moves, so its existence is the record of "this has been kept here" — including a row
+    // that has since fallen to zero, which is exactly when a shortage matters.
+    const stockedAt = new Set(levels.map((l) => `${l.locationId}__${l.productId}`))
+    const stockedAnywhere = new Set(levels.map((l) => l.productId))
+    // One place to chase something nobody has ever received: the main warehouse. Picked by
+    // type rather than by name, and the oldest of them, so it does not move about.
+    const home =
+      [...locations]
+        .filter((l) => l.active !== false)
+        .sort(
+          (a, b) =>
+            (a.type === 'warehouse' ? 0 : 1) - (b.type === 'warehouse' ? 0 : 1) ||
+            (a.createdAt ?? 0) - (b.createdAt ?? 0),
+        )[0]?.id ?? ''
+
     return {
       products,
       locations,
@@ -119,6 +147,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       qtyByUnit: (locationId, productId) => byUnit.get(`${locationId}__${productId}`) ?? [],
       minFor: (product, locationId) =>
         overrideMap.get(`${locationId}__${product.id}`) ?? product.minStock ?? 0,
+      tracksProduct: (locationId, productId) =>
+        stockedAt.has(`${locationId}__${productId}`) ||
+        (!stockedAnywhere.has(productId) && locationId === home),
     }
   }, [
     products,

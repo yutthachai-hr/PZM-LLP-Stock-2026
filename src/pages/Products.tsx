@@ -53,7 +53,7 @@ const SORTS: { value: SortKey; label: string }[] = [
 
 export function ProductsPage() {
   const t = useT()
-  const { products, locations, qtyAt, qtyByUnit, minFor, levels, minOverrides, loading } =
+  const { products, locations, qtyAt, qtyByUnit, minFor, tracksProduct, levels, minOverrides, loading } =
     useData()
   const { user } = useAuth()
   const { brand } = useBrand()
@@ -153,6 +153,10 @@ export function ProductsPage() {
       // Hiding is the alternative to deleting: the catalogue keeps the item, its history and
       // its balance, so putting it back is one click rather than keying it in again.
       .filter((p) => (status === 'hidden' ? p.active === false : p.active !== false))
+      // Viewing one location lists what that location carries, not the whole catalogue with
+      // zeros against it — a product that has never been sent to a branch is not a line the
+      // branch is short of.
+      .filter((p) => !locId || tracksProduct(locId, p.id))
       .filter((p) => (cat ? p.category === cat : true))
       .filter(matches)
       .filter(inStatus)
@@ -172,7 +176,7 @@ export function ProductsPage() {
             return a.name.localeCompare(b.name)
         }
       })
-  }, [products, search, searchIn, cat, status, sort, shownQty, minShown])
+  }, [products, search, searchIn, cat, status, sort, shownQty, minShown, locId, tracksProduct])
 
   async function toggleHidden(p: Product) {
     const hide = p.active !== false
@@ -298,9 +302,11 @@ export function ProductsPage() {
                 }}
                 title={p.active === false ? t('เลิกซ่อนสินค้านี้') : t('ซ่อนสินค้านี้')}
                 aria-label={p.active === false ? t('เลิกซ่อนสินค้านี้') : t('ซ่อนสินค้านี้')}
-                className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-base outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
+                className={`inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 ${
+                  p.active === false ? 'text-warn' : 'text-ink-faint hover:text-ink'
+                }`}
               >
-                {p.active === false ? '🙈' : '👁️'}
+                <Icon name={p.active === false ? 'eyeOff' : 'eye'} size={18} />
               </button>
             )}
             <Button
@@ -440,7 +446,7 @@ export function ProductsPage() {
               <option value="low">{t("ใกล้หมด")}</option>
               <option value="out">{t("หมดสต๊อก")}</option>
               <option value="in">{t("มีของ")}</option>
-              <option value="hidden">{t("🙈 ที่ซ่อนไว้")}</option>
+              <option value="hidden">{t("ที่ซ่อนไว้")}</option>
             </Select>
           </Field>
 

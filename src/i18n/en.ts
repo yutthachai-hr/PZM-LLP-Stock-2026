@@ -541,7 +541,7 @@ export const EN: Record<string, string> = {
   เลิกซ่อนสินค้านี้: 'Unhide this product',
   'ซ่อนแล้ว — ดูได้ที่ตัวกรอง "ที่ซ่อนไว้"': 'Hidden — find it under the "Hidden" filter',
   เลิกซ่อนแล้ว: 'Visible again',
-  '🙈 ที่ซ่อนไว้': '🙈 Hidden',
+  ที่ซ่อนไว้: 'Hidden',
   คลังต้นทางและปลายทางต้องต่างกัน: 'Source and destination must differ',
   จำนวนครั้งที่แก้ไข: 'Times edited',
   คลังต้นทาง: 'Source location',

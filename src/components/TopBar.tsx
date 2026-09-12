@@ -26,7 +26,7 @@ const MAX_RESULTS = 8
 export function TopBar({ onMenu, title }: { onMenu: () => void; title: string }) {
   const t = useT()
   const navigate = useNavigate()
-  const { products, locations, qtyAt, minFor } = useData()
+  const { products, locations, qtyAt, minFor, tracksProduct } = useData()
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -38,12 +38,14 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
     let n = 0
     for (const p of products) {
       for (const l of locations) {
+        // Same rule as the dashboard, so the bell and the list cannot disagree.
+        if (!tracksProduct(l.id, p.id)) continue
         const min = minFor(p, l.id)
         if (min > 0 && qtyAt(l.id, p.id) <= min) n++
       }
     }
     return n
-  }, [products, locations, qtyAt, minFor])
+  }, [products, locations, qtyAt, minFor, tracksProduct])
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase()

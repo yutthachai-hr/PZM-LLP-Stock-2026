@@ -38,7 +38,7 @@ interface LowItem {
 
 export function DashboardPage() {
   const t = useT()
-  const { products, locations, qtyAt, minFor, movements, loading } = useData()
+  const { products, locations, qtyAt, minFor, tracksProduct, movements, loading } = useData()
   const [scope, setScope] = useState<string>(ALL)
   const [search, setSearch] = useState('')
   // Recomputed on the hour so a screen left open overnight rolls over to the new day.
@@ -59,6 +59,8 @@ export function DashboardPage() {
     const items: LowItem[] = []
     for (const p of products) {
       for (const l of scopeLocations) {
+        // A branch is not short of something it has never carried.
+        if (!tracksProduct(l.id, p.id)) continue
         const min = minFor(p, l.id)
         if (min > 0) {
           const qty = qtyAt(l.id, p.id)
@@ -67,7 +69,7 @@ export function DashboardPage() {
       }
     }
     return items.sort((a, b) => a.qty - a.min - (b.qty - b.min))
-  }, [products, scopeLocations, qtyAt, minFor])
+  }, [products, scopeLocations, qtyAt, minFor, tracksProduct])
 
   const stats = useMemo(() => {
     let value = 0
@@ -109,6 +111,8 @@ export function DashboardPage() {
   const rows = useMemo<Row[]>(() => {
     const q = search.trim().toLowerCase()
     return products
+      // Looking at one branch means looking at what that branch carries.
+      .filter((p) => scope === ALL || tracksProduct(scope, p.id))
       .filter((p) => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
       .map((p) => ({
         p,
@@ -116,7 +120,7 @@ export function DashboardPage() {
         min: scope === ALL ? p.minStock : minFor(p, scope),
       }))
       .sort((a, b) => a.p.name.localeCompare(b.p.name))
-  }, [products, search, scopeLocations, qtyAt, scope, minFor])
+  }, [products, search, scopeLocations, qtyAt, scope, minFor, tracksProduct])
 
   const columns = useMemo<Column<Row>[]>(() => {
     const cols: Column<Row>[] = [
