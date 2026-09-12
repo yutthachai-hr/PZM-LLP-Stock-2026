@@ -5,6 +5,8 @@ import { COL, type ProductImage, type StockLevel } from '../types'
 import { QTY_MAX } from '../lib/validate'
 
 export interface ProductInput {
+  /** Who we buy it from. Empty means nobody has said yet. */
+  supplierId?: string
   sku: string
   name: string
   category: string
@@ -49,11 +51,12 @@ export async function createProduct(input: ProductInput): Promise<string> {
   const now = Date.now()
   // Optional fields are omitted rather than written empty: the rules pin the shape with
   // hasOnly, and a blank string is still a present key.
-  const { packSize, packLabel, ...rest } = input
+  const { packSize, packLabel, supplierId, ...rest } = input
   return backend.add(COL.products, {
     ...rest,
     ...(packSize === undefined ? {} : { packSize }),
     ...(packLabel?.trim() ? { packLabel: packLabel.trim() } : {}),
+    ...(supplierId ? { supplierId } : {}),
     hasImage: false,
     active: true,
     createdAt: now,
@@ -69,12 +72,15 @@ export async function updateProduct(
   // An empty cost box means "no cost recorded", which has to remove the field rather than
   // send undefined — Firestore skips undefined values, so clearing a cost of 100 used to
   // save happily and leave the 100 in place, still counted in the stock valuation.
-  const { cost, packSize, packLabel, ...rest } = patch
+  const { cost, packSize, packLabel, supplierId, ...rest } = patch
   const write: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
   if ('cost' in patch) write.cost = cost === undefined ? DELETE_FIELD : cost
   // Same reason as cost: clearing a pack size has to remove the field, or the old
   // multiplier survives and keeps converting quantities nobody asked it to.
   if ('packSize' in patch) write.packSize = packSize === undefined ? DELETE_FIELD : packSize
+  // "No supplier" has to remove the key: the validator pins the shape with hasOnly, and an
+  // empty string would be a present field pointing at nothing.
+  if ('supplierId' in patch) write.supplierId = supplierId ? supplierId : DELETE_FIELD
   if ('packLabel' in patch) {
     write.packLabel = packLabel?.trim() ? packLabel.trim() : DELETE_FIELD
   }

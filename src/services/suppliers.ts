@@ -1,3 +1,4 @@
+import { useEffect, useSyncExternalStore } from 'react'
 import { backend } from '../backend'
 import { AppError } from '../i18n/AppError'
 import { COL, type Supplier, type SupplierItem, type SupplierType } from '../types'
@@ -130,4 +131,68 @@ export async function updateSupplierItem(
 
 export async function removeSupplierItem(id: string): Promise<void> {
   await backend.remove(COL.supplierItems, id)
+}
+
+// ---------------------------------------------------------------- session cache ----
+
+/**
+ * The supplier list, read once per session.
+ *
+ * Roughly a hundred documents. The product editor needs them to offer a supplier, and the
+ * ordering screens will too, so reading them on every dialog would be a hundred reads for a
+ * list that changes a few times a year. Fetched the first time something asks, then held —
+ * and deliberately not subscribed, for the same reason nothing else here is.
+ */
+let cached: Supplier[] | null = null
+let inflight: Promise<Supplier[]> | null = null
+const listeners = new Set<() => void>()
+const NONE: Supplier[] = []
+
+function announce(): void {
+  for (const fn of listeners) fn()
+}
+
+/** Forgotten when the list is written to, so the next reader sees the change. */
+export function invalidateSupplierCache(): void {
+  cached = null
+  inflight = null
+  announce()
+}
+
+export async function loadSuppliers(): Promise<Supplier[]> {
+  if (cached) return cached
+  if (inflight) return inflight
+  inflight = listSuppliers()
+    .then((rows) => {
+      cached = rows
+      announce()
+      return rows
+    })
+    .catch(() => {
+      // A denied or failed read must not stop someone editing a product; they simply do not
+      // get to pick a supplier this time.
+      cached = NONE
+      announce()
+      return NONE
+    })
+    .finally(() => {
+      inflight = null
+    })
+  return inflight
+}
+
+/** The suppliers, fetching them the first time a screen asks. */
+export function useSuppliers(): Supplier[] {
+  const rows = useSyncExternalStore(
+    (fn) => {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
+    () => cached,
+    () => cached,
+  )
+  useEffect(() => {
+    void loadSuppliers()
+  }, [])
+  return rows ?? NONE
 }

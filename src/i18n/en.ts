@@ -529,6 +529,23 @@ export const EN: Record<string, string> = {
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)': 'Search a product to add (name / SKU)',
   เลือกหน่วยที่กรอก: 'Entry unit',
   ผู้แก้ไข: 'Edited by',
+  '— ยังไม่ระบุ —': '— not set —',
+  นำเข้าจากชื่อสินค้า: 'Import from product names',
+  'นำเข้าแล้ว: ผู้ขาย {suppliers} ราย, ผูกสินค้า {products} รายการ':
+    'Imported: {suppliers} suppliers, {products} products linked',
+  นำเข้าผู้ขายจากชื่อสินค้า: 'Import suppliers from product names',
+  ผู้ขายที่พบ: 'Suppliers found',
+  สินค้าที่จะผูก: 'Products to link',
+  'ชื่อในวงเล็บของสินค้าถูกอ่านเป็นผู้ขาย — ขนาดบรรจุถูกข้าม และการสะกดที่ต่างกันถูกรวมให้แล้ว {merged} ราย ตรวจแล้วติ๊กออกรายที่ไม่ต้องการ':
+    'The name in brackets is read as the supplier. Pack sizes are skipped, and {merged} were folded together from different spellings. Check them and drop any you do not want.',
+  สะกดในแคตตาล็อก: 'Spellings in the catalogue',
+  รวมสะกด: 'merged',
+  เอากลับ: 'Put back',
+  ไม่เอา: 'Drop',
+  'สินค้าที่ชื่อไม่ได้บอกผู้ขาย ({count} รายการ) — ใส่เองได้ที่หน้าสินค้า':
+    'Products whose name names no supplier ({count}) — set these on the product itself',
+  'ยืนยันนำเข้า {count} ราย': 'Import {count} suppliers',
+  'เปลี่ยนชื่อในสินค้า {count} รายการแล้ว': 'Renamed in {count} product names',
   ยังไม่ได้เลือกผู้ขาย: 'No suppliers selected',
   'ส่งตรงที่หน้าร้านสาขาอ่อนนุช (สาขา 3) ไม่ผ่านคลังหลัก':
     'Delivered straight to the Onnut shop (branch 3), not via the main warehouse',

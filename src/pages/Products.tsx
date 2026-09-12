@@ -33,6 +33,7 @@ import {
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
 import { changeProductUnit, setStockCount } from '../services/stock'
 import { useEntryUnits } from '../services/entryUnits'
+import { useSuppliers } from '../services/suppliers'
 import { sameUnit, unitNameFor } from '../lib/units'
 import { compressImage } from '../lib/image'
 import { fmtQty } from '../lib/format'
@@ -569,6 +570,7 @@ function ProductEditor({
     unitType: product?.unitType ?? 'EA',
     minStock: product?.minStock ?? 0,
     cost: product?.cost,
+    supplierId: product?.supplierId,
   })
   const [existingImg, setExistingImg] = useState<string | null>(null)
   const [newImg, setNewImg] = useState<string | null>(null)
@@ -591,6 +593,8 @@ function ProductEditor({
    * silently change its unit just because the list has moved on.
    */
   const plainUnits = useEntryUnits()
+  // Read once per session, not once per dialog: it is about a hundred documents.
+  const supplierChoices = useSuppliers()
   const unitChoices = useMemo(() => {
     const out = [...plainUnits]
     if (form.unitType && !out.some((u) => sameUnit(u, form.unitType))) out.unshift(form.unitType)
@@ -852,6 +856,22 @@ function ProductEditor({
             onChange={(e) => setForm({ ...form, minStock: Number(e.target.value) })}
             disabled={!canEdit}
           />
+        </Field>
+        {/* Most products name their supplier in brackets and were linked by the import.
+            This is for the handful whose names never did, and for changing one by hand. */}
+        <Field label={t("ผู้ขาย")}>
+          <Select
+            value={form.supplierId ?? ''}
+            onChange={(e) => setForm({ ...form, supplierId: e.target.value || undefined })}
+            disabled={!canEdit}
+          >
+            <option value="">{t("— ยังไม่ระบุ —")}</option>
+            {supplierChoices.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Field label={t("ต้นทุน/หน่วย (ไม่บังคับ)")}>
           <Input

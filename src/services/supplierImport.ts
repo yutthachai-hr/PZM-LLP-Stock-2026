@@ -9,6 +9,7 @@ import {
   supplierFromName,
 } from '../lib/supplierName'
 import { COL, type Product, type Supplier } from '../types'
+import { invalidateSupplierCache } from './suppliers'
 
 /**
  * Turning the supplier names hidden in product names into records people can work with.
@@ -158,6 +159,7 @@ export async function applySupplierProposal(
       linked++
     }
   }
+  invalidateSupplierCache()
   return { suppliers: created, products: linked }
 }
 
@@ -192,5 +194,6 @@ export async function renameSupplier(
     renamed++
   }
   await backend.update(COL.suppliers, supplierId, { name, updatedAt: now })
+  invalidateSupplierCache()
   return renamed
 }

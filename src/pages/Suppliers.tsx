@@ -20,6 +20,11 @@ import {
 import { useData } from '../data/DataContext'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
+import {
+  applySupplierProposal,
+  buildSupplierProposal,
+  renameSupplier,
+} from '../services/supplierImport'
 import { fmtMoney } from '../lib/format'
 import {
   addSupplierItem,
@@ -74,6 +79,7 @@ export function SuppliersPage() {
   const [creating, setCreating] = useState(false)
   const [addingTo, setAddingTo] = useState<Supplier | null>(null)
   const [search, setSearch] = useState('')
+  const [importing, setImporting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -268,10 +274,18 @@ export function SuppliersPage() {
         subtitle={t('รายชื่อผู้ขายและสินค้าที่ซื้อจากแต่ละราย')}
         actions={
           isAdmin ? (
-            <Button onClick={() => setCreating(true)}>
-              <Icon name="plus" size={16} />
-              {t('เพิ่มผู้ขาย')}
-            </Button>
+            <div className="flex gap-2">
+              {/* The catalogue already names its suppliers, in brackets. This reads them out
+                  and shows what it found; nothing is written until it is accepted. */}
+              <Button variant="secondary" onClick={() => setImporting(true)}>
+                <Icon name="download" size={16} />
+                {t('นำเข้าจากชื่อสินค้า')}
+              </Button>
+              <Button onClick={() => setCreating(true)}>
+                <Icon name="plus" size={16} />
+                {t('เพิ่มผู้ขาย')}
+              </Button>
+            </div>
           ) : undefined
         }
       />
@@ -333,6 +347,9 @@ export function SuppliersPage() {
         />
       )}
 
+      {importing && (
+        <ImportFromCatalogue onClose={() => setImporting(false)} onDone={() => void load()} />
+      )}
       {addingTo && (
         <AddProductModal
           supplier={addingTo}
@@ -346,6 +363,145 @@ export function SuppliersPage() {
 
 // ---------------------------------------------------------------- editors
 
+/**
+ * What reading the catalogue's brackets would produce, before any of it is written.
+ *
+ * The proposal is shown rather than applied because the brackets are a habit and not a
+ * field: among 126 of them are one company spelled three ways, a branch, and a shop that
+ * reads as a measurement. Undoing a bad import would mean unpicking 454 products, so the
+ * screen that would cause it is the screen that shows what it will do.
+ */
+function ImportFromCatalogue({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const t = useT()
+  const toast = useToast()
+  const { products } = useData()
+  const [busy, setBusy] = useState(false)
+  const [skipped, setSkipped] = useState<Set<string>>(new Set())
+
+  const proposal = useMemo(() => buildSupplierProposal(products), [products])
+  const chosen = proposal.suppliers.filter((s) => !skipped.has(s.name))
+  const mergedCount = proposal.suppliers.filter((s) => s.merged).length
+
+  function toggle(name: string) {
+    setSkipped((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  async function apply() {
+    setBusy(true)
+    try {
+      const done = await applySupplierProposal(chosen)
+      toast.success(
+        t('นำเข้าแล้ว: ผู้ขาย {suppliers} ราย, ผูกสินค้า {products} รายการ', {
+          suppliers: done.suppliers,
+          products: done.products,
+        }),
+      )
+      onDone()
+      onClose()
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={t('นำเข้าผู้ขายจากชื่อสินค้า')} wide>
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label={t('ผู้ขายที่พบ')} value={proposal.suppliers.length} />
+          <Stat label={t('สินค้าที่จะผูก')} value={proposal.linked} />
+          <Stat label={t('ยังไม่มีผู้ขาย')} value={proposal.withoutSupplier.length} />
+        </div>
+        <p className="text-xs text-ink-soft">
+          {t('ชื่อในวงเล็บของสินค้าถูกอ่านเป็นผู้ขาย — ขนาดบรรจุถูกข้าม และการสะกดที่ต่างกันถูกรวมให้แล้ว {merged} ราย ตรวจแล้วติ๊กออกรายที่ไม่ต้องการ', { merged: mergedCount })}
+        </p>
+
+        <div className="max-h-80 overflow-auto rounded-lg border border-line">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-sunken text-xs text-ink-soft">
+              <tr>
+                <th className="p-2 text-left font-medium">{t('ผู้ขาย')}</th>
+                <th className="p-2 text-left font-medium">{t('สะกดในแคตตาล็อก')}</th>
+                <th className="p-2 text-right font-medium">{t('สินค้า')}</th>
+                <th className="p-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {proposal.suppliers.map((s) => {
+                const off = skipped.has(s.name)
+                return (
+                  <tr key={s.name} className={off ? 'opacity-40' : ''}>
+                    <td className="p-2">
+                      <span className="font-medium text-ink">{s.name}</span>
+                      {s.merged && (
+                        <span className="ml-2 align-middle">
+                          <Badge color="amber">{t('รวมสะกด')}</Badge>
+                        </span>
+                      )}
+                      {s.note && <div className="text-xs text-ink-faint">{t(s.note)}</div>}
+                    </td>
+                    <td className="p-2 text-xs text-ink-soft">{s.spellings.join(', ')}</td>
+                    <td className="num p-2 text-right">{s.productIds.length}</td>
+                    <td className="p-2 text-right">
+                      <button
+                        onClick={() => toggle(s.name)}
+                        className="rounded px-2 text-xs font-medium text-ink-soft hover:bg-sunken"
+                      >
+                        {off ? t('เอากลับ') : t('ไม่เอา')}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {proposal.withoutSupplier.length > 0 && (
+          <details className="rounded-lg border border-line bg-sunken px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium text-ink-soft">
+              {t('สินค้าที่ชื่อไม่ได้บอกผู้ขาย ({count} รายการ) — ใส่เองได้ที่หน้าสินค้า', {
+                count: proposal.withoutSupplier.length,
+              })}
+            </summary>
+            <ul className="mt-2 space-y-0.5 text-xs text-ink-soft">
+              {proposal.withoutSupplier.map((p) => (
+                <li key={p.id}>{p.name}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            {t('ยกเลิก')}
+          </Button>
+          <Button onClick={() => void apply()} disabled={busy || chosen.length === 0}>
+            {busy
+              ? t('กำลังบันทึก...')
+              : t('ยืนยันนำเข้า {count} ราย', { count: chosen.length })}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-line bg-sunken px-3 py-2">
+      <div className="text-xs text-ink-soft">{label}</div>
+      <div className="num text-lg font-semibold text-ink">{value}</div>
+    </div>
+  )
+}
+
 function SupplierEditor({
   supplier,
   onClose,
@@ -356,6 +512,8 @@ function SupplierEditor({
   onSaved: () => Promise<void>
 }) {
   const t = useT()
+  // The catalogue, already in memory: renaming needs it to find the names to rewrite.
+  const { products } = useData()
   const toast = useToast()
   const [form, setForm] = useState<SupplierInput>({
     name: supplier?.name ?? '',
@@ -369,8 +527,19 @@ function SupplierEditor({
   async function save() {
     setBusy(true)
     try {
-      if (supplier) await updateSupplier(supplier.id, form)
-      else await createSupplier(form)
+      if (supplier) {
+        // Renaming is its own operation: it rewrites the bracket in every product name that
+        // carries this supplier, which is what the owner asked for and is not something an
+        // ordinary field update should do behind the scenes.
+        const renamedTo = form.name.trim()
+        if (renamedTo && renamedTo !== supplier.name) {
+          const touched = await renameSupplier(supplier.id, renamedTo, products)
+          if (touched > 0) {
+            toast.success(t('เปลี่ยนชื่อในสินค้า {count} รายการแล้ว', { count: touched }))
+          }
+        }
+        await updateSupplier(supplier.id, { ...form, name: renamedTo })
+      } else await createSupplier(form)
       toast.success(t('บันทึกแล้ว'))
       await onSaved()
       onClose()
