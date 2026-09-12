@@ -287,6 +287,18 @@ export function createLocalBackend(brand?: BrandId): Backend {
       return Object.values(loadMap(resolve(collection))) as T[]
     },
 
+    async getRange<T>(
+      collection: string,
+      field: string,
+      from: number,
+      to: number,
+    ): Promise<T[]> {
+      return (Object.values(loadMap(resolve(collection))) as T[]).filter((d) => {
+        const v = (d as Record<string, unknown>)[field]
+        return typeof v === 'number' && v >= from && v <= to
+      })
+    },
+
     async getOne<T>(collection: string, id: string): Promise<T | null> {
       const map = loadMap(resolve(collection))
       return (Object.hasOwn(map, id) ? (map[id] as T) : null) ?? null

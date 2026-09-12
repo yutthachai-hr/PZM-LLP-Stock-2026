@@ -133,6 +133,57 @@ export interface SupplierItem {
   updatedAt: number
 }
 
+/**
+ * What a calendar entry is about. Deliberately short: a type nobody can create is a type
+ * nobody can filter by, and the modules these would come from do not exist yet.
+ */
+export type StockEventType =
+  | 'stockCount'
+  | 'audit'
+  | 'delivery'
+  | 'transfer'
+  | 'inventoryTask'
+  | 'other'
+
+export type StockEventStatus = 'upcoming' | 'inProgress' | 'completed' | 'cancelled'
+
+export type StockEventPriority = 'normal' | 'high' | 'critical'
+
+/**
+ * Something that has to happen, on a date, at a location.
+ *
+ * Written by hand this round — there is no scheduler and no rule that creates one. It is a
+ * plan, not a derived condition: low stock is NOT an event, because it is already computed
+ * for free from balances the app has in memory, and one document per low SKU per location
+ * would be over a thousand documents nobody asked for.
+ */
+export interface StockEvent {
+  id: string
+  title: string
+  type: StockEventType
+  /** Which warehouse or branch. Empty for something that is not about one place. */
+  locationId?: string
+  /** When it starts, ms epoch. The only field the calendar queries on. */
+  startAt: number
+  /** When it should be done by, ms epoch. Optional — not everything has a deadline. */
+  dueAt?: number
+  status: StockEventStatus
+  priority: StockEventPriority
+  assignedTo?: string
+  /**
+   * The assignee's name, stored rather than looked up.
+   *
+   * `users` is only subscribed for admins, so a staff member holding a uid cannot turn it
+   * into a name without a read. Same denormalisation StockMovement already makes for
+   * productName and byUserName, and for the same reason.
+   */
+  assignedToName?: string
+  note?: string
+  createdBy: string
+  createdAt: number
+  updatedAt: number
+}
+
 export const COL = {
   users: 'users',
   products: 'products',
@@ -146,6 +197,7 @@ export const COL = {
   minOverrides: 'productMinOverrides',
   suppliers: 'suppliers',
   supplierItems: 'supplierItems',
+  events: 'stockEvents',
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const

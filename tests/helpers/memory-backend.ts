@@ -1,3 +1,4 @@
+import { DELETE_FIELD } from '../../src/backend/types'
 import type { Backend, SubscribeOptions, TxContext } from '../../src/backend/types'
 import { resolveCollection, type BrandId } from '../../src/brand/brand'
 
@@ -29,6 +30,29 @@ function col(name: string, brand?: BrandId): Docs {
 
 function clone<T>(v: T): T {
   return v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T)
+}
+
+/**
+ * Apply a patch the way both real backends do, DELETE_FIELD included.
+ *
+ * This used to spread the patch straight in, so a DELETE_FIELD marker was stored as a
+ * value rather than removing the key — the double said a cleared field was still there
+ * while Firestore and localStorage both said it was gone. A test double that disagrees
+ * with production about what "cleared" means will pass the wrong code.
+ *
+ * JSON.stringify also drops a Symbol value silently, so the marker cannot go through
+ * clone() at all.
+ */
+function applyPatch_(
+  existing: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...existing }
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === DELETE_FIELD) delete out[k]
+    else out[k] = clone(v)
+  }
+  return out
 }
 
 /** Empty the database and clear any injected failure. */
@@ -87,6 +111,13 @@ export function createMemoryBackend(brand?: BrandId): Backend {
     return [...col_(collection).values()].map(clone) as T[]
   },
 
+  async getRange<T>(collection: string, field: string, from: number, to: number): Promise<T[]> {
+    return ([...col_(collection).values()].map(clone) as T[]).filter((d) => {
+      const v = (d as Record<string, unknown>)[field]
+      return typeof v === 'number' && v >= from && v <= to
+    })
+  },
+
   async getOne<T>(collection: string, id: string): Promise<T | null> {
     return (clone(col_(collection).get(id)) as T) ?? null
   },
@@ -106,7 +137,7 @@ export function createMemoryBackend(brand?: BrandId): Backend {
   async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
     guard_(collection, id)
     const m = col_(collection)
-    m.set(id, { ...(m.get(id) ?? { id }), ...clone(patch), id })
+    m.set(id, { ...applyPatch_(m.get(id) ?? { id }, patch), id })
   },
 
   async remove(collection: string, id: string): Promise<void> {

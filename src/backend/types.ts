@@ -65,6 +65,18 @@ export interface Backend {
     onError?: (e: unknown) => void,
   ): () => void
   getAll<T>(collection: string): Promise<T[]>
+  /**
+   * Read a bounded slice of a collection, once, with no subscription.
+   *
+   * `subscribe` can bound a read with SinceFilter, but only from below and only by
+   * staying live. The calendar needs neither: it wants one month at a time, and it wants
+   * to stop costing anything the moment the screen is closed. Without this the only way
+   * to show a month is getAll() — the whole collection, growing forever, on every visit.
+   *
+   * Two bounds on ONE field, which Firestore's automatic index already serves, so this
+   * adds no composite index to deploy.
+   */
+  getRange<T>(collection: string, field: string, from: number, to: number): Promise<T[]>
   getOne<T>(collection: string, id: string): Promise<T | null>
   /** Auto-generate id. Returns the new id (also written into the doc's `id` field). */
   add(collection: string, data: Record<string, unknown>): Promise<string>

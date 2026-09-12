@@ -155,6 +155,119 @@ function supplierItem(id: string, over: Record<string, unknown> = {}) {
   }
 }
 
+function event(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    title: 'นับสต๊อกประจำสัปดาห์',
+    type: 'stockCount',
+    startAt: ts(),
+    status: 'upcoming',
+    priority: 'normal',
+    createdBy: ADMIN,
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  }
+}
+
+describe('calendar events', () => {
+  test('only an admin creates one, and only in their own name', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1')))
+    await assertFails(setDoc(doc(as(STAFF), 'stockEvents/e2'), event('e2')))
+    // An admin cannot file an event as someone else.
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'stockEvents/e3'), event('e3', { createdBy: STAFF })),
+    )
+  })
+
+  test('staff read them — the work is theirs to do', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/e1'), event('e1'))
+    })
+    await assertSucceeds(getDoc(doc(as(STAFF), 'stockEvents/e1')))
+    await assertSucceeds(getDocs(collection(as(STAFF), 'stockEvents')))
+    await assertFails(getDoc(doc(as(PENDING), 'stockEvents/e1')))
+  })
+
+  test('staff may move the status and nothing else', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/e1'), event('e1'))
+    })
+    await assertSucceeds(
+      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { status: 'inProgress', updatedAt: ts() }),
+    )
+    // The things a staff member must not be able to rewrite on work assigned to them.
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { title: 'something else', updatedAt: ts() }),
+    )
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { assignedTo: STAFF, updatedAt: ts() }),
+    )
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/e1'), { createdBy: STAFF }))
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { priority: 'critical', updatedAt: ts() }),
+    )
+  })
+
+  test('an admin may edit the rest', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/e1'), event('e1'))
+    })
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'stockEvents/e1'), {
+        title: 'ตรวจนับรายเดือน',
+        priority: 'high',
+        updatedAt: ts(),
+      }),
+    )
+  })
+
+  test('a staff set() cannot wipe the document under the edit guard', async () => {
+    // editedHonestly() used to default to true, which let an active user replace a whole
+    // document as long as the shape validated — rewriting who created it.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/e1'), event('e1'))
+    })
+    await assertFails(
+      setDoc(doc(as(STAFF), 'stockEvents/e1'), event('e1', { createdBy: STAFF })),
+    )
+  })
+
+  test('the unions are closed', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { type: 'poDelay' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e2'), event('e2', { status: 'waiting' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e3'), event('e3', { priority: 'p1' })))
+  })
+
+  test('a deadline before the start is refused by the rules too, not just the service', async () => {
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { dueAt: ts() - 86400000 })),
+    )
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'stockEvents/e2'), event('e2', { dueAt: ts() + 86400000 })),
+    )
+  })
+
+  test('an unknown field is refused', async () => {
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { escalationLevel: 2 })),
+    )
+  })
+
+  test('both brands are covered', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__stockEvents/e1'), event('e1')))
+    await assertFails(setDoc(doc(as(STAFF), 'lelapin__stockEvents/e2'), event('e2')))
+  })
+
+  test('an admin may delete one; staff may not', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/e1'), event('e1'))
+    })
+    await assertFails(deleteDoc(doc(as(STAFF), 'stockEvents/e1')))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'stockEvents/e1')))
+  })
+})
+
 describe('suppliers', () => {
   test('an admin may create one; staff may not', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1')))

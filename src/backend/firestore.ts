@@ -73,6 +73,22 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       )
     },
 
+    async getRange<T>(
+      collection: string,
+      field: string,
+      from: number,
+      to: number,
+    ): Promise<T[]> {
+      const snap = await getDocs(
+        query(
+          fbCollection(getDb(), resolve(collection)),
+          where(field, '>=', from),
+          where(field, '<=', to),
+        ),
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
+    },
+
     async getAll<T>(collection: string): Promise<T[]> {
       const db = getDb()
       const snap = await getDocs(fbCollection(db, resolve(collection)))

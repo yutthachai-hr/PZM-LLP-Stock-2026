@@ -62,8 +62,10 @@ service cloud.firestore {
     function staffWritable(name) {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
+        'stockEvents',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
-        'lelapin__movementImages', 'lelapin__notes'
+        'lelapin__movementImages', 'lelapin__notes',
+        'lelapin__stockEvents'
       ];
     }
 
@@ -241,6 +243,39 @@ service cloud.firestore {
         && (!('note' in d) || d.note is string && d.note.size() <= 2000);
     }
 
+    // A planned piece of work: a count, an audit, an expected delivery, a task.
+    //
+    // Low stock is deliberately NOT one of these. It is already derived for free from
+    // balances the app holds in memory, and one document per low product per location
+    // would be over a thousand documents that then have to be cleared again.
+    function validEvent(d) {
+      return d.keys().hasAll(['id', 'title', 'type', 'startAt', 'status', 'priority',
+          'createdBy', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'title', 'type', 'locationId', 'startAt', 'dueAt',
+          'status', 'priority', 'assignedTo', 'assignedToName', 'note',
+          'createdBy', 'createdAt', 'updatedAt'])
+        && text(d.title, 300)
+        && d.type in ['stockCount', 'audit', 'delivery', 'transfer', 'inventoryTask', 'other']
+        && d.status in ['upcoming', 'inProgress', 'completed', 'cancelled']
+        && d.priority in ['normal', 'high', 'critical']
+        && epochMs(d.startAt) && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && text(d.createdBy, 200)
+        && (!('locationId' in d) || text(d.locationId, 200))
+        && (!('dueAt' in d) || epochMs(d.dueAt) && d.dueAt >= d.startAt)
+        && (!('assignedTo' in d) || text(d.assignedTo, 200))
+        && (!('assignedToName' in d) || text(d.assignedToName, 200))
+        && (!('note' in d) || d.note is string && d.note.size() <= 2000);
+    }
+
+    // Staff may move an event along and nothing else. Without this the catch-all lets any
+    // active user replace a whole document via set(), rewriting who created it and when.
+    function eventEdit() {
+      return admin() || (
+        editedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.createdBy == resource.data.createdBy
+      );
+    }
+
     // One product a supplier sells us. buyingPrice is optional: it is not always known,
     // and a zero would read as free rather than as unknown.
     function validSupplierItem(d) {
@@ -265,6 +300,7 @@ service cloud.firestore {
         : kind(name) == 'locations' ? validLocation(d)
         : kind(name) == 'notes' ? validNote(d)
         : kind(name) == 'productMinOverrides' ? validMinOverride(d)
+        : kind(name) == 'stockEvents' ? validEvent(d)
         : kind(name) == 'suppliers' ? validSupplier(d)
         : kind(name) == 'supplierItems' ? validSupplierItem(d)
         : validImage(d)
@@ -283,11 +319,13 @@ service cloud.firestore {
     // or already corrected. Without the first check, staff can record stock in a
     // colleague's name and the ledger's "who" column means nothing.
     function createdHonestly(name) {
-      return kind(name) != 'stockMovements' || (
-        request.resource.data.byUserId == request.auth.uid
-        && !('voided' in request.resource.data)
-        && !('updatedBy' in request.resource.data)
-      );
+      return kind(name) == 'stockEvents'
+        ? admin() && request.resource.data.createdBy == request.auth.uid
+        : kind(name) != 'stockMovements' || (
+          request.resource.data.byUserId == request.auth.uid
+          && !('voided' in request.resource.data)
+          && !('updatedBy' in request.resource.data)
+        );
     }
 
     // Editing a movement means correcting the quantity, the business date or the note —
@@ -300,6 +338,7 @@ service cloud.firestore {
     // document number that has already been used.
     function editedHonestly(name) {
       return kind(name) == 'stockMovements' ? movementEdit()
+        : kind(name) == 'stockEvents' ? eventEdit()
         : kind(name) == 'counters' ? request.resource.data.value > resource.data.value
         : true;
     }
