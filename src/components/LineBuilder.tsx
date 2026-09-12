@@ -147,6 +147,7 @@ export function LineBuilder({
                   <div className="w-full sm:w-44">
                     <QtyInput
                       unitType={l.unit}
+                      productId={l.productId}
                       packSize={packOf.get(l.productId)?.packSize}
                       packLabel={packOf.get(l.productId)?.packLabel}
                       value={l.qty}

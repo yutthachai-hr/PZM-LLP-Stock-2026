@@ -164,6 +164,7 @@ export function AdjustPage() {
           <Field label={t("จำนวน")} required>
             <QtyInput
               unitType={product?.unitType ?? ''}
+              productId={product?.id}
               packSize={product?.packSize}
               packLabel={product?.packLabel}
               value={qty}
