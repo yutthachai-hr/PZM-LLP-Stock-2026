@@ -536,7 +536,6 @@ export const EN: Record<string, string> = {
   'ยังไม่มีรายการ — ค้นหาด้านบนเพื่อเพิ่มสินค้า': 'No items yet — search above to add one',
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)': 'Search a product to add (name / SKU)',
   เลือกหน่วยที่กรอก: 'Entry unit',
-  '1 {unit} คิดเป็น': '1 {unit} is',
   'กรัม (g)': 'Grams (g)',
   'มล. (ml)': 'Millilitres (ml)',
   ลิตร: 'Litres',
