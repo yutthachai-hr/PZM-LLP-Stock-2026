@@ -19,8 +19,15 @@ vi.mock('../src/backend', async () => {
 })
 
 const { resetMemory, seed, raw } = await import('./helpers/memory-backend')
-const { receiveStock, issueStock, adjustStock, voidMovement, parseLevelId, findLevelDrift } =
-  await import('../src/services/stock')
+const {
+  receiveStock,
+  issueStock,
+  adjustStock,
+  editMovement,
+  voidMovement,
+  parseLevelId,
+  findLevelDrift,
+} = await import('../src/services/stock')
 const { setActiveBrand } = await import('../src/brand/brand')
 
 const ACTOR = { id: 'uid-staff', name: 'Staff' }
@@ -202,5 +209,179 @@ describe('reading a balance key back', () => {
       productId: 'a__b',
       unit: 'ลัง',
     })
+  })
+})
+
+describe('correcting a row instead of cancelling it', () => {
+  test('changing the unit moves the number to the other balance', async () => {
+    // What people were doing instead: void the row, key the whole delivery again.
+    await receive(10, 'Pack')
+    const [m] = movements()
+    await editMovement({
+      movementId: m.id as string,
+      patch: { entryUnit: 'Carton' },
+      actor: ACTOR,
+    })
+    expect(qtyFor(MAIN, 'Pack')).toBe(0)
+    expect(qtyFor(MAIN, 'Carton')).toBe(10)
+    expect(movements()[0].entryUnit).toBe('Carton')
+  })
+
+  test("clearing the unit puts it back on the product's own balance", async () => {
+    await receive(4, 'Pack')
+    await editMovement({
+      movementId: movements()[0].id as string,
+      patch: { entryUnit: '' },
+      actor: ACTOR,
+    })
+    expect(qtyFor(MAIN, 'Pack')).toBe(0)
+    expect(qtyFor(MAIN)).toBe(4)
+    expect(movements()[0].entryUnit).toBeUndefined()
+  })
+
+  test('moving a receipt to another branch takes the stock with it', async () => {
+    await receive(6)
+    await editMovement({
+      movementId: movements()[0].id as string,
+      patch: { toLocationId: BRANCH },
+      actor: ACTOR,
+    })
+    expect(qtyFor(MAIN)).toBe(0)
+    expect(qtyFor(BRANCH)).toBe(6)
+  })
+
+  test('the unit and the branch can move at once, with the quantity', async () => {
+    await receive(10, 'Pack')
+    await editMovement({
+      movementId: movements()[0].id as string,
+      patch: { entryUnit: 'Carton', toLocationId: BRANCH, qty: 3 },
+      actor: ACTOR,
+    })
+    expect(qtyFor(MAIN, 'Pack')).toBe(0)
+    expect(qtyFor(BRANCH, 'Carton')).toBe(3)
+  })
+
+  test('a correction that would take a balance below zero is refused', async () => {
+    await receive(5)
+    await issueStock({
+      fromLocationId: MAIN,
+      toLocationId: BRANCH,
+      lines: [line(5)],
+      actor: ACTOR,
+      date: Date.now(),
+    })
+    // The goods have already gone on to the branch, so the receipt cannot shrink to 1.
+    const receipt = movements().find((m) => m.type === 'receive')!
+    await expect(
+      editMovement({ movementId: receipt.id as string, patch: { qty: 1 }, actor: ACTOR }),
+    ).rejects.toThrow()
+    expect(qtyFor(MAIN)).toBe(0)
+  })
+
+  test('an edit leaves the cached balances agreeing with the ledger', async () => {
+    await receive(10, 'Pack')
+    await editMovement({
+      movementId: movements()[0].id as string,
+      patch: { entryUnit: 'Carton', toLocationId: BRANCH },
+      actor: ACTOR,
+    })
+    expect(await findLevelDrift()).toEqual([])
+  })
+
+  test('a receipt cannot be turned into a transfer under the same document number', async () => {
+    await receive(3)
+    await expect(
+      editMovement({
+        movementId: movements()[0].id as string,
+        patch: { fromLocationId: BRANCH },
+        actor: ACTOR,
+      }),
+    ).rejects.toThrow()
+  })
+})
+
+describe('who edited a row, all of them', () => {
+  const OTHER = { id: 'uid-other', name: 'Somchai' }
+
+  test('the first edit records who made it and what they changed', async () => {
+    await receive(5)
+    await editMovement({
+      movementId: movements()[0].id as string,
+      patch: { qty: 6 },
+      actor: ACTOR,
+    })
+    const edits = movements()[0].edits as { by: string; byName: string; changed: string[] }[]
+    expect(edits).toHaveLength(1)
+    expect(edits[0]).toMatchObject({ by: ACTOR.id, byName: ACTOR.name, changed: ['จำนวน'] })
+  })
+
+  test('a second person appends — the first name is not overwritten', async () => {
+    // updatedBy only ever holds the last editor, which is what a second edit would hide.
+    await receive(5)
+    const id = movements()[0].id as string
+    await editMovement({ movementId: id, patch: { qty: 6 }, actor: ACTOR })
+    await editMovement({ movementId: id, patch: { qty: 7 }, actor: OTHER })
+    const m = movements()[0]
+    const edits = m.edits as { byName: string }[]
+    expect(edits.map((e) => e.byName)).toEqual([ACTOR.name, OTHER.name])
+    expect(m.updatedByName).toBe(OTHER.name)
+  })
+
+  test('each entry names the fields that edit touched', async () => {
+    await receive(5)
+    const id = movements()[0].id as string
+    await editMovement({
+      movementId: id,
+      patch: { entryUnit: 'Pack', toLocationId: BRANCH },
+      actor: ACTOR,
+    })
+    const edits = movements()[0].edits as { changed: string[] }[]
+    expect(edits[0].changed).toEqual(['หน่วย', 'คลังปลายทาง'])
+  })
+
+  test('a save that changes nothing leaves no entry', async () => {
+    // Otherwise opening and closing the dialog would pad the history and hide real edits.
+    await receive(5)
+    const id = movements()[0].id as string
+    await editMovement({ movementId: id, patch: { qty: 5 }, actor: ACTOR })
+    expect(movements()[0].edits).toBeUndefined()
+  })
+
+  test('a voided row cannot be edited at all', async () => {
+    await receive(5)
+    const id = movements()[0].id as string
+    await voidMovement(id, ACTOR)
+    await expect(
+      editMovement({ movementId: id, patch: { qty: 9 }, actor: ACTOR }),
+    ).rejects.toThrow()
+  })
+})
+
+describe('hiding a product instead of deleting it', () => {
+  // "ป้องกันการลบ แล้วต้องกลับมาใส่อีก" — a deleted product takes its history with it.
+  const hidden = { ...{ id: 'p2', sku: 'A-2', name: 'Retired', category: 'Seafood', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, createdAt: 1, updatedAt: 1 }, active: false }
+  const visible = { ...hidden, id: 'p3', sku: 'A-3', name: 'Current', active: true }
+  const legacy = { ...hidden, id: 'p4', sku: 'A-4', name: 'Legacy' } as Record<string, unknown>
+  delete legacy.active
+
+  const offered = (list: { active?: boolean }[]) => list.filter((p) => p.active !== false)
+
+  test('a hidden product is kept out of the pickers', () => {
+    expect(offered([hidden, visible]).map((p) => (p as { id: string }).id)).toEqual(['p3'])
+  })
+
+  test('a product with no flag at all is treated as visible', () => {
+    // Every product recorded before this feature has no `active` field.
+    expect(offered([legacy as { active?: boolean }])).toHaveLength(1)
+  })
+
+  test('hiding keeps the balance and the history exactly where they were', async () => {
+    await receive(8)
+    const before = qtyFor(MAIN)
+    seed('products', [
+      { id: 'p1', sku: 'A-1', name: 'Prawn', category: 'Seafood', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: false, createdAt: 1, updatedAt: 1 },
+    ])
+    expect(qtyFor(MAIN)).toBe(before)
+    expect(movements()).toHaveLength(1)
   })
 })

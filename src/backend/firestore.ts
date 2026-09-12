@@ -135,7 +135,10 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
             t.set(doc(db, resolve(collection), id), { ...data, id })
           },
           update(collection, id, patch) {
-            t.update(doc(db, resolve(collection), id), patch)
+            // Same translation the non-transactional update does. Without it a DELETE_FIELD
+            // marker reached Firestore as an opaque value, so clearing a field inside a
+            // transaction — the only place the stock engine ever clears one — did nothing.
+            t.update(doc(db, resolve(collection), id), toFirestorePatch(patch))
           },
           delete(collection, id) {
             t.delete(doc(db, resolve(collection), id))

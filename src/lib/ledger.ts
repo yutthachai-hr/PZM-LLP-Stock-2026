@@ -176,3 +176,19 @@ export function stockCard(all: StockMovement[], q: StockCardQuery): StockCard {
 export function shownUnit(m: { unit: string; entryUnit?: string }): string {
   return (m.entryUnit ?? '').trim() || m.unit
 }
+
+/**
+ * Everyone who has changed a row since it was filed, oldest first.
+ *
+ * The owner asked for this by name: if more than one account has touched a movement, the
+ * report has to name all of them, because a single "last edited by" is exactly what someone
+ * altering a colleague's entry would hide behind.
+ */
+export function editorsOf(m: { edits?: { byName: string }[]; updatedByName?: string }): string[] {
+  if (m.edits?.length) {
+    // The same person correcting a row twice is one name, in the order they first appear.
+    return [...new Set(m.edits.map((e) => e.byName).filter(Boolean))]
+  }
+  // Rows edited before the history existed still know who touched them last.
+  return m.updatedByName ? [m.updatedByName] : []
+}

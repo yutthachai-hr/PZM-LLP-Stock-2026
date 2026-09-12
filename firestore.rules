@@ -137,7 +137,7 @@ service cloud.firestore {
           'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'entryUnit', 'qty',
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'date', 'byUserId', 'byUserName', 'createdAt',
-          'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
         ])
         && d.type in ['receive', 'issue', 'adjust', 'consume']
         && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
@@ -147,6 +147,9 @@ service cloud.firestore {
         // Present only when the person keyed a unit other than the product's own. Nothing
         // is converted between the two; this is what the row is counted in.
         && (!('entryUnit' in d) || text(d.entryUnit, 20))
+        // Appended by editMovement, one entry per correction. Rules cannot look inside a
+        // list's maps, so the guarantees that matter are made on update: see appendedOwnEdit.
+        && (!('edits' in d) || (d.edits is list && d.edits.size() <= 200))
         && (!('note' in d) || text(d.note, 2000))
         && (!('reason' in d) || text(d.reason, 60))
         && (!('hasPhoto' in d) || d.hasPhoto is bool)
@@ -368,11 +371,37 @@ service cloud.firestore {
 
     function movementEdit() {
       return editedKeys().hasOnly([
-          'qty', 'date', 'note', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+          'qty', 'date', 'note', 'entryUnit', 'fromLocationId', 'toLocationId',
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
         ])
         && (!editedKeys().hasAny(['voided']) || admin())
         && (!('updatedBy' in request.resource.data)
-            || request.resource.data.updatedBy == request.auth.uid);
+            || request.resource.data.updatedBy == request.auth.uid)
+        // Changing what a row says means appending to its history, in the caller's own name.
+        && (!editedKeys().hasAny(['qty', 'date', 'note', 'entryUnit',
+                                  'fromLocationId', 'toLocationId'])
+            || appendedOwnEdit());
+    }
+
+    /**
+     * The edit history grew by exactly one entry, and that entry names the caller.
+     *
+     * This is the anti-fraud control the owner asked for, and it is worth being plain about
+     * its edge: rules cannot compare two lists element by element, so what is proved here is
+     * that an edit cannot be filed under a colleague's name and cannot quietly shrink the
+     * history. A determined admin calling the database directly could still rewrite earlier
+     * entries; catching that needs a trusted server comparing writes, which the free plan has
+     * no room for. The same limit already applies to balances, and for the same reason.
+     */
+    function appendedOwnEdit() {
+      // Read with a default: a write that omits the history entirely must be refused, not
+      // crash the rule. Omitting it is exactly how someone would try to edit anonymously.
+      let next = request.resource.data.get('edits', null);
+      let prev = resource.data.get('edits', []);
+      return next is list
+        && next.size() == prev.size() + 1
+        && next.size() <= 200
+        && next[next.size() - 1].by == request.auth.uid;
     }
 
     // ---------------------------------------------------------------- users ----

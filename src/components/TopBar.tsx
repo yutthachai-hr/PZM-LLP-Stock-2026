@@ -50,6 +50,9 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
     if (needle.length < 2) return []
     const hits: Product[] = []
     for (const p of products) {
+      // Hidden products are out of the catalogue's way; their history is still reachable
+      // from สินค้าคงคลัง with the "ที่ซ่อนไว้" filter.
+      if (p.active === false) continue
       if (p.name.toLowerCase().includes(needle) || p.sku.toLowerCase().includes(needle)) {
         hits.push(p)
         if (hits.length >= MAX_RESULTS) break

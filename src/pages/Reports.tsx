@@ -13,7 +13,7 @@ import {
   formatThaiDate,
   formatThaiDateTime,
 } from '../lib/format'
-import { shownUnit, stockCard } from '../lib/ledger'
+import { editorsOf, shownUnit, stockCard } from '../lib/ledger'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { DataTable, type Column } from '../components/DataTable'
@@ -214,6 +214,9 @@ export function ReportsPage() {
         // A note is free text, except for the constants the services write ("ตั้งยอดคงเหลือ") —
         // t() translates those and passes anything it does not recognise through unchanged.
         [t("หมายเหตุ / เลขบิล")]: m.note ? t(m.note) : '',
+        // Every account that has changed this row, not just the last one.
+        [t("ผู้แก้ไข")]: editorsOf(m).join(', '),
+        [t("จำนวนครั้งที่แก้ไข")]: m.edits?.length ?? 0,
       }))
       exportExcel(t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }), 'Movements', rows)
     } else {
@@ -247,6 +250,7 @@ export function ReportsPage() {
         ...(showBalance ? [t("คงเหลือ")] : []),
         t("หมายเหตุ / เลขบิล"),
         t("ผู้ทำ"),
+        t("ผู้แก้ไข"),
       ]
       const body = movementRows.map(({ m, inQty, outQty, balance }) => [
         formatThaiDate(m.date),
@@ -261,6 +265,7 @@ export function ReportsPage() {
         ...(showBalance ? [fmtQty(balance ?? 0)] : []),
         m.note ?? '',
         m.byUserName,
+        editorsOf(m).join(', '),
       ])
       exportReportPdf({
         filename: t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }),
@@ -343,6 +348,13 @@ export function ReportsPage() {
         header: t('หน่วย'),
         className: 'text-ink-soft',
         cell: ({ m }) => shownUnit(m),
+      },
+      {
+        key: 'editors',
+        header: t('ผู้แก้ไข'),
+        className: 'text-ink-soft',
+        // Blank on a row nobody has touched, which is most of them.
+        cell: ({ m }) => editorsOf(m).join(', '),
       },
     ]
     if (showBalance) {

@@ -430,13 +430,45 @@ describe('staff', () => {
 
 describe('the ledger is append-only', () => {
   test('staff and admins may add and amend movements', async () => {
+    const trail = (uid: string, n: number) =>
+      Array.from({ length: n }, (_, i) => ({ by: uid, byName: uid, at: ts(), changed: ['qty'] }))
     await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m3'), movement('m3')))
-    await assertSucceeds(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3 }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { qty: 9 }))
+    await assertSucceeds(
+      updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: trail(STAFF, 1) }),
+    )
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { qty: 9, edits: [...trail(STAFF, 1), ...trail(ADMIN, 1)] }),
+    )
     // Voiding is the one amendment staff may not make. The UI only ever offered the button
     // to admins; now the database agrees, so the API cannot be used to skip that.
     await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { voided: true }))
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true }))
+  })
+
+  test('a correction has to name the person making it, and cannot lose the ones before', async () => {
+    // "ถ้ามีคนแก้มากกว่า 1 ครั้ง ต้องใส่รายงานว่าแอคเคาท์ไหนบ้างที่แก้ไขไป กันการทุจริต."
+    const entry = (uid: string) => ({ by: uid, byName: uid, at: ts(), changed: ['qty'] })
+    const at = (uid: string) => doc(as(uid), 'stockMovements/m1')
+
+    // Changing a quantity while leaving no trace at all.
+    await assertFails(updateDoc(at(STAFF), { qty: 3 }))
+    // Signing the edit with a colleague's account.
+    await assertFails(updateDoc(at(STAFF), { qty: 3, edits: [entry(ADMIN)] }))
+    // Adding two entries at once, or none, so the count stops matching the corrections.
+    await assertFails(updateDoc(at(STAFF), { qty: 3, edits: [entry(STAFF), entry(STAFF)] }))
+    await assertFails(updateDoc(at(STAFF), { qty: 3, edits: [] }))
+
+    await assertSucceeds(updateDoc(at(STAFF), { qty: 3, edits: [entry(STAFF)] }))
+    // A second editor appends; dropping the first one's entry is refused.
+    await assertFails(updateDoc(at(ADMIN), { qty: 4, edits: [entry(ADMIN)] }))
+    await assertSucceeds(
+      updateDoc(at(ADMIN), { qty: 4, edits: [entry(STAFF), entry(ADMIN)] }),
+    )
+  })
+
+  test('the history cannot grow without bound', async () => {
+    const many = Array.from({ length: 201 }, () => ({ by: STAFF, byName: 'S', at: ts(), changed: [] }))
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: many }))
   })
 
   test('nobody may delete a movement — not even an admin', async () => {

@@ -154,6 +154,19 @@ describe('F02 — the ledger records who, and keeps it', () => {
         qty: 7,
         date: now(),
         note: 'corrected',
+        edits: [{ by: STAFF, byName: 'Staff', at: now(), changed: ['qty'] }],
+        updatedBy: STAFF,
+        updatedByName: 'Staff',
+        updatedAt: now(),
+      }),
+    )
+  })
+
+  test('a correction that leaves no trace is refused', async () => {
+    // The whole point of the history: you cannot change what a row says anonymously.
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), {
+        qty: 7,
         updatedBy: STAFF,
         updatedByName: 'Staff',
         updatedAt: now(),

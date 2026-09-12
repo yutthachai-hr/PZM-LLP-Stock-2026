@@ -50,6 +50,9 @@ export function AdjustPage() {
     const q = search.trim().toLowerCase()
     if (!q) return []
     return products
+      // A hidden product is one nobody should be filing against any more. Unhide it in
+      // สินค้าคงคลัง if it turns out they should.
+      .filter((p) => p.active !== false)
       .filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
       .slice(0, 8)
   }, [search, products])

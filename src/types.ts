@@ -111,10 +111,28 @@ export interface StockMovement {
   byUserId: string
   byUserName: string
   createdAt: number
+  /** Who touched it last. The full list is in `edits`. */
   updatedBy?: string
   updatedByName?: string
   updatedAt?: number
+  /**
+   * Every edit ever made to this row, oldest first, appended and never rewritten.
+   *
+   * `updatedBy` only ever names the most recent person, which is exactly the thing someone
+   * covering their tracks would rely on: edit a colleague's row, then let the next editor
+   * overwrite your name. The reports print this whole list.
+   */
+  edits?: MovementEdit[]
   voided?: boolean
+}
+
+/** One entry in a movement's edit history. */
+export interface MovementEdit {
+  by: string
+  byName: string
+  at: number
+  /** Which fields this edit changed, for the report to name them. */
+  changed: string[]
 }
 
 export interface Note {

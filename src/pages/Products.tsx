@@ -39,7 +39,7 @@ import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 
 type SearchIn = 'all' | 'name' | 'sku'
-type StockStatus = 'all' | 'low' | 'out' | 'in'
+type StockStatus = 'all' | 'low' | 'out' | 'in' | 'hidden'
 type SortKey = 'name-asc' | 'name-desc' | 'sku-asc' | 'sku-desc' | 'qty-desc' | 'qty-asc'
 
 const SORTS: { value: SortKey; label: string }[] = [
@@ -141,7 +141,7 @@ export function ProductsPage() {
       )
     }
     const inStatus = (p: Product) => {
-      if (status === 'all') return true
+      if (status === 'all' || status === 'hidden') return true
       const qty = shownQty(p.id)
       if (status === 'out') return qty <= 0
       if (status === 'in') return qty > 0
@@ -149,6 +149,10 @@ export function ProductsPage() {
       return min > 0 && qty <= min
     }
     return products
+      // Hidden products stay out of the way unless they are what is being looked for.
+      // Hiding is the alternative to deleting: the catalogue keeps the item, its history and
+      // its balance, so putting it back is one click rather than keying it in again.
+      .filter((p) => (status === 'hidden' ? p.active === false : p.active !== false))
       .filter((p) => (cat ? p.category === cat : true))
       .filter(matches)
       .filter(inStatus)
@@ -169,6 +173,16 @@ export function ProductsPage() {
         }
       })
   }, [products, search, searchIn, cat, status, sort, shownQty, minShown])
+
+  async function toggleHidden(p: Product) {
+    const hide = p.active !== false
+    try {
+      await updateProduct(p.id, { active: !hide })
+      toast.success(hide ? t('ซ่อนแล้ว — ดูได้ที่ตัวกรอง "ที่ซ่อนไว้"') : t('เลิกซ่อนแล้ว'))
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
 
   async function handleSeed() {
     setSeeding(true)
@@ -271,15 +285,34 @@ export function ProductsPage() {
         align: 'right',
         tableOnly: true,
         cell: (p) => (
-          <Button
-            variant="ghost"
-            onClick={(e) => {
-              e.stopPropagation()
-              setEditing(p)
-            }}
-          >
-            {isAdmin ? t('แก้ไข') : t('ดู')}
-          </Button>
+          <div className="flex items-center justify-end gap-1">
+            {/* Hide rather than delete. A deleted product takes its history with it and has
+                to be keyed in again from scratch; a hidden one is one click from coming
+                back, with its balance and its movements intact. */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void toggleHidden(p)
+                }}
+                title={p.active === false ? t('เลิกซ่อนสินค้านี้') : t('ซ่อนสินค้านี้')}
+                aria-label={p.active === false ? t('เลิกซ่อนสินค้านี้') : t('ซ่อนสินค้านี้')}
+                className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-base outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
+              >
+                {p.active === false ? '🙈' : '👁️'}
+              </button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditing(p)
+              }}
+            >
+              {isAdmin ? t('แก้ไข') : t('ดู')}
+            </Button>
+          </div>
         ),
       },
     ],
@@ -407,6 +440,7 @@ export function ProductsPage() {
               <option value="low">{t("ใกล้หมด")}</option>
               <option value="out">{t("หมดสต๊อก")}</option>
               <option value="in">{t("มีของ")}</option>
+              <option value="hidden">{t("🙈 ที่ซ่อนไว้")}</option>
             </Select>
           </Field>
 

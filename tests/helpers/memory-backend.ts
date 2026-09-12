@@ -157,8 +157,10 @@ export function createMemoryBackend(brand?: BrandId): Backend {
         writes.push([resolve(c), id, { ...clone(data), id }])
       },
       update(c, id, patch) {
+        // Not clone(patch): a JSON round-trip drops a Symbol-valued key outright, so the
+        // DELETE_FIELD marker disappeared and the field it should have removed survived.
         const cur = col_(c).get(id) ?? { id }
-        writes.push([resolve(c), id, { ...cur, ...clone(patch), id }])
+        writes.push([resolve(c), id, { ...applyPatch_(cur, patch), id }])
       },
       delete(c, id) {
         writes.push([resolve(c), id, null])

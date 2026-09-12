@@ -1,5 +1,5 @@
 import { backend } from '../backend'
-import type { Backend, TxContext } from '../backend/types'
+import { DELETE_FIELD, type Backend, type TxContext } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import {
   COL,
@@ -589,56 +589,135 @@ export async function setStockCount(params: {
 }
 
 /** Edit the quantity/date/note of an existing movement, re-applying the balance delta atomically. */
-export async function editMovementQty(params: {
+/** How many edits one row will carry before the history itself becomes the problem. */
+const MAX_EDITS = 200
+
+export interface MovementPatch {
+  qty?: number
+  date?: number
+  note?: string
+  /** The unit this row is counted in. Empty string puts it back on the product's own. */
+  entryUnit?: string
+  fromLocationId?: string
+  toLocationId?: string
+}
+
+/**
+ * Correct a movement in place — quantity, date, note, unit, or which location it belongs to.
+ *
+ * The alternative was voiding the row and keying it again, which is what people were doing
+ * to fix a unit. That leaves a cancelled row and a new one for what was always a single
+ * delivery, and it means the correction is only findable by reading both.
+ *
+ * The balance work is "take the old effect back off the books, then put the new one on".
+ * That is the only way a change of unit or of location can be right: those do not adjust a
+ * number, they move it to a different row entirely. Both sides are checked for going
+ * negative before anything is written.
+ *
+ * Every edit appends to `edits` — never replaces it. `updatedBy` names only the last person,
+ * which is precisely what a second edit would hide.
+ */
+export async function editMovement(params: {
   movementId: string
-  newQty: number
-  newDate?: number
-  newNote?: string
+  patch: MovementPatch
   actor: Actor
 }): Promise<void> {
-  const { movementId, newDate, newNote, actor } = params
-  const newQty = requireQty(params.newQty)
-  if (newDate !== undefined) requireEpochMs(newDate)
+  const { movementId, patch, actor } = params
+  if (patch.qty !== undefined) requireQty(patch.qty)
+  if (patch.date !== undefined) requireEpochMs(patch.date)
   const db = scoped()
 
   return db.transaction(async (tx) => {
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) throw new AppError('รายการนี้ถูกยกเลิกแล้ว')
-    const delta = roundQty(newQty - mv.qty)
+    if ((mv.edits?.length ?? 0) >= MAX_EDITS) {
+      throw new AppError('รายการนี้ถูกแก้ไขหลายครั้งเกินไป — กรุณายกเลิกแล้วบันทึกใหม่')
+    }
 
-    const fromLevel = mv.fromLocationId
-      ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.fromLocationId, mv).id)
-      : null
-    const toLevel = mv.toLocationId
-      ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.toLocationId, mv).id)
-      : null
+    const qty = patch.qty ?? mv.qty
+    const entryUnit = patch.entryUnit === undefined ? (mv.entryUnit ?? '') : patch.entryUnit.trim()
+    const from = patch.fromLocationId ?? mv.fromLocationId
+    const to = patch.toLocationId ?? mv.toLocationId
+    // A receipt has a destination and no source; an issue has both. Gaining or losing a side
+    // would turn it into a different kind of movement while keeping its document number.
+    if (!!from !== !!mv.fromLocationId || !!to !== !!mv.toLocationId) {
+      throw new AppError('แก้ไขไม่ได้: เปลี่ยนรูปแบบรายการไม่ได้')
+    }
+    if (from && to && from === to) throw new AppError('คลังต้นทางและปลายทางต้องต่างกัน')
+    await requireMasterData(tx, [], [from, to].filter((x): x is string => !!x))
+
+    const before = { productId: mv.productId, unit: mv.unit, entryUnit: mv.entryUnit }
+    const after = { productId: mv.productId, unit: mv.unit, entryUnit: entryUnit || undefined }
+
+    // Net change per balance row. A unit or location that did not move cancels itself out
+    // here and is never written, so an edit of the note alone touches no balance at all.
+    const touched = new Map<string, { locationId: string; unit?: string; delta: number }>()
+    function touch(
+      locationId: string | undefined,
+      x: { productId: string; unit: string; entryUnit?: string },
+      delta: number,
+    ) {
+      if (!locationId) return
+      const ref = levelRef(locationId, x)
+      const cur = touched.get(ref.id)
+      if (cur) cur.delta = roundQty(cur.delta + delta)
+      else touched.set(ref.id, { locationId, unit: ref.unit, delta })
+    }
+    touch(mv.fromLocationId, before, mv.qty) // goods come back to where they left
+    touch(mv.toLocationId, before, -mv.qty)
+    touch(from, after, -qty)
+    touch(to, after, qty)
+
+    const ids = [...touched.keys()]
+    const current = await Promise.all(ids.map((id) => tx.get<StockLevel>(COL.stockLevels, id)))
 
     const now = Date.now()
-    if (mv.fromLocationId) {
-      const cur = fromLevel?.qty ?? 0
-      const next = roundQty(cur - delta) // more qty out => lower balance
-      if (next < 0) throw new AppError('แก้ไขไม่ได้: สต๊อกต้นทางจะติดลบ')
+    ids.forEach((id, i) => {
+      const t = touched.get(id)!
+      if (t.delta === 0) return
+      const next = roundQty((current[i]?.qty ?? 0) + t.delta)
+      if (next < 0) throw new AppError('แก้ไขไม่ได้: ยอดคงเหลือจะติดลบ')
       tx.set(
         COL.stockLevels,
-        levelRef(mv.fromLocationId, mv).id,
-        levelDoc(mv.fromLocationId, mv.productId, next, actor, now, levelRef(mv.fromLocationId, mv).unit),
+        id,
+        levelDoc(t.locationId, mv.productId, next, actor, now, t.unit),
       )
+    })
+
+    const changed: string[] = []
+    const write: Record<string, unknown> = {}
+    if (qty !== mv.qty) {
+      write.qty = qty
+      changed.push('จำนวน') // i18n-key
     }
-    if (mv.toLocationId) {
-      const cur = toLevel?.qty ?? 0
-      const next = roundQty(cur + delta)
-      if (next < 0) throw new AppError('แก้ไขไม่ได้: สต๊อกปลายทางจะติดลบ')
-      tx.set(
-        COL.stockLevels,
-        levelRef(mv.toLocationId, mv).id,
-        levelDoc(mv.toLocationId, mv.productId, next, actor, now, levelRef(mv.toLocationId, mv).unit),
-      )
+    if (patch.date !== undefined && patch.date !== mv.date) {
+      write.date = patch.date
+      changed.push('วันที่') // i18n-key
     }
+    if (patch.note !== undefined && patch.note !== (mv.note ?? '')) {
+      write.note = patch.note
+      changed.push('หมายเหตุ') // i18n-key
+    }
+    if (entryUnit !== (mv.entryUnit ?? '')) {
+      write.entryUnit = entryUnit || DELETE_FIELD
+      changed.push('หน่วย') // i18n-key
+    }
+    if (from !== mv.fromLocationId) {
+      write.fromLocationId = from
+      changed.push('คลังต้นทาง') // i18n-key
+    }
+    if (to !== mv.toLocationId) {
+      write.toLocationId = to
+      changed.push('คลังปลายทาง') // i18n-key
+    }
+    if (changed.length === 0) return
+
     tx.update(COL.movements, movementId, {
-      qty: newQty,
-      ...(newDate ? { date: newDate } : {}),
-      ...(newNote !== undefined ? { note: newNote } : {}),
+      ...write,
+      // Appended, never replaced. The rules check it grew by exactly one and that the new
+      // entry names the caller, so an edit cannot be filed under somebody else.
+      edits: [...(mv.edits ?? []), { by: actor.id, byName: actor.name, at: now, changed }],
       updatedBy: actor.id,
       updatedByName: actor.name,
       updatedAt: now,

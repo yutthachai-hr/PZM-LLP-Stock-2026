@@ -536,6 +536,20 @@ export const EN: Record<string, string> = {
   'ยังไม่มีรายการ — ค้นหาด้านบนเพื่อเพิ่มสินค้า': 'No items yet — search above to add one',
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)': 'Search a product to add (name / SKU)',
   เลือกหน่วยที่กรอก: 'Entry unit',
+  ผู้แก้ไข: 'Edited by',
+  ซ่อนสินค้านี้: 'Hide this product',
+  เลิกซ่อนสินค้านี้: 'Unhide this product',
+  'ซ่อนแล้ว — ดูได้ที่ตัวกรอง "ที่ซ่อนไว้"': 'Hidden — find it under the "Hidden" filter',
+  เลิกซ่อนแล้ว: 'Visible again',
+  '🙈 ที่ซ่อนไว้': '🙈 Hidden',
+  คลังต้นทางและปลายทางต้องต่างกัน: 'Source and destination must differ',
+  จำนวนครั้งที่แก้ไข: 'Times edited',
+  คลังต้นทาง: 'Source location',
+  'ประวัติการแก้ไข ({count} ครั้ง)': 'Edit history ({count})',
+  'แก้ไขไม่ได้: ยอดคงเหลือจะติดลบ': 'Cannot edit: a balance would go negative',
+  'แก้ไขไม่ได้: เปลี่ยนรูปแบบรายการไม่ได้': 'Cannot edit: the kind of movement cannot change',
+  'รายการนี้ถูกแก้ไขหลายครั้งเกินไป — กรุณายกเลิกแล้วบันทึกใหม่':
+    'This row has been edited too many times — void it and record it again',
   หน่วยที่เลือกได้ตอนกรอก: 'Units you can key in',
   'ตัวเลือกหน่วยในหน้ารับเข้า / เบิกออก / ปรับสต๊อก — เป็นชื่อหน่วยเฉย ๆ ไม่ได้คูณจำนวน ถ้าต้องการให้คูณ ให้ตั้ง "ขนาดบรรจุ" ที่สินค้าแต่ละตัว':
     'The unit choices on the Receive, Issue and Adjust screens. These are names only — they do not multiply the quantity. For a unit that multiplies, set "Pack size" on the product itself.',
@@ -562,8 +576,6 @@ export const EN: Record<string, string> = {
   'สต๊อกไม่พอ (คงเหลือ {qty} {unit})': 'Not enough stock (on hand {qty} {unit})',
   'สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})':
     'Not enough stock for “{name}” (on hand {qty} {unit})',
-  'แก้ไขไม่ได้: สต๊อกต้นทางจะติดลบ': 'Cannot edit: the source balance would go negative',
-  'แก้ไขไม่ได้: สต๊อกปลายทางจะติดลบ': 'Cannot edit: the destination balance would go negative',
 
   // ---- import from Excel -------------------------------------------------------
   'นำเข้า Excel': 'Import Excel',

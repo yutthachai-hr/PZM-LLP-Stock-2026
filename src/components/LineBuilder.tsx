@@ -69,6 +69,9 @@ export function LineBuilder({
     if (!q) return []
     const chosen = new Set(lines.map((l) => l.productId))
     return products
+      // A hidden product is one nobody should be filing against any more. Unhide it in
+      // สินค้าคงคลัง if it turns out they should.
+      .filter((p) => p.active !== false)
       .filter((p) => !chosen.has(p.id))
       .filter(
         (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q),
