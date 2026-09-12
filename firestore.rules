@@ -183,12 +183,17 @@ service cloud.firestore {
         ])
         && d.keys().hasOnly([
           'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock', 'cost',
+          'packSize', 'packLabel',
           'hasImage', 'active', 'createdAt', 'updatedAt'
         ])
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
         && text(d.unit, 60) && text(d.unitType, 20)
         && nonneg(d.minStock, 1000000000)
         && (!('cost' in d) || nonneg(d.cost, 1000000000))
+        // A multiplier, so zero is not a valid pack: it would collapse every keyed
+        // quantity to nothing the moment the pack unit was chosen.
+        && (!('packSize' in d) || positive(d.packSize, 1000000000))
+        && (!('packLabel' in d) || text(d.packLabel, 40))
         && d.hasImage is bool && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }

@@ -170,6 +170,34 @@ function event(id: string, over: Record<string, unknown> = {}) {
   }
 }
 
+describe('product pack size', () => {
+  test('an optional pack size and label are accepted', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: 300, packLabel: 'ลัง' })),
+    )
+  })
+
+  test('a pack size of zero or less is refused', async () => {
+    // It is a multiplier: zero would collapse every keyed quantity to nothing.
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: 0 })))
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: -3 })))
+  })
+
+  test('a pack size that is not a number is refused', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: '300' })))
+  })
+
+  test('a product without a pack is still valid', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p9'), product('p9')))
+  })
+
+  test('staff still cannot write products', async () => {
+    await assertFails(
+      setDoc(doc(as(STAFF), 'products/p9'), product('p9', { packSize: 300 })),
+    )
+  })
+})
+
 describe('calendar events', () => {
   test('only an admin creates one, and only in their own name', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1')))

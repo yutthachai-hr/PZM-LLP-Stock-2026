@@ -22,6 +22,21 @@ export interface Product {
   unitType: string // short code, e.g. "KG", "EA"
   minStock: number // global minimum (reorder point)
   cost?: number // optional unit cost for inventory value
+  /**
+   * How many base units are in one pack, when the supplier delivers in packs.
+   *
+   * Goods arrive as "1 ลัง /300 ชิ้น" or "2/KG" — the company's own item file is full of
+   * it — but the ledger has to hold one number per product per location, so a balance
+   * cannot be part packs and part pieces. This is the multiplier that lets someone key
+   * what the delivery note says and still store base units, exactly as grams already
+   * convert into kilograms.
+   *
+   * Safe to change at any time: movements record base units, so editing it never
+   * rewrites history. That is why it is not frozen the way `unitType` is.
+   */
+  packSize?: number
+  /** What the pack is called on the delivery note — ลัง, กล่อง, Pack, Lot. */
+  packLabel?: string
   hasImage: boolean
   active: boolean
   createdAt: number

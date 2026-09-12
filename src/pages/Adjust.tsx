@@ -162,7 +162,13 @@ export function AdjustPage() {
             </Select>
           </Field>
           <Field label={t("จำนวน")} required>
-            <QtyInput unitType={product?.unitType ?? ''} value={qty} onChange={setQty} />
+            <QtyInput
+              unitType={product?.unitType ?? ''}
+              packSize={product?.packSize}
+              packLabel={product?.packLabel}
+              value={qty}
+              onChange={setQty}
+            />
           </Field>
           <Field label={t("เหตุผล")} required>
             <Select value={reason} onChange={(e) => setReason(e.target.value)}>

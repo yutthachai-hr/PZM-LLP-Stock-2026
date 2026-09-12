@@ -12,6 +12,8 @@ export interface ProductInput {
   unitType: string
   minStock: number
   cost?: number
+  packSize?: number
+  packLabel?: string
 }
 
 /**
@@ -22,7 +24,7 @@ export interface ProductInput {
  * stock valuation negative. HTML attributes are a hint to the person typing, not a rule.
  */
 function checkNumbers(input: Partial<ProductInput>): void {
-  const { minStock, cost } = input
+  const { minStock, cost, packSize } = input
   if (minStock !== undefined) {
     if (!Number.isFinite(minStock) || minStock < 0 || minStock > QTY_MAX) {
       throw new AppError('ขั้นต่ำต้องเป็นตัวเลขไม่ติดลบ')
@@ -33,13 +35,25 @@ function checkNumbers(input: Partial<ProductInput>): void {
       throw new AppError('ต้นทุนต้องเป็นตัวเลขไม่ติดลบ')
     }
   }
+  if (packSize !== undefined) {
+    // Zero or a negative would make every keyed quantity collapse to nothing once the
+    // pack unit was chosen — it is a multiplier, not a count.
+    if (!Number.isFinite(packSize) || packSize <= 0 || packSize > QTY_MAX) {
+      throw new AppError('ขนาดบรรจุต้องมากกว่า 0')
+    }
+  }
 }
 
 export async function createProduct(input: ProductInput): Promise<string> {
   checkNumbers(input)
   const now = Date.now()
+  // Optional fields are omitted rather than written empty: the rules pin the shape with
+  // hasOnly, and a blank string is still a present key.
+  const { packSize, packLabel, ...rest } = input
   return backend.add(COL.products, {
-    ...input,
+    ...rest,
+    ...(packSize === undefined ? {} : { packSize }),
+    ...(packLabel?.trim() ? { packLabel: packLabel.trim() } : {}),
     hasImage: false,
     active: true,
     createdAt: now,
@@ -100,9 +114,15 @@ export async function updateProduct(
   // An empty cost box means "no cost recorded", which has to remove the field rather than
   // send undefined — Firestore skips undefined values, so clearing a cost of 100 used to
   // save happily and leave the 100 in place, still counted in the stock valuation.
-  const { cost, ...rest } = patch
+  const { cost, packSize, packLabel, ...rest } = patch
   const write: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
   if ('cost' in patch) write.cost = cost === undefined ? DELETE_FIELD : cost
+  // Same reason as cost: clearing a pack size has to remove the field, or the old
+  // multiplier survives and keeps converting quantities nobody asked it to.
+  if ('packSize' in patch) write.packSize = packSize === undefined ? DELETE_FIELD : packSize
+  if ('packLabel' in patch) {
+    write.packLabel = packLabel?.trim() ? packLabel.trim() : DELETE_FIELD
+  }
   await backend.update(COL.products, id, write)
 }
 

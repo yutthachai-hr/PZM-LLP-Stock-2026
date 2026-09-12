@@ -494,6 +494,8 @@ function ProductEditor({
     unitType: product?.unitType ?? 'EA',
     minStock: product?.minStock ?? 0,
     cost: product?.cost,
+    packSize: product?.packSize,
+    packLabel: product?.packLabel ?? '',
   })
   const [existingImg, setExistingImg] = useState<string | null>(null)
   const [newImg, setNewImg] = useState<string | null>(null)
@@ -746,6 +748,36 @@ function ProductEditor({
                 cost: e.target.value === '' ? undefined : Number(e.target.value),
               })
             }
+            disabled={!canEdit}
+          />
+        </Field>
+        {/* The pack is an entry convenience, not a second unit: goods arrive by the case
+            but a balance has to stay one number. Filling these in lets the receiving
+            screen accept what the delivery note says and still store base units. Unlike
+            the unit itself this can be changed later — no movement records it. */}
+        <Field
+          label={t("ขนาดบรรจุ (ไม่บังคับ)")}
+          hint={t('เช่น 1 ลัง = 300 ชิ้น ให้ใส่ 300')}
+        >
+          <Input
+            type="number"
+            step="any"
+            min={0}
+            value={form.packSize ?? ''}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                packSize: e.target.value === '' ? undefined : Number(e.target.value),
+              })
+            }
+            disabled={!canEdit}
+          />
+        </Field>
+        <Field label={t("ชื่อหน่วยบรรจุ")} hint={t('เช่น ลัง, กล่อง, Pack, Lot')}>
+          <Input
+            value={form.packLabel ?? ''}
+            onChange={(e) => setForm({ ...form, packLabel: e.target.value })}
+            placeholder={t("เช่น ลัง")}
             disabled={!canEdit}
           />
         </Field>

@@ -66,6 +66,14 @@ export function LineBuilder({
     onChange(lines.filter((l) => l.productId !== id))
   }
 
+  // The pack multiplier belongs to the product, not to the line — keeping it out of Line
+  // means nothing new can reach a movement document, whose shape the rules pin with hasOnly.
+  const packOf = useMemo(() => {
+    const map = new Map<string, { packSize?: number; packLabel?: string }>()
+    for (const p of products) map.set(p.id, { packSize: p.packSize, packLabel: p.packLabel })
+    return map
+  }, [products])
+
   const inbound = direction === 'in'
   const sign = inbound ? '+' : '−'
   const signColor = inbound ? 'text-in' : 'text-out'
@@ -139,6 +147,8 @@ export function LineBuilder({
                   <div className="w-full sm:w-44">
                     <QtyInput
                       unitType={l.unit}
+                      packSize={packOf.get(l.productId)?.packSize}
+                      packLabel={packOf.get(l.productId)?.packLabel}
                       value={l.qty}
                       onChange={(v) => setQty(l.productId, v)}
                       invalid={over}
