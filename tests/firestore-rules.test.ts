@@ -527,6 +527,60 @@ describe('the bootstrap sentinel', () => {
   })
 })
 
+describe('the list of entry units', () => {
+  const units = (over: Record<string, unknown> = {}) => ({
+    id: 'entryUnits',
+    names: ['Lot', 'Pack', 'EA', 'Carton'],
+    updatedAt: ts(),
+    ...over,
+  })
+  const at = (uid: string) => doc(as(uid), 'meta/entryUnits')
+
+  test('an admin maintains it', async () => {
+    await assertSucceeds(setDoc(at(ADMIN), units()))
+  })
+
+  test('everyone signed in and active can read it — every entry screen needs it', async () => {
+    await assertSucceeds(setDoc(at(ADMIN), units()))
+    await assertSucceeds(getDoc(at(STAFF)))
+  })
+
+  test('staff cannot rewrite the vocabulary the whole company keys against', async () => {
+    await assertFails(setDoc(at(STAFF), units()))
+  })
+
+  test('someone waiting for approval, or with no profile, sees nothing', async () => {
+    await assertSucceeds(setDoc(at(ADMIN), units()))
+    await assertFails(getDoc(at(PENDING)))
+    await assertFails(getDoc(at(OUTSIDER)))
+    await assertFails(getDoc(doc(anon(), 'meta/entryUnits')))
+  })
+
+  test('the document keeps its shape', async () => {
+    await assertFails(setDoc(at(ADMIN), units({ extra: 'x' })))
+    await assertFails(setDoc(at(ADMIN), units({ names: 'Lot' })))
+    await assertFails(setDoc(at(ADMIN), units({ updatedAt: 'now' })))
+    await assertFails(setDoc(at(ADMIN), units({ id: 'somethingElse' })))
+  })
+
+  test('it can be shortened but not emptied, and never deleted', async () => {
+    await assertSucceeds(setDoc(at(ADMIN), units({ names: ['Carton'] })))
+    await assertFails(setDoc(at(ADMIN), units({ names: [] })))
+    await assertFails(deleteDoc(at(ADMIN)))
+  })
+
+  test('one write cannot stuff the dropdown', async () => {
+    const many = Array.from({ length: 41 }, (_, i) => `U${i}`)
+    await assertFails(setDoc(at(ADMIN), units({ names: many })))
+  })
+
+  test('it is not a way into the meta collection', async () => {
+    // Only this one document is reachable; the catch-all denies the rest of /meta.
+    await assertFails(setDoc(doc(as(ADMIN), 'meta/anythingElse'), { id: 'anythingElse' }))
+    await assertFails(getDocs(collection(as(ADMIN), 'meta')))
+  })
+})
+
 describe('collections outside the model', () => {
   test('an invented collection is denied even for an admin', async () => {
     await assertFails(setDoc(doc(as(ADMIN), 'evil/x'), { a: 1 }))

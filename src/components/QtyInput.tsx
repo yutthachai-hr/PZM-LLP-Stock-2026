@@ -35,6 +35,9 @@ export function subUnitsFor(unitType: string): EntryUnit[] {
  * another — so they do not convert anything: the number typed beside them is the number
  * recorded. Where a real conversion is wanted, ขนาดบรรจุ on the product supplies it, and
  * that pack is offered above these with its multiplier showing.
+ *
+ * This is only the starting list. The owner maintains the real one in Settings, which is
+ * where Carton and anything else they receive by gets added.
  */
 export const PLAIN_UNITS = ['Lot', 'Pack', 'EA'] as const
 
@@ -47,6 +50,8 @@ export function entryUnitsFor(
   unitType: string,
   packSize?: number,
   packLabel?: string,
+  /** The owner's list from Settings. Undefined until it loads; PLAIN_UNITS stands in. */
+  plainUnits?: readonly string[],
 ): EntryUnit[] {
   const hasPack = !!packSize && packSize > 0 && packSize !== 1
   const out: EntryUnit[] = [{ key: 'base', label: unitType || '-', factor: 1 }]
@@ -67,8 +72,11 @@ export function entryUnitsFor(
     taken.add('pack')
     taken.add((packLabel || 'Pack').trim().toLowerCase())
   }
-  for (const label of PLAIN_UNITS) {
-    if (taken.has(label.toLowerCase())) continue
+  for (const raw of plainUnits ?? PLAIN_UNITS) {
+    const label = raw.trim()
+    const key = label.toLowerCase()
+    if (!label || taken.has(key)) continue
+    taken.add(key) // a list edited by hand can repeat itself
     out.push({ key: `plain:${label}`, label, factor: 1 })
   }
   return out
@@ -82,6 +90,7 @@ export function QtyInput({ // i18n-key
   unitType,
   packSize,
   packLabel,
+  plainUnits,
   value,
   onChange,
   className = '',
@@ -91,6 +100,8 @@ export function QtyInput({ // i18n-key
   /** Base units per pack, from the product. Offers the pack with its size already known. */
   packSize?: number
   packLabel?: string
+  /** The owner's unit list. Passed in rather than fetched here, so one screen reads once. */
+  plainUnits?: readonly string[]
   value: number // always base units
   onChange: (baseValue: number) => void
   className?: string
@@ -98,8 +109,8 @@ export function QtyInput({ // i18n-key
 }) {
   const t = useT()
   const units = useMemo(
-    () => entryUnitsFor(unitType, packSize, packLabel),
-    [unitType, packSize, packLabel],
+    () => entryUnitsFor(unitType, packSize, packLabel, plainUnits),
+    [unitType, packSize, packLabel, plainUnits],
   )
   const [unitKey, setUnitKey] = useState('base')
   const unit = units.find((u) => u.key === unitKey) ?? units[0]
@@ -113,6 +124,12 @@ export function QtyInput({ // i18n-key
   useEffect(() => {
     setUnitKey('base')
   }, [unitType, packSize])
+
+  // The list can change under an open screen — someone adds Carton in Settings on another
+  // tab — and a select whose value matches no option renders blank.
+  useEffect(() => {
+    if (!units.some((u) => u.key === unitKey)) setUnitKey('base')
+  }, [units, unitKey])
 
   // Re-sync the text when the base value changes for a reason other than typing
   // (e.g. parent reset to 0, or the unit toggle changed the display scale).

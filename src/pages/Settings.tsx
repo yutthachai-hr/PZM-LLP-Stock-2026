@@ -28,6 +28,7 @@ import {
 } from '../services/users'
 import { recomputeLevels, findLevelDrift, type LevelDrift } from '../services/stock'
 import { seedInitialData } from '../services/seed'
+import { DEFAULT_UNITS, saveEntryUnits, useEntryUnits } from '../services/entryUnits'
 import {
   clearFirebaseConfig,
   getFirebaseConfig,
@@ -54,6 +55,7 @@ export function SettingsPage() {
       {!isDemoMode() && <CloudSection mode={mode} />}
 
       {isAdmin && <LocationsSection />}
+      {isAdmin && <UnitsSection />}
       {isAdmin && <UsersSection currentUserId={user!.id} />}
       {isAdmin && <BackupSection />}
       {isAdmin && user && <MaintenanceSection actor={{ id: user.id, name: user.name }} />}
@@ -64,6 +66,122 @@ export function SettingsPage() {
         </Card>
       )}
     </div>
+  )
+}
+
+
+// ---------------- Entry units ----------------
+
+/**
+ * The words a quantity may be keyed in — Lot, Pack, Carton.
+ *
+ * These are labels, not conversions: picking one records the number as typed, in the
+ * product's own unit. A unit that should multiply belongs on the product as ขนาดบรรจุ,
+ * which is per-product because one supplier's carton is not another's.
+ *
+ * Saved as a single shared document, so adding a unit costs one write and reading the list
+ * costs one read for the whole session.
+ */
+function UnitsSection() {
+  const t = useT()
+  const units = useEntryUnits()
+  const toast = useToast()
+  const confirm = useConfirm()
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function commit(next: string[], okMessage: string) {
+    setBusy(true)
+    try {
+      await saveEntryUnits(next)
+      toast.success(okMessage)
+      return true
+    } catch (e) {
+      toast.error(errText(e, t))
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function add() {
+    const name = draft.trim()
+    if (!name) return
+    if (units.some((u) => u.toLowerCase() === name.toLowerCase())) {
+      toast.error(t('มีหน่วยนี้อยู่แล้ว'))
+      return
+    }
+    if (await commit([...units, name], t('เพิ่มแล้ว'))) setDraft('')
+  }
+
+  async function remove(name: string) {
+    // Removing a unit changes nothing already recorded — movements hold numbers in the
+    // product's own unit, never this label — so this only shortens the dropdown.
+    const ok = await confirm({
+      title: t('ลบหน่วย'),
+      message: t('ลบ "{name}" ออกจากตัวเลือก? ประวัติที่บันทึกไปแล้วไม่เปลี่ยน', { name }),
+      danger: true,
+      confirmText: t('ลบ'),
+    })
+    if (!ok) return
+    await commit(
+      units.filter((u) => u !== name),
+      t('ลบแล้ว'),
+    )
+  }
+
+  return (
+    <Card className="p-4">
+      <SectionHeader
+        icon="package"
+        title={t('หน่วยที่เลือกได้ตอนกรอก')}
+        description={t('ตัวเลือกหน่วยในหน้ารับเข้า / เบิกออก / ปรับสต๊อก — เป็นชื่อหน่วยเฉย ๆ ไม่ได้คูณจำนวน ถ้าต้องการให้คูณ ให้ตั้ง "ขนาดบรรจุ" ที่สินค้าแต่ละตัว')}
+      />
+      <div className="flex flex-wrap gap-2">
+        {units.map((u) => (
+          <span
+            key={u}
+            className="inline-flex items-center gap-1 rounded-full border border-line-strong bg-sunken py-1 pr-1 pl-3 text-sm font-medium text-ink"
+          >
+            {u}
+            <button
+              type="button"
+              onClick={() => remove(u)}
+              disabled={busy || units.length <= 1}
+              aria-label={t('ลบ "{name}"', { name: u })}
+              className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-ink-faint outline-none transition-colors duration-150 hover:bg-danger-soft hover:text-danger focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Icon name="x" size={14} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 flex items-end gap-2">
+        <div className="flex-1">
+          <Field label={t('เพิ่มหน่วยใหม่')}>
+            <Input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void add()
+                }
+              }}
+              placeholder={t('เช่น Carton')}
+              maxLength={20}
+            />
+          </Field>
+        </div>
+        <Button variant="secondary" onClick={() => void add()} disabled={busy || !draft.trim()}>
+          <Icon name="plus" size={16} />
+          {t('เพิ่ม')}
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-ink-faint">
+        {t('ค่าเริ่มต้น: {list}', { list: DEFAULT_UNITS.join(', ') })}
+      </p>
+    </Card>
   )
 }
 

@@ -14,6 +14,7 @@ import {
 } from '../components/ui'
 import { ProductThumb } from '../components/ProductThumb'
 import { QtyInput } from '../components/QtyInput'
+import { useEntryUnits } from '../services/entryUnits'
 import { adjustStock } from '../services/stock'
 import { dateInputToMs, fmtQty, msToDateInput, todayMs } from '../lib/format'
 import { ADJUST_REASONS, type Product } from '../types'
@@ -22,6 +23,7 @@ import { errText } from '../i18n/AppError'
 
 export function AdjustPage() {
   const t = useT()
+  const plainUnits = useEntryUnits()
   const { products, locations, qtyAt } = useData()
   const { user } = useAuth()
   const toast = useToast()
@@ -166,6 +168,7 @@ export function AdjustPage() {
               unitType={product?.unitType ?? ''}
               packSize={product?.packSize}
               packLabel={product?.packLabel}
+              plainUnits={plainUnits}
               value={qty}
               onChange={setQty}
             />

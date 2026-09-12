@@ -294,6 +294,18 @@ service cloud.firestore {
         && (!('buyingPrice' in d) || nonneg(d.buyingPrice, 1000000000));
     }
 
+    // Rules cannot walk a list, so each name's own length is enforced by the service and by
+    // the editor's maxLength. What is pinned here is what protects the database: the exact
+    // key set, the id, and a bound on how many names a single write may add.
+    function validUnitList(d) {
+      return d.keys().hasOnly(['id', 'names', 'updatedAt'])
+        && d.id == 'entryUnits'
+        && d.names is list
+        && d.names.size() > 0
+        && d.names.size() <= 40
+        && d.updatedAt is number;
+    }
+
     // A document whose `id` field disagrees with its key makes the UI act on one row while
     // writing to another, so the two are pinned together here rather than hoped for.
     function validShape(name, docId, d) {
@@ -405,6 +417,23 @@ service cloud.firestore {
     match /meta/bootstrap {
       allow get: if authed();
       allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- entry units ----
+
+    // The words a quantity may be keyed in — Lot, Pack, Carton — maintained by an admin in
+    // Settings. One shared document rather than a collection: the list is a dozen short
+    // words, and a collection would be charged one read per name every time anyone opened
+    // a receiving screen. Shared across brands because a carton is a carton in either.
+    //
+    // These are labels, not conversions, so nothing here can change a recorded quantity: a
+    // movement stores a number in the product's own unit and never this string. The worst a
+    // bad list can do is put a silly word in a dropdown.
+    match /meta/entryUnits {
+      allow get: if active();
+      allow create, update: if admin() && validUnitList(request.resource.data);
+      // Emptying the dropdown is not an edit anyone needs; shortening it is.
+      allow delete: if false;
     }
 
     // ---------------------------------------------------------------- revocation ----

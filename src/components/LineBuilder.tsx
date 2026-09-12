@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { Product } from '../types'
 import { ProductThumb } from './ProductThumb'
 import { QtyInput } from './QtyInput'
+import { useEntryUnits } from '../services/entryUnits'
 import { Input } from './ui'
 import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
@@ -68,6 +69,9 @@ export function LineBuilder({
 
   // The pack multiplier belongs to the product, not to the line — keeping it out of Line
   // means nothing new can reach a movement document, whose shape the rules pin with hasOnly.
+  // Read once for the whole screen, not once per line.
+  const plainUnits = useEntryUnits()
+
   const packOf = useMemo(() => {
     const map = new Map<string, { packSize?: number; packLabel?: string }>()
     for (const p of products) map.set(p.id, { packSize: p.packSize, packLabel: p.packLabel })
@@ -149,6 +153,7 @@ export function LineBuilder({
                       unitType={l.unit}
                       packSize={packOf.get(l.productId)?.packSize}
                       packLabel={packOf.get(l.productId)?.packLabel}
+                      plainUnits={plainUnits}
                       value={l.qty}
                       onChange={(v) => setQty(l.productId, v)}
                       invalid={over}
