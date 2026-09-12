@@ -95,6 +95,17 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
+    async getBy<T>(
+      collection: string,
+      field: string,
+      value: string | number | boolean,
+    ): Promise<T[]> {
+      const snap = await getDocs(
+        query(fbCollection(getDb(), resolve(collection)), where(field, '==', value)),
+      )
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
+    },
+
     async getOne<T>(collection: string, id: string): Promise<T | null> {
       const db = getDb()
       const snap = await getDoc(doc(db, resolve(collection), id))

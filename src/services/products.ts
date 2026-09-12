@@ -61,56 +61,11 @@ export async function createProduct(input: ProductInput): Promise<string> {
   })
 }
 
-/**
- * Refuse a unit change once the product has been counted or moved.
- *
- * Changing KG to EA rewrites what every stored number MEANS without converting any of
- * them: a balance of 12.5 silently becomes 12.5 pieces, past movements keep the unit they
- * were recorded in, and the stock valuation is wrong from that moment on. There is no
- * conversion factor the app could apply, because only a person knows how many pieces are
- * in a kilogram of this particular product.
- *
- * A product with no balance and no history has nothing to reinterpret, so setting the unit
- * up correctly before use stays easy.
- */
-async function requireUnitChangeIsSafe(id: string, patch: Partial<ProductInput>): Promise<void> {
-  const product = await backend.getOne<{ unit: string; unitType: string; name?: string }>(
-    COL.products,
-    id,
-  )
-  if (!product) return
-  const changingUnit =
-    (patch.unitType !== undefined && patch.unitType !== product.unitType) ||
-    (patch.unit !== undefined && patch.unit !== product.unit)
-  if (!changingUnit) return
-
-  // A stockLevels row exists only once a movement has touched that product at that
-  // location, so its presence IS the history, and its qty is the stock. One read answers
-  // both questions.
-  const levels = await backend.getAll<StockLevel>(COL.stockLevels)
-  const mine = levels.filter((l) => l.productId === id)
-  const onHand = mine.reduce((sum, l) => sum + (l.qty ?? 0), 0)
-
-  if (Math.abs(onHand) > 1e-9) {
-    throw new AppError(
-      'เปลี่ยนหน่วยไม่ได้: "{name}" ยังมีสต๊อกคงเหลือ {qty} {unit} — ปรับยอดเป็น 0 ก่อน หรือสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง',
-      { name: product.name ?? id, qty: onHand, unit: product.unitType },
-    )
-  }
-  if (mine.length > 0) {
-    throw new AppError(
-      'เปลี่ยนหน่วยไม่ได้: "{name}" มีประวัติการเคลื่อนไหวแล้ว การเปลี่ยนหน่วยจะทำให้ตัวเลขเก่าอ่านผิดความหมาย — ให้สร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้องแทน',
-      { name: product.name ?? id },
-    )
-  }
-}
-
 export async function updateProduct(
   id: string,
   patch: Partial<ProductInput> & { active?: boolean },
 ): Promise<void> {
   checkNumbers(patch)
-  await requireUnitChangeIsSafe(id, patch)
   // An empty cost box means "no cost recorded", which has to remove the field rather than
   // send undefined — Firestore skips undefined values, so clearing a cost of 100 used to
   // save happily and leave the 100 in place, still counted in the stock valuation.

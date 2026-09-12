@@ -31,7 +31,7 @@ import {
   type ProductInput,
 } from '../services/products'
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
-import { setStockCount } from '../services/stock'
+import { changeProductUnit, setStockCount } from '../services/stock'
 import { compressImage } from '../lib/image'
 import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
@@ -641,6 +641,22 @@ function ProductEditor({
       // the id the first attempt created turns a retry into finishing the job.
       let id = product?.id ?? createdId
       if (id) {
+        // Correcting the unit restamps every row already filed under the old one, so it is
+        // its own operation rather than a field in the patch. It runs first: if it fails,
+        // nothing else has been written and the product still reads as it did.
+        const unitChanged =
+          !!product && (product.unitType !== form.unitType || product.unit !== form.unit)
+        if (unitChanged && user) {
+          const touched = await changeProductUnit({
+            productId: id,
+            unitType: form.unitType,
+            unit: form.unit,
+            actor: { id: user.id, name: user.name },
+          })
+          if (touched > 0) {
+            toast.success(t('เปลี่ยนหน่วยแล้ว — ปรับประวัติเก่า {count} รายการ', { count: touched }))
+          }
+        }
         await updateProduct(id, form)
       } else {
         id = await createProduct(form)

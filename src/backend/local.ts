@@ -299,6 +299,15 @@ export function createLocalBackend(brand?: BrandId): Backend {
       })
     },
 
+    async getBy<T>(
+      collection: string,
+      field: string,
+      value: string | number | boolean,
+    ): Promise<T[]> {
+      const all = Object.values(loadMap(resolve(collection))) as Record<string, unknown>[]
+      return all.filter((d) => d[field] === value) as T[]
+    },
+
     async getOne<T>(collection: string, id: string): Promise<T | null> {
       const map = loadMap(resolve(collection))
       return (Object.hasOwn(map, id) ? (map[id] as T) : null) ?? null

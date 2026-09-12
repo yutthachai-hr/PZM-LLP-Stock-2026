@@ -101,10 +101,6 @@ export const EN: Record<string, string> = {
     'Signed out automatically after {minutes} minutes of inactivity — this is a shared device',
   'เปลี่ยนหน่วยไม่ได้เพราะสินค้านี้มีสต๊อกหรือมีประวัติแล้ว — ตัวเลขเก่าจะอ่านผิดความหมาย ถ้าหน่วยผิดให้สร้างสินค้าใหม่':
     'The unit cannot be changed because this product has stock or history — the existing numbers would change meaning. If the unit is wrong, create a new product.',
-  'เปลี่ยนหน่วยไม่ได้: "{name}" ยังมีสต๊อกคงเหลือ {qty} {unit} — ปรับยอดเป็น 0 ก่อน หรือสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง':
-    'Cannot change the unit: “{name}” still has {qty} {unit} on hand — bring it to 0 first, or create a new product with the right unit',
-  'เปลี่ยนหน่วยไม่ได้: "{name}" มีประวัติการเคลื่อนไหวแล้ว การเปลี่ยนหน่วยจะทำให้ตัวเลขเก่าอ่านผิดความหมาย — ให้สร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้องแทน':
-    'Cannot change the unit: “{name}” already has movement history, and changing it would make those records mean something else — create a new product with the right unit instead',
   'มีเวอร์ชันใหม่ของระบบพร้อมใช้งานแล้ว': 'A new version of the system is ready',
   'อัปเดตตอนนี้': 'Update now',
   'ไว้ทีหลัง': 'Later',
@@ -537,6 +533,11 @@ export const EN: Record<string, string> = {
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)': 'Search a product to add (name / SKU)',
   เลือกหน่วยที่กรอก: 'Entry unit',
   ผู้แก้ไข: 'Edited by',
+  'เปลี่ยนหน่วยแล้ว — ปรับประวัติเก่า {count} รายการ':
+    'Unit changed — {count} past movements restamped',
+  'สินค้านี้มีประวัติ {count} รายการ มากเกินกว่าจะเปลี่ยนหน่วยทั้งหมดได้ — กรุณาสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง':
+    'This product has {count} movements, too many to restamp — create a new product with the right unit instead',
+  กรุณากรอกหน่วยนับ: 'Enter a unit',
   ซ่อนสินค้านี้: 'Hide this product',
   เลิกซ่อนสินค้านี้: 'Unhide this product',
   'ซ่อนแล้ว — ดูได้ที่ตัวกรอง "ที่ซ่อนไว้"': 'Hidden — find it under the "Hidden" filter',

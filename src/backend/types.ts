@@ -77,6 +77,15 @@ export interface Backend {
    * adds no composite index to deploy.
    */
   getRange<T>(collection: string, field: string, from: number, to: number): Promise<T[]>
+  /**
+   * Every document whose `field` equals `value`, once, with no subscription.
+   *
+   * One equality filter, which Firestore's automatic index already serves, so this adds no
+   * composite index to deploy. It exists so a rare admin job — relabelling one product's
+   * ledger — can read that product's rows instead of the whole ledger, which on a busy month
+   * is thousands of documents against a 50,000-a-day allowance shared by both companies.
+   */
+  getBy<T>(collection: string, field: string, value: string | number | boolean): Promise<T[]>
   getOne<T>(collection: string, id: string): Promise<T | null>
   /** Auto-generate id. Returns the new id (also written into the doc's `id` field). */
   add(collection: string, data: Record<string, unknown>): Promise<string>

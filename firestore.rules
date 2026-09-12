@@ -371,14 +371,16 @@ service cloud.firestore {
 
     function movementEdit() {
       return editedKeys().hasOnly([
-          'qty', 'date', 'note', 'entryUnit', 'fromLocationId', 'toLocationId',
+          'qty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
           'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
         ])
         && (!editedKeys().hasAny(['voided']) || admin())
         && (!('updatedBy' in request.resource.data)
             || request.resource.data.updatedBy == request.auth.uid)
         // Changing what a row says means appending to its history, in the caller's own name.
-        && (!editedKeys().hasAny(['qty', 'date', 'note', 'entryUnit',
+        // `unit` is here because correcting a product's unit restamps every row filed under
+        // the old one, and that is an edit like any other: it signs itself.
+        && (!editedKeys().hasAny(['qty', 'date', 'note', 'unit', 'entryUnit',
                                   'fromLocationId', 'toLocationId'])
             || appendedOwnEdit());
     }

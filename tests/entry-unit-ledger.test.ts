@@ -23,6 +23,7 @@ const {
   receiveStock,
   issueStock,
   adjustStock,
+  changeProductUnit,
   editMovement,
   voidMovement,
   parseLevelId,
@@ -383,5 +384,101 @@ describe('hiding a product instead of deleting it', () => {
     ])
     expect(qtyFor(MAIN)).toBe(before)
     expect(movements()).toHaveLength(1)
+  })
+})
+
+describe('correcting a product whose unit was set up wrong', () => {  const products = () => raw('products') as Record<string, unknown>[]
+
+  test('the unit can be changed even with stock and history on the product', async () => {
+    // This used to be refused outright: "ปรับยอดเป็น 0 ก่อน หรือสร้างสินค้าใหม่".
+    await receive(12)
+    const touched = await changeProductUnit({
+      productId: 'p1',
+      unitType: 'EA',
+      unit: 'Each',
+      actor: ACTOR,
+    })
+    expect(touched).toBe(1)
+    expect(products()[0]).toMatchObject({ unitType: 'EA', unit: 'Each' })
+  })
+
+  test('the quantity is untouched — only the label was wrong', async () => {
+    await receive(12)
+    await changeProductUnit({ productId: 'p1', unitType: 'EA', unit: 'Each', actor: ACTOR })
+    expect(qtyFor(MAIN)).toBe(12)
+  })
+
+  test('every past row is restamped, so the stock card reads in one unit', async () => {
+    await receive(4)
+    await receive(3)
+    await changeProductUnit({ productId: 'p1', unitType: 'EA', unit: 'Each', actor: ACTOR })
+    expect(movements().map((m) => m.unit)).toEqual(['EA', 'EA'])
+  })
+
+  test('each restamped row says who changed it', async () => {
+    // The owner asked for this by name: no change to a row without an account against it.
+    await receive(4)
+    await changeProductUnit({ productId: 'p1', unitType: 'EA', unit: 'Each', actor: ACTOR })
+    const edits = movements()[0].edits as { by: string; changed: string[] }[]
+    expect(edits).toHaveLength(1)
+    expect(edits[0]).toMatchObject({ by: ACTOR.id, changed: ['หน่วย'] })
+  })
+
+  test('a row keyed in the unit the product is becoming stops being a separate balance', async () => {
+    // 10 "EA" of a KG product was its own balance. Once the product IS EA, it is just 10.
+    await receive(10, 'EA')
+    await receive(2)
+    await changeProductUnit({ productId: 'p1', unitType: 'EA', unit: 'Each', actor: ACTOR })
+    expect(qtyFor(MAIN, 'EA')).toBe(0)
+    expect(qtyFor(MAIN)).toBe(12)
+    expect(movements().every((m) => m.entryUnit === undefined)).toBe(true)
+  })
+
+  test('a row keyed in some other unit stays its own balance', async () => {
+    await receive(10, 'Pack')
+    await receive(2)
+    await changeProductUnit({ productId: 'p1', unitType: 'EA', unit: 'Each', actor: ACTOR })
+    expect(qtyFor(MAIN, 'Pack')).toBe(10)
+    expect(qtyFor(MAIN)).toBe(2)
+  })
+
+  test('the books still agree with the ledger afterwards', async () => {
+    await receive(10, 'EA')
+    await receive(5, 'Pack')
+    await receive(2)
+    await changeProductUnit({ productId: 'p1', unitType: 'EA', unit: 'Each', actor: ACTOR })
+    expect(await findLevelDrift()).toEqual([])
+  })
+
+  test('running it twice changes nothing the second time', async () => {
+    // A run that stops halfway has to be safe to repeat.
+    await receive(4)
+    await changeProductUnit({ productId: 'p1', unitType: 'EA', unit: 'Each', actor: ACTOR })
+    const again = await changeProductUnit({
+      productId: 'p1',
+      unitType: 'EA',
+      unit: 'Each',
+      actor: ACTOR,
+    })
+    expect(again).toBe(0)
+    expect((movements()[0].edits as unknown[]).length).toBe(1)
+    expect(qtyFor(MAIN)).toBe(4)
+  })
+
+  test('a product with no history at all still changes unit', async () => {
+    const touched = await changeProductUnit({
+      productId: 'p1',
+      unitType: 'EA',
+      unit: 'Each',
+      actor: ACTOR,
+    })
+    expect(touched).toBe(0)
+    expect(products()[0]).toMatchObject({ unitType: 'EA' })
+  })
+
+  test('an empty unit is refused rather than filed', async () => {
+    await expect(
+      changeProductUnit({ productId: 'p1', unitType: '  ', unit: '', actor: ACTOR }),
+    ).rejects.toThrow()
   })
 })

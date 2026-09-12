@@ -118,6 +118,10 @@ export function createMemoryBackend(brand?: BrandId): Backend {
     })
   },
 
+  async getBy<T>(c: string, field: string, value: string | number | boolean): Promise<T[]> {
+    return [...col_(c).values()].map((d) => clone(d)).filter((d) => d[field] === value) as T[]
+  },
+
   async getOne<T>(collection: string, id: string): Promise<T | null> {
     return (clone(col_(collection).get(id)) as T) ?? null
   },

@@ -466,6 +466,19 @@ describe('the ledger is append-only', () => {
     )
   })
 
+  test("restamping a row's unit signs itself like any other correction", async () => {
+    // Correcting a product whose unit was set up wrong rewrites every row filed under the
+    // old one, so each of those rows has to name whoever did it.
+    const entry = (uid: string) => ({ by: uid, byName: uid, at: ts(), changed: ['unit'] })
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { unit: 'EA' }))
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockMovements/m1'), { unit: 'EA', edits: [entry(ADMIN)] }),
+    )
+    await assertSucceeds(
+      updateDoc(doc(as(STAFF), 'stockMovements/m1'), { unit: 'EA', edits: [entry(STAFF)] }),
+    )
+  })
+
   test('the history cannot grow without bound', async () => {
     const many = Array.from({ length: 201 }, () => ({ by: STAFF, byName: 'S', at: ts(), changed: [] }))
     await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: many }))

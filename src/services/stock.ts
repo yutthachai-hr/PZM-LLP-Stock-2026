@@ -725,6 +725,100 @@ export async function editMovement(params: {
   })
 }
 
+/** Above this, relabelling would eat a noticeable share of the day's write allowance. */
+const MAX_RELABEL = 1000
+
+/**
+ * Correct a product's own unit, and every row already filed under the old one.
+ *
+ * This used to be refused outright once a product had any stock or any history, on the
+ * grounds that old numbers would read wrong afterwards. The quantities are not the problem —
+ * a balance is keyed by the unit each movement recorded, not by the product's current one,
+ * so renaming KG to EA leaves one balance with the same number in it and no drift. The
+ * problem was only ever the labels, and the owner's answer is to correct those too: a unit
+ * that was wrong was wrong on every row it was ever printed on.
+ *
+ * So every movement for this product is restamped, and each one carries an entry in its own
+ * edit history naming who did it. Nothing is deleted and no quantity moves.
+ */
+export async function changeProductUnit(params: {
+  productId: string
+  unitType: string
+  unit: string
+  actor: Actor
+}): Promise<number> {
+  const { productId, actor } = params
+  const unitType = params.unitType.trim()
+  const unit = params.unit.trim()
+  if (!unitType) throw new AppError('กรุณากรอกหน่วยนับ')
+  requireId(productId, 'productId')
+  const db = scoped()
+
+  const product = await db.getOne<Product>(COL.products, productId)
+  if (!product) throw new AppError('ไม่พบสินค้า')
+  if (product.unitType === unitType && product.unit === unit) return 0
+
+  // One equality read for this product's rows, not the whole ledger.
+  const mine = await db.getBy<StockMovement>(COL.movements, 'productId', productId)
+  if (mine.length > MAX_RELABEL) {
+    throw new AppError(
+      'สินค้านี้มีประวัติ {count} รายการ มากเกินกว่าจะเปลี่ยนหน่วยทั้งหมดได้ — กรุณาสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง',
+      { count: mine.length },
+    )
+  }
+
+  const now = Date.now()
+  const stamp = { by: actor.id, byName: actor.name, at: now, changed: ['หน่วย'] } // i18n-key
+
+  // Restamp first. Each write is idempotent, so a run that stops halfway can simply be run
+  // again; and a movement already carrying the new unit files to the same balance it did
+  // before, so a partial pass cannot leave the books disagreeing.
+  for (const mv of mine) {
+    const dropEntry = (mv.entryUnit ?? '') === unitType
+    if (mv.unit === unitType && !dropEntry) continue
+    await db.update(COL.movements, mv.id, {
+      unit: unitType,
+      // "10 EA of a product measured in EA" is just 10 — the separate unit was only ever
+      // meaningful while it differed from the product's own.
+      ...(dropEntry ? { entryUnit: DELETE_FIELD } : {}),
+      edits: [...(mv.edits ?? []), stamp],
+      updatedBy: actor.id,
+      updatedByName: actor.name,
+      updatedAt: now,
+    })
+  }
+
+  // Then rebuild this product's balances from its own restamped ledger. Only rows whose unit
+  // collapsed into the product's own actually move, but rebuilding is cheaper to reason about
+  // than working out which did.
+  const relabelled = mine.map((mv) => ({
+    ...mv,
+    unit: unitType,
+    entryUnit: (mv.entryUnit ?? '') === unitType ? undefined : mv.entryUnit,
+  }))
+  const wanted = balancesFromLedger(relabelled)
+  const existing = (await db.getBy<StockLevel>(COL.stockLevels, 'productId', productId)) ?? []
+  for (const [id, qty] of wanted) {
+    const parsed = parseLevelId(id)
+    await db.set(
+      COL.stockLevels,
+      id,
+      levelDoc(parsed.locationId, productId, qty, actor, now, parsed.unit),
+    )
+  }
+  for (const lv of existing) {
+    if (wanted.has(lv.id)) continue
+    await db.set(
+      COL.stockLevels,
+      lv.id,
+      levelDoc(lv.locationId, productId, 0, actor, now, lv.unit ?? parseLevelId(lv.id).unit),
+    )
+  }
+
+  await db.update(COL.products, productId, { unitType, unit, updatedAt: now })
+  return mine.length
+}
+
 /**
  * Void a movement: reverse its balance effect and mark it voided (keeps the audit trail).
  *
