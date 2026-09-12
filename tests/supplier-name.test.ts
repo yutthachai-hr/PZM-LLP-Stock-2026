@@ -8,9 +8,11 @@
 
 import { describe, expect, test } from 'vitest'
 import {
+  SUPPLIER_NOTES,
   mergeKey,
   proposeMerges,
   renameInProductName,
+  settleSupplier,
   supplierFromName,
 } from '../src/lib/supplierName'
 
@@ -140,5 +142,42 @@ describe('renaming a supplier inside the product names', () => {
     expect(renameInProductName('SOMETHING (MAKRO)', ['MARKO'], 'Makro')).toBe(
       'SOMETHING (MAKRO)',
     )
+  })
+})
+
+describe("the owner's rulings on names the rules could not settle", () => {
+  test('a shop that reads as a measurement is kept, under the name the owner gave it', () => {
+    // "(7/11)" is all digits and a slash. No rule was ever going to know it is a shop.
+    expect(supplierFromName('EGGS (7/11)')).toBe('7/11')
+    expect(settleSupplier('7/11')).toBe('7/11 SEVEN ELEVEN')
+  })
+
+  test('a bracket naming a branch becomes the company that delivers there', () => {
+    // GAS 48 KG goes straight to the Onnut shop, and the owner named the supplier.
+    expect(settleSupplier('BRANCH 3')).toBe('PAP GAS')
+    expect(SUPPLIER_NOTES['PAP GAS']).toContain('อ่อนนุช')
+  })
+
+  test('all three spellings of one supplier settle on the one the owner picked', () => {
+    // 19 + 19 + 4 products. The rules only proposed two of the three as a group.
+    expect(settleSupplier('SIMUNMMANG')).toBe('SIMMUMMUANG')
+    expect(settleSupplier('SIMUMMUANG')).toBe('SIMMUMMUANG')
+    expect(settleSupplier('SIMUMUANG')).toBe('SIMMUMMUANG')
+  })
+
+  test('a name nobody ruled on comes back as it was', () => {
+    expect(settleSupplier('OLIVA')).toBe('OLIVA')
+    expect(settleSupplier('  JAGOTA ')).toBe('JAGOTA')
+  })
+
+  test('a ruling never changes how a bracket is read, only what it counts as', () => {
+    // BRANCH 3 is still what the name says; settling it is a separate, visible step.
+    expect(supplierFromName('GAS 48 KG (BRANCH 3)')).toBe('BRANCH 3')
+  })
+
+  test('the products the owner said they would fill in later still name nobody', () => {
+    for (const name of ['GAS 48 KG', 'WOOD', 'Whole Grain', 'Bread Roll/Soft Bread']) {
+      expect(supplierFromName(name)).toBeNull()
+    }
   })
 })

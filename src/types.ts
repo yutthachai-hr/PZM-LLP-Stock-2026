@@ -21,6 +21,17 @@ export interface Product {
   unit: string // display unit, e.g. "Kilogram", "Bottle"
   unitType: string // short code, e.g. "KG", "EA"
   minStock: number // global minimum (reorder point)
+  /**
+   * Who we buy this from.
+   *
+   * Held here rather than in supplierItems because that is one document per product, and
+   * "what does this supplier sell?" is asked every time an order is started — 454 reads for
+   * a question the catalogue, already in memory, can answer for nothing. supplierItems stays
+   * for the price we pay, which is not needed to place an order.
+   *
+   * Absent on a product whose name never said: the owner fills those in by hand.
+   */
+  supplierId?: string
   cost?: number // optional unit cost for inventory value
   /**
    * How many base units are in one pack, when the supplier delivers in packs.

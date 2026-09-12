@@ -529,6 +529,10 @@ export const EN: Record<string, string> = {
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)': 'Search a product to add (name / SKU)',
   เลือกหน่วยที่กรอก: 'Entry unit',
   ผู้แก้ไข: 'Edited by',
+  ยังไม่ได้เลือกผู้ขาย: 'No suppliers selected',
+  'ส่งตรงที่หน้าร้านสาขาอ่อนนุช (สาขา 3) ไม่ผ่านคลังหลัก':
+    'Delivered straight to the Onnut shop (branch 3), not via the main warehouse',
+  ไม่พบผู้ขาย: 'Supplier not found',
   '— เลือกหน่วย —': '— choose a unit —',
   กรุณาเลือกหน่วย: 'Choose a unit',
   'เปลี่ยนหน่วยแล้ว — ปรับประวัติเก่า {count} รายการ':

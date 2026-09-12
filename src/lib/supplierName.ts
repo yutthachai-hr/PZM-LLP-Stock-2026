@@ -16,6 +16,44 @@
 // looking at what was rejected, because a rule that throws away (7/11) is wrong about a real
 // shop and only the owner can say so.
 
+/**
+ * Brackets the size rules would throw out, but that the owner says are real shops.
+ *
+ * "(7/11)" reads as a measurement to any rule that looks at digits and slashes, and no rule
+ * is ever going to know better. This is why the proposal shows what it rejected as well as
+ * what it kept: the owner rescued this one by hand.
+ */
+const KEPT_DESPITE_LOOKING_LIKE_A_SIZE: Record<string, string> = {
+  '7/11': '7/11 SEVEN ELEVEN',
+}
+
+/**
+ * Brackets that name something other than a supplier, and who the supplier actually is.
+ *
+ * "GAS 48 KG (BRANCH 3)" names a branch, because that gas is delivered straight to the Onnut
+ * shop rather than to the warehouse. The owner named the company: PAP GAS.
+ */
+const NOT_THE_SUPPLIER: Record<string, string> = {
+  'BRANCH 3': 'PAP GAS',
+}
+
+/** Extra detail the owner gave about a supplier while settling its name. */
+export const SUPPLIER_NOTES: Record<string, string> = {
+  'PAP GAS': 'ส่งตรงที่หน้าร้านสาขาอ่อนนุช (สาขา 3) ไม่ผ่านคลังหลัก', // i18n-key
+}
+
+/**
+ * Spellings the owner settled, and the spelling they chose.
+ *
+ * สีมุมเมือง appears three ways across 42 products. The rules proposed two of them as one
+ * group and left the third out; the owner merged all three and picked the spelling below.
+ */
+const CANONICAL: Record<string, string> = {
+  SIMUNMMANG: 'SIMMUMMUANG',
+  SIMUMMUANG: 'SIMMUMMUANG',
+  SIMUMUANG: 'SIMMUMMUANG',
+}
+
 /** A bracket that is a measurement rather than a name: "25*12", "1*100", "4.5". */
 const ONLY_NUMBERS_AND_SYMBOLS = /^[\d\s.*/xX+\-]+$/
 
@@ -32,6 +70,7 @@ export function supplierFromName(name: string): string | null {
   for (let i = brackets.length - 1; i >= 0; i--) {
     const inner = brackets[i].slice(1, -1).trim()
     if (!inner) continue
+    if (inner in KEPT_DESPITE_LOOKING_LIKE_A_SIZE) return inner
     if (ONLY_NUMBERS_AND_SYMBOLS.test(inner)) continue
     if (OPENS_WITH_A_SIZE.test(inner)) continue
     return inner
@@ -133,4 +172,20 @@ export function renameInProductName(
   const at = name.lastIndexOf(target)
   if (at === -1) return name
   return name.slice(0, at) + `(${to})` + name.slice(at + target.length)
+}
+
+/**
+ * The name a bracket finally counts as, after the owner's rulings.
+ *
+ * Kept apart from reading the bracket so the two stay honest about what they are: one is a
+ * rule about how the catalogue is written, the other is a person's decision about their own
+ * suppliers. Adding a decision here should never quietly change how a name is parsed.
+ */
+export function settleSupplier(raw: string): string {
+  const trimmed = raw.trim()
+  const rescued = KEPT_DESPITE_LOOKING_LIKE_A_SIZE[trimmed]
+  if (rescued) return rescued
+  const corrected = NOT_THE_SUPPLIER[trimmed.toUpperCase()]
+  if (corrected) return corrected
+  return CANONICAL[mergeKey(trimmed)] ?? trimmed
 }
