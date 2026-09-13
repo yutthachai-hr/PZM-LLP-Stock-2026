@@ -415,17 +415,27 @@ function NewOrderModal({
                         <span className="block truncate text-sm text-ink">{p.name}</span>
                         <span className="doc-no block text-xs text-ink-faint">{p.sku}</span>
                       </span>
-                      <Input
-                        type="number"
-                        step="any"
-                        min={0}
-                        className="w-24 text-right"
-                        value={qty[p.id] ?? ''}
-                        onChange={(e) =>
-                          setQty((cur) => ({ ...cur, [p.id]: Number(e.target.value) }))
-                        }
-                      />
-                      <span className="w-10 text-xs text-ink-soft">{p.unitType}</span>
+                      {/* The width goes on a wrapper: Input carries w-full, and a w-24 beside
+                          it lost — the box took the row and left the product name a sliver. */}
+                      <div className="w-24 shrink-0">
+                        <Input
+                          type="number"
+                          step="any"
+                          min={0}
+                          inputMode="decimal"
+                          className="num text-right"
+                          value={qty[p.id] ?? ''}
+                          onChange={(e) =>
+                            setQty((cur) => ({ ...cur, [p.id]: Number(e.target.value) }))
+                          }
+                        />
+                      </div>
+                      {/* The order is in the unit the stock is counted in. Not a choice: a
+                          quantity keyed in any other unit would land in the books as a
+                          number nobody can add to what is on the shelf. */}
+                      <span className="w-10 shrink-0 text-xs font-medium text-ink-soft">
+                        {p.unitType}
+                      </span>
                     </li>
                   ))}
                 </ul>

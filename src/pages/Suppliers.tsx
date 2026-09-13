@@ -61,12 +61,18 @@ import type { Product, Supplier, SupplierItem, SupplierType } from '../types'
  * The price rows are now only what they hold that the product cannot: the price.
  */
 
+/**
+ * One row per supplier. The products sit inside the row, folded, and open on a click —
+ * the owner's words were "หนึ่งผู้ขาย ส่วนรายการสินค้าจะมีกี่รายการก็ได้": a supplier is a
+ * row, not four rows that happen to share a name. With 86 suppliers and 299 products the
+ * old one-row-per-pair table was 300 rows to scroll for a list of 86 names.
+ */
 interface Row {
   supplier: Supplier
-  /** Null on the placeholder row a supplier with nothing linked gets. */
-  product: Product | null
-  /** The price row for this pair, when one has been kept. */
-  item: SupplierItem | null
+  /** Everything linked to this supplier, by name. */
+  products: Product[]
+  /** Products the search matched inside this supplier, or all of them when not searching. */
+  shown: Product[]
 }
 
 export function SuppliersPage() {
@@ -109,31 +115,44 @@ export function SuppliersPage() {
     return m
   }, [items])
 
-  // A supplier with no products still gets one row, so it is visible and can be given some.
+  const q = search.trim().toLowerCase()
+
+  // Every supplier gets a row, products or not, so an empty one is visible and can be
+  // given some. A search keeps a row when the supplier matches, or when one of its
+  // products does — and in the second case shows only the products that matched, so
+  // searching for a product lands on it rather than on a folded list of forty.
   const rows = useMemo<Row[]>(() => {
+    const byName = (a: Product, b: Product) => a.name.localeCompare(b.name)
     const out: Row[] = []
-    for (const s of suppliers) {
-      const mine = products
-        .filter((p) => p.supplierId === s.id)
-        .sort((a, b) => a.name.localeCompare(b.name))
-      if (mine.length === 0) {
-        out.push({ supplier: s, product: null, item: null })
+    for (const supplier of suppliers) {
+      const mine = products.filter((p) => p.supplierId === supplier.id).sort(byName)
+      if (!q) {
+        out.push({ supplier, products: mine, shown: mine })
         continue
       }
-      for (const p of mine) {
-        out.push({ supplier: s, product: p, item: priceOf.get(`${s.id}/${p.id}`) ?? null })
-      }
+      const supplierHit =
+        supplier.name.toLowerCase().includes(q) || supplier.email.toLowerCase().includes(q)
+      const hits = mine.filter(
+        (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q),
+      )
+      if (supplierHit) out.push({ supplier, products: mine, shown: mine })
+      else if (hits.length) out.push({ supplier, products: mine, shown: hits })
     }
-    const q = search.trim().toLowerCase()
-    if (!q) return out
-    return out.filter(
-      (r) =>
-        r.supplier.name.toLowerCase().includes(q) ||
-        (r.product?.name ?? '').toLowerCase().includes(q) ||
-        (r.product?.sku ?? '').toLowerCase().includes(q) ||
-        r.supplier.email.toLowerCase().includes(q),
-    )
-  }, [suppliers, products, priceOf, search])
+    return out
+  }, [suppliers, products, q])
+
+  // Which suppliers are unfolded. A search unfolds every row it kept, because the row was
+  // kept for what is inside it.
+  const [open, setOpen] = useState<Set<string>>(() => new Set())
+  const isOpen = (id: string) => !!q || open.has(id)
+  function toggle(id: string) {
+    setOpen((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const linkedCount = useMemo(() => products.filter((p) => !!p.supplierId).length, [products])
 
@@ -189,20 +208,58 @@ export function SuppliersPage() {
         key: 'product',
         header: t('สินค้า'),
         cell: (r) =>
-          r.product ? (
-            <div className="min-w-0">
-              <div className="truncate text-ink">{r.product.name}</div>
-              <div className="flex gap-2 text-xs text-ink-faint">
-                <span className="doc-no">{r.product.sku}</span>
-                {r.item?.buyingPrice !== undefined && (
-                  <span className="num">
-                    ฿ {fmtMoney(r.item.buyingPrice)} {/* ฿ is a currency symbol — i18n-key */}
-                  </span>
-                )}
-              </div>
-            </div>
-          ) : (
+          r.products.length === 0 ? (
             <span className="text-xs text-ink-faint">{t('ยังไม่ได้ผูกสินค้า')}</span>
+          ) : (
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={() => toggle(r.supplier.id)}
+                aria-expanded={isOpen(r.supplier.id)}
+                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken"
+              >
+                <Icon
+                  name="chevronDown"
+                  size={14}
+                  className={`transition-transform ${isOpen(r.supplier.id) ? 'rotate-180' : ''}`}
+                />
+                {q && r.shown.length !== r.products.length
+                  ? t('{n} รายการ (ตรง {m})', { n: r.products.length, m: r.shown.length })
+                  : t('{n} รายการ', { n: r.products.length })}
+              </button>
+              {isOpen(r.supplier.id) && (
+                <ul className="mt-1 divide-y divide-line rounded-lg border border-line bg-sunken/60">
+                  {r.shown.map((p) => {
+                    const price = priceOf.get(`${r.supplier.id}/${p.id}`)?.buyingPrice
+                    return (
+                      <li key={p.id} className="flex items-center gap-3 px-3 py-1.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm text-ink">{p.name}</div>
+                          <div className="flex gap-2 text-xs text-ink-faint">
+                            <span className="doc-no">{p.sku}</span>
+                            <span>{p.unitType}</span>
+                            {price !== undefined && (
+                              <span className="num">
+                                ฿ {fmtMoney(price)} {/* ฿ is a currency symbol — i18n-key */}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => unlink(p)}
+                            className="shrink-0 rounded px-2 py-1 text-xs font-medium text-danger hover:bg-danger-soft"
+                          >
+                            {t('ปลด')}
+                          </button>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
           ),
       },
       {
@@ -250,21 +307,12 @@ export function SuppliersPage() {
               <Button variant="ghost" onClick={() => setEditing(r.supplier)}>
                 {t('แก้ไข')}
               </Button>
-              {r.product ? (
-                <button
-                  onClick={() => unlink(r.product!)}
-                  className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
-                >
-                  {t('ปลดสินค้า')}
-                </button>
-              ) : (
-                <button
-                  onClick={() => removeSupplier(r.supplier)}
-                  className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
-                >
-                  {t('ลบ')}
-                </button>
-              )}
+              <button
+                onClick={() => removeSupplier(r.supplier)}
+                className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
+              >
+                {t('ลบ')}
+              </button>
             </div>
           ) : null,
       },
@@ -272,7 +320,7 @@ export function SuppliersPage() {
     // unlink/removeSupplier close over state that changes with every load; the table is
     // cheap to rebuild and this keeps the handlers pointing at current data.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, isAdmin, items, suppliers, products],
+    [t, isAdmin, items, suppliers, products, open, q, priceOf],
   )
 
   if (loading) return <Spinner label={t('กำลังโหลดผู้ขาย...')} />
@@ -316,7 +364,7 @@ export function SuppliersPage() {
         <DataTable
           rows={rows}
           columns={columns}
-          rowKey={(r) => (r.product ? `${r.supplier.id}/${r.product.id}` : `supplier-${r.supplier.id}`)}
+          rowKey={(r) => r.supplier.id}
           minWidth={900}
           maxHeight="calc(100vh - 300px)"
           empty={
