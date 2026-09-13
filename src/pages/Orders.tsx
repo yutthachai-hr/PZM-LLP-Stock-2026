@@ -392,11 +392,14 @@ function NewOrderModal({
               }}
             >
               <option value="">{t('— เลือกผู้ขาย —')}</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
+              {/* A hidden supplier is one we have stopped ordering from. */}
+              {suppliers
+                .filter((s) => s.active !== false)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
             </Select>
           </Field>
           <Field label={t('คลังปลายทาง')} required>

@@ -62,8 +62,14 @@ export async function createSupplier(input: SupplierInput): Promise<string> {
   })
 }
 
-export async function updateSupplier(id: string, patch: Partial<SupplierInput>): Promise<void> {
+export async function updateSupplier(
+  id: string,
+  patch: Partial<SupplierInput> & { active?: boolean },
+): Promise<void> {
   const next: Record<string, unknown> = { updatedAt: Date.now() }
+  // Hidden, not deleted — the same rule products follow. The orders it filled still name
+  // it, and it is one click from coming back.
+  if (patch.active !== undefined) next.active = patch.active
   if (patch.name !== undefined) {
     const name = clean(patch.name)
     if (!name) throw new AppError('กรุณากรอกชื่อผู้ขาย')

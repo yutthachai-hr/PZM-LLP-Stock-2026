@@ -211,13 +211,6 @@ export type StockEventType =
   | 'delivery'
   | 'transfer'
   | 'inventoryTask'
-  /**
-   * The weekly order to a supplier.
-   *
-   * The one event type that carries work rather than only describing it: creating one opens
-   * an order, and its status follows the order rather than the generic calendar states.
-   */
-  | 'weeklyOrder'
   | 'other'
 
 export type StockEventStatus = 'upcoming' | 'inProgress' | 'completed' | 'cancelled'

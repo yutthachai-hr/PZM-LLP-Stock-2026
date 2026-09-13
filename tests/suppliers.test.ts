@@ -209,6 +209,27 @@ describe('suppliers', () => {
     })
   })
 
+  // Same rule as products: hide, never delete. A supplier that stops supplying keeps its
+  // name on every order it ever filled; hiding it takes it off the ordering screen and the
+  // product editor, and one click brings it back.
+  describe('hiding', () => {
+    test('hiding flips active off and leaves everything else alone', async () => {
+      const id = await createSupplier(INPUT)
+      await updateSupplier(id, { active: false })
+      const [s] = await listSuppliers()
+      expect(s.active).toBe(false)
+      expect(s.name).toBe('SIMUMMUANG')
+      await updateSupplier(id, { active: true })
+      expect((await listSuppliers())[0].active).toBe(true)
+    })
+
+    test('a hidden supplier is still listed — the screen decides what to show', async () => {
+      const id = await createSupplier(INPUT)
+      await updateSupplier(id, { active: false })
+      expect(await listSuppliers()).toHaveLength(1)
+    })
+  })
+
   test('the list is sorted by name so it does not reshuffle between loads', async () => {
     seed('suppliers', [
       { id: 'c', name: 'Zeta', contactNumber: '', email: '', type: 'takingReturn', active: true, createdAt: 3, updatedAt: 3 },

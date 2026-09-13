@@ -67,6 +67,10 @@ import type { Product, Supplier, SupplierItem, SupplierType } from '../types'
  * row, not four rows that happen to share a name. With 86 suppliers and 299 products the
  * old one-row-per-pair table was 300 rows to scroll for a list of 86 names.
  */
+type Shown = 'active' | 'hidden' | 'all'
+type Returns = 'all' | 'takingReturn' | 'notTakingReturn'
+type SortKey = 'name' | 'products'
+
 interface Row {
   supplier: Supplier
   /** Everything linked to this supplier, by name. */
@@ -91,6 +95,14 @@ export function SuppliersPage() {
   const [addingTo, setAddingTo] = useState<Supplier | null>(null)
   const [search, setSearch] = useState('')
   const [importing, setImporting] = useState(false)
+  // The same shape as the products screen: search stays out, the rest folds behind a
+  // button that says how many are on. Hidden suppliers are out of the default view, and
+  // "ที่ซ่อนไว้" is where they are found again.
+  const [showFilters, setShowFilters] = useState(false)
+  const [shown, setShown] = useState<Shown>('active')
+  const [returns, setReturns] = useState<Returns>('all')
+  const [sort, setSort] = useState<SortKey>('name')
+  const filterCount = (shown !== 'active' ? 1 : 0) + (returns !== 'all' ? 1 : 0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -125,6 +137,10 @@ export function SuppliersPage() {
     const byName = (a: Product, b: Product) => a.name.localeCompare(b.name)
     const out: Row[] = []
     for (const supplier of suppliers) {
+      const hidden = supplier.active === false
+      if (shown === 'active' && hidden) continue
+      if (shown === 'hidden' && !hidden) continue
+      if (returns !== 'all' && supplier.type !== returns) continue
       const mine = products.filter((p) => p.supplierId === supplier.id).sort(byName)
       if (!q) {
         out.push({ supplier, products: mine, shown: mine })
@@ -138,8 +154,13 @@ export function SuppliersPage() {
       if (supplierHit) out.push({ supplier, products: mine, shown: mine })
       else if (hits.length) out.push({ supplier, products: mine, shown: hits })
     }
+    if (sort === 'products') {
+      out.sort(
+        (a, b) => b.products.length - a.products.length || a.supplier.name.localeCompare(b.supplier.name),
+      )
+    }
     return out
-  }, [suppliers, products, q])
+  }, [suppliers, products, q, shown, returns, sort])
 
   // Which suppliers are unfolded. A search unfolds every row it kept, because the row was
   // kept for what is inside it.
@@ -177,6 +198,20 @@ export function SuppliersPage() {
     }
   }
 
+  // Hide rather than delete, as with products. A supplier that stops supplying keeps its
+  // name on every order it filled; hiding takes it off the ordering screen and the product
+  // editor, and it is one click from coming back.
+  async function toggleHidden(sup: Supplier) {
+    const hide = sup.active !== false
+    try {
+      await updateSupplier(sup.id, { active: !hide })
+      setSuppliers((cur) => cur.map((x) => (x.id === sup.id ? { ...x, active: !hide } : x)))
+      toast.success(hide ? t('ซ่อนแล้ว — ดูได้ที่ตัวกรอง "ที่ซ่อนไว้"') : t('เลิกซ่อนแล้ว'))
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
+
   async function unlink(product: Product) {
     try {
       await unlinkProduct(product.id, items)
@@ -197,7 +232,10 @@ export function SuppliersPage() {
         primary: true,
         cell: (r) => (
           <div className="min-w-0">
-            <div className="truncate font-medium text-ink">{r.supplier.name}</div>
+            <div className="flex items-center gap-2">
+              <span className="truncate font-medium text-ink">{r.supplier.name}</span>
+              {r.supplier.active === false && <Badge color="amber">{t('ซ่อนไว้')}</Badge>}
+            </div>
             {r.supplier.note && (
               <div className="truncate text-xs text-ink-faint">{r.supplier.note}</div>
             )}
@@ -300,7 +338,18 @@ export function SuppliersPage() {
         tableOnly: true,
         cell: (r) =>
           isAdmin ? (
-            <div className="flex justify-end gap-1">
+            <div className="flex items-center justify-end gap-1">
+              <button
+                type="button"
+                onClick={() => void toggleHidden(r.supplier)}
+                title={r.supplier.active === false ? t('เลิกซ่อนผู้ขายรายนี้') : t('ซ่อนผู้ขายรายนี้')}
+                aria-label={r.supplier.active === false ? t('เลิกซ่อนผู้ขายรายนี้') : t('ซ่อนผู้ขายรายนี้')}
+                className={`inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 ${
+                  r.supplier.active === false ? 'text-warn' : 'text-ink-faint hover:text-ink'
+                }`}
+              >
+                <Icon name={r.supplier.active === false ? 'eyeOff' : 'eye'} size={18} />
+              </button>
               <Button variant="ghost" onClick={() => setAddingTo(r.supplier)}>
                 {t('เพิ่มสินค้า')}
               </Button>
@@ -350,21 +399,77 @@ export function SuppliersPage() {
       />
 
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
-          <Input
-            placeholder={t('ค้นหาผู้ขาย หรือสินค้า…')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:max-w-xs"
-          />
-          <span className="ml-auto text-xs text-ink-faint">
-            {t('{s} ราย · {i} รายการสินค้า', { s: suppliers.length, i: linkedCount })}
-          </span>
+        <div className="border-b border-line p-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Input
+              placeholder={t('ค้นหาผู้ขาย หรือสินค้า…')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full sm:max-w-xs"
+            />
+            <Button
+              variant={showFilters || filterCount > 0 ? 'secondary' : 'ghost'}
+              onClick={() => setShowFilters((v) => !v)}
+              aria-expanded={showFilters}
+              aria-controls="supplier-filters"
+            >
+              <Icon name="adjust" size={16} />
+              {filterCount > 0 ? t('ตัวกรอง ({n})', { n: filterCount }) : t('ตัวกรอง')}
+              <Icon
+                name="chevronDown"
+                size={14}
+                className={showFilters ? 'rotate-180 transition-transform' : 'transition-transform'}
+              />
+            </Button>
+            <span className="ml-auto text-xs text-ink-faint">
+              {t('{s} ราย · {i} รายการสินค้า', { s: rows.length, i: linkedCount })}
+            </span>
+          </div>
+          <div
+            id="supplier-filters"
+            className={
+              showFilters ? 'mt-3 flex flex-wrap items-end gap-3 border-t border-line pt-3' : 'hidden'
+            }
+          >
+            <Field label={t('สถานะ')}>
+              <Select value={shown} onChange={(e) => setShown(e.target.value as Shown)} className="w-[150px]">
+                <option value="active">{t('ที่ใช้งาน')}</option>
+                <option value="hidden">{t('ที่ซ่อนไว้')}</option>
+                <option value="all">{t('ทั้งหมด')}</option>
+              </Select>
+            </Field>
+            <Field label={t('รับคืนของ')}>
+              <Select value={returns} onChange={(e) => setReturns(e.target.value as Returns)} className="w-[150px]">
+                <option value="all">{t('ทั้งหมด')}</option>
+                <option value="takingReturn">{t('รับคืน')}</option>
+                <option value="notTakingReturn">{t('ไม่รับคืน')}</option>
+              </Select>
+            </Field>
+            <Field label={t('เรียงตาม')}>
+              <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="w-[190px]">
+                <option value="name">{t('ชื่อ ก–ฮ / A–Z')}</option>
+                <option value="products">{t('จำนวนสินค้า มาก→น้อย')}</option>
+              </Select>
+            </Field>
+            {filterCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShown('active')
+                  setReturns('all')
+                }}
+                className="min-h-11 text-sm font-medium text-brand hover:underline"
+              >
+                {t('ล้างตัวกรอง ({n})', { n: filterCount })}
+              </button>
+            )}
+          </div>
         </div>
         <DataTable
           rows={rows}
           columns={columns}
           rowKey={(r) => r.supplier.id}
+          rowClassName={(r) => (r.supplier.active === false ? 'opacity-60' : '')}
           minWidth={900}
           maxHeight="calc(100vh - 300px)"
           empty={
@@ -382,6 +487,10 @@ export function SuppliersPage() {
             isAdmin
               ? (r) => (
                   <>
+                    <Button variant="secondary" onClick={() => void toggleHidden(r.supplier)}>
+                      <Icon name={r.supplier.active === false ? 'eyeOff' : 'eye'} size={16} />
+                      {r.supplier.active === false ? t('เลิกซ่อน') : t('ซ่อน')}
+                    </Button>
                     <Button variant="secondary" onClick={() => setAddingTo(r.supplier)}>
                       {t('เพิ่มสินค้า')}
                     </Button>

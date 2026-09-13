@@ -866,11 +866,16 @@ function ProductEditor({
             disabled={!canEdit}
           >
             <option value="">{t("— ยังไม่ระบุ —")}</option>
-            {supplierChoices.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
+            {/* Hidden suppliers are not offered — except the one this product already has,
+                or the select would show blank for a product whose supplier was hidden. */}
+            {supplierChoices
+              .filter((s) => s.active !== false || s.id === form.supplierId)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                  {s.active === false ? ` (${t('ซ่อนไว้')})` : ''}
+                </option>
+              ))}
           </Select>
         </Field>
         <Field label={t("ต้นทุน/หน่วย (ไม่บังคับ)")}>
