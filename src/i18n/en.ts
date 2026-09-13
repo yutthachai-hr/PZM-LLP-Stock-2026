@@ -911,7 +911,6 @@ export const EN: Record<string, string> = {
   // ---- pack size (entry unit conversion) -------------------------------------------
   'อัตราแปลงหน่วย (อ้างอิงเท่านั้น)': 'Unit reference rates (advisory only)',
   'ไม่บันทึกแปลงอัตโนมัติ — แค่โชว์ตัวเลขช่วยคูณตอนกรอก เช่น 1 ลัง = 288 {unit}': 'Not converted automatically — just shows the multiplication while you type, e.g. 1 case = 288 {unit}',
-  'เช่น ลัง': 'e.g. case',
   'เพิ่มหน่วยอ้างอิง': 'Add a reference unit',
   'ลบแถวนี้': 'Remove this row',
   '(อ้างอิง)': '(reference)',

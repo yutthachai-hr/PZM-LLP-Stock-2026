@@ -607,6 +607,26 @@ function ProductEditor({
     setForm((f) => ({ ...f, unitType: abbreviation, unit: unitNameFor(abbreviation) }))
   }
 
+  /**
+   * What a reference-conversion row may be set to: the owner's own unit list — the same
+   * one the receiving screen offers — minus this product's own unit (a reference for a
+   * unit against itself is meaningless) and minus whatever the other rows already claimed
+   * (one conversion per unit; picking a taken one would just be dropped silently on save).
+   * `currentLabel` is put back in if it is not otherwise on offer, so an older row set to
+   * a unit the owner's list has since dropped does not go blank the moment this opens.
+   */
+  function conversionUnitOptions(currentLabel: string): string[] {
+    const base = (form.unitType || '').trim()
+    const takenByOtherRows = (form.unitConversions ?? [])
+      .map((c) => c.label)
+      .filter((l) => !sameUnit(l, currentLabel))
+    const out = unitChoices.filter(
+      (u) => !sameUnit(u, base) && !takenByOtherRows.some((t) => sameUnit(t, u)),
+    )
+    if (currentLabel && !out.some((u) => sameUnit(u, currentLabel))) out.unshift(currentLabel)
+    return out
+  }
+
   // current on-hand quantity per location (editable) + the original values to detect changes
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [origCounts, setOrigCounts] = useState<Record<string, number>>({})
@@ -919,8 +939,12 @@ function ProductEditor({
                   the size box took the whole row and pushed the delete button off the
                   dialog's edge. Same bug, same fix, as the order form's quantity box. */}
               <div className="min-w-0 flex-1">
-                <Input
-                  placeholder={t('เช่น ลัง')}
+                {/* A dropdown, not a text box: typed by hand this became "1 carton" on one
+                    row and "Carton" already on the owner's own list on another — two
+                    spellings the entry screens would never recognise as the same unit.
+                    Picking from the units already in use is the one way to guarantee a
+                    conversion actually attaches to something selectable later. */}
+                <Select
                   value={c.label}
                   onChange={(e) => {
                     const next = [...(form.unitConversions ?? [])]
@@ -928,7 +952,14 @@ function ProductEditor({
                     setForm({ ...form, unitConversions: next })
                   }}
                   disabled={!canEdit}
-                />
+                >
+                  <option value="">{t('— เลือกหน่วย —')}</option>
+                  {conversionUnitOptions(c.label).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </Select>
               </div>
               <span className="shrink-0 text-sm text-ink-faint">=</span>
               <div className="w-24 shrink-0">
