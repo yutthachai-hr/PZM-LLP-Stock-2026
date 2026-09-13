@@ -914,31 +914,38 @@ function ProductEditor({
         <div className="space-y-2">
           {(form.unitConversions ?? []).map((c, i) => (
             <div key={i} className="flex items-center gap-2">
-              <Input
-                placeholder={t('เช่น ลัง')}
-                value={c.label}
-                onChange={(e) => {
-                  const next = [...(form.unitConversions ?? [])]
-                  next[i] = { ...next[i], label: e.target.value }
-                  setForm({ ...form, unitConversions: next })
-                }}
-                disabled={!canEdit}
-                className="flex-1"
-              />
+              {/* The width goes on a wrapper, not on Input's own className: Input carries
+                  w-full itself, and a narrower class placed beside it loses that fight —
+                  the size box took the whole row and pushed the delete button off the
+                  dialog's edge. Same bug, same fix, as the order form's quantity box. */}
+              <div className="min-w-0 flex-1">
+                <Input
+                  placeholder={t('เช่น ลัง')}
+                  value={c.label}
+                  onChange={(e) => {
+                    const next = [...(form.unitConversions ?? [])]
+                    next[i] = { ...next[i], label: e.target.value }
+                    setForm({ ...form, unitConversions: next })
+                  }}
+                  disabled={!canEdit}
+                />
+              </div>
               <span className="shrink-0 text-sm text-ink-faint">=</span>
-              <Input
-                type="number"
-                step="any"
-                min={0}
-                value={c.size ?? ''}
-                onChange={(e) => {
-                  const next = [...(form.unitConversions ?? [])]
-                  next[i] = { ...next[i], size: Number(e.target.value) }
-                  setForm({ ...form, unitConversions: next })
-                }}
-                disabled={!canEdit}
-                className="num w-28 shrink-0 text-right"
-              />
+              <div className="w-24 shrink-0">
+                <Input
+                  type="number"
+                  step="any"
+                  min={0}
+                  value={c.size ?? ''}
+                  onChange={(e) => {
+                    const next = [...(form.unitConversions ?? [])]
+                    next[i] = { ...next[i], size: Number(e.target.value) }
+                    setForm({ ...form, unitConversions: next })
+                  }}
+                  disabled={!canEdit}
+                  className="num text-right"
+                />
+              </div>
               <span className="w-10 shrink-0 text-sm text-ink-faint">{form.unitType}</span>
               {canEdit && (
                 <button
