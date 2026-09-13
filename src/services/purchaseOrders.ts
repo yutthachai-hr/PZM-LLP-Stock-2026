@@ -1,6 +1,7 @@
 import { backend } from '../backend'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
+import { sameUnit } from '../lib/units'
 import { requireEpochMs } from '../lib/validate'
 import { receiveStock } from './stock'
 import {
@@ -45,6 +46,8 @@ function makeDocNo(seq: number): string {
 export interface OrderLineInput {
   productId: string
   qty: number
+  /** The unit keyed. Dropped when it is the product's own, however it was spelled. */
+  entryUnit?: string
 }
 
 /**
@@ -75,10 +78,12 @@ export async function createPurchaseOrder(params: {
     if (!(l.qty > 0)) continue // a line nobody put a number against is not an order
     const p = byId.get(l.productId)
     if (!p) throw new AppError('ไม่พบสินค้า')
+    const entryUnit = (l.entryUnit ?? '').trim()
     lines.push({
       productId: p.id,
       productName: p.name,
       unit: p.unitType,
+      ...(entryUnit && !sameUnit(entryUnit, p.unitType) ? { entryUnit } : {}),
       orderedQty: l.qty,
     })
   }
@@ -222,6 +227,9 @@ export async function receivePurchaseOrder(params: {
       productId: l.productId,
       productName: l.productName,
       unit: l.unit,
+      // Into the balance for the unit it was ordered in, exactly as the receiving screen
+      // would file it if the same person keyed the same delivery by hand.
+      ...(l.entryUnit ? { entryUnit: l.entryUnit } : {}),
       qty: l.receivedQty!,
     })),
     actor,

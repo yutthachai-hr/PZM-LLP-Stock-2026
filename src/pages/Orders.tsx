@@ -26,6 +26,10 @@ import {
   summariseBySupplier,
 } from '../services/purchaseOrders'
 import { useSuppliers } from '../services/suppliers'
+import { useEntryUnits } from '../services/entryUnits'
+import { QtyInput } from '../components/QtyInput'
+import { shownUnit } from '../lib/ledger'
+import { sameUnit } from '../lib/units'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
@@ -326,9 +330,14 @@ function NewOrderModal({
   const active = useMemo(() => locations.filter((l) => l.active !== false), [locations])
   const [supplierId, setSupplierId] = useState('')
   const [locationId, setLocationId] = useState(active[0]?.id ?? '')
-  const [qty, setQty] = useState<Record<string, number>>({})
+  // Quantity and the unit it was keyed in, per product. The unit is offered from the same
+  // list the receiving screen offers — the product's own first, then the owner's — because
+  // the owner's rule is that an order is placed in the unit the goods will be received in.
+  const [lines, setLines] = useState<Record<string, { qty: number; unit: string }>>({})
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
+  // Read once for the whole form, not once per line.
+  const plainUnits = useEntryUnits()
 
   // Free: the catalogue is already in memory, and the link is a field on each product.
   const theirs = useMemo(() => {
@@ -340,7 +349,13 @@ function NewOrderModal({
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [products, supplierId, search])
 
-  const chosen = Object.entries(qty).filter(([, n]) => n > 0)
+  const chosen = Object.entries(lines).filter(([, l]) => l.qty > 0)
+  // Lines keyed in a unit other than the one the product is counted in. Allowed — one
+  // supplier really does sell by the carton — but said out loud before the order goes.
+  const offUnit = chosen.filter(([id, l]) => {
+    const p = products.find((x) => x.id === id)
+    return p && !sameUnit(l.unit, p.unitType)
+  })
 
   async function save() {
     setBusy(true)
@@ -350,7 +365,7 @@ function NewOrderModal({
       await createPurchaseOrder({
         supplier,
         locationId,
-        lines: chosen.map(([productId, n]) => ({ productId, qty: n })),
+        lines: chosen.map(([productId, l]) => ({ productId, qty: l.qty, entryUnit: l.unit })),
         products,
         actor,
       })
@@ -373,7 +388,7 @@ function NewOrderModal({
               value={supplierId}
               onChange={(e) => {
                 setSupplierId(e.target.value)
-                setQty({})
+                setLines({})
               }}
             >
               <option value="">{t('— เลือกผู้ขาย —')}</option>
@@ -409,41 +424,54 @@ function NewOrderModal({
                 </p>
               ) : (
                 <ul className="divide-y divide-line">
-                  {theirs.map((p) => (
-                    <li key={p.id} className="flex items-center gap-3 p-2">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm text-ink">{p.name}</span>
-                        <span className="doc-no block text-xs text-ink-faint">{p.sku}</span>
-                      </span>
-                      {/* The width goes on a wrapper: Input carries w-full, and a w-24 beside
-                          it lost — the box took the row and left the product name a sliver. */}
-                      <div className="w-24 shrink-0">
-                        <Input
-                          type="number"
-                          step="any"
-                          min={0}
-                          inputMode="decimal"
-                          className="num text-right"
-                          value={qty[p.id] ?? ''}
-                          onChange={(e) =>
-                            setQty((cur) => ({ ...cur, [p.id]: Number(e.target.value) }))
-                          }
-                        />
-                      </div>
-                      {/* The order is in the unit the stock is counted in. Not a choice: a
-                          quantity keyed in any other unit would land in the books as a
-                          number nobody can add to what is on the shelf. */}
-                      <span className="w-10 shrink-0 text-xs font-medium text-ink-soft">
-                        {p.unitType}
-                      </span>
-                    </li>
-                  ))}
+                  {theirs.map((p) => {
+                    const line = lines[p.id]
+                    const mismatch = !!line && line.qty > 0 && !sameUnit(line.unit, p.unitType)
+                    return (
+                      <li key={p.id} className="p-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm text-ink">{p.name}</span>
+                            <span className="flex gap-2 text-xs text-ink-faint">
+                              <span className="doc-no">{p.sku}</span>
+                              <span>
+                                {t('หน่วยรับเข้า')}: {p.unitType}
+                              </span>
+                            </span>
+                          </span>
+                          {/* The same box the receiving screen uses, so the units on offer
+                              here are the units the delivery can be keyed in. */}
+                          <div className="w-full shrink-0 sm:w-56">
+                            <QtyInput
+                              unitType={p.unitType}
+                              plainUnits={plainUnits}
+                              value={line?.qty ?? 0}
+                              onChange={(qty, unit) =>
+                                setLines((cur) => ({ ...cur, [p.id]: { qty, unit } }))
+                              }
+                              invalid={mismatch}
+                            />
+                          </div>
+                        </div>
+                        {mismatch && (
+                          <p role="alert" className="mt-1 text-xs font-medium text-danger">
+                            {t('หน่วยที่คุณเลือกกับหน่วยรับเข้าสินค้าไม่ตรงกัน กรุณาตรวจสอบอีกครั้งก่อนกดยืนยัน')}
+                          </p>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
           </>
         )}
 
+        {offUnit.length > 0 && (
+          <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
+            {t('มี {n} รายการที่หน่วยไม่ตรงกับหน่วยรับเข้าสินค้า — ตรวจสอบอีกครั้งก่อนกดยืนยัน', { n: offUnit.length })}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {t('ยกเลิก')}
@@ -544,7 +572,7 @@ function ReceiveModal({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-sm text-ink">{l.productName}</span>
                   <span className="text-xs text-ink-soft">
-                    {t('สั่ง')} {fmtQty(l.orderedQty)} {l.unit}
+                    {t('สั่ง')} {fmtQty(l.orderedQty)} {shownUnit(l)}
                   </span>
                   {/* One tap for the common case: it arrived exactly as ordered. */}
                   <button
@@ -667,7 +695,7 @@ function OrderSheet({
                   <td className="num py-1 text-right font-semibold text-ink">
                     {fmtQty(l.orderedQty)}
                   </td>
-                  <td className="py-1 pl-2 text-ink-soft">{l.unit}</td>
+                  <td className="py-1 pl-2 text-ink-soft">{shownUnit(l)}</td>
                 </tr>
               ))}
             </tbody>

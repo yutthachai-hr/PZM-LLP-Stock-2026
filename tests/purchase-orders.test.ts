@@ -54,7 +54,12 @@ const movements = () => raw('stockMovements') as Record<string, unknown>[]
 const balance = (productId: string) =>
   ((raw('stockLevels').find((d) => d.id === `${MAIN}__${productId}`)?.qty as number) ?? 0)
 
-async function placeOrder(lines = [{ productId: 'p1', qty: 10 }, { productId: 'p2', qty: 5 }]) {
+async function placeOrder(
+  lines: { productId: string; qty: number; entryUnit?: string }[] = [
+    { productId: 'p1', qty: 10 },
+    { productId: 'p2', qty: 5 },
+  ],
+) {
   return createPurchaseOrder({
     supplier: SUPPLIER,
     locationId: MAIN,
@@ -112,6 +117,42 @@ describe('placing an order', () => {
     await placeOrder()
     expect(movements()).toHaveLength(0)
     expect(balance('p1')).toBe(0)
+  })
+})
+
+// The owner's rule for ordering, once the product's own unit became editable: the order
+// is keyed in whatever unit the goods will be received in — the same list the receiving
+// screen offers — and an order placed in Pack must arrive in the Pack balance, not be
+// silently counted as pieces. The unit travels on the line exactly as it does on a
+// movement: `unit` is the product's own, `entryUnit` is present only when someone chose
+// something else.
+describe("ordering in a unit other than the product's own", () => {
+  test('the unit chosen is kept on the line, and only when it differs', async () => {
+    await placeOrder([
+      { productId: 'p1', qty: 3, entryUnit: 'Pack' },
+      { productId: 'p2', qty: 5, entryUnit: 'EA' }, // p2's own unit, spelled the same
+      { productId: 'p3', qty: 2, entryUnit: 'ea' }, // p3's own unit, spelled differently
+    ])
+    const [l1, l2, l3] = orders()[0].lines
+    expect(l1).toMatchObject({ unit: 'KG', entryUnit: 'Pack', orderedQty: 3 })
+    expect(l2).toMatchObject({ unit: 'EA', orderedQty: 5 })
+    expect('entryUnit' in l2).toBe(false)
+    expect('entryUnit' in l3).toBe(false)
+  })
+
+  test('receiving files the goods under the unit they were ordered in', async () => {
+    const id = await placeOrder([{ productId: 'p1', qty: 3, entryUnit: 'Pack' }])
+    await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-9100',
+      lines: [{ productId: 'p1', receivedQty: 0, checked: true }],
+      actor: ACTOR,
+    })
+    // The Pack balance, not the KG one: 3 Pack of anchovies is not 3 kg of them.
+    expect(movements()[0]).toMatchObject({ unit: 'KG', entryUnit: 'Pack', qty: 3 })
+    const levels = raw('stockLevels')
+    expect(levels.find((d) => d.id === `${MAIN}__p1#Pack`)?.qty).toBe(3)
+    expect(levels.find((d) => d.id === `${MAIN}__p1`)).toBeUndefined()
   })
 })
 

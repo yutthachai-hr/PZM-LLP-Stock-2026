@@ -240,6 +240,12 @@ export interface PurchaseOrderLine {
   productName: string
   /** The product's own unit when the order was placed. */
   unit: string
+  /**
+   * The unit the order was actually placed in, present only when it is not the product's
+   * own — the same pair a movement carries, for the same reason. An order for 3 Pack is
+   * received into the Pack balance, not counted as 3 of whatever the product is measured in.
+   */
+  entryUnit?: string
   orderedQty: number
   /**
    * What actually arrived, filled in during the receiving check.
