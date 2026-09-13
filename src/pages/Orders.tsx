@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
+import { useBrand } from '../brand/BrandContext'
+import { brandDef } from '../brand/brand'
 import { useData } from '../data/DataContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
@@ -60,8 +62,10 @@ export function OrdersPage() {
   const toast = useToast()
   const confirm = useConfirm()
   const { user } = useAuth()
+  const { brand } = useBrand()
   const { products, locations, locationById } = useData()
   const suppliers = useSuppliers()
+  const [busyExport, setBusyExport] = useState<'' | 'excel' | 'pdf'>('')
 
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -107,6 +111,72 @@ export function OrdersPage() {
       await load()
     } catch (e) {
       toast.error(errText(e, t))
+    }
+  }
+
+  /**
+   * The orders in view, one row per line: which day, which supplier, which item, how many.
+   *
+   * That is the question the owner asked the export to answer, so a line is the row and
+   * not the order — an order of twelve items is twelve rows that each carry the date and
+   * the supplier, which is what a spreadsheet filter needs. Sorted oldest first so the
+   * sheet reads as a diary. Received orders also carry what actually arrived.
+   */
+  function exportRows() {
+    const inView = tab === 'received' ? received : tab === 'open' ? open : orders
+    return [...inView]
+      .sort((a, b) => a.orderedAt - b.orderedAt)
+      .flatMap((o) =>
+        o.lines.map((l) => ({
+          [t('วันที่สั่ง')]: formatThaiDate(o.orderedAt),
+          [t('เลขที่')]: o.docNo,
+          [t('ผู้ขาย')]: o.supplierName,
+          [t('คลังปลายทาง')]: locationById(o.locationId)?.name ?? '',
+          [t('สินค้า')]: l.productName,
+          [t('จำนวนที่สั่ง')]: l.orderedQty,
+          [t('หน่วย')]: shownUnit(l),
+          [t('สถานะ')]: o.status === 'received' ? t('รับของแล้ว') : t('สั่งแล้ว'),
+          [t('จำนวนที่รับ')]: o.status === 'received' ? (l.receivedQty ?? '') : '',
+          [t('วันที่รับ')]: o.receivedAt ? formatThaiDate(o.receivedAt) : '',
+          [t('เลขที่บิล')]: o.invoiceNo ?? '',
+          [t('ผู้สั่ง')]: o.createdByName,
+          [t('หมายเหตุ')]: l.note ?? '',
+        })),
+      )
+  }
+
+  async function exportExcelFile() {
+    setBusyExport('excel')
+    try {
+      const { exportExcel } = await import('../lib/export')
+      exportExcel(t('ใบสั่งซื้อ_{ts}', { ts: Date.now() }), 'Orders', exportRows())
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusyExport('')
+    }
+  }
+
+  async function exportPdfFile() {
+    setBusyExport('pdf')
+    try {
+      const { exportReportPdf } = await import('../lib/export')
+      const rows = exportRows()
+      const head = rows.length ? Object.keys(rows[0]) : []
+      exportReportPdf({
+        filename: t('ใบสั่งซื้อ_{ts}', { ts: Date.now() }),
+        title: t('รายการสั่งซื้อ — {company}', { company: brand ? brandDef(brand).name : '' }),
+        meta: [
+          t('{days} วันล่าสุด', { days }),
+          tab === 'received' ? t('รับของแล้ว') : tab === 'open' ? t('รอรับของ') : t('ทั้งหมด'),
+        ],
+        head,
+        body: rows.map((r) => head.map((h) => r[h])),
+      })
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusyExport('')
     }
   }
 
@@ -160,12 +230,30 @@ export function OrdersPage() {
                   : t('สรุปตามผู้ขาย')}
             </button>
           ))}
-          <div className="ml-auto">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <Select value={String(days)} onChange={(e) => setDays(Number(e.target.value))}>
               <option value="7">{t('7 วันล่าสุด')}</option>
               <option value="30">{t('30 วันล่าสุด')}</option>
               <option value="90">{t('90 วันล่าสุด')}</option>
             </Select>
+            {/* What was ordered on which day, as a sheet — the summary the owner asked for
+                in a form that leaves the app. Exports what the tab shows. */}
+            <Button
+              variant="secondary"
+              onClick={() => void exportExcelFile()}
+              disabled={!!busyExport || orders.length === 0}
+            >
+              <Icon name="download" size={16} />
+              {busyExport === 'excel' ? t('กำลังสร้างไฟล์...') : 'Excel'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void exportPdfFile()}
+              disabled={!!busyExport || orders.length === 0}
+            >
+              <Icon name="download" size={16} />
+              {busyExport === 'pdf' ? t('กำลังสร้างไฟล์...') : 'PDF'}
+            </Button>
           </div>
         </div>
 

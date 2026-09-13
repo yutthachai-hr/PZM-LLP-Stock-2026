@@ -144,6 +144,12 @@ export function CalendarPage() {
   const [editing, setEditing] = useState<StockEvent | null>(null)
   const [creating, setCreating] = useState(false)
   const [today, setToday] = useState<StockEvent[]>([])
+  // The day someone tapped in the grid. Opens a panel beside the calendar with that day's
+  // tasks and a way to add one there — tapping a day used to do nothing unless the tap
+  // landed on the date number itself, which then silently switched views.
+  const [pickedDay, setPickedDay] = useState<number | null>(null)
+  // Where "เพิ่มงาน" starts. From the header it is now; from a day panel it is that day.
+  const [newStart, setNewStart] = useState<number | null>(null)
 
   const range = useMemo(() => rangeFor(view, anchor), [view, anchor])
 
@@ -221,6 +227,19 @@ export function CalendarPage() {
     })
   }, [events, typeFilter, locFilter, quick, search])
 
+  // A summary tile is a question — "what is coming up?" — and the answer is a list. Toggling
+  // a filter on a month grid whose only event sits in next month's trailing days changed
+  // nothing anyone could see, so the tile now also switches to the agenda, where the events
+  // it counted are the rows.
+  function pickQuick(k: Exclude<Quick, 'all'>) {
+    if (quick === k) {
+      setQuick('all')
+      return
+    }
+    setQuick(k)
+    setView('agenda')
+  }
+
   function shift(dir: -1 | 1) {
     const d = new Date(anchor)
     if (view === 'month') setAnchor(new Date(d.getFullYear(), d.getMonth() + dir, 1).getTime())
@@ -287,14 +306,14 @@ export function CalendarPage() {
             <SummaryTile
               icon="history"
               active={quick === 'today'}
-              onClick={() => setQuick(quick === 'today' ? 'all' : 'today')}
+              onClick={() => pickQuick('today')}
               value={counts.today}
               label={t('วันนี้')}
             />
             <SummaryTile
               icon="arrowRight"
               active={quick === 'upcoming'}
-              onClick={() => setQuick(quick === 'upcoming' ? 'all' : 'upcoming')}
+              onClick={() => pickQuick('upcoming')}
               value={counts.upcoming}
               label={t('ที่จะถึง')}
             />
@@ -302,7 +321,7 @@ export function CalendarPage() {
               icon="warning"
               tone="warn"
               active={quick === 'important'}
-              onClick={() => setQuick(quick === 'important' ? 'all' : 'important')}
+              onClick={() => pickQuick('important')}
               value={counts.important}
               label={t('สำคัญ')}
             />
@@ -310,7 +329,7 @@ export function CalendarPage() {
               icon="check"
               tone="in"
               active={quick === 'completed'}
-              onClick={() => setQuick(quick === 'completed' ? 'all' : 'completed')}
+              onClick={() => pickQuick('completed')}
               value={counts.completed}
               label={t('เสร็จแล้ว')}
             />
@@ -422,10 +441,7 @@ export function CalendarPage() {
             range={range}
             events={visible}
             onPick={setSelected}
-            onPickDay={(ms) => {
-              setAnchor(ms)
-              setView('agenda')
-            }}
+            onPickDay={setPickedDay}
           />
         ) : (
           <AgendaList
@@ -442,6 +458,25 @@ export function CalendarPage() {
           />
         )}
       </Card>
+
+      {pickedDay !== null && (
+        <DayPanel
+          day={pickedDay}
+          events={events.filter((e) => isSameDay(e.startAt, pickedDay))}
+          locationName={(id) => (id ? locationById(id)?.name : undefined)}
+          canAdd={!!isAdmin}
+          onClose={() => setPickedDay(null)}
+          onPick={(e) => {
+            setPickedDay(null)
+            setSelected(e)
+          }}
+          onAdd={() => {
+            setNewStart(pickedDay)
+            setPickedDay(null)
+            setCreating(true)
+          }}
+        />
+      )}
 
       {selected && (
         <EventDrawer
@@ -461,10 +496,12 @@ export function CalendarPage() {
       {(creating || editing) && user && (
         <EventEditor
           event={editing}
+          initialStart={newStart ?? undefined}
           userId={user.id}
           onClose={() => {
             setCreating(false)
             setEditing(null)
+            setNewStart(null)
           }}
           onSaved={(saved) => {
             patchEvent(saved)
@@ -583,15 +620,27 @@ function MonthGrid({
             const list = byDay.get(day) ?? []
             const outside = new Date(day).getMonth() !== month
             return (
+              // The whole cell is the target, not just the date number in its corner: on a
+              // tablet a finger lands in the middle of the square. Event chips inside stop
+              // the click so they still open their own drawer.
               <div
                 key={day}
-                className={`min-h-24 border-b border-r border-line p-1 last:border-r-0 ${
+                role="button"
+                tabIndex={0}
+                onClick={() => onPickDay(day)}
+                onKeyDown={(ev) => {
+                  if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault()
+                    onPickDay(day)
+                  }
+                }}
+                aria-label={formatThaiDateShort(day)}
+                className={`min-h-24 cursor-pointer border-b border-r border-line p-1 outline-none transition-colors duration-150 last:border-r-0 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 ${
                   outside ? 'bg-sunken/50' : ''
                 } ${day === todayKey ? 'bg-brand-soft/40' : ''}`}
               >
-                <button
-                  onClick={() => onPickDay(day)}
-                  className={`num mb-1 block rounded px-1 text-xs hover:bg-sunken ${
+                <span
+                  className={`num mb-1 block rounded px-1 text-xs ${
                     day === todayKey
                       ? 'font-bold text-brand'
                       : outside
@@ -600,12 +649,15 @@ function MonthGrid({
                   }`}
                 >
                   {new Date(day).getDate()}
-                </button>
+                </span>
                 <div className="space-y-0.5">
                   {list.slice(0, 3).map((e) => (
                     <button
                       key={e.id}
-                      onClick={() => onPick(e)}
+                      onClick={(ev) => {
+                        ev.stopPropagation()
+                        onPick(e)
+                      }}
                       title={e.title}
                       className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[11px] leading-tight hover:brightness-95 ${
                         e.status === 'completed'
@@ -624,12 +676,9 @@ function MonthGrid({
                     </button>
                   ))}
                   {list.length > 3 && (
-                    <button
-                      onClick={() => onPickDay(day)}
-                      className="px-1 text-[11px] text-ink-faint hover:underline"
-                    >
+                    <span className="block px-1 text-[11px] text-ink-faint">
                       {t('อีก {n} งาน', { n: list.length - 3 })}
-                    </button>
+                    </span>
                   )}
                 </div>
               </div>
@@ -705,6 +754,74 @@ function AgendaList({
         </div>
       ))}
     </div>
+  )
+}
+
+/**
+ * One day, beside the calendar.
+ *
+ * What a tap on a day opens: the tasks on it, each a tap from its own drawer, and — for
+ * an admin — a button that starts a new task already dated to that day. The owner's
+ * words: "การกดวันที่ควรเด้งเป็นการดูรายละเอียดวันนั้น หรือ +เพิ่มงานได้เลย".
+ */
+function DayPanel({
+  day,
+  events,
+  locationName,
+  canAdd,
+  onClose,
+  onPick,
+  onAdd,
+}: {
+  day: number
+  events: StockEvent[]
+  locationName: (id?: string) => string | undefined
+  canAdd: boolean
+  onClose: () => void
+  onPick: (e: StockEvent) => void
+  onAdd: () => void
+}) {
+  const t = useT()
+  const rows = [...events].sort((a, b) => a.startAt - b.startAt)
+  return (
+    <Modal open side onClose={onClose} title={formatThaiDateShort(day)}>
+      {rows.length === 0 ? (
+        <p className="py-6 text-center text-sm text-ink-soft">{t('วันนี้ไม่มีงาน')}</p>
+      ) : (
+        <ul className="-mx-2 divide-y divide-line">
+          {rows.map((e) => (
+            <li key={e.id}>
+              <button
+                onClick={() => onPick(e)}
+                className="flex w-full items-start gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-sunken"
+              >
+                <span className="num w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-soft">
+                  {timeOf(e.startAt)}
+                </span>
+                <Icon name={TYPE_ICON[e.type]} size={16} className="mt-0.5 shrink-0 text-ink-faint" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-ink">{e.title}</span>
+                  <span className="block truncate text-xs text-ink-faint">
+                    {t(TYPE_LABEL[e.type])}
+                    {e.locationId && ` · ${locationName(e.locationId) ?? ''}`}
+                    {e.assignedToName && ` · ${e.assignedToName}`}
+                  </span>
+                </span>
+                <Badge color={STATUS_COLOR[e.status]}>{t(STATUS_LABEL[e.status])}</Badge>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {canAdd && (
+        <div className="mt-4 border-t border-line pt-4">
+          <Button onClick={onAdd} className="w-full">
+            <Icon name="plus" size={16} />
+            {t('เพิ่มงานวันนี้')}
+          </Button>
+        </div>
+      )}
+    </Modal>
   )
 }
 
@@ -842,11 +959,14 @@ function fromInputs(date: string, time: string): number {
 
 function EventEditor({
   event,
+  initialStart,
   userId,
   onClose,
   onSaved,
 }: {
   event: StockEvent | null
+  /** For a new task opened from a day: that day, at the current time of day. */
+  initialStart?: number
   userId: string
   onClose: () => void
   onSaved: (saved: StockEvent) => void
@@ -854,7 +974,11 @@ function EventEditor({
   const t = useT()
   const toast = useToast()
   const { locations, users } = useData()
-  const start = event?.startAt ?? Date.now()
+  const start =
+    event?.startAt ??
+    (initialStart !== undefined
+      ? fromInputs(toDateInput(initialStart), toTimeInput(Date.now()))
+      : Date.now())
 
   const [title, setTitle] = useState(event?.title ?? '')
   const [type, setType] = useState<StockEventType>(event?.type ?? 'stockCount')
