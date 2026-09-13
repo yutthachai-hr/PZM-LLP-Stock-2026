@@ -181,13 +181,19 @@ input[type='number'] {
    * Hidden by visibility rather than display: the sheet sits inside a positioned modal, and
    * `display: none` on an ancestor takes the sheet with it whatever the sheet asks for.
    * Visibility is the one property a descendant can win back.
+   *
+   * The reveal below is written with the same `body:has(#order-sheet)` prefix on purpose.
+   * `:has()` carries the specificity of its argument, so the hiding rule weighs (0,1,1) —
+   * more than a bare `#order-sheet` at (0,1,0) — and the sheet stayed hidden along with
+   * everything else: the owner pressed print and got a blank A5 with a header. The prefix
+   * lifts the reveal to (0,2,1), which wins outright rather than by source order.
    */
   body:has(#order-sheet) * {
     visibility: hidden;
   }
 
-  #order-sheet,
-  #order-sheet * {
+  body:has(#order-sheet) #order-sheet,
+  body:has(#order-sheet) #order-sheet * {
     visibility: visible;
   }
 

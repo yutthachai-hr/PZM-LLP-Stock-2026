@@ -350,10 +350,10 @@ export function SuppliersPage() {
               >
                 <Icon name={r.supplier.active === false ? 'eyeOff' : 'eye'} size={18} />
               </button>
-              <Button variant="ghost" onClick={() => setAddingTo(r.supplier)}>
+              <Button variant="ghost" className="whitespace-nowrap" onClick={() => setAddingTo(r.supplier)}>
                 {t('เพิ่มสินค้า')}
               </Button>
-              <Button variant="ghost" onClick={() => setEditing(r.supplier)}>
+              <Button variant="ghost" className="whitespace-nowrap" onClick={() => setEditing(r.supplier)}>
                 {t('แก้ไข')}
               </Button>
               <button
