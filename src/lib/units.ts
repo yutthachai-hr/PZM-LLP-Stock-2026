@@ -36,3 +36,38 @@ export function unitNameFor(abbreviation: string): string {
 export function sameUnit(a: string | undefined, b: string | undefined): boolean {
   return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
 }
+
+/**
+ * A reference multiplier for a unit this product might be keyed in — "1 ลัง = 288 EA".
+ *
+ * Advisory only. Nothing in the ledger is ever computed from this: the owner's rule is that
+ * the number typed is the number recorded, because a case from one supplier is not the same
+ * size as a case from another. This exists so a person can see the arithmetic before they
+ * type, not so the system can do it for them.
+ */
+export interface UnitConversion {
+  label: string
+  size: number
+}
+
+const MAX_CONVERSIONS = 20
+const MAX_CONVERSION_LABEL = 40
+
+/**
+ * Tidy a list of reference conversions the way it will be stored: trimmed labels, positive
+ * finite sizes, de-duplicated case-insensitively (first one wins), and bounded. Exported so
+ * the product editor shows the person exactly what saving will keep — the same shape
+ * `normaliseUnits` in `services/entryUnits.ts` keeps for the owner's unit list.
+ */
+export function normaliseConversions(raw: readonly UnitConversion[]): UnitConversion[] {
+  const out: UnitConversion[] = []
+  for (const { label, size } of raw) {
+    const clean = label.trim().slice(0, MAX_CONVERSION_LABEL)
+    if (!clean) continue
+    if (!Number.isFinite(size) || size <= 0) continue
+    if (out.some((c) => sameUnit(c.label, clean))) continue
+    out.push({ label: clean, size })
+    if (out.length >= MAX_CONVERSIONS) break
+  }
+  return out
+}

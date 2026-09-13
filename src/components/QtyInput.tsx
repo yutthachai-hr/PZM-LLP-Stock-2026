@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useT } from '../i18n/I18nContext'
+import { sameUnit, type UnitConversion } from '../lib/units'
 import { blurOnWheel } from './ui'
 
 // Quantity input with the unit beside it. The VALUE handed to the parent is always in the
@@ -20,6 +21,13 @@ export interface EntryUnit {
   records: string
   /** True when the label is a translation key rather than stored data. */
   translate?: boolean
+  /**
+   * The owner's reference multiplier for this unit, if they set one — "1 ลัง = 288 EA".
+   *
+   * Advisory only, and unrelated to `factor`: `factor` stays 1, so nothing is converted
+   * into the ledger, and this only drives the hint text under the box.
+   */
+  refSize?: number
 }
 
 /**
@@ -59,18 +67,27 @@ export function entryUnitsFor(
   unitType: string,
   /** The owner's list from Settings. Undefined until it loads; PLAIN_UNITS stands in. */
   plainUnits?: readonly string[],
+  /** This product's reference multipliers, matched to a unit by name. */
+  conversions?: readonly UnitConversion[],
 ): EntryUnit[] {
   const base = (unitType || '').trim()
   const out: EntryUnit[] = [{ key: 'base', label: base || '-', factor: 1, records: base }]
   out.push(...subUnitsFor(unitType))
-  // Never list a unit the product already has under its own name.
-  const taken = new Set([base.toLowerCase()])
-  for (const raw of plainUnits ?? PLAIN_UNITS) {
+  // Never list a unit already on `out` — its own name, or a metric sub-unit — twice.
+  const taken = new Set([base.toLowerCase(), ...out.map((u) => u.label.toLowerCase())])
+  // The owner's shared list, plus — a product with its own conversions gets its own units
+  // offered too, whether or not the owner ever added them in Settings. A conversion set on
+  // one product ("1 ลัง = 288 EA" on this ice cream) says nothing about every other product,
+  // so it was never going to belong on the shared list; without this, setting it up would
+  // have done nothing, because ลัง still would not have been a choice to make.
+  const labels = [...(plainUnits ?? PLAIN_UNITS), ...(conversions ?? []).map((c) => c.label)]
+  for (const raw of labels) {
     const label = raw.trim()
     const key = label.toLowerCase()
     if (!label || taken.has(key)) continue
     taken.add(key) // a list edited by hand can repeat itself
-    out.push({ key: `plain:${label}`, label, factor: 1, records: label })
+    const ref = conversions?.find((c) => sameUnit(c.label, label))
+    out.push({ key: `plain:${label}`, label, factor: 1, records: label, refSize: ref?.size })
   }
   return out
 }
@@ -82,6 +99,7 @@ function round3(n: number): number {
 export function QtyInput({ // i18n-key
   unitType,
   plainUnits,
+  conversions,
   value,
   onChange,
   className = '',
@@ -90,6 +108,8 @@ export function QtyInput({ // i18n-key
   unitType: string
   /** The owner's unit list. Passed in rather than fetched here, so one screen reads once. */
   plainUnits?: readonly string[]
+  /** This product's reference multipliers — `product.unitConversions`, if it has any. */
+  conversions?: readonly UnitConversion[]
   value: number
   /**
    * The quantity, and the unit it is to be recorded under.
@@ -103,7 +123,10 @@ export function QtyInput({ // i18n-key
   invalid?: boolean
 }) {
   const t = useT()
-  const units = useMemo(() => entryUnitsFor(unitType, plainUnits), [unitType, plainUnits])
+  const units = useMemo(
+    () => entryUnitsFor(unitType, plainUnits, conversions),
+    [unitType, plainUnits, conversions],
+  )
   const [unitKey, setUnitKey] = useState('base')
   const unit = units.find((u) => u.key === unitKey) ?? units[0]
   const factor = unit.factor
@@ -139,6 +162,10 @@ export function QtyInput({ // i18n-key
   }
 
   const converted = factor !== 1 && Number(text) > 0 ? round3(Number(text) * factor) : null
+  // The owner's own hint, not the ledger's: unlike `converted`, this is never what gets
+  // filed — it just does the multiplication for whoever is standing at the shelf.
+  const reference =
+    unit.refSize !== undefined && Number(text) > 0 ? round3(Number(text) * unit.refSize) : null
 
   return (
     <div>
@@ -189,6 +216,15 @@ export function QtyInput({ // i18n-key
       {converted !== null && (
         <p className="mt-1 text-right text-xs text-ink-soft">
           = <span className="num font-semibold text-ink">{converted}</span> {unitType}
+        </p>
+      )}
+      {/* "≈", not "=" — deliberately different from the line above. That one is what gets
+          filed; this is the owner's own multiplier, shown so someone can check it against
+          the delivery note before typing, not so the system can act on it. */}
+      {reference !== null && (
+        <p className="mt-1 text-right text-xs text-ink-faint">
+          ≈ <span className="num font-medium text-ink-soft">{reference}</span> {unitType}{' '}
+          {t('(อ้างอิง)')}
         </p>
       )}
     </div>

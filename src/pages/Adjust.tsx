@@ -174,6 +174,7 @@ export function AdjustPage() {
             <QtyInput
               unitType={product?.unitType ?? ''}
               plainUnits={plainUnits}
+              conversions={product?.unitConversions}
               value={qty}
               onChange={(v, u) => {
                 setQty(v)

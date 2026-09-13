@@ -571,6 +571,7 @@ function ProductEditor({
     minStock: product?.minStock ?? 0,
     cost: product?.cost,
     supplierId: product?.supplierId,
+    unitConversions: product?.unitConversions ?? [],
   })
   const [existingImg, setExistingImg] = useState<string | null>(null)
   const [newImg, setNewImg] = useState<string | null>(null)
@@ -893,6 +894,85 @@ function ProductEditor({
             disabled={!canEdit}
           />
         </Field>
+      </div>
+
+      {/**
+       * Reference conversions: "1 ลัง = 288 EA". Advisory only — the entry screens show it
+       * as a hint beside the quantity box, and nothing here ever changes what a movement
+       * records. A case is not the same size from every supplier, so the owner's rule
+       * stands: the number typed is the number kept. This exists for the item that gets
+       * ordered by the case, issued by the pack, and received by the piece, so whoever is
+       * keying any of those sees the arithmetic instead of doing it in their head.
+       */}
+      <div className="mt-5 rounded-lg border border-line bg-sunken/60 p-4">
+        <div className="mb-1 text-sm font-semibold text-ink">{t('อัตราแปลงหน่วย (อ้างอิงเท่านั้น)')}</div>
+        <p className="mb-3 text-xs text-ink-faint">
+          {t('ไม่บันทึกแปลงอัตโนมัติ — แค่โชว์ตัวเลขช่วยคูณตอนกรอก เช่น 1 ลัง = 288 {unit}', {
+            unit: form.unitType || t('หน่วย'),
+          })}
+        </p>
+        <div className="space-y-2">
+          {(form.unitConversions ?? []).map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Input
+                placeholder={t('เช่น ลัง')}
+                value={c.label}
+                onChange={(e) => {
+                  const next = [...(form.unitConversions ?? [])]
+                  next[i] = { ...next[i], label: e.target.value }
+                  setForm({ ...form, unitConversions: next })
+                }}
+                disabled={!canEdit}
+                className="flex-1"
+              />
+              <span className="shrink-0 text-sm text-ink-faint">=</span>
+              <Input
+                type="number"
+                step="any"
+                min={0}
+                value={c.size ?? ''}
+                onChange={(e) => {
+                  const next = [...(form.unitConversions ?? [])]
+                  next[i] = { ...next[i], size: Number(e.target.value) }
+                  setForm({ ...form, unitConversions: next })
+                }}
+                disabled={!canEdit}
+                className="num w-28 shrink-0 text-right"
+              />
+              <span className="w-10 shrink-0 text-sm text-ink-faint">{form.unitType}</span>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      unitConversions: (form.unitConversions ?? []).filter((_, j) => j !== i),
+                    })
+                  }
+                  className="shrink-0 rounded p-2 text-ink-faint hover:bg-danger-soft hover:text-danger"
+                  aria-label={t('ลบแถวนี้')}
+                >
+                  <Icon name="trash" size={16} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {canEdit && (
+          <Button
+            variant="ghost"
+            className="mt-2"
+            onClick={() =>
+              setForm({
+                ...form,
+                unitConversions: [...(form.unitConversions ?? []), { label: '', size: 0 }],
+              })
+            }
+          >
+            <Icon name="plus" size={16} />
+            {t('เพิ่มหน่วยอ้างอิง')}
+          </Button>
+        )}
       </div>
 
       {product && canEdit && (

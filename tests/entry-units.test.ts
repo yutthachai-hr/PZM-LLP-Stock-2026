@@ -20,6 +20,7 @@ import { describe, expect, test } from 'vitest'
 import type { WheelEvent } from 'react'
 import { PLAIN_UNITS, entryUnitsFor, subUnitsFor } from '../src/components/QtyInput'
 import { blurOnWheel } from '../src/components/ui'
+import { normaliseConversions } from '../src/lib/units'
 
 const labels = (u: ReturnType<typeof entryUnitsFor>) => u.map((x) => x.label)
 
@@ -111,6 +112,88 @@ describe('what reaches the ledger', () => {
     const pack = entryUnitsFor('KG').find((u) => u.label === 'Pack')!
     expect(keyed(10, pack.factor)).toBe(10)
     expect(pack.records).toBe('Pack')
+  })
+})
+
+// The item that started this: ordered by the case, issued by the pack, received by the
+// piece. A reference multiplier is a hint next to the box, not a second way to convert.
+describe('a reference multiplier is a hint, not a conversion', () => {
+  test('the unit still records itself untouched, even with a reference size attached', () => {
+    const lang = entryUnitsFor('EA', ['ลัง'], [{ label: 'ลัง', size: 288 }]).find(
+      (u) => u.label === 'ลัง',
+    )!
+    expect(lang.factor).toBe(1)
+    expect(lang.records).toBe('ลัง')
+    expect(lang.refSize).toBe(288)
+  })
+
+  test('a conversion makes its own unit selectable, even off the owner\'s shared list', () => {
+    // Setting "1 ลัง = 288 EA" on one product would do nothing if ลัง were not offered —
+    // and it has no business on the shared list, since a case is a different size on
+    // every other product. This is what made it selectable in the browser check: before
+    // this, the reference sat on the product with nowhere to be picked from.
+    const units = entryUnitsFor('EA', ['Pack'], [{ label: 'ลัง', size: 288 }])
+    expect(units.map((u) => u.label)).toContain('ลัง')
+    expect(units.find((u) => u.label === 'ลัง')!.refSize).toBe(288)
+  })
+
+  test('a conversion label cannot duplicate the metric sub-unit row', () => {
+    // The metric row (กรัม/มล.) is generated before the owner's list is read, and the
+    // dedupe used to only know the product's own unit — a conversion or an owner's unit
+    // spelled the same as the metric label would have produced two rows with the same
+    // name, one of them silently missing the real ×0.001 that makes grams work at all.
+    const units = entryUnitsFor('KG', [], [{ label: 'กรัม (g)', size: 5 }])
+    const gramRows = units.filter((u) => u.label === 'กรัม (g)')
+    expect(gramRows).toHaveLength(1)
+    expect(gramRows[0].factor).toBe(0.001)
+    expect(gramRows[0].refSize).toBeUndefined()
+  })
+
+  test('a unit with no matching reference carries none', () => {
+    const pack = entryUnitsFor('EA', ['ลัง', 'แพ็ค'], [{ label: 'ลัง', size: 288 }]).find(
+      (u) => u.label === 'แพ็ค',
+    )!
+    expect(pack.refSize).toBeUndefined()
+  })
+
+  test('the label is matched the same forgiving way the unit list already is', () => {
+    // "ลัง " with trailing space, "LANG" any-case — a product edited by hand should not
+    // lose its reference over spelling that the rest of the app already treats as the same.
+    const units = entryUnitsFor('EA', ['ลัง'], [{ label: ' ลัง ', size: 288 }])
+    expect(units.find((u) => u.label === 'ลัง')!.refSize).toBe(288)
+  })
+
+  test('the base unit and the metric sub-units never carry one', () => {
+    // A reference multiplier only makes sense for a unit whose size is not already known —
+    // it would be nonsense on the base unit itself, or on grams, which already convert for
+    // real.
+    const units = entryUnitsFor('KG', [], [{ label: 'KG', size: 5 }, { label: 'กรัม (g)', size: 5 }])
+    expect(units.every((u) => u.refSize === undefined)).toBe(true)
+  })
+})
+
+describe('normaliseConversions', () => {
+  test('trims labels, drops non-positive sizes, and bounds the length', () => {
+    const raw = [
+      { label: '  ลัง  ', size: 288 },
+      { label: 'ศูนย์', size: 0 },
+      { label: 'ติดลบ', size: -5 },
+      { label: '   ', size: 10 },
+    ]
+    expect(normaliseConversions(raw)).toEqual([{ label: 'ลัง', size: 288 }])
+  })
+
+  test('a repeated label keeps the first one, the same rule the owner\'s own unit list uses', () => {
+    const raw = [
+      { label: 'Case', size: 288 },
+      { label: 'case', size: 24 },
+    ]
+    expect(normaliseConversions(raw)).toEqual([{ label: 'Case', size: 288 }])
+  })
+
+  test('a list longer than the cap is cut, not refused', () => {
+    const raw = Array.from({ length: 25 }, (_, i) => ({ label: `u${i}`, size: 1 }))
+    expect(normaliseConversions(raw)).toHaveLength(20)
   })
 })
 

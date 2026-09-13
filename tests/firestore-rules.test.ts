@@ -170,30 +170,39 @@ function event(id: string, over: Record<string, unknown> = {}) {
   }
 }
 
-describe('product pack size', () => {
-  test('an optional pack size and label are accepted', async () => {
+// Reference multipliers for the entry screens — "1 ลัง = 288 EA" — shown as a hint beside
+// the quantity box and never fed into a movement. The rules bound the list the same way an
+// order's lines are bounded: a size limit, not a check of every element, since the service
+// and the UI are what write it and the shape they write is fixed.
+describe('product unit reference conversions', () => {
+  test('a list of reference conversions is accepted', async () => {
     await assertSucceeds(
-      setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: 300, packLabel: 'ลัง' })),
+      setDoc(
+        doc(as(ADMIN), 'products/p9'),
+        product('p9', { unitConversions: [{ label: 'ลัง', size: 288 }] }),
+      ),
     )
   })
 
-  test('a pack size of zero or less is refused', async () => {
-    // It is a multiplier: zero would collapse every keyed quantity to nothing.
-    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: 0 })))
-    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: -3 })))
+  test('the list is bounded', async () => {
+    await assertFails(
+      setDoc(
+        doc(as(ADMIN), 'products/p9'),
+        product('p9', { unitConversions: Array(21).fill({ label: 'x', size: 1 }) }),
+      ),
+    )
   })
 
-  test('a pack size that is not a number is refused', async () => {
-    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { packSize: '300' })))
-  })
-
-  test('a product without a pack is still valid', async () => {
+  test('a product without any reference conversions is still valid', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p9'), product('p9')))
   })
 
   test('staff still cannot write products', async () => {
     await assertFails(
-      setDoc(doc(as(STAFF), 'products/p9'), product('p9', { packSize: 300 })),
+      setDoc(
+        doc(as(STAFF), 'products/p9'),
+        product('p9', { unitConversions: [{ label: 'ลัง', size: 288 }] }),
+      ),
     )
   })
 })

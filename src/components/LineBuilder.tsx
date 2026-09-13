@@ -143,6 +143,7 @@ export function LineBuilder({
           {lines.map((l) => {
             const avail = availableAt?.(l.productId)
             const over = avail !== undefined && l.qty > avail
+            const conversions = products.find((p) => p.id === l.productId)?.unitConversions
             return (
               <div
                 key={l.productId}
@@ -170,6 +171,7 @@ export function LineBuilder({
                     <QtyInput
                       unitType={l.unit}
                       plainUnits={plainUnits}
+                      conversions={conversions}
                       value={l.qty}
                       onChange={(v, u) => setQty(l.productId, v, u)}
                       invalid={over}

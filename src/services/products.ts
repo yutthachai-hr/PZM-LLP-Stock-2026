@@ -3,6 +3,7 @@ import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import { COL, type ProductImage, type StockLevel } from '../types'
 import { QTY_MAX } from '../lib/validate'
+import { normaliseConversions, type UnitConversion } from '../lib/units'
 
 export interface ProductInput {
   /** Who we buy it from. Empty means nobody has said yet. */
@@ -14,8 +15,8 @@ export interface ProductInput {
   unitType: string
   minStock: number
   cost?: number
-  packSize?: number
-  packLabel?: string
+  /** Reference multipliers for the entry screens — see the field's comment in types.ts. */
+  unitConversions?: UnitConversion[]
 }
 
 /**
@@ -26,7 +27,7 @@ export interface ProductInput {
  * stock valuation negative. HTML attributes are a hint to the person typing, not a rule.
  */
 function checkNumbers(input: Partial<ProductInput>): void {
-  const { minStock, cost, packSize } = input
+  const { minStock, cost } = input
   if (minStock !== undefined) {
     if (!Number.isFinite(minStock) || minStock < 0 || minStock > QTY_MAX) {
       throw new AppError('ขั้นต่ำต้องเป็นตัวเลขไม่ติดลบ')
@@ -37,13 +38,6 @@ function checkNumbers(input: Partial<ProductInput>): void {
       throw new AppError('ต้นทุนต้องเป็นตัวเลขไม่ติดลบ')
     }
   }
-  if (packSize !== undefined) {
-    // Zero or a negative would make every keyed quantity collapse to nothing once the
-    // pack unit was chosen — it is a multiplier, not a count.
-    if (!Number.isFinite(packSize) || packSize <= 0 || packSize > QTY_MAX) {
-      throw new AppError('ขนาดบรรจุต้องมากกว่า 0')
-    }
-  }
 }
 
 export async function createProduct(input: ProductInput): Promise<string> {
@@ -51,11 +45,11 @@ export async function createProduct(input: ProductInput): Promise<string> {
   const now = Date.now()
   // Optional fields are omitted rather than written empty: the rules pin the shape with
   // hasOnly, and a blank string is still a present key.
-  const { packSize, packLabel, supplierId, ...rest } = input
+  const { unitConversions, supplierId, ...rest } = input
+  const conversions = unitConversions ? normaliseConversions(unitConversions) : []
   return backend.add(COL.products, {
     ...rest,
-    ...(packSize === undefined ? {} : { packSize }),
-    ...(packLabel?.trim() ? { packLabel: packLabel.trim() } : {}),
+    ...(conversions.length ? { unitConversions: conversions } : {}),
     ...(supplierId ? { supplierId } : {}),
     hasImage: false,
     active: true,
@@ -72,17 +66,16 @@ export async function updateProduct(
   // An empty cost box means "no cost recorded", which has to remove the field rather than
   // send undefined — Firestore skips undefined values, so clearing a cost of 100 used to
   // save happily and leave the 100 in place, still counted in the stock valuation.
-  const { cost, packSize, packLabel, supplierId, ...rest } = patch
+  const { cost, unitConversions, supplierId, ...rest } = patch
   const write: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
   if ('cost' in patch) write.cost = cost === undefined ? DELETE_FIELD : cost
-  // Same reason as cost: clearing a pack size has to remove the field, or the old
-  // multiplier survives and keeps converting quantities nobody asked it to.
-  if ('packSize' in patch) write.packSize = packSize === undefined ? DELETE_FIELD : packSize
   // "No supplier" has to remove the key: the validator pins the shape with hasOnly, and an
   // empty string would be a present field pointing at nothing.
   if ('supplierId' in patch) write.supplierId = supplierId ? supplierId : DELETE_FIELD
-  if ('packLabel' in patch) {
-    write.packLabel = packLabel?.trim() ? packLabel.trim() : DELETE_FIELD
+  // Clearing the last row has to remove the key too, for the same reason.
+  if ('unitConversions' in patch) {
+    const conversions = unitConversions ? normaliseConversions(unitConversions) : []
+    write.unitConversions = conversions.length ? conversions : DELETE_FIELD
   }
   await backend.update(COL.products, id, write)
 }

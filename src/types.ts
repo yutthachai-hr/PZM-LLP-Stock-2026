@@ -34,20 +34,17 @@ export interface Product {
   supplierId?: string
   cost?: number // optional unit cost for inventory value
   /**
-   * How many base units are in one pack, when the supplier delivers in packs.
+   * Reference multipliers for units this product might be keyed in — "1 ลัง = 288 EA".
    *
-   * Goods arrive as "1 ลัง /300 ชิ้น" or "2/KG" — the company's own item file is full of
-   * it — but the ledger has to hold one number per product per location, so a balance
-   * cannot be part packs and part pieces. This is the multiplier that lets someone key
-   * what the delivery note says and still store base units, exactly as grams already
-   * convert into kilograms.
-   *
-   * Safe to change at any time: movements record base units, so editing it never
-   * rewrites history. That is why it is not frozen the way `unitType` is.
+   * The same product can be ordered by the ลัง, issued by the แพ็ค, and received by the
+   * ชิ้น, and each of those is its own separate balance (see `entryUnit` on
+   * StockMovement) — nothing here changes that. This is purely a number shown beside the
+   * quantity box so a person can see the arithmetic before they type, because a case from
+   * one supplier is not the size of a case from another and the owner's rule is that the
+   * number typed is the number recorded. Safe to change at any time: nothing reads it but
+   * the entry screens, and no movement ever stores it.
    */
-  packSize?: number
-  /** What the pack is called on the delivery note — ลัง, กล่อง, Pack, Lot. */
-  packLabel?: string
+  unitConversions?: { label: string; size: number }[]
   hasImage: boolean
   active: boolean
   createdAt: number

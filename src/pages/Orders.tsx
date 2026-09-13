@@ -536,6 +536,7 @@ function NewOrderModal({
                             <QtyInput
                               unitType={p.unitType}
                               plainUnits={plainUnits}
+                              conversions={p.unitConversions}
                               value={line?.qty ?? 0}
                               onChange={(qty, unit) =>
                                 setLines((cur) => ({ ...cur, [p.id]: { qty, unit } }))
