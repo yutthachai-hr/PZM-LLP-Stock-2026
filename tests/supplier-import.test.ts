@@ -144,6 +144,20 @@ describe('accepting the proposal', () => {
     expect(written.find((p) => p.id === 'c')?.supplierId).toBeUndefined()
   })
 
+  // Production rejected the whole import with "Missing or insufficient permissions". The
+  // memory backend takes any document, so the unit tests were green while the rules —
+  // which only accept the two supplier types the form offers — turned the real write away.
+  // The record the import writes has to be one the hand-entry path would write.
+  test('the supplier it writes is one the form could have created', async () => {
+    seed('products', products as unknown as Record<string, unknown>[])
+    await applySupplierProposal(buildSupplierProposal(products).suppliers)
+    const [written] = raw('suppliers') as Record<string, unknown>[]
+    expect(['takingReturn', 'notTakingReturn']).toContain(written.type)
+    expect(Object.keys(written).sort()).toEqual(
+      ['active', 'contactNumber', 'createdAt', 'email', 'id', 'name', 'type', 'updatedAt'],
+    )
+  })
+
   test('running it again reuses the supplier rather than making a second one', async () => {
     seed('products', products as unknown as Record<string, unknown>[])
     const proposal = buildSupplierProposal(products)

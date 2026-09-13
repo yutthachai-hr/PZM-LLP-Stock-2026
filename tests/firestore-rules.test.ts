@@ -333,6 +333,27 @@ describe('suppliers', () => {
     await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('somethingElse')))
   })
 
+  // The import from product names writes exactly these two documents, in this order. It
+  // shipped writing `type: 'general'` on the first one, which the rule above turns away —
+  // so the owner pressed the button, waited, and got "Missing or insufficient permissions"
+  // for the whole batch. The unit tests could not see it: their backend accepts anything.
+  test('the catalogue import writes a supplier and a product link the rules accept', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'products/p1'), product('p1', { name: 'MUSHROOMS (SIMUMMUANG)' }))
+    })
+    // What createSupplier() writes for a name the import found, nothing filled in yet.
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { contactNumber: '', email: '' })),
+    )
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), 'products/p1'), { supplierId: 's1', updatedAt: ts() }),
+    )
+    // And the value it used to write, so this stays a regression test and not a tautology.
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'suppliers/s2'), supplier('s2', { contactNumber: '', email: '', type: 'general' })),
+    )
+  })
+
   test('both brands are covered', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__suppliers/s1'), supplier('s1')))
     await assertFails(setDoc(doc(as(STAFF), 'lelapin__suppliers/s2'), supplier('s2')))

@@ -9,7 +9,7 @@ import {
   supplierFromName,
 } from '../lib/supplierName'
 import { COL, type Product, type Supplier } from '../types'
-import { invalidateSupplierCache } from './suppliers'
+import { createSupplier, invalidateSupplierCache } from './suppliers'
 
 /**
  * Turning the supplier names hidden in product names into records people can work with.
@@ -126,6 +126,13 @@ export function buildSupplierProposal(products: readonly Product[]): SupplierPro
  * yet rather than products pointing at a supplier that does not exist. Re-running it is
  * safe: a supplier that is already there is reused, and a product already pointing at the
  * right one is skipped.
+ *
+ * Each supplier goes through `createSupplier`, the same call the form makes. This used to
+ * build the document by hand with `type: 'general'` — a value that exists nowhere else:
+ * not in `SupplierType`, not in the form, and not in the rules, which turned the whole
+ * import away with "Missing or insufficient permissions" on the first supplier. The memory
+ * backend the tests run on accepts any document, which is how it got that far. One writer
+ * for the record means the shape cannot drift from what the rules were written against.
  */
 export async function applySupplierProposal(
   accepted: readonly ProposedSupplier[],
@@ -140,15 +147,14 @@ export async function applySupplierProposal(
   for (const row of accepted) {
     let supplier = byKey.get(mergeKey(row.name))
     if (!supplier) {
-      const id = await backend.add(COL.suppliers, {
+      const id = await createSupplier({
         name: row.name,
         contactNumber: '',
         email: '',
-        type: 'general',
+        // The form's own default for a supplier nobody has said anything about yet. The
+        // owner corrects it on the Suppliers screen for the ones that do not take returns.
+        type: 'takingReturn',
         ...(row.note ? { note: row.note } : {}),
-        active: true,
-        createdAt: now,
-        updatedAt: now,
       })
       supplier = { id, name: row.name } as Supplier
       byKey.set(mergeKey(row.name), supplier)
