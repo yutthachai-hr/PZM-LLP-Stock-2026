@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -753,12 +753,72 @@ function OrderSheet({
   onClose: () => void
 }) {
   const t = useT()
+  const toast = useToast()
+  const { brand } = useBrand()
+  const sheet = useRef<HTMLDivElement>(null)
+  const [sharing, setSharing] = useState(false)
+  // The company placing the order goes on the sheet itself, not on the buttons around it:
+  // it is the one thing a supplier reading a photo of this needs that the order does not
+  // otherwise carry, and one install serves two companies.
+  const company = brand ? brandDef(brand).name : ''
+
+  /**
+   * The sheet as a picture, handed to whatever the phone shares with.
+   *
+   * The owner sends these into a LINE group, and the print dialog is the wrong tool for
+   * that. The card is rasterised as drawn — company, number, lines, nothing else — at
+   * twice the screen density so it reads on a phone, and offered to the share sheet as a
+   * JPG. Where there is no share sheet (a desktop browser, mostly) it downloads instead,
+   * which is the same file one step further from the chat.
+   */
+  async function shareImage() {
+    if (!sheet.current) return
+    setSharing(true)
+    try {
+      const { default: html2canvas } = await import('html2canvas')
+      const canvas = await html2canvas(sheet.current, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      })
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.92),
+      )
+      if (!blob) throw new Error('no image')
+      const file = new File([blob], `${order.docNo}.jpg`, { type: 'image/jpeg' })
+      const title = t('ใบสั่งซื้อ {docNo} — {company}', { docNo: order.docNo, company })
+      if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title })
+          return
+        } catch (e) {
+          // Closing the share sheet without choosing is not an error worth a toast.
+          if ((e as { name?: string }).name === 'AbortError') return
+          throw e
+        }
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.name
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      toast.success(t('บันทึกรูปแล้ว — เครื่องนี้ไม่มีเมนูแชร์ จึงดาวน์โหลดให้แทน'))
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setSharing(false)
+    }
+  }
+
   return (
     <Modal open onClose={onClose} title={t('ใบสั่งซื้อ {docNo}', { docNo: order.docNo })}>
       <div className="space-y-3">
-        <div id="order-sheet" className="rounded-lg border border-line-strong bg-surface p-4">
+        <div id="order-sheet" ref={sheet} className="rounded-lg border border-line-strong bg-surface p-4">
           <div className="flex items-start justify-between gap-3 border-b border-line pb-2">
             <div>
+              <div className="text-xs font-bold uppercase tracking-wide text-brand">{company}</div>
               <div className="text-base font-bold text-ink">{t('ใบสั่งซื้อ')}</div>
               <div className="doc-no text-xs text-ink-faint">{order.docNo}</div>
             </div>
@@ -779,9 +839,13 @@ function OrderSheet({
                 <th className="py-1 text-left font-medium">{t('หน่วย')}</th>
               </tr>
             </thead>
+            {/* Row borders are a plain colour, not `border-line/60`: Tailwind writes an
+                opacity modifier as color-mix(in oklab, …), the browser computes that to
+                an oklab() value, and html2canvas cannot parse one — the share button
+                failed on exactly this line. */}
             <tbody>
               {order.lines.map((l) => (
-                <tr key={l.productId} className="border-b border-line/60">
+                <tr key={l.productId} className="border-b border-line">
                   <td className="py-1 pr-2 text-ink">{l.productName}</td>
                   <td className="num py-1 text-right font-semibold text-ink">
                     {fmtQty(l.orderedQty)}
@@ -796,13 +860,17 @@ function OrderSheet({
             {order.invoiceNo ? ` · ${t('บิล')} ${order.invoiceNo}` : ''}
           </div>
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {t('ปิด')}
           </Button>
-          <Button onClick={() => window.print()}>
+          <Button variant="secondary" onClick={() => window.print()}>
             <Icon name="download" size={16} />
             {t('พิมพ์ / บันทึก PDF (A5)')}
+          </Button>
+          <Button onClick={() => void shareImage()} disabled={sharing}>
+            <Icon name="share" size={16} />
+            {sharing ? t('กำลังสร้างรูป...') : t('แชร์เป็นรูป (JPG)')}
           </Button>
         </div>
       </div>
