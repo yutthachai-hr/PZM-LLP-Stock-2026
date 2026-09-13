@@ -27,16 +27,16 @@ import {
 } from '../services/supplierImport'
 import { fmtMoney } from '../lib/format'
 import {
-  addSupplierItem,
   createSupplier,
   deleteSupplier,
+  linkProduct,
   listSupplierItems,
   listSuppliers,
-  removeSupplierItem,
+  unlinkProduct,
   updateSupplier,
   type SupplierInput,
 } from '../services/suppliers'
-import type { Supplier, SupplierItem, SupplierType } from '../types'
+import type { Product, Supplier, SupplierItem, SupplierType } from '../types'
 
 /**
  * Who we buy from.
@@ -53,15 +53,20 @@ import type { Supplier, SupplierItem, SupplierType } from '../types'
  * clear their offline copy, so a global subscription is billed again on nearly every
  * session on every device in every branch, for a screen almost nobody has open.
  *
- * Product names come from DataContext, which already holds the catalogue. Nothing here
- * reads `products`.
+ * Products come from DataContext, which already holds the catalogue, and the link from a
+ * product to its supplier is the product's own `supplierId` — the field the catalogue
+ * import fills in and the ordering screen reads. This screen used to list from the
+ * supplierItems price rows instead, so after the import wrote 299 links it still showed
+ * every supplier as "ยังไม่ได้ผูกสินค้า", and its own "เพิ่มสินค้า" wrote a row Orders never saw.
+ * The price rows are now only what they hold that the product cannot: the price.
  */
 
 interface Row {
-  item: SupplierItem | null
   supplier: Supplier
-  productName: string
-  productSku: string
+  /** Null on the placeholder row a supplier with nothing linked gets. */
+  product: Product | null
+  /** The price row for this pair, when one has been kept. */
+  item: SupplierItem | null
 }
 
 export function SuppliersPage() {
@@ -98,25 +103,25 @@ export function SuppliersPage() {
     void load()
   }, [load])
 
-  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
+  const priceOf = useMemo(() => {
+    const m = new Map<string, SupplierItem>()
+    for (const i of items) m.set(`${i.supplierId}/${i.productId}`, i)
+    return m
+  }, [items])
 
   // A supplier with no products still gets one row, so it is visible and can be given some.
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = []
     for (const s of suppliers) {
-      const mine = items.filter((i) => i.supplierId === s.id)
+      const mine = products
+        .filter((p) => p.supplierId === s.id)
+        .sort((a, b) => a.name.localeCompare(b.name))
       if (mine.length === 0) {
-        out.push({ item: null, supplier: s, productName: '', productSku: '' })
+        out.push({ supplier: s, product: null, item: null })
         continue
       }
-      for (const item of mine) {
-        const p = productById.get(item.productId)
-        out.push({
-          item,
-          supplier: s,
-          productName: p?.name ?? t('(สินค้าถูกลบไปแล้ว)'),
-          productSku: p?.sku ?? '',
-        })
+      for (const p of mine) {
+        out.push({ supplier: s, product: p, item: priceOf.get(`${s.id}/${p.id}`) ?? null })
       }
     }
     const q = search.trim().toLowerCase()
@@ -124,14 +129,16 @@ export function SuppliersPage() {
     return out.filter(
       (r) =>
         r.supplier.name.toLowerCase().includes(q) ||
-        r.productName.toLowerCase().includes(q) ||
-        r.productSku.toLowerCase().includes(q) ||
+        (r.product?.name ?? '').toLowerCase().includes(q) ||
+        (r.product?.sku ?? '').toLowerCase().includes(q) ||
         r.supplier.email.toLowerCase().includes(q),
     )
-  }, [suppliers, items, productById, search, t])
+  }, [suppliers, products, priceOf, search])
+
+  const linkedCount = useMemo(() => products.filter((p) => !!p.supplierId).length, [products])
 
   async function removeSupplier(s: Supplier) {
-    const n = items.filter((i) => i.supplierId === s.id).length
+    const n = products.filter((p) => p.supplierId === s.id).length
     const ok = await confirm({
       title: t('ลบผู้ขาย'),
       message: t('ลบ "{name}" ? รายการสินค้าที่ผูกไว้ {n} รายการจะถูกลบด้วย', {
@@ -143,7 +150,7 @@ export function SuppliersPage() {
     })
     if (!ok) return
     try {
-      await deleteSupplier(s.id)
+      await deleteSupplier(s.id, products)
       toast.success(t('ลบแล้ว'))
       await load()
     } catch (e) {
@@ -151,12 +158,13 @@ export function SuppliersPage() {
     }
   }
 
-  async function unlink(item: SupplierItem) {
+  async function unlink(product: Product) {
     try {
-      await removeSupplierItem(item.id)
-      // Drop it locally rather than re-reading both collections for one deletion.
-      setItems((cur) => cur.filter((i) => i.id !== item.id))
-      toast.success(t('ลบแล้ว'))
+      await unlinkProduct(product.id, items)
+      // The product itself comes back through the products subscription; only the price
+      // row is ours to drop, and dropping it locally beats re-reading the collection.
+      setItems((cur) => cur.filter((i) => i.productId !== product.id))
+      toast.success(t('ปลดสินค้าแล้ว'))
     } catch (e) {
       toast.error(errText(e, t))
     }
@@ -181,14 +189,17 @@ export function SuppliersPage() {
         key: 'product',
         header: t('สินค้า'),
         cell: (r) =>
-          r.item ? (
+          r.product ? (
             <div className="min-w-0">
-              <div className="truncate text-ink">{r.productName}</div>
-              {r.item.buyingPrice !== undefined && (
-                <div className="num text-xs text-ink-faint">
-                  ฿ {fmtMoney(r.item.buyingPrice)} {/* ฿ is a currency symbol — i18n-key */}
-                </div>
-              )}
+              <div className="truncate text-ink">{r.product.name}</div>
+              <div className="flex gap-2 text-xs text-ink-faint">
+                <span className="doc-no">{r.product.sku}</span>
+                {r.item?.buyingPrice !== undefined && (
+                  <span className="num">
+                    ฿ {fmtMoney(r.item.buyingPrice)} {/* ฿ is a currency symbol — i18n-key */}
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             <span className="text-xs text-ink-faint">{t('ยังไม่ได้ผูกสินค้า')}</span>
@@ -239,9 +250,9 @@ export function SuppliersPage() {
               <Button variant="ghost" onClick={() => setEditing(r.supplier)}>
                 {t('แก้ไข')}
               </Button>
-              {r.item ? (
+              {r.product ? (
                 <button
-                  onClick={() => unlink(r.item!)}
+                  onClick={() => unlink(r.product!)}
                   className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
                 >
                   {t('ปลดสินค้า')}
@@ -261,7 +272,7 @@ export function SuppliersPage() {
     // unlink/removeSupplier close over state that changes with every load; the table is
     // cheap to rebuild and this keeps the handlers pointing at current data.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, isAdmin, items, suppliers],
+    [t, isAdmin, items, suppliers, products],
   )
 
   if (loading) return <Spinner label={t('กำลังโหลดผู้ขาย...')} />
@@ -299,13 +310,13 @@ export function SuppliersPage() {
             className="w-full sm:max-w-xs"
           />
           <span className="ml-auto text-xs text-ink-faint">
-            {t('{s} ราย · {i} รายการสินค้า', { s: suppliers.length, i: items.length })}
+            {t('{s} ราย · {i} รายการสินค้า', { s: suppliers.length, i: linkedCount })}
           </span>
         </div>
         <DataTable
           rows={rows}
           columns={columns}
-          rowKey={(r) => r.item?.id ?? `supplier-${r.supplier.id}`}
+          rowKey={(r) => (r.product ? `${r.supplier.id}/${r.product.id}` : `supplier-${r.supplier.id}`)}
           minWidth={900}
           maxHeight="calc(100vh - 300px)"
           empty={
@@ -353,8 +364,12 @@ export function SuppliersPage() {
       {addingTo && (
         <AddProductModal
           supplier={addingTo}
+          suppliers={suppliers}
+          items={items}
           onClose={() => setAddingTo(null)}
-          onAdded={(item) => setItems((cur) => [...cur, item])}
+          onLinked={(productId, item) =>
+            setItems((cur) => [...cur.filter((i) => i.productId !== productId), ...(item ? [item] : [])])
+          }
         />
       )}
     </div>
@@ -608,14 +623,26 @@ function SupplierEditor({
   )
 }
 
+/**
+ * Put one product under a supplier by hand.
+ *
+ * The list is in two groups. First the products nobody supplies yet — after the catalogue
+ * import those are the ones whose name carried no bracket, which the owner said they
+ * would fill in themselves, and this is where. Then everything already placed, labelled
+ * with where it is, so moving one is a choice and not an accident.
+ */
 function AddProductModal({
   supplier,
+  suppliers,
+  items,
   onClose,
-  onAdded,
+  onLinked,
 }: {
   supplier: Supplier
+  suppliers: readonly Supplier[]
+  items: readonly SupplierItem[]
   onClose: () => void
-  onAdded: (item: SupplierItem) => void
+  onLinked: (productId: string, item: SupplierItem | null) => void
 }) {
   const t = useT()
   const toast = useToast()
@@ -624,27 +651,25 @@ function AddProductModal({
   const [price, setPrice] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const sorted = useMemo(
-    () => [...products].sort((a, b) => a.name.localeCompare(b.name)),
-    [products],
-  )
+  const { free, placed } = useMemo(() => {
+    const byName = (a: Product, b: Product) => a.name.localeCompare(b.name)
+    const active = products.filter((p) => p.active !== false)
+    const supplierName = new Map(suppliers.map((s) => [s.id, s.name]))
+    return {
+      free: active.filter((p) => !p.supplierId).sort(byName),
+      placed: active
+        .filter((p) => !!p.supplierId && p.supplierId !== supplier.id)
+        .sort(byName)
+        .map((p) => ({ p, at: supplierName.get(p.supplierId!) ?? t('(ผู้ขายถูกลบไปแล้ว)') })),
+    }
+  }, [products, suppliers, supplier.id, t])
 
   async function save() {
     setBusy(true)
     try {
       const buyingPrice = price.trim() === '' ? undefined : Number(price)
-      const id = await addSupplierItem(supplier.id, productId, buyingPrice)
-      const now = Date.now()
-      // Push the new row into local state instead of re-reading both collections.
-      onAdded({
-        id,
-        supplierId: supplier.id,
-        productId,
-        ...(buyingPrice === undefined ? {} : { buyingPrice }),
-        active: true,
-        createdAt: now,
-        updatedAt: now,
-      })
+      const item = await linkProduct(supplier.id, productId, buyingPrice, items)
+      onLinked(productId, item)
       toast.success(t('บันทึกแล้ว'))
       onClose()
     } catch (e) {
@@ -664,11 +689,20 @@ function AddProductModal({
         <Field label={t('สินค้า')} required>
           <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
             <option value="">{t('— เลือกสินค้า —')}</option>
-            {sorted.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            <optgroup label={t('ยังไม่มีผู้ขาย ({n})', { n: free.length })}>
+              {free.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label={t('อยู่กับผู้ขายรายอื่น — เลือกแล้วจะย้ายมา ({n})', { n: placed.length })}>
+              {placed.map(({ p, at }) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} — {at}
+                </option>
+              ))}
+            </optgroup>
           </Select>
         </Field>
         <Field label={t('ราคาซื้อ/หน่วย (ไม่บังคับ)')}>
