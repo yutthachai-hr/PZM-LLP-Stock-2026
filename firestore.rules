@@ -282,7 +282,7 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'title', 'type', 'startAt', 'status', 'priority',
           'createdBy', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'title', 'type', 'locationId', 'startAt', 'dueAt',
-          'status', 'priority', 'assignedTo', 'assignedToName', 'note',
+          'status', 'priority', 'assignedTo', 'assignedToAll', 'assignedToName', 'note',
           'createdBy', 'createdAt', 'updatedAt'])
         && text(d.title, 300)
         && d.type in ['stockCount', 'audit', 'delivery', 'transfer', 'inventoryTask', 'other']
@@ -292,8 +292,12 @@ service cloud.firestore {
         && text(d.createdBy, 200)
         && (!('locationId' in d) || text(d.locationId, 200))
         && (!('dueAt' in d) || epochMs(d.dueAt) && d.dueAt >= d.startAt)
-        && (!('assignedTo' in d) || text(d.assignedTo, 200))
-        && (!('assignedToName' in d) || text(d.assignedToName, 200))
+        // Who it is for: a list of uids, or — for events written before the list — one uid
+        // as a string. Everyone is the flag, not a list of every uid.
+        && (!('assignedTo' in d) || text(d.assignedTo, 200)
+            || (d.assignedTo is list && d.assignedTo.size() >= 1 && d.assignedTo.size() <= 50))
+        && (!('assignedToAll' in d) || d.assignedToAll is bool)
+        && (!('assignedToName' in d) || text(d.assignedToName, 1000))
         && (!('note' in d) || d.note is string && d.note.size() <= 2000);
     }
 

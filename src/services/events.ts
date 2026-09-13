@@ -37,9 +37,26 @@ export interface EventInput {
   startAt: number
   dueAt?: number
   priority: StockEventPriority
-  assignedTo?: string
+  assignedTo?: string[]
+  assignedToAll?: boolean
   assignedToName?: string
   note?: string
+}
+
+/**
+ * The uids an event is assigned to, whatever shape the document holds.
+ *
+ * A list on anything written since assignees became several; one uid as a string on
+ * everything before. Empty when it is for everyone — that is the flag's job, and a list
+ * of every uid would be wrong the day someone new signs in.
+ */
+export function assigneesOf(e: {
+  assignedTo?: string[] | string
+  assignedToAll?: boolean
+}): string[] {
+  if (e.assignedToAll) return []
+  if (Array.isArray(e.assignedTo)) return e.assignedTo
+  return e.assignedTo ? [e.assignedTo] : []
 }
 
 /** Midnight-to-midnight bounds for a day, in the browser's own timezone. */
@@ -101,7 +118,9 @@ function optional(input: EventInput): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   if (input.locationId) out.locationId = input.locationId
   if (input.dueAt !== undefined) out.dueAt = input.dueAt
-  if (input.assignedTo) out.assignedTo = input.assignedTo
+  // Everyone, or some people, never both: the flag wins and the list is dropped.
+  if (input.assignedToAll) out.assignedToAll = true
+  else if (input.assignedTo?.length) out.assignedTo = input.assignedTo
   if (input.assignedToName) out.assignedToName = input.assignedToName
   if (input.note?.trim()) out.note = input.note.trim()
   return out
@@ -137,7 +156,7 @@ export async function updateEvent(id: string, input: EventInput): Promise<void> 
     updatedAt: Date.now(),
     ...opt,
   }
-  for (const key of ['locationId', 'dueAt', 'assignedTo', 'assignedToName', 'note']) {
+  for (const key of ['locationId', 'dueAt', 'assignedTo', 'assignedToAll', 'assignedToName', 'note']) {
     if (!(key in opt)) patch[key] = DELETE_FIELD
   }
   await backend.update(COL.events, id, patch)

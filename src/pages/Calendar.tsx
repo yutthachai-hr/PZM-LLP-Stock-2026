@@ -26,6 +26,7 @@ import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
 import { formatThaiDateShort } from '../lib/format'
 import {
+  assigneesOf,
   createEvent,
   dayBounds,
   deleteEvent,
@@ -82,6 +83,12 @@ const TYPE_ICON: Record<StockEventType, IconName> = {
   transfer: 'truck',
   inventoryTask: 'note',
   other: 'pin',
+}
+
+/** Who an event is for, as the screens print it. */
+function assigneeLabel(e: StockEvent, t: (k: string) => string): string | undefined {
+  if (e.assignedToAll) return t('ทุกคน')
+  return e.assignedToName || undefined
 }
 
 const STATUS_LABEL: Record<StockEventStatus, string> = {
@@ -736,7 +743,7 @@ function AgendaList({
                     <span className="block truncate text-xs text-ink-faint">
                       {t(TYPE_LABEL[e.type])}
                       {e.locationId && ` · ${locationName(e.locationId) ?? ''}`}
-                      {e.assignedToName && ` · ${e.assignedToName}`}
+                      {assigneeLabel(e, t) && ` · ${assigneeLabel(e, t)}`}
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
@@ -804,7 +811,7 @@ function DayPanel({
                   <span className="block truncate text-xs text-ink-faint">
                     {t(TYPE_LABEL[e.type])}
                     {e.locationId && ` · ${locationName(e.locationId) ?? ''}`}
-                    {e.assignedToName && ` · ${e.assignedToName}`}
+                    {assigneeLabel(e, t) && ` · ${assigneeLabel(e, t)}`}
                   </span>
                 </span>
                 <Badge color={STATUS_COLOR[e.status]}>{t(STATUS_LABEL[e.status])}</Badge>
@@ -876,7 +883,7 @@ function EventDrawer({
         )}
         <Row label={t('คลัง/สาขา')}>{locationName ?? <Muted>{t('ไม่ระบุ')}</Muted>}</Row>
         <Row label={t('ผู้รับผิดชอบ')}>
-          {event.assignedToName ?? <Muted>{t('ยังไม่มอบหมาย')}</Muted>}
+          {assigneeLabel(event, t) ?? <Muted>{t('ยังไม่มอบหมาย')}</Muted>}
         </Row>
         <Row label={t('หมายเหตุ')}>
           {event.note ? (
@@ -987,7 +994,13 @@ function EventEditor({
   const [time, setTime] = useState(toTimeInput(start))
   const [dueDate, setDueDate] = useState(event?.dueAt ? toDateInput(event.dueAt) : '')
   const [priority, setPriority] = useState<StockEventPriority>(event?.priority ?? 'normal')
-  const [assignedTo, setAssignedTo] = useState(event?.assignedTo ?? '')
+  // One person, several, or everyone — the owner's three cases. Everyone is its own flag,
+  // and choosing it clears the list, so an event is never "everyone, and also these two".
+  const [assignedTo, setAssignedTo] = useState<string[]>(() => (event ? assigneesOf(event) : []))
+  const [assignedToAll, setAssignedToAll] = useState(!!event?.assignedToAll)
+  function toggleAssignee(id: string) {
+    setAssignedTo((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
+  }
   const [note, setNote] = useState(event?.note ?? '')
   const [busy, setBusy] = useState(false)
 
@@ -1001,11 +1014,15 @@ function EventEditor({
         startAt: fromInputs(date, time),
         dueAt: dueDate ? fromInputs(dueDate, '23:59') : undefined,
         priority,
-        assignedTo: assignedTo || undefined,
+        assignedTo: assignedToAll ? undefined : assignedTo,
+        assignedToAll: assignedToAll || undefined,
         // Stored so a staff member holding a uid does not have to read `users` to show it.
-        assignedToName: assignedTo
-          ? users.find((u) => u.id === assignedTo)?.name || undefined
-          : undefined,
+        assignedToName: assignedToAll
+          ? t('ทุกคน')
+          : assignedTo
+                .map((id) => users.find((u) => u.id === id)?.name)
+                .filter((n): n is string => !!n)
+                .join(', ') || undefined,
         note,
       }
       const now = Date.now()
@@ -1086,18 +1103,49 @@ function EventEditor({
             ))}
           </Select>
         </Field>
-        <Field label={t('ผู้รับผิดชอบ')}>
-          <Select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
-            <option value="">{t('ยังไม่มอบหมาย')}</option>
+        <fieldset>
+          <legend className="mb-1.5 block text-sm font-medium text-ink">{t('ผู้รับผิดชอบ')}</legend>
+          <div className="max-h-48 divide-y divide-line overflow-auto rounded-lg border border-line-strong">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm font-medium text-ink hover:bg-sunken">
+              <input
+                type="checkbox"
+                checked={assignedToAll}
+                onChange={(e) => {
+                  setAssignedToAll(e.target.checked)
+                  if (e.target.checked) setAssignedTo([])
+                }}
+                className="h-4 w-4 accent-brand"
+              />
+              {t('ทุกคน')}
+            </label>
             {users
               .filter((u) => u.active !== false)
               .map((u) => (
-                <option key={u.id} value={u.id}>
+                <label
+                  key={u.id}
+                  className={`flex min-h-11 items-center gap-3 px-3 text-sm ${
+                    assignedToAll ? 'cursor-default text-ink-faint' : 'cursor-pointer text-ink hover:bg-sunken'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={assignedToAll || assignedTo.includes(u.id)}
+                    disabled={assignedToAll}
+                    onChange={() => toggleAssignee(u.id)}
+                    className="h-4 w-4 accent-brand"
+                  />
                   {u.name}
-                </option>
+                </label>
               ))}
-          </Select>
-        </Field>
+          </div>
+          <p className="mt-1.5 text-xs text-ink-soft">
+            {assignedToAll
+              ? t('มอบหมายให้ทุกคน')
+              : assignedTo.length === 0
+                ? t('ยังไม่มอบหมาย')
+                : t('มอบหมาย {n} คน', { n: assignedTo.length })}
+          </p>
+        </fieldset>
         <Field label={t('หมายเหตุ')}>
           <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>

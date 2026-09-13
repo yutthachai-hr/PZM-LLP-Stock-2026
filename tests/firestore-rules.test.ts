@@ -296,6 +296,44 @@ describe('calendar events', () => {
   })
 })
 
+// Who a task is for. The owner asked for one person, several, or everyone. Several is a
+// list of uids; everyone is a flag rather than a list of every uid, which would go stale
+// the day someone joins. A single uid as a plain string is still accepted, because that is
+// what every event written before this looks like.
+describe('calendar event assignees', () => {
+  test('a list of people, a flag for everyone, and the old single string all pass', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { assignedTo: [STAFF, ADMIN], assignedToName: 'A, B' })),
+    )
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'stockEvents/e2'), event('e2', { assignedToAll: true, assignedToName: 'ทุกคน' })),
+    )
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'stockEvents/e3'), event('e3', { assignedTo: STAFF, assignedToName: 'A' })),
+    )
+  })
+
+  test('the list is bounded, and the flag is a boolean', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { assignedTo: [] })))
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { assignedTo: Array(51).fill(STAFF) })),
+    )
+    await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { assignedToAll: 'yes' })))
+  })
+
+  test('staff still cannot reassign work to themselves', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/e1'), event('e1'))
+    })
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { assignedTo: [STAFF], updatedAt: ts() }),
+    )
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { assignedToAll: true, updatedAt: ts() }),
+    )
+  })
+})
+
 describe('suppliers', () => {
   test('an admin may create one; staff may not', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1')))

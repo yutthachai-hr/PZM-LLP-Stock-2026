@@ -315,9 +315,15 @@ export interface StockEvent {
   dueAt?: number
   status: StockEventStatus
   priority: StockEventPriority
-  assignedTo?: string
   /**
-   * The assignee's name, stored rather than looked up.
+   * Who it is for: a list of uids. Events written before this hold one uid as a plain
+   * string; read through `assigneesOf()` rather than directly.
+   */
+  assignedTo?: string[] | string
+  /** For everyone. A flag, not a list of every uid, so it stays true when someone joins. */
+  assignedToAll?: boolean
+  /**
+   * The assignees' names, joined, stored rather than looked up.
    *
    * `users` is only subscribed for admins, so a staff member holding a uid cannot turn it
    * into a name without a read. Same denormalisation StockMovement already makes for

@@ -131,12 +131,35 @@ describe('changing', () => {
   })
 
   test('clearing an optional field removes it instead of blanking it', async () => {
-    const id = await createEvent({ ...BASE, note: 'เดิม', assignedTo: 'u1' }, ADMIN)
+    const id = await createEvent({ ...BASE, note: 'เดิม', assignedTo: ['u1'], assignedToAll: false }, ADMIN)
     expect('note' in (raw('stockEvents') as Record<string, unknown>[])[0]).toBe(true)
     await updateEvent(id, BASE)
     const row = (raw('stockEvents') as Record<string, unknown>[])[0]
     expect('note' in row).toBe(false)
     expect('assignedTo' in row).toBe(false)
+    expect('assignedToAll' in row).toBe(false)
+  })
+
+  // The owner asked for one person, several, or everyone.
+  test('assignees are a list; everyone is a flag with no list beside it', async () => {
+    await createEvent({ ...BASE, assignedTo: ['u1', 'u2'], assignedToName: 'A, B' }, ADMIN)
+    await createEvent({ ...BASE, assignedToAll: true, assignedTo: ['u1'], assignedToName: 'ทุกคน' }, ADMIN)
+    await createEvent({ ...BASE, assignedTo: [] }, ADMIN)
+    const rows = raw('stockEvents') as Record<string, unknown>[]
+    expect(rows[0].assignedTo).toEqual(['u1', 'u2'])
+    // "everyone" is not a list of everyone — that would be wrong the day someone joins.
+    expect(rows[1].assignedToAll).toBe(true)
+    expect('assignedTo' in rows[1]).toBe(false)
+    // an empty list means nobody, and nobody is the absence of the field
+    expect('assignedTo' in rows[2]).toBe(false)
+  })
+
+  test('an event written before this, with one uid as a string, still reads', async () => {
+    const { assigneesOf } = await import('../src/services/events')
+    expect(assigneesOf({ assignedTo: 'u1' })).toEqual(['u1'])
+    expect(assigneesOf({ assignedTo: ['u1', 'u2'] })).toEqual(['u1', 'u2'])
+    expect(assigneesOf({})).toEqual([])
+    expect(assigneesOf({ assignedToAll: true, assignedTo: 'u1' })).toEqual([])
   })
 
   test('deleting removes it', async () => {
