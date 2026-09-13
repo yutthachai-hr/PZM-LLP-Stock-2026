@@ -160,4 +160,44 @@ input[type='number'] {
   .no-print {
     display: none !important;
   }
+
+  /*
+   * The order sheet, printed on its own.
+   *
+   * A5 because that is what the owner asked for — it is an order handed to a supplier or
+   * photographed into a chat, not a report. The browser's own print dialog does the PDF, so
+   * nothing here costs a library in the bundle.
+   *
+   * Everything but the sheet is hidden by lifting it out of the page flow rather than by
+   * hiding its ancestors: the modal it lives in is positioned, and hiding a positioned
+   * parent takes the child with it.
+   */
+  @page {
+    size: A5;
+    margin: 10mm;
+  }
+
+  /*
+   * Hidden by visibility rather than display: the sheet sits inside a positioned modal, and
+   * `display: none` on an ancestor takes the sheet with it whatever the sheet asks for.
+   * Visibility is the one property a descendant can win back.
+   */
+  body:has(#order-sheet) * {
+    visibility: hidden;
+  }
+
+  #order-sheet,
+  #order-sheet * {
+    visibility: visible;
+  }
+
+  #order-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+  }
 }

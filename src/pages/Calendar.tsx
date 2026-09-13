@@ -72,6 +72,7 @@ const TYPE_LABEL: Record<StockEventType, string> = {
   delivery: 'ของเข้า', // i18n-key
   transfer: 'โอนสาขา', // i18n-key
   inventoryTask: 'งานคลัง', // i18n-key
+  weeklyOrder: 'สั่งประจำสัปดาห์', // i18n-key
   other: 'อื่น ๆ', // i18n-key
 }
 
@@ -81,6 +82,7 @@ const TYPE_ICON: Record<StockEventType, IconName> = {
   delivery: 'receive',
   transfer: 'truck',
   inventoryTask: 'note',
+  weeklyOrder: 'truck',
   other: 'pin',
 }
 
@@ -867,16 +869,33 @@ function EventEditor({
   const [note, setNote] = useState(event?.note ?? '')
   const [busy, setBusy] = useState(false)
 
+  /**
+   * A weekly order is the one entry that tracks goods rather than a job.
+   *
+   * Its stages are the order's — placed, then arrived — mapped onto the calendar's own
+   * statuses so the rest of the screen, the filters and the counts keep working unchanged.
+   */
+  const isOrder = type === 'weeklyOrder'
+  const [orderStage, setOrderStage] = useState<'ordered' | 'received'>(
+    event?.status === 'completed' ? 'received' : 'ordered',
+  )
+
   async function save() {
     setBusy(true)
     try {
-      const startAt = fromInputs(date, time)
+      // A weekly order is placed when it is written down, so its time is now rather than
+      // something anybody picks. An existing one keeps the time it was placed at.
+      const startAt = isOrder
+        ? fromInputs(date, event ? toTimeInput(event.startAt) : toTimeInput(Date.now()))
+        : fromInputs(date, time)
       const input: EventInput = {
         title,
         type,
         locationId: locationId || undefined,
         startAt,
-        dueAt: dueDate ? fromInputs(dueDate, '23:59') : undefined,
+        // An order has no deadline; it has a status. Its due date is dropped rather than
+        // carried as a leftover from whatever the entry used to be.
+        dueAt: isOrder ? undefined : dueDate ? fromInputs(dueDate, '23:59') : undefined,
         priority,
         assignedTo: assignedTo || undefined,
         // Stored so a staff member holding a uid does not have to read `users` to show it.
@@ -886,15 +905,25 @@ function EventEditor({
         note,
       }
       const now = Date.now()
+      // The order's stage, mapped onto the calendar's own statuses so every filter, count
+      // and colour on this screen keeps working without knowing about orders.
+      const stageStatus: StockEventStatus = orderStage === 'received' ? 'completed' : 'inProgress'
       if (event) {
         await updateEvent(event.id, input)
-        onSaved({ ...event, ...input, updatedAt: now } as StockEvent)
+        if (isOrder && event.status !== stageStatus) await setEventStatus(event.id, stageStatus)
+        onSaved({
+          ...event,
+          ...input,
+          ...(isOrder ? { status: stageStatus } : {}),
+          updatedAt: now,
+        } as StockEvent)
       } else {
         const id = await createEvent(input, userId)
+        if (isOrder) await setEventStatus(id, stageStatus)
         onSaved({
           id,
           ...input,
-          status: 'upcoming',
+          status: isOrder ? stageStatus : 'upcoming',
           createdBy: userId,
           createdAt: now,
           updatedAt: now,
@@ -946,13 +975,46 @@ function EventEditor({
           <Field label={t('วันที่')} required>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
-          <Field label={t('เวลา')}>
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          </Field>
+          {/* A weekly order is placed at the moment it is written down, so its time is the
+              time it was created rather than something to pick. */}
+          {!isOrder && (
+            <Field label={t('เวลา')}>
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            </Field>
+          )}
         </div>
-        <Field label={t('กำหนดเสร็จ (ไม่บังคับ)')}>
-          <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-        </Field>
+        {isOrder ? (
+          /* The owner's rule: for a weekly order this row stops being a deadline and becomes
+             where the order actually is — placed, then received. Deliveries are chased by the
+             status, not by a date somebody set optimistically a week earlier. */
+          <Field label={t('สถานะการสั่ง')}>
+            <div className="flex gap-2">
+              {(['ordered', 'received'] as const).map((k) => {
+                const on = orderStage === k
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setOrderStage(k)}
+                    className={`min-h-11 flex-1 cursor-pointer rounded-lg px-3 text-sm font-medium transition-colors duration-150 ${
+                      on
+                        ? k === 'received'
+                          ? 'bg-in-soft text-in ring-1 ring-in/30'
+                          : 'bg-brand-soft text-brand ring-1 ring-brand/30'
+                        : 'border border-line-strong text-ink-soft hover:bg-sunken'
+                    }`}
+                  >
+                    {k === 'ordered' ? t('สั่งแล้ว') : t('รับของแล้ว')}
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
+        ) : (
+          <Field label={t('กำหนดเสร็จ (ไม่บังคับ)')}>
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </Field>
+        )}
         <Field label={t('คลัง/สาขา')}>
           <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
             <option value="">{t('ไม่ระบุ')}</option>

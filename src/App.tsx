@@ -21,6 +21,7 @@ import { MovementsPage } from './pages/Movements'
 import { ReportsPage } from './pages/Reports'
 import { ImportPage } from './pages/Import'
 import { SuppliersPage } from './pages/Suppliers'
+import { OrdersPage } from './pages/Orders'
 import { CalendarPage } from './pages/Calendar'
 import { NotesPage } from './pages/Notes'
 import { SettingsPage } from './pages/Settings'
@@ -72,6 +73,7 @@ function Gate() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/settings" element={<SettingsPage />} />

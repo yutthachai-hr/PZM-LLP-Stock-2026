@@ -62,10 +62,10 @@ service cloud.firestore {
     function staffWritable(name) {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
-        'stockEvents',
+        'stockEvents', 'purchaseOrders',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
-        'lelapin__stockEvents'
+        'lelapin__stockEvents', 'lelapin__purchaseOrders'
       ];
     }
 
@@ -99,8 +99,22 @@ service cloud.firestore {
 
     // Notes are the only thing staff throw away. Clearing balances and images happens
     // when an admin deletes a product or a location.
+    /**
+     * An order whose goods reached the books.
+     *
+     * It is the paperwork behind a stock receipt, and nobody can delete a receipt. Deleting
+     * the order would leave that movement with nothing explaining where it came from, so it
+     * is as permanent as the movement it produced — admins included.
+     */
+    function receivedOrder(name) {
+      return kind(name) == 'purchaseOrders' && resource.data.status == 'received';
+    }
+
     function staffDeletable(name) {
-      return kind(name) == 'notes';
+      // An order that has been received is a record of goods that moved, so it stays. The
+      // service refuses it too; this is the half that a caller with a token cannot skip.
+      return kind(name) == 'notes'
+        || (kind(name) == 'purchaseOrders' && resource.data.status != 'received');
     }
 
     // ---------------------------------------------------------------- values ----
@@ -317,6 +331,46 @@ service cloud.firestore {
         && d.updatedAt is number;
     }
 
+    /**
+     * An order placed with a supplier.
+     *
+     * Staff place and receive orders, which is why this is in the staff list — ordering is
+     * the everyday job, same as recording stock. What staff cannot do is make the stock move
+     * without a receipt: taking an order into stock writes an ordinary stockMovement, and
+     * that document is validated by the same rules as any other.
+     *
+     * The lines are a list, and rules cannot look inside one, so what is pinned here is the
+     * shape around them and a bound on how many. The quantities inside are checked by the
+     * service and, where it matters, by the movement the receipt produces.
+     */
+    function validPurchaseOrder(d) {
+      return d.keys().hasAll([
+          'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
+          'orderedAt', 'lines', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
+          'orderedAt', 'lines', 'invoiceNo', 'receivedAt', 'receivedBy', 'receivedByName',
+          'movementDocNo', 'eventId', 'note',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.status in ['draft', 'ordered', 'received']
+        && text(d.docNo, 40) && text(d.supplierId, 200) && text(d.supplierName, 300)
+        && text(d.locationId, 200)
+        && epochMs(d.orderedAt) && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && d.lines is list && d.lines.size() > 0 && d.lines.size() <= 200
+        && (!('invoiceNo' in d) || text(d.invoiceNo, 100))
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('eventId' in d) || text(d.eventId, 200))
+        && (!('movementDocNo' in d) || text(d.movementDocNo, 40))
+        && (!('receivedAt' in d) || epochMs(d.receivedAt))
+        && (!('receivedBy' in d) || text(d.receivedBy, 200))
+        && (!('receivedByName' in d) || text(d.receivedByName, 200))
+        // An order that reached the books names the paper it came with. Without this the
+        // invoice number is a habit the form could be talked out of.
+        && (d.status != 'received' || ('invoiceNo' in d && 'movementDocNo' in d));
+    }
+
     // A document whose `id` field disagrees with its key makes the UI act on one row while
     // writing to another, so the two are pinned together here rather than hoped for.
     function validShape(name, docId, d) {
@@ -331,6 +385,7 @@ service cloud.firestore {
         : kind(name) == 'stockEvents' ? validEvent(d)
         : kind(name) == 'suppliers' ? validSupplier(d)
         : kind(name) == 'supplierItems' ? validSupplierItem(d)
+        : kind(name) == 'purchaseOrders' ? validPurchaseOrder(d)
         : validImage(d)
       );
     }
@@ -349,6 +404,12 @@ service cloud.firestore {
     function createdHonestly(name) {
       return kind(name) == 'stockEvents'
         ? admin() && request.resource.data.createdBy == request.auth.uid
+        // An order is filed by whoever placed it. Ordering is everyday work, so staff may do
+        // it, but not in a colleague's name — the dashboard's "who ordered this" has to mean
+        // something when the goods do not turn up.
+        : kind(name) == 'purchaseOrders'
+        ? request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status != 'received'
         : kind(name) != 'stockMovements' || (
           request.resource.data.byUserId == request.auth.uid
           && !('voided' in request.resource.data)
@@ -365,10 +426,33 @@ service cloud.firestore {
     // Counters only ever go forwards, so a replayed or forged write cannot hand out a
     // document number that has already been used.
     function editedHonestly(name) {
-      return kind(name) == 'stockMovements' ? movementEdit()
+      return kind(name) == 'purchaseOrders' ? orderEdit()
+        : kind(name) == 'stockMovements' ? movementEdit()
         : kind(name) == 'stockEvents' ? eventEdit()
         : kind(name) == 'counters' ? request.resource.data.value > resource.data.value
         : true;
+    }
+
+    /**
+     * What may change on an order after it is placed.
+     *
+     * Not who placed it, not its number, not the supplier or the destination — those are what
+     * the order IS, and an order whose supplier can be swapped after the fact is not evidence
+     * of anything. Receiving fills in the arrival fields and rewrites the lines with what
+     * actually turned up; both are the same edit and both are listed here.
+     */
+    function orderEdit() {
+      return editedKeys().hasOnly([
+          'status', 'lines', 'invoiceNo', 'note',
+          'receivedAt', 'receivedBy', 'receivedByName', 'movementDocNo', 'updatedAt'
+        ])
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.docNo == resource.data.docNo
+        && request.resource.data.supplierId == resource.data.supplierId
+        && request.resource.data.locationId == resource.data.locationId
+        // Whoever checked the delivery in signs for it.
+        && (!('receivedBy' in request.resource.data)
+            || request.resource.data.receivedBy == request.auth.uid);
     }
 
     function movementEdit() {
@@ -505,7 +589,8 @@ service cloud.firestore {
         && editedHonestly(collection);
 
       allow delete: if active() && staffDeletable(collection);
-      allow delete: if admin() && brandData(collection) && !ledger(collection);
+      allow delete: if admin() && brandData(collection) && !ledger(collection)
+        && !receivedOrder(collection);
     }
   }
 }

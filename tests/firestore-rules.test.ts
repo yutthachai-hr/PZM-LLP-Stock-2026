@@ -629,6 +629,107 @@ describe('a balance counted in a unit somebody keyed', () => {
   })
 })
 
+describe('orders placed with suppliers', () => {
+  const order = (over: Record<string, unknown> = {}) => ({
+    id: 'po1',
+    docNo: 'PO-00001',
+    supplierId: 'sup1',
+    supplierName: 'OLIVA',
+    status: 'ordered',
+    locationId: 'loc1',
+    orderedAt: ts(),
+    lines: [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3 }],
+    createdBy: STAFF,
+    createdByName: 'Staff',
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  })
+  const at = (uid: string, id = 'po1') => doc(as(uid), 'purchaseOrders', id)
+
+  test('staff place orders — it is everyday work, like recording stock', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order()))
+  })
+
+  test('an order cannot be filed in a colleague name', async () => {
+    // The dashboard's "who ordered this" has to mean something when goods do not turn up.
+    await assertFails(setDoc(at(STAFF), order({ createdBy: ADMIN })))
+  })
+
+  test('an order cannot be born already received', async () => {
+    await assertFails(setDoc(at(STAFF), order({ status: 'received' })))
+  })
+
+  test('the shape is pinned, and an empty order is not one', async () => {
+    await assertFails(setDoc(at(STAFF), order({ extra: 'x' })))
+    await assertFails(setDoc(at(STAFF), order({ lines: [] })))
+    await assertFails(setDoc(at(STAFF), order({ status: 'sent' })))
+    await assertFails(setDoc(at(STAFF), order({ orderedAt: 'today' })))
+  })
+
+  test('received means there is an invoice number and a stock receipt behind it', async () => {
+    // Without this the invoice number is a habit the form could be talked out of.
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertFails(updateDoc(at(STAFF), { status: 'received', updatedAt: ts() }))
+    await assertFails(
+      updateDoc(at(STAFF), { status: 'received', invoiceNo: 'IV-1', updatedAt: ts() }),
+    )
+    await assertSucceeds(
+      updateDoc(at(STAFF), {
+        status: 'received',
+        invoiceNo: 'IV-1',
+        movementDocNo: 'RC-00007',
+        receivedBy: STAFF,
+        receivedByName: 'Staff',
+        receivedAt: ts(),
+        updatedAt: ts(),
+      }),
+    )
+  })
+
+  test('what the order IS cannot be rewritten after the fact', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertFails(updateDoc(at(STAFF), { supplierId: 'sup2', updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { docNo: 'PO-09999', updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { locationId: 'loc2', updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { createdBy: ADMIN, updatedAt: ts() }))
+  })
+
+  test('whoever checks the delivery in signs for it themselves', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertFails(
+      updateDoc(at(STAFF), { receivedBy: ADMIN, receivedByName: 'Admin', updatedAt: ts() }),
+    )
+  })
+
+  test('an order that never arrived can be thrown away; one that reached the books cannot', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(deleteDoc(at(STAFF)))
+    await assertSucceeds(
+      setDoc(at(STAFF, 'po2'), order({ id: 'po2', docNo: 'PO-00002' })),
+    )
+    await assertSucceeds(
+      updateDoc(at(STAFF, 'po2'), {
+        status: 'received',
+        invoiceNo: 'IV-2',
+        movementDocNo: 'RC-1',
+        receivedBy: STAFF,
+        receivedByName: 'Staff',
+        receivedAt: ts(),
+        updatedAt: ts(),
+      }),
+    )
+    await assertFails(deleteDoc(at(STAFF, 'po2')))
+    await assertFails(deleteDoc(at(ADMIN, 'po2')))
+  })
+
+  test('someone waiting for approval sees no orders at all', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertFails(getDoc(at(PENDING)))
+    await assertFails(getDoc(doc(anon(), 'purchaseOrders/po1')))
+  })
+})
+
 describe('the list of entry units', () => {
   const units = (over: Record<string, unknown> = {}) => ({
     id: 'entryUnits',

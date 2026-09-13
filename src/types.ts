@@ -211,11 +211,90 @@ export type StockEventType =
   | 'delivery'
   | 'transfer'
   | 'inventoryTask'
+  /**
+   * The weekly order to a supplier.
+   *
+   * The one event type that carries work rather than only describing it: creating one opens
+   * an order, and its status follows the order rather than the generic calendar states.
+   */
+  | 'weeklyOrder'
   | 'other'
 
 export type StockEventStatus = 'upcoming' | 'inProgress' | 'completed' | 'cancelled'
 
 export type StockEventPriority = 'normal' | 'high' | 'critical'
+
+/**
+ * Where an order has got to.
+ *
+ * Deliberately three states and no more. "Ordered" is the moment somebody sent the list to
+ * the supplier; "received" is the moment the goods were checked in and the stock actually
+ * moved. A draft is a list still being built, and nothing outside this app knows about it.
+ */
+export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received'
+
+/** One product on an order, as ordered and as it actually turned up. */
+export interface PurchaseOrderLine {
+  productId: string
+  /** Denormalised, like a movement: the order has to still read correctly years later. */
+  productName: string
+  /** The product's own unit when the order was placed. */
+  unit: string
+  orderedQty: number
+  /**
+   * What actually arrived, filled in during the receiving check.
+   *
+   * Absent until somebody checks the delivery in. Equal to orderedQty on a line that was
+   * simply ticked as correct.
+   */
+  receivedQty?: number
+  /** Ticked to say the delivery matched the order, without retyping the number. */
+  checked?: boolean
+  /** Why it did not match. The screen insists on one whenever the quantity was changed. */
+  note?: string
+}
+
+/**
+ * An order placed with one supplier.
+ *
+ * Its own collection rather than a field on the calendar entry: an order carries a list of
+ * lines that grows, gets checked off on arrival, and is reported on by date and supplier
+ * long after the calendar has moved past it.
+ */
+export interface PurchaseOrder {
+  id: string
+  /** PO-00001. The number people say out loud. */
+  docNo: string
+  supplierId: string
+  /** Denormalised so an old order still names its supplier after a rename. */
+  supplierName: string
+  status: PurchaseOrderStatus
+  /** Where the goods will land, and where the stock receipt will be filed. */
+  locationId: string
+  /** When it was sent to the supplier, ms epoch. */
+  orderedAt: number
+  lines: PurchaseOrderLine[]
+  /**
+   * The supplier's invoice number.
+   *
+   * Required before the goods can be taken into stock, exactly as it is when somebody keys a
+   * receipt by hand — an order that reaches the books without one is a number nobody can
+   * trace back to a piece of paper.
+   */
+  invoiceNo?: string
+  receivedAt?: number
+  receivedBy?: string
+  receivedByName?: string
+  /** The stock receipt this became, so the two can be read against each other. */
+  movementDocNo?: string
+  /** The calendar entry that opened it, when it came from a weekly order. */
+  eventId?: string
+  note?: string
+  createdBy: string
+  createdByName: string
+  createdAt: number
+  updatedAt: number
+}
 
 /**
  * Something that has to happen, on a date, at a location.
@@ -266,6 +345,7 @@ export const COL = {
   suppliers: 'suppliers',
   supplierItems: 'supplierItems',
   events: 'stockEvents',
+  purchaseOrders: 'purchaseOrders',
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const
