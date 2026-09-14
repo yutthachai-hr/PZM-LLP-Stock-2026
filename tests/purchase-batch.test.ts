@@ -16,8 +16,11 @@ vi.mock('../src/backend', async () => {
 })
 const { resetMemory, raw } = await import('./helpers/memory-backend')
 const {
+  approveBatch,
   assessRows,
   buildBatchRows,
+  ensureDraftOrders,
+  settleSendStatus,
   canonicalUnit,
   cancelBatch,
   createBatch,
@@ -340,5 +343,91 @@ describe('the batch document', () => {
     await createBatch({ locationId: 'loc', sourceFileName: 'b', fileHash: 'hb', sheetName: 's', blockLabel: 'x', rows: build(), actor: ACTOR })
     const list = await listBatchesInRange(t0 - 1000, Date.now() + 1000)
     expect(list.map((b) => b.sourceFileName)).toEqual(['b', 'a'])
+  })
+})
+
+describe('from a batch to draft orders', () => {
+  beforeEach(() => {
+    resetMemory()
+    setActiveBrand('pizza')
+  })
+  const orders = () => raw('purchaseOrders') as unknown as PurchaseOrder[]
+  const make = (rows: [string, string, string | number][]) =>
+    createBatch({ locationId: 'loc', sourceFileName: 'f', fileHash: 'h', sheetName: 's', blockLabel: 'x', rows: assessed(rows), actor: ACTOR })
+
+  test('every ready group gets one draft, numbered per supplier, and the batch remembers it', async () => {
+    const batch = await make([
+      ['COKE CAN 325 ML 1X24', 'Pack', 5],
+      ['COKE ZERO CAN 325 ML 1X24', 'Pack', 5],
+      ['FRENCH FRIES 3/8', 'Pack', 6],
+    ])
+    const next = await ensureDraftOrders({ batchId: batch.id, products: PRODUCTS, actor: ACTOR })
+    expect(next.groups.map((g) => [g.supplierName, g.docNo])).toEqual([
+      ['THAINAMTHIP', 'PO-00001'],
+      ['GLOBAL FOOD', 'PO-00001'],
+    ])
+    const all = orders()
+    expect(all).toHaveLength(2)
+    expect(all.every((o) => o.status === 'draft' && o.batchId === batch.id)).toBe(true)
+    const thai = all.find((o) => o.supplierName === 'THAINAMTHIP')!
+    expect(thai.lines.map((l) => [l.productName, l.orderedQty])).toEqual([
+      ['COKE CAN 325 ML 1X24 (THAINAMTHIP)', 5],
+      ['COKE ZERO CAN 325 ML 1X24 (THAINAMTHIP)', 5],
+    ])
+    expect(next.history.at(-1)!.action).toBe('poGenerated')
+  })
+
+  test('a group with a row still in question gets no draft; the other supplier does', async () => {
+    const batch = await make([['COKE CAN 325 ML 1X24', 'Pack', 'ตาม'], ['FRENCH FRIES 3/8', 'Pack', 6]])
+    const next = await ensureDraftOrders({ batchId: batch.id, products: PRODUCTS, actor: ACTOR })
+    expect(next.groups.find((g) => g.supplierName === 'THAINAMTHIP')!.poId).toBeUndefined()
+    expect(next.groups.find((g) => g.supplierName === 'GLOBAL FOOD')!.docNo).toBe('PO-00001')
+    expect(orders()).toHaveLength(1)
+  })
+
+  test('changing a quantity replaces the draft; an approved order is left alone', async () => {
+    const batch = await make([['COKE CAN 325 ML 1X24', 'Pack', 5], ['FRENCH FRIES 3/8', 'Pack', 6]])
+    let cur = await ensureDraftOrders({ batchId: batch.id, products: PRODUCTS, actor: ACTOR })
+    cur = await approveBatch({ batchId: batch.id, products: PRODUCTS, actor: ACTOR, supplierId: 's-global' })
+    const rows = cur.rows.map((r) => (r.rawName.startsWith('COKE') ? { ...r, qty: 7 } : { ...r, qty: 99 }))
+    // Row edits after approval of one group are still allowed for the others.
+    cur = await saveRows({ batchId: batch.id, rows, ctx: ctx(), actor: ACTOR, action: 'qtyChanged' })
+    cur = await ensureDraftOrders({ batchId: batch.id, products: PRODUCTS, actor: ACTOR })
+    const all = orders()
+    const thai = all.filter((o) => o.supplierName === 'THAINAMTHIP')
+    expect(thai).toHaveLength(1)
+    expect(thai[0]).toMatchObject({ status: 'draft', docNo: 'PO-00002' })
+    expect(thai[0].lines[0].orderedQty).toBe(7)
+    const global = all.find((o) => o.supplierName === 'GLOBAL FOOD')!
+    expect(global.status).toBe('ordered')
+    expect(global.lines[0].orderedQty).toBe(6)
+  })
+
+  test('approve all places every ready group and marks the batch approved', async () => {
+    const batch = await make([['COKE CAN 325 ML 1X24', 'Pack', 5], ['FRENCH FRIES 3/8', 'Pack', 6]])
+    const next = await approveBatch({ batchId: batch.id, products: PRODUCTS, actor: { id: 'u9', name: 'Boss' } })
+    expect(next.status).toBe('approved')
+    expect(orders().every((o) => o.status === 'ordered' && o.approvedBy === 'u9')).toBe(true)
+    expect(next.history.map((h) => h.action)).toEqual(['imported', 'poGenerated', 'approved'])
+    await expect(saveRows({ batchId: batch.id, rows: next.rows, ctx: ctx(), actor: ACTOR, action: 'x' })).rejects.toThrow()
+  })
+
+  test('approve all with an unresolved row places the others and keeps the batch open', async () => {
+    const batch = await make([['SOMETHING NEW', 'EA', 1], ['FRENCH FRIES 3/8', 'Pack', 6]])
+    const next = await approveBatch({ batchId: batch.id, products: PRODUCTS, actor: ACTOR })
+    expect(next.status).toBe('needsReview')
+    expect(orders().map((o) => o.status)).toEqual(['ordered'])
+  })
+
+  test('the batch completes once every placed order is sent or skipped', async () => {
+    const batch = await make([['COKE CAN 325 ML 1X24', 'Pack', 5], ['FRENCH FRIES 3/8', 'Pack', 6]])
+    await approveBatch({ batchId: batch.id, products: PRODUCTS, actor: ACTOR })
+    const { setShareStatus } = await import('../src/services/purchaseOrders')
+    const [a, b] = orders()
+    await setShareStatus(a.id, 'sent', ACTOR, 1)
+    expect((await settleSendStatus(batch.id, ACTOR)).status).toBe('sending')
+    await setShareStatus(b.id, 'skipped', ACTOR)
+    expect((await settleSendStatus(batch.id, ACTOR)).status).toBe('completed')
+    await expect(cancelBatch(batch.id, ACTOR)).rejects.toThrow()
   })
 })

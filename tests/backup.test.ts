@@ -327,6 +327,21 @@ describe('what arrived after the backup was written', () => {
     expect((raw('purchaseOrders')[0] as { status: string }).status).toBe('received')
   })
 
+  test('imported order lists and confirmed spellings travel with the file, and a batch is never overwritten', async () => {
+    seed('productAliases', [{ id: 'alias-1', key: 'X', productId: 'p1', sourceName: 'X ', createdBy: 'u', createdByName: 'U', createdAt: 1 }])
+    seed('purchaseBatches', [{ id: 'pb1', batchNo: 'PB-20260914-001', locationId: MAIN, sourceFileName: 'f', fileHash: 'h', sheetName: 's', blockLabel: 'x', status: 'ready', rows: [], groups: [], history: [], createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 }])
+    const b = await buildBackup('Owner')
+    expect(b.version).toBe(4)
+    expect(b.data.productAliases).toHaveLength(1)
+    expect(b.data.purchaseBatches).toHaveLength(1)
+
+    resetMemory()
+    seed('purchaseBatches', [{ ...(b.data.purchaseBatches[0] as object), status: 'completed' }])
+    await restoreBackup(parseBackup(JSON.stringify(b)), RESTORE_MODES.overwrite)
+    expect(raw('productAliases')).toHaveLength(1)
+    expect((raw('purchaseBatches')[0] as { status: string }).status).toBe('completed')
+  })
+
   test('a file from before these collections existed still restores', async () => {
     const b = await buildBackup('Owner')
     const old = { ...b, version: 2, data: Object.fromEntries(Object.entries(b.data).filter(([k]) => !['suppliers', 'supplierItems', 'stockEvents', 'purchaseOrders'].includes(k))), counts: {} }

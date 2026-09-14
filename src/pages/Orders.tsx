@@ -135,7 +135,8 @@ export function OrdersPage() {
           [t('สินค้า')]: l.productName,
           [t('จำนวนที่สั่ง')]: l.orderedQty,
           [t('หน่วย')]: shownUnit(l),
-          [t('สถานะ')]: o.status === 'received' ? t('รับของแล้ว') : t('สั่งแล้ว'),
+          [t('สถานะ')]:
+            o.status === 'received' ? t('รับของแล้ว') : o.status === 'draft' ? t('ร่าง') : t('สั่งแล้ว'),
           [t('จำนวนที่รับ')]: o.status === 'received' ? (l.receivedQty ?? '') : '',
           [t('วันที่รับ')]: o.receivedAt ? formatThaiDate(o.receivedAt) : '',
           [t('เลขที่บิล')]: o.invoiceNo ?? '',
@@ -318,6 +319,10 @@ function OrderRow({
 }) {
   const t = useT()
   const done = order.status === 'received'
+  // A draft is a proposal from an imported list that nobody has approved yet. It is
+  // shown so the person knows it exists, but it is not waiting for goods and cannot be
+  // received — approving happens on the batch screen it came from.
+  const draft = order.status === 'draft'
   return (
     <li className="flex flex-wrap items-center gap-3 p-3">
       <div className="min-w-0 flex-1">
@@ -326,9 +331,12 @@ function OrderRow({
           <span className="doc-no text-xs text-ink-faint">{order.docNo}</span>
           {done ? (
             <Badge color="green">{t('รับของแล้ว')}</Badge>
+          ) : draft ? (
+            <Badge color="slate">{t('ร่าง — รออนุมัติ')}</Badge>
           ) : (
             <Badge color={late ? 'red' : 'blue'}>{t('สั่งแล้ว')}</Badge>
           )}
+          {order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>}
           {late && (
             <Badge color="red">
               {t('รอมา {days} วัน', { days: daysWaiting(order) })}
@@ -345,7 +353,7 @@ function OrderRow({
         <Button variant="ghost" onClick={onOpen}>
           {t('ดูใบสั่ง')}
         </Button>
-        {!done && <Button onClick={onReceive}>{t('ตรวจรับของ')}</Button>}
+        {!done && !draft && <Button onClick={onReceive}>{t('ตรวจรับของ')}</Button>}
         {!done && (
           <button
             onClick={onRemove}

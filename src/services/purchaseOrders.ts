@@ -10,6 +10,7 @@ import {
   type PurchaseOrder,
   type PurchaseOrderLine,
   type PurchaseOrderStatus,
+  type PurchaseShareStatus,
   type Supplier,
 } from '../types'
 
@@ -103,6 +104,11 @@ export async function createPurchaseOrder(params: {
   actor: { id: string; name: string }
   orderedAt?: number
   eventId?: string
+  /**
+   * The imported order list this came from. Such an order is born a draft: it is a
+   * proposal until somebody approves it, and the sheet is never shared before that.
+   */
+  batchId?: string
   note?: string
 }): Promise<string> {
   const { supplier, locationId, actor } = params
@@ -153,11 +159,12 @@ export async function createPurchaseOrder(params: {
       docNo: makeDocNo(seq),
       supplierId: supplier.id,
       supplierName: supplier.name,
-      status: 'ordered' satisfies PurchaseOrderStatus,
+      status: (params.batchId ? 'draft' : 'ordered') satisfies PurchaseOrderStatus,
       locationId,
       orderedAt,
       lines,
       ...(params.eventId ? { eventId: params.eventId } : {}),
+      ...(params.batchId ? { batchId: params.batchId } : {}),
       ...(params.note?.trim() ? { note: params.note.trim() } : {}),
       createdBy: actor.id,
       createdByName: actor.name,
@@ -166,6 +173,57 @@ export async function createPurchaseOrder(params: {
     })
     return id
   })
+}
+
+/**
+ * Turn a draft into an order.
+ *
+ * The moment the proposal becomes a promise: from here the order counts as waiting for
+ * goods, shows on the dashboard, and may be sent. `orderedAt` is reset to now, because the
+ * date an order was drafted is not the date it was placed. Who approved is written on the
+ * order itself, so a sheet that turns out wrong can be traced without the batch.
+ */
+export async function approvePurchaseOrder(
+  id: string,
+  actor: { id: string; name: string },
+): Promise<void> {
+  const db = scoped()
+  await db.transaction(async (tx) => {
+    const order = await tx.get<PurchaseOrder>(COL.purchaseOrders, id)
+    if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
+    if (order.status !== 'draft') return // already approved; idempotent by design
+    const now = Date.now()
+    tx.update(COL.purchaseOrders, id, {
+      status: 'ordered' satisfies PurchaseOrderStatus,
+      orderedAt: now,
+      approvedBy: actor.id,
+      approvedByName: actor.name,
+      approvedAt: now,
+      updatedAt: now,
+    })
+  })
+}
+
+/**
+ * Record where the sheet has got to on its way to the supplier — see the field's comment on
+ * PurchaseOrder for what each status may honestly claim.
+ */
+export async function setShareStatus(
+  id: string,
+  status: PurchaseShareStatus,
+  actor: { id: string; name: string },
+  imageVersion?: number,
+): Promise<void> {
+  const now = Date.now()
+  const patch: Record<string, unknown> = { shareStatus: status, updatedAt: now }
+  if (status === 'shareOpened') patch.shareOpenedAt = now
+  if (status === 'sent') {
+    patch.sentAt = now
+    patch.sentBy = actor.id
+    patch.sentByName = actor.name
+    if (imageVersion !== undefined) patch.imageVersion = imageVersion
+  }
+  await scoped().update(COL.purchaseOrders, id, patch)
 }
 
 /**
@@ -242,6 +300,8 @@ export async function receivePurchaseOrder(params: {
   const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, orderId)
   if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
   if (order.status === 'received') throw new AppError('ใบสั่งซื้อนี้รับของแล้ว')
+  // A draft is a proposal nobody has placed; goods cannot arrive against it.
+  if (order.status === 'draft') throw new AppError('ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ')
 
   const given = new Map(params.lines.map((l) => [l.productId, l]))
   const settled: PurchaseOrderLine[] = []
@@ -321,6 +381,7 @@ export function summariseBySupplier(
 ): { supplierName: string; orders: number; lines: number; items: number }[] {
   const by = new Map<string, { supplierName: string; orders: number; lines: number; items: number }>()
   for (const o of orders) {
+    if (o.status === 'draft') continue // a proposal is not something ordered from anyone
     const row = by.get(o.supplierId) ?? {
       supplierName: o.supplierName,
       orders: 0,

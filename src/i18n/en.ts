@@ -934,4 +934,8 @@ export const EN: Record<string, string> = {
   'ไม่พบชุดนำเข้านี้': 'This import batch was not found',
   'ชุดนี้อนุมัติแล้ว แก้ไขรายการไม่ได้': 'This batch is approved; its rows can no longer be edited',
   'ชุดนี้ส่งครบแล้ว ยกเลิกไม่ได้': 'This batch has been fully sent and cannot be cancelled',
+  'ร่าง — รออนุมัติ': 'Draft — awaiting approval',
+  'ร่าง': 'Draft',
+  'ส่งเข้า LINE แล้ว': 'Sent to LINE',
+  'ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ': 'This order is still a draft — approve it before receiving',
 }

@@ -21,7 +21,9 @@ vi.mock('../src/backend', async () => {
 const { resetMemory, seed, raw } = await import('./helpers/memory-backend')
 const {
   CHASE_AFTER_DAYS,
+  approvePurchaseOrder,
   createPurchaseOrder,
+  setShareStatus,
   daysWaiting,
   deletePurchaseOrder,
   listOrdersInRange,
@@ -407,5 +409,73 @@ describe('cancelling', () => {
     })
     await expect(deletePurchaseOrder(id)).rejects.toThrow()
     expect(orders()).toHaveLength(1)
+  })
+})
+
+// ---- drafts: an order from an imported list is a proposal until approved ----------
+
+describe('a draft order', () => {
+  const draft = () =>
+    createPurchaseOrder({
+      supplier: SUPPLIER,
+      locationId: MAIN,
+      lines: [{ productId: 'p1', qty: 10 }],
+      products,
+      actor: ACTOR,
+      batchId: 'batch-1',
+    })
+
+  test('is born a draft only when it comes from a batch, and carries the batch id', async () => {
+    const id = await draft()
+    const manual = await placeOrder()
+    const byId = (x: string) => orders().find((o) => o.id === x)!
+    expect(byId(id)).toMatchObject({ status: 'draft', batchId: 'batch-1' })
+    expect(byId(manual).status).toBe('ordered')
+    expect('batchId' in byId(manual)).toBe(false)
+  })
+
+  test('is not waiting for goods, and cannot be received', async () => {
+    const id = await draft()
+    const o = orders().find((x) => x.id === id)!
+    expect(overdueOrders([{ ...o, orderedAt: 0 }], Date.now())).toEqual([])
+    await expect(
+      receivePurchaseOrder({ orderId: id, invoiceNo: 'INV-1', lines: [{ productId: 'p1', receivedQty: 10, checked: true }], actor: ACTOR }),
+    ).rejects.toThrow(/ร่าง/)
+  })
+
+  test('approval places it: status, a fresh orderedAt, and who approved', async () => {
+    const id = await draft()
+    const before = orders().find((x) => x.id === id)!.orderedAt
+    await new Promise((r) => setTimeout(r, 2))
+    await approvePurchaseOrder(id, { id: 'uid-boss', name: 'Boss' })
+    const o = orders().find((x) => x.id === id)!
+    expect(o).toMatchObject({ status: 'ordered', approvedBy: 'uid-boss', approvedByName: 'Boss' })
+    expect(o.orderedAt).toBeGreaterThan(before)
+    expect(o.approvedAt).toBe(o.orderedAt)
+    // Approving twice changes nothing — the second person does not replace the first.
+    await approvePurchaseOrder(id, { id: 'uid-other', name: 'Other' })
+    expect(orders().find((x) => x.id === id)!.approvedBy).toBe('uid-boss')
+  })
+
+  test("still takes the supplier's next number, like any order", async () => {
+    await draft()
+    const second = await placeOrder()
+    expect(orders().find((x) => x.id === second)!.docNo).toBe('PO-00002')
+  })
+})
+
+describe('where the sheet has got to', () => {
+  test('opening the share screen and LINE confirming are two different facts', async () => {
+    const id = await placeOrder()
+    await setShareStatus(id, 'shareOpened', ACTOR)
+    let o = orders().find((x) => x.id === id)!
+    expect(o.shareStatus).toBe('shareOpened')
+    expect(o.shareOpenedAt).toBeGreaterThan(0)
+    expect(o.sentAt).toBeUndefined()
+
+    await setShareStatus(id, 'sent', ACTOR, 2)
+    o = orders().find((x) => x.id === id)!
+    expect(o).toMatchObject({ shareStatus: 'sent', sentBy: 'uid-staff', sentByName: 'Staff', imageVersion: 2 })
+    expect(o.sentAt).toBeGreaterThan(0)
   })
 })

@@ -7,6 +7,7 @@ import { buildMatchIndex, matchProduct, type MatchIndex, type ProductAlias } fro
 import { sameUnit } from '../lib/units'
 import { startOfDay } from '../lib/format'
 import { shownUnit } from '../lib/ledger'
+import { approvePurchaseOrder, createPurchaseOrder, deletePurchaseOrder } from './purchaseOrders'
 import {
   COL,
   type BatchGroup,
@@ -485,4 +486,142 @@ export async function cancelBatch(batchId: string, actor: { id: string; name: st
   if (!cur) throw new AppError('ไม่พบชุดนำเข้านี้')
   if (cur.status === 'completed') throw new AppError('ชุดนี้ส่งครบแล้ว ยกเลิกไม่ได้')
   await appendHistory(batchId, actor, 'cancelled', undefined, { status: 'cancelled' })
+}
+
+// ---------------------------------------------------------------- draft orders ----
+
+/** What a group's rows would put on an order, for telling whether a draft is still right. */
+function linesOf(batch: PurchaseBatch, group: BatchGroup) {
+  return group.rowIdx
+    .map((i) => batch.rows[i])
+    .filter((r) => !r.skipped && r.productId && r.qty !== undefined && r.qty > 0)
+    .map((r) => ({ productId: r.productId!, qty: r.qty!, ...(r.entryUnit ? { entryUnit: r.entryUnit } : {}) }))
+}
+
+function sameLines(a: PurchaseOrder['lines'], b: ReturnType<typeof linesOf>): boolean {
+  if (a.length !== b.length) return false
+  return a.every((l, i) => {
+    const m = b[i]
+    return l.productId === m.productId && l.orderedQty === m.qty && (l.entryUnit ?? '') === (m.entryUnit ?? '')
+  })
+}
+
+/**
+ * A draft order for every group that is ready, and none for any that is not.
+ *
+ * Drafts are proposals, so they follow the rows: a group whose rows changed since its draft
+ * was written gets a fresh draft and the stale one is deleted, and a group that no longer
+ * exists loses its draft. Only drafts are touched — an approved order is a promise and is
+ * never rewritten here. Uses the same `createPurchaseOrder` as the manual screen, so the
+ * numbering and the line checks are the ones every order gets.
+ */
+export async function ensureDraftOrders(params: {
+  batchId: string
+  products: readonly Product[]
+  actor: { id: string; name: string }
+}): Promise<PurchaseBatch> {
+  const db = scoped()
+  const batch = await getBatch(params.batchId)
+  if (!batch) throw new AppError('ไม่พบชุดนำเข้านี้')
+  if (['completed', 'cancelled'].includes(batch.status)) return batch
+
+  const mine = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'batchId', batch.id)
+  const byId = new Map(mine.map((o) => [o.id, o]))
+  const groups: BatchGroup[] = []
+  const notes: string[] = []
+  for (const g of batch.groups) {
+    const state = groupState({ ...g, poId: undefined }, batch.rows)
+    const existing = g.poId ? byId.get(g.poId) : undefined
+    const wanted = linesOf(batch, g)
+    if (existing && existing.status !== 'draft') {
+      groups.push(g) // placed; leave it alone whatever the rows now say
+      continue
+    }
+    if (existing && state === 'ready' && sameLines(existing.lines, wanted)) {
+      groups.push(g)
+      continue
+    }
+    if (existing) {
+      await deletePurchaseOrder(existing.id)
+      byId.delete(existing.id)
+      notes.push(`${existing.docNo} ✕`)
+    }
+    if (state !== 'ready' || wanted.length === 0) {
+      groups.push({ supplierId: g.supplierId, supplierName: g.supplierName, rowIdx: g.rowIdx })
+      continue
+    }
+    const poId = await createPurchaseOrder({
+      supplier: { id: g.supplierId, name: g.supplierName },
+      locationId: batch.locationId,
+      lines: wanted,
+      products: params.products,
+      actor: params.actor,
+      batchId: batch.id,
+    })
+    const created = await db.getOne<PurchaseOrder>(COL.purchaseOrders, poId)
+    groups.push({ ...g, poId, docNo: created?.docNo })
+    notes.push(`${g.supplierName}: ${created?.docNo ?? ''}`)
+  }
+  // Drafts for suppliers that have since left the batch.
+  const referenced = new Set(groups.map((g) => g.poId).filter(Boolean))
+  for (const o of byId.values()) {
+    if (o.status === 'draft' && !referenced.has(o.id)) {
+      await deletePurchaseOrder(o.id)
+      notes.push(`${o.docNo} ✕`)
+    }
+  }
+  if (notes.length === 0) return { ...batch, groups }
+  return appendHistory(batch.id, params.actor, 'poGenerated', notes.join(', '), { groups })
+}
+
+/**
+ * Approve the drafts of every group that is ready — or of one group — and, once every
+ * group in the batch has a placed order and no row is still waiting on a person, mark the
+ * batch approved. A batch with a row nobody has settled stays at needsReview, with the
+ * groups that were approved approved: one unknown product should not hold up the other
+ * seven suppliers.
+ */
+export async function approveBatch(params: {
+  batchId: string
+  products: readonly Product[]
+  actor: { id: string; name: string }
+  /** Only this supplier's group; everything ready when absent. */
+  supplierId?: string
+}): Promise<PurchaseBatch> {
+  const db = scoped()
+  const batch = await ensureDraftOrders(params)
+  if (['completed', 'cancelled'].includes(batch.status)) return batch
+  const approved: string[] = []
+  for (const g of batch.groups) {
+    if (params.supplierId && g.supplierId !== params.supplierId) continue
+    if (!g.poId) continue
+    const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, g.poId)
+    if (!order || order.status !== 'draft') continue
+    await approvePurchaseOrder(g.poId, params.actor)
+    approved.push(g.docNo ?? g.poId)
+  }
+  const orders = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'batchId', batch.id)
+  const placed = new Set(orders.filter((o) => o.status !== 'draft').map((o) => o.id))
+  const allPlaced = batch.groups.length > 0 && batch.groups.every((g) => g.poId && placed.has(g.poId))
+  const orphan = batch.rows.some((r) => !r.skipped && !r.supplierId)
+  const status: PurchaseBatchStatus = allPlaced && !orphan ? 'approved' : batch.status
+  if (approved.length === 0 && status === batch.status) return batch
+  return appendHistory(batch.id, params.actor, 'approved', approved.join(', '), { status })
+}
+
+/**
+ * Where the batch stands after a sheet was sent or skipped: `sending` while any placed
+ * order is still unsent, `completed` once every one has been sent or deliberately skipped.
+ */
+export async function settleSendStatus(batchId: string, actor: { id: string; name: string }): Promise<PurchaseBatch> {
+  const db = scoped()
+  const batch = await getBatch(batchId)
+  if (!batch) throw new AppError('ไม่พบชุดนำเข้านี้')
+  if (!['approved', 'sending'].includes(batch.status)) return batch
+  const orders = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'batchId', batch.id)
+  const placed = orders.filter((o) => o.status !== 'draft')
+  const done = placed.every((o) => o.shareStatus === 'sent' || o.shareStatus === 'skipped')
+  const status: PurchaseBatchStatus = placed.length > 0 && done ? 'completed' : 'sending'
+  if (status === batch.status) return batch
+  return appendHistory(batchId, actor, status, undefined, { status })
 }
