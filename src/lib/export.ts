@@ -97,7 +97,10 @@ export function exportReportPdf(opts: PdfReportOptions): void {
     body: opts.body.map((r) => r.map((c) => String(c))),
     foot: opts.foot ? [opts.foot.map((c) => String(c))] : undefined,
     styles: { font, fontSize: 9, cellPadding: 4 },
-    headStyles: { font, fillColor: [185, 28, 28], textColor: 255 },
+    // Sarabun is registered as 'normal' only; autoTable bolds the head by default, and a
+    // bold request falls back to a font with no Thai glyphs — the header came out as
+    // "'1 5H*1 @%" on the order sheet PDF while every body row read fine.
+    headStyles: { font, fillColor: [185, 28, 28], textColor: 255, fontStyle: 'normal' },
     footStyles: { font, fillColor: [241, 245, 249], textColor: 20, fontStyle: 'normal' },
     alternateRowStyles: { fillColor: [250, 250, 250] },
   })
