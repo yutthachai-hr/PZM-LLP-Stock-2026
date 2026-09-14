@@ -943,4 +943,9 @@ export const EN: Record<string, string> = {
   'กรุณาเข้าสู่ระบบใหม่': 'Please sign in again',
   'รูปใหญ่เกินไป': 'The picture is too large',
   'อัปโหลดรูปไม่สำเร็จ ({status})': 'Uploading the picture failed ({status})',
+  'เครื่องนี้ยังไม่ได้ตั้งค่า LINE (LIFF)': 'LINE (LIFF) is not set up on this deployment',
+  'LINE รุ่นนี้หรือการตั้งค่า LIFF ยังไม่รองรับการเลือกผู้รับ': 'This LINE version, or the LIFF settings, do not support the recipient picker',
+  'ยังไม่มีรูปสำหรับส่ง': 'There is no picture to send yet',
+  'ส่ง LINE': 'Send via LINE',
+  'แชร์รูป': 'Share picture',
 }

@@ -16,6 +16,7 @@
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
+    "@line/liff": "^2.31.0",
     "@netlify/blobs": "^11.1.0",
     "@netlify/functions": "^6.0.0",
     "dayjs": "^1.11.21",
