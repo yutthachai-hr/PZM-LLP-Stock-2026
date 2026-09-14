@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const sdk = {
   init: vi.fn(async () => {}),
+  isInClient: vi.fn(() => false),
   isLoggedIn: vi.fn(() => true),
   login: vi.fn(),
   isApiAvailable: vi.fn(() => true),
@@ -78,10 +79,18 @@ describe('the LINE (LIFF) provider', () => {
     expect(sdk.shareTargetPicker).not.toHaveBeenCalled()
   })
 
-  test('is only available when the picker is', async () => {
+  test('is available before login (login comes first), and only with the picker after', async () => {
     expect(await lineLiffProvider.isAvailable()).toBe(true)
     sdk.isApiAvailable.mockReturnValue(false)
     expect(await lineLiffProvider.isAvailable()).toBe(false)
+    // Not signed in yet: the SDK cannot know about the picker, so this is not a "no".
+    sdk.isLoggedIn.mockReturnValue(false)
+    expect(await lineLiffProvider.isAvailable()).toBe(true)
+    // Inside the LINE app the picker is LINE's own; the SDK answer is trusted as is.
+    sdk.isLoggedIn.mockReturnValue(true)
+    sdk.isInClient.mockReturnValue(true)
+    expect(await lineLiffProvider.isAvailable()).toBe(true)
+    sdk.isInClient.mockReturnValue(false)
   })
 
   test('needs the picture hosted first', async () => {

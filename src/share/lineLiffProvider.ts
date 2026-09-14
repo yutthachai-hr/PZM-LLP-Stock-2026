@@ -56,6 +56,11 @@ export const lineLiffProvider: PurchaseShareProvider = {
     if (!liffId()) return false
     try {
       const sdk = await liff()
+      // In an ordinary browser the SDK reports the picker unavailable until the person has
+      // been through LINE Login (seen on the demo deploy: init fine, picker false, not
+      // logged in). That is not "no LINE here" — it is "not yet signed in", and share()
+      // takes them through login. Only a signed-in SDK that still says no means no.
+      if (sdk.isInClient() || !sdk.isLoggedIn()) return true
       return sdk.isApiAvailable('shareTargetPicker')
     } catch {
       return false
