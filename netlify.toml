@@ -91,7 +91,15 @@
 # A branch named `demo` deploys the demo build: browser storage only, never the live
 # Firebase project (see .env.demo). It exists so the LINE share — which needs a real HTTPS
 # address to run — can be tried without touching production. Enable "branch deploys" for
-# `demo` in the Netlify UI; set PO_IMAGE_DEMO_KEY / VITE_PO_IMAGE_DEMO_KEY (the same random
-# string) and VITE_LIFF_ID for this context there, not here.
+# `demo` in the Netlify UI.
+#
+# VITE_LIFF_ID is the LIFF app whose Endpoint URL is the demo deploy (the owner created it
+# on 14 Sep 2026). A LIFF id is public — it ships in client code — so it lives here.
+# Production gets its own LIFF app (endpoint = the live URL), set as VITE_LIFF_ID on the
+# production context in the Netlify UI, never in this file.
+#
+# PO_IMAGE_DEMO_KEY / VITE_PO_IMAGE_DEMO_KEY (the same random string) are set in the
+# Netlify UI for this context only — a key does not belong in the repo.
 [context.demo.environment]
   VITE_DEMO_MODE = "1"
+  VITE_LIFF_ID = "2011602857-k9K8Zplx"
