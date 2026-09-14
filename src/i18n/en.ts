@@ -927,4 +927,11 @@ export const EN: Record<string, string> = {
   'ขั้นต่ำ {n}': 'min. {n}',
   'ขั้นต่ำในการสั่ง (ไม่บังคับ)': 'Minimum order (optional)',
   'เช่น 5 — เตือนเมื่อสั่งน้อยกว่านี้': 'e.g. 5 — warns when an order is below this',
+  // ---- purchase automation: import + batch -----------------------------------------
+  'อ่านไฟล์ไม่ได้ — ต้องเป็นไฟล์ Excel (.xlsx หรือ .xls)': 'Could not read the file — it must be an Excel workbook (.xlsx or .xls)',
+  'ไม่มีรายการที่จะสั่งในไฟล์นี้': 'There is nothing to order in this file',
+  'นำเข้าได้สูงสุด {max} รายการต่อครั้ง': 'At most {max} rows per import',
+  'ไม่พบชุดนำเข้านี้': 'This import batch was not found',
+  'ชุดนี้อนุมัติแล้ว แก้ไขรายการไม่ได้': 'This batch is approved; its rows can no longer be edited',
+  'ชุดนี้ส่งครบแล้ว ยกเลิกไม่ได้': 'This batch has been fully sent and cannot be cancelled',
 }
