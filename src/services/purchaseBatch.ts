@@ -615,13 +615,22 @@ export async function approveBatch(params: {
  */
 export async function settleSendStatus(batchId: string, actor: { id: string; name: string }): Promise<PurchaseBatch> {
   const db = scoped()
-  const batch = await getBatch(batchId)
+  let batch = await getBatch(batchId)
   if (!batch) throw new AppError('ไม่พบชุดนำเข้านี้')
-  if (!['approved', 'sending'].includes(batch.status)) return batch
+  if (['completed', 'cancelled'].includes(batch.status)) return batch
   const orders = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'batchId', batch.id)
-  const placed = orders.filter((o) => o.status !== 'draft')
-  const done = placed.every((o) => o.shareStatus === 'sent' || o.shareStatus === 'skipped')
-  const status: PurchaseBatchStatus = placed.length > 0 && done ? 'completed' : 'sending'
+  const placed = new Map(orders.filter((o) => o.status !== 'draft').map((o) => [o.id, o]))
+  // A batch whose last question was settled after its orders were approved is approved —
+  // nothing is left for a person, and every group has a placed order.
+  if (['draft', 'needsReview', 'ready'].includes(batch.status)) {
+    const allPlaced = batch.groups.length > 0 && batch.groups.every((g) => g.poId && placed.has(g.poId))
+    const orphan = batch.rows.some((r) => !r.skipped && !r.supplierId)
+    if (!allPlaced || orphan) return batch
+    batch = await appendHistory(batchId, actor, 'approved', undefined, { status: 'approved' })
+  }
+  const done = [...placed.values()].every((o) => o.shareStatus === 'sent' || o.shareStatus === 'skipped')
+  const started = [...placed.values()].some((o) => !!o.shareStatus)
+  const status: PurchaseBatchStatus = placed.size > 0 && done ? 'completed' : started ? 'sending' : 'approved'
   if (status === batch.status) return batch
   return appendHistory(batchId, actor, status, undefined, { status })
 }

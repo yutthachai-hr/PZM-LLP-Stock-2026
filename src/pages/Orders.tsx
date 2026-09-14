@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -66,6 +67,7 @@ export function OrdersPage() {
   const { user } = useAuth()
   const { brand } = useBrand()
   const { products, locations, locationById } = useData()
+  const navigate = useNavigate()
   const suppliers = useSuppliers()
   const [busyExport, setBusyExport] = useState<'' | 'excel' | 'pdf'>('')
 
@@ -194,10 +196,18 @@ export function OrdersPage() {
         title={t('สั่งซื้อ')}
         subtitle={t('สั่งของกับผู้ขาย ตรวจรับ แล้วเข้าคลังในขั้นตอนเดียว')}
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Icon name="plus" size={16} />
-            {t('สั่งของใหม่')}
-          </Button>
+          // Two ways in, same orders underneath: the list from Excel, or one supplier by
+          // hand. The manual screen stays exactly as it was for the days it is the right tool.
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => navigate('/purchase')}>
+              <Icon name="upload" size={16} />
+              {t('สั่งอัตโนมัติจาก Excel')}
+            </Button>
+            <Button onClick={() => setCreating(true)}>
+              <Icon name="plus" size={16} />
+              {t('สั่งของใหม่ (สั่งเอง)')}
+            </Button>
+          </div>
         }
       />
 
