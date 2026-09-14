@@ -43,6 +43,18 @@ function makeDocNo(seq: number): string {
   return `PO-${String(seq).padStart(5, '0')}`
 }
 
+/**
+ * The counter an order's number comes from: one per supplier.
+ *
+ * The owner's rule is that the numbers belong to the supplier — HOMEMADE CHEESE's first
+ * order is PO-00001 whatever anyone else ordered that week, and its second is PO-00002.
+ * One shared counter had the eighth order of the day come out as PO-00008 for a supplier
+ * ordered from once, which reads as a sequence nobody has.
+ */
+function counterId(supplierId: string): string {
+  return `purchaseOrder__${supplierId}`
+}
+
 export interface OrderLineInput {
   productId: string
   qty: number
@@ -93,10 +105,21 @@ export async function createPurchaseOrder(params: {
   }
 
   const db = scoped()
+
+  // Orders placed before the numbers became per-supplier carry the old shared sequence,
+  // and the rules freeze an order's number once written — so they stay as they are, and a
+  // supplier's first order under this rule is counted after however many it already has.
+  // Read outside the transaction (a query cannot run inside one) and used only when the
+  // supplier's counter does not exist yet; if two people open the same new supplier's
+  // first order at once, the second transaction retries against the counter the first
+  // one created and never sees this number.
+  const existing = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'supplierId', supplier.id)
+  const seed = existing.length
+
   return db.transaction(async (tx) => {
-    const counter = await tx.get<{ value: number }>(COL.counters, 'purchaseOrder')
-    const seq = (counter?.value ?? 0) + 1
-    tx.set(COL.counters, 'purchaseOrder', { value: seq })
+    const counter = await tx.get<{ value: number }>(COL.counters, counterId(supplier.id))
+    const seq = (counter?.value ?? seed) + 1
+    tx.set(COL.counters, counterId(supplier.id), { value: seq })
     const now = Date.now()
     const id = `${now}-${Math.random().toString(36).slice(2, 8)}`
     tx.set(COL.purchaseOrders, id, {

@@ -91,6 +91,39 @@ describe('placing an order', () => {
     expect(orders().map((o) => o.docNo).sort()).toEqual(['PO-00001', 'PO-00002'])
   })
 
+  // The owner's rule: the numbers belong to the supplier. HOMEMADE CHEESE's first order is
+  // PO-00001 whatever anyone else has ordered, and its second is PO-00002. One shared
+  // counter gave the eighth order of the day PO-00008 for a supplier ordered from once.
+  test('each supplier counts its own orders from one', async () => {
+    await placeOrder()
+    await placeOrder()
+    await createPurchaseOrder({
+      supplier: { id: 'sup-2', name: 'HOMEMADE CHEESE' },
+      locationId: MAIN,
+      lines: [{ productId: 'p3', qty: 1 }],
+      products,
+      actor: ACTOR,
+    })
+    const by = (name: string) => orders().filter((o) => o.supplierName === name).map((o) => o.docNo).sort()
+    expect(by('OLIVA')).toEqual(['PO-00001', 'PO-00002'])
+    expect(by('HOMEMADE CHEESE')).toEqual(['PO-00001'])
+  })
+
+  test('a supplier with orders from before the per-supplier count carries on from them', async () => {
+    // Eight orders exist in production under the old shared counter. Their numbers are
+    // frozen by the rules and are not rewritten. A supplier's first order under the new
+    // rule is numbered after however many it already has, so nothing is issued twice.
+    seed('purchaseOrders', [
+      {
+        id: 'old-1', docNo: 'PO-00008', supplierId: SUPPLIER.id, supplierName: SUPPLIER.name,
+        status: 'ordered', locationId: MAIN, orderedAt: 1, lines: [], createdBy: 'x',
+        createdByName: 'x', createdAt: 1, updatedAt: 1,
+      },
+    ])
+    await placeOrder()
+    expect(orders().map((o) => o.docNo).sort()).toEqual(['PO-00002', 'PO-00008'])
+  })
+
   test('each line records the product name and unit as they were', async () => {
     // Denormalised for the same reason a movement is: the order has to read correctly after
     // the catalogue has moved on.
