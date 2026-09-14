@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { PurchaseWidget } from './purchase/PurchaseWidget'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
 import { useData } from '../data/DataContext'
@@ -265,6 +266,8 @@ export function DashboardPage() {
           />
         </StatGroup>
       </div>
+
+      <PurchaseWidget />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4 lg:col-span-2">

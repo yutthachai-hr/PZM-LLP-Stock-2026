@@ -1065,4 +1065,8 @@ export const EN: Record<string, string> = {
   'กำลังเตรียม…': 'Preparing…',
   'กด "ส่ง LINE" → เลือกแชทของผู้ขาย → ส่ง แล้วกลับมาที่นี่ ระบบจะไปรายถัดไปเอง': 'Press "Send via LINE" → pick the supplier\'s chat → send, then come back here; the next supplier follows',
   'เครื่องนี้ไม่มี LINE (LIFF) — จะเปิดเมนูแชร์ของเครื่องแทน เลือก LINE แล้วเลือกแชทของผู้ขาย': 'LINE (LIFF) is not set up here — the device\'s share menu opens instead; pick LINE, then the supplier\'s chat',
+  'สั่งซื้ออัตโนมัติ วันนี้': 'Auto purchase today',
+  'ดูทั้งหมด': 'See all',
+  'พร้อมส่ง': 'Ready to send',
+  'ยังไม่ส่ง': 'Not sent',
 }
