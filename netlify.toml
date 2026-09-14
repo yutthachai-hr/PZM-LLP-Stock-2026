@@ -73,4 +73,25 @@
     X-Content-Type-Options = "nosniff"
     # This app has no use for any of these; a compromised dependency should not either.
     Permissions-Policy = "geolocation=(), microphone=(), payment=(), usb=(), interest-cohort=()"
-    Content-Security-Policy = '''default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests'''
+    # LINE: the LIFF SDK (bundled from npm, so no script host) talks to api.line.me, and
+    # sharing from an ordinary browser opens LINE's own picker in a popup/frame on
+    # liff.line.me / access.line.me. Nothing else of LINE's is reachable.
+    Content-Security-Policy = '''default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://profile.line-scdn.net; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://api.line.me https://liff.line.me https://access.line.me; frame-src https://liff.line.me https://access.line.me; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://access.line.me; frame-ancestors 'none'; upgrade-insecure-requests'''
+
+# ---------------------------------------------------------------- functions ----
+#
+# netlify/functions/po-image.mts hosts order-sheet pictures for LINE to fetch (see the
+# file). It needs Netlify Blobs, which is part of the site; nothing to configure here
+# beyond the bundler.
+[functions]
+  node_bundler = "esbuild"
+
+# ---------------------------------------------------------------- demo branch ----
+#
+# A branch named `demo` deploys the demo build: browser storage only, never the live
+# Firebase project (see .env.demo). It exists so the LINE share — which needs a real HTTPS
+# address to run — can be tried without touching production. Enable "branch deploys" for
+# `demo` in the Netlify UI; set PO_IMAGE_DEMO_KEY / VITE_PO_IMAGE_DEMO_KEY (the same random
+# string) and VITE_LIFF_ID for this context there, not here.
+[context.demo.environment]
+  VITE_DEMO_MODE = "1"

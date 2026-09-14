@@ -938,4 +938,9 @@ export const EN: Record<string, string> = {
   'ร่าง': 'Draft',
   'ส่งเข้า LINE แล้ว': 'Sent to LINE',
   'ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ': 'This order is still a draft — approve it before receiving',
+  // ---- purchase automation: image host + LINE ---------------------------------------
+  'เครื่องนี้ยังไม่ได้ตั้งค่าที่เก็บรูปสำหรับส่ง LINE': 'This device has no image host set up for sending to LINE',
+  'กรุณาเข้าสู่ระบบใหม่': 'Please sign in again',
+  'รูปใหญ่เกินไป': 'The picture is too large',
+  'อัปโหลดรูปไม่สำเร็จ ({status})': 'Uploading the picture failed ({status})',
 }

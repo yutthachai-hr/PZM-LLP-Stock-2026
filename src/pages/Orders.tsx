@@ -30,6 +30,8 @@ import {
 import { useSuppliers } from '../services/suppliers'
 import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
+import { PoSheet } from '../components/PoSheet'
+import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs } from '../lib/format'
@@ -784,18 +786,8 @@ function OrderSheet({
     if (!sheet.current) return
     setSharing(true)
     try {
-      const { default: html2canvas } = await import('html2canvas')
-      const canvas = await html2canvas(sheet.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-      })
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/jpeg', 0.92),
-      )
-      if (!blob) throw new Error('no image')
-      const file = new File([blob], `${order.docNo}.jpg`, { type: 'image/jpeg' })
+      const blob = await renderElementToJpeg(sheet.current)
+      const file = new File([blob], sheetFileName(order.docNo), { type: 'image/jpeg' })
       const title = t('ใบสั่งซื้อ {docNo} — {company}', { docNo: order.docNo, company })
       if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
         try {
@@ -824,51 +816,7 @@ function OrderSheet({
   return (
     <Modal open onClose={onClose} title={t('ใบสั่งซื้อ {docNo}', { docNo: order.docNo })}>
       <div className="space-y-3">
-        <div id="order-sheet" ref={sheet} className="rounded-lg border border-line-strong bg-surface p-4">
-          <div className="flex items-start justify-between gap-3 border-b border-line pb-2">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wide text-brand">{company}</div>
-              <div className="text-base font-bold text-ink">{t('ใบสั่งซื้อ')}</div>
-              <div className="doc-no text-xs text-ink-faint">{order.docNo}</div>
-            </div>
-            <div className="text-right text-xs text-ink-soft">
-              <div>{formatThaiDate(order.orderedAt)}</div>
-              <div>{locationName}</div>
-            </div>
-          </div>
-          <div className="py-2 text-sm">
-            <span className="text-ink-soft">{t('ผู้ขาย')}: </span>
-            <span className="font-semibold text-ink">{order.supplierName}</span>
-          </div>
-          <table className="w-full text-sm">
-            <thead className="border-y border-line text-xs text-ink-soft">
-              <tr>
-                <th className="py-1 text-left font-medium">{t('รายการ')}</th>
-                <th className="py-1 text-right font-medium">{t('จำนวน')}</th>
-                <th className="py-1 text-left font-medium">{t('หน่วย')}</th>
-              </tr>
-            </thead>
-            {/* Row borders are a plain colour, not `border-line/60`: Tailwind writes an
-                opacity modifier as color-mix(in oklab, …), the browser computes that to
-                an oklab() value, and html2canvas cannot parse one — the share button
-                failed on exactly this line. */}
-            <tbody>
-              {order.lines.map((l) => (
-                <tr key={l.productId} className="border-b border-line">
-                  <td className="py-1 pr-2 text-ink">{l.productName}</td>
-                  <td className="num py-1 text-right font-semibold text-ink">
-                    {fmtQty(l.orderedQty)}
-                  </td>
-                  <td className="py-1 pl-2 text-ink-soft">{shownUnit(l)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="pt-2 text-xs text-ink-faint">
-            {t('ผู้สั่ง')}: {order.createdByName}
-            {order.invoiceNo ? ` · ${t('บิล')} ${order.invoiceNo}` : ''}
-          </div>
-        </div>
+        <PoSheet order={order} locationName={locationName} company={company} ref={sheet} />
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {t('ปิด')}
