@@ -11,7 +11,6 @@ import { getAuthInstance, clearLocalCaches } from '../firebase/app'
 import { clearThumbCache } from '../components/ProductThumb'
 
 import { AppError } from '../i18n/AppError'
-import { useIdleLogout } from './useIdleLogout'
 import { classifyProfileError, retryDelayMs } from './profileError'
 
 interface AuthState {
@@ -34,7 +33,6 @@ const SESSION_KEY = 'pmstock:v1:session'
 // through t() when it renders.
 const PENDING = 'บัญชีนี้ยังไม่ถูกเปิดใช้งาน — กรุณาให้ผู้ดูแลระบบอนุมัติก่อนเข้าใช้' // i18n-key
 const REVOKED = 'สิทธิ์การเข้าใช้ของบัญชีนี้ถูกยกเลิกแล้ว' // i18n-key
-const IDLE = 'ออกจากระบบอัตโนมัติเพราะไม่มีการใช้งาน {minutes} นาที — เครื่องนี้เป็นเครื่องใช้ร่วมกัน' // i18n-key
 const UNPROVISIONED =
   'ระบบนี้ยังไม่ได้ตั้งค่า — เจ้าของต้องสร้างบัญชีผู้ดูแลคนแรกจาก Firebase Console ก่อน' // i18n-key
 // Shown only when the very first profile read fails, so the sign-in screen says why it is
@@ -84,15 +82,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
   // name entered on the sign-up form, used when the profile doc is created
   const pendingName = useRef<string | null>(null)
-
-  // The branches share a tablet, so a session left open belongs to whoever picks the device
-  // up next — and every movement they record is filed under the previous person's name.
-  useIdleLogout(user !== null, () => {
-    setNotice(IDLE)
-    // The session ends — that is what keeps a movement from being filed under the previous
-    // person — but the offline copy stays. See logout() for why the two came apart.
-    void logout({ keepOfflineCopy: true })
-  })
 
   // ---- initial load ----
   useEffect(() => {
@@ -313,18 +302,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /**
    * Sign out, and — when somebody chose to — leave nothing readable behind.
    *
-   * The branches share a tablet, so the next person to pick it up is a different person.
-   * Ending the session is what matters: every movement is filed under whoever is signed
-   * in. The offline copy Firestore keeps of everything loaded is a smaller matter — it is
-   * stock data every member of staff may read anyway, reachable only through developer
-   * tools — and clearing it turned out to cost the day. Cleared, the next sign-in reads the
-   * whole catalogue, every balance and a month of ledger again, a few thousand billed
-   * reads; and the idle timer signs a tablet out every twenty minutes it sits on the
-   * counter. By late morning the free plan's 50,000 reads were gone and every order
-   * failed with "Quota exceeded".
+   * The 20-minute idle auto-kickout was removed per owner request: tablets and devices
+   * stay signed in permanently so staff can immediately continue work without session
+   * interruptions or cold-start read spikes.
    *
-   * So the two came apart. The idle timer ends the session and keeps the copy; a person
-   * pressing "ออกจากระบบ" — the deliberate hand-over the audit was about — still clears it.
+   * When someone deliberately taps "ออกจากระบบ" (Sign out), it clears session and caches.
    * Clearing needs the database shut down first, which is why that path reloads.
    */
   async function logout(opts: { keepOfflineCopy?: boolean } = {}): Promise<void> {

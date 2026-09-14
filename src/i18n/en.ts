@@ -97,8 +97,6 @@ export const EN: Record<string, string> = {
   'ต้นทุนต้องเป็นตัวเลขไม่ติดลบ': 'The cost must be a number that is not negative',
   'ไฟล์นี้เป็นข้อมูลของ {file} แต่ตอนนี้เปิด {current} อยู่ — สลับไปที่ {file} ก่อนแล้วค่อยกู้คืน':
     'This file holds {file} data but {current} is open — switch to {file} first, then restore',
-  'ออกจากระบบอัตโนมัติเพราะไม่มีการใช้งาน {minutes} นาที — เครื่องนี้เป็นเครื่องใช้ร่วมกัน':
-    'Signed out automatically after {minutes} minutes of inactivity — this is a shared device',
   'มีเวอร์ชันใหม่ของระบบพร้อมใช้งานแล้ว': 'A new version of the system is ready',
   'อัปเดตตอนนี้': 'Update now',
   'ไว้ทีหลัง': 'Later',

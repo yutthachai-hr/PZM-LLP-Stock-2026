@@ -169,6 +169,7 @@ src/
   แต่การรับเข้า/เบิก/ปรับ ทุกอย่างทำใน Firestore transaction ซึ่ง
   [ล้มเหลวเมื่อออฟไลน์](https://firebase.google.com/docs/firestore/manage-data/transactions)
   ต้องมีเน็ตตอนกดบันทึก
+- **Session คงอยู่ตลอดเวลา (No Auto Kick-out):** ไม่มีการตัด session อัตโนมัติเมื่อไม่มีการใช้งาน เพื่อความต่อเนื่องในการทำงานของหน้าร้าน/ครัว และป้องกัน Cold Start Read Spike ที่อาจทำให้เกินโควตาฟรี 50,000 reads/วันของ Firebase Spark (อ่านแผนโควตาฉบับเต็มได้ที่ [`FIREBASE_QUOTA_PLAN_FOR_GEMINI.md`](FIREBASE_QUOTA_PLAN_FOR_GEMINI.md)) เมื่อต้องการออกจากระบบ สามารถกดปุ่ม "ออกจากระบบ" เพื่อล้างแคชในเครื่องได้ตามปกติ
 
 ---
 

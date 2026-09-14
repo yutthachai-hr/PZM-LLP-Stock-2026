@@ -6,7 +6,6 @@ import { DEMO_ADMIN, resetDemoData } from '../services/demoSeed'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
-import { IDLE_MINUTES } from '../auth/useIdleLogout'
 
 export function LoginPage() {
   const t = useT()
@@ -120,7 +119,7 @@ export function LoginPage() {
           )}
           {notice && !error && (
             <div className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
-              {t(notice, { minutes: IDLE_MINUTES })}
+              {t(notice)}
             </div>
           )}
           {error && (
