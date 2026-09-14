@@ -32,6 +32,14 @@ export interface Product {
    * Absent on a product whose name never said: the owner fills those in by hand.
    */
   supplierId?: string
+  /**
+   * Other suppliers this can be bought from, for the day the usual one is out.
+   *
+   * The automatic order never picks one of these on its own: an order goes to `supplierId`
+   * or to a person to decide. Listed here so that person sees the choice instead of having
+   * to remember it.
+   */
+  alternateSupplierIds?: string[]
   cost?: number // optional unit cost for inventory value
   /**
    * Reference multipliers for units this product might be keyed in — "1 ลัง = 288 EA".
@@ -181,6 +189,10 @@ export interface Supplier {
   email: string
   type: SupplierType
   note?: string
+  /** Where this supplier's deliveries usually land. The automatic order offers it first. */
+  defaultLocationId?: string
+  /** Days from order to delivery, as the owner knows it. Shown, never enforced. */
+  leadTimeDays?: number
   active: boolean
   createdAt: number
   updatedAt: number
@@ -193,6 +205,8 @@ export interface SupplierItem {
   productId: string
   /** Purchase price per unit of the product's own unitType. Optional: not always known. */
   buyingPrice?: number
+  /** The least the supplier will sell at once. A warning on review, never a block. */
+  minOrderQty?: number
   active: boolean
   createdAt: number
   updatedAt: number
@@ -348,6 +362,8 @@ export const COL = {
   supplierItems: 'supplierItems',
   events: 'stockEvents',
   purchaseOrders: 'purchaseOrders',
+  purchaseBatches: 'purchaseBatches',
+  productAliases: 'productAliases',
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const

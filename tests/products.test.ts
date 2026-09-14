@@ -74,3 +74,18 @@ describe('setting reference conversions', () => {
     expect(row.unitConversions).toEqual([{ label: 'ลัง', size: 288 }])
   })
 })
+
+describe('alternate suppliers', () => {
+  test('never include the primary, blanks, or repeats, and are removed when emptied', async () => {
+    const id = await createProduct({
+      ...BASE,
+      supplierId: 's-main',
+      alternateSupplierIds: ['s-main', 's-b', ' ', 's-b', 's-c'],
+    })
+    const row = () => raw('products')[0] as Record<string, unknown>
+    expect(row().alternateSupplierIds).toEqual(['s-b', 's-c'])
+
+    await updateProduct(id, { supplierId: 's-main', alternateSupplierIds: [] })
+    expect('alternateSupplierIds' in row()).toBe(false)
+  })
+})

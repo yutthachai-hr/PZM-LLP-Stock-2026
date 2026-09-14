@@ -239,3 +239,47 @@ describe('suppliers', () => {
     expect((await listSuppliers()).map((s) => s.name)).toEqual(['Alpha', 'Mid', 'Zeta'])
   })
 })
+
+// ---- purchase master: what the automatic order reads off a supplier ------------------
+
+describe('supplier purchase defaults', () => {
+  test('a default warehouse and lead time are stored, and cleared by removing the key', async () => {
+    const id = await createSupplier({
+      name: 'THAINAMTHIP',
+      contactNumber: '',
+      email: '',
+      type: 'takingReturn',
+      defaultLocationId: 'loc-main',
+      leadTimeDays: 2,
+    })
+    const row = () => (raw('suppliers') as Record<string, unknown>[]).find((s) => s.id === id)!
+    expect(row()).toMatchObject({ defaultLocationId: 'loc-main', leadTimeDays: 2 })
+
+    await updateSupplier(id, { defaultLocationId: undefined, leadTimeDays: undefined })
+    expect('defaultLocationId' in row()).toBe(false)
+    expect('leadTimeDays' in row()).toBe(false)
+  })
+
+  test('a lead time that is not a whole number of days is refused', async () => {
+    await expect(
+      createSupplier({
+        name: 'X',
+        contactNumber: '',
+        email: '',
+        type: 'takingReturn',
+        leadTimeDays: 1.5,
+      }),
+    ).rejects.toThrow()
+  })
+
+  test('a minimum order quantity rides on the price row', async () => {
+    const sid = await createSupplier({ name: 'S', contactNumber: '', email: '', type: 'takingReturn' })
+    seed('products', [
+      { id: 'p1', sku: 'A', name: 'A', category: 'c', unit: 'u', unitType: 'EA', minStock: 0, hasImage: false, active: true, createdAt: 0, updatedAt: 0 },
+    ])
+    const item = await linkProduct(sid, 'p1', undefined, [], 5)
+    expect(item).toMatchObject({ supplierId: sid, productId: 'p1', minOrderQty: 5 })
+    expect('buyingPrice' in (raw('supplierItems')[0] as object)).toBe(false)
+    await expect(linkProduct(sid, 'p1', undefined, [item!], 0)).rejects.toThrow()
+  })
+})

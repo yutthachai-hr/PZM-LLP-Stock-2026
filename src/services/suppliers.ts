@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { backend } from '../backend'
+import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import { COL, type Product, type Supplier, type SupplierItem, type SupplierType } from '../types'
 import { updateProduct } from './products'
@@ -33,6 +34,17 @@ export interface SupplierInput {
   email: string
   type: SupplierType
   note?: string
+  /** Where the goods usually land; the automatic order offers it first. Empty = unknown. */
+  defaultLocationId?: string
+  /** Days from order to delivery. Shown, never enforced. Undefined = unknown. */
+  leadTimeDays?: number
+}
+
+function checkLeadTime(days: number | undefined): void {
+  if (days === undefined) return
+  if (!Number.isInteger(days) || days < 0 || days > 365) {
+    throw new AppError('ระยะเวลาส่งของต้องเป็นจำนวนวัน 0–365')
+  }
 }
 
 /** Every supplier, once. ~20 documents. Called when the Suppliers screen opens. */
@@ -49,6 +61,7 @@ export async function listSupplierItems(): Promise<SupplierItem[]> {
 export async function createSupplier(input: SupplierInput): Promise<string> {
   const name = clean(input.name)
   if (!name) throw new AppError('กรุณากรอกชื่อผู้ขาย')
+  checkLeadTime(input.leadTimeDays)
   const now = Date.now()
   return backend.add(COL.suppliers, {
     name,
@@ -56,6 +69,8 @@ export async function createSupplier(input: SupplierInput): Promise<string> {
     email: clean(input.email),
     type: input.type,
     ...(input.note?.trim() ? { note: clean(input.note) } : {}),
+    ...(input.defaultLocationId ? { defaultLocationId: input.defaultLocationId } : {}),
+    ...(input.leadTimeDays === undefined ? {} : { leadTimeDays: input.leadTimeDays }),
     active: true,
     createdAt: now,
     updatedAt: now,
@@ -79,6 +94,15 @@ export async function updateSupplier(
   if (patch.email !== undefined) next.email = clean(patch.email)
   if (patch.type !== undefined) next.type = patch.type
   if (patch.note !== undefined) next.note = clean(patch.note)
+  // Both are optional keys under hasOnly, so clearing one removes it rather than writing
+  // an empty value — the same rule a product's supplierId follows.
+  if ('defaultLocationId' in patch) {
+    next.defaultLocationId = patch.defaultLocationId ? patch.defaultLocationId : DELETE_FIELD
+  }
+  if ('leadTimeDays' in patch) {
+    checkLeadTime(patch.leadTimeDays)
+    next.leadTimeDays = patch.leadTimeDays === undefined ? DELETE_FIELD : patch.leadTimeDays
+  }
   await backend.update(COL.suppliers, id, next)
 }
 
@@ -125,11 +149,15 @@ export async function linkProduct(
   productId: string,
   buyingPrice: number | undefined,
   items: readonly SupplierItem[],
+  minOrderQty?: number,
 ): Promise<SupplierItem | null> {
   if (!supplierId) throw new AppError('ข้อมูลไม่ครบ: {what}', { what: 'supplierId' })
   if (!productId) throw new AppError('กรุณาเลือกสินค้า')
   if (buyingPrice !== undefined && (!Number.isFinite(buyingPrice) || buyingPrice < 0)) {
     throw new AppError('ราคาซื้อต้องไม่ติดลบ')
+  }
+  if (minOrderQty !== undefined && (!Number.isFinite(minOrderQty) || minOrderQty <= 0)) {
+    throw new AppError('ขั้นต่ำในการสั่งต้องมากกว่า 0')
   }
   await updateProduct(productId, { supplierId })
 
@@ -138,14 +166,27 @@ export async function linkProduct(
   await Promise.all(stale.map((i) => backend.remove(COL.supplierItems, i.id)))
 
   const existing = mine.find((i) => i.supplierId === supplierId)
-  if (buyingPrice === undefined) return existing ?? null
+  if (buyingPrice === undefined && minOrderQty === undefined) return existing ?? null
   const now = Date.now()
   if (existing) {
-    await updateSupplierItem(existing.id, { buyingPrice })
-    return { ...existing, buyingPrice, updatedAt: now }
+    const patch = {
+      ...(buyingPrice === undefined ? {} : { buyingPrice }),
+      ...(minOrderQty === undefined ? {} : { minOrderQty }),
+    }
+    await updateSupplierItem(existing.id, patch)
+    return { ...existing, ...patch, updatedAt: now }
   }
-  const id = await addSupplierItem(supplierId, productId, buyingPrice)
-  return { id, supplierId, productId, buyingPrice, active: true, createdAt: now, updatedAt: now }
+  const id = await addSupplierItem(supplierId, productId, buyingPrice, minOrderQty)
+  return {
+    id,
+    supplierId,
+    productId,
+    ...(buyingPrice === undefined ? {} : { buyingPrice }),
+    ...(minOrderQty === undefined ? {} : { minOrderQty }),
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  }
 }
 
 /** Take a product away from whoever supplies it, price row included. */
@@ -164,6 +205,7 @@ export async function addSupplierItem(
   supplierId: string,
   productId: string,
   buyingPrice?: number,
+  minOrderQty?: number,
 ): Promise<string> {
   if (!supplierId) throw new AppError('ข้อมูลไม่ครบ: {what}', { what: 'supplierId' })
   if (!productId) throw new AppError('กรุณาเลือกสินค้า')
@@ -175,6 +217,7 @@ export async function addSupplierItem(
     supplierId,
     productId,
     ...(buyingPrice === undefined ? {} : { buyingPrice }),
+    ...(minOrderQty === undefined ? {} : { minOrderQty }),
     active: true,
     createdAt: now,
     updatedAt: now,
@@ -183,9 +226,17 @@ export async function addSupplierItem(
 
 export async function updateSupplierItem(
   id: string,
-  patch: { productId?: string; buyingPrice?: number },
+  patch: { productId?: string; buyingPrice?: number; minOrderQty?: number },
 ): Promise<void> {
   const next: Record<string, unknown> = { updatedAt: Date.now() }
+  // The least the supplier sells at once. Cleared by passing undefined explicitly.
+  if ('minOrderQty' in patch) {
+    const moq = patch.minOrderQty
+    if (moq !== undefined && (!Number.isFinite(moq) || moq <= 0)) {
+      throw new AppError('ขั้นต่ำในการสั่งต้องมากกว่า 0')
+    }
+    next.minOrderQty = moq === undefined ? DELETE_FIELD : moq
+  }
   if (patch.productId !== undefined) {
     if (!patch.productId) throw new AppError('กรุณาเลือกสินค้า')
     next.productId = patch.productId

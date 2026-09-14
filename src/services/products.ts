@@ -8,6 +8,8 @@ import { normaliseConversions, type UnitConversion } from '../lib/units'
 export interface ProductInput {
   /** Who we buy it from. Empty means nobody has said yet. */
   supplierId?: string
+  /** Other suppliers it can come from. See the field on Product. */
+  alternateSupplierIds?: string[]
   sku: string
   name: string
   category: string
@@ -40,17 +42,41 @@ function checkNumbers(input: Partial<ProductInput>): void {
   }
 }
 
+/** At most this many fallbacks; a product bought from more places than this is a category. */
+const MAX_ALTERNATES = 10
+
+/**
+ * The alternates as they will be stored: trimmed, no blanks, no repeats, never the primary
+ * supplier (it is not an alternative to itself), and bounded. The rules bound the list too;
+ * this is the half that keeps the dialog honest about what will be saved.
+ */
+export function normaliseAlternates(
+  raw: readonly string[] | undefined,
+  primary: string | undefined,
+): string[] {
+  const out: string[] = []
+  for (const id of raw ?? []) {
+    const clean = id.trim()
+    if (!clean || clean === primary || out.includes(clean)) continue
+    out.push(clean)
+    if (out.length >= MAX_ALTERNATES) break
+  }
+  return out
+}
+
 export async function createProduct(input: ProductInput): Promise<string> {
   checkNumbers(input)
   const now = Date.now()
   // Optional fields are omitted rather than written empty: the rules pin the shape with
   // hasOnly, and a blank string is still a present key.
-  const { unitConversions, supplierId, ...rest } = input
+  const { unitConversions, supplierId, alternateSupplierIds, ...rest } = input
   const conversions = unitConversions ? normaliseConversions(unitConversions) : []
+  const alternates = normaliseAlternates(alternateSupplierIds, supplierId)
   return backend.add(COL.products, {
     ...rest,
     ...(conversions.length ? { unitConversions: conversions } : {}),
     ...(supplierId ? { supplierId } : {}),
+    ...(alternates.length ? { alternateSupplierIds: alternates } : {}),
     hasImage: false,
     active: true,
     createdAt: now,
@@ -66,8 +92,12 @@ export async function updateProduct(
   // An empty cost box means "no cost recorded", which has to remove the field rather than
   // send undefined — Firestore skips undefined values, so clearing a cost of 100 used to
   // save happily and leave the 100 in place, still counted in the stock valuation.
-  const { cost, unitConversions, supplierId, ...rest } = patch
+  const { cost, unitConversions, supplierId, alternateSupplierIds, ...rest } = patch
   const write: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
+  if ('alternateSupplierIds' in patch) {
+    const alternates = normaliseAlternates(alternateSupplierIds, supplierId)
+    write.alternateSupplierIds = alternates.length ? alternates : DELETE_FIELD
+  }
   if ('cost' in patch) write.cost = cost === undefined ? DELETE_FIELD : cost
   // "No supplier" has to remove the key: the validator pins the shape with hasOnly, and an
   // empty string would be a present field pointing at nothing.

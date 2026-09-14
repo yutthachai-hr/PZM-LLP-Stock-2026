@@ -206,7 +206,7 @@ service cloud.firestore {
         ])
         && d.keys().hasOnly([
           'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock', 'cost',
-          'unitConversions', 'supplierId',
+          'unitConversions', 'supplierId', 'alternateSupplierIds',
           'hasImage', 'active', 'createdAt', 'updatedAt'
         ])
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
@@ -220,6 +220,10 @@ service cloud.firestore {
         // like every other list in this file; not validated element by element, the same
         // as an order's lines.
         && (!('unitConversions' in d) || (d.unitConversions is list && d.unitConversions.size() <= 20))
+        // Other suppliers it can come from, for a person to pick when the usual one is out.
+        // The automatic order never chooses one of these by itself.
+        && (!('alternateSupplierIds' in d)
+            || (d.alternateSupplierIds is list && d.alternateSupplierIds.size() <= 10))
         && d.hasImage is bool && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }
@@ -264,6 +268,7 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'name', 'contactNumber', 'email', 'type', 'active',
           'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'name', 'contactNumber', 'email', 'type', 'note',
+          'defaultLocationId', 'leadTimeDays',
           'active', 'createdAt', 'updatedAt'])
         && text(d.name, 200)
         && d.contactNumber is string && d.contactNumber.size() <= 40
@@ -271,7 +276,11 @@ service cloud.firestore {
         && d.type in ['takingReturn', 'notTakingReturn']
         && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt)
-        && (!('note' in d) || d.note is string && d.note.size() <= 2000);
+        && (!('note' in d) || d.note is string && d.note.size() <= 2000)
+        // Where this supplier's goods usually land, and how many days they take. Both are
+        // defaults the automatic order offers; neither is a rule it enforces.
+        && (!('defaultLocationId' in d) || text(d.defaultLocationId, 200))
+        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365));
     }
 
     // A planned piece of work: a count, an audit, an expected delivery, a task.
@@ -299,7 +308,11 @@ service cloud.firestore {
             || (d.assignedTo is list && d.assignedTo.size() >= 1 && d.assignedTo.size() <= 50))
         && (!('assignedToAll' in d) || d.assignedToAll is bool)
         && (!('assignedToName' in d) || text(d.assignedToName, 1000))
-        && (!('note' in d) || d.note is string && d.note.size() <= 2000);
+        && (!('note' in d) || d.note is string && d.note.size() <= 2000)
+        // Where this supplier's goods usually land, and how many days they take. Both are
+        // defaults the automatic order offers; neither is a rule it enforces.
+        && (!('defaultLocationId' in d) || text(d.defaultLocationId, 200))
+        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365));
     }
 
     // Staff may move an event along and nothing else. Without this the catch-all lets any
@@ -316,12 +329,15 @@ service cloud.firestore {
     function validSupplierItem(d) {
       return d.keys().hasAll(['id', 'supplierId', 'productId', 'active', 'createdAt',
           'updatedAt'])
-        && d.keys().hasOnly(['id', 'supplierId', 'productId', 'buyingPrice', 'active',
-          'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'supplierId', 'productId', 'buyingPrice', 'minOrderQty',
+          'active', 'createdAt', 'updatedAt'])
         && text(d.supplierId, 200) && text(d.productId, 200)
         && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt)
-        && (!('buyingPrice' in d) || nonneg(d.buyingPrice, 1000000000));
+        && (!('buyingPrice' in d) || nonneg(d.buyingPrice, 1000000000))
+        // The least the supplier will sell at once. A warning on the order review, not a
+        // block: the person may know the supplier is making an exception.
+        && (!('minOrderQty' in d) || positive(d.minOrderQty, 1000000000));
     }
 
     // Rules cannot walk a list, so each name's own length is enforced by the service and by

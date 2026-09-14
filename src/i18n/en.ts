@@ -912,4 +912,19 @@ export const EN: Record<string, string> = {
   'เพิ่มหน่วยอ้างอิง': 'Add a reference unit',
   'ลบแถวนี้': 'Remove this row',
   '(อ้างอิง)': '(reference)',
+
+  // ---- purchase automation: product / supplier master -----------------------------
+  'ผู้ขายสำรอง (ไม่บังคับ)': 'Alternate suppliers (optional)',
+  'ไม่มีชื่อให้จับคู่': 'There is no name to match',
+  'ระยะเวลาส่งของต้องเป็นจำนวนวัน 0–365': 'Lead time must be a number of days, 0–365',
+  'ขั้นต่ำในการสั่งต้องมากกว่า 0': 'Minimum order must be more than 0',
+  'คลังปลายทางปกติ': 'Usual destination',
+  '— ไม่ระบุ —': '— not set —',
+  'ระยะเวลาส่ง (วัน)': 'Lead time (days)',
+  'เช่น 2': 'e.g. 2',
+  'หมายเหตุการสั่งซื้อ': 'Purchase notes',
+  'เช่น สั่งก่อน 10 โมง ส่งวันถัดไป': 'e.g. order before 10:00 for next-day delivery',
+  'ขั้นต่ำ {n}': 'min. {n}',
+  'ขั้นต่ำในการสั่ง (ไม่บังคับ)': 'Minimum order (optional)',
+  'เช่น 5 — เตือนเมื่อสั่งน้อยกว่านี้': 'e.g. 5 — warns when an order is below this',
 }
