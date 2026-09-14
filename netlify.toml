@@ -73,10 +73,13 @@
     X-Content-Type-Options = "nosniff"
     # This app has no use for any of these; a compromised dependency should not either.
     Permissions-Policy = "geolocation=(), microphone=(), payment=(), usb=(), interest-cohort=()"
-    # LINE: the LIFF SDK (bundled from npm, so no script host) talks to api.line.me, and
-    # sharing from an ordinary browser opens LINE's own picker in a popup/frame on
-    # liff.line.me / access.line.me. Nothing else of LINE's is reachable.
-    Content-Security-Policy = '''default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://profile.line-scdn.net; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://api.line.me https://liff.line.me https://access.line.me; frame-src https://liff.line.me https://access.line.me; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://access.line.me; frame-ancestors 'none'; upgrade-insecure-requests'''
+    # LINE: the LIFF SDK is bundled from npm, but at init it still loads its "client
+    # features" script from static.line-scdn.net and its wording from liffsdk.line-scdn.net
+    # (seen blocked on the first demo run: "failed to load legacy extensions" — and with
+    # them the share target picker reported itself unavailable). Sharing from an ordinary
+    # browser opens LINE's own picker in a popup/frame on liff.line.me / access.line.me.
+    # Nothing else of LINE's is reachable.
+    Content-Security-Policy = '''default-src 'self'; script-src 'self' https://static.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://profile.line-scdn.net https://static.line-scdn.net; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://api.line.me https://liff.line.me https://access.line.me https://static.line-scdn.net https://liffsdk.line-scdn.net; frame-src https://liff.line.me https://access.line.me https://static.line-scdn.net; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://access.line.me; frame-ancestors 'none'; upgrade-insecure-requests'''
 
 # ---------------------------------------------------------------- functions ----
 #
