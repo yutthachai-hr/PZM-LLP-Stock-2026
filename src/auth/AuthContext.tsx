@@ -22,7 +22,7 @@ interface AuthState {
   notice: string | null // e.g. "account pending approval"
   login: (email: string, password: string) => Promise<void>
   signUp: (name: string, email: string, password: string) => Promise<void>
-  logout: () => Promise<void>
+  logout: (opts?: { keepOfflineCopy?: boolean }) => Promise<void>
 }
 
 const AuthCtx = createContext<AuthState | null>(null)
@@ -89,7 +89,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // up next — and every movement they record is filed under the previous person's name.
   useIdleLogout(user !== null, () => {
     setNotice(IDLE)
-    void logout()
+    // The session ends — that is what keeps a movement from being filed under the previous
+    // person — but the offline copy stays. See logout() for why the two came apart.
+    void logout({ keepOfflineCopy: true })
   })
 
   // ---- initial load ----
@@ -309,15 +311,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   /**
-   * Sign out and leave nothing readable behind.
+   * Sign out, and — when somebody chose to — leave nothing readable behind.
    *
    * The branches share a tablet, so the next person to pick it up is a different person.
-   * Signing out alone does not help much: Firestore keeps an offline copy of everything
-   * that was loaded, and the app keeps decoded product photos in memory. Both are cleared
-   * here. Clearing the offline copy needs the database shut down first, which is why the
-   * page reloads afterwards.
+   * Ending the session is what matters: every movement is filed under whoever is signed
+   * in. The offline copy Firestore keeps of everything loaded is a smaller matter — it is
+   * stock data every member of staff may read anyway, reachable only through developer
+   * tools — and clearing it turned out to cost the day. Cleared, the next sign-in reads the
+   * whole catalogue, every balance and a month of ledger again, a few thousand billed
+   * reads; and the idle timer signs a tablet out every twenty minutes it sits on the
+   * counter. By late morning the free plan's 50,000 reads were gone and every order
+   * failed with "Quota exceeded".
+   *
+   * So the two came apart. The idle timer ends the session and keeps the copy; a person
+   * pressing "ออกจากระบบ" — the deliberate hand-over the audit was about — still clears it.
+   * Clearing needs the database shut down first, which is why that path reloads.
    */
-  async function logout(): Promise<void> {
+  async function logout(opts: { keepOfflineCopy?: boolean } = {}): Promise<void> {
     if (BACKEND_MODE === 'cloud') {
       await fbSignOut(getAuthInstance())
     } else {
@@ -325,7 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null)
     clearThumbCache()
-    await clearLocalCaches()
+    if (!opts.keepOfflineCopy) await clearLocalCaches()
   }
 
   return (

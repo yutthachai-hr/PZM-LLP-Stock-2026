@@ -61,8 +61,11 @@ const Ctx = createContext<DataState | null>(null)
 
 // How far back the ledger is loaded on start-up. Every movement in the window is a billed
 // read each time the app cold-starts on a device, and the collection only ever grows —
-// without a bound, one page load eventually costs a whole day's free quota.
-const RECENT_DAYS = 90
+// without a bound, one page load eventually costs a whole day's free quota. Ninety days
+// was three months of every receipt and issue at three sites on every cold start; thirty
+// is what the dashboard and the everyday screens actually look at, and anything older is
+// one click away on the screens that show history (LedgerWindowNotice).
+const RECENT_DAYS = 30
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()

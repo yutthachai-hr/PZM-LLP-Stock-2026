@@ -100,7 +100,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <UserBox
           name={user?.name ?? ''}
           role={user?.role ?? 'staff'}
-          onLogout={logout}
+          onLogout={() => void logout()}
           onSwitch={reset}
         />
       </aside>
@@ -134,7 +134,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <UserBox
           name={user?.name ?? ''}
           role={user?.role ?? 'staff'}
-          onLogout={logout}
+          onLogout={() => void logout()}
           onSwitch={reset}
         />
           </aside>

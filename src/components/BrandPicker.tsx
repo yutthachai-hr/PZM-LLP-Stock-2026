@@ -44,7 +44,7 @@ export function BrandPicker({ onPick }: { onPick: (b: BrandId) => void }) {
           ))}
         </div>
         <button
-          onClick={logout}
+          onClick={() => void logout()}
           className="mx-auto mt-5 block text-xs text-ink-faint hover:text-ink-soft hover:underline"
         >
           {t('ออกจากระบบ')}

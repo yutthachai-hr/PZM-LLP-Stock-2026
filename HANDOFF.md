@@ -38,9 +38,9 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 
 - **Multi-tenancy แบบ prefix ชื่อ collection**: `products` = Pizza Mania, `lelapin__products` = Le Lapin ฟังก์ชัน `resolveCollection()` ใน `src/brand/brand.ts` จัดการเรื่องนี้ — ห้ามเขียน query ตรงไปที่ชื่อ collection โดยไม่ผ่านตัวนี้
 - **Backend abstraction** (`src/backend/types.ts`): มี 2 implementation จริง (`firestore.ts`, `local.ts` สำหรับ demo) และ 1 test double (`tests/helpers/memory-backend.ts`) — เทสต์ทุกตัวรันผ่าน backend ปลอม ไม่แตะ Firestore จริง
-- **`DataContext`** เปิด subscription แบบ realtime อยู่ **7 ตัวเท่านั้น** (products, locations, stockLevels, movements-90วันล่าสุด, notes, minOverrides, users) — อะไรที่ไม่ใช่ 7 ตัวนี้ต้องอ่านแบบ one-shot (`getAll`/`getRange`/`getBy`) แล้ว cache เอง
+- **`DataContext`** เปิด subscription แบบ realtime อยู่ **7 ตัวเท่านั้น** (products, locations, stockLevels, movements-30วันล่าสุด, notes, minOverrides, users) — อะไรที่ไม่ใช่ 7 ตัวนี้ต้องอ่านแบบ one-shot (`getAll`/`getRange`/`getBy`) แล้ว cache เอง
 - **firestore.rules**: ไฟล์เดียว, catch-all `match /{collection}/{docId}` กับ allow-list `staffWritable()`/`adminWritable()` ที่ต้องลงทั้งสองชื่อแบรนด์เสมอ ทุก collection มี validator ของตัวเองที่ใช้ `hasOnly()` ปิดรูป
-- **`clearLocalCaches()`** ตอน logout ล้าง IndexedDB ทั้งหมด — แท็บเล็ตที่ตั้ง auto-logout 20 นาที แปลว่าแทบทุก session คือ cold start ใหม่
+- **`clearLocalCaches()`** ล้าง IndexedDB เฉพาะตอนกด "ออกจากระบบ" เอง — **auto-logout 20 นาทีไม่ล้างแล้ว** (14 ก.ย.) เพราะทุก cold start อ่านแคตตาล็อก+ยอด+ledger ใหม่หลายพัน reads แล้วแท็บเล็ตถูกเตะออกทุก 20 นาที → โควตาฟรี 50,000 reads/วันหมดก่อนเที่ยง ขึ้น "Quota exceeded" ตอนสั่งของ; ledger ที่โหลดตอนเปิดลดจาก 90 → 30 วัน (`RECENT_DAYS`)
 - **i18n**: ข้อความไทยคือ key เอง ไม่มีไฟล์ key แยก เช็คด้วย `node scripts/i18n-check.mjs` — เครื่องมือนี้มองไม่เห็น template literal และ Thai ใน JSX comment ระวังตรงนี้
 
 ---

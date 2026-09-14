@@ -3,9 +3,11 @@
 //   npm test
 //
 // Firebase's free plan gives both companies 50,000 document reads a day between them, and
-// the shared tablets clear their offline copy on idle sign-out — so nearly every session
-// pays full price for whatever the app loads. These tests pin the two properties that keep
-// the calendar cheap: a range is read once, and a write never causes a re-read.
+// the shared tablets used to clear their offline copy on idle sign-out — nearly every
+// session paid full price for whatever the app loaded, and on 14 September the quota was
+// gone by late morning. The idle path keeps the copy now, but the budget is still finite.
+// These tests pin the two properties that keep the calendar cheap: a range is read once,
+// and a write never causes a re-read.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
