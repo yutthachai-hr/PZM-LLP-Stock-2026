@@ -1,9 +1,10 @@
 import { backend } from '../backend'
 import type { Backend } from '../backend/types'
-import { COL, type StockMovement, type StockLevel } from '../types'
+import { COL, type PurchaseOrder, type StockMovement, type StockLevel } from '../types'
 import { brandDef, getBrand, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
-import { roundQty } from '../lib/validate'
+import { balancesFromLedger, parseLevelId } from './stock'
+import { orderCounterFloors } from './purchaseOrders'
 
 // ---------------------------------------------------------------------------
 // Whole-database backup and restore for one brand.
@@ -28,8 +29,15 @@ import { roundQty } from '../lib/validate'
 // which does make the file large.
 // ---------------------------------------------------------------------------
 
-/** Bumped when the shape changes in a way a restore has to know about. */
-const FORMAT_VERSION = 2
+/**
+ * Bumped when the shape changes in a way a restore has to know about.
+ *
+ * 3: suppliers, supplierItems, stockEvents and purchaseOrders are in the file. They arrived
+ *    after version 2 and were simply not backed up — a restore brought the stock back and
+ *    lost every order ever placed. A version-2 file still restores; those four are read as
+ *    empty.
+ */
+const FORMAT_VERSION = 3
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,
@@ -47,9 +55,14 @@ const COLLECTIONS = [
   COL.productImages,
   COL.locations,
   COL.minOverrides,
+  COL.suppliers,
+  COL.supplierItems,
+  COL.events,
   COL.notes,
   COL.movements,
   COL.movementImages,
+  // After the ledger: a received order names the receipt it became.
+  COL.purchaseOrders,
 ] as const
 
 /** Rebuilt from the ledger on restore, so they are stored for reference only. */
@@ -63,12 +76,21 @@ const OVERWRITABLE: readonly string[] = [
   COL.productImages,
   COL.locations,
   COL.minOverrides,
+  COL.suppliers,
+  COL.supplierItems,
+  COL.events,
   COL.notes,
   COL.movementImages,
 ]
 
-/** Never restored over an existing document: the ledger is append-only. */
-const APPEND_ONLY: readonly string[] = [COL.movements]
+/**
+ * Never restored over an existing document.
+ *
+ * The ledger is append-only. An order is evidence in the same way: once received it names
+ * the receipt it became and the rules will not let it be deleted, so a file's older copy —
+ * still saying "ordered" — must not win over the database's "received".
+ */
+const APPEND_ONLY: readonly string[] = [COL.movements, COL.purchaseOrders]
 
 /**
  * Backed up for the record, never written back.
@@ -127,22 +149,6 @@ function ledgerStamp(movements: StockMovement[]): string {
     if (t > latest) latest = t
   }
   return `${movements.length}:${latest}`
-}
-
-function balancesFromLedger(movements: StockMovement[]): Map<string, number> {
-  const map = new Map<string, number>()
-  for (const m of movements) {
-    if (m.voided) continue
-    if (m.fromLocationId) {
-      const k = `${m.fromLocationId}__${m.productId}`
-      map.set(k, roundQty((map.get(k) ?? 0) - m.qty))
-    }
-    if (m.toLocationId) {
-      const k = `${m.toLocationId}__${m.productId}`
-      map.set(k, roundQty((map.get(k) ?? 0) + m.qty))
-    }
-  }
-  return map
 }
 
 /** Highest sequence number each counter must be at, read back out of the document numbers. */
@@ -464,11 +470,13 @@ async function rebuildDerived(db: Backend): Promise<number> {
 
   const existing = await db.getAll<StockLevel>(COL.stockLevels)
   for (const [id, qty] of balances) {
-    const [locationId, productId] = id.split('__')
+    // The key carries the unit when it is not the product's own; the row says it too.
+    const { locationId, productId, unit } = parseLevelId(id)
     await db.set(COL.stockLevels, id, {
       productId,
       locationId,
       qty,
+      ...(unit ? { unit } : {}),
       updatedAt: now,
       updatedBy: 'restore',
     })
@@ -476,15 +484,22 @@ async function rebuildDerived(db: Backend): Promise<number> {
   }
   for (const lv of existing) {
     if (balances.has(lv.id)) continue
+    const unit = lv.unit ?? parseLevelId(lv.id).unit
     await db.set(COL.stockLevels, lv.id, {
       productId: lv.productId,
       locationId: lv.locationId,
       qty: 0,
+      ...(unit ? { unit } : {}),
       updatedAt: now,
       updatedBy: 'restore',
     })
     n++
   }
+
+  // Each supplier's order counter, from the orders now in the database — same rule the
+  // ordering screen applies when it finds no counter at all.
+  const orders = await db.getAll<PurchaseOrder>(COL.purchaseOrders)
+  for (const [counter, seq] of orderCounterFloors(orders)) counters.set(counter, seq)
 
   for (const [counter, seq] of counters) {
     const current = await db.getOne<{ value: number }>(COL.counters, counter)

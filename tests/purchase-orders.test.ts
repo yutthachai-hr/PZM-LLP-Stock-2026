@@ -109,10 +109,11 @@ describe('placing an order', () => {
     expect(by('HOMEMADE CHEESE')).toEqual(['PO-00001'])
   })
 
-  test('a supplier with orders from before the per-supplier count carries on from them', async () => {
+  test('a supplier with orders from before the per-supplier count carries on past them', async () => {
     // Eight orders exist in production under the old shared counter. Their numbers are
-    // frozen by the rules and are not rewritten. A supplier's first order under the new
-    // rule is numbered after however many it already has, so nothing is issued twice.
+    // frozen by the rules and are not rewritten. A supplier whose one order says PO-00008
+    // continues at PO-00009 — not PO-00002, which would reach a second PO-00008 seven
+    // orders later. A gap is a curiosity; the same number twice is a filing error.
     seed('purchaseOrders', [
       {
         id: 'old-1', docNo: 'PO-00008', supplierId: SUPPLIER.id, supplierName: SUPPLIER.name,
@@ -121,7 +122,7 @@ describe('placing an order', () => {
       },
     ])
     await placeOrder()
-    expect(orders().map((o) => o.docNo).sort()).toEqual(['PO-00002', 'PO-00008'])
+    expect(orders().map((o) => o.docNo).sort()).toEqual(['PO-00008', 'PO-00009'])
   })
 
   test('each line records the product name and unit as they were', async () => {

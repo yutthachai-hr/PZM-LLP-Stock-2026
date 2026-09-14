@@ -51,8 +51,35 @@ function makeDocNo(seq: number): string {
  * One shared counter had the eighth order of the day come out as PO-00008 for a supplier
  * ordered from once, which reads as a sequence nobody has.
  */
-function counterId(supplierId: string): string {
+export function counterId(supplierId: string): string {
   return `purchaseOrder__${supplierId}`
+}
+
+/**
+ * The lowest value each supplier's counter may hold, given the orders that exist.
+ *
+ * Two things are counted and the larger wins. The number of orders the supplier has, so a
+ * supplier's first order under per-supplier numbering is counted after the ones it already
+ * had. And the highest number actually printed on one of them — the eight orders placed
+ * under the old shared counter carry numbers up to PO-00008, and a supplier whose one order
+ * says PO-00008 would otherwise reach a second PO-00008 seven orders later. A gap in the
+ * sequence is a curiosity; the same number on two orders is a filing error.
+ *
+ * Used when an order is placed, and by the restore to rebuild the counters from the orders
+ * it has just put back.
+ */
+export function orderCounterFloors(orders: readonly PurchaseOrder[]): Map<string, number> {
+  const count = new Map<string, number>()
+  const max = new Map<string, number>()
+  for (const o of orders) {
+    const id = counterId(o.supplierId)
+    count.set(id, (count.get(id) ?? 0) + 1)
+    const seq = Number(String(o.docNo ?? '').split('-')[1])
+    if (Number.isFinite(seq) && seq > (max.get(id) ?? 0)) max.set(id, seq)
+  }
+  const out = new Map<string, number>()
+  for (const [id, n] of count) out.set(id, Math.max(n, max.get(id) ?? 0))
+  return out
 }
 
 export interface OrderLineInput {
@@ -107,14 +134,14 @@ export async function createPurchaseOrder(params: {
   const db = scoped()
 
   // Orders placed before the numbers became per-supplier carry the old shared sequence,
-  // and the rules freeze an order's number once written — so they stay as they are, and a
-  // supplier's first order under this rule is counted after however many it already has.
+  // and the rules freeze an order's number once written — so they stay as they are, and
+  // the supplier's counter starts from the floor those orders set (see orderCounterFloors).
   // Read outside the transaction (a query cannot run inside one) and used only when the
   // supplier's counter does not exist yet; if two people open the same new supplier's
   // first order at once, the second transaction retries against the counter the first
   // one created and never sees this number.
   const existing = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'supplierId', supplier.id)
-  const seed = existing.length
+  const seed = orderCounterFloors(existing).get(counterId(supplier.id)) ?? 0
 
   return db.transaction(async (tx) => {
     const counter = await tx.get<{ value: number }>(COL.counters, counterId(supplier.id))

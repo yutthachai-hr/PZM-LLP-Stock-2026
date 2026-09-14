@@ -881,7 +881,13 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
 }
 
 /** Balances rebuilt from the ledger, keyed `${locationId}__${productId}`. */
-function balancesFromLedger(movements: StockMovement[]): Map<string, number> {
+/**
+ * Every balance the ledger adds up to, keyed the way stockLevels is — one per product per
+ * location per keyed unit. Exported for the restore, which used to keep its own copy that
+ * only knew the product's own unit: a 10 Pack balance was zeroed by the restore meant to
+ * save it, because the copy never produced a `#Pack` key for it to survive under.
+ */
+export function balancesFromLedger(movements: StockMovement[]): Map<string, number> {
   const map = new Map<string, number>()
   for (const m of movements) {
     if (m.voided) continue

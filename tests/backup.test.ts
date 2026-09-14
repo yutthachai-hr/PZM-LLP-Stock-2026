@@ -279,3 +279,87 @@ describe('policy — a backup belongs to the brand it came from', () => {
     await expect(restoreBackup(file, RESTORE_MODES.repair)).resolves.toBeTruthy()
   })
 })
+
+// Four collections arrived after this file was written — suppliers, what they sell us, the
+// calendar, and purchase orders — and none of them was in the backup. A restore after a
+// mistaken delete would have brought the stock back and lost every order ever placed and
+// every supplier it was placed with. Per-unit balances arrived in the same period, and the
+// rebuild only knew the product's own unit: a 10 Pack balance was zeroed by the restore
+// that was meant to save it.
+describe('what arrived after the backup was written', () => {
+  const supplier = { id: 's1', name: 'OLIVA', contactNumber: '', email: '', type: 'takingReturn', active: true, createdAt: 1, updatedAt: 1 }
+  const item = { id: 'si1', supplierId: 's1', productId: 'p1', buyingPrice: 120, active: true, createdAt: 1, updatedAt: 1 }
+  const event = { id: 'e1', title: 'นับสต๊อก', type: 'stockCount', startAt: 1, status: 'upcoming', priority: 'normal', createdBy: 'uid-admin', createdAt: 1, updatedAt: 1 }
+  const order = (id: string, docNo: string) => ({
+    id, docNo, supplierId: 's1', supplierName: 'OLIVA', status: 'ordered', locationId: MAIN,
+    orderedAt: 1, lines: [{ productId: 'p1', productName: 'Mozzarella', unit: 'KG', orderedQty: 3 }],
+    createdBy: 'uid-staff', createdByName: 'Staff', createdAt: 1, updatedAt: 1,
+  })
+
+  test('suppliers, their items, the calendar and purchase orders are in the file', async () => {
+    seed('suppliers', [supplier])
+    seed('supplierItems', [item])
+    seed('stockEvents', [event])
+    seed('purchaseOrders', [order('o1', 'PO-00001')])
+    const b = await buildBackup('Owner')
+    expect(b.data.suppliers).toHaveLength(1)
+    expect(b.data.supplierItems).toHaveLength(1)
+    expect(b.data.stockEvents).toHaveLength(1)
+    expect(b.data.purchaseOrders).toHaveLength(1)
+  })
+
+  test('they come back on restore, and an order already there is never overwritten', async () => {
+    seed('suppliers', [supplier])
+    seed('supplierItems', [item])
+    seed('stockEvents', [event])
+    seed('purchaseOrders', [order('o1', 'PO-00001')])
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    resetMemory()
+    seedMasterData()
+    // An order received since the backup: the file's copy says "ordered", the database says
+    // "received". Orders are evidence of receipts the same way movements are, so the newer
+    // one stays even in overwrite mode.
+    seed('purchaseOrders', [{ ...order('o1', 'PO-00001'), status: 'received', invoiceNo: 'IV-1' }])
+    await restoreBackup(file, RESTORE_MODES.overwrite)
+    expect(raw('suppliers')).toHaveLength(1)
+    expect(raw('supplierItems')).toHaveLength(1)
+    expect(raw('stockEvents')).toHaveLength(1)
+    expect((raw('purchaseOrders')[0] as { status: string }).status).toBe('received')
+  })
+
+  test('a file from before these collections existed still restores', async () => {
+    const b = await buildBackup('Owner')
+    const old = { ...b, version: 2, data: Object.fromEntries(Object.entries(b.data).filter(([k]) => !['suppliers', 'supplierItems', 'stockEvents', 'purchaseOrders'].includes(k))), counts: {} }
+    const file = parseBackup(JSON.stringify(old))
+    await expect(restoreBackup(file, RESTORE_MODES.repair)).resolves.toBeTruthy()
+  })
+
+  test('a balance kept in a unit other than the product\'s own survives a restore', async () => {
+    await receiveStock({
+      lines: [{ productId: 'p1', productName: 'Mozzarella', unit: 'KG', entryUnit: 'Pack', qty: 10 }],
+      toLocationId: MAIN,
+      date: Date.now(),
+      actor: ACTOR,
+    })
+    await receive(2)
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    expect(file.integrity.drift).toBe(0)
+    resetMemory()
+    seedMasterData()
+    await restoreBackup(file, RESTORE_MODES.repair)
+    const levels = raw('stockLevels') as { id: string; qty: number; unit?: string }[]
+    expect(levels.find((l) => l.id === `${MAIN}__p1#Pack`)).toMatchObject({ qty: 10, unit: 'Pack' })
+    expect(levels.find((l) => l.id === `${MAIN}__p1`)?.qty).toBe(2)
+  })
+
+  test('each supplier\'s order counter is rebuilt, so the next order is not numbered twice', async () => {
+    seed('suppliers', [supplier])
+    seed('purchaseOrders', [order('o1', 'PO-00001'), order('o2', 'PO-00002')])
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    resetMemory()
+    seedMasterData()
+    await restoreBackup(file, RESTORE_MODES.repair)
+    const counter = raw('counters').find((c) => c.id === 'purchaseOrder__s1') as { value: number } | undefined
+    expect(counter?.value).toBe(2)
+  })
+})
