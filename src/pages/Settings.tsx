@@ -494,6 +494,7 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
               disabled={u.id === currentUserId}
             >
               <option value="admin">{t("ผู้ดูแล")}</option>
+              <option value="manager">{t('หัวหน้า')}</option>
               <option value="staff">{t("พนักงาน")}</option>
             </Select>
             {u.active === false ? (
@@ -596,6 +597,7 @@ function UserEditor({ onClose, onDone }: { onClose: () => void; onDone: () => vo
         <Field label={t("สิทธิ์")}>
           <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
             <option value="staff">{t("พนักงาน (รับ/เบิก/ดู)")}</option>
+            <option value="manager">{t('หัวหน้า (อนุมัติรายการขอสั่งซื้อ)')}</option>
             <option value="admin">{t("ผู้ดูแล (จัดการทั้งหมด)")}</option>
           </Select>
         </Field>

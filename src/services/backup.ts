@@ -38,8 +38,9 @@ import { orderCounterFloors } from './purchaseOrders'
  *    empty.
  *  - 4: imported order lists (purchaseBatches) and confirmed spellings (productAliases).
  *    A version-3 file still restores; both are read as empty.
+ *  - 5: purchase requests (purchaseRequests). A version-4 file still restores.
  */
-const FORMAT_VERSION = 4
+const FORMAT_VERSION = 5
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,
@@ -69,6 +70,8 @@ const COLLECTIONS = [
   COL.purchaseOrders,
   // Version 4: after the orders, which a batch's groups point at.
   COL.purchaseBatches,
+  // Version 5: purchase requests, which point at the orders they became.
+  COL.purchaseRequests,
 ] as const
 
 /** Rebuilt from the ledger on restore, so they are stored for reference only. */
@@ -97,7 +100,7 @@ const OVERWRITABLE: readonly string[] = [
  * the receipt it became and the rules will not let it be deleted, so a file's older copy —
  * still saying "ordered" — must not win over the database's "received".
  */
-const APPEND_ONLY: readonly string[] = [COL.movements, COL.purchaseOrders, COL.purchaseBatches]
+const APPEND_ONLY: readonly string[] = [COL.movements, COL.purchaseOrders, COL.purchaseBatches, COL.purchaseRequests]
 
 /**
  * Backed up for the record, never written back.

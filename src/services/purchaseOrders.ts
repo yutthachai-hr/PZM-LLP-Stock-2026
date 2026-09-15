@@ -178,6 +178,8 @@ export async function createPurchaseOrder(params: {
    * proposal until somebody approves it, and the sheet is never shared before that.
    */
   batchId?: string
+  /** The approved purchase request this comes from. Placed at once — the approval was the decision. */
+  requestId?: string
   note?: string
 }): Promise<string> {
   const { supplier, locationId, actor } = params
@@ -234,6 +236,7 @@ export async function createPurchaseOrder(params: {
       lines,
       ...(params.eventId ? { eventId: params.eventId } : {}),
       ...(params.batchId ? { batchId: params.batchId } : {}),
+      ...(params.requestId ? { requestId: params.requestId } : {}),
       ...(params.note?.trim() ? { note: params.note.trim() } : {}),
       createdBy: actor.id,
       createdByName: actor.name,

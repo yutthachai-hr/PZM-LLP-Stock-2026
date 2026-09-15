@@ -10,8 +10,8 @@
 
 | อย่าง | สถานะ |
 |---|---|
-| Git `main` | ตรงกับ `origin/main`; สั่งซื้ออัตโนมัติ merge เข้า `main` แล้ว 15 ก.ย. (branch `feat/purchase-automation` / `demo` ยังอยู่สำหรับเดโม) |
-| Firestore rules | **deploy แล้ว 15 ก.ย.** ตรงกับไฟล์ที่ commit (รวม `purchaseBatches`, `productAliases`, field ใหม่บน purchaseOrders) |
+| Git `main` | ตรงกับ `origin/main`; สั่งซื้ออัตโนมัติ merge 15 ก.ย.; **รายการขอสั่งซื้อ (purchase requests) + บทบาท `manager` merge 15 ก.ย.** (branch `feat/purchase-requests`) |
+| Firestore rules | **deploy แล้ว 15 ก.ย.** ตรงกับไฟล์ที่ commit (รวม `purchaseRequests`, `manager()`, `requestId` บน purchaseOrders) |
 | Netlify | build จาก repo อัตโนมัติทุกครั้งที่ push เข้า `main` |
 | Firebase project | `pzm-stock-x5` (ทั้งสองแบรนด์ใช้ project เดียวกัน แยกด้วย collection prefix) |
 | Repo | `github.com/yutthachai-hr/PZM-LLP-Stock-2026` (private) |
@@ -107,12 +107,32 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 
 ---
 
+### รายการขอสั่งซื้อ — พนักงานขอ → หัวหน้าอนุมัติ → PO (branch `feat/purchase-requests`, 15 ก.ย.) — collection ที่ 7: `purchaseRequests`
+
+เจ้าของเปลี่ยนทางเข้า: **ไม่ใช้ Excel เป็น input อีกต่อไป** (หน้า import ยังอยู่ แต่ถอดจากเมนู เหลือปุ่ม "นำเข้า Excel (ทางเลือก)" ในหน้าสั่งซื้อ) พนักงานสร้าง "รายการขอสั่งซื้อ" (PR) ในแอป → หัวหน้าตรวจ/แก้/อนุมัติ → ระบบสร้างใบสั่งซื้อ (PO) ต่อผู้ขายจากจำนวนที่อนุมัติ → ส่งรูปเข้า LINE ด้วย `SendWizard` ตัวเดิม **PR ≠ PO**: PR คือคำขอ PO คือใบที่ส่งผู้ขาย ตัดสินใจกับเจ้าของ 15 ก.ย.: เพิ่มบทบาท **`manager` (หัวหน้า)**; ผู้ขอเลือกผู้ขายรายใดก็ได้แต่ถ้าไม่ใช่ประจำ/สำรองจะติดธง "เลือกผู้ขายเอง" ให้หัวหน้าเห็น; 1 คำขอ = 1 คลังปลายทาง
+
+**บทบาท** `Role = 'admin' | 'manager' | 'staff'` (`src/types.ts`, rules `manager()` = admin หรือ manager) — manager ทำได้ทุกอย่างที่ staff ทำ + ตรวจ/แก้/ส่งกลับ/ไม่อนุมัติ/อนุมัติ PR; **แตะ catalogue/ผู้ขาย/ผู้ใช้ไม่ได้** (ยัง `admin()`) ตั้งบทบาทที่ Settings → ผู้ใช้ ("หัวหน้า") **เจ้าของต้องตั้งให้หัวหน้าเองหลัง deploy** ไม่งั้นไม่มีใครอนุมัติได้นอกจาก admin
+
+**สถานะ** `draft → pendingApproval → (returned → pendingApproval อีกครั้ง, revision+1) → approved → poCreated` หรือ `rejected`; "READY_FOR_ORDER" ในสเปก = `approved` ที่ยังไม่มี `orders`; admin `reopenRequest` ได้จาก approved/rejected → pendingApproval (มีประวัติ) ตารางเปลี่ยนสถานะอยู่ที่เดียว `src/lib/purchaseRequestStatus.ts` (`canTransition`, `canEditItems`, `isReadyForOrder`, `liveItems`)
+
+**โมเดล** `PurchaseRequest` (เอกสารเดียวต่อคำขอ, `PR-00001` counter `purchaseRequest` ต่อแบรนด์): `items[]` ≤200 แต่ละบรรทัดมี `requestedQty` (ของผู้ขอ, `null` ถ้าหัวหน้าเพิ่ม) **และ** `approvedQty` (หัวหน้าแก้; ตอนส่งตรวจจะ copy จาก requestedQty) ทั้งสองค่าคงอยู่เสมอเพื่อ audit, `supplierChoice: primary|alternate|custom`, `managerAdded`, `removed {by,at,reason}` (หัวหน้านำออกระหว่างตรวจ = soft-remove ต้องมีเหตุผล; ผู้ขอลบตอนร่าง = ลบจริง); `history[]` append-only ≤500 (ทุก action พร้อม old→new); `orders[]` เติมครั้งเดียวตอนแปลงเป็น PO; `PurchaseOrder.requestId` ชี้กลับ
+
+**บริการ** `src/services/purchaseRequests.ts` — ทุก mutation เป็น `mutate(id, fn)` = transaction อ่าน-แก้-เขียน ตรวจสถานะ/สิทธิ์ในนั้น: `createRequest`, `addItem`, `setRequestedQty` (ก่อนส่งเท่านั้น), `setApprovedQty` (manager, pendingApproval), `removeItem`, `changeSupplier`, `setItemNote`, `setRequestHeader`, `submitRequest` (`blockingIssues`: ≥1 บรรทัด, จำนวน>0, สินค้า/ผู้ขาย/คลังยังใช้งาน), `returnRequest`/`rejectRequest` (เหตุผลบังคับ), `approveRequest` (block ถ้ามี issue), `reopenRequest` (admin), `convertToOrders` (ต้อง approved และ `orders` ว่าง + `getBy(requestId)` กันซ้ำ → `createPurchaseOrder` ต่อผู้ขายด้วยเลขรันต่อผู้ขายเดิม → transaction สุดท้ายเขียน `orders` + `poCreated`; เรียกซ้ำถูกปฏิเสธ), `noteExport`
+
+**Rules** `validRequest` (hasOnly, enum, ขนาด list, approved⇒approvedBy ฯลฯ), `createdHonestly` (createdBy==requestedBy==uid, status draft), `requestEdit` (history ไม่หด, docNo/createdBy/requestedBy แช่แข็ง), `requestMove` (ใครเปลี่ยนสถานะไหนได้: ส่งตรวจ = ผู้ขอหรือ manager; returned/approved/rejected = manager และลงชื่อ uid ตัวเอง; poCreated จาก approved เท่านั้น; reopen = admin) ลบ = admin
+
+**หน้าจอ** `src/pages/requests/`: `/requests` (30 วัน, filter ทั้งหมด/ของฉัน/รออนุมัติ/ส่งกลับ/พร้อมสร้าง PO/สร้างแล้ว/ไม่อนุมัติ; หัวหน้าเปิดมาเจอ "รออนุมัติ" เรียงเก่าสุดก่อน ถ้าไม่มีก็ "ทั้งหมด"), `/requests/new` + `/requests/:id` → `RequestPage` เลือก `RequestEditor` (ร่าง/ส่งกลับ และคนนี้แก้ได้) หรือ `RequestReview` (หัวหน้า/อ่านอย่างเดียว) — editor หน้าเดียวไม่ซ้อน modal: คลัง+หมายเหตุ / `ProductPicker` (แท็บ "สินค้า" = ค้นชื่อ/SKU debounce ลูกศร+Enter → เลือกผู้ขาย (ประจำ/สำรอง/รายอื่น-ติดธง) + จำนวน + หน่วย Enter = เพิ่ม; แท็บ "ผู้ขาย" = เลือกผู้ขายแล้วใส่จำนวนทีละบรรทัด) / ตะกร้าจัดกลุ่มผู้ขาย แก้จำนวน/หน่วย/ผู้ขายในที่ **เอกสารถูกสร้างตอนเพิ่มบรรทัดแรก** (lazy) แล้ว URL ย้ายไป `/requests/:id` โดยไม่ remount editor. Review: สถิติ, ตารางต่อผู้ขาย ช่อง "อนุมัติ" แก้ในที่ (เซฟตอน blur), เปลี่ยนผู้ขาย, หมายเหตุ, นำออก+เหตุผล, หัวหน้าเพิ่มสินค้าด้วย `ProductPicker` ตัวเดียวกัน (บรรทัดนั้น "ขอ = —"), ปุ่ม อนุมัติทั้งหมด/ส่งกลับ/ไม่อนุมัติ (`ReasonModal`), หลังอนุมัติ PDF/Excel (`src/lib/requestExport.ts` จัดกลุ่มผู้ขาย มีทั้งขอ/อนุมัติ) + "สร้างใบสั่งซื้อ" (ยืนยัน, ครั้งเดียว), หลังสร้าง "ส่ง LINE ทั้งหมด (N)" เปิด `SendWizard` + ลิงก์ "ดูในหน้าสั่งซื้อ", แท็บประวัติ. Dashboard `RequestWidget` แทน `PurchaseWidget`; เมนู "รายการขอสั่งซื้อ" แทน "สั่งซื้ออัตโนมัติ"; หน้าสั่งซื้อโชว์ "จากรายการขอสั่งซื้อ" บนใบที่มี `requestId` และ "สั่งของใหม่ (สั่งเอง)" ยังใช้ได้
+
+**ทดสอบ**: `tests/purchase-requests.test.ts` (20 รวม acceptance: RED OAK 5→3, ROCKET 3, COKE CAN 5, หัวหน้าเพิ่ม COKE ZERO 5 → ACK PO-00001 + THAINAMTHIP PO-00001; แปลงซ้ำถูกปฏิเสธ; requested/approved ครบ), rules tests สำหรับ manager + ทุก transition; **เดินใน demo แล้ว 15 ก.ย.** ทั้งสองแท็บของ picker, ส่งตรวจ, แก้อนุมัติ, เพิ่มโดยหัวหน้า, อนุมัติ, PDF/Excel, สร้าง PO 2 ใบ, wizard, ส่งกลับ→แก้→ส่งใหม่ (ครั้งที่ 2), 375px ผ่าน. หมายเหตุเครื่องมือ: ปุ่ม "Return" ของ browser automation ส่ง `key=""` ไม่ใช่ Enter — ต้องกด `Enter`
+
+---
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
-npm test              # 418 unit tests
-npm run test:rules    # 127 rules tests (ต้องมี Java สำหรับ emulator)
-npm run build          # tsc -b + typecheck netlify function + vite build
+npm test              # 443 unit tests
+npm run test:rules    # 133 rules tests (ต้องมี Java สำหรับ emulator)
+npm run build          # tsc -b + typecheck netlify + cloudflare functions + vite build
 npm run lint            # 0 errors
 npm run i18n:check      # ครบทุกข้อความ
 ```
@@ -120,6 +140,8 @@ npm run i18n:check      # ครบทุกข้อความ
 ---
 
 ## 6. ค้างอยู่ / ต้องตัดสินใจต่อ
+
+-1. **รายการขอสั่งซื้อ — ขึ้นของจริงแล้ว 15 ก.ย.** สิ่งที่เจ้าของต้องทำเอง: (ก) Settings → ผู้ใช้ → ตั้งบทบาท "หัวหน้า" ให้คนที่อนุมัติ (ทั้งสองแบรนด์ถ้าจำเป็น); (ข) กด "จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย" ใน Settings (ทั้งสองแบรนด์) ให้เลข PO เดิมเรียงต่อผู้ขายตามที่ตัดสินไว้; (ค) บอกพนักงานว่าทางเข้าใหม่คือเมนู "รายการขอสั่งซื้อ" Excel เหลือเป็นทางเลือกในหน้าสั่งซื้อ
 
 0. **สั่งซื้ออัตโนมัติ — ขึ้นของจริงแล้ว 15 ก.ย.** (rules deploy → merge → Netlify build). ทดสอบส่ง LINE จริงผ่านแล้วบนเดโม (เจ้าของส่งถึงคนอื่นได้). ที่ยังต้องรู้: LIFF app `2011602857-k9K8Zplx` ถูกใช้ทั้ง production (`[context.production.environment]`) และ demo — LIFF app มี Endpoint ได้อันเดียว ตัวไหนไม่ตรง Endpoint จะ login LINE ไม่กลับ (เดโมยอมเสียได้). **Netlify Blobs บนแผนฟรี**: ใช้ได้จริง (รูปถูกฝากและ LINE ดึงได้ตอนทดสอบ). ขั้นตอนตั้งค่าเดโมด้านล่างเก็บไว้เป็นประวัติ:
    1. **ลอง LIFF บน URL จริงก่อน** (localhost ใช้ LIFF ไม่ได้): เปิด branch deploy ชื่อ `demo` ใน Netlify UI (Site settings → Build & deploy → Branch deploys) — `netlify.toml` บังคับ `VITE_DEMO_MODE=1` ให้ context นี้แล้ว จะได้ `https://demo--pzmstock.netlify.app` ที่ใช้ browser storage ล้วน ไม่แตะ production
@@ -140,7 +162,7 @@ npm run i18n:check      # ครบทุกข้อความ
 
 ## 7. กติกาที่เจ้าของวางไว้ — ต้องรู้ก่อนทำงานต่อ
 
-- **Firebase Spark ฟรี, ห้ามเพิ่ม cost โดยไม่จำเป็น** — งดใช้ `onSnapshot` ถ้า one-shot read พอ, งดเพิ่ม collection ใหม่โดยไม่ถามก่อน (ตอนนี้มี 6 ตัวที่ตกลงแล้ว: `stockEvents`, `suppliers`, `supplierItems`, `purchaseOrders`, `purchaseBatches`, `productAliases` — สองตัวหลังอนุมัติในแผน 14 ก.ย.)
+- **Firebase Spark ฟรี, ห้ามเพิ่ม cost โดยไม่จำเป็น** — งดใช้ `onSnapshot` ถ้า one-shot read พอ, งดเพิ่ม collection ใหม่โดยไม่ถามก่อน (ตอนนี้มี 7 ตัวที่ตกลงแล้ว: `stockEvents`, `suppliers`, `supplierItems`, `purchaseOrders`, `purchaseBatches`, `productAliases`, `purchaseRequests` — ตัวสุดท้ายอนุมัติในแผน 15 ก.ย.)
 - **ห้ามแปลงหน่วยเอง** — ระบบต้องบันทึกตามหน่วยที่คนกรอกจริงเท่านั้น (ยกเว้นกรัม/กิโล, มล./ลิตร ที่อนุญาตไว้แล้ว)
 - **ห้ามลบ ให้ซ่อนแทน** — ใช้กับทั้งสินค้าและใบสั่งซื้อที่รับของแล้ว
 - **ทุกการแก้ไขย้อนหลังต้องมีชื่อคนแก้ครบ ป้องกันการทุจริต** — ทั้ง movement และ purchase order
@@ -187,7 +209,7 @@ npm run i18n:check      # ครบทุกข้อความ
 สิ่งที่ Claude ใหม่ควรทำเป็นอันดับแรกเมื่อรับงานต่อ:
 1. `git log --oneline -20` ดูว่าทำอะไรมาล่าสุด
 2. `git status` เช็คว่ามีอะไรค้าง uncommitted
-3. เช็คหัวข้อ **"6. ค้างอยู่"** ด้านบนว่ามีอะไรรอการตัดสินใจ (ข้อ 0 คือขั้นที่เจ้าของต้องทำเองก่อนสั่งซื้ออัตโนมัติจะใช้จริงได้)
+3. เช็คหัวข้อ **"6. ค้างอยู่"** ด้านบนว่ามีอะไรรอการตัดสินใจ (ข้อ -1 คือขั้นที่เจ้าของต้องทำเองให้รายการขอสั่งซื้อใช้จริงได้: ตั้งบทบาทหัวหน้า)
 4. ถ้าจะแก้ rules หรือ collection ใหม่ — ถามเจ้าของก่อนเสมอตามกติกาข้อ 7
 
 ---
