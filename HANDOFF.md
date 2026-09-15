@@ -10,8 +10,8 @@
 
 | อย่าง | สถานะ |
 |---|---|
-| Git `main` | ตรงกับ `origin/main`; **งานสั่งซื้ออัตโนมัติอยู่บน branch `feat/purchase-automation` ยังไม่ merge** (ดูข้อ 4 หัวข้อสุดท้าย + ข้อ 6) |
-| Firestore rules | `main` ตรงกับที่ deploy แล้ว; **`feat/purchase-automation` แก้ rules (2 collection ใหม่ + field ใหม่) ยังไม่ deploy** — ต้อง deploy ก่อน merge/push (กติกาข้อ 7) |
+| Git `main` | ตรงกับ `origin/main`; สั่งซื้ออัตโนมัติ merge เข้า `main` แล้ว 15 ก.ย. (branch `feat/purchase-automation` / `demo` ยังอยู่สำหรับเดโม) |
+| Firestore rules | **deploy แล้ว 15 ก.ย.** ตรงกับไฟล์ที่ commit (รวม `purchaseBatches`, `productAliases`, field ใหม่บน purchaseOrders) |
 | Netlify | build จาก repo อัตโนมัติทุกครั้งที่ push เข้า `main` |
 | Firebase project | `pzm-stock-x5` (ทั้งสองแบรนด์ใช้ project เดียวกัน แยกด้วย collection prefix) |
 | Repo | `github.com/yutthachai-hr/PZM-LLP-Stock-2026` (private) |
@@ -121,7 +121,7 @@ npm run i18n:check      # ครบทุกข้อความ
 
 ## 6. ค้างอยู่ / ต้องตัดสินใจต่อ
 
-0. **สั่งซื้ออัตโนมัติ — ขั้นที่เจ้าของต้องทำเองก่อนใช้จริง** (branch `feat/purchase-automation`):
+0. **สั่งซื้ออัตโนมัติ — ขึ้นของจริงแล้ว 15 ก.ย.** (rules deploy → merge → Netlify build). ทดสอบส่ง LINE จริงผ่านแล้วบนเดโม (เจ้าของส่งถึงคนอื่นได้). ที่ยังต้องรู้: LIFF app `2011602857-k9K8Zplx` ถูกใช้ทั้ง production (`[context.production.environment]`) และ demo — LIFF app มี Endpoint ได้อันเดียว ตัวไหนไม่ตรง Endpoint จะ login LINE ไม่กลับ (เดโมยอมเสียได้). **Netlify Blobs บนแผนฟรี**: ใช้ได้จริง (รูปถูกฝากและ LINE ดึงได้ตอนทดสอบ). ขั้นตอนตั้งค่าเดโมด้านล่างเก็บไว้เป็นประวัติ:
    1. **ลอง LIFF บน URL จริงก่อน** (localhost ใช้ LIFF ไม่ได้): เปิด branch deploy ชื่อ `demo` ใน Netlify UI (Site settings → Build & deploy → Branch deploys) — `netlify.toml` บังคับ `VITE_DEMO_MODE=1` ให้ context นี้แล้ว จะได้ `https://demo--pzmstock.netlify.app` ที่ใช้ browser storage ล้วน ไม่แตะ production
    2. ~~LIFF app~~ ทำแล้ว 14 ก.ย.: LIFF ID `2011602857-k9K8Zplx` อยู่ใน `netlify.toml` context `demo` แล้ว — ตรวจใน LINE Developers ว่า Endpoint URL = URL ข้อ 1 และ **Share target picker เปิดอยู่** (ถ้า Endpoint ตั้งเป็น pzmstock.netlify.app ไว้ ให้ย้าย id นี้ไป production context แทน)
    3. Netlify env สำหรับ `demo`: `PO_IMAGE_DEMO_KEY` และ `VITE_PO_IMAGE_DEMO_KEY` = สตริงสุ่มเดียวกัน (**ห้ามตั้งบน production**)

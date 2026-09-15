@@ -89,6 +89,14 @@
 [functions]
   node_bundler = "esbuild"
 
+# ---------------------------------------------------------------- production ----
+#
+# The LIFF app the live site sends order sheets through (owner, 15 Sep 2026). A LIFF id
+# is public — it ships in the client bundle — which is why it can live here. A LIFF app
+# has exactly one Endpoint URL, and this one's must be https://pzmstock.netlify.app.
+[context.production.environment]
+  VITE_LIFF_ID = "2011602857-k9K8Zplx"
+
 # ---------------------------------------------------------------- demo branch ----
 #
 # A branch named `demo` deploys the demo build: browser storage only, never the live
