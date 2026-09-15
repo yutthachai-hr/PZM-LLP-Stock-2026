@@ -2,8 +2,10 @@
 //
 //   npm run icons
 //
-// The source of truth is assets/app-icon.png — the running rabbit chef. It is committed so
-// the icons can be regenerated rather than being three binaries nobody can reproduce.
+// The source of truth is assets/app-icon.png — the running rabbit chef (the red/orange
+// tile with the delivery box, replaced by the owner on 15 Sep 2026; the earlier green one
+// is gone). It is committed so the icons can be regenerated rather than being three
+// binaries nobody can reproduce.
 //
 // Written with only node:zlib so there is no image dependency to keep up to date. That
 // means decoding the source PNG here as well as writing one: a PNG is a header, one
@@ -16,7 +18,7 @@
 //                       drawn.
 //   pwa-maskable-512    `purpose: maskable`. Android crops this to whatever shape the
 //                       launcher uses — a circle on Pixel, a squircle on Samsung. The
-//                       green runs to all four edges and the rabbit is scaled into the
+//                       tile red runs to all four edges and the rabbit is scaled into the
 //                       inner 80%, which is the only part guaranteed to survive the crop.
 //                       Declaring the `any` file as maskable, which the manifest used to
 //                       do, gets the rounded corners and part of the pizza sliced off.
@@ -438,8 +440,8 @@ const wrote = (name, img) => {
 for (const size of [192, 512]) wrote(`pwa-${size}.png`, resize(art, size))
 // A tab favicon is 16 CSS pixels wide in practice. Full bleed, because transparent
 // corners just make it look chipped at that size — and cropped in to 78%, because the
-// whole drawing at 32px is a green square with a smudge in it, while dropping the empty
-// green margin makes the chef's hat and the pizza large enough to tell apart.
+// whole drawing at 32px is a red square with a smudge in it, while dropping the empty
+// margin makes the chef's hat and the box large enough to tell apart.
 wrote('favicon-32.png', onSolid(crop(art, 0.78), 32, bg, 1))
 // 80% is the maskable safe zone: everything outside it is the launcher's to crop.
 wrote('pwa-maskable-512.png', onSolid(art, 512, bg, 0.8))
