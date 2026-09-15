@@ -27,8 +27,11 @@ export function PurchaseRequestsPage() {
   const { locationById } = useData()
   const [params, setParams] = useSearchParams()
   const manager = isManager(user?.role)
-  const filter = (params.get('filter') as Filter) || (manager ? 'pendingApproval' : 'all')
   const [rows, setRows] = useState<PurchaseRequest[]>([])
+  // A manager lands on what is waiting for them — unless nothing is, then on everything.
+  const filter =
+    (params.get('filter') as Filter) ||
+    (manager && rows.some((r) => r.status === 'pendingApproval') ? 'pendingApproval' : 'all')
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {

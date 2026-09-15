@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { EmptyState, Spinner } from '../../components/ui'
@@ -19,12 +19,21 @@ export function RequestPage() {
   const { id } = useParams()
   const { user } = useAuth()
   const [pr, setPr] = useState<PurchaseRequest | null | undefined>(undefined)
+  const shown = useRef<string | null>(null)
+  // What the editor is keyed on. Stays 'new' after the lazy create so the editor does not
+  // remount (and lose the cursor) when the URL moves from /new to the document.
+  const editorKey = useRef('new')
 
   const load = useCallback(async () => {
     if (!id || id === 'new') {
+      editorKey.current = 'new'
       setPr(null)
       return
     }
+    // The editor creates the document lazily and moves the URL to it; the copy it handed
+    // over is current, so do not refetch (that would remount the editor mid-typing).
+    if (shown.current === id) return
+    editorKey.current = id
     setPr(await getRequest(id))
   }, [id])
 
@@ -37,6 +46,10 @@ export function RequestPage() {
 
   const editable =
     !pr || (user && isRequesterEditable(pr.status) && canEditItems(pr, { id: user.id, role: user.role as Role }))
-  if (editable) return <RequestEditor key={pr?.id ?? 'new'} initial={pr} />
-  return <RequestReview key={pr!.id} initial={pr!} onChange={setPr} />
+  const onChange = (next: PurchaseRequest) => {
+    shown.current = next.id
+    setPr(next)
+  }
+  if (editable) return <RequestEditor key={editorKey.current} initial={pr} onChange={onChange} />
+  return <RequestReview key={pr!.id} initial={pr!} onChange={onChange} />
 }

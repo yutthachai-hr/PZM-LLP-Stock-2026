@@ -1149,7 +1149,7 @@ export const EN: Record<string, string> = {
   'พิมพ์ชื่อหรือรหัส แล้วกด Enter — หรือเลือกผู้ขายแล้วใส่จำนวนทีละรายการ': 'Type a name or code and press Enter — or pick a supplier and enter quantities line by line',
   'รายการที่ขอ': 'Requested lines',
   '{n} รายการ · {s} ผู้ขาย': '{n} lines · {s} suppliers',
-  'ยังไม่มีรายการ — เพิ่มจากช่องค้นหาด้านซ้าย': 'No lines yet — add from the search on the left',
+  'ยังไม่มีรายการ — เพิ่มจากช่อง "เพิ่มสินค้า"': 'No lines yet — add from the "Add product" box',
   'ผู้ขายสำรอง': 'Alternate supplier',
   'สำรอง': 'alternate',
   'ขอ {qty} {unit}': 'Requested {qty} {unit}',

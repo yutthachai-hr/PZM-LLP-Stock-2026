@@ -27,7 +27,7 @@ import { ProductPicker, type PickedLine } from './ProductPicker'
  * added (or its header changed), not when the screen opens, so backing out of an empty
  * one leaves no empty document behind.
  */
-export function RequestEditor({ initial }: { initial: PurchaseRequest | null }) {
+export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest | null; onChange: (pr: PurchaseRequest) => void }) {
   const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
@@ -76,6 +76,7 @@ export function RequestEditor({ initial }: { initial: PurchaseRequest | null }) 
     if (!actor) throw new Error('no user')
     const created = await S.createRequest({ locationId, note, actor })
     setPr(created)
+    onChange(created)
     navigate(`/requests/${created.id}`, { replace: true })
     return created
   }
@@ -132,7 +133,8 @@ export function RequestEditor({ initial }: { initial: PurchaseRequest | null }) 
       const next = await S.submitRequest({ id: pr.id, ctx: { products, suppliers, locations }, actor })
       setPr(next)
       toast.success(t('ส่งให้หัวหน้าตรวจแล้ว'))
-      navigate(`/requests/${next.id}`, { replace: true })
+      // The parent decides editor vs review from the status, so tell it.
+      onChange(next)
     })
   }
 
@@ -209,7 +211,7 @@ export function RequestEditor({ initial }: { initial: PurchaseRequest | null }) 
             }
           />
           {items.length === 0 ? (
-            <p className="text-sm text-ink-faint">{t('ยังไม่มีรายการ — เพิ่มจากช่องค้นหาด้านซ้าย')}</p>
+            <p className="text-sm text-ink-faint">{t('ยังไม่มีรายการ — เพิ่มจากช่อง "เพิ่มสินค้า"')}</p>
           ) : (
             <div className="space-y-3">
               {groups.map((g) => (
