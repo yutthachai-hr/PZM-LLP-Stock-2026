@@ -69,10 +69,12 @@ service cloud.firestore {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
         'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
+        'purchaseRequests',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
         'lelapin__stockEvents', 'lelapin__purchaseOrders',
-        'lelapin__purchaseBatches', 'lelapin__productAliases'
+        'lelapin__purchaseBatches', 'lelapin__productAliases',
+        'lelapin__purchaseRequests'
       ];
     }
 
@@ -382,7 +384,7 @@ service cloud.firestore {
           'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
           'orderedAt', 'lines', 'invoiceNo', 'receivedAt', 'receivedBy', 'receivedByName',
           'movementDocNo', 'eventId', 'note',
-          'batchId', 'approvedBy', 'approvedByName', 'approvedAt',
+          'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ])
@@ -400,6 +402,7 @@ service cloud.firestore {
         && (!('receivedByName' in d) || text(d.receivedByName, 200))
         // From an imported list: a draft until approved, and the approval is signed.
         && (!('batchId' in d) || text(d.batchId, 200))
+        && (!('requestId' in d) || text(d.requestId, 200))
         && (!('approvedBy' in d) || text(d.approvedBy, 200))
         && (!('approvedByName' in d) || text(d.approvedByName, 200))
         && (!('approvedAt' in d) || epochMs(d.approvedAt))
@@ -445,6 +448,50 @@ service cloud.firestore {
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }
 
+    /**
+     * A purchase request: what was asked for, what the หัวหน้า approved, and the orders it
+     * became. Lines and history are lists the rules cannot walk; the service checks what
+     * each line says, and the orders a request turns into are validated as orders.
+     */
+    function validRequest(d) {
+      return d.keys().hasAll([
+          'id', 'docNo', 'status', 'revision', 'locationId', 'items', 'requestedBy',
+          'requestedByName', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'status', 'revision', 'locationId', 'note', 'items',
+          'requestedBy', 'requestedByName', 'submittedAt',
+          'returnReason', 'rejectReason', 'approvalNote',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'rejectedBy', 'rejectedByName', 'rejectedAt',
+          'orders', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && text(d.docNo, 40) && text(d.locationId, 200)
+        && d.status in ['draft', 'pendingApproval', 'returned', 'approved', 'rejected', 'poCreated']
+        && d.revision is int && d.revision >= 1 && d.revision <= 1000
+        && d.items is list && d.items.size() <= 200
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 500
+        && (!('orders' in d) || (d.orders is list && d.orders.size() <= 60))
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('submittedAt' in d) || epochMs(d.submittedAt))
+        && (!('returnReason' in d) || text(d.returnReason, 2000))
+        && (!('rejectReason' in d) || text(d.rejectReason, 2000))
+        && (!('approvalNote' in d) || text(d.approvalNote, 2000))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('approvedByName' in d) || text(d.approvedByName, 200))
+        && (!('approvedAt' in d) || epochMs(d.approvedAt))
+        && (!('rejectedBy' in d) || text(d.rejectedBy, 200))
+        && (!('rejectedByName' in d) || text(d.rejectedByName, 200))
+        && (!('rejectedAt' in d) || epochMs(d.rejectedAt))
+        && text(d.requestedBy, 200) && text(d.requestedByName, 200)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        // What a status means is pinned to who signed it.
+        && (d.status != 'approved' || 'approvedBy' in d)
+        && (d.status != 'rejected' || 'rejectedBy' in d)
+        && (d.status != 'poCreated' || ('orders' in d && d.orders.size() > 0));
+    }
+
     /** A workbook spelling somebody confirmed as one product. */
     function validAlias(d) {
       return d.keys().hasAll(['id', 'key', 'productId', 'sourceName', 'createdBy', 'createdByName', 'createdAt'])
@@ -470,6 +517,7 @@ service cloud.firestore {
         : kind(name) == 'supplierItems' ? validSupplierItem(d)
         : kind(name) == 'purchaseOrders' ? validPurchaseOrder(d)
         : kind(name) == 'purchaseBatches' ? validBatch(d)
+        : kind(name) == 'purchaseRequests' ? validRequest(d)
         : kind(name) == 'productAliases' ? validAlias(d)
         : validImage(d)
       );
@@ -501,6 +549,11 @@ service cloud.firestore {
           && request.resource.data.status in ['draft', 'needsReview', 'ready']
         : kind(name) == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
+        // A request is filed by whoever is asking, as a draft.
+        : kind(name) == 'purchaseRequests'
+        ? request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.requestedBy == request.auth.uid
+          && request.resource.data.status == 'draft'
         : kind(name) != 'stockMovements' || (
           request.resource.data.byUserId == request.auth.uid
           && !('voided' in request.resource.data)
@@ -519,6 +572,7 @@ service cloud.firestore {
     function editedHonestly(name) {
       return kind(name) == 'purchaseOrders' ? orderEdit()
         : kind(name) == 'purchaseBatches' ? batchEdit()
+        : kind(name) == 'purchaseRequests' ? requestEdit()
         // Confirming a spelling again replaces the whole alias, signed by whoever did it.
         : kind(name) == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
@@ -573,6 +627,50 @@ service cloud.firestore {
     function batchEdit() {
       return editedKeys().hasOnly(['rows', 'groups', 'history', 'status', 'updatedAt'])
         && request.resource.data.history.size() >= resource.data.history.size();
+    }
+
+    /**
+     * What may change on a request, and who may change it.
+     *
+     * Its number, who asked, and when it was filed are what the request IS. The history
+     * only grows. The lines may be rewritten by anyone who may write at all — a token
+     * holder could forge a line either way, and what protects the business is that the
+     * words that make a request an order (approved / rejected / returned / poCreated) may
+     * only be spoken by a manager, in their own name, and a manager may not un-say them:
+     * leaving approved or rejected takes an admin.
+     */
+    function requestEdit() {
+      return editedKeys().hasOnly([
+          'status', 'revision', 'locationId', 'note', 'items', 'submittedAt',
+          'returnReason', 'rejectReason', 'approvalNote',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'rejectedBy', 'rejectedByName', 'rejectedAt',
+          'orders', 'history', 'updatedAt'
+        ])
+        && request.resource.data.history.size() >= resource.data.history.size()
+        && (request.resource.data.status == resource.data.status || requestMove())
+        && (!('approvedBy' in request.resource.data)
+            || request.resource.data.approvedBy == resource.data.approvedBy
+            || request.resource.data.approvedBy == request.auth.uid)
+        && (!('rejectedBy' in request.resource.data)
+            || request.resource.data.rejectedBy == resource.data.rejectedBy
+            || request.resource.data.rejectedBy == request.auth.uid);
+    }
+
+    function requestMove() {
+      let from = resource.data.status;
+      let to = request.resource.data.status;
+      return (
+        // submit / resubmit: the requester or a manager
+        (to == 'pendingApproval' && from in ['draft', 'returned']
+          && (resource.data.requestedBy == request.auth.uid || manager()))
+        // the manager's three words
+        || (to in ['returned', 'approved', 'rejected'] && from == 'pendingApproval' && manager())
+        // turning an approved request into orders: anyone who may place an order
+        || (to == 'poCreated' && from == 'approved')
+        // reopening a decision: admin only
+        || (to == 'pendingApproval' && from in ['approved', 'rejected'] && admin())
+      );
     }
 
     function movementEdit() {

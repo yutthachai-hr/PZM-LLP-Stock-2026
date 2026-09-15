@@ -19,6 +19,7 @@ let env: RulesTestEnvironment
 
 const ADMIN = 'uid-admin'
 const STAFF = 'uid-staff'
+const MANAGER = 'uid-manager' // หัวหน้า: reviews purchase requests, nothing admin-only
 const PENDING = 'uid-pending' // signed up, not approved yet
 const OUTSIDER = 'uid-outsider' // has an auth account, no profile
 
@@ -43,6 +44,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'meta/bootstrap'), { claimedBy: ADMIN, at: Date.now() })
     await setDoc(doc(db, 'users', ADMIN), { name: 'Admin', role: 'admin', active: true })
     await setDoc(doc(db, 'users', STAFF), { name: 'Staff', role: 'staff', active: true })
+    await setDoc(doc(db, 'users', MANAGER), { name: 'Manager', role: 'manager', active: true })
     await setDoc(doc(db, 'users', PENDING), { name: 'Pending', role: 'staff', active: false })
     await setDoc(doc(db, 'products/p1'), product('p1'))
     await setDoc(
@@ -968,6 +970,90 @@ describe('confirmed product spellings', () => {
     await assertFails(setDoc(at(STAFF), alias({ productId: 'p3', createdBy: ADMIN })))
     await assertFails(setDoc(at(STAFF), alias({ extra: 1 })))
     await assertSucceeds(deleteDoc(at(STAFF)))
+  })
+})
+
+describe('the manager role', () => {
+  test('may record stock like staff, but may not touch the catalogue or the roster', async () => {
+    await assertSucceeds(setDoc(doc(as(MANAGER), 'stockMovements/m9'), movement('m9', MANAGER)))
+    await assertFails(setDoc(doc(as(MANAGER), 'products/p9'), product('p9')))
+    await assertFails(updateDoc(doc(as(MANAGER), 'users', STAFF), { role: 'admin' }))
+    await assertFails(getDoc(doc(as(MANAGER), 'users', STAFF)))
+  })
+})
+
+describe('purchase requests', () => {
+  const pr = (over: Record<string, unknown> = {}) => ({
+    id: 'pr1',
+    docNo: 'PR-00001',
+    status: 'draft',
+    revision: 1,
+    locationId: 'loc1',
+    items: [{ idx: 0, productId: 'p1', productName: 'X', sku: 'S', unit: 'KG', supplierId: 's1', supplierName: 'S', supplierChoice: 'primary', requestedQty: 5 }],
+    requestedBy: STAFF,
+    requestedByName: 'Staff',
+    history: [{ at: ts(), by: STAFF, byName: 'Staff', action: 'created' }],
+    createdBy: STAFF,
+    createdByName: 'Staff',
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  })
+  const at = (uid: string, id = 'pr1') => doc(as(uid), 'purchaseRequests', id)
+  const grow = () => [...pr().history, { at: ts(), by: MANAGER, byName: 'Manager', action: 'x' }]
+
+  test("staff file a draft in their own name; not someone else's, and not already approved", async () => {
+    await assertSucceeds(setDoc(at(STAFF), pr()))
+    await assertFails(setDoc(at(STAFF, 'pr2'), pr({ id: 'pr2', requestedBy: ADMIN })))
+    await assertFails(setDoc(at(STAFF, 'pr3'), pr({ id: 'pr3', status: 'pendingApproval' })))
+    await assertFails(setDoc(at(STAFF, 'pr4'), pr({ id: 'pr4', extra: 1 })))
+    await assertFails(setDoc(at(PENDING, 'pr5'), pr({ id: 'pr5', createdBy: PENDING, requestedBy: PENDING })))
+  })
+
+  test('the requester submits; a manager approves, returns or rejects, in their own name; staff cannot', async () => {
+    await assertSucceeds(setDoc(at(STAFF), pr()))
+    await assertSucceeds(updateDoc(at(STAFF), { status: 'pendingApproval', submittedAt: ts(), history: grow(), updatedAt: ts() }))
+    // Staff cannot speak the manager's words
+    await assertFails(updateDoc(at(STAFF), { status: 'approved', approvedBy: STAFF, approvedByName: 'Staff', approvedAt: ts(), history: grow(), updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { status: 'returned', returnReason: 'x', history: grow(), updatedAt: ts() }))
+    // A manager cannot sign as someone else
+    await assertFails(updateDoc(at(MANAGER), { status: 'approved', approvedBy: ADMIN, approvedByName: 'Admin', approvedAt: ts(), history: grow(), updatedAt: ts() }))
+    // Approved must carry a signature at all
+    await assertFails(updateDoc(at(MANAGER), { status: 'approved', history: grow(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(MANAGER), { status: 'approved', approvedBy: MANAGER, approvedByName: 'Manager', approvedAt: ts(), history: grow(), updatedAt: ts() }))
+    // Once approved, a manager cannot quietly take it back; an admin reopens
+    await assertFails(updateDoc(at(MANAGER), { status: 'pendingApproval', history: grow(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(ADMIN), { status: 'pendingApproval', history: grow(), updatedAt: ts() }))
+  })
+
+  test('the number, the requester and the history cannot be rewritten', async () => {
+    await assertSucceeds(setDoc(at(STAFF), pr()))
+    await assertFails(updateDoc(at(STAFF), { docNo: 'PR-09999', updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { requestedBy: ADMIN, updatedAt: ts() }))
+    await assertFails(updateDoc(at(ADMIN), { history: [], updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { status: 'approved', approvedBy: STAFF, history: grow(), updatedAt: ts() }))
+  })
+
+  test('orders come only from an approved request, and poCreated names them', async () => {
+    await assertSucceeds(setDoc(at(STAFF), pr({ status: 'draft' })))
+    await assertFails(updateDoc(at(STAFF), { status: 'poCreated', orders: [{ supplierId: 's1', supplierName: 'S', poId: 'po1', docNo: 'PO-00001' }], history: grow(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(STAFF), { status: 'pendingApproval', history: grow(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(MANAGER), { status: 'approved', approvedBy: MANAGER, approvedByName: 'M', approvedAt: ts(), history: grow(), updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { status: 'poCreated', history: grow(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(STAFF), { status: 'poCreated', orders: [{ supplierId: 's1', supplierName: 'S', poId: 'po1', docNo: 'PO-00001' }], history: grow(), updatedAt: ts() }))
+    // An order may say which request it came from
+    await assertSucceeds(setDoc(doc(as(STAFF), 'purchaseOrders', 'po1'), {
+      id: 'po1', docNo: 'PO-00001', supplierId: 's1', supplierName: 'S', status: 'ordered', locationId: 'loc1', orderedAt: ts(),
+      lines: [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3 }], requestId: 'pr1',
+      createdBy: STAFF, createdByName: 'Staff', createdAt: ts(), updatedAt: ts(),
+    }))
+  })
+
+  test('staff cannot delete a request; an admin can', async () => {
+    await assertSucceeds(setDoc(at(STAFF), pr()))
+    await assertFails(deleteDoc(at(STAFF)))
+    await assertFails(deleteDoc(at(MANAGER)))
+    await assertSucceeds(deleteDoc(at(ADMIN)))
   })
 })
 
