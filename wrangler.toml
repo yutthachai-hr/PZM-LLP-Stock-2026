@@ -10,4 +10,4 @@ compatibility_flags = ["nodejs_compat"]
 # paste its id here; the preview namespace can be the same one.
 [[kv_namespaces]]
 binding = "PO_IMAGES"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "227ca0f947374f5d9ddf9752b7ea506c"
