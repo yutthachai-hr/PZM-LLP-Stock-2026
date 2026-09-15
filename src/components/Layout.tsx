@@ -258,7 +258,7 @@ function UserBox({
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-ink">{name}</div>
           <div className="text-xs text-ink-faint">
-            {role === 'admin' ? t('ผู้ดูแลระบบ') : t('พนักงาน')}
+            {role === 'admin' ? t('ผู้ดูแลระบบ') : role === 'manager' ? t('หัวหน้า') : t('พนักงาน')}
           </div>
         </div>
       </div>

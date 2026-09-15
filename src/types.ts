@@ -1,6 +1,10 @@
 // ---------- Core domain types for Pizza Mania Stock ----------
 
-export type Role = 'admin' | 'staff'
+/**
+ * `manager` (หัวหน้า) reviews and approves purchase requests and does everything staff do;
+ * the catalogue, suppliers and the roster stay with `admin`. Added 15 Sep 2026.
+ */
+export type Role = 'admin' | 'manager' | 'staff'
 
 export interface AppUser {
   id: string // uid
@@ -301,6 +305,8 @@ export interface PurchaseOrder {
   eventId?: string
   /** The imported order list it came from, when it did not come from the manual screen. */
   batchId?: string
+  /** The approved purchase request it was made from. Set once; a request converts once. */
+  requestId?: string
   /** Who turned the draft into an order, and when. Absent on an order placed by hand. */
   approvedBy?: string
   approvedByName?: string
@@ -491,6 +497,109 @@ export interface PurchaseBatch {
   updatedAt: number
 }
 
+// ---------------------------------------------------------------- purchase requests ----
+
+/**
+ * Where a request stands. The only place these words are compared is
+ * `src/lib/purchaseRequestStatus.ts`.
+ *
+ *   draft → pendingApproval → approved → poCreated
+ *                ↓ returned → (edited) → pendingApproval
+ *                ↓ rejected
+ *
+ * "Ready for order" is `approved` with no `orders` yet; `poCreated` means the orders exist
+ * and are placed — in this app an order made from an approved request is placed the moment
+ * it is created, so there is no separate "ordered" state to wait for.
+ */
+export type PurchaseRequestStatus =
+  | 'draft'
+  | 'pendingApproval'
+  | 'returned'
+  | 'approved'
+  | 'rejected'
+  | 'poCreated'
+
+/** How the supplier on a line was arrived at — the manager sees `custom` flagged. */
+export type SupplierChoice = 'primary' | 'alternate' | 'custom'
+
+export interface PurchaseRequestItem {
+  /** Position in the request. Stable: history entries point at lines by this. */
+  idx: number
+  productId: string
+  /** Denormalised, like an order line: the request has to read correctly after a rename. */
+  productName: string
+  sku: string
+  /** The product's own unit when the line was added. */
+  unit: string
+  /** The unit asked for, only when it is not the product's own (see PurchaseOrderLine). */
+  entryUnit?: string
+  supplierId: string
+  supplierName: string
+  supplierChoice: SupplierChoice
+  /**
+   * What the requester asked for. Never edited by a manager — the manager's number is
+   * `approvedQty`, and both stay, so "asked 5, got 3" can be read back later. Null on a
+   * line the manager added.
+   */
+  requestedQty: number | null
+  /** What the manager approved. Set to requestedQty on submit; the manager may change it. */
+  approvedQty?: number
+  managerAdded?: boolean
+  note?: string
+  /** Taken out by a manager — kept, not deleted, so the review still shows it. */
+  removed?: { by: string; byName: string; at: number; reason: string }
+}
+
+/** One thing that happened to a request, appended and never rewritten. */
+export interface PurchaseRequestHistoryEntry {
+  at: number
+  by: string
+  byName: string
+  action: string
+  detail?: string
+  itemIdx?: number
+  oldValue?: string
+  newValue?: string
+}
+
+/**
+ * A request to buy: what someone on the floor asked for, what the หัวหน้า approved, and
+ * the orders it became. Not an order — nothing reaches a supplier from here until it is
+ * approved and converted, and the conversion goes through the same createPurchaseOrder
+ * as the manual screen.
+ */
+export interface PurchaseRequest {
+  id: string
+  /** PR-00001. One sequence per brand. */
+  docNo: string
+  status: PurchaseRequestStatus
+  /** Starts at 1; goes up each time a returned request is submitted again. */
+  revision: number
+  /** One destination per request. */
+  locationId: string
+  note?: string
+  items: PurchaseRequestItem[]
+  requestedBy: string
+  requestedByName: string
+  submittedAt?: number
+  returnReason?: string
+  rejectReason?: string
+  approvalNote?: string
+  approvedBy?: string
+  approvedByName?: string
+  approvedAt?: number
+  rejectedBy?: string
+  rejectedByName?: string
+  rejectedAt?: number
+  /** The orders it became, one per supplier. Written once; a request converts once. */
+  orders?: { supplierId: string; supplierName: string; poId: string; docNo: string }[]
+  history: PurchaseRequestHistoryEntry[]
+  createdBy: string
+  createdByName: string
+  createdAt: number
+  updatedAt: number
+}
+
 export const COL = {
   users: 'users',
   products: 'products',
@@ -507,6 +616,7 @@ export const COL = {
   events: 'stockEvents',
   purchaseOrders: 'purchaseOrders',
   purchaseBatches: 'purchaseBatches',
+  purchaseRequests: 'purchaseRequests',
   productAliases: 'productAliases',
   meta: 'meta',
   revokedUsers: 'revokedUsers',

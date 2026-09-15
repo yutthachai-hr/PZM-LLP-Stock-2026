@@ -50,6 +50,12 @@ service cloud.firestore {
       return active() && profile().role == 'admin';
     }
 
+    // A หัวหน้า: reviews and approves purchase requests. Everything an admin may do to a
+    // request a manager may do too; the catalogue and the roster stay admin-only.
+    function manager() {
+      return active() && profile().role in ['admin', 'manager'];
+    }
+
     // ---------------------------------------------------------------- brands ----
 
     // Each brand owns a namespace: "products" for Pizza Mania, "lelapin__products" for
