@@ -28,8 +28,8 @@ const NAV: NavItem[] = [
   { to: '/calendar', label: 'ปฏิทินคลัง', icon: 'calendar' }, // i18n-key
   { to: '/movements', label: 'ประวัติ/Stock Card', icon: 'history' }, // i18n-key
   { to: '/reports', label: 'รายงาน', icon: 'report' }, // i18n-key
+  { to: '/requests', label: 'รายการขอสั่งซื้อ', icon: 'note' }, // i18n-key
   { to: '/orders', label: 'สั่งซื้อ', icon: 'truck' }, // i18n-key
-  { to: '/purchase', label: 'สั่งซื้ออัตโนมัติ', icon: 'upload' }, // i18n-key
   { to: '/suppliers', label: 'ผู้ขาย', icon: 'users' }, // i18n-key
   { to: '/import', label: 'นำเข้า Excel', icon: 'upload', adminOnly: true }, // i18n-key
   { to: '/notes', label: 'บันทึกช่วยจำ', icon: 'note' }, // i18n-key

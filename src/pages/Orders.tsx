@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -201,7 +201,7 @@ export function OrdersPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => navigate('/purchase')}>
               <Icon name="upload" size={16} />
-              {t('สั่งอัตโนมัติจาก Excel')}
+              {t('นำเข้า Excel (ทางเลือก)')}
             </Button>
             <Button onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} />
@@ -349,6 +349,11 @@ function OrderRow({
             <Badge color={late ? 'red' : 'blue'}>{t('สั่งแล้ว')}</Badge>
           )}
           {order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>}
+          {order.requestId && (
+            <Link to={`/requests/${order.requestId}`} className="text-xs text-brand hover:underline">
+              {t('จากรายการขอสั่งซื้อ')}
+            </Link>
+          )}
           {late && (
             <Badge color="red">
               {t('รอมา {days} วัน', { days: daysWaiting(order) })}

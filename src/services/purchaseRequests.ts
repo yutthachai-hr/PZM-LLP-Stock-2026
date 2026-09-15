@@ -599,7 +599,6 @@ export async function convertToOrders(params: {
       products: params.products,
       actor: { id: params.actor.id, name: params.actor.name },
       requestId: pr.id,
-      note: `${pr.docNo}`,
     })
     const created = await db.getOne<PurchaseOrder>(COL.purchaseOrders, poId)
     orders.push({ supplierId: g.supplierId, supplierName: g.supplierName, poId, docNo: created?.docNo ?? '' })
