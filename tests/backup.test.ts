@@ -64,6 +64,20 @@ describe('F54 — a backup you can actually sign in to afterwards', () => {
     expect(b.data.meta).toHaveLength(1)
   })
 
+  test('meta is read document by document, never listed', async () => {
+    // The rules allow `get` on meta/bootstrap and meta/entryUnits and no `list` at all, so
+    // a backup that listed the collection died with "insufficient permissions" in
+    // production. Reading the two known documents is what the rules permit; anything
+    // else under meta is unreadable by design and stays out of the file.
+    seed('meta', [
+      { id: 'bootstrap', claimedBy: 'uid-admin', at: 1 },
+      { id: 'entryUnits', units: ['Lot', 'Pack'] },
+      { id: 'something-else', x: 1 },
+    ])
+    const b = await buildBackup('Owner')
+    expect(b.data.meta.map((d) => d.id).sort()).toEqual(['bootstrap', 'entryUnits'])
+  })
+
   test('local passwords are not written into a file people email around', async () => {
     const b = await buildBackup('Owner')
     expect(JSON.stringify(b)).not.toContain('hunter2')

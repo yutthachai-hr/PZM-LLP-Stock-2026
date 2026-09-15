@@ -174,6 +174,27 @@ function countersFromLedger(movements: StockMovement[]): Map<string, number> {
  * from the ledger, that mismatch is harmless — but the file says which it is rather than
  * leaving the owner to guess.
  */
+/**
+ * The two documents that live under `meta`, fetched one by one.
+ *
+ * The rules open `meta/bootstrap` and `meta/entryUnits` to `get` and nothing else — there is
+ * no `list` on the collection, by design, so an invented document there can never be read
+ * back. Listing it therefore fails with "insufficient permissions" and used to take the
+ * whole backup down with it (the owner hit exactly that on 15 Sep 2026, on the one screen
+ * that is the only recovery this database has). A document that does not exist is simply
+ * not in the file.
+ */
+const META_DOCS = ['bootstrap', 'entryUnits'] as const
+
+async function readMeta(db: Backend): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = []
+  for (const id of META_DOCS) {
+    const doc = await db.getOne<Record<string, unknown>>(COL.meta, id)
+    if (doc) out.push(doc)
+  }
+  return out
+}
+
 export async function buildBackup(createdBy: string): Promise<BackupFile> {
   const brand = getBrand()
   const db: Backend = backend.forBrand(brand)
@@ -183,7 +204,7 @@ export async function buildBackup(createdBy: string): Promise<BackupFile> {
   const counts: Record<string, number> = {}
 
   for (const name of ALL_COLLECTIONS) {
-    const docs = await db.getAll<Record<string, unknown>>(name)
+    const docs = name === COL.meta ? await readMeta(db) : await db.getAll<Record<string, unknown>>(name)
     data[name] = name === COL.users ? docs.map(withoutSecrets) : docs
     counts[name] = data[name].length
   }
