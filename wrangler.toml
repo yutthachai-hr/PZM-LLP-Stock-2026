@@ -1,0 +1,13 @@
+# Cloudflare Pages configuration — used only when the site is built on Cloudflare (see
+# HANDOFF.md §8). Netlify ignores this file. Local try-out: `npx wrangler pages dev dist`.
+name = "pzmstock"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Order-sheet pictures for LINE (functions/api/po-image.ts, functions/po/[token].ts).
+# Create the namespace in the Cloudflare dashboard (Workers & Pages → KV → Create) and
+# paste its id here; the preview namespace can be the same one.
+[[kv_namespaces]]
+binding = "PO_IMAGES"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

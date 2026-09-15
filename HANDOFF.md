@@ -149,16 +149,26 @@ npm run i18n:check      # ครบทุกข้อความ
 
 ---
 
-## 8. แผนย้าย hosting ไป Cloudflare Pages (แผนอย่างเดียว — เจ้าของสั่ง 14 ก.ย. ยังไม่แตะ)
+## 8. ย้าย hosting ไป Cloudflare Pages — ไฟล์พร้อมแล้ว รอเจ้าของกดเท่านั้น (15 ก.ย.)
 
-ทำไม: bandwidth ไม่จำกัด, 500 build/เดือน, Pages Functions + **KV** ฟรีโดยไม่ต้องผูกบัตร (ที่เก็บรูป PO ไม่ต้องพึ่ง Netlify Blobs), branch `demo` ได้ preview URL ฟรี
+ทำไม: bandwidth ไม่จำกัด, 500 build/เดือน, Pages Functions + **KV** ฟรีโดยไม่ต้องผูกบัตร (ที่เก็บรูป PO ไม่ต้องพึ่ง Netlify Blobs), branch `demo` ได้ URL ของตัวเองฟรี
 
-1. เจ้าของ: Cloudflare → Pages → เชื่อม GitHub `yutthachai-hr/PZM-LLP-Stock-2026`, build `npm run build`, output `dist`, env `NODE_VERSION=22`, production branch `main`
-2. โค้ด: `public/_headers` คัดลอก header ทั้งหมดจาก `netlify.toml` (Pages อ่าน `_headers` + `public/_redirects` ที่มีอยู่แล้ว); พอร์ต `netlify/functions/po-image.mts` → `functions/api/po-image.ts` ใช้ KV binding + `expirationTtl` (ตรรกะ verify token เหมือนเดิม); `wrangler.toml` สำหรับ `wrangler pages dev`; แก้ `VITE_PO_IMAGE_HOST` ถ้า path เปลี่ยน
-3. Firebase console → Authentication → Authorized domains: เพิ่ม `<project>.pages.dev` และโดเมนจริง; LINE Developers: LIFF app มี Endpoint ได้อันเดียว → เพิ่ม LIFF app อีกตัวสำหรับ URL ใหม่, `VITE_LIFF_ID` ต่อ host
-4. ตัดสลับ: deploy ที่ Pages, เช็ค bundle hash + `manifest.webmanifest` แบบเดียวกับที่เช็ค Netlify (memory: pzm-stock-repo-and-deploy), ชี้โดเมน, **เปิด Netlify ทิ้งไว้จนทุกเครื่องปิดแท็บแอปแล้วเปิดใหม่** (PWA cache) แล้วค่อยลบ site เดิม; rollback = ชี้โดเมนกลับ
+**ที่อยู่ใน repo แล้ว (Netlify ไม่แตะไฟล์พวกนี้เลย):**
+- `functions/api/po-image.ts` + `functions/po/[token].ts` + `functions/_poImage.ts` — ที่เก็บรูป PO เวอร์ชัน Cloudflare (KV + `expirationTtl` 7 วัน, verify Firebase token เหมือน Netlify) typecheck ใน `npm run build`
+- `cloudflare/_headers` — header/CSP ชุดเดียวกับ `netlify.toml` (test `tests/image-host.test.ts` ล็อกให้ตรงกัน) → `scripts/cf-postbuild.mjs` คัดลอกเข้า `dist/` เฉพาะตอน `CF_PAGES=1`
+- `wrangler.toml` — `pages_build_output_dir = "dist"`, KV binding `PO_IMAGES` (ต้องใส่ id จริง)
+- `public/_redirects` เดิม (`/* /index.html 200`) Pages อ่านได้เลย
 
----
+**ขั้นตอนตอนจะย้ายจริง (เจ้าของทำ ~30 นาที, ไม่กระทบ Netlify จนกว่าจะชี้โดเมน):**
+1. Cloudflare dashboard → Workers & Pages → **KV → Create namespace** ชื่อ `po-images` → คัดลอก id ใส่ `wrangler.toml` (`id = "..."`) → commit
+2. Workers & Pages → **Create → Pages → Connect to Git** → repo `yutthachai-hr/PZM-LLP-Stock-2026` → production branch `main`, build command `npm run build`, output `dist`
+3. Environment variables (Production): `NODE_VERSION=22`, `VITE_PO_IMAGE_HOST=/api/po-image`, `VITE_LIFF_ID=<LIFF app ที่ Endpoint = URL ใหม่>`; (Preview/branch `demo`): เพิ่ม `VITE_DEMO_MODE=1`, `PO_IMAGE_DEMO_KEY` + `VITE_PO_IMAGE_DEMO_KEY`
+4. Settings → Functions → **KV namespace bindings**: `PO_IMAGES` → namespace ข้อ 1 (ถ้า wrangler.toml ถูกอ่านจะขึ้นเองอยู่แล้ว)
+5. Deploy → ได้ `https://pzmstock.pages.dev` → ตรวจ: เปิดหน้าแรกได้, `curl -sI https://pzmstock.pages.dev/ | grep -i content-security` มี CSP, `curl -X POST .../api/po-image` ตอบ 401, bundle hash ตรงกับ `main`
+6. **Firebase console → Authentication → Settings → Authorized domains → เพิ่ม `pzmstock.pages.dev`** (ไม่งั้น login ไม่ได้) และโดเมนจริงถ้ามี
+7. LINE Developers → LIFF app ใหม่ Endpoint = URL ใหม่ (LIFF app มี Endpoint ได้อันเดียว) → ใส่ `VITE_LIFF_ID` ข้อ 3 → redeploy
+8. ตัดสลับ: ชี้โดเมน/แจ้งพนักงานใช้ URL ใหม่, **เปิด Netlify ทิ้งไว้จนทุกเครื่องปิดแท็บแอปแล้วเปิดใหม่** (PWA cache) แล้วค่อยลบ site เดิม; rollback = กลับไปใช้ URL Netlify ซึ่งยังทำงานอยู่
+9. หลังย้ายเสร็จ: ลบ `netlify/`, `netlify.toml`, `@netlify/*` ออกจาก repo และแก้ `src/services/poImages.ts` ให้ default เป็น `/api/po-image`
 
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "demo": "vite --mode demo --port 5175 --strictPort",
-    "build": "tsc -b && tsc -p netlify/tsconfig.json && vite build",
+    "build": "tsc -b && tsc -p netlify/tsconfig.json && tsc -p functions/tsconfig.json && vite build && node scripts/cf-postbuild.mjs",
     "lint": "oxlint",
     "import-items": "node scripts/import-items.mjs",
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
@@ -32,6 +32,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260915.1",
     "@firebase/rules-unit-testing": "^5.0.1",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^24.13.2",
