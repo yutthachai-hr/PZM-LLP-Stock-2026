@@ -62,10 +62,11 @@ service cloud.firestore {
     function staffWritable(name) {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
-        'stockEvents', 'purchaseOrders',
+        'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
-        'lelapin__stockEvents', 'lelapin__purchaseOrders'
+        'lelapin__stockEvents', 'lelapin__purchaseOrders',
+        'lelapin__purchaseBatches', 'lelapin__productAliases'
       ];
     }
 
@@ -114,6 +115,8 @@ service cloud.firestore {
       // An order that has been received is a record of goods that moved, so it stays. The
       // service refuses it too; this is the half that a caller with a token cannot skip.
       return kind(name) == 'notes'
+        // A confirmed spelling that turns out wrong is unlearned by deleting it.
+        || kind(name) == 'productAliases'
         || (kind(name) == 'purchaseOrders' && resource.data.status != 'received');
     }
 
@@ -206,7 +209,7 @@ service cloud.firestore {
         ])
         && d.keys().hasOnly([
           'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock', 'cost',
-          'unitConversions', 'supplierId',
+          'unitConversions', 'supplierId', 'alternateSupplierIds',
           'hasImage', 'active', 'createdAt', 'updatedAt'
         ])
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
@@ -220,6 +223,10 @@ service cloud.firestore {
         // like every other list in this file; not validated element by element, the same
         // as an order's lines.
         && (!('unitConversions' in d) || (d.unitConversions is list && d.unitConversions.size() <= 20))
+        // Other suppliers it can come from, for a person to pick when the usual one is out.
+        // The automatic order never chooses one of these by itself.
+        && (!('alternateSupplierIds' in d)
+            || (d.alternateSupplierIds is list && d.alternateSupplierIds.size() <= 10))
         && d.hasImage is bool && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }
@@ -264,6 +271,7 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'name', 'contactNumber', 'email', 'type', 'active',
           'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'name', 'contactNumber', 'email', 'type', 'note',
+          'defaultLocationId', 'leadTimeDays',
           'active', 'createdAt', 'updatedAt'])
         && text(d.name, 200)
         && d.contactNumber is string && d.contactNumber.size() <= 40
@@ -271,7 +279,11 @@ service cloud.firestore {
         && d.type in ['takingReturn', 'notTakingReturn']
         && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt)
-        && (!('note' in d) || d.note is string && d.note.size() <= 2000);
+        && (!('note' in d) || d.note is string && d.note.size() <= 2000)
+        // Where this supplier's goods usually land, and how many days they take. Both are
+        // defaults the automatic order offers; neither is a rule it enforces.
+        && (!('defaultLocationId' in d) || text(d.defaultLocationId, 200))
+        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365));
     }
 
     // A planned piece of work: a count, an audit, an expected delivery, a task.
@@ -299,7 +311,11 @@ service cloud.firestore {
             || (d.assignedTo is list && d.assignedTo.size() >= 1 && d.assignedTo.size() <= 50))
         && (!('assignedToAll' in d) || d.assignedToAll is bool)
         && (!('assignedToName' in d) || text(d.assignedToName, 1000))
-        && (!('note' in d) || d.note is string && d.note.size() <= 2000);
+        && (!('note' in d) || d.note is string && d.note.size() <= 2000)
+        // Where this supplier's goods usually land, and how many days they take. Both are
+        // defaults the automatic order offers; neither is a rule it enforces.
+        && (!('defaultLocationId' in d) || text(d.defaultLocationId, 200))
+        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365));
     }
 
     // Staff may move an event along and nothing else. Without this the catch-all lets any
@@ -316,12 +332,15 @@ service cloud.firestore {
     function validSupplierItem(d) {
       return d.keys().hasAll(['id', 'supplierId', 'productId', 'active', 'createdAt',
           'updatedAt'])
-        && d.keys().hasOnly(['id', 'supplierId', 'productId', 'buyingPrice', 'active',
-          'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'supplierId', 'productId', 'buyingPrice', 'minOrderQty',
+          'active', 'createdAt', 'updatedAt'])
         && text(d.supplierId, 200) && text(d.productId, 200)
         && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt)
-        && (!('buyingPrice' in d) || nonneg(d.buyingPrice, 1000000000));
+        && (!('buyingPrice' in d) || nonneg(d.buyingPrice, 1000000000))
+        // The least the supplier will sell at once. A warning on the order review, not a
+        // block: the person may know the supplier is making an exception.
+        && (!('minOrderQty' in d) || positive(d.minOrderQty, 1000000000));
     }
 
     // Rules cannot walk a list, so each name's own length is enforced by the service and by
@@ -357,6 +376,8 @@ service cloud.firestore {
           'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
           'orderedAt', 'lines', 'invoiceNo', 'receivedAt', 'receivedBy', 'receivedByName',
           'movementDocNo', 'eventId', 'note',
+          'batchId', 'approvedBy', 'approvedByName', 'approvedAt',
+          'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ])
         && d.status in ['draft', 'ordered', 'received']
@@ -371,9 +392,60 @@ service cloud.firestore {
         && (!('receivedAt' in d) || epochMs(d.receivedAt))
         && (!('receivedBy' in d) || text(d.receivedBy, 200))
         && (!('receivedByName' in d) || text(d.receivedByName, 200))
+        // From an imported list: a draft until approved, and the approval is signed.
+        && (!('batchId' in d) || text(d.batchId, 200))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('approvedByName' in d) || text(d.approvedByName, 200))
+        && (!('approvedAt' in d) || epochMs(d.approvedAt))
+        // Where the sheet has got to on its way to the supplier. `sent` is what LINE
+        // reported, not what the supplier has read — see the type's comment.
+        && (!('shareStatus' in d) || d.shareStatus in ['shareOpened', 'sent', 'skipped', 'failed'])
+        && (!('shareOpenedAt' in d) || epochMs(d.shareOpenedAt))
+        && (!('sentAt' in d) || epochMs(d.sentAt))
+        && (!('sentBy' in d) || text(d.sentBy, 200))
+        && (!('sentByName' in d) || text(d.sentByName, 200))
+        && (!('imageVersion' in d) || nonneg(d.imageVersion, 1000000))
         // An order that reached the books names the paper it came with. Without this the
         // invoice number is a habit the form could be talked out of.
         && (d.status != 'received' || ('invoiceNo' in d && 'movementDocNo' in d));
+    }
+
+    /**
+     * One import of the order workbook. The rows and groups are lists the rules cannot walk,
+     * so what is pinned is the shape around them and a bound on how many; what each row says
+     * is checked by the service and, in the end, by the order it becomes — which is validated
+     * like any other order.
+     */
+    function validBatch(d) {
+      return d.keys().hasAll([
+          'id', 'batchNo', 'locationId', 'sourceFileName', 'fileHash', 'sheetName',
+          'blockLabel', 'status', 'rows', 'groups', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'batchNo', 'locationId', 'sourceFileName', 'fileHash', 'sheetName',
+          'blockLabel', 'blockDate', 'mapping', 'status', 'rows', 'groups', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && text(d.batchNo, 40) && text(d.locationId, 200) && text(d.sourceFileName, 200)
+        && text(d.fileHash, 128) && text(d.sheetName, 200) && text(d.blockLabel, 200)
+        && d.status in ['draft', 'needsReview', 'ready', 'approved', 'sending', 'completed', 'cancelled']
+        && d.rows is list && d.rows.size() > 0 && d.rows.size() <= 300
+        && d.groups is list && d.groups.size() <= 60
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 500
+        && (!('blockDate' in d) || epochMs(d.blockDate))
+        && (!('mapping' in d) || d.mapping is map)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    /** A workbook spelling somebody confirmed as one product. */
+    function validAlias(d) {
+      return d.keys().hasAll(['id', 'key', 'productId', 'sourceName', 'createdBy', 'createdByName', 'createdAt'])
+        && d.keys().hasOnly(['id', 'key', 'productId', 'sourceName', 'createdBy', 'createdByName', 'createdAt'])
+        && text(d.key, 300) && text(d.productId, 200) && text(d.sourceName, 300)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt);
     }
 
     // A document whose `id` field disagrees with its key makes the UI act on one row while
@@ -391,6 +463,8 @@ service cloud.firestore {
         : kind(name) == 'suppliers' ? validSupplier(d)
         : kind(name) == 'supplierItems' ? validSupplierItem(d)
         : kind(name) == 'purchaseOrders' ? validPurchaseOrder(d)
+        : kind(name) == 'purchaseBatches' ? validBatch(d)
+        : kind(name) == 'productAliases' ? validAlias(d)
         : validImage(d)
       );
     }
@@ -415,6 +489,12 @@ service cloud.firestore {
         : kind(name) == 'purchaseOrders'
         ? request.resource.data.createdBy == request.auth.uid
           && request.resource.data.status != 'received'
+        // An import is filed by whoever imported it, and is not born approved or sent.
+        : kind(name) == 'purchaseBatches'
+        ? request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status in ['draft', 'needsReview', 'ready']
+        : kind(name) == 'productAliases'
+        ? request.resource.data.createdBy == request.auth.uid
         : kind(name) != 'stockMovements' || (
           request.resource.data.byUserId == request.auth.uid
           && !('voided' in request.resource.data)
@@ -432,6 +512,10 @@ service cloud.firestore {
     // document number that has already been used.
     function editedHonestly(name) {
       return kind(name) == 'purchaseOrders' ? orderEdit()
+        : kind(name) == 'purchaseBatches' ? batchEdit()
+        // Confirming a spelling again replaces the whole alias, signed by whoever did it.
+        : kind(name) == 'productAliases'
+        ? request.resource.data.createdBy == request.auth.uid
         : kind(name) == 'stockMovements' ? movementEdit()
         : kind(name) == 'stockEvents' ? eventEdit()
         : kind(name) == 'counters' ? request.resource.data.value > resource.data.value
@@ -449,8 +533,20 @@ service cloud.firestore {
     function orderEdit() {
       return editedKeys().hasOnly([
           'status', 'lines', 'invoiceNo', 'note',
-          'receivedAt', 'receivedBy', 'receivedByName', 'movementDocNo', 'updatedAt'
+          'receivedAt', 'receivedBy', 'receivedByName', 'movementDocNo', 'updatedAt',
+          // Approving a draft resets the order date and signs it; sending records where
+          // the sheet got to. Neither may be signed in someone else's name.
+          'orderedAt', 'approvedBy', 'approvedByName', 'approvedAt',
+          'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion'
         ])
+        // The order date only moves when a draft is placed.
+        && (!editedKeys().hasAny(['orderedAt']) || resource.data.status == 'draft')
+        && (!('approvedBy' in request.resource.data)
+            || request.resource.data.approvedBy == request.auth.uid
+            || request.resource.data.approvedBy == resource.data.approvedBy)
+        && (!('sentBy' in request.resource.data)
+            || request.resource.data.sentBy == request.auth.uid
+            || request.resource.data.sentBy == resource.data.sentBy)
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.docNo == resource.data.docNo
         && request.resource.data.supplierId == resource.data.supplierId
@@ -458,6 +554,16 @@ service cloud.firestore {
         // Whoever checked the delivery in signs for it.
         && (!('receivedBy' in request.resource.data)
             || request.resource.data.receivedBy == request.auth.uid);
+    }
+
+    /**
+     * What may change on an import after it is filed: the rows as people settle them, the
+     * groups and status as that happens, and the history — which only ever grows. Where it
+     * came from and who filed it are what the batch IS.
+     */
+    function batchEdit() {
+      return editedKeys().hasOnly(['rows', 'groups', 'history', 'status', 'updatedAt'])
+        && request.resource.data.history.size() >= resource.data.history.size();
     }
 
     function movementEdit() {

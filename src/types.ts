@@ -32,6 +32,14 @@ export interface Product {
    * Absent on a product whose name never said: the owner fills those in by hand.
    */
   supplierId?: string
+  /**
+   * Other suppliers this can be bought from, for the day the usual one is out.
+   *
+   * The automatic order never picks one of these on its own: an order goes to `supplierId`
+   * or to a person to decide. Listed here so that person sees the choice instead of having
+   * to remember it.
+   */
+  alternateSupplierIds?: string[]
   cost?: number // optional unit cost for inventory value
   /**
    * Reference multipliers for units this product might be keyed in — "1 ลัง = 288 EA".
@@ -181,6 +189,10 @@ export interface Supplier {
   email: string
   type: SupplierType
   note?: string
+  /** Where this supplier's deliveries usually land. The automatic order offers it first. */
+  defaultLocationId?: string
+  /** Days from order to delivery, as the owner knows it. Shown, never enforced. */
+  leadTimeDays?: number
   active: boolean
   createdAt: number
   updatedAt: number
@@ -193,6 +205,8 @@ export interface SupplierItem {
   productId: string
   /** Purchase price per unit of the product's own unitType. Optional: not always known. */
   buyingPrice?: number
+  /** The least the supplier will sell at once. A warning on review, never a block. */
+  minOrderQty?: number
   active: boolean
   createdAt: number
   updatedAt: number
@@ -285,12 +299,36 @@ export interface PurchaseOrder {
   movementDocNo?: string
   /** The calendar entry that opened it, when it came from a weekly order. */
   eventId?: string
+  /** The imported order list it came from, when it did not come from the manual screen. */
+  batchId?: string
+  /** Who turned the draft into an order, and when. Absent on an order placed by hand. */
+  approvedBy?: string
+  approvedByName?: string
+  approvedAt?: number
+  /**
+   * Where the sheet has got to on its way to the supplier.
+   *
+   * `shareOpened` means the share screen was opened and nothing more is known — the person
+   * may have closed it. `sent` is written only when LINE itself reports the message went
+   * (shareTargetPicker resolving with status "success"); it says LINE accepted it, not that
+   * the supplier has read it, and the screens are worded that way. Absent until the first
+   * attempt.
+   */
+  shareStatus?: PurchaseShareStatus
+  shareOpenedAt?: number
+  sentAt?: number
+  sentBy?: string
+  sentByName?: string
+  /** Which rendering of the sheet was sent, so a regenerated one can be told apart. */
+  imageVersion?: number
   note?: string
   createdBy: string
   createdByName: string
   createdAt: number
   updatedAt: number
 }
+
+export type PurchaseShareStatus = 'shareOpened' | 'sent' | 'skipped' | 'failed'
 
 /**
  * Something that has to happen, on a date, at a location.
@@ -333,6 +371,126 @@ export interface StockEvent {
   updatedAt: number
 }
 
+// ---------------------------------------------------------------- purchase batches ----
+
+/**
+ * What is wrong with, or worth a second look at, one row of an imported order list.
+ *
+ * `block` — cannot become an order as it stands (a hidden supplier, a hidden product).
+ * `review` — a person has to choose something (which product, which supplier, a quantity).
+ * `warn` — probably fine, but the person ticks it before it goes (an unusual quantity).
+ */
+export type BatchIssueSeverity = 'block' | 'review' | 'warn'
+
+export type BatchIssueCode =
+  | 'unknownProduct'
+  | 'ambiguousProduct'
+  | 'noSupplier'
+  | 'supplierInactive'
+  | 'productInactive'
+  | 'qtyUnclear'
+  | 'unitMismatch'
+  | 'duplicateProduct'
+  | 'belowMoq'
+  | 'suspiciousQty'
+  | 'possibleDuplicateOrder'
+
+export interface BatchIssue {
+  code: BatchIssueCode
+  severity: BatchIssueSeverity
+  /** A number or name the message can quote — the MOQ, the usual quantity, the PO number. */
+  detail?: string
+}
+
+/** One line of the order workbook, as read and as a person has since settled it. */
+export interface BatchRow {
+  /** Position in the batch. Stable: groups point at rows by this. */
+  idx: number
+  excelRow: number
+  rawName: string
+  rawUnit: string
+  rawQty: string
+  note?: string
+  /** How the product was found. `manual` when a person picked it on the review screen. */
+  matchKind?: 'exact' | 'alias' | 'manual' | 'ambiguous' | 'none'
+  productId?: string
+  /** Denormalised, like an order line: the batch has to read correctly after a rename. */
+  productName?: string
+  /** The product's own unit when the row was settled. */
+  unit?: string
+  /** The unit the order is placed in, only when it is not the product's own. */
+  entryUnit?: string
+  supplierId?: string
+  supplierName?: string
+  qty?: number
+  issues: BatchIssue[]
+  /** The person said "not this one" — kept so the review shows what was left out and why. */
+  skipped?: boolean
+  /** Every `warn` on this row has been looked at and accepted. */
+  confirmed?: boolean
+}
+
+/** One supplier's share of a batch, and the order it became. */
+export interface BatchGroup {
+  supplierId: string
+  supplierName: string
+  rowIdx: number[]
+  poId?: string
+  docNo?: string
+}
+
+export type PurchaseBatchStatus =
+  | 'draft'
+  | 'needsReview'
+  | 'ready'
+  | 'approved'
+  | 'sending'
+  | 'completed'
+  | 'cancelled'
+
+/** One thing that happened to a batch, appended and never rewritten. */
+export interface BatchHistoryEntry {
+  at: number
+  by: string
+  byName: string
+  action: string
+  detail?: string
+}
+
+/**
+ * One import of the order workbook: the rows read, how each was settled, and the orders it
+ * became.
+ *
+ * Rows and groups live inside the document rather than in their own collections for the
+ * same reason an order's lines do: a batch of eighty rows is one read, and nothing needs a
+ * row without its batch. `history` is the audit trail the owner asked for — who imported,
+ * who mapped what, who approved, who sent — and is only ever appended to.
+ */
+export interface PurchaseBatch {
+  id: string
+  /** PB-20260914-001. Counted per day. */
+  batchNo: string
+  locationId: string
+  sourceFileName: string
+  /** SHA-256 of the file, so the same workbook imported twice is noticed. */
+  fileHash: string
+  sheetName: string
+  /** The block heading as written, so the person can see which week this was. */
+  blockLabel: string
+  /** The date in that heading, when it had one. */
+  blockDate?: number
+  /** Column letters a person chose, when the headers could not be read. */
+  mapping?: { name: string; qty: string; unit?: string; note?: string }
+  status: PurchaseBatchStatus
+  rows: BatchRow[]
+  groups: BatchGroup[]
+  history: BatchHistoryEntry[]
+  createdBy: string
+  createdByName: string
+  createdAt: number
+  updatedAt: number
+}
+
 export const COL = {
   users: 'users',
   products: 'products',
@@ -348,6 +506,8 @@ export const COL = {
   supplierItems: 'supplierItems',
   events: 'stockEvents',
   purchaseOrders: 'purchaseOrders',
+  purchaseBatches: 'purchaseBatches',
+  productAliases: 'productAliases',
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const

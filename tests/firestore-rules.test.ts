@@ -852,6 +852,122 @@ describe('the list of entry units', () => {
   })
 })
 
+describe('orders from an imported list', () => {
+  const order = (over: Record<string, unknown> = {}) => ({
+    id: 'po9',
+    docNo: 'PO-00009',
+    supplierId: 'sup1',
+    supplierName: 'OLIVA',
+    status: 'draft',
+    locationId: 'loc1',
+    orderedAt: ts(),
+    lines: [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3 }],
+    batchId: 'pb1',
+    createdBy: STAFF,
+    createdByName: 'Staff',
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  })
+  const at = (uid: string) => doc(as(uid), 'purchaseOrders', 'po9')
+
+  test('a draft may be filed, and approved by whoever signs it', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertFails(
+      updateDoc(at(STAFF), { status: 'ordered', orderedAt: ts(), approvedBy: ADMIN, approvedByName: 'Admin', approvedAt: ts(), updatedAt: ts() }),
+    )
+    await assertSucceeds(
+      updateDoc(at(STAFF), { status: 'ordered', orderedAt: ts(), approvedBy: STAFF, approvedByName: 'Staff', approvedAt: ts(), updatedAt: ts() }),
+    )
+  })
+
+  test('the order date moves only when a draft is placed', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order({ status: 'ordered' })))
+    await assertFails(updateDoc(at(STAFF), { orderedAt: ts() + 1, updatedAt: ts() }))
+  })
+
+  test("where the sheet got to is recorded in the sender's own name, and only as one of the known words", async () => {
+    await assertSucceeds(setDoc(at(STAFF), order({ status: 'ordered' })))
+    await assertSucceeds(updateDoc(at(STAFF), { shareStatus: 'shareOpened', shareOpenedAt: ts(), updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { shareStatus: 'delivered', updatedAt: ts() }))
+    await assertFails(
+      updateDoc(at(STAFF), { shareStatus: 'sent', sentAt: ts(), sentBy: ADMIN, sentByName: 'Admin', updatedAt: ts() }),
+    )
+    await assertSucceeds(
+      updateDoc(at(STAFF), { shareStatus: 'sent', sentAt: ts(), sentBy: STAFF, sentByName: 'Staff', imageVersion: 1, updatedAt: ts() }),
+    )
+  })
+})
+
+describe('imported order lists', () => {
+  const batch = (over: Record<string, unknown> = {}) => ({
+    id: 'pb1',
+    batchNo: 'PB-20260914-001',
+    locationId: 'loc1',
+    sourceFileName: 'order.xlsx',
+    fileHash: 'abc',
+    sheetName: 's',
+    blockLabel: 'รายการสั่งของ 14/9/2026',
+    status: 'ready',
+    rows: [{ idx: 0, excelRow: 4, rawName: 'X', rawUnit: 'KG', rawQty: '5', issues: [] }],
+    groups: [],
+    history: [{ at: ts(), by: STAFF, byName: 'Staff', action: 'imported' }],
+    createdBy: STAFF,
+    createdByName: 'Staff',
+    createdAt: ts(),
+    updatedAt: ts(),
+    ...over,
+  })
+  const at = (uid: string, id = 'pb1') => doc(as(uid), 'purchaseBatches', id)
+
+  test('staff import; the import is in their own name and not born approved', async () => {
+    await assertSucceeds(setDoc(at(STAFF), batch()))
+    await assertFails(setDoc(at(STAFF, 'pb2'), batch({ id: 'pb2', createdBy: ADMIN })))
+    await assertFails(setDoc(at(STAFF, 'pb3'), batch({ id: 'pb3', status: 'approved' })))
+    await assertFails(setDoc(at(STAFF, 'pb4'), batch({ id: 'pb4', rows: [] })))
+    await assertFails(setDoc(at(STAFF, 'pb5'), batch({ id: 'pb5', extra: 1 })))
+    await assertFails(setDoc(at(PENDING, 'pb6'), batch({ id: 'pb6', createdBy: PENDING })))
+  })
+
+  test('rows, groups, status and history may change; the history never shrinks; the source never changes', async () => {
+    await assertSucceeds(setDoc(at(STAFF), batch()))
+    const longer = [...batch().history, { at: ts(), by: ADMIN, byName: 'Admin', action: 'approved' }]
+    await assertSucceeds(updateDoc(at(ADMIN), { status: 'approved', history: longer, updatedAt: ts() }))
+    await assertFails(updateDoc(at(ADMIN), { history: [], updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { fileHash: 'other', updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { batchNo: 'PB-x', updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { createdBy: ADMIN, updatedAt: ts() }))
+  })
+
+  test('staff cannot delete an import; an admin can', async () => {
+    await assertSucceeds(setDoc(at(STAFF), batch()))
+    await assertFails(deleteDoc(at(STAFF)))
+    await assertSucceeds(deleteDoc(at(ADMIN)))
+  })
+})
+
+describe('confirmed product spellings', () => {
+  const alias = (over: Record<string, unknown> = {}) => ({
+    id: 'alias-1',
+    key: 'BLUE CHEESE 3 KG',
+    productId: 'p1',
+    sourceName: 'BLUE CHEESE 3 KG ',
+    createdBy: STAFF,
+    createdByName: 'Staff',
+    createdAt: ts(),
+    ...over,
+  })
+  const at = (uid: string) => doc(as(uid), 'productAliases', 'alias-1')
+
+  test('staff confirm a spelling, may confirm it again, and may unlearn it', async () => {
+    await assertSucceeds(setDoc(at(STAFF), alias()))
+    await assertSucceeds(setDoc(at(ADMIN), alias({ productId: 'p2', createdBy: ADMIN, createdByName: 'Admin' })))
+    await assertFails(setDoc(at(STAFF), alias({ productId: 'p3', createdBy: ADMIN })))
+    await assertFails(setDoc(at(STAFF), alias({ extra: 1 })))
+    await assertSucceeds(deleteDoc(at(STAFF)))
+  })
+})
+
 describe('collections outside the model', () => {
   test('an invented collection is denied even for an admin', async () => {
     await assertFails(setDoc(doc(as(ADMIN), 'evil/x'), { a: 1 }))

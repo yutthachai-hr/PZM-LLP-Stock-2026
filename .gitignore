@@ -37,3 +37,8 @@ firestore-debug.log
 
 # Real company data staged for a local import run. Never commit.
 public/__demo-import.xlsx
+
+# Company workbooks dropped in for development — order lists, stock counts. Never committed.
+samples/
+ตัวอย่าง*.xlsx
+public/__demo-order.xlsx

@@ -25,7 +25,7 @@ import {
   buildSupplierProposal,
   renameSupplier,
 } from '../services/supplierImport'
-import { fmtMoney } from '../lib/format'
+import { fmtMoney, fmtQty } from '../lib/format'
 import {
   createSupplier,
   deleteSupplier,
@@ -268,7 +268,8 @@ export function SuppliersPage() {
               {isOpen(r.supplier.id) && (
                 <ul className="mt-1 divide-y divide-line rounded-lg border border-line bg-sunken/60">
                   {r.shown.map((p) => {
-                    const price = priceOf.get(`${r.supplier.id}/${p.id}`)?.buyingPrice
+                    const link = priceOf.get(`${r.supplier.id}/${p.id}`)
+                    const price = link?.buyingPrice
                     return (
                       <li key={p.id} className="flex items-center gap-3 px-3 py-1.5">
                         <div className="min-w-0 flex-1">
@@ -279,6 +280,11 @@ export function SuppliersPage() {
                             {price !== undefined && (
                               <span className="num">
                                 ฿ {fmtMoney(price)} {/* ฿ is a currency symbol — i18n-key */}
+                              </span>
+                            )}
+                            {link?.minOrderQty !== undefined && (
+                              <span className="num">
+                                {t('ขั้นต่ำ {n}', { n: fmtQty(link.minOrderQty) })}
                               </span>
                             )}
                           </div>
@@ -685,7 +691,7 @@ function SupplierEditor({
 }) {
   const t = useT()
   // The catalogue, already in memory: renaming needs it to find the names to rewrite.
-  const { products } = useData()
+  const { products, locations } = useData()
   const toast = useToast()
   const [form, setForm] = useState<SupplierInput>({
     name: supplier?.name ?? '',
@@ -693,6 +699,8 @@ function SupplierEditor({
     email: supplier?.email ?? '',
     type: supplier?.type ?? 'takingReturn',
     note: supplier?.note ?? '',
+    defaultLocationId: supplier?.defaultLocationId,
+    leadTimeDays: supplier?.leadTimeDays,
   })
   const [busy, setBusy] = useState(false)
 
@@ -759,11 +767,49 @@ function SupplierEditor({
             <option value="notTakingReturn">{t('ไม่รับคืน')}</option>
           </Select>
         </Field>
-        <Field label={t('หมายเหตุ')}>
+        {/* Defaults the automatic order offers, not rules it enforces: where this supplier
+            usually delivers, and how long they take. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label={t('คลังปลายทางปกติ')}>
+            <Select
+              value={form.defaultLocationId ?? ''}
+              onChange={(e) =>
+                setForm({ ...form, defaultLocationId: e.target.value || undefined })
+              }
+            >
+              <option value="">{t('— ไม่ระบุ —')}</option>
+              {locations
+                .filter((l) => l.active !== false || l.id === form.defaultLocationId)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+          <Field label={t('ระยะเวลาส่ง (วัน)')}>
+            <Input
+              type="number"
+              min={0}
+              max={365}
+              step={1}
+              value={form.leadTimeDays ?? ''}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  leadTimeDays: e.target.value === '' ? undefined : Number(e.target.value),
+                })
+              }
+              placeholder={t('เช่น 2')}
+            />
+          </Field>
+        </div>
+        <Field label={t('หมายเหตุการสั่งซื้อ')}>
           <Textarea
             rows={2}
             value={form.note ?? ''}
             onChange={(e) => setForm({ ...form, note: e.target.value })}
+            placeholder={t('เช่น สั่งก่อน 10 โมง ส่งวันถัดไป')}
           />
         </Field>
       </div>
@@ -806,6 +852,7 @@ function AddProductModal({
   const { products } = useData()
   const [productId, setProductId] = useState('')
   const [price, setPrice] = useState('')
+  const [moq, setMoq] = useState('')
   const [busy, setBusy] = useState(false)
 
   const { free, placed } = useMemo(() => {
@@ -825,7 +872,8 @@ function AddProductModal({
     setBusy(true)
     try {
       const buyingPrice = price.trim() === '' ? undefined : Number(price)
-      const item = await linkProduct(supplier.id, productId, buyingPrice, items)
+      const minOrderQty = moq.trim() === '' ? undefined : Number(moq)
+      const item = await linkProduct(supplier.id, productId, buyingPrice, items, minOrderQty)
       onLinked(productId, item)
       toast.success(t('บันทึกแล้ว'))
       onClose()
@@ -869,6 +917,16 @@ function AddProductModal({
             step="0.01"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
+          />
+        </Field>
+        <Field label={t('ขั้นต่ำในการสั่ง (ไม่บังคับ)')}>
+          <Input
+            type="number"
+            min={0}
+            step="any"
+            value={moq}
+            onChange={(e) => setMoq(e.target.value)}
+            placeholder={t('เช่น 5 — เตือนเมื่อสั่งน้อยกว่านี้')}
           />
         </Field>
       </div>

@@ -571,6 +571,7 @@ function ProductEditor({
     minStock: product?.minStock ?? 0,
     cost: product?.cost,
     supplierId: product?.supplierId,
+    alternateSupplierIds: product?.alternateSupplierIds ?? [],
     unitConversions: product?.unitConversions ?? [],
   })
   const [existingImg, setExistingImg] = useState<string | null>(null)
@@ -899,6 +900,39 @@ function ProductEditor({
               ))}
           </Select>
         </Field>
+        {/* Who else sells it. The automatic order never picks one of these by itself; it is
+            the list a person sees when the usual supplier cannot deliver. */}
+        {supplierChoices.filter((s) => s.active !== false && s.id !== form.supplierId).length >
+          0 && (
+          <Field label={t('ผู้ขายสำรอง (ไม่บังคับ)')}>
+            <div className="flex max-h-32 flex-col gap-1 overflow-y-auto rounded-lg border border-line p-2 text-sm">
+              {supplierChoices
+                .filter((s) => s.active !== false && s.id !== form.supplierId)
+                .map((s) => {
+                  const on = (form.alternateSupplierIds ?? []).includes(s.id)
+                  return (
+                    <label key={s.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={!canEdit}
+                        onChange={(e) => {
+                          const cur = form.alternateSupplierIds ?? []
+                          setForm({
+                            ...form,
+                            alternateSupplierIds: e.target.checked
+                              ? [...cur, s.id]
+                              : cur.filter((id) => id !== s.id),
+                          })
+                        }}
+                      />
+                      <span className="text-ink">{s.name}</span>
+                    </label>
+                  )
+                })}
+            </div>
+          </Field>
+        )}
         <Field label={t("ต้นทุน/หน่วย (ไม่บังคับ)")}>
           <Input
             type="number"
