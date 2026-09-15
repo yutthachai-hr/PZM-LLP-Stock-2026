@@ -22,9 +22,25 @@ import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './Purcha
  * rejection is an error. Nothing here claims more than that.
  */
 
-/** The LIFF app id, when this deployment has one. Public; ships in client code. */
+/**
+ * The LIFF apps the owner registered, by the host they point at. A LIFF app has exactly
+ * one Endpoint URL, so an id only works on the host LINE was told about; listing them by
+ * host means a deploy on either platform finds its own without a build variable — which
+ * Cloudflare Pages will not take from its dashboard once a wrangler.toml exists. Ids are
+ * public (they ship in the client bundle). VITE_LIFF_ID still overrides, for the demo
+ * branch and for trying a new app before it is listed here.
+ */
+const LIFF_BY_HOST: Record<string, string> = {
+  'pzmstock.netlify.app': '2011602857-k9K8Zplx',
+  'pzmstock.pages.dev': '2011602857-k9K8Zplx',
+}
+
+/** The LIFF app id for this deployment, or '' when it has none. */
 export function liffId(): string {
-  return (import.meta.env.VITE_LIFF_ID ?? '').trim()
+  const fromEnv = (import.meta.env.VITE_LIFF_ID ?? '').trim()
+  if (fromEnv) return fromEnv
+  if (typeof location === 'undefined') return ''
+  return LIFF_BY_HOST[location.hostname] ?? ''
 }
 
 type Liff = typeof import('@line/liff').default

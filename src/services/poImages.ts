@@ -28,10 +28,20 @@ export interface HostedImage {
   expiresAt: number
 }
 
-const DEFAULT_HOST = '/.netlify/functions/po-image'
+/**
+ * Where the function lives on each host. The same code is deployed to Netlify (functions
+ * under /.netlify/functions/) and to Cloudflare Pages (functions under /api/), and
+ * Cloudflare Pages will not take build-time variables from its dashboard once a
+ * wrangler.toml exists — so the host is recognised here, and VITE_PO_IMAGE_HOST only
+ * overrides it.
+ */
+function defaultHost(): string {
+  if (typeof location !== 'undefined' && /\.pages\.dev$/.test(location.hostname)) return '/api/po-image'
+  return '/.netlify/functions/po-image'
+}
 
 function host(): string {
-  return (import.meta.env.VITE_PO_IMAGE_HOST ?? '').trim() || DEFAULT_HOST
+  return (import.meta.env.VITE_PO_IMAGE_HOST ?? '').trim() || defaultHost()
 }
 
 /**

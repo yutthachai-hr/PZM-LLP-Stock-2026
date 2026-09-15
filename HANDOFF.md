@@ -149,7 +149,15 @@ npm run i18n:check      # ครบทุกข้อความ
 
 ---
 
-## 8. ย้าย hosting ไป Cloudflare Pages — ไฟล์พร้อมแล้ว รอเจ้าของกดเท่านั้น (15 ก.ย.)
+## 8. Cloudflare Pages — **ขึ้นแล้วคู่ขนานกับ Netlify (15 ก.ย.)** ยังไม่ตัดสลับ
+
+`https://pzmstock.pages.dev` deploy จาก `main` อัตโนมัติเหมือน Netlify (project `pzmstock`, KV `po-images` = `227ca0f947374f5d9ddf9752b7ea506c`, Firebase authorized domain เพิ่มแล้ว) ตรวจแล้ว: SPA route, CSP, cache header, function 401/404, ไอคอน. **สิ่งที่ต่างจาก Netlify**: Cloudflare ไม่รับ build variable จาก dashboard เมื่อมี `wrangler.toml` → โค้ดเลือกเองตาม hostname: `src/services/poImages.ts` (`.pages.dev` → `/api/po-image`) และ `src/share/lineLiffProvider.ts` (`LIFF_BY_HOST`); Node เวอร์ชันมาจาก `.node-version`. LIFF app `2011602857-k9K8Zplx` ชี้ที่ Netlify อยู่ — วันตัดสลับให้ย้าย Endpoint URL ใน LINE Developers ไป `https://pzmstock.pages.dev` (โค้ดรองรับไว้แล้ว ไม่ต้องแก้)
+
+**ตัดสลับเมื่อพร้อม**: แจ้งพนักงานใช้ `pzmstock.pages.dev` (หรือชี้โดเมนจริง) → ย้าย LIFF Endpoint → เปิด Netlify ทิ้งไว้จนทุกเครื่องเปิดแอปใหม่ (PWA cache) → แล้วค่อยลบ site Netlify + `netlify/`, `netlify.toml`, `@netlify/*`
+
+---
+
+### ประวัติการเตรียม (คงไว้เพื่ออ้างอิง)
 
 ทำไม: bandwidth ไม่จำกัด, 500 build/เดือน, Pages Functions + **KV** ฟรีโดยไม่ต้องผูกบัตร (ที่เก็บรูป PO ไม่ต้องพึ่ง Netlify Blobs), branch `demo` ได้ URL ของตัวเองฟรี
 
