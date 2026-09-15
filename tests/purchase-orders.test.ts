@@ -111,11 +111,11 @@ describe('placing an order', () => {
     expect(by('HOMEMADE CHEESE')).toEqual(['PO-00001'])
   })
 
-  test('a supplier with orders from before the per-supplier count carries on past them', async () => {
-    // Eight orders exist in production under the old shared counter. Their numbers are
-    // frozen by the rules and are not rewritten. A supplier whose one order says PO-00008
-    // continues at PO-00009 — not PO-00002, which would reach a second PO-00008 seven
-    // orders later. A gap is a curiosity; the same number twice is a filing error.
+  test('until the old numbers are put right, a new order never repeats one', async () => {
+    // Orders from the old shared counter carry numbers like PO-00008 for a supplier
+    // ordered from once. Without renumbering, the next order continues past them — the
+    // same number twice would be a filing error. This is exactly what the owner saw as
+    // BETAGRO PO-00005 → PO-00006 on 15 Sep, and why renumbering exists (next test).
     seed('purchaseOrders', [
       {
         id: 'old-1', docNo: 'PO-00008', supplierId: SUPPLIER.id, supplierName: SUPPLIER.name,
@@ -125,6 +125,52 @@ describe('placing an order', () => {
     ])
     await placeOrder()
     expect(orders().map((o) => o.docNo).sort()).toEqual(['PO-00008', 'PO-00009'])
+  })
+
+  test('renumbering gives every supplier 1, 2, 3 in the order they ordered, and resets the counters', async () => {
+    const legacy = (id: string, docNo: string, supplierId: string, supplierName: string, orderedAt: number) => ({
+      id, docNo, supplierId, supplierName, status: 'ordered', locationId: MAIN, orderedAt, lines: [],
+      createdBy: 'x', createdByName: 'x', createdAt: orderedAt, updatedAt: orderedAt,
+    })
+    seed('purchaseOrders', [
+      legacy('b5', 'PO-00005', 'sup-b', 'BETAGRO', 100),
+      legacy('t4', 'PO-00004', 'sup-t', 'TGM', 90),
+      legacy('t6', 'PO-00006', 'sup-t', 'TGM', 95),
+      legacy('b6', 'PO-00006', 'sup-b', 'BETAGRO', 200),
+      legacy('n1', 'PO-00001', 'sup-n', 'NEXTECH', 50),
+    ])
+    seed('counters', [{ id: 'purchaseOrder__sup-b', value: 6 }, { id: 'purchaseOrder__sup-t', value: 6 }])
+
+    const { renumberPlan, renumberOrdersPerSupplier } = await import('../src/services/purchaseOrders')
+    const plan = renumberPlan(orders())
+    expect(plan.changes.map((c) => `${c.supplierName} ${c.from}→${c.to}`).sort()).toEqual([
+      'BETAGRO PO-00005→PO-00001',
+      'BETAGRO PO-00006→PO-00002',
+      'TGM PO-00004→PO-00001',
+      'TGM PO-00006→PO-00002',
+    ])
+    expect(plan.counters.get('purchaseOrder__sup-n')).toBe(1)
+
+    const changed = await renumberOrdersPerSupplier()
+    expect(changed).toHaveLength(4)
+    const by = (name: string) =>
+      orders().filter((o) => o.supplierName === name).sort((a, b) => a.orderedAt - b.orderedAt).map((o) => o.docNo)
+    expect(by('BETAGRO')).toEqual(['PO-00001', 'PO-00002'])
+    expect(by('TGM')).toEqual(['PO-00001', 'PO-00002'])
+    expect(by('NEXTECH')).toEqual(['PO-00001'])
+    const counter = (id: string) => (raw('counters').find((c) => c.id === id) as { value: number } | undefined)?.value
+    expect(counter('purchaseOrder__sup-b')).toBe(2)
+    expect(counter('purchaseOrder__sup-t')).toBe(2)
+    expect(counter('purchaseOrder__sup-n')).toBe(1)
+
+    // And the next BETAGRO order is its third, not its seventh.
+    await createPurchaseOrder({
+      supplier: { id: 'sup-b', name: 'BETAGRO' }, locationId: MAIN,
+      lines: [{ productId: 'p1', qty: 1 }], products, actor: ACTOR,
+    })
+    expect(by('BETAGRO')).toEqual(['PO-00001', 'PO-00002', 'PO-00003'])
+    // Running it again changes nothing.
+    expect(await renumberOrdersPerSupplier()).toEqual([])
   })
 
   test('each line records the product name and unit as they were', async () => {

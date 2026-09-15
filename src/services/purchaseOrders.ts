@@ -83,6 +83,75 @@ export function orderCounterFloors(orders: readonly PurchaseOrder[]): Map<string
   return out
 }
 
+// ---------------------------------------------------------------- renumbering ----
+
+/** One order whose number the renumbering would change. */
+export interface RenumberChange {
+  id: string
+  supplierId: string
+  supplierName: string
+  from: string
+  to: string
+}
+
+/**
+ * The numbers every order SHOULD carry under the owner's rule: each supplier's orders
+ * count 1, 2, 3 … in the order they were placed, whatever else was ordered that week.
+ *
+ * Orders placed before the numbers were made per-supplier (14 Sep 2026) took the old
+ * shared sequence, so a supplier ordered from once was holding PO-00005 and its next
+ * order came out as PO-00006 — a sequence that supplier never had. The owner's ruling
+ * (15 Sep): BETAGRO's orders are BETAGRO's first, second, third, and the old numbers are
+ * put right, not worked around. Sorted by when the order was placed, then by when it was
+ * recorded, so two on one day keep the order they were keyed in.
+ */
+export function renumberPlan(orders: readonly PurchaseOrder[]): {
+  changes: RenumberChange[]
+  counters: Map<string, number>
+} {
+  const bySupplier = new Map<string, PurchaseOrder[]>()
+  for (const o of orders) bySupplier.set(o.supplierId, [...(bySupplier.get(o.supplierId) ?? []), o])
+  const changes: RenumberChange[] = []
+  const counters = new Map<string, number>()
+  for (const [supplierId, list] of bySupplier) {
+    list.sort((a, b) => a.orderedAt - b.orderedAt || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+    list.forEach((o, i) => {
+      const to = makeDocNo(i + 1)
+      if (o.docNo !== to) {
+        changes.push({ id: o.id, supplierId, supplierName: o.supplierName, from: o.docNo, to })
+      }
+    })
+    counters.set(counterId(supplierId), list.length)
+  }
+  return { changes, counters }
+}
+
+/**
+ * Put every order's number right, and every supplier's counter with it.
+ *
+ * Reads the whole collection (tens of documents) and rewrites only the numbers that
+ * differ from the plan. Admin only — the rules let nobody else touch a number once
+ * written, and a counter may only ever go up, so a counter that must come DOWN is
+ * removed and created afresh rather than edited. Returns what was changed so the screen
+ * can show it and the history can name it.
+ */
+export async function renumberOrdersPerSupplier(): Promise<RenumberChange[]> {
+  const db = scoped()
+  const orders = await db.getAll<PurchaseOrder>(COL.purchaseOrders)
+  const { changes, counters } = renumberPlan(orders)
+  const now = Date.now()
+  for (const c of changes) {
+    await db.update(COL.purchaseOrders, c.id, { docNo: c.to, updatedAt: now })
+  }
+  for (const [id, value] of counters) {
+    const cur = await db.getOne<{ value: number }>(COL.counters, id)
+    if (cur?.value === value) continue
+    if (cur && cur.value > value) await db.remove(COL.counters, id)
+    await db.set(COL.counters, id, { value })
+  }
+  return changes
+}
+
 export interface OrderLineInput {
   productId: string
   qty: number

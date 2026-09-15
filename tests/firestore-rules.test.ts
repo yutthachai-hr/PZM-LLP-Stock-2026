@@ -759,6 +759,9 @@ describe('orders placed with suppliers', () => {
     await assertSucceeds(setDoc(at(STAFF), order()))
     await assertFails(updateDoc(at(STAFF), { supplierId: 'sup2', updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { docNo: 'PO-09999', updatedAt: ts() }))
+    // The one exception: an admin putting the per-supplier sequence right (15 Sep 2026).
+    await assertSucceeds(updateDoc(at(ADMIN), { docNo: 'PO-00002', updatedAt: ts() }))
+    await assertFails(updateDoc(at(ADMIN), { supplierId: 'sup2', updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { locationId: 'loc2', updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { createdBy: ADMIN, updatedAt: ts() }))
   })

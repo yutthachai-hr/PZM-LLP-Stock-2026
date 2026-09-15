@@ -647,6 +647,45 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
     }
   }
 
+  /**
+   * Put every purchase order's number right: each supplier's orders count 1, 2, 3 in the
+   * order they were placed (the owner's rule, 15 Sep 2026). Shows what would change and
+   * asks before touching anything; the numbers are what suppliers see on the sheet.
+   */
+  async function renumber() {
+    setBusy('renumber')
+    try {
+      const { renumberPlan, listOrdersInRange, renumberOrdersPerSupplier } = await import('../services/purchaseOrders')
+      const all = await listOrdersInRange(0, Date.now() + 86_400_000)
+      const plan = renumberPlan(all)
+      if (plan.changes.length === 0) {
+        toast.success(t('เลขใบสั่งซื้อถูกต้องตามผู้ขายทุกใบแล้ว'))
+        return
+      }
+      const preview = plan.changes
+        .slice(0, 12)
+        .map((c) => `${c.supplierName}: ${c.from} → ${c.to}`)
+        .join('\n')
+      const ok = await confirm({
+        title: t('จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย'),
+        message:
+          t('จะเปลี่ยนเลข {n} ใบ ให้แต่ละผู้ขายนับ 1, 2, 3 ตามลำดับที่สั่ง เลขที่เคยส่งให้ผู้ขายไปแล้วจะไม่ตรงกับในระบบ', { n: plan.changes.length }) +
+          '\n\n' +
+          preview +
+          (plan.changes.length > 12 ? '\n…' : ''),
+        danger: true,
+        confirmText: t('จัดเลขใหม่'),
+      })
+      if (!ok) return
+      const changed = await renumberOrdersPerSupplier()
+      toast.success(t('จัดเลขใหม่แล้ว {n} ใบ', { n: changed.length }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy('')
+    }
+  }
+
   async function seed() {
     const ok = await confirm({
       message: t("นำเข้าแคตตาล็อกสินค้า + คลังเริ่มต้น? (ข้ามถ้ามีข้อมูลอยู่แล้ว)"),
@@ -682,6 +721,9 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
         </Button>
         <Button variant="secondary" onClick={checkIntegrity} disabled={!!busy}>
           {busy === 'check' ? t("กำลังตรวจ...") : t("ตรวจความสอดคล้องของยอด")}
+        </Button>
+        <Button variant="secondary" onClick={renumber} disabled={!!busy}>
+          {busy === 'renumber' ? t('กำลังตรวจเลข...') : t('จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย')}
         </Button>
       </div>
       <p className="mt-2 text-xs text-ink-faint">

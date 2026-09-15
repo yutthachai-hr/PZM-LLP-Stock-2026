@@ -532,7 +532,7 @@ service cloud.firestore {
      */
     function orderEdit() {
       return editedKeys().hasOnly([
-          'status', 'lines', 'invoiceNo', 'note',
+          'status', 'lines', 'invoiceNo', 'note', 'docNo',
           'receivedAt', 'receivedBy', 'receivedByName', 'movementDocNo', 'updatedAt',
           // Approving a draft resets the order date and signs it; sending records where
           // the sheet got to. Neither may be signed in someone else's name.
@@ -548,7 +548,10 @@ service cloud.firestore {
             || request.resource.data.sentBy == request.auth.uid
             || request.resource.data.sentBy == resource.data.sentBy)
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.docNo == resource.data.docNo
+        // A number is frozen for everyone but an admin putting the sequence right — the
+        // owner's rule is that each supplier's orders count 1, 2, 3 in their own order,
+        // and the orders numbered under the old shared counter had to be corrected.
+        && (request.resource.data.docNo == resource.data.docNo || admin())
         && request.resource.data.supplierId == resource.data.supplierId
         && request.resource.data.locationId == resource.data.locationId
         // Whoever checked the delivery in signs for it.

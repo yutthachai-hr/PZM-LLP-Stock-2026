@@ -1069,4 +1069,10 @@ export const EN: Record<string, string> = {
   'ดูทั้งหมด': 'See all',
   'พร้อมส่ง': 'Ready to send',
   'ยังไม่ส่ง': 'Not sent',
+  'เลขใบสั่งซื้อถูกต้องตามผู้ขายทุกใบแล้ว': 'Every order already carries its supplier sequence number',
+  'จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย': 'Renumber orders per supplier',
+  'จะเปลี่ยนเลข {n} ใบ ให้แต่ละผู้ขายนับ 1, 2, 3 ตามลำดับที่สั่ง เลขที่เคยส่งให้ผู้ขายไปแล้วจะไม่ตรงกับในระบบ': '{n} orders will be renumbered so each supplier counts 1, 2, 3 in the order placed. Numbers already sent to suppliers will no longer match the system',
+  'จัดเลขใหม่': 'Renumber',
+  'จัดเลขใหม่แล้ว {n} ใบ': 'Renumbered {n} orders',
+  'กำลังตรวจเลข...': 'Checking numbers...',
 }
