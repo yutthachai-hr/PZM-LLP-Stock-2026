@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { EmptyState, Spinner } from '../../components/ui'
 import { useT } from '../../i18n/I18nContext'
 import { canEditItems, isRequesterEditable } from '../../lib/purchaseRequestStatus'
+import { requestCache } from '../../data/requestCache'
 import { getRequest } from '../../services/purchaseRequests'
 import type { PurchaseRequest, Role } from '../../types'
 import { RequestEditor } from './RequestEditor'
@@ -49,6 +50,8 @@ export function RequestPage() {
   const onChange = (next: PurchaseRequest) => {
     shown.current = next.id
     setPr(next)
+    // The calendar and the dashboard hold this request too; keep their copy current.
+    requestCache.patch(next)
   }
   if (editable) return <RequestEditor key={editorKey.current} initial={pr} onChange={onChange} />
   return <RequestReview key={pr!.id} initial={pr!} onChange={onChange} />

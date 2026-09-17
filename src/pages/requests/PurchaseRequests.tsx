@@ -9,7 +9,8 @@ import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { formatThaiDateTime } from '../../lib/format'
 import { isManager, isReadyForOrder, liveItems, PR_STATUS_KEYS, prBadgeColor } from '../../lib/purchaseRequestStatus'
-import { listRequestsInRange } from '../../services/purchaseRequests'
+import { requestCache } from '../../data/requestCache'
+import { bkkDayEnd, bkkDayStart } from '../../lib/inventoryRules/time'
 import type { PurchaseRequest, PurchaseRequestStatus } from '../../types'
 
 /**
@@ -38,7 +39,7 @@ export function PurchaseRequestsPage() {
     setLoading(true)
     try {
       const now = Date.now()
-      setRows(await listRequestsInRange(now - DAYS * 86_400_000, now + 86_400_000))
+      setRows(await requestCache.fetchRange(bkkDayStart(now) - DAYS * 86_400_000, bkkDayEnd(now) + 86_400_000))
     } catch (e) {
       toast.error(errText(e, t))
     } finally {

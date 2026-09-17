@@ -197,6 +197,13 @@ export interface Supplier {
   defaultLocationId?: string
   /** Days from order to delivery, as the owner knows it. Shown, never enforced. */
   leadTimeDays?: number
+  /**
+   * Weekdays an order may be placed with them, 0 = Sunday … 6 = Saturday, and the time of
+   * day (HH:mm, Bangkok) it has to be in by. The calendar shows each as a cut-off; nothing
+   * refuses an order placed after one — the owner's word is "แสดง" not "ห้าม".
+   */
+  orderDays?: number[]
+  cutoffTime?: string
   active: boolean
   createdAt: number
   updatedAt: number
@@ -228,7 +235,11 @@ export type StockEventType =
   | 'inventoryTask'
   | 'other'
 
-export type StockEventStatus = 'upcoming' | 'inProgress' | 'completed' | 'cancelled'
+/**
+ * `waitingApproval`: done by the person assigned, awaiting the manager's sign-off — only on
+ * tasks whose schedule asks for one.
+ */
+export type StockEventStatus = 'upcoming' | 'inProgress' | 'waitingApproval' | 'completed' | 'cancelled'
 
 export type StockEventPriority = 'normal' | 'high' | 'critical'
 
@@ -287,6 +298,13 @@ export interface PurchaseOrder {
   locationId: string
   /** When it was sent to the supplier, ms epoch. */
   orderedAt: number
+  /**
+   * When the supplier is to deliver, ms epoch of the day. Set when the order is placed —
+   * the date asked for, or the supplier's lead time counted from today — and changed when
+   * the supplier says otherwise. The calendar's receiving entries and the "late" flag hang
+   * off it; absent on orders placed before it existed, which fall back to the lead time.
+   */
+  expectedAt?: number
   lines: PurchaseOrderLine[]
   /**
    * The supplier's invoice number.
@@ -372,6 +390,12 @@ export interface StockEvent {
    */
   assignedToName?: string
   note?: string
+  /**
+   * What the task is about, when it is about one thing: the product a count or check
+   * concerns, the supplier a delivery comes from. Optional; most tasks name neither.
+   */
+  productId?: string
+  supplierId?: string
   createdBy: string
   createdAt: number
   updatedAt: number

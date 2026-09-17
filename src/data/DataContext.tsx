@@ -7,7 +7,6 @@ import {
   type StockLocation,
   type StockLevel,
   type StockMovement,
-  type Note,
   type MinOverride,
   type AppUser,
 } from '../types'
@@ -17,7 +16,6 @@ interface DataState {
   locations: StockLocation[]
   levels: StockLevel[]
   movements: StockMovement[]
-  notes: Note[]
   minOverrides: MinOverride[]
   users: AppUser[]
   loading: boolean
@@ -87,7 +85,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     sinceField: 'date',
     sinceValue: movementsFrom,
   })
-  const { data: notes } = useLive<Note>(COL.notes)
   const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides)
   const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin })
 
@@ -138,7 +135,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       locations,
       levels,
       movements,
-      notes,
       minOverrides,
       users,
       loading: pLoading || lLoading || sLoading || mLoading,
@@ -159,7 +155,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     locations,
     levels,
     movements,
-    notes,
     minOverrides,
     users,
     pLoading,

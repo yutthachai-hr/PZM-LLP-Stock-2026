@@ -193,6 +193,7 @@ export function Modal({
   children,
   wide,
   side,
+  sheet,
 }: {
   open: boolean
   onClose: () => void
@@ -209,6 +210,12 @@ export function Modal({
    * whole width.
    */
   side?: boolean
+  /**
+   * On a phone, rise from the bottom as a sheet instead of covering the screen from the
+   * side — a thumb reaches the bottom, and the list behind stays half in view. At `sm`
+   * and up it is the side drawer. Implies `side`.
+   */
+  sheet?: boolean
 }) {
   const t = useT()
   const panel = useRef<HTMLDivElement>(null)
@@ -268,9 +275,11 @@ export function Modal({
   return (
     <div
       className={
-        side
-          ? 'fixed inset-0 z-50 flex justify-end overscroll-contain bg-ink/50 backdrop-blur-[2px]'
-          : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/50 p-4 backdrop-blur-[2px] sm:items-center'
+        sheet
+          ? 'fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-ink/50 backdrop-blur-[2px] sm:items-stretch sm:justify-end'
+          : side
+            ? 'fixed inset-0 z-50 flex justify-end overscroll-contain bg-ink/50 backdrop-blur-[2px]'
+            : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/50 p-4 backdrop-blur-[2px] sm:items-center'
       }
       onClick={onClose}
     >
@@ -280,13 +289,16 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         className={
-          side
-            ? 'flex h-full w-full max-w-md flex-col overflow-y-auto bg-surface shadow-2xl'
-            : `w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl bg-surface shadow-2xl`
+          sheet
+            ? 'flex max-h-[92vh] w-full flex-col overflow-y-auto rounded-t-2xl bg-surface shadow-2xl sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none'
+            : side
+              ? 'flex h-full w-full max-w-md flex-col overflow-y-auto bg-surface shadow-2xl'
+              : `w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl bg-surface shadow-2xl`
         }
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface px-5 py-3">
+          {sheet && <span aria-hidden className="absolute left-1/2 top-1.5 h-1 w-10 -translate-x-1/2 rounded-full bg-line sm:hidden" />}
           <h3 id={titleId} className="text-balance text-lg font-bold text-ink">
             {title}
           </h3>
