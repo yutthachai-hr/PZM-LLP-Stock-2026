@@ -17,6 +17,7 @@ const {
   linkProduct,
   listSupplierItems,
   listSuppliers,
+  loadSuppliers,
   removeSupplierItem,
   unlinkProduct,
   updateSupplier,
@@ -124,6 +125,23 @@ describe('suppliers', () => {
     // Physically separate collections, not a field filter.
     expect(raw('suppliers')).toHaveLength(1)
     expect(raw('lelapin__suppliers')).toHaveLength(1)
+  })
+
+  test('the session cache is dropped when the brand changes', async () => {
+    // The product editor reads the cached list. It once outlived a brand switch, so the
+    // Pizza Mania editor offered Le Lapin's suppliers and filed a Le Lapin id onto a
+    // Pizza Mania product (17 Sep 2026).
+    await createSupplier(INPUT)
+    expect((await loadSuppliers()).map((s) => s.name)).toEqual(['SIMUMMUANG'])
+    setActiveBrand('lelapin')
+    await createSupplier({ ...INPUT, name: 'LE LAPIN SUPPLIER' })
+    expect((await loadSuppliers()).map((s) => s.name)).toEqual(['LE LAPIN SUPPLIER'])
+    setActiveBrand('pizza')
+    expect((await loadSuppliers()).map((s) => s.name)).toEqual(['SIMUMMUANG'])
+    // Choosing the brand already open is not a change and keeps the copy.
+    const same = await loadSuppliers()
+    setActiveBrand('pizza')
+    expect(await loadSuppliers()).toBe(same)
   })
 
   test('unlinking a product leaves the supplier', async () => {

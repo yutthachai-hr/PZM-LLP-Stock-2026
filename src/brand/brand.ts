@@ -113,14 +113,29 @@ export function getBrand(): BrandId {
   return current
 }
 
+const brandListeners = new Set<() => void>()
+
+/**
+ * Called when the brand changes. Anything that holds a brand-scoped list in module state
+ * (the supplier cache, for one) registers here and forgets its copy — the supplier list
+ * outlived a brand switch once, and the Pizza Mania product editor offered Le Lapin's
+ * suppliers, saving a Le Lapin id onto a Pizza Mania product (17 Sep 2026).
+ */
+export function onBrandChange(fn: () => void): () => void {
+  brandListeners.add(fn)
+  return () => brandListeners.delete(fn)
+}
+
 /** Set the active brand for the data layer (updates collection resolution immediately). */
 export function setActiveBrand(b: BrandId): void {
+  const changed = b !== current
   current = b
   try {
     localStorage.setItem(LS_KEY, b)
   } catch {
     /* ignore */
   }
+  if (changed) for (const fn of brandListeners) fn()
 }
 
 export function lastBrand(): BrandId {

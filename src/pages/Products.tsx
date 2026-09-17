@@ -888,6 +888,12 @@ function ProductEditor({
             disabled={!canEdit}
           >
             <option value="">{t("— ยังไม่ระบุ —")}</option>
+            {/* An id that matches nobody here (a supplier deleted, or one from the other
+                brand) is shown as such rather than quietly reading as "not set" — the
+                person sees there is something to fix and can pick the right one. */}
+            {form.supplierId && !supplierChoices.some((s) => s.id === form.supplierId) && (
+              <option value={form.supplierId}>{t('ผู้ขายที่ไม่พบในแบรนด์นี้ — เลือกใหม่')}</option>
+            )}
             {/* Hidden suppliers are not offered — except the one this product already has,
                 or the select would show blank for a product whose supplier was hidden. */}
             {supplierChoices

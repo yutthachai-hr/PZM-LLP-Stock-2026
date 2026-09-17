@@ -1189,4 +1189,5 @@ export const EN: Record<string, string> = {
   'หัวหน้านำสินค้าออก': 'Manager removed a product',
   'ส่งออกไฟล์': 'Exported',
   'รายการขอสั่งซื้อ — รอตรวจ {n} รายการ': 'Purchase requests — {n} awaiting review',
+  'ผู้ขายที่ไม่พบในแบรนด์นี้ — เลือกใหม่': 'Supplier not found in this brand — pick again',
 }

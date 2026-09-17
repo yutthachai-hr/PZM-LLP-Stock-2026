@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { onBrandChange } from '../brand/brand'
 import { backend } from '../backend'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
@@ -279,6 +280,10 @@ export function invalidateSupplierCache(): void {
   inflight = null
   announce()
 }
+
+// The list is one brand's. Switching brands must drop it, or the other brand's product
+// editor offers these names and files their ids onto its products.
+onBrandChange(invalidateSupplierCache)
 
 export async function loadSuppliers(): Promise<Supplier[]> {
   if (cached) return cached
