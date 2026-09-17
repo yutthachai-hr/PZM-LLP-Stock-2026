@@ -76,6 +76,13 @@ const paths = {
   globe: 'M2 12h20M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20',
   calendar:
     'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  // The inventory calendar and its notifications.
+  bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
+  clock: 'M12 6v6l4 2',
+  alertCircle: 'M12 8v4M12 16h.01',
+  checkCircle: 'M21.801 10A10 10 0 1 1 17 3.335M9 11l3 3L22 4',
+  cart: 'M2 2h2l2.5 12.5a2 2 0 0 0 2 1.5h9.5a2 2 0 0 0 2-1.5L22 6H6',
+  box: 'M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16ZM12 22V12M3.3 7l8.7 5 8.7-5',
 } as const
 
 export type IconName = keyof typeof paths
@@ -98,6 +105,12 @@ const circles: Partial<Record<IconName, { cx: number; cy: number; r: number }[]>
     { cx: 18, cy: 19, r: 3 },
   ],
   globe: [{ cx: 12, cy: 12, r: 10 }],
+  clock: [{ cx: 12, cy: 12, r: 10 }],
+  alertCircle: [{ cx: 12, cy: 12, r: 10 }],
+  cart: [
+    { cx: 8, cy: 21, r: 1 },
+    { cx: 19, cy: 21, r: 1 },
+  ],
 }
 
 /** Icons drawn as solid shapes rather than strokes. */

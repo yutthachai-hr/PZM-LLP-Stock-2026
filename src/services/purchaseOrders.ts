@@ -1,4 +1,6 @@
 import { backend } from '../backend'
+import { DELETE_FIELD } from '../backend/types'
+import { isLate } from '../lib/inventoryRules/purchasing'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { sameUnit } from '../lib/units'
@@ -172,6 +174,8 @@ export async function createPurchaseOrder(params: {
   products: readonly Product[]
   actor: { id: string; name: string }
   orderedAt?: number
+  /** The day the supplier is to deliver. Omitted = unknown (the lead time stands in). */
+  expectedAt?: number
   eventId?: string
   /**
    * The imported order list this came from. Such an order is born a draft: it is a
@@ -187,6 +191,7 @@ export async function createPurchaseOrder(params: {
   if (!locationId) throw new AppError('กรุณาเลือกคลังปลายทาง')
   const orderedAt = params.orderedAt ?? Date.now()
   requireEpochMs(orderedAt)
+  if (params.expectedAt !== undefined) requireEpochMs(params.expectedAt)
 
   const byId = new Map(params.products.map((p) => [p.id, p]))
   const lines: PurchaseOrderLine[] = []
@@ -233,6 +238,7 @@ export async function createPurchaseOrder(params: {
       status: (params.batchId ? 'draft' : 'ordered') satisfies PurchaseOrderStatus,
       locationId,
       orderedAt,
+      ...(params.expectedAt !== undefined ? { expectedAt: params.expectedAt } : {}),
       lines,
       ...(params.eventId ? { eventId: params.eventId } : {}),
       ...(params.batchId ? { batchId: params.batchId } : {}),
@@ -317,19 +323,38 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrder | null
 }
 
 /**
- * How long an order may sit as "ordered" before it is worth chasing.
- *
- * The owner's number: three days without the goods turning up.
+ * When the supplier is to deliver: the date on the order, else the lead time counted from
+ * the order date, else nothing. Bangkok days; see lib/inventoryRules/purchasing.ts.
  */
-export const CHASE_AFTER_DAYS = 3
+export { expectedDeliveryAt, CHASE_AFTER_DAYS } from '../lib/inventoryRules/purchasing'
 
-/** Orders that were sent more than three days ago and have still not arrived. */
-export function overdueOrders(orders: readonly PurchaseOrder[], now = Date.now()): PurchaseOrder[] {
-  const cutoff = now - CHASE_AFTER_DAYS * 86_400_000
-  return orders.filter((o) => o.status === 'ordered' && o.orderedAt < cutoff)
+/**
+ * Change the delivery date the order is waiting on — the supplier said a different day,
+ * or none was known when it was placed. Dated to the start of that day.
+ */
+export async function setExpectedDelivery(id: string, expectedAt: number | undefined): Promise<void> {
+  if (expectedAt !== undefined) requireEpochMs(expectedAt)
+  await scoped().update(COL.purchaseOrders, id, {
+    expectedAt: expectedAt === undefined ? DELETE_FIELD : expectedAt,
+    updatedAt: Date.now(),
+  })
 }
 
-/** Whole days an order has been waiting, for the screen to say how late it is. */
+/**
+ * Orders that have not arrived by the day they were due — the date on the order when it
+ * has one, otherwise the owner's rule of three days after ordering.
+ */
+export function overdueOrders(
+  orders: readonly PurchaseOrder[],
+  now = Date.now(),
+  leadTimeOf?: (supplierId: string) => number | undefined,
+): PurchaseOrder[] {
+  return orders.filter((o) => o.status === 'ordered' && isLate(o, now, leadTimeOf?.(o.supplierId)))
+}
+
+export { isLate } from '../lib/inventoryRules/purchasing'
+
+/** Whole days an order has been waiting since it was placed, for "รอมา n วัน". */
 export function daysWaiting(order: PurchaseOrder, now = Date.now()): number {
   return Math.floor((now - order.orderedAt) / 86_400_000)
 }

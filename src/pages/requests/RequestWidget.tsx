@@ -4,12 +4,14 @@ import { useAuth } from '../../auth/AuthContext'
 import { Button, StatGroup, StatTile } from '../../components/ui'
 import { useT } from '../../i18n/I18nContext'
 import { isManager, isReadyForOrder } from '../../lib/purchaseRequestStatus'
-import { listRequestsInRange } from '../../services/purchaseRequests'
+import { requestCache } from '../../data/requestCache'
+import { bkkDayEnd, bkkDayStart } from '../../lib/inventoryRules/time'
 
 /**
  * Purchase requests on the dashboard: the last month, by where they stand. A manager's
  * first tile is what is waiting for them; everyone else's is their own drafts and
- * returns. Read once when the dashboard opens; nothing subscribed.
+ * returns. Read once when the dashboard opens through the shared range cache — the
+ * Today panel reads a wider window of the same collection, so this is usually free.
  */
 const DAYS = 30
 
@@ -25,7 +27,8 @@ export function RequestWidget() {
     ;(async () => {
       try {
         const now = Date.now()
-        const rows = await listRequestsInRange(now - DAYS * 86_400_000, now + 86_400_000)
+        // Day-aligned bounds, so the cache key is the same all day and a remount is free.
+        const rows = await requestCache.fetchRange(bkkDayStart(now) - DAYS * 86_400_000, bkkDayEnd(now) + 86_400_000)
         const mine = (s: string) => rows.filter((r) => r.status === s && (manager || r.requestedBy === user?.id)).length
         if (alive) {
           setC({

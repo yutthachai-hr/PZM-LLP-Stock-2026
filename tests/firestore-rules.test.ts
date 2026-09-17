@@ -371,6 +371,12 @@ describe('suppliers', () => {
     )
   })
 
+  test('order days and a cut-off time are kept for the calendar, within their shape', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { orderDays: [1, 3, 5], cutoffTime: '14:00' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s2'), supplier('s2', { orderDays: 'Mon' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s3'), supplier('s3', { cutoffTime: 'two in the afternoon' })))
+  })
+
   test('note is optional, and bounded', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { note: 'ok' })))
     await assertFails(
@@ -728,6 +734,12 @@ describe('orders placed with suppliers', () => {
 
   test('an order cannot be born already received', async () => {
     await assertFails(setDoc(at(STAFF), order({ status: 'received' })))
+  })
+
+  test('the delivery date is kept, and may be moved while the goods are out', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order({ expectedAt: ts() + 86_400_000 })))
+    await assertSucceeds(updateDoc(at(STAFF), { expectedAt: ts() + 2 * 86_400_000, updatedAt: ts() }))
+    await assertFails(setDoc(at(STAFF, 'po2'), order({ id: 'po2', expectedAt: 'Thursday' })))
   })
 
   test('the shape is pinned, and an empty order is not one', async () => {

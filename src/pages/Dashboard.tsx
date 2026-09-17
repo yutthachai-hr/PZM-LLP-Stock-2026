@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { RequestWidget } from './requests/RequestWidget'
+import { TodayPanel } from '../components/dashboard/TodayPanel'
+import { shortages } from '../lib/inventoryRules/lowStock'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
 import { useData } from '../data/DataContext'
@@ -56,19 +58,10 @@ export function DashboardPage() {
 
   const totalQtyOf = (p: Product) => scopeLocations.reduce((s, l) => s + qtyAt(l.id, p.id), 0)
 
+  // One rule, shared with the top bar and the calendar (lib/inventoryRules/lowStock.ts),
+  // so the badge, this list and the calendar cannot disagree.
   const lowStock = useMemo(() => {
-    const items: LowItem[] = []
-    for (const p of products) {
-      for (const l of scopeLocations) {
-        // A branch is not short of something it has never carried.
-        if (!tracksProduct(l.id, p.id)) continue
-        const min = minFor(p, l.id)
-        if (min > 0) {
-          const qty = qtyAt(l.id, p.id)
-          if (qty <= min) items.push({ product: p, location: l, qty, min })
-        }
-      }
-    }
+    const items: LowItem[] = shortages({ products, locations: scopeLocations, qtyAt, minFor, tracksProduct })
     return items.sort((a, b) => a.qty - a.min - (b.qty - b.min))
   }, [products, scopeLocations, qtyAt, minFor, tracksProduct])
 
@@ -266,6 +259,8 @@ export function DashboardPage() {
           />
         </StatGroup>
       </div>
+
+      <TodayPanel />
 
       <RequestWidget />
 

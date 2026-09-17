@@ -38,6 +38,9 @@ import {
 } from '../services/suppliers'
 import type { Product, Supplier, SupplierItem, SupplierType } from '../types'
 
+// Sunday first, matching Date#getDay(). i18n-key
+const ORDER_DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] // i18n-key
+
 /**
  * Who we buy from.
  *
@@ -701,6 +704,8 @@ function SupplierEditor({
     note: supplier?.note ?? '',
     defaultLocationId: supplier?.defaultLocationId,
     leadTimeDays: supplier?.leadTimeDays,
+    orderDays: supplier?.orderDays ?? [],
+    cutoffTime: supplier?.cutoffTime ?? '',
   })
   const [busy, setBusy] = useState(false)
 
@@ -802,6 +807,40 @@ function SupplierEditor({
               }
               placeholder={t('เช่น 2')}
             />
+          </Field>
+        </div>
+        {/* Their order rhythm. The calendar puts a cut-off on each order day at this time;
+            nothing refuses an order placed after it. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <fieldset>
+            <legend className="mb-1.5 block text-sm font-medium text-ink">{t('วันที่รับออเดอร์')}</legend>
+            <div className="flex flex-wrap gap-1">
+              {ORDER_DAY_NAMES.map((name, day) => {
+                const on = (form.orderDays ?? []).includes(day)
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        orderDays: on ? (form.orderDays ?? []).filter((d) => d !== day) : [...(form.orderDays ?? []), day].sort(),
+                      })
+                    }
+                    className={`min-h-11 min-w-11 rounded-lg px-2 text-sm font-medium ${
+                      on ? 'bg-brand text-white' : 'bg-sunken text-ink-soft hover:bg-line'
+                    }`}
+                  >
+                    {t(name)}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-ink-soft">{t('ไม่เลือก = สั่งได้ทุกวัน')}</p>
+          </fieldset>
+          <Field label={t('เวลาตัดรอบสั่ง')} hint={t('ปฏิทินจะแสดง "ตัดรอบสั่ง" ในวันที่เลือก')}>
+            <Input type="time" value={form.cutoffTime ?? ''} onChange={(e) => setForm({ ...form, cutoffTime: e.target.value })} />
           </Field>
         </div>
         <Field label={t('หมายเหตุการสั่งซื้อ')}>

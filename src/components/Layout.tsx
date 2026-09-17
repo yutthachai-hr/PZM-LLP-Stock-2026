@@ -32,7 +32,6 @@ const NAV: NavItem[] = [
   { to: '/orders', label: 'สั่งซื้อ', icon: 'truck' }, // i18n-key
   { to: '/suppliers', label: 'ผู้ขาย', icon: 'users' }, // i18n-key
   { to: '/import', label: 'นำเข้า Excel', icon: 'upload', adminOnly: true }, // i18n-key
-  { to: '/notes', label: 'บันทึกช่วยจำ', icon: 'note' }, // i18n-key
   { to: '/settings', label: 'ตั้งค่า', icon: 'settings' }, // i18n-key
 ]
 

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useData } from '../data/DataContext'
+import { orderCache } from '../data/orderCache'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { Icon } from '../components/Icon'
@@ -23,9 +24,11 @@ import {
   createPurchaseOrder,
   daysWaiting,
   deletePurchaseOrder,
+  expectedDeliveryAt,
   listOrdersInRange,
   overdueOrders,
   receivePurchaseOrder,
+  setExpectedDelivery,
   summariseBySupplier,
 } from '../services/purchaseOrders'
 import { useSuppliers } from '../services/suppliers'
@@ -69,6 +72,7 @@ export function OrdersPage() {
   const { products, locations, locationById } = useData()
   const navigate = useNavigate()
   const suppliers = useSuppliers()
+  const [params, setParams] = useSearchParams()
   const [busyExport, setBusyExport] = useState<'' | 'excel' | 'pdf'>('')
 
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
@@ -83,7 +87,10 @@ export function OrdersPage() {
     setLoading(true)
     try {
       const to = Date.now()
-      setOrders(await listOrdersInRange(to - days * DAY, to + DAY))
+      const rows = await listOrdersInRange(to - days * DAY, to + DAY)
+      setOrders(rows)
+      // Keep the calendar's copy current without it re-reading the month.
+      for (const o of rows) orderCache.patch(o)
     } catch (e) {
       toast.error(errText(e, t))
     } finally {
@@ -95,7 +102,35 @@ export function OrdersPage() {
     void load()
   }, [load])
 
-  const late = useMemo(() => overdueOrders(orders), [orders])
+  // Opened from the calendar: ?po=<id> shows the sheet, ?receive=<id> opens the check-in.
+  // Consumed once the list is here, and cleared so a refresh does not reopen it.
+  useEffect(() => {
+    if (loading) return
+    const po = params.get('po')
+    const receive = params.get('receive')
+    if (!po && !receive) return
+    const hit = orders.find((o) => o.id === (po ?? receive))
+    if (hit) (po ? setViewing : setReceiving)(hit)
+    setParams({}, { replace: true })
+  }, [loading, orders, params, setParams])
+
+  const leadTimeOf = useCallback(
+    (supplierId: string) => suppliers.find((x) => x.id === supplierId)?.leadTimeDays,
+    [suppliers],
+  )
+  const late = useMemo(() => overdueOrders(orders, Date.now(), leadTimeOf), [orders, leadTimeOf])
+
+  async function changeExpected(order: PurchaseOrder, value: string) {
+    try {
+      const at = value ? dateInputToMs(value) : undefined
+      await setExpectedDelivery(order.id, at)
+      setOrders((cur) => cur.map((o) => (o.id === order.id ? { ...o, expectedAt: at } : o)))
+      orderCache.patch({ ...order, expectedAt: at, updatedAt: Date.now() })
+      toast.success(t('บันทึกแล้ว'))
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
   const lateIds = useMemo(() => new Set(late.map((o) => o.id)), [late])
   const open = orders.filter((o) => o.status !== 'received')
   const received = orders.filter((o) => o.status === 'received')
@@ -111,6 +146,7 @@ export function OrdersPage() {
     if (!ok) return
     try {
       await deletePurchaseOrder(order.id)
+      orderCache.remove(order.id)
       toast.success(t('ยกเลิกแล้ว'))
       await load()
     } catch (e) {
@@ -281,6 +317,8 @@ export function OrdersPage() {
                 key={o.id}
                 order={o}
                 late={lateIds.has(o.id)}
+                expectedAt={expectedDeliveryAt(o, leadTimeOf(o.supplierId))}
+                onExpectedChange={(v) => void changeExpected(o, v)}
                 locationName={locationById(o.locationId)?.name ?? ''}
                 onOpen={() => setViewing(o)}
                 onReceive={() => setReceiving(o)}
@@ -317,6 +355,8 @@ export function OrdersPage() {
 function OrderRow({
   order,
   late,
+  expectedAt,
+  onExpectedChange,
   locationName,
   onOpen,
   onReceive,
@@ -324,6 +364,9 @@ function OrderRow({
 }: {
   order: PurchaseOrder
   late: boolean
+  /** The day the goods are due — written on the order, or counted from the lead time. */
+  expectedAt?: number
+  onExpectedChange: (value: string) => void
   locationName: string
   onOpen: () => void
   onReceive: () => void
@@ -365,6 +408,24 @@ function OrderRow({
           {t('{count} รายการ', { count: order.lines.length })}
           {order.invoiceNo ? ` · ${t('บิล')} ${order.invoiceNo}` : ''}
         </div>
+        {/* The day the supplier is to deliver. Editable in place while the goods are
+            still out — the supplier rings to say Thursday, not Tuesday, and the calendar
+            and the "late" flag follow the date written here. */}
+        {!done && !draft && (
+          <label className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+            <span>{t('กำหนดส่ง')}</span>
+            <input
+              type="date"
+              value={order.expectedAt !== undefined ? msToDateInput(order.expectedAt) : ''}
+              onChange={(e) => onExpectedChange(e.target.value)}
+              aria-label={t('กำหนดส่ง')}
+              className="min-h-9 rounded-md border border-line bg-surface px-2 text-xs text-ink"
+            />
+            {order.expectedAt === undefined && expectedAt !== undefined && (
+              <span className="text-ink-faint">{t('ตามระยะส่งของผู้ขาย: {date}', { date: formatThaiDate(expectedAt) })}</span>
+            )}
+          </label>
+        )}
       </div>
       <div className="flex shrink-0 gap-2">
         <Button variant="ghost" onClick={onOpen}>
@@ -449,6 +510,9 @@ function NewOrderModal({
   const [lines, setLines] = useState<Record<string, { qty: number; unit: string }>>({})
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
+  // The day the supplier is to deliver. Offered from their lead time; the person may say
+  // otherwise. Empty means unknown, and the lead time then stands in on the calendar.
+  const [expected, setExpected] = useState('')
   // Read once for the whole form, not once per line.
   const plainUnits = useEntryUnits()
 
@@ -481,6 +545,7 @@ function NewOrderModal({
         lines: chosen.map(([productId, l]) => ({ productId, qty: l.qty, entryUnit: l.unit })),
         products,
         actor,
+        ...(expected ? { expectedAt: dateInputToMs(expected) } : {}),
       })
       toast.success(t('สั่งของแล้ว'))
       onDone()
@@ -502,6 +567,8 @@ function NewOrderModal({
               onChange={(e) => {
                 setSupplierId(e.target.value)
                 setLines({})
+                const lead = suppliers.find((s) => s.id === e.target.value)?.leadTimeDays
+                setExpected(lead === undefined ? '' : msToDateInput(Date.now() + lead * 86_400_000))
               }}
             >
               <option value="">{t('— เลือกผู้ขาย —')}</option>
@@ -523,6 +590,9 @@ function NewOrderModal({
                 </option>
               ))}
             </Select>
+          </Field>
+          <Field label={t('วันที่ให้ส่งของ')} hint={t('ว่างไว้ = ยังไม่ทราบ ปฏิทินจะใช้ระยะส่งของผู้ขายแทน')}>
+            <Input type="date" value={expected} onChange={(e) => setExpected(e.target.value)} />
           </Field>
         </div>
 

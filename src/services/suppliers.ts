@@ -39,6 +39,10 @@ export interface SupplierInput {
   defaultLocationId?: string
   /** Days from order to delivery. Shown, never enforced. Undefined = unknown. */
   leadTimeDays?: number
+  /** Weekdays orders are placed, 0 = Sunday. Empty/undefined = any day. */
+  orderDays?: number[]
+  /** Time of day an order has to be in by, HH:mm. Undefined = none. */
+  cutoffTime?: string
 }
 
 function checkLeadTime(days: number | undefined): void {
@@ -46,6 +50,18 @@ function checkLeadTime(days: number | undefined): void {
   if (!Number.isInteger(days) || days < 0 || days > 365) {
     throw new AppError('ระยะเวลาส่งของต้องเป็นจำนวนวัน 0–365')
   }
+}
+
+/** Sunday-first weekday numbers, each once, in order — the shape the calendar reads. */
+function cleanOrderDays(days: number[] | undefined): number[] | undefined {
+  if (!days) return undefined
+  const out = [...new Set(days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort()
+  return out.length ? out : undefined
+}
+
+function checkCutoff(time: string | undefined): void {
+  if (time === undefined || time === '') return
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new AppError('เวลาตัดรอบต้องเป็น HH:mm')
 }
 
 /** Every supplier, once. ~20 documents. Called when the Suppliers screen opens. */
@@ -63,8 +79,9 @@ export async function createSupplier(input: SupplierInput): Promise<string> {
   const name = clean(input.name)
   if (!name) throw new AppError('กรุณากรอกชื่อผู้ขาย')
   checkLeadTime(input.leadTimeDays)
+  checkCutoff(input.cutoffTime)
   const now = Date.now()
-  return backend.add(COL.suppliers, {
+  const id = await backend.add(COL.suppliers, {
     name,
     contactNumber: clean(input.contactNumber),
     email: clean(input.email),
@@ -72,10 +89,15 @@ export async function createSupplier(input: SupplierInput): Promise<string> {
     ...(input.note?.trim() ? { note: clean(input.note) } : {}),
     ...(input.defaultLocationId ? { defaultLocationId: input.defaultLocationId } : {}),
     ...(input.leadTimeDays === undefined ? {} : { leadTimeDays: input.leadTimeDays }),
+    ...(cleanOrderDays(input.orderDays) ? { orderDays: cleanOrderDays(input.orderDays) } : {}),
+    ...(input.cutoffTime ? { cutoffTime: input.cutoffTime } : {}),
     active: true,
     createdAt: now,
     updatedAt: now,
   })
+  const written = await backend.getOne<Supplier>(COL.suppliers, id)
+  if (written) patchSupplierCache(id, written)
+  return id
 }
 
 export async function updateSupplier(
@@ -104,7 +126,26 @@ export async function updateSupplier(
     checkLeadTime(patch.leadTimeDays)
     next.leadTimeDays = patch.leadTimeDays === undefined ? DELETE_FIELD : patch.leadTimeDays
   }
+  if ('orderDays' in patch) {
+    const days = cleanOrderDays(patch.orderDays)
+    next.orderDays = days ?? DELETE_FIELD
+  }
+  if ('cutoffTime' in patch) {
+    checkCutoff(patch.cutoffTime)
+    next.cutoffTime = patch.cutoffTime ? patch.cutoffTime : DELETE_FIELD
+  }
   await backend.update(COL.suppliers, id, next)
+  if (cached) {
+    const cur = cached.find((s) => s.id === id)
+    if (cur) {
+      const merged: Record<string, unknown> = { ...cur }
+      for (const [k, v] of Object.entries(next)) {
+        if (v === DELETE_FIELD) delete merged[k]
+        else merged[k] = v
+      }
+      patchSupplierCache(id, merged as unknown as Supplier)
+    }
+  }
 }
 
 /**
@@ -126,6 +167,7 @@ export async function deleteSupplier(id: string, products: readonly Product[]): 
     if (p.supplierId === id) await updateProduct(p.id, { supplierId: undefined })
   }
   await backend.remove(COL.suppliers, id)
+  patchSupplierCache(id, null)
 }
 
 // ---------------------------------------------------------------- product links ----
@@ -284,6 +326,18 @@ export function invalidateSupplierCache(): void {
 // The list is one brand's. Switching brands must drop it, or the other brand's product
 // editor offers these names and files their ids onto its products.
 onBrandChange(invalidateSupplierCache)
+
+/**
+ * Fold one written supplier into the held list, so the calendar and the product editor
+ * see the change without the list being read again. A supplier not in the list yet (a
+ * create) is added; `null` removes.
+ */
+export function patchSupplierCache(id: string, row: Supplier | null): void {
+  if (!cached) return
+  const without = cached.filter((s) => s.id !== id)
+  cached = row ? [...without, row].sort((a, b) => a.name.localeCompare(b.name)) : without
+  announce()
+}
 
 export async function loadSuppliers(): Promise<Supplier[]> {
   if (cached) return cached

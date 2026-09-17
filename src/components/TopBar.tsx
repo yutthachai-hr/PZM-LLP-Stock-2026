@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { shortages } from '../lib/inventoryRules/lowStock'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../data/DataContext'
 import { useT } from '../i18n/I18nContext'
@@ -34,18 +35,11 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
   const box = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
 
-  const lowCount = useMemo(() => {
-    let n = 0
-    for (const p of products) {
-      for (const l of locations) {
-        // Same rule as the dashboard, so the bell and the list cannot disagree.
-        if (!tracksProduct(l.id, p.id)) continue
-        const min = minFor(p, l.id)
-        if (min > 0 && qtyAt(l.id, p.id) <= min) n++
-      }
-    }
-    return n
-  }, [products, locations, qtyAt, minFor, tracksProduct])
+  // Same rule as the dashboard and the calendar, so the badge and the lists cannot disagree.
+  const lowCount = useMemo(
+    () => shortages({ products, locations, qtyAt, minFor, tracksProduct }).length,
+    [products, locations, qtyAt, minFor, tracksProduct],
+  )
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase()

@@ -296,7 +296,7 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'name', 'contactNumber', 'email', 'type', 'active',
           'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'name', 'contactNumber', 'email', 'type', 'note',
-          'defaultLocationId', 'leadTimeDays',
+          'defaultLocationId', 'leadTimeDays', 'orderDays', 'cutoffTime',
           'active', 'createdAt', 'updatedAt'])
         && text(d.name, 200)
         && d.contactNumber is string && d.contactNumber.size() <= 40
@@ -308,7 +308,11 @@ service cloud.firestore {
         // Where this supplier's goods usually land, and how many days they take. Both are
         // defaults the automatic order offers; neither is a rule it enforces.
         && (!('defaultLocationId' in d) || text(d.defaultLocationId, 200))
-        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365));
+        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365))
+        // Which weekdays (0 = Sunday) an order may be placed, and the time of day it has to
+        // be in by. The calendar shows them as cut-offs; nothing refuses an order after one.
+        && (!('orderDays' in d) || (d.orderDays is list && d.orderDays.size() <= 7))
+        && (!('cutoffTime' in d) || text(d.cutoffTime, 5));
     }
 
     // A planned piece of work: a count, an audit, an expected delivery, a task.
@@ -399,7 +403,7 @@ service cloud.firestore {
         ])
         && d.keys().hasOnly([
           'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
-          'orderedAt', 'lines', 'invoiceNo', 'receivedAt', 'receivedBy', 'receivedByName',
+          'orderedAt', 'expectedAt', 'lines', 'invoiceNo', 'receivedAt', 'receivedBy', 'receivedByName',
           'movementDocNo', 'eventId', 'note',
           'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
@@ -427,6 +431,9 @@ service cloud.firestore {
     function orderLive(d) {
       return d.status in ['draft', 'ordered', 'received']
         && epochMs(d.orderedAt) && epochMs(d.updatedAt)
+        // When the supplier is to deliver — the day the order asked for, or the lead time
+        // counted from the order. The calendar's receiving entries hang off it.
+        && (!('expectedAt' in d) || epochMs(d.expectedAt))
         && d.lines is list && d.lines.size() > 0 && d.lines.size() <= 200
         && (!('invoiceNo' in d) || text(d.invoiceNo, 100))
         && (!('note' in d) || text(d.note, 2000))
@@ -653,7 +660,7 @@ service cloud.firestore {
      */
     function orderEdit() {
       return editedKeys().hasOnly([
-          'status', 'lines', 'invoiceNo', 'note', 'docNo',
+          'status', 'lines', 'invoiceNo', 'note', 'docNo', 'expectedAt',
           'receivedAt', 'receivedBy', 'receivedByName', 'movementDocNo', 'updatedAt',
           // Approving a draft resets the order date and signs it; sending records where
           // the sheet got to. Neither may be signed in someone else's name.
