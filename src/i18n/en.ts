@@ -793,7 +793,7 @@ export const EN: Record<string, string> = {
     'This dev server is connected to live data — use npm run demo',
 
   // ---- suppliers -------------------------------------------------------------------
-  ผู้ขาย: 'Suppliers',
+  ผู้ขาย: 'Supplier',
   'รายชื่อผู้ขายและสินค้าที่ซื้อจากแต่ละราย': 'Who we buy from, and what we buy from them',
   เพิ่มผู้ขาย: 'Add supplier',
   แก้ไขผู้ขาย: 'Edit supplier',
@@ -839,7 +839,7 @@ export const EN: Record<string, string> = {
   'เสร็จแล้ว': 'Done',
   เดือน: 'Month',
   สัปดาห์: 'Week',
-  รายการ: 'Agenda',
+  รายการ: 'Items',
   ก่อนหน้า: 'Previous',
   ถัดไป: 'Next',
   ทุกประเภท: 'All types',
@@ -1240,4 +1240,14 @@ export const EN: Record<string, string> = {
   'เวลาตัดรอบสั่ง': 'Order cut-off time',
   'ปฏิทินจะแสดง "ตัดรอบสั่ง" ในวันที่เลือก': 'The calendar shows a cut-off on each selected day',
   'เวลาตัดรอบต้องเป็น HH:mm': 'Cut-off time must be HH:mm',
+  // ---- purchasing polish (17 Sep 2026) ----
+  'ใบรับของ': 'Goods received note',
+  'รับจริง': 'Received',
+  'ผู้รับของ': 'Received by',
+  'ภาษาในใบ': 'Sheet language',
+  'คงเหลือตอนขอ': 'On hand when requested',
+  'คงเหลือทุกคลังตอนขอ': 'On hand everywhere when requested',
+  'ทุกคลัง {n}': 'all locations {n}',
+  'ผู้ขาย:': 'Supplier:',
+  'รายการตามวัน': 'Agenda',
 }

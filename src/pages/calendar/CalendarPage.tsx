@@ -449,7 +449,7 @@ export function CalendarPage() {
             <SegTab grow={false} label={t('เดือน')} active={view === 'month'} onClick={() => setView('month')} />
             <SegTab grow={false} label={t('สัปดาห์')} active={view === 'week'} onClick={() => setView('week')} />
             <SegTab grow={false} label={t('วัน')} active={view === 'day'} onClick={() => setView('day')} />
-            <SegTab grow={false} label={t('รายการ')} active={view === 'agenda'} onClick={() => setView('agenda')} />
+            <SegTab grow={false} label={t('รายการตามวัน')} active={view === 'agenda'} onClick={() => setView('agenda')} />
           </div>
           <div className="flex items-center gap-1">
             <IconButton label={t('ก่อนหน้า')} icon="arrowRight" flip onClick={() => shift(-1)} />

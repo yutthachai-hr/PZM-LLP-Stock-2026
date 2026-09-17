@@ -34,14 +34,15 @@ import {
 import { useSuppliers } from '../services/suppliers'
 import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
-import { PoSheet } from '../components/PoSheet'
+import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
 import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs } from '../lib/format'
-import { useT } from '../i18n/I18nContext'
+import { useI18n, useT, type Lang } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import type { Product, PurchaseOrder, Supplier } from '../types'
+import { looseMatch } from '../lib/search'
 
 /**
  * Orders out, and goods in.
@@ -522,7 +523,7 @@ function NewOrderModal({
     const q = search.trim().toLowerCase()
     return products
       .filter((p) => p.supplierId === supplierId && p.active !== false)
-      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      .filter((p) => looseMatch([p.name, p.sku], q))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [products, supplierId, search])
 
@@ -849,10 +850,14 @@ function OrderSheet({
   onClose: () => void
 }) {
   const t = useT()
+  const { lang } = useI18n()
   const toast = useToast()
   const { brand } = useBrand()
   const sheet = useRef<HTMLDivElement>(null)
   const [sharing, setSharing] = useState(false)
+  // The sheet's language, chosen here: a foreign supplier gets English, whatever the
+  // person sending reads the app in.
+  const [sheetLang, setSheetLang] = useState<Lang>(lang)
   // The company placing the order goes on the sheet itself, not on the buttons around it:
   // it is the one thing a supplier reading a photo of this needs that the order does not
   // otherwise carry, and one install serves two companies.
@@ -901,7 +906,8 @@ function OrderSheet({
   return (
     <Modal open onClose={onClose} title={t('ใบสั่งซื้อ {docNo}', { docNo: order.docNo })}>
       <div className="space-y-3">
-        <PoSheet order={order} locationName={locationName} company={company} ref={sheet} />
+        <SheetLangToggle value={sheetLang} onChange={setSheetLang} />
+        <PoSheet order={order} locationName={locationName} company={company} ref={sheet} lang={sheetLang} />
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {t('ปิด')}

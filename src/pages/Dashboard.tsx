@@ -22,6 +22,7 @@ import { ProductThumb } from '../components/ProductThumb'
 import { fmtMoney, fmtQty, formatThaiDateShort, todayMs } from '../lib/format'
 import type { Product, StockLocation } from '../types'
 import { useT } from '../i18n/I18nContext'
+import { looseMatch } from '../lib/search'
 
 const ALL = '__all__'
 const WEEK = 7 * 86_400_000
@@ -107,7 +108,7 @@ export function DashboardPage() {
     return products
       // Looking at one branch means looking at what that branch carries.
       .filter((p) => scope === ALL || tracksProduct(scope, p.id))
-      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      .filter((p) => looseMatch([p.name, p.sku], q))
       .map((p) => ({
         p,
         total: totalQtyOf(p),

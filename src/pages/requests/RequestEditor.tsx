@@ -33,7 +33,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
   const confirm = useConfirm()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { products, locations } = useData()
+  const { products, locations, qtyAt } = useData()
   const suppliers = useSuppliers()
   const plainUnits = useEntryUnits()
 
@@ -130,7 +130,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
     })
     if (!ok) return
     await run('submit', async () => {
-      const next = await S.submitRequest({ id: pr.id, ctx: { products, suppliers, locations }, actor })
+      const next = await S.submitRequest({ id: pr.id, ctx: { products, suppliers, locations, qtyAt }, actor })
       setPr(next)
       toast.success(t('ส่งให้หัวหน้าตรวจแล้ว'))
       // The parent decides editor vs review from the status, so tell it.

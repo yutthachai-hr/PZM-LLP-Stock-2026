@@ -8,6 +8,7 @@ import { useT } from '../../i18n/I18nContext'
 import { normaliseName, similarity } from '../../lib/productMatch'
 import { sameUnit } from '../../lib/units'
 import type { Product, Supplier } from '../../types'
+import { looseMatch, looseScore } from '../../lib/search'
 
 /**
  * Finding the thing to ask for, and how many.
@@ -96,6 +97,8 @@ function searchProducts(q: string, products: readonly Product[]): Product[] {
       if (sku === upper) score = 3
       else if (sku.startsWith(upper)) score = 2.5
       else if (name.includes(key)) score = 2 + similarity(key, name) / 10
+      // Spacing and word order forgiven: "siamfood salad" finds "SALAD (SIAM FOOD)".
+      else if (looseMatch([p.name, p.sku], raw)) score = 1.5 + looseScore([p.name, p.sku], raw) / 100
       else score = similarity(key, name)
       return { p, score }
     })

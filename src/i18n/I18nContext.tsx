@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 import { EN } from './en'
+import { setDateLanguage } from '../lib/format'
 
 // ---------------------------------------------------------------------------
 // Translation, gettext-style: the Thai copy IS the lookup key.
@@ -46,9 +47,14 @@ function fill(text: string, vars?: Record<string, string | number>): string {
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(initialLang)
+  const [lang, setLangState] = useState<Lang>(() => {
+    const l = initialLang()
+    setDateLanguage(l)
+    return l
+  })
 
   const setLang = useCallback((l: Lang) => {
+    setDateLanguage(l)
     setLangState(l)
     try {
       localStorage.setItem(LS_KEY, l)
@@ -69,6 +75,14 @@ export function useI18n(): I18nState {
   const ctx = useContext(Ctx)
   if (!ctx) throw new Error('useI18n must be used within I18nProvider')
   return ctx
+}
+
+/**
+ * A translator for a language other than the screen's — for a sheet drawn in the
+ * supplier's language while the person reads the app in their own.
+ */
+export function translatorFor(lang: Lang): TFn {
+  return (thai, vars) => fill(lang === 'en' ? (EN[thai] ?? thai) : thai, vars)
 }
 
 /** Shorthand for the common case of only needing the translate function. */

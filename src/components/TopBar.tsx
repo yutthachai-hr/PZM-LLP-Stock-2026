@@ -8,6 +8,7 @@ import type { Product } from '../types'
 import { Icon } from './Icon'
 import { LangButton } from './LangButton'
 import { ProductThumb } from './ProductThumb'
+import { looseScore } from '../lib/search'
 
 /**
  * The bar across the top of every screen: find a product, and see what is running out.
@@ -42,19 +43,18 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
   )
 
   const results = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const needle = q.trim()
     if (needle.length < 2) return []
-    const hits: Product[] = []
-    for (const p of products) {
-      // Hidden products are out of the catalogue's way; their history is still reachable
-      // from สินค้าคงคลัง with the "ที่ซ่อนไว้" filter.
-      if (p.active === false) continue
-      if (p.name.toLowerCase().includes(needle) || p.sku.toLowerCase().includes(needle)) {
-        hits.push(p)
-        if (hits.length >= MAX_RESULTS) break
-      }
-    }
-    return hits
+    // Loose: "siam food" finds SIAMFOOD, words match in any order, best matches first.
+    // Hidden products are out of the catalogue's way; their history is still reachable
+    // from สินค้าคงคลัง with the "ที่ซ่อนไว้" filter.
+    return products
+      .filter((p) => p.active !== false)
+      .map((p) => ({ p, score: looseScore([p.name, p.sku], needle) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name))
+      .slice(0, MAX_RESULTS)
+      .map((x) => x.p)
   }, [q, products])
 
   useEffect(() => setActive(0), [q])

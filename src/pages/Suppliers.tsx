@@ -37,6 +37,7 @@ import {
   type SupplierInput,
 } from '../services/suppliers'
 import type { Product, Supplier, SupplierItem, SupplierType } from '../types'
+import { looseMatch } from '../lib/search'
 
 // Sunday first, matching Date#getDay(). i18n-key
 const ORDER_DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] // i18n-key
@@ -149,11 +150,9 @@ export function SuppliersPage() {
         out.push({ supplier, products: mine, shown: mine })
         continue
       }
-      const supplierHit =
-        supplier.name.toLowerCase().includes(q) || supplier.email.toLowerCase().includes(q)
-      const hits = mine.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q),
-      )
+      // "SIAM FOOD" and "SIAMFOOD" are the same supplier to the person typing.
+      const supplierHit = looseMatch([supplier.name, supplier.email], q)
+      const hits = mine.filter((p) => looseMatch([p.name, p.sku], q))
       if (supplierHit) out.push({ supplier, products: mine, shown: mine })
       else if (hits.length) out.push({ supplier, products: mine, shown: hits })
     }

@@ -2,25 +2,38 @@ import dayjs from 'dayjs'
 
 // ---- Dates (Thai / Buddhist Era) ----
 // Business users read dates as Buddhist year (Gregorian + 543). e.g. 2026-07-15 => 15/07/2569.
+// With the interface in English the year is Gregorian: the owner's rule is that choosing EN
+// changes everything, and a foreign reader has no use for 2569.
 
 export function toBE(year: number): number {
   return year + 543
 }
 
-/** "15/07/2569" */
+let displayLang: 'th' | 'en' = 'th'
+
+/** Called by the language switch, so every date on every screen follows it. */
+export function setDateLanguage(lang: 'th' | 'en'): void {
+  displayLang = lang
+}
+
+function shownYear(year: number): number {
+  return displayLang === 'en' ? year : toBE(year)
+}
+
+/** "15/07/2569" — or "15/07/2026" in English */
 export function formatThaiDate(ms: number): string {
   const d = dayjs(ms)
   const dd = String(d.date()).padStart(2, '0')
   const mm = String(d.month() + 1).padStart(2, '0')
-  return `${dd}/${mm}/${toBE(d.year())}`
+  return `${dd}/${mm}/${shownYear(d.year())}`
 }
 
-/** "15/07/69" (2-digit BE year) */
+/** "15/07/69" (2-digit year) */
 export function formatThaiDateShort(ms: number): string {
   const d = dayjs(ms)
   const dd = String(d.date()).padStart(2, '0')
   const mm = String(d.month() + 1).padStart(2, '0')
-  const yy = String(toBE(d.year())).slice(-2)
+  const yy = String(shownYear(d.year())).slice(-2)
   return `${dd}/${mm}/${yy}`
 }
 
@@ -90,4 +103,14 @@ export function fmtMoney(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+/**
+ * A date the way a reader of that language expects it: Thai readers get the Buddhist
+ * year, English readers the Gregorian one. For sheets that leave the company.
+ */
+export function formatDateFor(ms: number, lang: 'th' | 'en'): string {
+  const d = dayjs(ms)
+  const year = lang === 'th' ? toBE(d.year()) : d.year()
+  return `${d.format('DD/MM')}/${year}`
 }
