@@ -26,7 +26,7 @@ describe('the Cloudflare configuration agrees with the app', () => {
     }
     expect(csp).toContain("frame-ancestors 'none'")
     // A cached service worker would keep showing the previous build after a deploy.
-    expect(headers).toMatch(/\/sw\.js\n\s+Cache-Control: public, max-age=0, must-revalidate/)
+    expect(headers).toMatch(/\/sw\.js\r?\n\s+Cache-Control: public, max-age=0, must-revalidate/)
   })
 
   test('the image host pins the Firebase project and the limits the app assumes', () => {
