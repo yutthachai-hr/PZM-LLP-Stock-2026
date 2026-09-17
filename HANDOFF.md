@@ -218,7 +218,7 @@ npm run i18n:check      # ครบทุกข้อความ
 
 ## 10. ปฏิทินคลัง + งาน + แจ้งเตือน — โครงการ 4 เฟส (เริ่ม 17 ก.ย.) **ทำถึง Phase A แล้ว**
 
-แผนเต็มอยู่ที่ `C:\Users\Yutthachai\.claude\plans\purchase-workflow-shiny-alpaca.md` (เครื่องเจ้าของ) — สรุปสาระสำคัญไว้ที่นี่เพื่อให้ session/account อื่นทำต่อได้
+แผนเต็มอยู่ใน repo ที่ `docs/PLAN-inventory-calendar.md` — สรุปสาระสำคัญไว้ที่นี่เพื่อให้ session/account อื่นทำต่อได้
 
 **สเปกเจ้าของ (ย่อ)**: ปฏิทินเดือน/สัปดาห์/วัน/รายการ + filter (คลัง, ประเภท, สถานะ, ความสำคัญ, ผู้ขาย, ค้นหา); event ประเภท นับสต๊อก / รับของ / จัดซื้อ / ใกล้หมด / หมด / ปรับสต๊อก / ของเสีย / ตัดรอบผู้ขาย / แนะนำสั่งซื้อ / งาน; **ห้าม audit และ transfer**; expiry เลื่อนออก (ยังไม่มี batch/lot); drawer รายละเอียด + ปุ่มตามสิทธิ์; ตารางนับสต๊อกอัตโนมัติ (config ใน Settings); workflow scheduled→pending→inProgress→(waitingApproval)→completed / overdue; แจ้งเตือนในแอป (bell, priorities CRITICAL/HIGH/MEDIUM/INFO, preferences, escalation, daily brief, weekly summary); reorder recommendation + estimated stockout; threshold ปรับสต๊อก/ของเสีย; ห้ามสร้าง event/PR/PO ซ้ำ (deterministic id); ห้าม hardcode; ไม่ให้งาน background ผูกกับการเปิดแอป; วิเคราะห์โควตา Firebase ไม่ให้ชน 50k reads/วัน
 
