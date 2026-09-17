@@ -38,7 +38,8 @@ export function DemoBanner() {
 /**
  * Says when a development server is pointed at the real warehouse.
  *
- * `npm run demo` sets VITE_DEMO_MODE through .env.demo, and the flag is read at build time.
+ * `npm run demo` sets VITE_DEMO_MODE through .env.demo (the `demo` branch on Cloudflare
+ * through vite.config.ts), and the flag is read at build time.
  * On 2026-09-11 a merge rewrote vite.config.ts and .env.demo at once; Vite auto-restarted
  * on the config change and came back **without the mode flag**. The dev server was then in
  * Cloud mode against pzm-stock-x5, and the only sign was the absence of the demo pill —

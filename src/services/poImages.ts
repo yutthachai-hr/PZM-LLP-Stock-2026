@@ -6,17 +6,17 @@ import { AppError } from '../i18n/AppError'
  *
  * A LINE image message is two URLs, not a file: LINE's servers fetch the picture from
  * wherever it is hosted, so the picture has to sit on a public HTTPS address for a while.
- * Firebase's free plan gives this project no Storage bucket, so the site's own serverless
- * function keeps it (netlify/functions/po-image.ts) — under a random, unguessable token,
- * for a few days, then gone.
+ * Firebase's free plan gives this project no Storage bucket, so the site's own Pages
+ * Function keeps it (functions/api/po-image.ts, in Cloudflare KV) — under a random,
+ * unguessable token, for a few days, then gone.
  *
  * The caller proves who they are with their Firebase ID token; the function checks it
  * against Google's public keys. A demo build has no Firebase user, so a demo deployment
  * accepts a shared key instead (VITE_PO_IMAGE_DEMO_KEY) — never set on production.
  *
- * Kept deliberately small and behind one function so that moving the host (to Cloudflare
- * Pages Functions + KV, which the owner is planning) is a change to this file and the
- * function, and to nothing that decides what an order is.
+ * Kept deliberately small and behind one function so that moving the host (Netlify Blobs
+ * until 17 Sep 2026, Cloudflare KV since) is a change to this file and the function, and
+ * to nothing that decides what an order is.
  */
 
 export interface HostedImage {
@@ -28,20 +28,9 @@ export interface HostedImage {
   expiresAt: number
 }
 
-/**
- * Where the function lives on each host. The same code is deployed to Netlify (functions
- * under /.netlify/functions/) and to Cloudflare Pages (functions under /api/), and
- * Cloudflare Pages will not take build-time variables from its dashboard once a
- * wrangler.toml exists — so the host is recognised here, and VITE_PO_IMAGE_HOST only
- * overrides it.
- */
-function defaultHost(): string {
-  if (typeof location !== 'undefined' && /\.pages\.dev$/.test(location.hostname)) return '/api/po-image'
-  return '/.netlify/functions/po-image'
-}
-
+/** Where the function lives: this site's own /api/po-image unless VITE_PO_IMAGE_HOST says otherwise. */
 function host(): string {
-  return (import.meta.env.VITE_PO_IMAGE_HOST ?? '').trim() || defaultHost()
+  return (import.meta.env.VITE_PO_IMAGE_HOST ?? '').trim() || '/api/po-image'
 }
 
 /**

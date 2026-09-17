@@ -1,7 +1,6 @@
-# Cloudflare Pages headers — the same policy as netlify.toml, in the format Pages reads.
-# scripts/cf-postbuild.mjs copies this into dist/ only when building on Cloudflare
-# (CF_PAGES=1), so Netlify never sees it and there is one policy, not two.
-# tests/image-host.test.ts pins the CSP line here to the one in netlify.toml.
+# Cloudflare Pages headers. Vite copies this file into dist/ as-is and Pages reads it.
+# tests/image-host.test.ts pins the parts the app depends on (the LINE hosts in the CSP,
+# the no-cache rule for the service worker).
 
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate

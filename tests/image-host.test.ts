@@ -1,7 +1,6 @@
-// The two image hosts (Netlify Blobs today, Cloudflare KV when the site moves) and the
-// two header files must say the same thing. Nothing runs them here — they run on their
-// platforms — but the pieces the app relies on are pinned so a change to one is a failing
-// test until the other follows.
+// The picture host (functions/*, Cloudflare KV) and the headers file are not run here —
+// they run on Cloudflare — but the pieces the app relies on are pinned so that a change
+// to one side is a failing test until the other follows.
 //
 //   npm test
 
@@ -10,27 +9,39 @@ import { describe, expect, test } from 'vitest'
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
-describe('the Cloudflare and Netlify configurations agree', () => {
-  test('the Content-Security-Policy is the same on both hosts', () => {
-    const netlify = read('netlify.toml').match(/Content-Security-Policy = '''([\s\S]*?)'''/)![1].trim()
-    const cf = read('cloudflare/_headers').match(/Content-Security-Policy: (.*)/)![1].trim()
-    expect(cf).toBe(netlify)
+describe('the Cloudflare configuration agrees with the app', () => {
+  test('the headers file reaches dist/ and the CSP admits everything LINE needs', () => {
+    const headers = read('public/_headers')
+    const csp = headers.match(/Content-Security-Policy: (.*)/)![1]
+    // The LIFF SDK loads its client-features script and wording from these two hosts; the
+    // picker is opened on liff.line.me / access.line.me; api.line.me answers the SDK.
+    for (const host of [
+      'https://static.line-scdn.net',
+      'https://liffsdk.line-scdn.net',
+      'https://api.line.me',
+      'https://liff.line.me',
+      'https://access.line.me',
+    ]) {
+      expect(csp).toContain(host)
+    }
+    expect(csp).toContain("frame-ancestors 'none'")
+    // A cached service worker would keep showing the previous build after a deploy.
+    expect(headers).toMatch(/\/sw\.js\n\s+Cache-Control: public, max-age=0, must-revalidate/)
   })
 
-  test('both image hosts pin the same Firebase project and the same limits', () => {
-    const netlify = read('netlify/functions/po-image.mts')
+  test('the image host pins the Firebase project and the limits the app assumes', () => {
     const cf = read('functions/_poImage.ts')
-    for (const src of [netlify, cf]) {
-      expect(src).toContain("PROJECT_ID = 'pzm-stock-x5'")
-      expect(src).toContain('MAX_BYTES = 1_500_000')
-    }
-    expect(netlify).toContain('TTL_DAYS = 7')
+    expect(cf).toContain("PROJECT_ID = 'pzm-stock-x5'")
+    expect(cf).toContain('MAX_BYTES = 1_500_000')
     expect(cf).toContain('TTL_SECONDS = 7 * 86_400')
   })
 
-  test('the GET route for a hosted picture is /po/<token>.jpg on both', () => {
-    expect(read('netlify/functions/po-image.mts')).toContain("'/po/:token'")
+  test('the app posts to /api/po-image and LINE fetches /po/<token>.jpg', () => {
+    expect(read('src/services/poImages.ts')).toContain("'/api/po-image'")
     expect(read('functions/po/[token].ts')).toContain('/^[0-9a-f]{32}$/')
-    expect(read('src/services/poImages.ts')).toContain('/.netlify/functions/po-image')
+  })
+
+  test('the demo branch builds in demo mode from the Cloudflare branch name', () => {
+    expect(read('vite.config.ts')).toContain("process.env.CF_PAGES_BRANCH === 'demo'")
   })
 })

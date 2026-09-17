@@ -1,21 +1,19 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 /**
- * Order-sheet picture hosting for Cloudflare Pages — the same contract as
- * netlify/functions/po-image.mts, over a KV namespace instead of Netlify Blobs.
+ * Order-sheet picture hosting: a Pages Function over a KV namespace. (Until 17 Sep 2026
+ * the same contract ran on Netlify Blobs; that implementation is gone.)
  *
  *   POST /api/po-image?kind=original|preview&po=<tag>   (see api/po-image.ts)
  *   GET  /po/<token>.jpg                                 (see po/[token].ts)
  *
- * The app is told where to POST through VITE_PO_IMAGE_HOST=/api/po-image on this host;
- * the GET path is the same on both hosts, so the URLs handed to LINE never change shape.
+ * The app POSTs to /api/po-image (src/services/poImages.ts) and hands LINE the GET URL.
  *
  * KV gives the pictures a real TTL (`expirationTtl`), so unlike the Blobs version there
  * is no lazy expiry: an expired key is simply gone. The KV free plan allows 1,000 writes
  * a day — one sheet is two writes (original + preview), so that is 500 sheets a day.
  *
- * Nothing in the app knows which host it is on. Keep the two implementations in step:
- * `tests/image-host.test.ts` pins the shared constants against each other.
+ * `tests/image-host.test.ts` pins the constants the app relies on.
  */
 
 export interface Env {

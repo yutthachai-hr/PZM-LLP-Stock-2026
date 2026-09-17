@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// The `demo` branch on Cloudflare Pages is the public demo: browser storage only, never the
+// live Firebase project. Pages sets CF_PAGES_BRANCH while building and, with a
+// wrangler.toml present, takes no plain build variables from its dashboard — so the flag
+// is derived here. Locally `npm run demo` sets it through .env.demo instead.
+if (process.env.CF_PAGES_BRANCH === 'demo') process.env.VITE_DEMO_MODE = '1'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [

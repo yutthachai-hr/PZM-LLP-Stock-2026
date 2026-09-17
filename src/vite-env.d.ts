@@ -14,7 +14,7 @@ interface ImportMetaEnv {
   readonly VITE_LIFF_ID?: string
   /**
    * Where order-sheet pictures are hosted for LINE to fetch. Defaults to this site's own
-   * function (`/.netlify/functions/po-image`). Read through src/services/poImages.ts.
+   * Pages Function (`/api/po-image`). Read through src/services/poImages.ts.
    */
   readonly VITE_PO_IMAGE_HOST?: string
   /**
