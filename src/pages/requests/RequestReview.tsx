@@ -202,7 +202,18 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                 <span className="text-xs text-ink-soft">{t('{count} รายการ', { count: g.items.length })}</span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className={`w-full table-fixed text-sm ${reviewing ? 'min-w-[980px]' : 'min-w-[640px]'}`}>
+                  {/* One table per supplier, so the widths are pinned here or every table
+                      sizes its own columns and the numbers zigzag down the page. */}
+                  <colgroup>
+                    <col />
+                    <col className="w-20" />
+                    <col className={reviewing ? 'w-32' : 'w-20'} />
+                    <col className="w-20" />
+                    {reviewing && <col className="w-48" />}
+                    <col className={reviewing ? 'w-48' : 'w-40'} />
+                    {reviewing && <col className="w-24" />}
+                  </colgroup>
                   <thead className="text-left text-xs text-ink-soft">
                     <tr>
                       <th className="px-4 py-2">{t('สินค้า')}</th>
@@ -218,7 +229,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                     {g.items.map((item) => (
                       <tr key={item.idx} className="border-t border-line align-top">
                         <td className="px-4 py-2">
-                          <div className="text-ink">{item.productName}</div>
+                          <div className="break-words text-ink">{item.productName}</div>
                           <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                             <span className="doc-no">{item.sku}</span>
                             {item.managerAdded && <Badge color="blue">{t('หัวหน้าเพิ่ม')}</Badge>}
