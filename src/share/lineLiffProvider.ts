@@ -30,12 +30,13 @@ import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './Purcha
  * in the client bundle). VITE_LIFF_ID still overrides, for trying a new app before it is
  * listed here.
  *
- * The demo branch deploys to demo.pzmstock.pages.dev and is listed with the same app:
- * the share target picker works there inside the LINE app, but LINE Login from an outside
- * browser returns to the production host (the one Endpoint URL). Good enough for a demo.
+ * Production is the "la mania" app under the owner's "Main Stock" provider (LINE Login
+ * channel 2011611102); the demo branch has its own app under "LLPZM Stock" (channel
+ * 2011602857). The owner keeps the two apart on purpose (17 Sep 2026) — do not point both
+ * hosts at one app.
  */
 const LIFF_BY_HOST: Record<string, string> = {
-  'pzmstock.pages.dev': '2011602857-k9K8Zplx',
+  'pzmstock.pages.dev': '2011611102-JhUfXMIe',
   'demo.pzmstock.pages.dev': '2011602857-k9K8Zplx',
 }
 

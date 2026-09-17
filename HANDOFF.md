@@ -179,7 +179,7 @@ npm run i18n:check      # ครบทุกข้อความ
 | Demo | `https://demo.pzmstock.pages.dev` ← branch `demo` — **demo mode มาจากชื่อ branch** (`vite.config.ts`: `CF_PAGES_BRANCH === 'demo'` → `VITE_DEMO_MODE=1`) ใช้ browser storage ล้วน ไม่แตะ Firebase |
 | รูป PO | `functions/api/po-image.ts` + `functions/po/[token].ts` → KV `po-images` (`227ca0f947374f5d9ddf9752b7ea506c`, binding `PO_IMAGES` ใน `wrangler.toml`) หมดอายุ 7 วันเอง; ฟรี 1,000 write/วัน = ~500 ใบ/วัน |
 | Header/CSP | `public/_headers` (Vite คัดลอกเข้า `dist/` เอง) — `tests/image-host.test.ts` ล็อกโฮสต์ LINE ใน CSP และ no-cache ของ `sw.js` |
-| LIFF | `src/share/lineLiffProvider.ts` `LIFF_BY_HOST`: `pzmstock.pages.dev` และ `demo.pzmstock.pages.dev` → `2011602857-k9K8Zplx` — **Endpoint URL ของ LIFF app ต้องเป็น `https://pzmstock.pages.dev`** (LIFF app มี Endpoint ได้อันเดียว; บนเดโม picker ใช้ได้ในแอป LINE แต่ LINE Login จากเบราว์เซอร์นอกจะกลับไปที่ production) |
+| LIFF | `src/share/lineLiffProvider.ts` `LIFF_BY_HOST` — **production** `pzmstock.pages.dev` → `2011611102-JhUfXMIe` (app "la mania", provider **Main Stock**, channel 2011611102, Endpoint = `https://pzmstock.pages.dev`); **demo** `demo.pzmstock.pages.dev` → `2011602857-k9K8Zplx` (app "llpzm stock", provider LLPZM Stock, channel 2011602857, Endpoint = `https://demo.pzmstock.pages.dev`). เจ้าของแยกสองแอปนี้โดยตั้งใจ (17 ก.ย.) — shareTargetPicker เปิดอยู่ทั้งสอง channel |
 | Firebase | Authorized domains มี `pzmstock.pages.dev` แล้ว (เดโมไม่ต้อง — ไม่ใช้ Firebase) |
 | Node | `.node-version` = 22 |
 
