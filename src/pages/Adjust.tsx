@@ -20,6 +20,7 @@ import { dateInputToMs, fmtQty, msToDateInput, todayMs } from '../lib/format'
 import { ADJUST_REASONS, type Product } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
+import { looseMatch, looseScore } from '../lib/search'
 
 export function AdjustPage() {
   const t = useT()
@@ -53,7 +54,8 @@ export function AdjustPage() {
       // A hidden product is one nobody should be filing against any more. Unhide it in
       // สินค้าคงคลัง if it turns out they should.
       .filter((p) => p.active !== false)
-      .filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      .filter((p) => looseMatch([p.name, p.sku], q))
+      .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
       .slice(0, 8)
   }, [search, products])
 

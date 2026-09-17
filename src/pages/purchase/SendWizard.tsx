@@ -5,9 +5,9 @@ import { brandDef } from '../../brand/brand'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
-import { PoSheet } from '../../components/PoSheet'
+import { PoSheet, SheetLangToggle } from '../../components/PoSheet'
 import { Badge, Button, Modal } from '../../components/ui'
-import { useT } from '../../i18n/I18nContext'
+import { useI18n, useT, type Lang } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
 import { imageHostAvailable, uploadPoImage } from '../../services/poImages'
@@ -40,6 +40,7 @@ export function SendWizard({
   onClose: () => void
 }) {
   const t = useT()
+  const { lang: screenLang } = useI18n()
   const toast = useToast()
   const { user } = useAuth()
   const { brand } = useBrand()
@@ -50,6 +51,7 @@ export function SendWizard({
   const [provider, setProvider] = useState<PurchaseShareProvider | null>(null)
   const [currentId, setCurrentId] = useState<string | null>(pending[0]?.id ?? null)
   const [pageIdx, setPageIdx] = useState(0)
+  const [sheetLang, setSheetLang] = useState<Lang>(screenLang)
   const [busy, setBusy] = useState<'' | 'render' | 'share'>('')
   const [askOutcome, setAskOutcome] = useState(false)
   const sheet = useRef<HTMLDivElement>(null)
@@ -164,6 +166,7 @@ export function SendWizard({
           {pages.length > 1 && <Badge color="amber">{t('รูปที่ {n} จาก {of}', { n: page.n, of: page.of })}</Badge>}
           {current.shareStatus === 'failed' && <Badge color="red">{t('ครั้งก่อนส่งไม่สำเร็จ')}</Badge>}
         </div>
+        <SheetLangToggle value={sheetLang} onChange={setSheetLang} />
         <PoSheet
           order={current}
           lines={pages[pageIdx] ?? current.lines}
@@ -172,6 +175,7 @@ export function SendWizard({
           page={page}
           ref={sheet}
           id="send-sheet"
+          lang={sheetLang}
         />
         {askOutcome ? (
           <div className="rounded-lg border border-line bg-sunken p-3">

@@ -36,7 +36,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
   const navigate = useNavigate()
   const { user } = useAuth()
   const { brand } = useBrand()
-  const { products, locations, locationById } = useData()
+  const { products, locations, locationById, qtyAt } = useData()
   const suppliers = useSuppliers()
 
   const [pr, setPrState] = useState(initial)
@@ -202,11 +202,12 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                 <span className="text-xs text-ink-soft">{t('{count} รายการ', { count: g.items.length })}</span>
               </div>
               <div className="overflow-x-auto">
-                <table className={`w-full table-fixed text-sm ${reviewing ? 'min-w-[980px]' : 'min-w-[640px]'}`}>
+                <table className={`w-full table-fixed text-sm ${reviewing ? 'min-w-[1080px]' : 'min-w-[720px]'}`}>
                   {/* One table per supplier, so the widths are pinned here or every table
                       sizes its own columns and the numbers zigzag down the page. */}
                   <colgroup>
                     <col />
+                    <col className="w-28" />
                     <col className="w-20" />
                     <col className={reviewing ? 'w-32' : 'w-20'} />
                     <col className="w-20" />
@@ -217,6 +218,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                   <thead className="text-left text-xs text-ink-soft">
                     <tr>
                       <th className="px-4 py-2">{t('สินค้า')}</th>
+                      <th className="px-2 py-2 text-right">{t('คงเหลือ')}</th>
                       <th className="px-2 py-2 text-right">{t('ขอ')}</th>
                       <th className="px-2 py-2 text-right">{t('อนุมัติ')}</th>
                       <th className="px-2 py-2">{t('หน่วย')}</th>
@@ -236,6 +238,29 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                             {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                             {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}
                           </div>
+                        </td>
+                        {/* What was on the shelf when this was sent for review — at the
+                            request's warehouse, with the figure across every location
+                            beneath. A draft shows the live balance instead, marked so. */}
+                        <td className="num px-2 py-2 text-right">
+                          {(() => {
+                            const live = item.stockAtSubmit === undefined
+                            const here = live ? qtyAt(pr.locationId, item.productId) : item.stockAtSubmit
+                            const total = live
+                              ? locations.filter((l) => l.active !== false).reduce((n, l) => n + qtyAt(l.id, item.productId), 0)
+                              : item.stockTotalAtSubmit
+                            return (
+                              <>
+                                <span className={`font-semibold ${here !== undefined && here <= 0 ? 'text-out' : 'text-ink'}`}>
+                                  {here === undefined ? '—' : fmtQty(here)}
+                                </span>
+                                {total !== undefined && total !== here && (
+                                  <span className="block text-xs text-ink-faint">{t('ทุกคลัง {n}', { n: fmtQty(total) })}</span>
+                                )}
+                                {live && <span className="block text-[10px] text-ink-faint">{t('ปัจจุบัน')}</span>}
+                              </>
+                            )
+                          })()}
                         </td>
                         <td className="num px-2 py-2 text-right text-ink-soft">{item.requestedQty === null ? '—' : fmtQty(item.requestedQty)}</td>
                         <td className="px-2 py-2 text-right">
@@ -346,7 +371,9 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                     </Button>
                   </>
                 )}
-                {(pr.status === 'approved' || pr.status === 'poCreated') && (
+                {/* A sheet of the request as it stands, at any stage — the manager takes
+                    the pending one to the phone or the printer while deciding. */}
+                {(
                   <>
                     <Button variant="secondary" onClick={() => void exportFile('pdf')} disabled={!!busy}>
                       <Icon name="download" size={16} />

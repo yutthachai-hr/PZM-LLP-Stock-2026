@@ -169,6 +169,24 @@ describe('submitting', () => {
     const other = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 5 }])
     await expect(S.submitRequest({ id: other.id, ctx, actor: OTHER_STAFF })).rejects.toThrow()
   })
+
+  test('freezes what was on the shelf that day, here and everywhere, for the manager to weigh the ask against', async () => {
+    // The owner's rule: the review compares against the balance of the month the request
+    // was opened in, never a figure borrowed from later. So it is written at submit time.
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 5 }])
+    const balances: Record<string, number> = { [`${MAIN}__p-redoak`]: 3, 'loc-branch__p-redoak': 4 }
+    const qtyAt = (loc: string, pid: string) => balances[`${loc}__${pid}`] ?? 0
+    const withBranch = { ...ctx, locations: [...locations, { id: 'loc-branch', name: 'B', type: 'branch' as const, active: true, createdAt: 1 }], qtyAt }
+    const sent = await S.submitRequest({ id: pr.id, ctx: withBranch, actor: STAFF })
+    expect(sent.items[0]).toMatchObject({ stockAtSubmit: 3, stockTotalAtSubmit: 7 })
+    // Later movements do not touch it.
+    balances[`${MAIN}__p-redoak`] = 0
+    expect((await S.getRequest(pr.id))!.items[0].stockAtSubmit).toBe(3)
+    // Without balances to hand (older callers), nothing is written.
+    const bare = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 5 }])
+    const sentBare = await S.submitRequest({ id: bare.id, ctx, actor: STAFF })
+    expect(sentBare.items[0].stockAtSubmit).toBeUndefined()
+  })
 })
 
 describe('the manager reviews', () => {

@@ -7,6 +7,7 @@ import { Input } from './ui'
 import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
+import { looseMatch, looseScore } from '../lib/search'
 
 export interface Line {
   productId: string
@@ -73,9 +74,8 @@ export function LineBuilder({
       // สินค้าคงคลัง if it turns out they should.
       .filter((p) => p.active !== false)
       .filter((p) => !chosen.has(p.id))
-      .filter(
-        (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q),
-      )
+      .filter((p) => looseMatch([p.name, p.sku], q))
+      .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
       .slice(0, 8)
   }, [search, products, lines])
 

@@ -40,6 +40,7 @@ import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
+import { looseMatch } from '../lib/search'
 
 type SearchIn = 'all' | 'name' | 'sku'
 type StockStatus = 'all' | 'low' | 'out' | 'in' | 'hidden'
@@ -135,13 +136,9 @@ export function ProductsPage() {
     const q = search.trim().toLowerCase()
     const matches = (p: Product) => {
       if (!q) return true
-      if (searchIn === 'name') return p.name.toLowerCase().includes(q)
-      if (searchIn === 'sku') return p.sku.toLowerCase().includes(q)
-      return (
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q)
-      )
+      if (searchIn === 'name') return looseMatch([p.name], q)
+      if (searchIn === 'sku') return looseMatch([p.sku], q)
+      return looseMatch([p.name, p.sku, p.category], q)
     }
     const inStatus = (p: Product) => {
       if (status === 'all' || status === 'hidden') return true

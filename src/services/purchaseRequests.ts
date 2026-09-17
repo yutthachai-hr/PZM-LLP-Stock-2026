@@ -446,7 +446,13 @@ export function blockingIssues(
 /** draft | returned → pendingApproval. Sets every line's approved quantity to the requested one. */
 export async function submitRequest(params: {
   id: string
-  ctx: { products: readonly Product[]; suppliers: readonly Supplier[]; locations: readonly StockLocation[] }
+  ctx: {
+    products: readonly Product[]
+    suppliers: readonly Supplier[]
+    locations: readonly StockLocation[]
+    /** Base-unit balance at a location, for the snapshot the manager reviews against. */
+    qtyAt?: (locationId: string, productId: string) => number
+  }
   actor: Actor
 }): Promise<PurchaseRequest> {
   return mutate(params.id, (pr) => {
@@ -459,7 +465,18 @@ export async function submitRequest(params: {
     const issues = blockingIssues(pr, params.ctx, (i) => i.requestedQty)
     if (issues.length) throw new AppError('ส่งไม่ได้: {what}', { what: issues[0] })
     const resubmit = pr.status === 'returned'
-    const items = pr.items.map((i) => (i.removed ? i : { ...i, approvedQty: i.requestedQty ?? i.approvedQty ?? 0 }))
+    const qtyAt = params.ctx.qtyAt
+    const activeLocations = params.ctx.locations.filter((l) => l.active !== false)
+    const snapshot = (productId: string) =>
+      qtyAt
+        ? {
+            stockAtSubmit: qtyAt(pr.locationId, productId),
+            stockTotalAtSubmit: activeLocations.reduce((n, l) => n + qtyAt(l.id, productId), 0),
+          }
+        : {}
+    const items = pr.items.map((i) =>
+      i.removed ? i : { ...i, approvedQty: i.requestedQty ?? i.approvedQty ?? 0, ...snapshot(i.productId) },
+    )
     const { returnReason: _r, ...rest } = pr
     void _r
     return {

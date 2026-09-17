@@ -570,6 +570,14 @@ export interface PurchaseRequestItem {
   approvedQty?: number
   managerAdded?: boolean
   note?: string
+  /**
+   * The balance when the request was sent for review — at the request's warehouse and
+   * across every location — so the manager weighs the ask against what was on the shelf
+   * that day, not against a number that has moved since. Written once, at submit; the
+   * owner's rule is that a review never borrows another month's figure.
+   */
+  stockAtSubmit?: number
+  stockTotalAtSubmit?: number
   /** Taken out by a manager — kept, not deleted, so the review still shows it. */
   removed?: { by: string; byName: string; at: number; reason: string }
 }

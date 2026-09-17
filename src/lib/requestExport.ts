@@ -2,6 +2,7 @@ import { exportExcel, exportReportPdf } from './export'
 import { fmtQty, formatThaiDate } from './format'
 import { liveItems } from './purchaseRequestStatus'
 import type { PurchaseRequest, PurchaseRequestItem } from '../types'
+import { PR_STATUS_KEYS } from './purchaseRequestStatus'
 
 /**
  * A purchase request as a file — the whole request, grouped by supplier, with the
@@ -34,6 +35,8 @@ export function requestRows(pr: PurchaseRequest, locationName: string, t: T): Re
         [t('ผู้ขาย')]: g.supplierName,
         [t('รหัสสินค้า')]: i.sku,
         [t('สินค้า')]: i.productName,
+        [t('คงเหลือตอนขอ')]: i.stockAtSubmit ?? '',
+        [t('คงเหลือทุกคลังตอนขอ')]: i.stockTotalAtSubmit ?? '',
         [t('จำนวนที่ขอ')]: i.requestedQty ?? '',
         [t('จำนวนที่อนุมัติ')]: i.approvedQty ?? '',
         [t('หน่วย')]: i.entryUnit ?? i.unit,
@@ -61,6 +64,7 @@ export function exportRequestPdf(pr: PurchaseRequest, company: string, locationN
         g.supplierName,
         i.productName,
         i.sku,
+        i.stockAtSubmit === undefined ? '-' : fmtQty(i.stockAtSubmit),
         i.requestedQty === null ? '-' : fmtQty(i.requestedQty),
         i.approvedQty === undefined ? '-' : fmtQty(i.approvedQty),
         i.entryUnit ?? i.unit,
@@ -76,10 +80,10 @@ export function exportRequestPdf(pr: PurchaseRequest, company: string, locationN
       `${t('ผู้ขอ')}: ${pr.requestedByName}`,
       pr.approvedByName
         ? `${t('ผู้อนุมัติ')}: ${pr.approvedByName} · ${t('วันที่อนุมัติ')} ${pr.approvedAt ? formatThaiDate(pr.approvedAt) : ''}`
-        : `${t('สถานะ')}: ${pr.status}`,
+        : `${t('สถานะ')}: ${t(PR_STATUS_KEYS[pr.status])}`,
       ...(pr.approvalNote ? [`${t('หมายเหตุการอนุมัติ')}: ${pr.approvalNote}`] : []),
     ],
-    head: [t('ผู้ขาย'), t('สินค้า'), t('รหัสสินค้า'), t('จำนวนที่ขอ'), t('จำนวนที่อนุมัติ'), t('หน่วย'), t('หมายเหตุ')],
+    head: [t('ผู้ขาย'), t('สินค้า'), t('รหัสสินค้า'), t('คงเหลือ'), t('จำนวนที่ขอ'), t('จำนวนที่อนุมัติ'), t('หน่วย'), t('หมายเหตุ')],
     body,
   })
 }
