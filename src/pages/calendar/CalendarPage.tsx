@@ -101,6 +101,8 @@ export function CalendarPage() {
   const [editing, setEditing] = useState<StockEvent | null>(null)
   const [creating, setCreating] = useState(false)
   const [newStart, setNewStart] = useState<number | null>(null)
+  // On a phone the selects fold behind one button, so the lists come first.
+  const [showFilters, setShowFilters] = useState(false)
 
   // Opened from a dashboard tile: ?filter=today|attention|tasks|purchasing|stock — the
   // list view with that filter on, then the parameter is dropped.
@@ -136,7 +138,7 @@ export function CalendarPage() {
       if (quick === 'tasks' && !(i.kind === 'task' && isOpen(i))) return false
       if (quick === 'purchasing' && !isPurchasing(i)) return false
       if (quick === 'stock' && !isStock(i)) return false
-      if (quick === 'completed' && i.status !== 'completed') return false
+      if (quick === 'completed' && !(i.status === 'completed' && i.kind !== 'cutoff')) return false
       if (q) {
         const product = i.productId ? productById(i.productId) : undefined
         const fields = [
@@ -162,7 +164,8 @@ export function CalendarPage() {
       tasks: feed.items.filter((i) => i.kind === 'task' && isOpen(i)).length,
       purchasing: feed.items.filter((i) => isPurchasing(i) && isOpen(i)).length,
       stock: feed.items.filter(isStock).length,
-      completed: feed.items.filter((i) => i.status === 'completed').length,
+      // A cut-off that has passed is over, not achieved; it does not count as done.
+      completed: feed.items.filter((i) => i.status === 'completed' && i.kind !== 'cutoff').length,
     }),
     [feed.items, now],
   )
@@ -226,8 +229,9 @@ export function CalendarPage() {
     />
   )
 
+  const filtersOn = !!(kind || status || priority || loc || supplier)
   const filterBar = (
-    <div className="flex w-full flex-wrap gap-2">
+    <div className={phone ? 'grid grid-cols-2 gap-2' : 'flex w-full flex-wrap gap-2'}>
       <Select value={kind} onChange={(e) => setKind(e.target.value as '' | CalendarKind)} className="sm:w-36" aria-label={t('ประเภท')}>
         <option value="">{t('ทุกประเภท')}</option>
         {KINDS.map((k) => (
@@ -270,7 +274,7 @@ export function CalendarPage() {
             </option>
           ))}
       </Select>
-      <Input placeholder={t('ค้นหา สินค้า / ผู้ขาย / เลขที่…')} value={search} onChange={(e) => setSearch(e.target.value)} className="sm:w-52" />
+      {!phone && <Input placeholder={t('ค้นหา สินค้า / ผู้ขาย / เลขที่…')} value={search} onChange={(e) => setSearch(e.target.value)} className="sm:w-52" />}
     </div>
   )
 
@@ -371,7 +375,16 @@ export function CalendarPage() {
       <div className="space-y-4">
         {header}
         {errorBox}
-        <Card className="p-2">{filterBar}</Card>
+        <Card className="space-y-2 p-2">
+          <div className="flex gap-2">
+            <Input placeholder={t('ค้นหา สินค้า / ผู้ขาย / เลขที่…')} value={search} onChange={(e) => setSearch(e.target.value)} className="min-w-0 flex-1" />
+            <Button variant={filtersOn ? 'primary' : 'secondary'} onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters}>
+              <Icon name="adjust" size={16} />
+              {t('ตัวกรอง')}
+            </Button>
+          </div>
+          {showFilters && filterBar}
+        </Card>
         {feed.loading ? (
           <Spinner label={t('กำลังโหลดปฏิทิน...')} />
         ) : (
@@ -384,6 +397,9 @@ export function CalendarPage() {
               </div>
               {s.rows.length === 0 ? (
                 <p className="px-3 py-3 text-sm text-ink-faint">{t('ไม่มี')}</p>
+              ) : s.key === 'upcoming' || s.key === 'attention' ? (
+                // Rows from several days carry their day as a heading.
+                <AgendaList items={s.rows.slice(0, 12)} now={now} onPick={(x) => setSelectedId(x.id)} empty={null} compact />
               ) : (
                 <ul className="divide-y divide-line">
                   {s.rows.slice(0, 8).map((i) => (

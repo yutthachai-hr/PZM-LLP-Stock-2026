@@ -49,7 +49,7 @@ export function TodayPanel() {
   const upcoming = useMemo(
     () =>
       feed.items
-        .filter((i) => i.at > bkkDayEnd(now) && i.at <= bkkDayEnd(now) + 7 * DAY_MS && isOpen(i))
+        .filter((i) => i.at > bkkDayEnd(now) && i.at <= bkkDayEnd(now) + 7 * DAY_MS && (isOpen(i) || i.kind === 'cutoff'))
         .slice(0, 8),
     [feed.items, now],
   )
