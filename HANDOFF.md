@@ -131,7 +131,7 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 
 ```
 npm test              # 443 unit tests
-npm run test:rules    # 133 rules tests (ต้องมี Java สำหรับ emulator)
+npm run test:rules    # 136 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
 npm run build          # tsc -b + typecheck functions/ (Cloudflare) + vite build
 npm run lint            # 0 errors
 npm run i18n:check      # ครบทุกข้อความ
@@ -167,6 +167,8 @@ npm run i18n:check      # ครบทุกข้อความ
 - **ห้ามลบ ให้ซ่อนแทน** — ใช้กับทั้งสินค้าและใบสั่งซื้อที่รับของแล้ว
 - **ทุกการแก้ไขย้อนหลังต้องมีชื่อคนแก้ครบ ป้องกันการทุจริต** — ทั้ง movement และ purchase order
 - **rules deploy ต้องทำก่อน push โค้ดที่แตะ field/collection ใหม่เสมอ** ไม่งั้น production จะปฏิเสธ write เงียบ ๆ
+- **Firestore ประเมิน rules ได้ไม่เกิน 1,000 expression ต่อ request** และถ้าเกินจะตอบ "Missing or insufficient permissions" เฉย ๆ (17 ก.ย.: หัวหน้า/ผู้ดูแลกดอนุมัติ PR ไม่ได้เพราะเอกสารมี `note` เพิ่มมาหนึ่งช่อง; ใบสั่งซื้อที่มาจากคำขอ+ส่ง LINE แล้วก็จะรับของไม่ได้แบบเดียวกัน) แก้โดย `validShape(..., fresh)`: ตอน create ตรวจทั้งเอกสาร ตอน update ตรวจเฉพาะช่องที่ edit rule ยอมให้เปลี่ยน (`requestLive`/`orderLive`), bind `kind(name)` ครั้งเดียวด้วย `let`, และใน edit rule ใช้ `roleIsAdmin()/roleIsManager()` แทน `admin()/manager()` (writer() พิสูจน์ active แล้ว) — **เวลาเพิ่มช่องใหม่ให้ PR/PO ต้องรัน `npm run test:rules`** `tests/firestore-rules-budget.test.ts` replay เอกสารกว้างสุด ถ้าตกให้แยก validator ต่อ อย่าเพิ่ม check ลงใน path ของ update โดยไม่วัด (วิธีวัด headroom: pad rule ด้วย `&& true` ผ่านฟังก์ชันจนตก — 1 `true` ≈ 3 expression)
+- **ใบสั่งซื้อที่รับของแล้ว**: rule เดิมบังคับ `receivedBy == ผู้เขียน` ทุกครั้งที่แก้ → คนอื่นแตะใบนั้นไม่ได้เลย (รวมปุ่มจัดเลขใหม่ของผู้ดูแล) แก้เป็น "receivedBy ไม่เปลี่ยน หรือเป็นผู้เขียน" 17 ก.ย.
 - ก่อนตัดสินใจอะไรที่มีผลกว้าง (เพิ่ม collection, เปลี่ยนนโยบายเก่า, ลบข้อมูล) **ต้องถามเจ้าของก่อนเสมอ ห้ามเดา**
 
 ---

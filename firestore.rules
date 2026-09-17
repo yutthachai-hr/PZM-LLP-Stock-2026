@@ -56,6 +56,18 @@ service cloud.firestore {
       return active() && profile().role in ['admin', 'manager'];
     }
 
+    // The same two questions asked from inside an edit rule, where writer() has already
+    // proved the caller active. Re-proving it costs a profile lookup and a few dozen of the
+    // 1,000 expressions a request may evaluate, which the widest documents cannot spare.
+    // Only for use under `allow update`, after writer().
+    function roleIsAdmin() {
+      return profile().role == 'admin';
+    }
+
+    function roleIsManager() {
+      return profile().role in ['admin', 'manager'];
+    }
+
     // ---------------------------------------------------------------- brands ----
 
     // Each brand owns a namespace: "products" for Pizza Mania, "lelapin__products" for
@@ -95,6 +107,11 @@ service cloud.firestore {
 
     // Which kind of record this is, brand aside. Only ever reached for a name that already
     // matched one of the exact lists above, so the split cannot be used to invent a kind.
+    //
+    // Call it once per function and bind the result with `let`: a rules request may evaluate
+    // at most 1,000 expressions, and the dispatchers below used to re-run this regex for
+    // every branch — a purchase request with a note (one more optional field to check)
+    // went over the budget and was refused as "insufficient permissions" (17 Sep 2026).
     function kind(name) {
       return name.matches('^lelapin__.*') ? name.split('__')[1] : name;
     }
@@ -376,7 +393,7 @@ service cloud.firestore {
      * service and, where it matters, by the movement the receipt produces.
      */
     function validPurchaseOrder(d) {
-      return d.keys().hasAll([
+      return orderFrozen(d) && orderLive(d) && d.keys().hasAll([
           'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
           'orderedAt', 'lines', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ])
@@ -387,22 +404,37 @@ service cloud.firestore {
           'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'
-        ])
-        && d.status in ['draft', 'ordered', 'received']
-        && text(d.docNo, 40) && text(d.supplierId, 200) && text(d.supplierName, 300)
+        ]);
+    }
+
+    /** What an order IS — checked when it is placed; orderEdit() keeps it from moving. */
+    function orderFrozen(d) {
+      return text(d.docNo, 40) && text(d.supplierId, 200) && text(d.supplierName, 300)
         && text(d.locationId, 200)
-        && epochMs(d.orderedAt) && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && text(d.createdBy, 200) && text(d.createdByName, 200) && epochMs(d.createdAt)
+        // Where it came from: the calendar event, the imported list, the request.
+        && (!('eventId' in d) || text(d.eventId, 200))
+        && (!('batchId' in d) || text(d.batchId, 200))
+        && (!('requestId' in d) || text(d.requestId, 200));
+    }
+
+    /**
+     * What may still change — checked on every write, and the whole check on update (see
+     * validShape: a received order that came through a request and went out by LINE
+     * carries every optional field, and checking all of them again went over the
+     * expression budget).
+     */
+    function orderLive(d) {
+      return d.status in ['draft', 'ordered', 'received']
+        && epochMs(d.orderedAt) && epochMs(d.updatedAt)
         && d.lines is list && d.lines.size() > 0 && d.lines.size() <= 200
         && (!('invoiceNo' in d) || text(d.invoiceNo, 100))
         && (!('note' in d) || text(d.note, 2000))
-        && (!('eventId' in d) || text(d.eventId, 200))
         && (!('movementDocNo' in d) || text(d.movementDocNo, 40))
         && (!('receivedAt' in d) || epochMs(d.receivedAt))
         && (!('receivedBy' in d) || text(d.receivedBy, 200))
         && (!('receivedByName' in d) || text(d.receivedByName, 200))
-        // From an imported list: a draft until approved, and the approval is signed.
-        && (!('batchId' in d) || text(d.batchId, 200))
-        && (!('requestId' in d) || text(d.requestId, 200))
+        // From an imported list or a request: a draft until approved, and the approval is signed.
         && (!('approvedBy' in d) || text(d.approvedBy, 200))
         && (!('approvedByName' in d) || text(d.approvedByName, 200))
         && (!('approvedAt' in d) || epochMs(d.approvedAt))
@@ -454,7 +486,7 @@ service cloud.firestore {
      * each line says, and the orders a request turns into are validated as orders.
      */
     function validRequest(d) {
-      return d.keys().hasAll([
+      return requestFrozen(d) && requestLive(d) && d.keys().hasAll([
           'id', 'docNo', 'status', 'revision', 'locationId', 'items', 'requestedBy',
           'requestedByName', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ])
@@ -465,8 +497,28 @@ service cloud.firestore {
           'approvedBy', 'approvedByName', 'approvedAt',
           'rejectedBy', 'rejectedByName', 'rejectedAt',
           'orders', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
-        ])
-        && text(d.docNo, 40) && text(d.locationId, 200)
+        ]);
+    }
+
+    /** The part of a request an edit may not touch — checked when it is filed. */
+    function requestFrozen(d) {
+      return text(d.docNo, 40)
+        && text(d.requestedBy, 200) && text(d.requestedByName, 200)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt);
+    }
+
+    /**
+     * The part an edit may change — checked on every write. On update this is the whole
+     * check (see validShape); requestEdit() is what keeps the frozen part frozen and the
+     * key set closed, so hasAll/hasOnly need not be paid for again.
+     */
+    function validRequestEdit(d) {
+      return requestLive(d);
+    }
+
+    function requestLive(d) {
+      return text(d.locationId, 200)
         && d.status in ['draft', 'pendingApproval', 'returned', 'approved', 'rejected', 'poCreated']
         && d.revision is int && d.revision >= 1 && d.revision <= 1000
         && d.items is list && d.items.size() <= 200
@@ -483,9 +535,7 @@ service cloud.firestore {
         && (!('rejectedBy' in d) || text(d.rejectedBy, 200))
         && (!('rejectedByName' in d) || text(d.rejectedByName, 200))
         && (!('rejectedAt' in d) || epochMs(d.rejectedAt))
-        && text(d.requestedBy, 200) && text(d.requestedByName, 200)
-        && text(d.createdBy, 200) && text(d.createdByName, 200)
-        && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && epochMs(d.updatedAt)
         // What a status means is pinned to who signed it.
         && (d.status != 'approved' || 'approvedBy' in d)
         && (d.status != 'rejected' || 'rejectedBy' in d)
@@ -503,22 +553,31 @@ service cloud.firestore {
 
     // A document whose `id` field disagrees with its key makes the UI act on one row while
     // writing to another, so the two are pinned together here rather than hoped for.
-    function validShape(name, docId, d) {
+    //
+    // `fresh` is true on create. A purchase request is the widest document here — some
+    // forty typed fields — and checking all of them on every update, on top of the edit
+    // rules, ran past Firestore's budget of 1,000 evaluated expressions per request; the
+    // write was refused as "insufficient permissions" (17 Sep 2026). On update only the
+    // fields an edit may touch are re-checked; the frozen ones were checked at birth and
+    // requestEdit() keeps them frozen. The heavy documents also sit early in the chain,
+    // because every comparison walked past costs a few expressions.
+    function validShape(name, docId, d, fresh) {
+      let k = kind(name);
       return d.id == docId && (
-        kind(name) == 'stockMovements' ? movementCore(d)
-        : kind(name) == 'stockLevels' ? validLevel(d)
-        : kind(name) == 'counters' ? validCounter(d)
-        : kind(name) == 'products' ? validProduct(d)
-        : kind(name) == 'locations' ? validLocation(d)
-        : kind(name) == 'notes' ? validNote(d)
-        : kind(name) == 'productMinOverrides' ? validMinOverride(d)
-        : kind(name) == 'stockEvents' ? validEvent(d)
-        : kind(name) == 'suppliers' ? validSupplier(d)
-        : kind(name) == 'supplierItems' ? validSupplierItem(d)
-        : kind(name) == 'purchaseOrders' ? validPurchaseOrder(d)
-        : kind(name) == 'purchaseBatches' ? validBatch(d)
-        : kind(name) == 'purchaseRequests' ? validRequest(d)
-        : kind(name) == 'productAliases' ? validAlias(d)
+        k == 'stockMovements' ? movementCore(d)
+        : k == 'stockLevels' ? validLevel(d)
+        : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
+        : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d))
+        : k == 'counters' ? validCounter(d)
+        : k == 'products' ? validProduct(d)
+        : k == 'locations' ? validLocation(d)
+        : k == 'notes' ? validNote(d)
+        : k == 'productMinOverrides' ? validMinOverride(d)
+        : k == 'stockEvents' ? validEvent(d)
+        : k == 'suppliers' ? validSupplier(d)
+        : k == 'supplierItems' ? validSupplierItem(d)
+        : k == 'purchaseBatches' ? validBatch(d)
+        : k == 'productAliases' ? validAlias(d)
         : validImage(d)
       );
     }
@@ -535,26 +594,27 @@ service cloud.firestore {
     // or already corrected. Without the first check, staff can record stock in a
     // colleague's name and the ledger's "who" column means nothing.
     function createdHonestly(name) {
-      return kind(name) == 'stockEvents'
+      let k = kind(name);
+      return k == 'stockEvents'
         ? admin() && request.resource.data.createdBy == request.auth.uid
         // An order is filed by whoever placed it. Ordering is everyday work, so staff may do
         // it, but not in a colleague's name — the dashboard's "who ordered this" has to mean
         // something when the goods do not turn up.
-        : kind(name) == 'purchaseOrders'
+        : k == 'purchaseOrders'
         ? request.resource.data.createdBy == request.auth.uid
           && request.resource.data.status != 'received'
         // An import is filed by whoever imported it, and is not born approved or sent.
-        : kind(name) == 'purchaseBatches'
+        : k == 'purchaseBatches'
         ? request.resource.data.createdBy == request.auth.uid
           && request.resource.data.status in ['draft', 'needsReview', 'ready']
-        : kind(name) == 'productAliases'
+        : k == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
         // A request is filed by whoever is asking, as a draft.
-        : kind(name) == 'purchaseRequests'
+        : k == 'purchaseRequests'
         ? request.resource.data.createdBy == request.auth.uid
           && request.resource.data.requestedBy == request.auth.uid
           && request.resource.data.status == 'draft'
-        : kind(name) != 'stockMovements' || (
+        : k != 'stockMovements' || (
           request.resource.data.byUserId == request.auth.uid
           && !('voided' in request.resource.data)
           && !('updatedBy' in request.resource.data)
@@ -570,15 +630,16 @@ service cloud.firestore {
     // Counters only ever go forwards, so a replayed or forged write cannot hand out a
     // document number that has already been used.
     function editedHonestly(name) {
-      return kind(name) == 'purchaseOrders' ? orderEdit()
-        : kind(name) == 'purchaseBatches' ? batchEdit()
-        : kind(name) == 'purchaseRequests' ? requestEdit()
+      let k = kind(name);
+      return k == 'purchaseOrders' ? orderEdit()
+        : k == 'purchaseBatches' ? batchEdit()
+        : k == 'purchaseRequests' ? requestEdit()
         // Confirming a spelling again replaces the whole alias, signed by whoever did it.
-        : kind(name) == 'productAliases'
+        : k == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
-        : kind(name) == 'stockMovements' ? movementEdit()
-        : kind(name) == 'stockEvents' ? eventEdit()
-        : kind(name) == 'counters' ? request.resource.data.value > resource.data.value
+        : k == 'stockMovements' ? movementEdit()
+        : k == 'stockEvents' ? eventEdit()
+        : k == 'counters' ? request.resource.data.value > resource.data.value
         : true;
     }
 
@@ -611,11 +672,15 @@ service cloud.firestore {
         // A number is frozen for everyone but an admin putting the sequence right — the
         // owner's rule is that each supplier's orders count 1, 2, 3 in their own order,
         // and the orders numbered under the old shared counter had to be corrected.
-        && (request.resource.data.docNo == resource.data.docNo || admin())
+        && (request.resource.data.docNo == resource.data.docNo || roleIsAdmin())
         && request.resource.data.supplierId == resource.data.supplierId
         && request.resource.data.locationId == resource.data.locationId
-        // Whoever checked the delivery in signs for it.
+        // Whoever checked the delivery in signs for it. Once signed it stays as it is, and
+        // the order may still be touched by others — an admin putting the numbers right,
+        // say. (Until 17 Sep 2026 this read "receivedBy must be the caller" outright, which
+        // locked every received order to the person who received it.)
         && (!('receivedBy' in request.resource.data)
+            || request.resource.data.receivedBy == resource.data.receivedBy
             || request.resource.data.receivedBy == request.auth.uid);
     }
 
@@ -663,13 +728,13 @@ service cloud.firestore {
       return (
         // submit / resubmit: the requester or a manager
         (to == 'pendingApproval' && from in ['draft', 'returned']
-          && (resource.data.requestedBy == request.auth.uid || manager()))
+          && (resource.data.requestedBy == request.auth.uid || roleIsManager()))
         // the manager's three words
-        || (to in ['returned', 'approved', 'rejected'] && from == 'pendingApproval' && manager())
+        || (to in ['returned', 'approved', 'rejected'] && from == 'pendingApproval' && roleIsManager())
         // turning an approved request into orders: anyone who may place an order
         || (to == 'poCreated' && from == 'approved')
         // reopening a decision: admin only
-        || (to == 'pendingApproval' && from in ['approved', 'rejected'] && admin())
+        || (to == 'pendingApproval' && from in ['approved', 'rejected'] && roleIsAdmin())
       );
     }
 
@@ -678,7 +743,7 @@ service cloud.firestore {
           'qty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
           'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
         ])
-        && (!editedKeys().hasAny(['voided']) || admin())
+        && (!editedKeys().hasAny(['voided']) || roleIsAdmin())
         && (!('updatedBy' in request.resource.data)
             || request.resource.data.updatedBy == request.auth.uid)
         // Changing what a row says means appending to its history, in the caller's own name.
@@ -799,11 +864,11 @@ service cloud.firestore {
       // Type and range checks belong here as well as in the services, because the services
       // are client code: a caller holding a token skips them entirely.
       allow create: if writer(collection)
-        && validShape(collection, docId, request.resource.data)
+        && validShape(collection, docId, request.resource.data, true)
         && createdHonestly(collection);
 
       allow update: if writer(collection)
-        && validShape(collection, docId, request.resource.data)
+        && validShape(collection, docId, request.resource.data, false)
         && editedHonestly(collection);
 
       allow delete: if active() && staffDeletable(collection);
