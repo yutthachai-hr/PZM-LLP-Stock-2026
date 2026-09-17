@@ -10,8 +10,8 @@
 
 | อย่าง | สถานะ |
 |---|---|
-| Git `main` | ตรงกับ `origin/main`; สั่งซื้ออัตโนมัติ merge 15 ก.ย.; **รายการขอสั่งซื้อ (purchase requests) + บทบาท `manager` merge 15 ก.ย.** (branch `feat/purchase-requests`) |
-| Firestore rules | **deploy แล้ว 15 ก.ย.** ตรงกับไฟล์ที่ commit (รวม `purchaseRequests`, `manager()`, `requestId` บน purchaseOrders) |
+| Git `main` | ตรงกับ `origin/main`; สั่งซื้ออัตโนมัติ 15 ก.ย.; รายการขอสั่งซื้อ + `manager` 15 ก.ย.; Cloudflare-only 17 ก.ย.; **ปฏิทินคลัง Phase A + purchasing polish 17 ก.ย.** (branch `feat/inventory-calendar` ยังใช้ต่อสำหรับ Phase B–D) |
+| Firestore rules | **deploy แล้ว 17 ก.ย.** ตรงกับไฟล์ที่ commit (รวม expression-budget split, supplier `orderDays/cutoffTime`, PO `expectedAt`) |
 | Hosting | **Cloudflare Pages เท่านั้น (ตัดสลับ 17 ก.ย.)** `https://pzmstock.pages.dev` build จาก `main` อัตโนมัติ; branch `demo` → `https://demo.pzmstock.pages.dev` (demo mode จากชื่อ branch) — Netlify เลิกใช้แล้ว |
 | Firebase project | `pzm-stock-x5` (ทั้งสองแบรนด์ใช้ project เดียวกัน แยกด้วย collection prefix) |
 | Repo | `github.com/yutthachai-hr/PZM-LLP-Stock-2026` (private) |
@@ -130,8 +130,8 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
-npm test              # 443 unit tests
-npm run test:rules    # 136 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
+npm test              # 469 unit tests
+npm run test:rules    # 138 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
 npm run build          # tsc -b + typecheck functions/ (Cloudflare) + vite build
 npm run lint            # 0 errors
 npm run i18n:check      # ครบทุกข้อความ
@@ -216,6 +216,41 @@ npm run i18n:check      # ครบทุกข้อความ
 8. ตัดสลับ: ชี้โดเมน/แจ้งพนักงานใช้ URL ใหม่, **เปิด Netlify ทิ้งไว้จนทุกเครื่องปิดแท็บแอปแล้วเปิดใหม่** (PWA cache) แล้วค่อยลบ site เดิม; rollback = กลับไปใช้ URL Netlify ซึ่งยังทำงานอยู่
 9. หลังย้ายเสร็จ: ลบ `netlify/`, `netlify.toml`, `@netlify/*` ออกจาก repo และแก้ `src/services/poImages.ts` ให้ default เป็น `/api/po-image`
 
+## 10. ปฏิทินคลัง + งาน + แจ้งเตือน — โครงการ 4 เฟส (เริ่ม 17 ก.ย.) **ทำถึง Phase A แล้ว**
+
+แผนเต็มอยู่ที่ `C:\Users\Yutthachai\.claude\plans\purchase-workflow-shiny-alpaca.md` (เครื่องเจ้าของ) — สรุปสาระสำคัญไว้ที่นี่เพื่อให้ session/account อื่นทำต่อได้
+
+**สเปกเจ้าของ (ย่อ)**: ปฏิทินเดือน/สัปดาห์/วัน/รายการ + filter (คลัง, ประเภท, สถานะ, ความสำคัญ, ผู้ขาย, ค้นหา); event ประเภท นับสต๊อก / รับของ / จัดซื้อ / ใกล้หมด / หมด / ปรับสต๊อก / ของเสีย / ตัดรอบผู้ขาย / แนะนำสั่งซื้อ / งาน; **ห้าม audit และ transfer**; expiry เลื่อนออก (ยังไม่มี batch/lot); drawer รายละเอียด + ปุ่มตามสิทธิ์; ตารางนับสต๊อกอัตโนมัติ (config ใน Settings); workflow scheduled→pending→inProgress→(waitingApproval)→completed / overdue; แจ้งเตือนในแอป (bell, priorities CRITICAL/HIGH/MEDIUM/INFO, preferences, escalation, daily brief, weekly summary); reorder recommendation + estimated stockout; threshold ปรับสต๊อก/ของเสีย; ห้ามสร้าง event/PR/PO ซ้ำ (deterministic id); ห้าม hardcode; ไม่ให้งาน background ผูกกับการเปิดแอป; วิเคราะห์โควตา Firebase ไม่ให้ชน 50k reads/วัน
+
+**คำตัดสินของเจ้าของ (17 ก.ย.)**: (1) background jobs = **Cloudflare Worker + Cron (ฟรี)** เข้า Firestore ผ่าน REST ด้วย **service account key** ที่เก็บเป็น Cloudflare secret — เจ้าของจะสร้าง SA ใน GCP เอง (สิทธิ์ `roles/datastore.user` เท่านั้น) และวางเป็น secret `FIREBASE_SERVICE_ACCOUNT`; (2) ไม่ทำ expiry รอบนี้; (3) อนุมัติ collection ใหม่ 2 ตัว: `notifications`, `inventorySchedules` (+ field ใหม่บน suppliers/stockEvents/purchaseOrders); ถอด listener `notes` เพื่อเอาโควตา listener (สูงสุด 7) ไปให้ notifications; (4) ส่ง 4 เฟส ขึ้นของจริงทีละเฟส
+
+**สถาปัตยกรรม (ทำแล้วใน Phase A)**
+- `src/lib/inventoryRules/` = กฎธุรกิจล้วน (ห้าม import backend/react/i18n/firebase — จะถูก bundle เข้า Worker ด้วย): `time.ts` (วันแบบ Bangkok UTC+7 คงที่: `bkkDayStart/End/Key/FromKey/Weekday/AtTime`), `types.ts` (`CalendarItem` view-model: id deterministic, kind, sourceType/sourceId, titleKey+params, at, status, priority, meta), `calendarFeed.ts` (`buildFeed(input)` pure), `purchasing.ts` (`expectedDeliveryAt` = วันบนใบ → orderedAt+leadTimeDays → ไม่ทราบ; `isLate`/`daysLate`/`deliveryState`; `openPurchaseFor` กัน PR/PO ซ้ำ; `incomingFor`; `cutoffInstants`), `lowStock.ts` (`shortages()` กฎเดียวใช้ทั้ง Dashboard/TopBar/ปฏิทิน), `permissions.ts` (`actionsFor(item, actor)` — ตอนนี้ยัง admin-only สำหรับ edit/cancel/delete task)
+- **derived vs persisted**: เก็บเป็นเอกสารเฉพาะ task (`stockEvents`); รับของ/PR รอ/ตัดรอบ/ใกล้หมด/หมด **คำนวณตอนอ่าน** จากข้อมูลที่โหลดอยู่แล้ว → ไม่มีซ้ำโดยโครงสร้าง; "overdue" เป็นสถานะคำนวณ ไม่เก็บ
+- `src/data/rangeCache.ts` (`createRangeCache`) + `eventCache.ts` (wrapper ชื่อเดิม), `orderCache.ts` (orderedAt), `requestCache.ts` (createdAt): cache ช่วงวันต่อ session, **covering lookup** (ช่วงแคบใช้ของช่วงกว้างที่โหลดไว้), in-flight dedup, patch-in-place ไม่ invalidate; `src/data/useCalendarFeed.ts` อ่าน 3 ช่วง (orders ย้อน 45 วัน, requests ย้อน 30 วัน) แล้ว `buildFeed`; หน้า Orders/Requests patch cache เมื่อเขียน; **ช่วงต้อง day-aligned** (bkkDayStart/End) ไม่งั้น key เปลี่ยนทุกครั้ง
+- หน้าจอ `src/pages/calendar/`: `CalendarPage` (เดือน/สัปดาห์/วัน/รายการตามวัน, การ์ดสรุป, filter, `?filter=today|attention|tasks|purchasing|stock|completed` และ `?item=<id>` จาก Dashboard, มือถือ = วันนี้→ต้องดูก่อน→งานของฉัน→7 วัน→ปฏิทินย่อ ตัวกรองพับ), `MonthGrid`, `WeekView`, `AgendaList`, `CompactMonth`, `ItemRow` (`itemTitle/itemSubtitle`), `ItemDrawer` (`<Modal sheet>` bottom sheet บนมือถือ; ปุ่ม: task start/complete/edit/cancel/delete, PO ดูใบ/ตรวจรับ → `/orders?po=|receive=`, PR → `/requests/:id`, low/out → ประวัติ / สร้าง PR (ถ้า `openPurchaseFor` เจอ แสดง "มีการสั่งซื้ออยู่แล้ว")), `EventEditor` (type เสนอแค่ stockCount/delivery/inventoryTask/other), `chips.ts` (icon/label/tone)
+- Dashboard: `src/components/dashboard/TodayPanel.tsx` (วันนี้ + 7 วัน + การ์ด 4 ใบ); `RequestWidget` ใช้ requestCache
+- ฟิลด์ใหม่: `Supplier.orderDays: number[]` (0=อา), `cutoffTime 'HH:mm'` (ฟอร์มผู้ขายมีปุ่มวัน+เวลา; rules validSupplier); `PurchaseOrder.expectedAt` (ตั้งตอนสั่ง เติมจาก leadTime, แก้ในแถวหน้า Orders ผ่าน `setExpectedDelivery`; `overdueOrders(orders, now, leadTimeOf)` ยึดวันนี้แทนกฎ 3 วันเมื่อมี); `StockEvent.status += 'waitingApproval'`, `productId?`, `supplierId?` (type เท่านั้น ยังไม่มีใครเขียน — rules ยังไม่รับ `waitingApproval`)
+- `Modal` มี prop `sheet`; `Icon` เพิ่ม bell/clock/alertCircle/checkCircle/cart/box; `src/lib/search.ts` (`looseIncludes/looseMatch/looseScore`) ใช้กับทุกช่องค้นหา
+- ถอดแล้ว: เมนู/route/หน้า "บันทึกช่วยจำ" + listener `notes` (ข้อมูล, rules, backup ยังอยู่)
+
+**purchasing polish (17 ก.ย. ทำแล้ว)**: `PurchaseRequestItem.stockAtSubmit/stockTotalAtSubmit` snapshot ตอน `submitRequest` (ctx.qtyAt) → คอลัมน์ "คงเหลือ" ในหน้าตรวจ + export; PDF/Excel กดได้ตั้งแต่รออนุมัติ; `PoSheet` มี `lang` prop + `SheetLangToggle` (TH/EN, `translatorFor(lang)`, `formatDateFor`), ใบที่รับแล้ว = "ใบรับของ" ตรา + คอลัมน์สั่ง/รับจริง; เส้นในตารางใบเอาออก (เจ้าของสั่ง); `setDateLanguage` ทำให้วันที่เป็น ค.ศ. เมื่อ UI เป็น EN
+
+**ค้างจากข้อความล่าสุดของเจ้าของ (ยังไม่ทำ — ทำก่อน Phase B)**
+1. ชื่อคลัง "คลังหลัก/สาขาสารสิน/สาขาอ่อนนุช" ต้องเป็นอังกฤษเมื่อ UI เป็น EN → เสนอ: ฟิลด์ `nameEn?` บน locations (แก้ใน Settings, rules validLocation hasOnly) และ DataContext ส่ง `locations` ที่ชื่อสลับตามภาษา (Settings ใช้ raw); ไล่ Thai ที่เหลือ (แบรนด์ tagline ใน `src/brand/brand.ts`, ชื่อผู้ใช้เดโม)
+2. เอาคำว่า "(แบรนด์น้อง)" ออกจาก tagline Le Lapin (`src/brand/brand.ts`)
+3. **บั๊ก selection หลุด**: ลากเลือกข้อความใน Modal แล้วปล่อยเมาส์นอกกรอบ → overlay `onClick` ปิด modal ทำให้ selection หาย → แก้ใน `ui.tsx` Modal: ปิดเฉพาะเมื่อ mousedown **และ** mouseup อยู่บน overlay เอง
+4. คงเหลือในหน้าตรวจ PR ต้องแยกต่อคลัง (คลังหลัก/สารสิน/อ่อนนุช) → เพิ่ม `stockByLocationAtSubmit: Record<locationId, number>` ตอน submit และแสดงใต้ตัวเลข
+5. ใบสั่ง/ใบรับของ: "รับจริง" ให้ขึ้นบรรทัดใหม่ใต้ชื่อสินค้า (เขียว=ตรง, แดง=ต่าง คงสีเดิม); เปลี่ยนคำ "ภาษาในใบ" → "ภาษา"
+6. ปรับดีไซน์ตารางปฏิทินให้สวยขึ้นตาม Figma "Content Calendar with Auto-Layout 2025 (Community)" file `MrYi0FVUiViBW50pcJ0Mef` node `4-644` — ใช้ Figma MCP `get_screenshot`/`get_design_context` ดู แล้วปรับ `MonthGrid`/`WeekView` (สี token เดิม ไม่ใส่ gradient)
+
+**Phase B (ต่อไป)**: rules `stockEvents` แยก `eventFrozen/eventLive` (+ sourceType, sourceId, scheduleId, refKey, productId, supplierId, history≤100, rescheduledFrom, startedBy/At, completedBy/At, approvedBy/At, cancelReason; status `waitingApproval`), **manager สร้าง/แก้ได้**, staff แก้ได้เฉพาะ status/started*/completed*/history บนงานที่ assigned (หรือ assignedToAll); collection `inventorySchedules` (docs: `kind:'stockCount'` ตาราง, `settings` threshold, ภายหลัง `prefs__<uid>`, `snooze__…`; write gate ตาม prefix id: prefs ตัวเอง, snooze active, อื่น admin); `meta/cronStatus` read active/write false; `src/lib/inventoryRules/schedules.ts` (`occurrencesBetween`, `taskIdFor` = `sc__<scheduleId>__<yyyymmdd>`, `buildTaskDoc`); `src/services/schedules.ts`, `src/services/automation.ts` (`generateStockCountTasks` ฝั่ง client สำหรับ demo/ก่อนมี Worker: local mode เสมอ, cloud mode เฉพาะ manager+ เมื่อ cronStatus เก่ากว่า 26 ชม., วันละครั้งต่อเครื่อง); `services/events.ts` เพิ่ม start/complete(requiresApproval)/approve/reschedule(reason→history)/cancel; Settings: SchedulesSection, ThresholdsSection, AutomationStatus; `RescheduleModal`; backup FORMAT_VERSION 6; tests: occurrences (daily/weekly/biweekly/monthly clamp/custom, disabled, รันซ้ำ = 0 ใหม่), workflow, rules, budget replay งานกว้างสุด
+**Phase C**: `notifications` collection (1 doc = 1 แจ้งเตือน, id = dedup key, `to {all?,roles?,uids?}`, `readBy {uid:ms}`, listener ตัวที่ 7 ใน DataContext `since createdAt ≥ sessionStart−7d`, กรอง recipient/prefs ฝั่ง client, อ่านแล้ว = update เฉพาะ `readBy.<uid>` (ต้องเพิ่ม dotted-key ให้ local/memory backend)), engine `src/lib/inventoryRules/notifications.ts` + `copy.ts`, bell+panel ใน TopBar, prefs `inventorySchedules/prefs__<uid>`, daily brief/escalation, **Worker** `worker/` (wrangler.toml crons `*/30 * * * *` + 00:05 & 07:00 BKK + จันทร์ 07:30; `auth.ts` SA JWT RS256 WebCrypto; `firestore.ts` runQuery/batchWrite `currentDocument.exists:false`; jobs generateStockCountTasks/taskReminders+escalation/purchaseWatch/dailyBrief/weeklySummary/purgeNotifications/heartbeat→`meta/cronStatus`; secret `FIREBASE_SERVICE_ACCOUNT`; kill switch `WORKER_ENABLED`; test grep ให้ Worker เขียนแค่ stockEvents/notifications/meta/cronStatus)
+**Phase D**: `usage.ts` (issue+consume ออกจากคลัง = usage; adjust-out lost/broken/expired/damage = loss; guard ≥2 moves & ≥7 วัน), `reorder.ts` (need = avgDaily×(leadTime+coverDays)+safety; qty = ceil(need−onHand−incoming); MOQ; fallback minStock), `adjustments.ts` (value=qty×cost, threshold ฿/%), ReorderCard, weekly summary, RequestEditor prefill `?product=&location=`
+**โควตา**: ประมาณ 20–21k reads/วัน (baseline 12k + notifications 1.3k + ปฏิทิน 2.2k + Worker 4.3k) จาก 50k; writes ~1.2k/20k — ต้องมี `tests/quota-budget.test.ts` คำนวณจากค่าคงที่จริง และตรวจ Firebase console Usage หลังแต่ละเฟส
+
+---
+
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 
 บอก Claude session ใหม่ประมาณนี้:
@@ -225,7 +260,7 @@ npm run i18n:check      # ครบทุกข้อความ
 สิ่งที่ Claude ใหม่ควรทำเป็นอันดับแรกเมื่อรับงานต่อ:
 1. `git log --oneline -20` ดูว่าทำอะไรมาล่าสุด
 2. `git status` เช็คว่ามีอะไรค้าง uncommitted
-3. เช็คหัวข้อ **"6. ค้างอยู่"** ด้านบนว่ามีอะไรรอการตัดสินใจ (ข้อ -1 คือขั้นที่เจ้าของต้องทำเองให้รายการขอสั่งซื้อใช้จริงได้: ตั้งบทบาทหัวหน้า)
+3. เช็คหัวข้อ **"6. ค้างอยู่"** และ **"10. ปฏิทินคลัง"** (รายการค้าง 6 ข้อ แล้วต่อ Phase B) — branch งานคือ `feat/inventory-calendar`
 4. ถ้าจะแก้ rules หรือ collection ใหม่ — ถามเจ้าของก่อนเสมอตามกติกาข้อ 7
 
 ---
