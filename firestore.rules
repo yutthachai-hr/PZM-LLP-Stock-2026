@@ -258,8 +258,9 @@ service cloud.firestore {
 
     function validLocation(d) {
       return d.keys().hasAll(['id', 'name', 'type', 'active', 'createdAt'])
-        && d.keys().hasOnly(['id', 'name', 'type', 'active', 'createdAt'])
+        && d.keys().hasOnly(['id', 'name', 'nameEn', 'type', 'active', 'createdAt'])
         && text(d.name, 200)
+        && (!('nameEn' in d) || text(d.nameEn, 200))
         && d.type in ['warehouse', 'branch']
         && d.active is bool
         && epochMs(d.createdAt);

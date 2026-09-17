@@ -73,6 +73,11 @@ export type LocationType = 'warehouse' | 'branch'
 export interface StockLocation {
   id: string
   name: string
+  /**
+   * The name in English, shown when the interface is in English. The Thai name is the
+   * record; this is a label for foreign staff and suppliers. Absent = the Thai name shows.
+   */
+  nameEn?: string
   type: LocationType
   active: boolean
   createdAt: number
@@ -578,6 +583,8 @@ export interface PurchaseRequestItem {
    */
   stockAtSubmit?: number
   stockTotalAtSubmit?: number
+  /** The same moment, per location id — so the manager sees where the stock actually is. */
+  stockByLocationAtSubmit?: Record<string, number>
   /** Taken out by a manager — kept, not deleted, so the review still shows it. */
   removed?: { by: string; byName: string; at: number; reason: string }
 }

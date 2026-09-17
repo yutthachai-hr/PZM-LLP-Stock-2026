@@ -275,7 +275,7 @@ function CloudSection({ mode }: { mode: 'cloud' | 'local' }) {
 // ---------------- Locations ----------------
 function LocationsSection() {
   const t = useT()
-  const { locations } = useData()
+  const { locations, rawLocations } = useData()
   const toast = useToast()
   const confirm = useConfirm()
   const [editing, setEditing] = useState<StockLocation | null>(null)
@@ -323,7 +323,7 @@ function LocationsSection() {
               {l.type === 'warehouse' ? t("คลังหลัก") : t("สาขา")}
             </Badge>
             <button
-              onClick={() => setEditing(l)}
+              onClick={() => setEditing(rawLocations.find((r) => r.id === l.id) ?? l)}
               className={`${rowAction} text-ink-soft hover:bg-sunken hover:text-ink`}
             >
               {t("แก้ไข")}
@@ -360,6 +360,7 @@ function LocationEditor({
   const t = useT()
   const toast = useToast()
   const [name, setName] = useState(location?.name ?? '')
+  const [nameEn, setNameEn] = useState(location?.nameEn ?? '')
   const [type, setType] = useState<LocationType>(location?.type ?? 'branch')
   const [busy, setBusy] = useState(false)
 
@@ -367,8 +368,8 @@ function LocationEditor({
     if (!name.trim()) return toast.error(t("ใส่ชื่อคลัง"))
     setBusy(true)
     try {
-      if (location) await updateLocation(location.id, { name, type })
-      else await createLocation(name, type)
+      if (location) await updateLocation(location.id, { name, nameEn, type })
+      else await createLocation(name, type, nameEn)
       toast.success(t("บันทึกแล้ว"))
       onClose()
     } catch (e) {
@@ -383,6 +384,9 @@ function LocationEditor({
       <div className="space-y-4">
         <Field label={t("ชื่อคลัง/สาขา")} required>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label={t('ชื่อภาษาอังกฤษ')} hint={t('แสดงแทนชื่อไทยเมื่อเปิดแอปเป็นภาษาอังกฤษ')}>
+          <Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="e.g. Main Warehouse" />
         </Field>
         <Field label={t("ประเภท")}>
           <Select value={type} onChange={(e) => setType(e.target.value as LocationType)}>

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { Icon } from '../../components/Icon'
 import { useT } from '../../i18n/I18nContext'
-import { formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import type { CalendarItem } from '../../lib/inventoryRules/types'
 import { chipClass, DAY_NAMES, timeOf } from './chips'
@@ -42,19 +41,21 @@ export function WeekView({
               <button
                 type="button"
                 onClick={() => onPickDay(day)}
-                className={`flex w-full items-baseline justify-between border-b border-line px-2 py-2 text-left hover:bg-sunken ${today ? 'bg-brand-soft/40' : 'bg-sunken'}`}
+                className="flex w-full items-center justify-between border-b border-line px-3 py-2.5 text-left hover:bg-sunken/60"
               >
-                <span className="text-xs font-medium uppercase text-ink-soft">{t(DAY_NAMES[new Date(day).getDay()])}</span>
-                <span className={`num text-sm ${today ? 'font-bold text-brand' : 'text-ink'}`}>{formatThaiDateShort(day).slice(0, 5)}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{t(DAY_NAMES[new Date(day).getDay()])}</span>
+                <span className={`num inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-sm font-semibold ${today ? 'bg-brand text-white' : 'text-ink'}`}>
+                  {new Date(day).getDate()}
+                </span>
               </button>
-              <div className="space-y-1 p-1">
+              <div className="space-y-1 p-2">
                 {list.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => onPick(item)}
                     title={itemTitle(item, t)}
-                    className={`block w-full rounded px-1.5 py-1 text-left text-[11px] leading-tight hover:brightness-95 ${chipClass(item)}`}
+                    className={`block w-full rounded-md px-2 py-1.5 text-left text-[11px] font-medium leading-4 transition hover:brightness-95 ${chipClass(item)}`}
                   >
                     <span className="flex items-center gap-1">
                       <Icon name={itemIcon(item)} size={11} className="shrink-0" />
