@@ -128,7 +128,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
     if (!actor) return
     await run(kind, async () => {
       if (kind === 'pdf') exportRequestPdf(pr, company, locationName, t)
-      else exportRequestExcel(pr, locationName, t)
+      else exportRequestExcel(pr, locationName, t, (id) => locationById(id)?.name ?? id)
       setPr(await S.noteExport(pr.id, kind, actor))
     })
   }
@@ -245,18 +245,30 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                         <td className="num px-2 py-2 text-right">
                           {(() => {
                             const live = item.stockAtSubmit === undefined
+                            const active = locations.filter((l) => l.active !== false)
                             const here = live ? qtyAt(pr.locationId, item.productId) : item.stockAtSubmit
+                            // Per location: the frozen figures when they exist, else live.
+                            const perLoc = active.map((l) => ({
+                              l,
+                              qty: live ? qtyAt(l.id, item.productId) : (item.stockByLocationAtSubmit?.[l.id] ?? undefined),
+                            }))
                             const total = live
-                              ? locations.filter((l) => l.active !== false).reduce((n, l) => n + qtyAt(l.id, item.productId), 0)
+                              ? perLoc.reduce((n, x) => n + (x.qty ?? 0), 0)
                               : item.stockTotalAtSubmit
                             return (
                               <>
                                 <span className={`font-semibold ${here !== undefined && here <= 0 ? 'text-out' : 'text-ink'}`}>
                                   {here === undefined ? '—' : fmtQty(here)}
                                 </span>
-                                {total !== undefined && total !== here && (
+                                {total !== undefined && (
                                   <span className="block text-xs text-ink-faint">{t('ทุกคลัง {n}', { n: fmtQty(total) })}</span>
                                 )}
+                                <span className="block text-[10px] leading-4 text-ink-faint">
+                                  {perLoc
+                                    .filter((x) => x.qty !== undefined)
+                                    .map((x) => `${x.l.name} ${fmtQty(x.qty ?? 0)}`)
+                                    .join(' · ')}
+                                </span>
                                 {live && <span className="block text-[10px] text-ink-faint">{t('ปัจจุบัน')}</span>}
                               </>
                             )

@@ -106,7 +106,6 @@ export function PoSheet({
           <tr>
             <th className="py-1 text-left font-medium">{t('รายการสินค้า')}</th>
             <th className="py-1 text-right font-medium">{received ? t('สั่ง') : t('จำนวน')}</th>
-            {received && <th className="py-1 text-right font-medium">{t('รับจริง')}</th>}
             <th className="py-1 text-left font-medium">{t('หน่วย')}</th>
           </tr>
         </thead>
@@ -118,16 +117,18 @@ export function PoSheet({
               <tr key={l.productId} className="align-top">
                 <td className="py-1 pr-2 break-words">
                   {l.productName}
-                  {received && l.note && <span className="block text-xs text-ink-soft">{l.note}</span>}
+                  {/* What actually arrived, on its own line under the item so the eye
+                      finds it: green when it matches the order, red when it does not. */}
+                  {received && (
+                    <span className={`block text-xs font-semibold ${short ? 'text-out' : 'text-in'}`}>
+                      {t('รับจริง')} {fmtQty(got)} {shownUnit(l)}
+                      {l.note ? <span className="font-normal text-ink-soft"> · {l.note}</span> : null}
+                    </span>
+                  )}
                 </td>
                 <td className={`num whitespace-nowrap py-1 text-right ${received ? 'text-ink-soft' : 'font-semibold'}`}>
                   {fmtQty(l.orderedQty)}
                 </td>
-                {received && (
-                  <td className={`num whitespace-nowrap py-1 text-right font-semibold ${short ? 'text-out' : 'text-in'}`}>
-                    {fmtQty(got)}
-                  </td>
-                )}
                 <td className="whitespace-nowrap py-1 pl-2 text-ink-soft">{shownUnit(l)}</td>
               </tr>
             )
@@ -149,7 +150,7 @@ export function SheetLangToggle({ value, onChange }: { value: Lang; onChange: (l
   const { t } = useI18n()
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-ink-soft">{t('ภาษาในใบ')}</span>
+      <span className="text-xs text-ink-soft">{t('ภาษา')}</span>
       <div className="flex gap-1 rounded-lg bg-sunken p-1">
         <SegTab grow={false} label="TH" active={value === 'th'} onClick={() => onChange('th')} />
         <SegTab grow={false} label="EN" active={value === 'en'} onClick={() => onChange('en')} />

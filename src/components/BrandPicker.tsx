@@ -34,7 +34,7 @@ export function BrandPicker({ onPick }: { onPick: (b: BrandId) => void }) {
                 <div className="text-xs text-ink-faint">
                   {b.id === 'pizza'
                     ? t('ระบบสต๊อกพิซซ่า')
-                    : t('ระบบสต๊อกแซนด์วิช (แบรนด์น้อง)')}
+                    : t('ระบบสต๊อกแซนด์วิช')}
                 </div>
               </div>
               {b.id === last && (

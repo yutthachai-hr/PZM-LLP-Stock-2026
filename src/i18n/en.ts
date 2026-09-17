@@ -155,7 +155,7 @@ export const EN: Record<string, string> = {
   'สวัสดี {name} — ข้อมูลสต๊อกของแต่ละแบรนด์แยกกันสมบูรณ์':
     'Hello {name} — each brand keeps its stock data completely separate',
   ระบบสต๊อกพิซซ่า: 'Pizza stock system',
-  'ระบบสต๊อกแซนด์วิช (แบรนด์น้อง)': 'Sandwich stock system (sister brand)',
+  ระบบสต๊อกแซนด์วิช: 'Sandwich stock system',
 
   // ---- login / auth ------------------------------------------------------------
   เข้าสู่ระบบ: 'Sign in',
@@ -1244,10 +1244,13 @@ export const EN: Record<string, string> = {
   'ใบรับของ': 'Goods received note',
   'รับจริง': 'Received',
   'ผู้รับของ': 'Received by',
-  'ภาษาในใบ': 'Sheet language',
+  ภาษา: 'Language',
   'คงเหลือตอนขอ': 'On hand when requested',
   'คงเหลือทุกคลังตอนขอ': 'On hand everywhere when requested',
   'ทุกคลัง {n}': 'all locations {n}',
   'ผู้ขาย:': 'Supplier:',
   'รายการตามวัน': 'Agenda',
+  'ชื่อภาษาอังกฤษ': 'English name',
+  'แสดงแทนชื่อไทยเมื่อเปิดแอปเป็นภาษาอังกฤษ': 'Shown instead of the Thai name when the app is in English',
+  'คงเหลือแยกคลังตอนขอ': 'On hand by location when requested',
 }

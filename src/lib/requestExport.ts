@@ -24,7 +24,12 @@ export function groupedBySupplier(pr: PurchaseRequest): { supplierName: string; 
 }
 
 /** One row per line, for a spreadsheet that can be filtered and pivoted. */
-export function requestRows(pr: PurchaseRequest, locationName: string, t: T): Record<string, string | number>[] {
+export function requestRows(
+  pr: PurchaseRequest,
+  locationName: string,
+  t: T,
+  locationNameOf: (id: string) => string = (id) => id,
+): Record<string, string | number>[] {
   const rows: Record<string, string | number>[] = []
   for (const g of groupedBySupplier(pr)) {
     for (const i of g.items) {
@@ -37,6 +42,9 @@ export function requestRows(pr: PurchaseRequest, locationName: string, t: T): Re
         [t('สินค้า')]: i.productName,
         [t('คงเหลือตอนขอ')]: i.stockAtSubmit ?? '',
         [t('คงเหลือทุกคลังตอนขอ')]: i.stockTotalAtSubmit ?? '',
+        [t('คงเหลือแยกคลังตอนขอ')]: i.stockByLocationAtSubmit
+          ? Object.entries(i.stockByLocationAtSubmit).map(([id, q]) => `${locationNameOf(id)} ${q}`).join(' · ')
+          : '',
         [t('จำนวนที่ขอ')]: i.requestedQty ?? '',
         [t('จำนวนที่อนุมัติ')]: i.approvedQty ?? '',
         [t('หน่วย')]: i.entryUnit ?? i.unit,
@@ -52,8 +60,13 @@ export function requestRows(pr: PurchaseRequest, locationName: string, t: T): Re
   return rows
 }
 
-export function exportRequestExcel(pr: PurchaseRequest, locationName: string, t: T): void {
-  exportExcel(`${pr.docNo}.xlsx`, pr.docNo, requestRows(pr, locationName, t))
+export function exportRequestExcel(
+  pr: PurchaseRequest,
+  locationName: string,
+  t: T,
+  locationNameOf?: (id: string) => string,
+): void {
+  exportExcel(`${pr.docNo}.xlsx`, pr.docNo, requestRows(pr, locationName, t, locationNameOf))
 }
 
 export function exportRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): void {

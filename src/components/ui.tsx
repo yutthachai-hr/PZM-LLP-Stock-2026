@@ -220,6 +220,12 @@ export function Modal({
   const t = useT()
   const panel = useRef<HTMLDivElement>(null)
   const titleId = useId()
+  // Where the last mouse press began. A click "on the overlay" that started inside the
+  // panel is somebody selecting text and letting go past its edge — the browser reports
+  // that as a click on the common ancestor, which used to close the dialog and lose the
+  // selection (the owner: "คลุมข้อความแล้วหลุดกรอบ มันหลุดเลย"). Only a press that both
+  // begins and ends on the backdrop closes it.
+  const pressedOnOverlay = useRef(false)
 
   // A dialog that is only a dialog visually: with no role, screen readers announced it as
   // ordinary page content; with no focus handling, Tab walked out of it into the page
@@ -281,7 +287,13 @@ export function Modal({
             ? 'fixed inset-0 z-50 flex justify-end overscroll-contain bg-ink/50 backdrop-blur-[2px]'
             : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/50 p-4 backdrop-blur-[2px] sm:items-center'
       }
-      onClick={onClose}
+      onMouseDown={(e) => {
+        pressedOnOverlay.current = e.target === e.currentTarget
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && pressedOnOverlay.current) onClose()
+        pressedOnOverlay.current = false
+      }}
     >
       <div
         ref={panel}

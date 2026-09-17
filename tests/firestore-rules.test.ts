@@ -574,6 +574,9 @@ describe('admins', () => {
     await assertSucceeds(
       setDoc(doc(as(ADMIN), 'locations/loc2'), location('loc2', { name: 'New' })),
     )
+    // A location may carry an English label for the English interface; nothing else.
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'locations/loc3'), location('loc3', { name: 'คลังหลัก', nameEn: 'Main Warehouse' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'locations/loc4'), location('loc4', { nameEn: 42 })))
     await assertSucceeds(getDocs(collection(as(ADMIN), 'users')))
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'users', PENDING), { active: true }))
     await assertSucceeds(setDoc(doc(as(ADMIN), 'users/uid-new'), { role: 'staff', active: true }))

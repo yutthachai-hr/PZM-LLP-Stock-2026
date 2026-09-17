@@ -108,7 +108,8 @@ async function renameToThai(brand: BrandId): Promise<void> {
   const locations = await backend.getAll<{ id: string; name: string }>(COL.locations)
   for (const l of locations) {
     const thai = names[l.name]
-    if (thai) await backend.update(COL.locations, l.id, { name: thai })
+    // The English default becomes the English label, so the demo reads right in both.
+    if (thai) await backend.update(COL.locations, l.id, { name: thai, nameEn: l.name })
   }
 }
 

@@ -472,6 +472,7 @@ export async function submitRequest(params: {
         ? {
             stockAtSubmit: qtyAt(pr.locationId, productId),
             stockTotalAtSubmit: activeLocations.reduce((n, l) => n + qtyAt(l.id, productId), 0),
+            stockByLocationAtSubmit: Object.fromEntries(activeLocations.map((l) => [l.id, qtyAt(l.id, productId)])),
           }
         : {}
     const items = pr.items.map((i) =>

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
 import { useAuth } from '../auth/AuthContext'
+import { useI18n } from '../i18n/I18nContext'
 import {
   COL,
   type Product,
@@ -13,7 +14,10 @@ import {
 
 interface DataState {
   products: Product[]
+  /** Named for the interface language: the English name when the screen is in English. */
   locations: StockLocation[]
+  /** As stored — the Thai name — for the screen that edits them. */
+  rawLocations: StockLocation[]
   levels: StockLevel[]
   movements: StockMovement[]
   minOverrides: MinOverride[]
@@ -72,7 +76,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.role === 'admin'
 
   const { data: products, loading: pLoading } = useLive<Product>(COL.products)
-  const { data: locations, loading: lLoading } = useLive<StockLocation>(COL.locations)
+  const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations)
+  const { lang } = useI18n()
+  // Every screen prints `location.name`; swapping it here is what makes "คลังหลัก" read
+  // "Main Warehouse" everywhere at once when the interface is in English.
+  const locations = useMemo(
+    () => (lang === 'en' ? rawLocations.map((l) => (l.nameEn ? { ...l, name: l.nameEn } : l)) : rawLocations),
+    [rawLocations, lang],
+  )
   const { data: levels, loading: sLoading } = useLive<StockLevel>(COL.stockLevels)
   const [movementsFrom, setMovementsFrom] = useState(
     () => Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000,
@@ -133,6 +144,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return {
       products,
       locations,
+      rawLocations,
       levels,
       movements,
       minOverrides,
@@ -153,6 +165,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [
     products,
     locations,
+    rawLocations,
     levels,
     movements,
     minOverrides,
