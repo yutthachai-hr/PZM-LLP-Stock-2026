@@ -25,14 +25,18 @@ import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './Purcha
 /**
  * The LIFF apps the owner registered, by the host they point at. A LIFF app has exactly
  * one Endpoint URL, so an id only works on the host LINE was told about; listing them by
- * host means a deploy on either platform finds its own without a build variable — which
- * Cloudflare Pages will not take from its dashboard once a wrangler.toml exists. Ids are
- * public (they ship in the client bundle). VITE_LIFF_ID still overrides, for the demo
- * branch and for trying a new app before it is listed here.
+ * host means a deployment finds its own without a build variable — which Cloudflare Pages
+ * will not take from its dashboard once a wrangler.toml exists. Ids are public (they ship
+ * in the client bundle). VITE_LIFF_ID still overrides, for trying a new app before it is
+ * listed here.
+ *
+ * The demo branch deploys to demo.pzmstock.pages.dev and is listed with the same app:
+ * the share target picker works there inside the LINE app, but LINE Login from an outside
+ * browser returns to the production host (the one Endpoint URL). Good enough for a demo.
  */
 const LIFF_BY_HOST: Record<string, string> = {
-  'pzmstock.netlify.app': '2011602857-k9K8Zplx',
   'pzmstock.pages.dev': '2011602857-k9K8Zplx',
+  'demo.pzmstock.pages.dev': '2011602857-k9K8Zplx',
 }
 
 /** The LIFF app id for this deployment, or '' when it has none. */

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "demo": "vite --mode demo --port 5175 --strictPort",
-    "build": "tsc -b && tsc -p netlify/tsconfig.json && tsc -p functions/tsconfig.json && vite build && node scripts/cf-postbuild.mjs",
+    "build": "tsc -b && tsc -p functions/tsconfig.json && vite build",
     "lint": "oxlint",
     "import-items": "node scripts/import-items.mjs",
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
@@ -17,8 +17,6 @@
   },
   "dependencies": {
     "@line/liff": "^2.31.0",
-    "@netlify/blobs": "^11.1.0",
-    "@netlify/functions": "^6.0.0",
     "dayjs": "^1.11.21",
     "firebase": "^12.16.0",
     "html2canvas": "^1.4.1",
