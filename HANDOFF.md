@@ -12,7 +12,7 @@
 |---|---|
 | Git `main` | ตรงกับ `origin/main`; สั่งซื้ออัตโนมัติ merge 15 ก.ย.; **รายการขอสั่งซื้อ (purchase requests) + บทบาท `manager` merge 15 ก.ย.** (branch `feat/purchase-requests`) |
 | Firestore rules | **deploy แล้ว 15 ก.ย.** ตรงกับไฟล์ที่ commit (รวม `purchaseRequests`, `manager()`, `requestId` บน purchaseOrders) |
-| Netlify | build จาก repo อัตโนมัติทุกครั้งที่ push เข้า `main` |
+| Hosting | **Cloudflare Pages เท่านั้น (ตัดสลับ 17 ก.ย.)** `https://pzmstock.pages.dev` build จาก `main` อัตโนมัติ; branch `demo` → `https://demo.pzmstock.pages.dev` (demo mode จากชื่อ branch) — Netlify เลิกใช้แล้ว |
 | Firebase project | `pzm-stock-x5` (ทั้งสองแบรนด์ใช้ project เดียวกัน แยกด้วย collection prefix) |
 | Repo | `github.com/yutthachai-hr/PZM-LLP-Stock-2026` (private) |
 | Demo mode | `npm run demo` — แยกจากของจริงสนิท ปลอดภัยสำหรับทดสอบทุกฟีเจอร์ |
@@ -101,7 +101,7 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 
 **สิทธิ์** (ใช้ 2 บทบาทเดิม ตามที่เจ้าของเลือก 14 ก.ย.): staff = นำเข้า/จับคู่/เลือกผู้ขายจากรายการของสินค้า (ประจำ+สำรอง)/อนุมัติ/ส่ง; admin เพิ่ม = เลือกผู้ขายใดก็ได้ + ตั้งเป็นผู้ขายประจำจากหน้า resolve, ยกเลิกชุดที่มีใบอนุมัติแล้ว, ลบชุด (rules)
 
-**ส่ง LINE** `src/share/`: interface `PurchaseShareProvider` (ฝั่ง PO ไม่ import LINE เลย) — `lineLiffProvider` ใช้ `@line/liff` `shareTargetPicker` (image message = URL สาธารณะ 2 อัน) ; `webShareProvider` = เมนูแชร์ของเครื่อง (ใช้เมื่อไม่มี `VITE_LIFF_ID` เช่น localhost) ตอบได้แค่ "เปิดแล้ว" แล้วถามคนว่าส่งหรือยัง. **รูปต้องมี URL**: Firebase Spark ไม่มี Storage → `netlify/functions/po-image.mts` + Netlify Blobs (token สุ่ม 128 บิต, 7 วัน, อัปโหลดต้องมี Firebase ID token ที่ verify กับ Google JWKS; demo ใช้ `PO_IMAGE_DEMO_KEY`) — typecheck ใน `npm run build` ผ่าน `netlify/tsconfig.json`
+**ส่ง LINE** `src/share/`: interface `PurchaseShareProvider` (ฝั่ง PO ไม่ import LINE เลย) — `lineLiffProvider` ใช้ `@line/liff` `shareTargetPicker` (image message = URL สาธารณะ 2 อัน) ; `webShareProvider` = เมนูแชร์ของเครื่อง (ใช้เมื่อไม่มี `VITE_LIFF_ID` เช่น localhost) ตอบได้แค่ "เปิดแล้ว" แล้วถามคนว่าส่งหรือยัง. **รูปต้องมี URL**: Firebase Spark ไม่มี Storage → `functions/api/po-image.ts` + Cloudflare KV (token สุ่ม 128 บิต, 7 วัน, อัปโหลดต้องมี Firebase ID token ที่ verify กับ Google JWKS; demo ใช้ `PO_IMAGE_DEMO_KEY`) — typecheck ใน `npm run build` ผ่าน `functions/tsconfig.json` (เดิมเป็น Netlify Blobs ถึง 17 ก.ย.)
 
 **ทดสอบใน demo แล้ว** (14 ก.ย.): ไฟล์ 3 ผู้ขาย → 4 กลุ่มหลังแก้ชีสกำกวม → ร่าง PO-00001 ต่อเจ้า → อนุมัติทั้งหมด → wizard ส่ง/ข้าม → "ส่งครบแล้ว" ทุกก้าวอยู่ในประวัติ; หน้าจอ 375px ผ่าน
 
@@ -132,7 +132,7 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 ```
 npm test              # 443 unit tests
 npm run test:rules    # 133 rules tests (ต้องมี Java สำหรับ emulator)
-npm run build          # tsc -b + typecheck netlify + cloudflare functions + vite build
+npm run build          # tsc -b + typecheck functions/ (Cloudflare) + vite build
 npm run lint            # 0 errors
 npm run i18n:check      # ครบทุกข้อความ
 ```
@@ -143,7 +143,7 @@ npm run i18n:check      # ครบทุกข้อความ
 
 -1. **รายการขอสั่งซื้อ — ขึ้นของจริงแล้ว 15 ก.ย.** สิ่งที่เจ้าของต้องทำเอง: (ก) Settings → ผู้ใช้ → ตั้งบทบาท "หัวหน้า" ให้คนที่อนุมัติ (ทั้งสองแบรนด์ถ้าจำเป็น); (ข) กด "จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย" ใน Settings (ทั้งสองแบรนด์) ให้เลข PO เดิมเรียงต่อผู้ขายตามที่ตัดสินไว้; (ค) บอกพนักงานว่าทางเข้าใหม่คือเมนู "รายการขอสั่งซื้อ" Excel เหลือเป็นทางเลือกในหน้าสั่งซื้อ
 
-0. **สั่งซื้ออัตโนมัติ — ขึ้นของจริงแล้ว 15 ก.ย.** (rules deploy → merge → Netlify build). ทดสอบส่ง LINE จริงผ่านแล้วบนเดโม (เจ้าของส่งถึงคนอื่นได้). ที่ยังต้องรู้: LIFF app `2011602857-k9K8Zplx` ถูกใช้ทั้ง production (`[context.production.environment]`) และ demo — LIFF app มี Endpoint ได้อันเดียว ตัวไหนไม่ตรง Endpoint จะ login LINE ไม่กลับ (เดโมยอมเสียได้). **Netlify Blobs บนแผนฟรี**: ใช้ได้จริง (รูปถูกฝากและ LINE ดึงได้ตอนทดสอบ). ขั้นตอนตั้งค่าเดโมด้านล่างเก็บไว้เป็นประวัติ:
+0. **สั่งซื้ออัตโนมัติ — ขึ้นของจริงแล้ว 15 ก.ย.** (rules deploy → merge → build). *(ขั้นตอนข้อ 1–6 ด้านล่างเป็นประวัติสมัย Netlify — ดู §8 สำหรับสภาพปัจจุบัน)* ทดสอบส่ง LINE จริงผ่านแล้วบนเดโม (เจ้าของส่งถึงคนอื่นได้). ที่ยังต้องรู้: LIFF app `2011602857-k9K8Zplx` ถูกใช้ทั้ง production (`[context.production.environment]`) และ demo — LIFF app มี Endpoint ได้อันเดียว ตัวไหนไม่ตรง Endpoint จะ login LINE ไม่กลับ (เดโมยอมเสียได้). **Netlify Blobs บนแผนฟรี**: ใช้ได้จริง (รูปถูกฝากและ LINE ดึงได้ตอนทดสอบ). ขั้นตอนตั้งค่าเดโมด้านล่างเก็บไว้เป็นประวัติ:
    1. **ลอง LIFF บน URL จริงก่อน** (localhost ใช้ LIFF ไม่ได้): เปิด branch deploy ชื่อ `demo` ใน Netlify UI (Site settings → Build & deploy → Branch deploys) — `netlify.toml` บังคับ `VITE_DEMO_MODE=1` ให้ context นี้แล้ว จะได้ `https://demo--pzmstock.netlify.app` ที่ใช้ browser storage ล้วน ไม่แตะ production
    2. ~~LIFF app~~ ทำแล้ว 14 ก.ย.: LIFF ID `2011602857-k9K8Zplx` อยู่ใน `netlify.toml` context `demo` แล้ว — ตรวจใน LINE Developers ว่า Endpoint URL = URL ข้อ 1 และ **Share target picker เปิดอยู่** (ถ้า Endpoint ตั้งเป็น pzmstock.netlify.app ไว้ ให้ย้าย id นี้ไป production context แทน)
    3. Netlify env สำหรับ `demo`: `PO_IMAGE_DEMO_KEY` และ `VITE_PO_IMAGE_DEMO_KEY` = สตริงสุ่มเดียวกัน (**ห้ามตั้งบน production**)
@@ -171,19 +171,33 @@ npm run i18n:check      # ครบทุกข้อความ
 
 ---
 
-## 8. Cloudflare Pages — **ขึ้นแล้วคู่ขนานกับ Netlify (15 ก.ย.)** ยังไม่ตัดสลับ
+## 8. Cloudflare Pages — **โฮสต์เดียวของระบบ (ตัดสลับ 17 ก.ย.)** Netlify เลิกใช้แล้ว
 
-`https://pzmstock.pages.dev` deploy จาก `main` อัตโนมัติเหมือน Netlify (project `pzmstock`, KV `po-images` = `227ca0f947374f5d9ddf9752b7ea506c`, Firebase authorized domain เพิ่มแล้ว) ตรวจแล้ว: SPA route, CSP, cache header, function 401/404, ไอคอน. **สิ่งที่ต่างจาก Netlify**: Cloudflare ไม่รับ build variable จาก dashboard เมื่อมี `wrangler.toml` → โค้ดเลือกเองตาม hostname: `src/services/poImages.ts` (`.pages.dev` → `/api/po-image`) และ `src/share/lineLiffProvider.ts` (`LIFF_BY_HOST`); Node เวอร์ชันมาจาก `.node-version`. LIFF app `2011602857-k9K8Zplx` ชี้ที่ Netlify อยู่ — วันตัดสลับให้ย้าย Endpoint URL ใน LINE Developers ไป `https://pzmstock.pages.dev` (โค้ดรองรับไว้แล้ว ไม่ต้องแก้)
+| | |
+|---|---|
+| Production | `https://pzmstock.pages.dev` ← branch `main` (project `pzmstock`, account `dc0c72ca65f1d5eea15758565cd427f7`) |
+| Demo | `https://demo.pzmstock.pages.dev` ← branch `demo` — **demo mode มาจากชื่อ branch** (`vite.config.ts`: `CF_PAGES_BRANCH === 'demo'` → `VITE_DEMO_MODE=1`) ใช้ browser storage ล้วน ไม่แตะ Firebase |
+| รูป PO | `functions/api/po-image.ts` + `functions/po/[token].ts` → KV `po-images` (`227ca0f947374f5d9ddf9752b7ea506c`, binding `PO_IMAGES` ใน `wrangler.toml`) หมดอายุ 7 วันเอง; ฟรี 1,000 write/วัน = ~500 ใบ/วัน |
+| Header/CSP | `public/_headers` (Vite คัดลอกเข้า `dist/` เอง) — `tests/image-host.test.ts` ล็อกโฮสต์ LINE ใน CSP และ no-cache ของ `sw.js` |
+| LIFF | `src/share/lineLiffProvider.ts` `LIFF_BY_HOST`: `pzmstock.pages.dev` และ `demo.pzmstock.pages.dev` → `2011602857-k9K8Zplx` — **Endpoint URL ของ LIFF app ต้องเป็น `https://pzmstock.pages.dev`** (LIFF app มี Endpoint ได้อันเดียว; บนเดโม picker ใช้ได้ในแอป LINE แต่ LINE Login จากเบราว์เซอร์นอกจะกลับไปที่ production) |
+| Firebase | Authorized domains มี `pzmstock.pages.dev` แล้ว (เดโมไม่ต้อง — ไม่ใช้ Firebase) |
+| Node | `.node-version` = 22 |
 
-**ตัดสลับเมื่อพร้อม**: แจ้งพนักงานใช้ `pzmstock.pages.dev` (หรือชี้โดเมนจริง) → ย้าย LIFF Endpoint → เปิด Netlify ทิ้งไว้จนทุกเครื่องเปิดแอปใหม่ (PWA cache) → แล้วค่อยลบ site Netlify + `netlify/`, `netlify.toml`, `@netlify/*`
+**สิ่งที่ต้องรู้เวลาแก้ config**: มี `wrangler.toml` แล้ว dashboard Cloudflare รับแค่ **Secrets** (ตัวแปรธรรมดาถูกล็อก "managed through wrangler.toml") → ค่าคงที่อยู่ในโค้ด/`wrangler.toml`, ค่าที่ขึ้นกับ branch derive จาก `CF_PAGES_BRANCH` ใน `vite.config.ts`. ก่อน 17 ก.ย. เดโมบน Cloudflare เคย build เป็นสำเนา production เพราะเหตุนี้ — แก้แล้ว
 
----
+**Secrets ที่ต้องมีบน environment Preview** (สำหรับเดโมส่ง LINE): `PO_IMAGE_DEMO_KEY` (function) และ `VITE_PO_IMAGE_DEMO_KEY` (build, ค่าเดียวกัน) — ห้ามตั้งบน Production. ถ้าไม่ตั้ง เดโมยังใช้ได้ทุกอย่างยกเว้นอัปโหลดรูปไปส่ง LINE ("เครื่องนี้ยังไม่ได้ตั้งค่าที่เก็บรูป")
+
+**ข้อมูล**: ไม่มีอะไรต้องย้าย — ข้อมูลทั้งหมดอยู่ใน Firestore `pzm-stock-x5` ซึ่งทั้งสองโฮสต์ชี้อยู่แล้ว; ที่หายไปกับ Netlify มีแค่รูป PO ชั่วคราว (อายุ 7 วัน) ใน Netlify Blobs และ URL `pzmstock.netlify.app`
+
+**ตรวจว่า deploy ลง**: `curl -s https://pzmstock.pages.dev/ | grep -o 'assets/index-[^"]*\.js'` แล้ว hash ต้องตรงกับ `npm run build` ในเครื่อง; `curl -sI https://pzmstock.pages.dev/ | grep -i content-security` ต้องมี CSP; `curl -X POST https://pzmstock.pages.dev/api/po-image` ต้องตอบ 401
+
+**เครื่องเก่าที่ยังเปิด `pzmstock.netlify.app`**: PWA จะยังเปิดจากแคชได้พักหนึ่ง แต่ LINE Login จะไม่กลับ (Endpoint ย้ายแล้ว) — ให้ทุกคนเปิด `https://pzmstock.pages.dev` แล้วติดตั้งใหม่ ลบ site Netlify ได้เมื่อไม่มีใครใช้ที่เก่าแล้ว
 
 ### ประวัติการเตรียม (คงไว้เพื่ออ้างอิง)
 
 ทำไม: bandwidth ไม่จำกัด, 500 build/เดือน, Pages Functions + **KV** ฟรีโดยไม่ต้องผูกบัตร (ที่เก็บรูป PO ไม่ต้องพึ่ง Netlify Blobs), branch `demo` ได้ URL ของตัวเองฟรี
 
-**ที่อยู่ใน repo แล้ว (Netlify ไม่แตะไฟล์พวกนี้เลย):**
+**ที่เตรียมไว้ตอนนั้น (ไฟล์ Netlify ถูกลบออกจาก repo 17 ก.ย.):**
 - `functions/api/po-image.ts` + `functions/po/[token].ts` + `functions/_poImage.ts` — ที่เก็บรูป PO เวอร์ชัน Cloudflare (KV + `expirationTtl` 7 วัน, verify Firebase token เหมือน Netlify) typecheck ใน `npm run build`
 - `cloudflare/_headers` — header/CSP ชุดเดียวกับ `netlify.toml` (test `tests/image-host.test.ts` ล็อกให้ตรงกัน) → `scripts/cf-postbuild.mjs` คัดลอกเข้า `dist/` เฉพาะตอน `CF_PAGES=1`
 - `wrangler.toml` — `pages_build_output_dir = "dist"`, KV binding `PO_IMAGES` (ต้องใส่ id จริง)

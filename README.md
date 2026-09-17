@@ -133,7 +133,7 @@ firebase deploy
 ```
 จะได้ URL เช่น `https://pizza-mania-stock.web.app` เปิดได้ทุกเครื่อง/มือถือ
 
-ทางเลือกอื่นที่ฟรี: **Netlify** หรือ **Vercel** (ลาก `dist/` ขึ้นไปได้เลย)
+ระบบจริง deploy บน **Cloudflare Pages** (`https://pzmstock.pages.dev`, build จาก `main` อัตโนมัติ — ดู HANDOFF.md §8)
 
 > เปิดบนมือถือแล้วกด "เพิ่มไปยังหน้าจอโฮม" จะติดตั้งเป็นแอป (PWA) ใช้เหมือนแอปจริง
 
