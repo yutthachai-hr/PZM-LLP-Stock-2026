@@ -18,8 +18,8 @@ const SRC = fileURLToPath(new URL('../src/', import.meta.url))
 const SKIP = /catalog\.generated|sarabunFont|[\\/]i18n[\\/]/
 // Files that legitimately hold Thai as data or as translation keys, not as rendered copy.
 // lib/orderSheet.ts holds the Thai column headings of the company's own order workbook:
-// data it reads, never copy it shows.
-const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]seed[\\/]products\.ts$|[\\/]lib[\\/]orderSheet\.ts$/
+// data it reads, never copy it shows. lib/siteTone.ts matches the sites' own Thai names.
+const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]seed[\\/]products\.ts$|[\\/]lib[\\/](orderSheet|siteTone)\.ts$/
 
 const THAI = /[฀-๿]/
 

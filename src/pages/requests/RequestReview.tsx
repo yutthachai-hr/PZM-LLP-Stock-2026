@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { siteTones } from '../../lib/siteTone'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
@@ -35,6 +36,8 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
   const { user } = useAuth()
   const { brand } = useBrand()
   const { products, locations, locationById, qtyAt } = useData()
+  const activeLocations = useMemo(() => locations.filter((l) => l.active !== false), [locations])
+  const tones = useMemo(() => siteTones(activeLocations), [activeLocations])
   const suppliers = useSuppliers()
 
   const [pr, setPrState] = useState(initial)
@@ -231,35 +234,38 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                           </div>
                         </td>
                         {/* What was on the shelf when this was sent for review — at the
-                            request's warehouse, with the figure across every location
-                            beneath. A draft shows the live balance instead, marked so. */}
+                            request's warehouse, then one tinted chip per site (the owner's
+                            colours: see lib/siteTone.ts). No all-sites total: the chips are
+                            the breakdown. A draft shows the live balance instead, marked so. */}
                         <td className="num px-2 py-2 text-right">
                           {(() => {
                             const live = item.stockAtSubmit === undefined
-                            const active = locations.filter((l) => l.active !== false)
                             const here = live ? qtyAt(pr.locationId, item.productId) : item.stockAtSubmit
                             // Per location: the frozen figures when they exist, else live.
-                            const perLoc = active.map((l) => ({
-                              l,
-                              qty: live ? qtyAt(l.id, item.productId) : (item.stockByLocationAtSubmit?.[l.id] ?? undefined),
-                            }))
-                            const total = live
-                              ? perLoc.reduce((n, x) => n + (x.qty ?? 0), 0)
-                              : item.stockTotalAtSubmit
+                            const perLoc = activeLocations
+                              .map((l) => ({
+                                l,
+                                qty: live ? qtyAt(l.id, item.productId) : item.stockByLocationAtSubmit?.[l.id],
+                              }))
+                              .filter((x) => x.qty !== undefined)
                             return (
                               <>
                                 <span className={`font-semibold ${here !== undefined && here <= 0 ? 'text-out' : 'text-ink'}`}>
                                   {here === undefined ? '—' : fmtQty(here)}
                                 </span>
-                                {total !== undefined && (
-                                  <span className="block text-xs text-ink-faint">{t('ทุกคลัง {n}', { n: fmtQty(total) })}</span>
+                                {perLoc.length > 0 && (
+                                  <span className="mt-1 flex flex-col items-end gap-0.5">
+                                    {perLoc.map((x) => (
+                                      <span
+                                        key={x.l.id}
+                                        className={`inline-flex min-w-[8.5rem] justify-between gap-2 rounded px-1.5 text-[11px] leading-5 ${tones.get(x.l.id) ?? ''} ${(x.qty ?? 0) <= 0 ? 'opacity-60' : ''}`}
+                                      >
+                                        <span className="truncate">{x.l.name}</span>
+                                        <span className="font-semibold">{fmtQty(x.qty ?? 0)}</span>
+                                      </span>
+                                    ))}
+                                  </span>
                                 )}
-                                <span className="block text-[10px] leading-4 text-ink-faint">
-                                  {perLoc
-                                    .filter((x) => x.qty !== undefined)
-                                    .map((x) => `${x.l.name} ${fmtQty(x.qty ?? 0)}`)
-                                    .join(' · ')}
-                                </span>
                                 {live && <span className="block text-[10px] text-ink-faint">{t('ปัจจุบัน')}</span>}
                               </>
                             )

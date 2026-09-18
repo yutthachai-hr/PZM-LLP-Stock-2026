@@ -461,7 +461,7 @@ export function CalendarPage() {
             <Spinner label={t('กำลังโหลดปฏิทิน...')} />
           </div>
         ) : view === 'month' ? (
-          <MonthGrid anchor={anchor} range={range} items={visible} now={now} onPick={(i) => setSelectedId(i.id)} onPickDay={setPickedDay} />
+          <MonthGrid anchor={anchor} range={range} items={visible} now={now} onPick={(i) => setSelectedId(i.id)} onPickDay={setPickedDay} onShift={shift} />
         ) : view === 'week' ? (
           <WeekView range={range} items={visible} now={now} onPick={(i) => setSelectedId(i.id)} onPickDay={(d) => { setAnchor(d); setView('day') }} />
         ) : (

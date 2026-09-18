@@ -141,21 +141,36 @@ export function renumberPlan(orders: readonly PurchaseOrder[]): {
  * removed and created afresh rather than edited. Returns what was changed so the screen
  * can show it and the history can name it.
  */
-export async function renumberOrdersPerSupplier(): Promise<RenumberChange[]> {
+export async function renumberOrdersPerSupplier(): Promise<{ changed: RenumberChange[]; failed: (RenumberChange & { error: string })[] }> {
   const db = scoped()
   const orders = await db.getAll<PurchaseOrder>(COL.purchaseOrders)
   const { changes, counters } = renumberPlan(orders)
   const now = Date.now()
+  const changed: RenumberChange[] = []
+  const failed: (RenumberChange & { error: string })[] = []
+  // One order at a time, carrying on past a refusal: stopping at the first one left the
+  // rest unchanged with only a generic error to show for it (owner report, 18 Sep 2026).
   for (const c of changes) {
-    await db.update(COL.purchaseOrders, c.id, { docNo: c.to, updatedAt: now })
+    try {
+      await db.update(COL.purchaseOrders, c.id, { docNo: c.to, updatedAt: now })
+      changed.push(c)
+      const o = orders.find((x) => x.id === c.id)
+      if (o) orderCache.patch({ ...o, docNo: c.to, updatedAt: now })
+    } catch (e) {
+      failed.push({ ...c, error: e instanceof Error ? e.message : String(e) })
+    }
   }
-  for (const [id, value] of counters) {
-    const cur = await db.getOne<{ value: number }>(COL.counters, id)
-    if (cur?.value === value) continue
-    if (cur && cur.value > value) await db.remove(COL.counters, id)
-    await db.set(COL.counters, id, { value })
+  // Counters only once every number is right, or a new order could reuse a number still
+  // printed on an order that failed to move.
+  if (failed.length === 0) {
+    for (const [id, value] of counters) {
+      const cur = await db.getOne<{ value: number }>(COL.counters, id)
+      if (cur?.value === value) continue
+      if (cur && cur.value > value) await db.remove(COL.counters, id)
+      await db.set(COL.counters, id, { value })
+    }
   }
-  return changes
+  return { changed, failed }
 }
 
 export interface OrderLineInput {
