@@ -1,17 +1,20 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { Icon } from '../../components/Icon'
+import { useToast } from '../../components/Toast'
 import { Badge, Button, Modal } from '../../components/ui'
 import { useData } from '../../data/DataContext'
+import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { fmtQty, formatThaiDate, formatThaiDateShort, formatThaiDateTime } from '../../lib/format'
-import { actionsFor, type ItemAction } from '../../lib/inventoryRules/permissions'
+import { actionsFor, canManageTasks, type ItemAction } from '../../lib/inventoryRules/permissions'
 import { expectedDeliveryAt, openPurchaseFor, type OpenPurchase } from '../../lib/inventoryRules/purchasing'
 import type { CalendarItem, ItemStatus } from '../../lib/inventoryRules/types'
 import { useSuppliers } from '../../services/suppliers'
 import { PR_STATUS_KEYS } from '../../lib/purchaseRequestStatus'
-import type { PurchaseOrder, PurchaseRequest, Role, StockEvent, StockEventStatus } from '../../types'
+import { approveEvent, cancelEvent, completeEvent, reopenEvent, rescheduleEvent, startEvent } from '../../services/events'
+import type { EventHistoryAction, EventHistoryEntry, PurchaseOrder, PurchaseRequest, Role, StockEvent } from '../../types'
 import {
   DAY_NAMES,
   EVENT_STATUS_LABEL,
@@ -24,6 +27,7 @@ import {
   timeOf,
 } from './chips'
 import { itemIcon, itemTitle } from './ItemRow'
+import { ReasonModal, RescheduleModal } from './RescheduleModal'
 
 /**
  * One item, opened beside the calendar (a sheet from the bottom on a phone).
@@ -37,7 +41,7 @@ export function ItemDrawer({
   orders,
   requests,
   onClose,
-  onMove,
+  onChanged,
   onEdit,
   onDelete,
 }: {
@@ -45,11 +49,15 @@ export function ItemDrawer({
   orders: readonly PurchaseOrder[]
   requests: readonly PurchaseRequest[]
   onClose: () => void
-  onMove: (item: CalendarItem, status: StockEventStatus) => Promise<void>
+  /** A workflow step went through; the task as it now is. */
+  onChanged: (e: StockEvent) => void
   onEdit: (item: CalendarItem) => void
   onDelete: (item: CalendarItem) => Promise<void>
 }) {
   const t = useT()
+  const toast = useToast()
+  const [dialog, setDialog] = useState<'reschedule' | 'cancel' | 'reopen' | null>(null)
+  const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
   const { user } = useAuth()
   const { locationById } = useData()
@@ -61,6 +69,27 @@ export function ItemDrawer({
     (item.kind === 'lowStock' || item.kind === 'outOfStock' || item.kind === 'reorder') && item.productId
       ? openPurchaseFor(item.productId, item.locationId, { requests, orders })
       : null
+
+  const actor = user ? { id: user.id, name: user.name } : null
+  const event = item.meta.kind === 'task' ? item.meta.event : null
+  const manages = !!user && canManageTasks(user.role as Role)
+  // Finishing a sign-off task hands it in, unless the finisher may sign it themselves.
+  const handsIn = !!event?.requiresApproval && !manages
+
+  // Each step signs the history in the actor's name; the drawer already holds the task,
+  // so nothing is read first.
+  async function run(step: () => Promise<StockEvent>, done: string): Promise<void> {
+    setBusy(true)
+    try {
+      onChanged(await step())
+      setDialog(null)
+      toast.success(done)
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const go = (path: string) => {
     onClose()
@@ -104,23 +133,39 @@ export function ItemDrawer({
       </dl>
 
       <div className="mt-6 space-y-2 border-t border-line pt-4">
-        {item.meta.kind === 'task' && (has('start') || has('complete')) && (
+        {event && actor && (has('start') || has('complete') || has('approve') || has('reopen')) && (
           <div className="flex flex-wrap gap-2">
             {has('start') && (
-              <Button variant="secondary" onClick={() => void onMove(item, 'inProgress')}>
+              <Button variant="secondary" disabled={busy} onClick={() => void run(() => startEvent(event, actor), t('เริ่มงานแล้ว'))}>
                 <Icon name="arrowRight" size={15} />
                 {t('เริ่มทำ')}
               </Button>
             )}
             {has('complete') && (
-              <Button variant="success" onClick={() => void onMove(item, 'completed')}>
+              <Button
+                variant="success"
+                disabled={busy}
+                onClick={() => void run(() => completeEvent(event, actor, { canApprove: manages }), handsIn ? t('ส่งให้หัวหน้าตรวจแล้ว') : t('บันทึกว่าเสร็จแล้ว'))}
+              >
                 <Icon name="check" size={15} />
-                {t('ทำเสร็จแล้ว')}
+                {handsIn ? t('ทำเสร็จ ส่งตรวจ') : t('ทำเสร็จแล้ว')}
+              </Button>
+            )}
+            {has('approve') && (
+              <Button variant="success" disabled={busy} onClick={() => void run(() => approveEvent(event, actor), t('อนุมัติแล้ว'))}>
+                <Icon name="checkCircle" size={15} />
+                {t('อนุมัติ')}
+              </Button>
+            )}
+            {has('reopen') && (
+              <Button variant="secondary" disabled={busy} onClick={() => setDialog('reopen')}>
+                <Icon name="refresh" size={15} />
+                {t('ส่งกลับให้ทำใหม่')}
               </Button>
             )}
           </div>
         )}
-        {item.meta.kind === 'task' && (has('edit') || has('cancel') || has('delete')) && (
+        {event && (has('edit') || has('reschedule') || has('cancel') || has('delete')) && (
           <div className="flex flex-wrap gap-2">
             {has('edit') && (
               <Button variant="secondary" onClick={() => onEdit(item)}>
@@ -128,8 +173,14 @@ export function ItemDrawer({
                 {t('แก้ไข')}
               </Button>
             )}
+            {has('reschedule') && (
+              <Button variant="secondary" disabled={busy} onClick={() => setDialog('reschedule')}>
+                <Icon name="clock" size={15} />
+                {t('เลื่อนงาน')}
+              </Button>
+            )}
             {has('cancel') && (
-              <Button variant="secondary" onClick={() => void onMove(item, 'cancelled')}>
+              <Button variant="secondary" disabled={busy} onClick={() => setDialog('cancel')}>
                 {t('ยกเลิกงาน')}
               </Button>
             )}
@@ -181,6 +232,35 @@ export function ItemDrawer({
           </div>
         )}
       </div>
+
+      {event && actor && dialog === 'reschedule' && (
+        <RescheduleModal
+          event={event}
+          onClose={() => setDialog(null)}
+          onSubmit={(start, reason) => run(() => rescheduleEvent(event, start, reason, actor), t('เลื่อนงานแล้ว'))}
+        />
+      )}
+      {event && actor && dialog === 'cancel' && (
+        <ReasonModal
+          title={t('ยกเลิกงาน')}
+          message={t('ยกเลิก "{title}" ? งานจะยังอยู่ในปฏิทินพร้อมเหตุผล', { title: event.title })}
+          confirmText={t('ยกเลิกงาน')}
+          required={false}
+          danger
+          onClose={() => setDialog(null)}
+          onSubmit={(reason) => run(() => cancelEvent(event, actor, reason), t('ยกเลิกงานแล้ว'))}
+        />
+      )}
+      {event && actor && dialog === 'reopen' && (
+        <ReasonModal
+          title={t('ส่งกลับให้ทำใหม่')}
+          message={t('บอกผู้ทำว่าต้องแก้อะไร — ข้อความนี้จะอยู่ในประวัติของงาน')}
+          confirmText={t('ส่งกลับ')}
+          required
+          onClose={() => setDialog(null)}
+          onSubmit={(reason) => run(() => reopenEvent(event, actor, reason), t('ส่งกลับแล้ว'))}
+        />
+      )}
     </Modal>
   )
 }
@@ -234,8 +314,73 @@ function TaskBody({ event: e, status, locationName }: { event: StockEvent; statu
       <Row label={t('คลัง/สาขา')}>{locationName(e.locationId) ?? <Muted>{t('ไม่ระบุ')}</Muted>}</Row>
       <Row label={t('ผู้รับผิดชอบ')}>{e.assignedToAll ? t('ทุกคน') : e.assignedToName || <Muted>{t('ยังไม่มอบหมาย')}</Muted>}</Row>
       <Row label={t('หมายเหตุ')}>{e.note ? <span className="whitespace-pre-line">{e.note}</span> : <Muted>{t('ไม่มี')}</Muted>}</Row>
+      {e.sourceType === 'schedule' && <Row label={t('ที่มา')}>{t('สร้างจากตารางนับสต๊อก')}</Row>}
+      {e.requiresApproval && <Row label={t('การตรวจ')}>{t('ต้องให้หัวหน้าอนุมัติเมื่อเสร็จ')}</Row>}
+      {e.rescheduledFrom !== undefined && (
+        <Row label={t('เดิมกำหนด')}>
+          {formatThaiDateShort(e.rescheduledFrom)} {timeOf(e.rescheduledFrom)}
+        </Row>
+      )}
+      {e.startedByName && <Row label={t('เริ่มโดย')}>{signed(e.startedByName, e.startedAt)}</Row>}
+      {e.completedByName && <Row label={t('ทำเสร็จโดย')}>{signed(e.completedByName, e.completedAt)}</Row>}
+      {e.approvedByName && <Row label={t('อนุมัติโดย')}>{signed(e.approvedByName, e.approvedAt)}</Row>}
+      {e.cancelReason && <Row label={t('เหตุผลที่ยกเลิก')}>{e.cancelReason}</Row>}
       <Row label={t('อัปเดตล่าสุด')}>{formatThaiDateTime(e.updatedAt)}</Row>
+      {(e.history?.length ?? 0) > 0 && <HistoryList history={e.history ?? []} />}
     </>
+  )
+}
+
+function signed(name: string, at?: number): string {
+  return at ? `${name} · ${formatThaiDateTime(at)}` : name
+}
+
+const HISTORY_LABEL: Record<EventHistoryAction, string> = {
+  created: 'สร้างงาน', // i18n-key
+  generated: 'สร้างจากตาราง', // i18n-key
+  assigned: 'มอบหมาย', // i18n-key
+  started: 'เริ่มทำ', // i18n-key
+  completed: 'ทำเสร็จ', // i18n-key
+  approved: 'อนุมัติ', // i18n-key
+  rescheduled: 'เลื่อนงาน', // i18n-key
+  cancelled: 'ยกเลิกงาน', // i18n-key
+  edited: 'แก้ไข', // i18n-key
+  reopened: 'ส่งกลับให้ทำใหม่', // i18n-key
+}
+
+const isMs = (v?: string) => !!v && /^[0-9]+$/.test(v)
+
+/** Who did what, newest first. A move shows the old and new time; a reason shows as said. */
+function HistoryList({ history }: { history: EventHistoryEntry[] }) {
+  const t = useT()
+  const when = (v: string) => (isMs(v) ? `${formatThaiDateShort(Number(v))} ${timeOf(Number(v))}` : v)
+  return (
+    <div className="border-t border-line pt-3">
+      <dt className="mb-2 text-xs text-ink-faint">{t('ประวัติ')}</dt>
+      <dd>
+        <ol className="space-y-2">
+          {[...history].reverse().map((h, i) => (
+            <li key={`${h.at}-${i}`} className="text-sm">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium text-ink">{t(HISTORY_LABEL[h.action] ?? h.action)}</span>
+                <span className="text-xs text-ink-soft">{h.byName}</span>
+                <span className="num text-xs text-ink-faint">{formatThaiDateTime(h.at)}</span>
+              </div>
+              {h.action === 'rescheduled' && h.oldValue && h.newValue && (
+                <div className="text-xs text-ink-soft">
+                  {when(h.oldValue)} → {when(h.newValue)}
+                </div>
+              )}
+              {h.detail === 'waitingApproval' ? (
+                <div className="text-xs text-ink-soft">{t('ส่งให้หัวหน้าตรวจ')}</div>
+              ) : (
+                h.detail && h.action !== 'generated' && <div className="whitespace-pre-line text-xs text-ink-soft">{h.detail}</div>
+              )}
+            </li>
+          ))}
+        </ol>
+      </dd>
+    </div>
   )
 }
 

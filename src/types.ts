@@ -438,9 +438,130 @@ export interface StockEvent {
    */
   productId?: string
   supplierId?: string
+  /**
+   * Where it came from. A task the schedule generated says so, names its schedule, and
+   * carries `refKey` = `schedule__<scheduleId>__stockCount__<yyyymmdd>` — the same string
+   * is its document id, which is what stops the same day being generated twice.
+   */
+  sourceType?: 'manual' | 'schedule'
+  sourceId?: string
+  scheduleId?: string
+  refKey?: string
+  /** Completing it hands it to a manager to sign off (status `waitingApproval`) first. */
+  requiresApproval?: boolean
+  /** Everything that happened to it, oldest first, in the actor's own name. */
+  history?: EventHistoryEntry[]
+  /** When it was originally set for, kept when it is moved. */
+  rescheduledFrom?: number
+  startedBy?: string
+  startedByName?: string
+  startedAt?: number
+  completedBy?: string
+  completedByName?: string
+  completedAt?: number
+  approvedBy?: string
+  approvedByName?: string
+  approvedAt?: number
+  cancelReason?: string
   createdBy: string
   createdAt: number
   updatedAt: number
+}
+
+export type EventHistoryAction =
+  | 'created'
+  | 'generated'
+  | 'assigned'
+  | 'started'
+  | 'completed'
+  | 'approved'
+  | 'rescheduled'
+  | 'cancelled'
+  | 'edited'
+  | 'reopened'
+
+export interface EventHistoryEntry {
+  at: number
+  by: string
+  byName: string
+  action: EventHistoryAction
+  /** For a reschedule: the old and new start, as ms; for a cancel: the reason. */
+  detail?: string
+  oldValue?: string
+  newValue?: string
+}
+
+// ---------------------------------------------------------------- inventory schedules ----
+
+export type ScheduleFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom'
+
+/**
+ * A recurring stock count, as the admin set it up: where, how often, what time, who.
+ * The tasks it produces are ordinary stockEvents of type `stockCount`, one per occurrence,
+ * with a deterministic id — generating a day twice writes the same document twice.
+ */
+export interface InventorySchedule {
+  id: string
+  kind: 'stockCount'
+  name: string
+  locationId: string
+  frequency: ScheduleFrequency
+  /** weekly / biweekly: 0 = Sunday … 6 = Saturday. */
+  daysOfWeek?: number[]
+  /** monthly: 1..31 (a month without that day counts on its last day). */
+  dayOfMonth?: number
+  /** custom: every N days from `anchorDay`. biweekly also counts weeks from `anchorDay`. */
+  intervalDays?: number
+  /** A Bangkok day (start-of-day ms) the rhythm is counted from. */
+  anchorDay?: number
+  /** HH:mm the count starts. */
+  startTime: string
+  /** How long until it is due, in minutes; absent = end of the day. */
+  durationMin?: number
+  assignedTo?: string[]
+  assignedToAll?: boolean
+  assignedToName?: string
+  requiresApproval?: boolean
+  priority: StockEventPriority
+  enabled: boolean
+  note?: string
+  createdBy: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** The thresholds and timings the calendar and the notifications work to. One per brand. */
+export interface InventorySettings {
+  id: 'settings'
+  kind: 'settings'
+  /** An adjustment worth at least this many baht is significant. */
+  adjustValueBaht: number
+  /** …or at least this percent of what was on hand. */
+  adjustPct: number
+  /** Waste/loss worth at least this many baht is told to the manager. */
+  wasteValueBaht: number
+  /** Days of cover a reorder recommendation aims for beyond the lead time. */
+  coverDays: number
+  /** Minutes before a task starts that its reminder goes out. */
+  reminderBeforeMin: number
+  /** Hours past due before an overdue task is escalated to the manager. */
+  escalateAfterHours: number
+  /** Days of movement history the usage rate is averaged over. */
+  usageWindowDays: number
+  updatedBy?: string
+  updatedAt: number
+}
+
+export const DEFAULT_INVENTORY_SETTINGS: Omit<InventorySettings, 'updatedAt' | 'updatedBy'> = {
+  id: 'settings',
+  kind: 'settings',
+  adjustValueBaht: 1000,
+  adjustPct: 20,
+  wasteValueBaht: 500,
+  coverDays: 7,
+  reminderBeforeMin: 60,
+  escalateAfterHours: 4,
+  usageWindowDays: 30,
 }
 
 // ---------------------------------------------------------------- purchase batches ----
@@ -690,6 +811,7 @@ export const COL = {
   suppliers: 'suppliers',
   supplierItems: 'supplierItems',
   events: 'stockEvents',
+  inventorySchedules: 'inventorySchedules',
   purchaseOrders: 'purchaseOrders',
   purchaseBatches: 'purchaseBatches',
   purchaseRequests: 'purchaseRequests',

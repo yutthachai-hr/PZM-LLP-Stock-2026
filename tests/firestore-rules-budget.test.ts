@@ -112,3 +112,29 @@ test('staff can receive the widest purchase order, and an admin can renumber it'
     await assertFails(updateDoc(doc(env.authenticatedContext(MANAGER).firestore(), `${brand}/po1`), { receivedBy: ADMIN, updatedAt: ts() }))
   }
 })
+
+test('staff can finish the widest task and a manager can move it', async () => {
+  const uids = Array.from({ length: 50 }, (_, i) => (i === 0 ? STAFF : 'uid-' + i))
+  const task = {
+    id: 'sc__sched__20260917', docNo: undefined, title: 'x'.repeat(300), type: 'stockCount', locationId: 'loc',
+    startAt: ts(), dueAt: ts() + 3_600_000, status: 'inProgress', priority: 'critical',
+    assignedTo: uids, assignedToName: 'a'.repeat(1000), note: 'n'.repeat(2000), productId: 'p', supplierId: 's',
+    sourceType: 'schedule', sourceId: 'sched', scheduleId: 'sched', refKey: 'sc__sched__20260917', requiresApproval: true,
+    history: Array.from({ length: 99 }, () => ({ at: ts(), by: STAFF, byName: 'S', action: 'edited', detail: 'd', oldValue: 'o', newValue: 'n' })),
+    rescheduledFrom: ts() - 86_400_000, startedBy: STAFF, startedByName: 'S', startedAt: ts(),
+    createdBy: MANAGER, createdAt: ts(), updatedAt: ts(),
+  }
+  delete (task as { docNo?: unknown }).docNo
+  for (const brand of ['stockEvents', 'lelapin__stockEvents']) {
+    await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), `${brand}/${task.id}`), task))
+    await replace(STAFF, `${brand}/${task.id}`, (cur) => ({
+      ...cur, status: 'waitingApproval', completedBy: STAFF, completedByName: 'S', completedAt: ts(),
+      history: [...(cur.history as unknown[]), { at: ts(), by: STAFF, byName: 'S', action: 'completed' }], updatedAt: ts(),
+    }))
+    await replace(MANAGER, `${brand}/${task.id}`, (cur) => ({
+      ...cur, status: 'completed', approvedBy: MANAGER, approvedByName: 'M', approvedAt: ts(), startAt: ts() + 86_400_000, dueAt: ts() + 90_000_000,
+      history: [...(cur.history as unknown[]), { at: ts(), by: MANAGER, byName: 'M', action: 'approved' }].slice(-100), updatedAt: ts(),
+    }))
+  }
+})
+

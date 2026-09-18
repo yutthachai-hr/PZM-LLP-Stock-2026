@@ -345,7 +345,7 @@ describe('what arrived after the backup was written', () => {
     seed('productAliases', [{ id: 'alias-1', key: 'X', productId: 'p1', sourceName: 'X ', createdBy: 'u', createdByName: 'U', createdAt: 1 }])
     seed('purchaseBatches', [{ id: 'pb1', batchNo: 'PB-20260914-001', locationId: MAIN, sourceFileName: 'f', fileHash: 'h', sheetName: 's', blockLabel: 'x', status: 'ready', rows: [], groups: [], history: [], createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 }])
     const b = await buildBackup('Owner')
-    expect(b.version).toBe(5)
+    expect(b.version).toBe(6)
     expect(b.data.productAliases).toHaveLength(1)
     expect(b.data.purchaseBatches).toHaveLength(1)
 
@@ -354,6 +354,19 @@ describe('what arrived after the backup was written', () => {
     await restoreBackup(parseBackup(JSON.stringify(b)), RESTORE_MODES.overwrite)
     expect(raw('productAliases')).toHaveLength(1)
     expect((raw('purchaseBatches')[0] as { status: string }).status).toBe('completed')
+  })
+
+  test('stock-count schedules and thresholds travel with the file', async () => {
+    seed('inventorySchedules', [
+      { id: 'sc1', kind: 'stockCount', name: 'นับคลังหลัก', locationId: MAIN, frequency: 'weekly', daysOfWeek: [1], startTime: '09:00', priority: 'normal', enabled: true, createdBy: 'uid-admin', createdAt: 1, updatedAt: 1 },
+      { id: 'settings', kind: 'settings', adjustValueBaht: 1000, adjustPct: 20, wasteValueBaht: 500, coverDays: 7, reminderBeforeMin: 60, escalateAfterHours: 4, usageWindowDays: 30, updatedAt: 1 },
+    ])
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    expect(file.data.inventorySchedules).toHaveLength(2)
+    resetMemory()
+    seedMasterData()
+    await restoreBackup(file, RESTORE_MODES.repair)
+    expect(raw('inventorySchedules')).toHaveLength(2)
   })
 
   test('a file from before these collections existed still restores', async () => {

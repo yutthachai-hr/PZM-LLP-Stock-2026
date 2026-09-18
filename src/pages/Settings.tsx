@@ -4,6 +4,9 @@ import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { BackupSection } from '../components/BackupSection'
+import { AutomationStatus } from './settings/AutomationStatus'
+import { SchedulesSection } from './settings/SchedulesSection'
+import { ThresholdsSection } from './settings/ThresholdsSection'
 import { Icon } from '../components/Icon'
 import {
   Badge,
@@ -45,6 +48,7 @@ export function SettingsPage() {
   const t = useT()
   const { user, mode } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const isManager = isAdmin || user?.role === 'manager'
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -57,6 +61,9 @@ export function SettingsPage() {
       {isAdmin && <LocationsSection />}
       {isAdmin && <UnitsSection />}
       {isAdmin && <UsersSection currentUserId={user!.id} />}
+      {isAdmin && <SchedulesSection />}
+      {isAdmin && <ThresholdsSection />}
+      {isManager && <AutomationStatus />}
       {isAdmin && <BackupSection />}
       {isAdmin && user && <MaintenanceSection actor={{ id: user.id, name: user.name }} />}
 

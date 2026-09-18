@@ -14,9 +14,10 @@ import { canManageTasks } from '../../lib/inventoryRules/permissions'
 import { bkkDayEnd, bkkDayStart, DAY_MS, isSameBkkDay } from '../../lib/inventoryRules/time'
 import type { CalendarItem, CalendarKind, ItemPriority, ItemStatus } from '../../lib/inventoryRules/types'
 import { looseMatch } from '../../lib/search'
-import { assigneesOf, dayBounds, deleteEvent, monthGridBounds, setEventStatus, weekBounds } from '../../services/events'
+import { runOnOpen } from '../../services/automation'
+import { assigneesOf, dayBounds, deleteEvent, monthGridBounds, weekBounds } from '../../services/events'
 import { useSuppliers } from '../../services/suppliers'
-import type { Role, StockEvent, StockEventStatus } from '../../types'
+import type { Role, StockEvent } from '../../types'
 import { AgendaList } from './AgendaList'
 import { KIND_LABEL, PRIORITY_LABEL, STATUS_LABEL } from './chips'
 import { CompactMonth } from './CompactMonth'
@@ -80,6 +81,17 @@ export function CalendarPage() {
   const phone = usePhone()
   const [params, setParams] = useSearchParams()
   const canManage = !!user && canManageTasks(user.role as Role)
+
+  // Today's and the next two weeks' stock counts, written from the schedules if the
+  // Worker has not (demo mode always; live only for a manager when the Worker is late).
+  // Once a day per device; the ids are deterministic, so overlapping with the Worker is
+  // harmless. A failure here is silent — the calendar still shows what exists.
+  const userId = user?.id
+  useEffect(() => {
+    if (!user) return
+    void runOnOpen({ id: user.id, name: user.name, role: user.role as Role }).catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -189,17 +201,6 @@ export function CalendarPage() {
     else setAnchor(anchor + dir * AGENDA_DAYS * DAY_MS)
   }
 
-  async function move(item: CalendarItem, next: StockEventStatus) {
-    if (item.meta.kind !== 'task') return
-    try {
-      await setEventStatus(item.meta.event.id, next)
-      feed.patchTask({ ...item.meta.event, status: next, updatedAt: Date.now() })
-      toast.success(t('บันทึกแล้ว'))
-    } catch (e) {
-      toast.error(errText(e, t))
-    }
-  }
-
   async function remove(item: CalendarItem) {
     if (item.meta.kind !== 'task') return
     const ok = await confirm({ title: t('ลบงาน'), message: t('ลบ "{title}" ?', { title: item.meta.event.title }), danger: true, confirmText: t('ลบ') })
@@ -284,7 +285,7 @@ export function CalendarPage() {
       orders={feed.orders}
       requests={feed.requests}
       onClose={() => setSelectedId(null)}
-      onMove={move}
+      onChanged={feed.patchTask}
       onEdit={(i) => {
         if (i.meta.kind === 'task') setEditing(i.meta.event)
         setSelectedId(null)
@@ -297,7 +298,7 @@ export function CalendarPage() {
     <EventEditor
       event={editing}
       initialStart={newStart ?? undefined}
-      userId={user.id}
+      actor={{ id: user.id, name: user.name }}
       onClose={() => {
         setCreating(false)
         setEditing(null)
