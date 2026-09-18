@@ -137,12 +137,13 @@ service cloud.firestore {
     }
 
     function staffDeletable(name) {
-      // An order that has been received is a record of goods that moved, so it stays. The
-      // service refuses it too; this is the half that a caller with a token cannot skip.
+      // A placed order is never deleted, only cancelled: every number stays on the books
+      // with who cancelled it and why. (Until 18 Sep 2026 any unreceived order could go.)
       return kind(name) == 'notes'
         // A confirmed spelling that turns out wrong is unlearned by deleting it.
         || kind(name) == 'productAliases'
-        || (kind(name) == 'purchaseOrders' && resource.data.status != 'received');
+        // A draft is a proposal the import screen rebuilds; nothing placed is ever deleted.
+        || (kind(name) == 'purchaseOrders' && resource.data.status == 'draft');
     }
 
     // ---------------------------------------------------------------- values ----
@@ -408,6 +409,7 @@ service cloud.firestore {
           'movementDocNo', 'eventId', 'note',
           'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
+          'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ]);
     }
@@ -430,7 +432,7 @@ service cloud.firestore {
      * expression budget).
      */
     function orderLive(d) {
-      return d.status in ['draft', 'ordered', 'received']
+      return d.status in ['draft', 'ordered', 'received', 'cancelled']
         && epochMs(d.orderedAt) && epochMs(d.updatedAt)
         // When the supplier is to deliver — the day the order asked for, or the lead time
         // counted from the order. The calendar's receiving entries hang off it.
@@ -454,6 +456,13 @@ service cloud.firestore {
         && (!('sentBy' in d) || text(d.sentBy, 200))
         && (!('sentByName' in d) || text(d.sentByName, 200))
         && (!('imageVersion' in d) || nonneg(d.imageVersion, 1000000))
+        // A cancelled order stays on the books, signed and with its reason — the number
+        // is never reused and the record is never removed (owner's rule, 18 Sep 2026).
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
+        && (!('cancelledByName' in d) || text(d.cancelledByName, 200))
+        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d))
         // An order that reached the books names the paper it came with. Without this the
         // invoice number is a habit the form could be talked out of.
         && (d.status != 'received' || ('invoiceNo' in d && 'movementDocNo' in d));
@@ -666,10 +675,16 @@ service cloud.firestore {
           // Approving a draft resets the order date and signs it; sending records where
           // the sheet got to. Neither may be signed in someone else's name.
           'orderedAt', 'approvedBy', 'approvedByName', 'approvedAt',
-          'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion'
+          'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
+          'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt'
         ])
         // The order date only moves when a draft is placed.
         && (!editedKeys().hasAny(['orderedAt']) || resource.data.status == 'draft')
+        // Cancelling is signed by the caller, and a cancelled order is closed for good —
+        // only an admin putting numbers right may still touch it.
+        && (!('cancelledBy' in request.resource.data) || request.resource.data.cancelledBy == request.auth.uid)
+        && (resource.data.status != 'cancelled' || roleIsAdmin())
+        && (resource.data.status != 'received' || request.resource.data.status == 'received')
         && (!('approvedBy' in request.resource.data)
             || request.resource.data.approvedBy == request.auth.uid
             || request.resource.data.approvedBy == resource.data.approvedBy)

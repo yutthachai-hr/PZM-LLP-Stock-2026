@@ -18,17 +18,19 @@ vi.mock('../src/backend', async () => {
   return { backend: m.memoryBackend, BACKEND_MODE: 'local' }
 })
 
-const { resetMemory, seed, raw } = await import('./helpers/memory-backend')
+const { resetMemory, seed, raw, memoryBackend } = await import('./helpers/memory-backend')
 const {
   CHASE_AFTER_DAYS,
   approvePurchaseOrder,
   createPurchaseOrder,
   setShareStatus,
   daysWaiting,
+  cancelPurchaseOrder,
   deletePurchaseOrder,
   listOrdersInRange,
   overdueOrders,
   receivePurchaseOrder,
+  repairReceivedDates,
   summariseBySupplier,
 } = await import('../src/services/purchaseOrders')
 const { setActiveBrand } = await import('../src/brand/brand')
@@ -381,6 +383,45 @@ describe('checking the delivery in', () => {
     })
     expect(orders()[0]).toMatchObject({ receivedBy: 'uid-nuiy', receivedByName: 'Nuiy' })
   })
+
+  test('the order is stamped with the delivery date, the same one the stock receipt is filed under', async () => {
+    // Until 17 Sep 2026 the order took Date.now() while the movement took the chosen date,
+    // so every receipt sheet said "received today" whatever the delivery note said.
+    const id = await placeOrder()
+    const delivered = new Date(2026, 8, 12, 0, 0).getTime()
+    await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-1',
+      date: delivered,
+      lines: [
+        { productId: 'p1', receivedQty: 0, checked: true },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+    })
+    expect(orders()[0].receivedAt).toBe(delivered)
+    expect(movements()[0].date).toBe(delivered)
+  })
+
+  test('orders stamped with the keying day are repaired from their stock receipt', async () => {
+    const id = await placeOrder()
+    const delivered = new Date(2026, 8, 12, 0, 0).getTime()
+    await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-1',
+      date: delivered,
+      lines: [
+        { productId: 'p1', receivedQty: 0, checked: true },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+    })
+    // Corrupt it the way the old code did.
+    await memoryBackend.update('purchaseOrders', id, { receivedAt: Date.now() })
+    expect(await repairReceivedDates()).toEqual({ checked: 1, fixed: 1 })
+    expect(orders()[0].receivedAt).toBe(delivered)
+    expect(await repairReceivedDates()).toEqual({ checked: 1, fixed: 0 })
+  })
 })
 
 describe('chasing an order that has not turned up', () => {
@@ -435,10 +476,23 @@ describe('reading orders back', () => {
 })
 
 describe('cancelling', () => {
-  test('an order that never arrived can be thrown away', async () => {
+  test('an order that never arrived is cancelled with a reason and stays on the books', async () => {
     const id = await placeOrder()
-    await deletePurchaseOrder(id)
-    expect(orders()).toHaveLength(0)
+    await expect(cancelPurchaseOrder({ id, reason: '  ', actor: ACTOR })).rejects.toThrow()
+    const next = await cancelPurchaseOrder({ id, reason: 'ผู้ขายของหมด', actor: ACTOR })
+    expect(next).toMatchObject({ status: 'cancelled', cancelReason: 'ผู้ขายของหมด', cancelledBy: ACTOR.id })
+    expect(orders()).toHaveLength(1)
+    expect(orders()[0].status).toBe('cancelled')
+    await expect(cancelPurchaseOrder({ id, reason: 'again', actor: ACTOR })).rejects.toThrow()
+    // A cancelled order is not awaited, and is not something ordered from anyone.
+    expect(overdueOrders(orders(), Date.now() + 30 * 86_400_000)).toHaveLength(0)
+    expect(summariseBySupplier(orders())).toHaveLength(0)
+  })
+
+  test('a placed order cannot be deleted, only a draft', async () => {
+    const id = await placeOrder()
+    await expect(deletePurchaseOrder(id)).rejects.toThrow()
+    expect(orders()).toHaveLength(1)
   })
 
   test('one that reached the books cannot be', async () => {
@@ -454,6 +508,7 @@ describe('cancelling', () => {
       actor: ACTOR,
     })
     await expect(deletePurchaseOrder(id)).rejects.toThrow()
+    await expect(cancelPurchaseOrder({ id, reason: 'x', actor: ACTOR })).rejects.toThrow()
     expect(orders()).toHaveLength(1)
   })
 })

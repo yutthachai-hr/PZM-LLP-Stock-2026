@@ -5,12 +5,11 @@ import { useBrand } from '../../brand/BrandContext'
 import { brandDef } from '../../brand/brand'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
-import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
-import { Badge, Button, Card, Input, PageHeader, SectionHeader, SegTab, Select } from '../../components/ui'
+import { Badge, Button, Card, Field, Input, Modal, PageHeader, SectionHeader, SegTab, Select } from '../../components/ui'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
-import { fmtQty, formatThaiDate, formatThaiDateTime } from '../../lib/format'
+import { dateInputToMs, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput } from '../../lib/format'
 import { isManager, isReadyForOrder, isUnderReview, liveItems, PR_STATUS_KEYS, prBadgeColor } from '../../lib/purchaseRequestStatus'
 import { exportRequestExcel, exportRequestPdf, groupedBySupplier } from '../../lib/requestExport'
 import * as S from '../../services/purchaseRequests'
@@ -32,7 +31,6 @@ import { ReasonModal } from './ReasonModal'
 export function RequestReview({ initial, onChange }: { initial: PurchaseRequest; onChange: (pr: PurchaseRequest) => void }) {
   const t = useT()
   const toast = useToast()
-  const confirm = useConfirm()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { brand } = useBrand()
@@ -52,6 +50,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
   const [ask, setAsk] = useState<null | 'return' | 'reject' | 'approve' | 'reopen' | { remove: PurchaseRequestItem }>(null)
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [sending, setSending] = useState(false)
+  const [converting, setConverting] = useState(false)
 
   const actor = useMemo(() => (user ? { id: user.id, name: user.name, role: user.role as Role } : null), [user])
   const manager = isManager(user?.role)
@@ -107,20 +106,12 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
       toast.success(t('เพิ่ม {name} แล้ว', { name: line.productName }))
     })
   }
-  async function convert() {
+  async function convert(expectedAt: Record<string, number>) {
     if (!actor) return
-    const ok = await confirm({
-      title: t('สร้างใบสั่งซื้อ'),
-      message: t('สร้างใบสั่งซื้อ {n} ใบ ({list}) จากจำนวนที่อนุมัติ — ทำได้ครั้งเดียว', {
-        n: groups.length,
-        list: groups.map((g) => g.supplierName).join(', '),
-      }),
-      confirmText: t('สร้างใบสั่งซื้อ'),
-    })
-    if (!ok) return
     await run('convert', async () => {
-      const next = await S.convertToOrders({ id: pr.id, products, actor })
+      const next = await S.convertToOrders({ id: pr.id, products, actor, expectedAt })
       setPr(next)
+      setConverting(false)
       toast.success(t('สร้างใบสั่งซื้อแล้ว {n} ใบ', { n: next.orders?.length ?? 0 }))
     })
   }
@@ -398,7 +389,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                   </>
                 )}
                 {isReadyForOrder(pr) && (
-                  <Button onClick={() => void convert()} disabled={!!busy || groups.length === 0}>
+                  <Button onClick={() => setConverting(true)} disabled={!!busy || groups.length === 0}>
                     <Icon name="truck" size={16} />
                     {busy === 'convert' ? t('กำลังสร้าง...') : t('สร้างใบสั่งซื้อ')}
                   </Button>
@@ -538,6 +529,19 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
           }}
         />
       )}
+      {converting && (
+        <ConvertModal
+          groups={groups.map((g) => ({
+            supplierId: g.supplierId,
+            supplierName: g.supplierName,
+            lines: g.items.length,
+            leadTimeDays: suppliers.find((s) => s.id === g.supplierId)?.leadTimeDays,
+          }))}
+          busy={busy === 'convert'}
+          onClose={() => setConverting(false)}
+          onConfirm={convert}
+        />
+      )}
       {sending && (
         <SendWizard
           orders={orders}
@@ -582,4 +586,59 @@ export function historyText(action: string, t: (k: string) => string): string {
     convertedToPo: t('สร้างใบสั่งซื้อ'),
   }
   return map[action] ?? action
+}
+
+/**
+ * The last question before the orders exist: when is each supplier to deliver? One date
+ * per supplier, started from their lead time, written on the order it becomes — the
+ * calendar's receiving entries and the "late" flag hang off it.
+ */
+function ConvertModal({
+  groups,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  groups: { supplierId: string; supplierName: string; lines: number; leadTimeDays?: number }[]
+  busy: boolean
+  onClose: () => void
+  onConfirm: (expectedAt: Record<string, number>) => Promise<void> | void
+}) {
+  const t = useT()
+  const [dates, setDates] = useState<Record<string, string>>(() =>
+    Object.fromEntries(groups.map((g) => [g.supplierId, msToDateInput(Date.now() + (g.leadTimeDays ?? 0) * 86_400_000)])),
+  )
+  return (
+    <Modal open onClose={onClose} title={t('สร้างใบสั่งซื้อ')}>
+      <p className="mb-3 text-sm text-ink-soft">
+        {t('สร้างใบสั่งซื้อ {n} ใบจากจำนวนที่อนุมัติ — ทำได้ครั้งเดียว ระบุวันที่ให้ส่งของของแต่ละผู้ขาย', { n: groups.length })}
+      </p>
+      <div className="space-y-3">
+        {groups.map((g) => (
+          <Field
+            key={g.supplierId}
+            label={`${g.supplierName} · ${t('{count} รายการ', { count: g.lines })}`}
+            hint={g.leadTimeDays !== undefined ? t('ระยะส่งของผู้ขาย {n} วัน', { n: g.leadTimeDays }) : undefined}
+          >
+            <Input type="date" value={dates[g.supplierId] ?? ''} onChange={(e) => setDates((cur) => ({ ...cur, [g.supplierId]: e.target.value }))} />
+          </Field>
+        ))}
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose} disabled={busy}>
+          {t('ยกเลิก')}
+        </Button>
+        <Button
+          disabled={busy}
+          onClick={() => {
+            const out: Record<string, number> = {}
+            for (const [id, v] of Object.entries(dates)) if (v) out[id] = dateInputToMs(v)
+            void onConfirm(out)
+          }}
+        >
+          {busy ? t('กำลังสร้าง...') : t('สร้างใบสั่งซื้อ')}
+        </Button>
+      </div>
+    </Modal>
+  )
 }

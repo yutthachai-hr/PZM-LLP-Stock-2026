@@ -37,7 +37,7 @@ export function PurchaseWidget() {
           review += b.rows.filter((r) => !r.skipped && rowState(r) !== 'ready').length
           const orders = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'batchId', b.id)
           for (const o of orders) {
-            if (o.status === 'draft') continue
+            if (o.status === 'draft' || o.status === 'cancelled') continue
             if (o.shareStatus === 'sent') sent++
             else if (o.shareStatus === 'skipped' || o.shareStatus === 'failed') stuck++
             else toSend++

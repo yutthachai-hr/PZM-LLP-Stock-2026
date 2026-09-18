@@ -6,8 +6,9 @@ import { brandDef } from '../brand/brand'
 import { useData } from '../data/DataContext'
 import { orderCache } from '../data/orderCache'
 import { useToast } from '../components/Toast'
-import { useConfirm } from '../components/Confirm'
+import { DataTable } from '../components/DataTable'
 import { Icon } from '../components/Icon'
+import { ReasonModal } from './requests/ReasonModal'
 import {
   Badge,
   Button,
@@ -21,14 +22,13 @@ import {
 } from '../components/ui'
 import {
   CHASE_AFTER_DAYS,
+  cancelPurchaseOrder,
   createPurchaseOrder,
   daysWaiting,
-  deletePurchaseOrder,
   expectedDeliveryAt,
   listOrdersInRange,
   overdueOrders,
   receivePurchaseOrder,
-  setExpectedDelivery,
   summariseBySupplier,
 } from '../services/purchaseOrders'
 import { useSuppliers } from '../services/suppliers'
@@ -38,7 +38,7 @@ import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
-import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs } from '../lib/format'
+import { fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput, dateInputToMs } from '../lib/format'
 import { useI18n, useT, type Lang } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import type { Product, PurchaseOrder, Supplier } from '../types'
@@ -60,14 +60,13 @@ import { looseMatch } from '../lib/search'
  * query, however many suppliers there are.
  */
 
-type Tab = 'open' | 'received' | 'summary'
+type Tab = 'open' | 'received' | 'cancelled' | 'summary'
 
 const DAY = 86_400_000
 
 export function OrdersPage() {
   const t = useT()
   const toast = useToast()
-  const confirm = useConfirm()
   const { user } = useAuth()
   const { brand } = useBrand()
   const { products, locations, locationById } = useData()
@@ -83,6 +82,7 @@ export function OrdersPage() {
   const [creating, setCreating] = useState(false)
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null)
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null)
+  const [cancelling, setCancelling] = useState<PurchaseOrder | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -121,35 +121,21 @@ export function OrdersPage() {
   )
   const late = useMemo(() => overdueOrders(orders, Date.now(), leadTimeOf), [orders, leadTimeOf])
 
-  async function changeExpected(order: PurchaseOrder, value: string) {
-    try {
-      const at = value ? dateInputToMs(value) : undefined
-      await setExpectedDelivery(order.id, at)
-      setOrders((cur) => cur.map((o) => (o.id === order.id ? { ...o, expectedAt: at } : o)))
-      orderCache.patch({ ...order, expectedAt: at, updatedAt: Date.now() })
-      toast.success(t('บันทึกแล้ว'))
-    } catch (e) {
-      toast.error(errText(e, t))
-    }
-  }
   const lateIds = useMemo(() => new Set(late.map((o) => o.id)), [late])
-  const open = orders.filter((o) => o.status !== 'received')
+  const open = orders.filter((o) => o.status === 'ordered' || o.status === 'draft')
   const received = orders.filter((o) => o.status === 'received')
+  // Cancelled orders stay in the list: the number, who called it off and why are the
+  // trail an audit follows. Nothing on this screen deletes an order.
+  const cancelled = orders.filter((o) => o.status === 'cancelled')
   const summary = useMemo(() => summariseBySupplier(orders), [orders])
 
-  async function remove(order: PurchaseOrder) {
-    const ok = await confirm({
-      title: t('ยกเลิกใบสั่งซื้อ'),
-      message: t('ยกเลิก {docNo} ? ใบที่ยังไม่รับของเท่านั้นที่ยกเลิกได้', { docNo: order.docNo }),
-      danger: true,
-      confirmText: t('ยกเลิกใบสั่งซื้อ'),
-    })
-    if (!ok) return
+  async function cancel(order: PurchaseOrder, reason: string) {
+    if (!user) return
     try {
-      await deletePurchaseOrder(order.id)
-      orderCache.remove(order.id)
-      toast.success(t('ยกเลิกแล้ว'))
-      await load()
+      const next = await cancelPurchaseOrder({ id: order.id, reason, actor: { id: user.id, name: user.name } })
+      setOrders((cur) => cur.map((o) => (o.id === order.id ? next : o)))
+      setCancelling(null)
+      toast.success(t('ยกเลิก {docNo} แล้ว', { docNo: order.docNo }))
     } catch (e) {
       toast.error(errText(e, t))
     }
@@ -164,7 +150,7 @@ export function OrdersPage() {
    * sheet reads as a diary. Received orders also carry what actually arrived.
    */
   function exportRows() {
-    const inView = tab === 'received' ? received : tab === 'open' ? open : orders
+    const inView = tab === 'received' ? received : tab === 'open' ? open : tab === 'cancelled' ? cancelled : orders
     return [...inView]
       .sort((a, b) => a.orderedAt - b.orderedAt)
       .flatMap((o) =>
@@ -177,11 +163,20 @@ export function OrdersPage() {
           [t('จำนวนที่สั่ง')]: l.orderedQty,
           [t('หน่วย')]: shownUnit(l),
           [t('สถานะ')]:
-            o.status === 'received' ? t('รับของแล้ว') : o.status === 'draft' ? t('ร่าง') : t('สั่งแล้ว'),
+            o.status === 'received'
+              ? t('รับของแล้ว')
+              : o.status === 'draft'
+                ? t('ร่าง')
+                : o.status === 'cancelled'
+                  ? t('ยกเลิกแล้ว')
+                  : t('สั่งแล้ว'),
+          [t('กำหนดส่ง')]: o.expectedAt ? formatThaiDate(o.expectedAt) : '',
           [t('จำนวนที่รับ')]: o.status === 'received' ? (l.receivedQty ?? '') : '',
           [t('วันที่รับ')]: o.receivedAt ? formatThaiDate(o.receivedAt) : '',
           [t('เลขที่บิล')]: o.invoiceNo ?? '',
           [t('ผู้สั่ง')]: o.createdByName,
+          [t('ผู้ยกเลิก')]: o.cancelledByName ?? '',
+          [t('เหตุผลที่ยกเลิก')]: o.cancelReason ?? '',
           [t('หมายเหตุ')]: l.note ?? '',
         })),
       )
@@ -210,7 +205,7 @@ export function OrdersPage() {
         title: t('รายการสั่งซื้อ — {company}', { company: brand ? brandDef(brand).name : '' }),
         meta: [
           t('{days} วันล่าสุด', { days }),
-          tab === 'received' ? t('รับของแล้ว') : tab === 'open' ? t('รอรับของ') : t('ทั้งหมด'),
+          tab === 'received' ? t('รับของแล้ว') : tab === 'open' ? t('รอรับของ') : tab === 'cancelled' ? t('ยกเลิกแล้ว') : t('ทั้งหมด'),
         ],
         head,
         body: rows.map((r) => head.map((h) => r[h])),
@@ -265,7 +260,7 @@ export function OrdersPage() {
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
-          {(['open', 'received', 'summary'] as Tab[]).map((k) => (
+          {(['open', 'received', 'cancelled', 'summary'] as Tab[]).map((k) => (
             <button
               key={k}
               onClick={() => setTab(k)}
@@ -277,7 +272,9 @@ export function OrdersPage() {
                 ? t('รอรับของ ({count})', { count: open.length })
                 : k === 'received'
                   ? t('รับของแล้ว ({count})', { count: received.length })
-                  : t('สรุปตามผู้ขาย')}
+                  : k === 'cancelled'
+                    ? t('ยกเลิกแล้ว ({count})', { count: cancelled.length })
+                    : t('สรุปตามผู้ขาย')}
             </button>
           ))}
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -309,6 +306,8 @@ export function OrdersPage() {
 
         {tab === 'summary' ? (
           <SupplierSummary rows={summary} />
+        ) : tab === 'cancelled' ? (
+          <CancelledTable rows={cancelled} locationName={(id) => locationById(id)?.name ?? ''} onOpen={setViewing} />
         ) : shown.length === 0 ? (
           <p className="p-8 text-center text-sm text-ink-soft">{t('ไม่มีใบสั่งซื้อในช่วงนี้')}</p>
         ) : (
@@ -319,11 +318,10 @@ export function OrdersPage() {
                 order={o}
                 late={lateIds.has(o.id)}
                 expectedAt={expectedDeliveryAt(o, leadTimeOf(o.supplierId))}
-                onExpectedChange={(v) => void changeExpected(o, v)}
                 locationName={locationById(o.locationId)?.name ?? ''}
                 onOpen={() => setViewing(o)}
                 onReceive={() => setReceiving(o)}
-                onRemove={() => void remove(o)}
+                onCancel={() => setCancelling(o)}
               />
             ))}
           </ul>
@@ -349,6 +347,50 @@ export function OrdersPage() {
         />
       )}
       {viewing && <OrderSheet order={viewing} locationName={locationById(viewing.locationId)?.name ?? ''} onClose={() => setViewing(null)} />}
+      {cancelling && (
+        <ReasonModal
+          title={t('ยกเลิกใบสั่งซื้อ {docNo}', { docNo: cancelling.docNo })}
+          message={t('ใบนี้จะยังอยู่ในรายการ "ยกเลิกแล้ว" พร้อมชื่อผู้ยกเลิกและเหตุผล เลขที่จะไม่ถูกนำกลับมาใช้')}
+          confirmText={t('ยกเลิกใบสั่งซื้อ')}
+          danger
+          onClose={() => setCancelling(null)}
+          onConfirm={(reason) => cancel(cancelling, reason)}
+        />
+      )}
+    </div>
+  )
+}
+
+/** The orders called off, as a table: the trail an audit reads. */
+function CancelledTable({
+  rows,
+  locationName,
+  onOpen,
+}: {
+  rows: PurchaseOrder[]
+  locationName: (id: string) => string
+  onOpen: (o: PurchaseOrder) => void
+}) {
+  const t = useT()
+  const sorted = [...rows].sort((a, b) => (b.cancelledAt ?? 0) - (a.cancelledAt ?? 0))
+  return (
+    <div className="p-3">
+      <DataTable
+        rows={sorted}
+        rowKey={(o) => o.id}
+        onRowClick={onOpen}
+        empty={<p className="p-8 text-center text-sm text-ink-soft">{t('ไม่มีใบสั่งซื้อที่ยกเลิกในช่วงนี้')}</p>}
+        columns={[
+          { key: 'docNo', header: t('เลขที่'), primary: true, cell: (o) => <span className="doc-no">{o.docNo}</span> },
+          { key: 'supplier', header: t('ผู้ขาย'), cell: (o) => o.supplierName },
+          { key: 'ordered', header: t('วันที่สั่ง'), cell: (o) => formatThaiDate(o.orderedAt) },
+          { key: 'location', header: t('คลังปลายทาง'), cell: (o) => locationName(o.locationId) },
+          { key: 'lines', header: t('รายการ'), align: 'right', cell: (o) => o.lines.length },
+          { key: 'by', header: t('ผู้ยกเลิก'), cell: (o) => o.cancelledByName ?? '' },
+          { key: 'at', header: t('ยกเลิกเมื่อ'), cell: (o) => (o.cancelledAt ? formatThaiDateTime(o.cancelledAt) : '') },
+          { key: 'reason', header: t('เหตุผล'), cell: (o) => <span className="whitespace-pre-line">{o.cancelReason ?? ''}</span> },
+        ]}
+      />
     </div>
   )
 }
@@ -357,21 +399,19 @@ function OrderRow({
   order,
   late,
   expectedAt,
-  onExpectedChange,
   locationName,
   onOpen,
   onReceive,
-  onRemove,
+  onCancel,
 }: {
   order: PurchaseOrder
   late: boolean
   /** The day the goods are due — written on the order, or counted from the lead time. */
   expectedAt?: number
-  onExpectedChange: (value: string) => void
   locationName: string
   onOpen: () => void
   onReceive: () => void
-  onRemove: () => void
+  onCancel: () => void
 }) {
   const t = useT()
   const done = order.status === 'received'
@@ -408,25 +448,16 @@ function OrderRow({
           {formatThaiDate(order.orderedAt)} · {locationName} ·{' '}
           {t('{count} รายการ', { count: order.lines.length })}
           {order.invoiceNo ? ` · ${t('บิล')} ${order.invoiceNo}` : ''}
+          {/* The day the supplier is to deliver — set when the order is placed (by hand or
+              from a request) and read-only here; the calendar and the "late" flag follow it. */}
+          {!done && !draft && expectedAt !== undefined && (
+            <>
+              {' · '}
+              {t('กำหนดส่ง')} {formatThaiDate(expectedAt)}
+              {order.expectedAt === undefined && <span className="text-ink-faint"> ({t('ตามระยะส่งของผู้ขาย')})</span>}
+            </>
+          )}
         </div>
-        {/* The day the supplier is to deliver. Editable in place while the goods are
-            still out — the supplier rings to say Thursday, not Tuesday, and the calendar
-            and the "late" flag follow the date written here. */}
-        {!done && !draft && (
-          <label className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
-            <span>{t('กำหนดส่ง')}</span>
-            <input
-              type="date"
-              value={order.expectedAt !== undefined ? msToDateInput(order.expectedAt) : ''}
-              onChange={(e) => onExpectedChange(e.target.value)}
-              aria-label={t('กำหนดส่ง')}
-              className="min-h-9 rounded-md border border-line bg-surface px-2 text-xs text-ink"
-            />
-            {order.expectedAt === undefined && expectedAt !== undefined && (
-              <span className="text-ink-faint">{t('ตามระยะส่งของผู้ขาย: {date}', { date: formatThaiDate(expectedAt) })}</span>
-            )}
-          </label>
-        )}
       </div>
       <div className="flex shrink-0 gap-2">
         <Button variant="ghost" onClick={onOpen}>
@@ -435,7 +466,7 @@ function OrderRow({
         {!done && !draft && <Button onClick={onReceive}>{t('ตรวจรับของ')}</Button>}
         {!done && (
           <button
-            onClick={onRemove}
+            onClick={onCancel}
             className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
           >
             {t('ยกเลิก')}

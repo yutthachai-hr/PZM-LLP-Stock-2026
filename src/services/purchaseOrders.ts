@@ -5,6 +5,7 @@ import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { sameUnit } from '../lib/units'
 import { requireEpochMs } from '../lib/validate'
+import { orderCache } from '../data/orderCache'
 import { receiveStock } from './stock'
 import {
   COL,
@@ -449,7 +450,10 @@ export async function receivePurchaseOrder(params: {
     status: 'received' satisfies PurchaseOrderStatus,
     lines: settled,
     invoiceNo,
-    receivedAt: now,
+    // The date on the delivery note, the same one the stock receipt is filed under — not
+    // the moment it was keyed. (Until 17 Sep 2026 this was Date.now(), which stamped every
+    // receipt with the day it was typed in.) `updatedAt` keeps the keying time.
+    receivedAt: params.date ?? now,
     receivedBy: actor.id,
     receivedByName: actor.name,
     movementDocNo: docNo,
@@ -458,13 +462,79 @@ export async function receivePurchaseOrder(params: {
   return { docNo, receivedLines: arrived.length }
 }
 
-/** Cancel an order that was never placed or never turned up. Stock is never involved. */
+/**
+ * Put right the received orders stamped with the keying day instead of the delivery date.
+ *
+ * Every receipt files a stock movement under the date the person chose; the order used to
+ * be stamped with Date.now(). The movement is the truth, so each received order takes the
+ * date of the movement it points at. Safe to run again: an order already right is skipped.
+ */
+export async function repairReceivedDates(): Promise<{ checked: number; fixed: number }> {
+  const db = scoped()
+  const orders = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'status', 'received')
+  let fixed = 0
+  for (const o of orders) {
+    if (!o.movementDocNo || o.receivedAt === undefined) continue
+    const moves = await db.getBy<{ date: number }>(COL.movements, 'docNo', o.movementDocNo)
+    const date = moves[0]?.date
+    if (date === undefined || sameDay(date, o.receivedAt)) continue
+    await db.update(COL.purchaseOrders, o.id, { receivedAt: date, updatedAt: Date.now() })
+    orderCache.patch({ ...o, receivedAt: date })
+    fixed++
+  }
+  return { checked: orders.length, fixed }
+}
+
+function sameDay(a: number, b: number): boolean {
+  const x = new Date(a)
+  const y = new Date(b)
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate()
+}
+
+/**
+ * Call an order off — one never placed, or one the goods never came for. Stock is never
+ * involved, and the document is never removed: it keeps its number, and records who
+ * cancelled it and why, so the sequence PO-00001, 00002, 00003 has no holes an audit
+ * cannot explain. (Until 18 Sep 2026 this deleted the document.)
+ */
+export async function cancelPurchaseOrder(params: {
+  id: string
+  reason: string
+  actor: { id: string; name: string }
+}): Promise<PurchaseOrder> {
+  const reason = params.reason.trim()
+  if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ยกเลิก')
+  const db = scoped()
+  const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, params.id)
+  if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
+  if (order.status === 'received') throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว')
+  if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ยกเลิกไปแล้ว')
+  const now = Date.now()
+  const patch = {
+    status: 'cancelled' as const,
+    cancelReason: reason,
+    cancelledBy: params.actor.id,
+    cancelledByName: params.actor.name,
+    cancelledAt: now,
+    updatedAt: now,
+  }
+  await db.update(COL.purchaseOrders, params.id, patch)
+  const next: PurchaseOrder = { ...order, ...patch }
+  orderCache.patch(next)
+  return next
+}
+
+/**
+ * Drop a draft. Only a draft: it is a proposal the import screen rebuilds as rows change,
+ * not an order anyone was told about. Anything placed is cancelled, never removed.
+ */
 export async function deletePurchaseOrder(id: string): Promise<void> {
   const order = await scoped().getOne<PurchaseOrder>(COL.purchaseOrders, id)
-  if (order?.status === 'received') {
-    throw new AppError('ลบไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว')
+  if (order && order.status !== 'draft') {
+    throw new AppError('ลบได้เฉพาะร่าง ใบที่สั่งแล้วต้องยกเลิกพร้อมเหตุผล')
   }
   await scoped().remove(COL.purchaseOrders, id)
+  orderCache.remove(id)
 }
 
 /**
@@ -478,7 +548,7 @@ export function summariseBySupplier(
 ): { supplierName: string; orders: number; lines: number; items: number }[] {
   const by = new Map<string, { supplierName: string; orders: number; lines: number; items: number }>()
   for (const o of orders) {
-    if (o.status === 'draft') continue // a proposal is not something ordered from anyone
+    if (o.status === 'draft' || o.status === 'cancelled') continue // neither was ordered from anyone
     const row = by.get(o.supplierId) ?? {
       supplierName: o.supplierName,
       orders: 0,

@@ -790,8 +790,24 @@ describe('orders placed with suppliers', () => {
     )
   })
 
-  test('an order that never arrived can be thrown away; one that reached the books cannot', async () => {
+  test('a placed order is cancelled in the caller name with a reason, never deleted', async () => {
+    // The number stays on the books with who called it off and why (owner, 18 Sep 2026).
     await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertFails(deleteDoc(at(STAFF)))
+    await assertFails(updateDoc(at(STAFF), { status: 'cancelled', updatedAt: ts() }))
+    await assertFails(
+      updateDoc(at(STAFF), { status: 'cancelled', cancelReason: 'x', cancelledBy: ADMIN, cancelledByName: 'Admin', cancelledAt: ts(), updatedAt: ts() }),
+    )
+    await assertSucceeds(
+      updateDoc(at(STAFF), { status: 'cancelled', cancelReason: 'supplier out of stock', cancelledBy: STAFF, cancelledByName: 'Staff', cancelledAt: ts(), updatedAt: ts() }),
+    )
+    // Cancelled is final for staff: it cannot be revived or received.
+    await assertFails(updateDoc(at(STAFF), { status: 'ordered', updatedAt: ts() }))
+    await assertFails(deleteDoc(at(STAFF)))
+  })
+
+  test('a draft nobody approved can still be dropped; one that reached the books cannot', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order({ status: 'draft', batchId: 'b1' })))
     await assertSucceeds(deleteDoc(at(STAFF)))
     await assertSucceeds(
       setDoc(at(STAFF, 'po2'), order({ id: 'po2', docNo: 'PO-00002' })),

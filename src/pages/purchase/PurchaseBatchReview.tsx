@@ -131,7 +131,7 @@ export function PurchaseBatchReviewPage() {
       batch
         ? batch.groups
             .map((g) => (g.poId ? orders.get(g.poId) : undefined))
-            .filter((o): o is PurchaseOrder => !!o && o.status !== 'draft')
+            .filter((o): o is PurchaseOrder => !!o && o.status !== 'draft' && o.status !== 'cancelled')
         : [],
     [batch, orders],
   )
@@ -272,7 +272,7 @@ export function PurchaseBatchReviewPage() {
         {batch.groups.map((g) => {
           const state = rowsReady(g, batch.rows)
           const order = g.poId ? orders.get(g.poId) : undefined
-          const placed = !!order && order.status !== 'draft'
+          const placed = !!order && order.status !== 'draft' && order.status !== 'cancelled'
           return (
             <Card key={g.supplierId} className="p-4">
               <div className="flex flex-wrap items-start gap-3">

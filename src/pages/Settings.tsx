@@ -692,6 +692,27 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
     }
   }
 
+  /**
+   * Received orders stamped with the day they were keyed instead of the delivery date
+   * (a bug until 17 Sep 2026). The stock movement has the right date; copy it back.
+   */
+  async function repairReceived() {
+    setBusy('received')
+    try {
+      const { repairReceivedDates } = await import('../services/purchaseOrders')
+      const r = await repairReceivedDates()
+      toast.success(
+        r.fixed === 0
+          ? t('วันที่รับของตรงกับใบรับสินค้าทุกใบแล้ว ({n} ใบ)', { n: r.checked })
+          : t('แก้วันที่รับของแล้ว {fixed} จาก {n} ใบ', { fixed: r.fixed, n: r.checked }),
+      )
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy('')
+    }
+  }
+
   async function seed() {
     const ok = await confirm({
       message: t("นำเข้าแคตตาล็อกสินค้า + คลังเริ่มต้น? (ข้ามถ้ามีข้อมูลอยู่แล้ว)"),
@@ -730,6 +751,9 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
         </Button>
         <Button variant="secondary" onClick={renumber} disabled={!!busy}>
           {busy === 'renumber' ? t('กำลังตรวจเลข...') : t('จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย')}
+        </Button>
+        <Button variant="secondary" onClick={repairReceived} disabled={!!busy}>
+          {busy === 'received' ? t('กำลังตรวจวันที่...') : t('ซ่อมวันที่รับของตามใบรับสินค้า')}
         </Button>
       </div>
       <p className="mt-2 text-xs text-ink-faint">

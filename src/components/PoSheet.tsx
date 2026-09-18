@@ -63,6 +63,7 @@ export function PoSheet({
   const L: Lang = lang ?? screen.lang
   const t = translatorFor(L)
   const received = order.status === 'received'
+  const cancelled = order.status === 'cancelled'
   const date = (ms: number) => formatDateFor(ms, L)
   return (
     <div id={id} ref={ref} className="rounded-lg border border-line-strong bg-white p-4 text-ink">
@@ -98,6 +99,12 @@ export function PoSheet({
           <span className="rounded border-2 border-in px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-in">
             {t('รับของแล้ว')}
             {order.receivedAt ? ` · ${date(order.receivedAt)}` : ''}
+          </span>
+        )}
+        {cancelled && (
+          <span className="rounded border-2 border-out px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-out">
+            {t('ยกเลิกแล้ว')}
+            {order.cancelledAt ? ` · ${date(order.cancelledAt)}` : ''}
           </span>
         )}
       </div>
@@ -138,6 +145,8 @@ export function PoSheet({
       <div className="pt-2 text-xs text-ink-faint">
         {t('ผู้สั่ง')}: {order.createdByName}
         {received && order.receivedByName ? ` · ${t('ผู้รับของ')}: ${order.receivedByName}` : ''}
+        {cancelled && order.cancelledByName ? ` · ${t('ผู้ยกเลิก')}: ${order.cancelledByName}` : ''}
+        {cancelled && order.cancelReason ? ` · ${t('เหตุผล')}: ${order.cancelReason}` : ''}
         {order.invoiceNo ? ` · ${t('บิล')} ${order.invoiceNo}` : ''}
         {order.note ? ` · ${order.note}` : ''}
       </div>
