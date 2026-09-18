@@ -592,6 +592,8 @@ export async function convertToOrders(params: {
   id: string
   products: readonly Product[]
   actor: Actor
+  /** The day each supplier is to deliver, by supplier id. Omitted: the lead time decides. */
+  expectedAt?: Readonly<Record<string, number>>
 }): Promise<PurchaseRequest> {
   const db = scoped()
   const pr = await getRequest(params.id)
@@ -617,6 +619,7 @@ export async function convertToOrders(params: {
       products: params.products,
       actor: { id: params.actor.id, name: params.actor.name },
       requestId: pr.id,
+      ...(params.expectedAt?.[g.supplierId] !== undefined ? { expectedAt: params.expectedAt[g.supplierId] } : {}),
     })
     const created = await db.getOne<PurchaseOrder>(COL.purchaseOrders, poId)
     orders.push({ supplierId: g.supplierId, supplierName: g.supplierName, poId, docNo: created?.docNo ?? '' })

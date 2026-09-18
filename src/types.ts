@@ -255,7 +255,7 @@ export type StockEventPriority = 'normal' | 'high' | 'critical'
  * the supplier; "received" is the moment the goods were checked in and the stock actually
  * moved. A draft is a list still being built, and nothing outside this app knows about it.
  */
-export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received'
+export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received' | 'cancelled'
 
 /** One product on an order, as ordered and as it actually turned up. */
 export interface PurchaseOrderLine {
@@ -282,6 +282,28 @@ export interface PurchaseOrderLine {
   checked?: boolean
   /** Why it did not match. The screen insists on one whenever the quantity was changed. */
   note?: string
+}
+
+/** One thing that moved in a revision, kept as data so either language can say it. */
+export type PoRevisionChange =
+  | { kind: 'qty'; productName: string; unit: string; from: number; to: number }
+  | { kind: 'add'; productName: string; unit: string; to: number }
+  | { kind: 'remove'; productName: string; unit: string; from: number }
+  | { kind: 'expectedAt'; from?: number; to?: number }
+  | { kind: 'note'; from?: string; to?: string }
+
+/**
+ * A change to a placed order: the PO revision of every purchasing system. The supplier
+ * already holds the number, so the number stays and the sheet goes out again marked
+ * Rev.n; what changed and why is kept on the order for the audit.
+ */
+export interface PoRevisionEntry {
+  rev: number
+  at: number
+  by: string
+  byName: string
+  reason: string
+  changes: PoRevisionChange[]
 }
 
 /**
@@ -324,6 +346,21 @@ export interface PurchaseOrder {
   receivedByName?: string
   /** The stock receipt this became, so the two can be read against each other. */
   movementDocNo?: string
+  /**
+   * Why it was called off, and by whom. A cancelled order keeps its number and stays in
+   * the list — an order that vanished is exactly what an audit cannot follow.
+   */
+  cancelReason?: string
+  cancelledBy?: string
+  cancelledByName?: string
+  cancelledAt?: number
+  /**
+   * How many times it was changed after being placed. The number the supplier holds
+   * stays the same; the sheet says "Rev.2" and is sent again. Absent = never changed.
+   */
+  revision?: number
+  /** Each change after placing, oldest first: who, why, and exactly what moved. */
+  revisions?: PoRevisionEntry[]
   /** The calendar entry that opened it, when it came from a weekly order. */
   eventId?: string
   /** The imported order list it came from, when it did not come from the manual screen. */

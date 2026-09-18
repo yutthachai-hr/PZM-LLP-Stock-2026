@@ -80,6 +80,10 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 - ใบสั่งซื้อพิมพ์ A5 ได้ หรือแคปหน้าจอส่งไลน์
 - ปุ่ม Excel / PDF ข้างช่วงวัน ออกรายการสั่งซื้อ 1 แถวต่อ 1 บรรทัดสินค้า (วันไหน ผู้ขายไหน สินค้าอะไร เท่าไร รับแล้วเท่าไร บิลอะไร)
 - ใบที่ "รับของแล้ว" **ลบไม่ได้แม้แต่ Admin** (เป็นหลักฐานของ stock receipt ที่ลบไม่ได้เหมือนกัน)
+- **18 ก.ย. — ใบสั่งซื้อไม่ลบอีกต่อไป (กันทุจริต)**: "ยกเลิก" = สถานะ `cancelled` + `cancelReason` + `cancelledBy/Name/At` (ต้องใส่เหตุผล) เลข PO ไม่ถูกนำกลับมาใช้; แท็บ "ยกเลิกแล้ว" เป็นตาราง; ใบขึ้นตรา "ยกเลิกแล้ว" สีแดง; Excel/PDF มีคอลัมน์ผู้ยกเลิก+เหตุผล; rules: staff ลบได้เฉพาะ `status == 'draft'` (ร่างจากชุดนำเข้า Excel ที่ระบบสร้างซ้ำได้ — `deletePurchaseOrder` ก็รับเฉพาะร่าง), ใบยกเลิกแล้วแก้ไม่ได้ยกเว้น admin
+- **18 ก.ย. — แก้ไขใบที่สั่งแล้ว = PO Revision** (`amendPurchaseOrder`): เลขเดิมคงไว้, `revision` นับ 1,2,3, `revisions[]` เก็บ `{rev, at, by, byName, reason, changes[]}` โดย `changes` เป็น data (`qty|add|remove|expectedAt|note` + from/to) แล้วแปลข้อความตอนแสดง; ใบขึ้น "PO-00002 · Rev.1"; ประวัติการแก้ใต้ใบใน OrderSheet; badge "แก้ไขแล้ว — ยังไม่ส่งใหม่" เมื่อ `needsResend()` (เคยส่ง LINE แล้วและ `sentAt` < revision ล่าสุด); **rules: บรรทัด/กำหนดส่งของใบที่สั่งแล้วเปลี่ยนได้เฉพาะพร้อม `revisions` ที่ยาวขึ้น** (หรือตอนรับของ) — แก้เงียบ ๆ ถูกปฏิเสธ; ร่างยังแก้อิสระ; ใบรับแล้วปิดถาวร
+- **กำหนดส่ง (`expectedAt`)** ตั้งได้ตอนสร้างเท่านั้น: หน้าสั่งเอง (prefill จาก lead time) และ **popup ตอนแปลง PR → PO** (`ConvertModal` ใน RequestReview: วันต่อผู้ขาย, `convertToOrders({ expectedAt: {supplierId: ms} })`) หลังจากนั้นเปลี่ยนผ่าน Revision เท่านั้น (`setExpectedDelivery` ถูกลบ 18 ก.ย.)
+- **บั๊กวันที่รับของ (แก้ 18 ก.ย.)**: `receivePurchaseOrder` เคยประทับ `receivedAt = Date.now()` ทั้งที่ stock movement ใช้วันที่เลือก → ใบรับของทุกใบขึ้นวันคีย์; ตอนนี้ใช้ `params.date`; ใบเก่าซ่อมด้วย Settings → ดูแลข้อมูล → "ซ่อมวันที่รับของตามใบรับสินค้า" (`repairReceivedDates`: ดึง `date` จาก movement ที่ `movementDocNo` ชี้) **เจ้าของต้องกดเองครั้งเดียวต่อแบรนด์หลัง deploy**
 - **เลข PO รันแยกตามผู้ขาย** (`counters/purchaseOrder__<supplierId>`, 14 ก.ย.) — ใบเก่า 8 ใบที่ออกใต้ตัวนับรวมยังเลขเดิม (rules ล็อกไว้) ตัวนับของแต่ละเจ้าเริ่มจาก max(จำนวนใบที่มี, เลขสูงสุดที่พิมพ์ไปแล้ว) เพื่อไม่ให้เลขซ้ำ (`orderCounterFloors`)
 - **ไฟล์สำรอง (format v3)** รวม suppliers / supplierItems / stockEvents / purchaseOrders แล้ว — ก่อนหน้านี้ 4 collection นี้ไม่อยู่ในไฟล์เลย กู้คืนแล้วใบสั่งซื้อและผู้ขายจะหายหมด; ใบสั่งซื้อเป็น append-only ตอนกู้คืนเหมือน ledger (ไม่ทับใบที่รับของไปแล้ว); rebuild ยอดคงเหลือหลังกู้คืนรู้จักยอดแยกหน่วย (`#Pack`) แล้ว — เดิมล้างเป็น 0
 
@@ -140,6 +144,8 @@ npm run i18n:check      # ครบทุกข้อความ
 ---
 
 ## 6. ค้างอยู่ / ต้องตัดสินใจต่อ
+
+-2. **18 ก.ย. — branch `fix/po-history`** (วันที่รับของ, ยกเลิกไม่ลบ, กำหนดส่งตอนสร้าง, PO Revision): commit แล้ว **รอ `npx firebase login --reauth` → deploy rules → merge main → verify bundle**; หลัง deploy เจ้าของกด "ซ่อมวันที่รับของตามใบรับสินค้า" ทั้งสองแบรนด์. Phase B ของปฏิทินค้างอยู่ใน `git stash` ชื่อ `phase-b-wip` บน `feat/inventory-calendar` (types/rules/tests/schedules.ts/events.ts/automation.ts/services/schedules.ts) — `git stash pop` แล้ว merge main เข้า (ชนที่ types.ts, firestore.rules, Settings.tsx, en.ts) ก่อนทำ UI ต่อ
 
 -1. **รายการขอสั่งซื้อ — ขึ้นของจริงแล้ว 15 ก.ย.** สิ่งที่เจ้าของต้องทำเอง: (ก) Settings → ผู้ใช้ → ตั้งบทบาท "หัวหน้า" ให้คนที่อนุมัติ (ทั้งสองแบรนด์ถ้าจำเป็น); (ข) กด "จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย" ใน Settings (ทั้งสองแบรนด์) ให้เลข PO เดิมเรียงต่อผู้ขายตามที่ตัดสินไว้; (ค) บอกพนักงานว่าทางเข้าใหม่คือเมนู "รายการขอสั่งซื้อ" Excel เหลือเป็นทางเลือกในหน้าสั่งซื้อ
 

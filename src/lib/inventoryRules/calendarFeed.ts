@@ -102,7 +102,8 @@ export function buildFeed(input: FeedInput): CalendarItem[] {
   }
 
   for (const order of input.orders) {
-    if (order.status === 'draft') continue
+    // A draft was never placed and a cancelled order never will be: neither is awaited.
+    if (order.status === 'draft' || order.status === 'cancelled') continue
     const lead = supplierById.get(order.supplierId)?.leadTimeDays
     const at = orderDay(order, lead)
     if (!inRange(at, range)) continue

@@ -3,8 +3,10 @@ import { DELETE_FIELD } from '../backend/types'
 import { isLate } from '../lib/inventoryRules/purchasing'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
+import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
 import { requireEpochMs } from '../lib/validate'
+import { orderCache } from '../data/orderCache'
 import { receiveStock } from './stock'
 import {
   COL,
@@ -12,6 +14,8 @@ import {
   type PurchaseOrder,
   type PurchaseOrderLine,
   type PurchaseOrderStatus,
+  type PoRevisionChange,
+  type PoRevisionEntry,
   type PurchaseShareStatus,
   type Supplier,
 } from '../types'
@@ -193,25 +197,7 @@ export async function createPurchaseOrder(params: {
   requireEpochMs(orderedAt)
   if (params.expectedAt !== undefined) requireEpochMs(params.expectedAt)
 
-  const byId = new Map(params.products.map((p) => [p.id, p]))
-  const lines: PurchaseOrderLine[] = []
-  for (const l of params.lines) {
-    if (!(l.qty > 0)) continue // a line nobody put a number against is not an order
-    const p = byId.get(l.productId)
-    if (!p) throw new AppError('ไม่พบสินค้า')
-    const entryUnit = (l.entryUnit ?? '').trim()
-    lines.push({
-      productId: p.id,
-      productName: p.name,
-      unit: p.unitType,
-      ...(entryUnit && !sameUnit(entryUnit, p.unitType) ? { entryUnit } : {}),
-      orderedQty: l.qty,
-    })
-  }
-  if (lines.length === 0) throw new AppError('ยังไม่ได้ระบุจำนวนสินค้าที่จะสั่ง')
-  if (lines.length > MAX_LINES) {
-    throw new AppError('สั่งได้สูงสุด {max} รายการต่อใบ', { max: MAX_LINES })
-  }
+  const lines = buildLines(params.lines, params.products)
 
   const db = scoped()
 
@@ -251,6 +237,30 @@ export async function createPurchaseOrder(params: {
     })
     return id
   })
+}
+
+/** The lines an order is made of, from what was keyed. A line with no number is not one. */
+function buildLines(input: readonly OrderLineInput[], products: readonly Product[]): PurchaseOrderLine[] {
+  const byId = new Map(products.map((p) => [p.id, p]))
+  const lines: PurchaseOrderLine[] = []
+  for (const l of input) {
+    if (!(l.qty > 0)) continue
+    const p = byId.get(l.productId)
+    if (!p) throw new AppError('ไม่พบสินค้า')
+    const entryUnit = (l.entryUnit ?? '').trim()
+    lines.push({
+      productId: p.id,
+      productName: p.name,
+      unit: p.unitType,
+      ...(entryUnit && !sameUnit(entryUnit, p.unitType) ? { entryUnit } : {}),
+      orderedQty: l.qty,
+    })
+  }
+  if (lines.length === 0) throw new AppError('ยังไม่ได้ระบุจำนวนสินค้าที่จะสั่ง')
+  if (lines.length > MAX_LINES) {
+    throw new AppError('สั่งได้สูงสุด {max} รายการต่อใบ', { max: MAX_LINES })
+  }
+  return lines
 }
 
 /**
@@ -329,15 +339,107 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrder | null
 export { expectedDeliveryAt, CHASE_AFTER_DAYS } from '../lib/inventoryRules/purchasing'
 
 /**
- * Change the delivery date the order is waiting on — the supplier said a different day,
- * or none was known when it was placed. Dated to the start of that day.
+ * What differs between an order as it stands and as it is about to be: the entries a
+ * revision records. Empty when nothing moved, which is not a revision.
  */
-export async function setExpectedDelivery(id: string, expectedAt: number | undefined): Promise<void> {
-  if (expectedAt !== undefined) requireEpochMs(expectedAt)
-  await scoped().update(COL.purchaseOrders, id, {
-    expectedAt: expectedAt === undefined ? DELETE_FIELD : expectedAt,
-    updatedAt: Date.now(),
-  })
+export function revisionChanges(
+  order: Pick<PurchaseOrder, 'lines' | 'expectedAt' | 'note'>,
+  next: { lines: readonly PurchaseOrderLine[]; expectedAt?: number; note?: string },
+): PoRevisionChange[] {
+  const out: PoRevisionChange[] = []
+  const before = new Map(order.lines.map((l) => [l.productId, l]))
+  const after = new Map(next.lines.map((l) => [l.productId, l]))
+  for (const l of order.lines) {
+    const n = after.get(l.productId)
+    if (!n) out.push({ kind: 'remove', productName: l.productName, unit: shownUnit(l), from: l.orderedQty })
+    else if (n.orderedQty !== l.orderedQty || shownUnit(n) !== shownUnit(l)) {
+      out.push({ kind: 'qty', productName: l.productName, unit: shownUnit(n), from: l.orderedQty, to: n.orderedQty })
+    }
+  }
+  for (const n of next.lines) {
+    if (!before.has(n.productId)) out.push({ kind: 'add', productName: n.productName, unit: shownUnit(n), to: n.orderedQty })
+  }
+  if ((order.expectedAt ?? null) !== (next.expectedAt ?? null)) {
+    out.push({
+      kind: 'expectedAt',
+      ...(order.expectedAt !== undefined ? { from: order.expectedAt } : {}),
+      ...(next.expectedAt !== undefined ? { to: next.expectedAt } : {}),
+    })
+  }
+  const noteNow = order.note?.trim() ?? ''
+  const noteNext = next.note?.trim() ?? ''
+  if (noteNow !== noteNext) {
+    out.push({ kind: 'note', ...(noteNow ? { from: noteNow } : {}), ...(noteNext ? { to: noteNext } : {}) })
+  }
+  return out
+}
+
+/** A revision is remembered fifty deep; the rules cap the list and the oldest go first. */
+const MAX_REVISIONS = 50
+
+/**
+ * Change a placed order — the PO revision of every purchasing system. The supplier holds
+ * the number already, so the number stays; the lines, the delivery date and the note may
+ * move, the change is signed and explained, and the sheet goes out again as Rev.n. An
+ * order whose goods were checked in is closed; a draft is edited on the screen it came
+ * from. Silent edits are refused by the rules: lines move only with a revision.
+ */
+export async function amendPurchaseOrder(params: {
+  id: string
+  lines: readonly OrderLineInput[]
+  expectedAt?: number
+  note?: string
+  reason: string
+  products: readonly Product[]
+  actor: { id: string; name: string }
+}): Promise<PurchaseOrder> {
+  const reason = params.reason.trim()
+  if (!reason) throw new AppError('กรุณาระบุเหตุผลที่แก้ไข')
+  if (params.expectedAt !== undefined) requireEpochMs(params.expectedAt)
+  const db = scoped()
+  const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, params.id)
+  if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
+  if (order.status !== 'ordered') throw new AppError('แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ')
+
+  const lines = buildLines(params.lines, params.products)
+  const note = params.note?.trim() || undefined
+  const changes = revisionChanges(order, { lines, expectedAt: params.expectedAt, note })
+  if (changes.length === 0) throw new AppError('ไม่มีอะไรเปลี่ยนจากเดิม')
+
+  const now = Date.now()
+  const rev = (order.revision ?? 0) + 1
+  const entry: PoRevisionEntry = { rev, at: now, by: params.actor.id, byName: params.actor.name, reason, changes }
+  const revisions = [...(order.revisions ?? []), entry].slice(-MAX_REVISIONS)
+  const patch: Record<string, unknown> = {
+    lines,
+    expectedAt: params.expectedAt === undefined ? DELETE_FIELD : params.expectedAt,
+    note: note === undefined ? DELETE_FIELD : note,
+    revision: rev,
+    revisions,
+    updatedAt: now,
+  }
+  await db.update(COL.purchaseOrders, params.id, patch)
+  const { expectedAt: _e, note: _n, ...rest } = order
+  void _e
+  void _n
+  const next: PurchaseOrder = {
+    ...rest,
+    lines,
+    ...(params.expectedAt !== undefined ? { expectedAt: params.expectedAt } : {}),
+    ...(note !== undefined ? { note } : {}),
+    revision: rev,
+    revisions,
+    updatedAt: now,
+  }
+  orderCache.patch(next)
+  return next
+}
+
+/** A revised order that has not gone out again since: the supplier still holds the old sheet. */
+export function needsResend(order: PurchaseOrder): boolean {
+  const last = order.revisions?.[order.revisions.length - 1]
+  if (!last || order.status !== 'ordered') return false
+  return order.shareStatus === 'sent' && (order.sentAt ?? 0) < last.at
 }
 
 /**
@@ -449,7 +551,10 @@ export async function receivePurchaseOrder(params: {
     status: 'received' satisfies PurchaseOrderStatus,
     lines: settled,
     invoiceNo,
-    receivedAt: now,
+    // The date on the delivery note, the same one the stock receipt is filed under — not
+    // the moment it was keyed. (Until 17 Sep 2026 this was Date.now(), which stamped every
+    // receipt with the day it was typed in.) `updatedAt` keeps the keying time.
+    receivedAt: params.date ?? now,
     receivedBy: actor.id,
     receivedByName: actor.name,
     movementDocNo: docNo,
@@ -458,13 +563,79 @@ export async function receivePurchaseOrder(params: {
   return { docNo, receivedLines: arrived.length }
 }
 
-/** Cancel an order that was never placed or never turned up. Stock is never involved. */
+/**
+ * Put right the received orders stamped with the keying day instead of the delivery date.
+ *
+ * Every receipt files a stock movement under the date the person chose; the order used to
+ * be stamped with Date.now(). The movement is the truth, so each received order takes the
+ * date of the movement it points at. Safe to run again: an order already right is skipped.
+ */
+export async function repairReceivedDates(): Promise<{ checked: number; fixed: number }> {
+  const db = scoped()
+  const orders = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'status', 'received')
+  let fixed = 0
+  for (const o of orders) {
+    if (!o.movementDocNo || o.receivedAt === undefined) continue
+    const moves = await db.getBy<{ date: number }>(COL.movements, 'docNo', o.movementDocNo)
+    const date = moves[0]?.date
+    if (date === undefined || sameDay(date, o.receivedAt)) continue
+    await db.update(COL.purchaseOrders, o.id, { receivedAt: date, updatedAt: Date.now() })
+    orderCache.patch({ ...o, receivedAt: date })
+    fixed++
+  }
+  return { checked: orders.length, fixed }
+}
+
+function sameDay(a: number, b: number): boolean {
+  const x = new Date(a)
+  const y = new Date(b)
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate()
+}
+
+/**
+ * Call an order off — one never placed, or one the goods never came for. Stock is never
+ * involved, and the document is never removed: it keeps its number, and records who
+ * cancelled it and why, so the sequence PO-00001, 00002, 00003 has no holes an audit
+ * cannot explain. (Until 18 Sep 2026 this deleted the document.)
+ */
+export async function cancelPurchaseOrder(params: {
+  id: string
+  reason: string
+  actor: { id: string; name: string }
+}): Promise<PurchaseOrder> {
+  const reason = params.reason.trim()
+  if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ยกเลิก')
+  const db = scoped()
+  const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, params.id)
+  if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
+  if (order.status === 'received') throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว')
+  if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ยกเลิกไปแล้ว')
+  const now = Date.now()
+  const patch = {
+    status: 'cancelled' as const,
+    cancelReason: reason,
+    cancelledBy: params.actor.id,
+    cancelledByName: params.actor.name,
+    cancelledAt: now,
+    updatedAt: now,
+  }
+  await db.update(COL.purchaseOrders, params.id, patch)
+  const next: PurchaseOrder = { ...order, ...patch }
+  orderCache.patch(next)
+  return next
+}
+
+/**
+ * Drop a draft. Only a draft: it is a proposal the import screen rebuilds as rows change,
+ * not an order anyone was told about. Anything placed is cancelled, never removed.
+ */
 export async function deletePurchaseOrder(id: string): Promise<void> {
   const order = await scoped().getOne<PurchaseOrder>(COL.purchaseOrders, id)
-  if (order?.status === 'received') {
-    throw new AppError('ลบไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว')
+  if (order && order.status !== 'draft') {
+    throw new AppError('ลบได้เฉพาะร่าง ใบที่สั่งแล้วต้องยกเลิกพร้อมเหตุผล')
   }
   await scoped().remove(COL.purchaseOrders, id)
+  orderCache.remove(id)
 }
 
 /**
@@ -478,7 +649,7 @@ export function summariseBySupplier(
 ): { supplierName: string; orders: number; lines: number; items: number }[] {
   const by = new Map<string, { supplierName: string; orders: number; lines: number; items: number }>()
   for (const o of orders) {
-    if (o.status === 'draft') continue // a proposal is not something ordered from anyone
+    if (o.status === 'draft' || o.status === 'cancelled') continue // neither was ordered from anyone
     const row = by.get(o.supplierId) ?? {
       supplierName: o.supplierName,
       orders: 0,

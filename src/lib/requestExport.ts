@@ -13,10 +13,10 @@ import { PR_STATUS_KEYS } from './purchaseRequestStatus'
 
 type T = (key: string, vars?: Record<string, string | number>) => string
 
-export function groupedBySupplier(pr: PurchaseRequest): { supplierName: string; items: PurchaseRequestItem[] }[] {
-  const by = new Map<string, { supplierName: string; items: PurchaseRequestItem[] }>()
+export function groupedBySupplier(pr: PurchaseRequest): { supplierId: string; supplierName: string; items: PurchaseRequestItem[] }[] {
+  const by = new Map<string, { supplierId: string; supplierName: string; items: PurchaseRequestItem[] }>()
   for (const i of liveItems(pr.items)) {
-    const g = by.get(i.supplierId) ?? { supplierName: i.supplierName, items: [] }
+    const g = by.get(i.supplierId) ?? { supplierId: i.supplierId, supplierName: i.supplierName, items: [] }
     g.items.push(i)
     by.set(i.supplierId, g)
   }
