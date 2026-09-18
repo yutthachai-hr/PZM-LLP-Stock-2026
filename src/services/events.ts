@@ -2,6 +2,8 @@ import { backend } from '../backend'
 import { AppError } from '../i18n/AppError'
 import { requireEpochMs } from '../lib/validate'
 import { DELETE_FIELD } from '../backend/types'
+import { taskApprovalDraft } from '../lib/inventoryRules/notifications'
+import { deliver } from './notifications'
 import {
   COL,
   type EventHistoryAction,
@@ -242,12 +244,19 @@ export async function startEvent(e: StockEvent, actor: Actor): Promise<StockEven
  * Finish a task. One that needs a manager's sign-off waits for it — unless the person
  * finishing it may sign, in which case it is done in one step, signed by them.
  */
-export async function completeEvent(e: StockEvent, actor: Actor, opts: { canApprove: boolean }): Promise<StockEvent> {
+export async function completeEvent(
+  e: StockEvent,
+  actor: Actor,
+  opts: { canApprove: boolean; locationName?: (id: string | undefined) => string },
+): Promise<StockEvent> {
   if (e.status !== 'upcoming' && e.status !== 'inProgress') throw new AppError('งานนี้ปิดไปแล้ว')
   const now = Date.now()
   const signed = { completedBy: actor.id, completedByName: actor.name, completedAt: now }
   if (e.requiresApproval && !opts.canApprove) {
-    return step(e, { status: 'waitingApproval', ...signed }, entry(actor, 'completed', now, { detail: 'waitingApproval' }))
+    const next = await step(e, { status: 'waitingApproval', ...signed }, entry(actor, 'completed', now, { detail: 'waitingApproval' }))
+    // Tell the managers now rather than at the next job run.
+    await deliver(taskApprovalDraft(next, opts.locationName ?? (() => '')), actor)
+    return next
   }
   const approval = e.requiresApproval ? { approvedBy: actor.id, approvedByName: actor.name, approvedAt: now } : {}
   return step(e, { status: 'completed', ...signed, ...approval }, entry(actor, 'completed', now))

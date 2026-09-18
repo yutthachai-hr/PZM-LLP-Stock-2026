@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { BackupSection } from '../components/BackupSection'
 import { AutomationStatus } from './settings/AutomationStatus'
+import { NotificationPrefsSection } from './settings/NotificationPrefsSection'
 import { SchedulesSection } from './settings/SchedulesSection'
 import { ThresholdsSection } from './settings/ThresholdsSection'
 import { Icon } from '../components/Icon'
@@ -57,6 +58,8 @@ export function SettingsPage() {
       {/* Hidden in a demo build: a config saved here is ignored by getFirebaseConfig(),
           so connecting would silently do nothing. */}
       {!isDemoMode() && <CloudSection mode={mode} />}
+
+      <NotificationPrefsSection />
 
       {isAdmin && <LocationsSection />}
       {isAdmin && <UnitsSection />}

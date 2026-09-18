@@ -1,10 +1,28 @@
 import { backend, BACKEND_MODE } from '../backend'
 import { getBrand } from '../brand/brand'
+import { inventoryInsights } from '../lib/inventoryRules/insights'
+import { evaluate, plan, weeklyFigures, type JobName } from '../lib/inventoryRules/notifications'
 import { GENERATE_AHEAD_DAYS, missingTasks, taskIdFor } from '../lib/inventoryRules/schedules'
+import { stockView } from '../lib/inventoryRules/stockView'
 import { bkkDayEnd, bkkDayKey, bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
-import { COL, type InventorySchedule, type Role, type StockEvent } from '../types'
-import { patchEvent } from '../data/eventCache'
+import {
+  COL,
+  type AppNotification,
+  type InventorySchedule,
+  type MinOverride,
+  type Product,
+  type Role,
+  type StockEvent,
+  type StockLevel,
+  type StockLocation,
+  type StockMovement,
+} from '../types'
+import { fetchRange as fetchEvents, patchEvent } from '../data/eventCache'
+import { orderCache } from '../data/orderCache'
+import { requestCache } from '../data/requestCache'
+import { applyPlan, getNotifications } from './notifications'
 import { loadScheduleConfig } from './schedules'
+import { loadSuppliers } from './suppliers'
 
 /**
  * The background jobs, run from the browser.
@@ -119,3 +137,111 @@ export async function runOnOpen(actor: { id: string; name: string; role: Role },
 
 /** The id the generator will use for a schedule on a day — for "preview next dates". */
 export { taskIdFor }
+
+// ---------------------------------------------------------------- notifications ----
+
+/** How often the app re-checks what to announce while it is open (live fallback only). */
+export const CLIENT_NOTIFY_EVERY_MS = 30 * 60_000
+const NOTIFY_KEY = 'pzm.automation.notifiedAt'
+
+/** How far back tasks are looked at for overdue and escalation. */
+export const TASK_LOOKBACK_DAYS = 14
+
+export interface NotifyData {
+  products: readonly Product[]
+  locations: readonly StockLocation[]
+  levels: readonly StockLevel[]
+  minOverrides: readonly MinOverride[]
+  movements: readonly StockMovement[]
+  notifications: readonly AppNotification[]
+}
+
+/**
+ * Whether this device should run the notification jobs now: in local mode, whenever asked;
+ * live, only a manager or admin, only while the Worker is late, and at most every half
+ * hour per device and brand.
+ */
+export async function shouldRunNotifications(role: Role, now = Date.now()): Promise<boolean> {
+  if (BACKEND_MODE === 'local') return true
+  if (role !== 'admin' && role !== 'manager') return false
+  let last = 0
+  try {
+    const raw = localStorage.getItem(`${NOTIFY_KEY}:${getBrand()}`)
+    last = raw ? Number(raw) : 0
+  } catch {
+    // no storage: fall through to the Worker check
+  }
+  if (now - last < CLIENT_NOTIFY_EVERY_MS) return false
+  const status = await readCronStatus()
+  return !(status?.lastRunAt && now - status.lastRunAt < WORKER_STALE_MS)
+}
+
+function markNotified(now: number): void {
+  try {
+    localStorage.setItem(`${NOTIFY_KEY}:${getBrand()}`, String(now))
+  } catch {
+    // harmless
+  }
+}
+
+/**
+ * Every notification job, from the browser: the Worker's work, on the same pure rules and
+ * under the same ids. Reads: three range queries through the session caches (usually
+ * already held), the configuration (held), and one read per announcement not already in
+ * the week the bell holds. Returns the number of documents written.
+ */
+export async function runNotificationJobs(
+  actor: { id: string; name: string },
+  data: NotifyData,
+  now = Date.now(),
+): Promise<number> {
+  const today = bkkDayStart(now)
+  const [events, orders, requests, suppliers, config] = await Promise.all([
+    fetchEvents(today - TASK_LOOKBACK_DAYS * DAY_MS, bkkDayEnd(now) + DAY_MS),
+    orderCache.fetchRange(today - 45 * DAY_MS, bkkDayEnd(now)),
+    requestCache.fetchRange(today - 30 * DAY_MS, bkkDayEnd(now)),
+    loadSuppliers(),
+    loadScheduleConfig(),
+  ])
+  const view = stockView(data)
+  const insights = inventoryInsights({
+    ...view,
+    products: data.products,
+    locations: data.locations,
+    movements: data.movements,
+    orders,
+    requests,
+    suppliers,
+    settings: config.settings,
+    snoozes: config.snoozes,
+    now,
+    adjustmentsSince: today - 7 * DAY_MS,
+  })
+  const locationName = (id: string | undefined) => data.locations.find((l) => l.id === id)?.name ?? ''
+  const jobs: JobName[] = ['tasks', 'purchasing', 'inventory', 'brief', 'weekly']
+  const drafts = evaluate({
+    now,
+    jobs,
+    events,
+    orders,
+    requests,
+    suppliers,
+    // Announce only the last two days' adjustments; the week is for the Monday figures.
+    insights: { ...insights, adjustments: insights.adjustments.filter((a) => a.movement.date >= today - 2 * DAY_MS) },
+    weekly: weeklyFigures({
+      now,
+      events,
+      orders,
+      adjustments: insights.adjustments,
+      leadTimeOf: (id) => suppliers.find((s) => s.id === id)?.leadTimeDays,
+    }),
+    locationName,
+    settings: config.settings,
+  })
+  const known = new Map(data.notifications.map((n) => [n.id, n]))
+  const missing = drafts.map((d) => d.id).filter((id) => !known.has(id))
+  for (const n of await getNotifications(missing)) known.set(n.id, n)
+  const written = await applyPlan(plan(drafts, known, jobs, now, 'client', actor.id))
+  markNotified(now)
+  return written
+}

@@ -14,7 +14,6 @@ import { canManageTasks } from '../../lib/inventoryRules/permissions'
 import { bkkDayEnd, bkkDayStart, DAY_MS, isSameBkkDay } from '../../lib/inventoryRules/time'
 import type { CalendarItem, CalendarKind, ItemPriority, ItemStatus } from '../../lib/inventoryRules/types'
 import { looseMatch } from '../../lib/search'
-import { runOnOpen } from '../../services/automation'
 import { assigneesOf, dayBounds, deleteEvent, monthGridBounds, weekBounds } from '../../services/events'
 import { useSuppliers } from '../../services/suppliers'
 import type { Role, StockEvent } from '../../types'
@@ -40,7 +39,7 @@ type View = 'month' | 'week' | 'day' | 'agenda'
 type Quick = 'all' | 'today' | 'attention' | 'tasks' | 'purchasing' | 'stock' | 'completed'
 
 const AGENDA_DAYS = 45
-const KINDS: CalendarKind[] = ['task', 'poExpected', 'prPending', 'cutoff', 'lowStock', 'outOfStock']
+const KINDS: CalendarKind[] = ['task', 'poExpected', 'prPending', 'cutoff', 'lowStock', 'outOfStock', 'reorder', 'stockoutEstimate', 'adjustment', 'waste']
 const STATUSES: ItemStatus[] = ['pending', 'inProgress', 'waitingApproval', 'completed', 'overdue', 'cancelled']
 const PRIORITIES: ItemPriority[] = ['critical', 'high', 'medium', 'normal']
 
@@ -69,7 +68,8 @@ function usePhone(): boolean {
 const isOpen = (i: CalendarItem) => i.status === 'pending' || i.status === 'inProgress' || i.status === 'waitingApproval' || i.status === 'overdue'
 const needsAttention = (i: CalendarItem) => i.status === 'overdue' || i.priority === 'critical' || (i.priority === 'high' && isOpen(i))
 const isPurchasing = (i: CalendarItem) => i.kind === 'poExpected' || i.kind === 'prPending' || i.kind === 'cutoff'
-const isStock = (i: CalendarItem) => i.kind === 'lowStock' || i.kind === 'outOfStock' || i.kind === 'stockoutEstimate' || i.kind === 'reorder'
+const isStock = (i: CalendarItem) =>
+  i.kind === 'lowStock' || i.kind === 'outOfStock' || i.kind === 'stockoutEstimate' || i.kind === 'reorder' || i.kind === 'adjustment' || i.kind === 'waste'
 
 export function CalendarPage() {
   const { t, lang } = useI18n()
@@ -81,17 +81,6 @@ export function CalendarPage() {
   const phone = usePhone()
   const [params, setParams] = useSearchParams()
   const canManage = !!user && canManageTasks(user.role as Role)
-
-  // Today's and the next two weeks' stock counts, written from the schedules if the
-  // Worker has not (demo mode always; live only for a manager when the Worker is late).
-  // Once a day per device; the ids are deterministic, so overlapping with the Worker is
-  // harmless. A failure here is silent — the calendar still shows what exists.
-  const userId = user?.id
-  useEffect(() => {
-    if (!user) return
-    void runOnOpen({ id: user.id, name: user.name, role: user.role as Role }).catch(() => undefined)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId])
 
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {

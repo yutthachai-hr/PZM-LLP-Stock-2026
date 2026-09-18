@@ -49,6 +49,17 @@ function applyPatch_(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...existing }
   for (const [k, v] of Object.entries(patch)) {
+    // "a.b" is a field inside a map, as Firestore's update() reads it — how one person marks
+    // a notification read without rewriting everyone else's entry.
+    const dot = k.indexOf('.')
+    if (dot > 0) {
+      const head = k.slice(0, dot)
+      const inner = { ...((out[head] as Record<string, unknown> | undefined) ?? {}) }
+      if (v === DELETE_FIELD) delete inner[k.slice(dot + 1)]
+      else inner[k.slice(dot + 1)] = clone(v)
+      out[head] = inner
+      continue
+    }
     if (v === DELETE_FIELD) delete out[k]
     else out[k] = clone(v)
   }

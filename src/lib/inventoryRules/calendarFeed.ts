@@ -20,6 +20,10 @@ export const TITLE = {
   cutoff: 'ตัดรอบสั่ง {supplier} · {time}', // i18n-key
   lowStock: '{product} ใกล้หมด · เหลือ {qty} {unit}', // i18n-key
   outOfStock: '{product} หมด · {location}', // i18n-key
+  reorder: 'แนะนำสั่ง {product} · {qty} {unit}', // i18n-key
+  stockoutEstimate: '{product} คาดว่าจะหมดใน {days} วัน', // i18n-key
+  adjustment: 'ปรับสต๊อก {product} {sign}{qty} {unit}', // i18n-key
+  waste: 'ของเสีย {product} -{qty} {unit}', // i18n-key
 } as const
 
 const PRIORITY_RANK: Record<ItemPriority, number> = { critical: 0, high: 1, medium: 2, normal: 3 }
@@ -204,6 +208,79 @@ export function buildFeed(input: FeedInput): CalendarItem[] {
         persisted: false,
       })
     }
+  }
+
+  // The analysis: suggestions and estimates sit on today, adjustments on their own day.
+  const ins = input.insights
+  if (ins && inRange(today, range)) {
+    for (const r of ins.reorders) {
+      items.push({
+        id: `reorder__${r.product.id}__${r.location.id}`,
+        kind: 'reorder',
+        sourceType: 'derived',
+        sourceId: `${r.location.id}__${r.product.id}`,
+        titleKey: TITLE.reorder,
+        titleParams: { product: r.product.name, qty: r.recommendedQty, unit: r.product.unitType },
+        at: today,
+        allDay: true,
+        locationId: r.location.id,
+        productId: r.product.id,
+        supplierId: r.supplier?.id,
+        priority: r.inProgress ? 'normal' : 'medium',
+        status: 'info',
+        meta: {
+          kind: 'reorder',
+          product: r.product,
+          location: r.location,
+          onHand: r.onHand,
+          incoming: r.incoming,
+          avgDaily: r.avgDaily,
+          daysLeft: r.daysLeft,
+          recommendedQty: r.recommendedQty,
+          supplier: r.supplier,
+          basis: r.basis,
+        },
+        persisted: false,
+      })
+    }
+    for (const s of ins.stockouts) {
+      items.push({
+        id: `stockoutEstimate__${s.product.id}__${s.location.id}`,
+        kind: 'stockoutEstimate',
+        sourceType: 'derived',
+        sourceId: `${s.location.id}__${s.product.id}`,
+        titleKey: TITLE.stockoutEstimate,
+        titleParams: { product: s.product.name, days: Math.max(0, Math.floor(s.daysLeft)) },
+        at: today,
+        allDay: true,
+        locationId: s.location.id,
+        productId: s.product.id,
+        priority: 'high',
+        status: 'info',
+        meta: { kind: 'stockoutEstimate', product: s.product, location: s.location, qty: s.qty, avgDaily: s.avgDaily, daysLeft: s.daysLeft },
+        persisted: false,
+      })
+    }
+  }
+  for (const a of ins?.adjustments ?? []) {
+    const m = a.movement
+    if (!inRange(m.date, range)) continue
+    items.push({
+      id: `${a.kind}__${m.id}`,
+      kind: a.kind,
+      sourceType: 'movement',
+      sourceId: m.id,
+      titleKey: a.kind === 'waste' ? TITLE.waste : TITLE.adjustment,
+      titleParams: { product: m.productName, qty: m.qty, unit: m.unit, sign: m.fromLocationId ? '-' : '+' },
+      at: m.date,
+      allDay: true,
+      locationId: m.fromLocationId ?? m.toLocationId,
+      productId: m.productId,
+      priority: 'high',
+      status: 'info',
+      meta: { kind: a.kind, movement: m, product: a.product, value: a.value ?? 0 },
+      persisted: false,
+    })
   }
 
   return items.sort(

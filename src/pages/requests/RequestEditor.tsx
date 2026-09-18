@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
@@ -38,9 +38,19 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
   const plainUnits = useEntryUnits()
 
   const activeLocations = useMemo(() => locations.filter((l) => l.active !== false), [locations])
+  // Opened from a reorder suggestion or a shortage on the calendar:
+  // /requests/new?product=…&location=…&qty=… — the location is set and the line offered.
+  const [query] = useSearchParams()
+  const suggestedProduct = !initial ? products.find((p) => p.id === query.get('product')) : undefined
+  const suggestedQty = Number(query.get('qty')) || 0
+  const [suggestionDone, setSuggestionDone] = useState(false)
   const [pr, setPr] = useState<PurchaseRequest | null>(initial)
   const [locationId, setLocationId] = useState(
-    initial?.locationId ?? (activeLocations.find((l) => l.type === 'warehouse')?.id ?? activeLocations[0]?.id ?? ''),
+    initial?.locationId ??
+      (activeLocations.find((l) => l.id === query.get('location'))?.id ??
+        activeLocations.find((l) => l.type === 'warehouse')?.id ??
+        activeLocations[0]?.id ??
+        ''),
   )
   const [note, setNote] = useState(initial?.note ?? '')
   const [busy, setBusy] = useState('')
@@ -163,6 +173,38 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
           </div>
         }
       />
+
+      {suggestedProduct && !suggestionDone && !inCart.has(suggestedProduct.id) && (
+        <Card className="flex flex-wrap items-center gap-3 border-brand/40 bg-brand-soft p-3 text-sm text-ink">
+          <Icon name="cart" size={16} className="text-brand" />
+          <span className="min-w-0 flex-1">
+            {suggestedQty > 0
+              ? t('จากคำแนะนำ: {name} {qty} {unit}', { name: suggestedProduct.name, qty: fmtQty(suggestedQty), unit: suggestedProduct.unitType })
+              : t('จากปฏิทิน: {name}', { name: suggestedProduct.name })}
+          </span>
+          {suggestedProduct.supplierId ? (
+            <Button
+              disabled={!!busy}
+              onClick={async () => {
+                const sup = suppliers.find((x) => x.id === suggestedProduct.supplierId)
+                await add({
+                  productId: suggestedProduct.id,
+                  productName: suggestedProduct.name,
+                  supplierId: suggestedProduct.supplierId!,
+                  supplierName: sup?.name ?? '',
+                  qty: suggestedQty > 0 ? suggestedQty : Math.max(1, suggestedProduct.minStock),
+                })
+                setSuggestionDone(true)
+              }}
+            >
+              <Icon name="plus" size={15} />
+              {t('เพิ่มลงรายการ')}
+            </Button>
+          ) : (
+            <span className="text-xs text-ink-soft">{t('สินค้านี้ยังไม่มีผู้ขาย — ค้นหาแล้วเลือกผู้ขายด้านล่าง')}</span>
+          )}
+        </Card>
+      )}
 
       {pr?.status === 'returned' && pr.returnReason && (
         <Card className="border-warn bg-warn-soft p-3 text-sm text-ink">

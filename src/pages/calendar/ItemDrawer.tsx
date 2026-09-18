@@ -7,14 +7,16 @@ import { Badge, Button, Modal } from '../../components/ui'
 import { useData } from '../../data/DataContext'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
-import { fmtQty, formatThaiDate, formatThaiDateShort, formatThaiDateTime } from '../../lib/format'
+import { fmtMoney, fmtQty, formatThaiDate, formatThaiDateShort, formatThaiDateTime } from '../../lib/format'
 import { actionsFor, canManageTasks, type ItemAction } from '../../lib/inventoryRules/permissions'
 import { expectedDeliveryAt, openPurchaseFor, type OpenPurchase } from '../../lib/inventoryRules/purchasing'
 import type { CalendarItem, ItemStatus } from '../../lib/inventoryRules/types'
 import { useSuppliers } from '../../services/suppliers'
 import { PR_STATUS_KEYS } from '../../lib/purchaseRequestStatus'
 import { approveEvent, cancelEvent, completeEvent, reopenEvent, rescheduleEvent, startEvent } from '../../services/events'
-import type { EventHistoryAction, EventHistoryEntry, PurchaseOrder, PurchaseRequest, Role, StockEvent } from '../../types'
+import { ADJUST_REASONS, type EventHistoryAction, type EventHistoryEntry, type PurchaseOrder, type PurchaseRequest, type Role, type StockEvent } from '../../types'
+import { snoozeReorder } from '../../services/schedules'
+import { DAY_MS } from '../../lib/inventoryRules/time'
 import {
   DAY_NAMES,
   EVENT_STATUS_LABEL,
@@ -123,6 +125,36 @@ export function ItemDrawer({
             )}
           </>
         )}
+        {item.meta.kind === 'reorder' && <ReorderBody meta={item.meta} inProgress={inProgress} />}
+        {item.meta.kind === 'stockoutEstimate' && (
+          <>
+            <Row label={t('สินค้า')}>{item.meta.product.name}</Row>
+            <Row label={t('คลัง/สาขา')}>{item.meta.location.name}</Row>
+            <Row label={t('คงเหลือ')}>
+              {fmtQty(item.meta.qty)} {item.meta.product.unitType}
+            </Row>
+            <Row label={t('ใช้เฉลี่ยต่อวัน')}>
+              {fmtQty(item.meta.avgDaily)} {item.meta.product.unitType}
+            </Row>
+            <Row label={t('คาดว่าจะหมดใน')}>{t('{n} วัน', { n: Math.floor(item.meta.daysLeft) })}</Row>
+          </>
+        )}
+        {(item.meta.kind === 'adjustment' || item.meta.kind === 'waste') && (
+          <>
+            <Row label={t('สินค้า')}>{item.meta.movement.productName}</Row>
+            <Row label={t('จำนวน')}>
+              {item.meta.movement.fromLocationId ? '-' : '+'}
+              {fmtQty(item.meta.movement.qty)} {item.meta.movement.unit}
+            </Row>
+            <Row label={t('เหตุผล')}>{reasonLabel(item.meta.movement.reason, t)}</Row>
+            <Row label={t('มูลค่า')}>{item.meta.value > 0 ? fmtMoney(item.meta.value) : <Muted>{t('ไม่ทราบต้นทุน')}</Muted>}</Row>
+            <Row label={t('คลัง/สาขา')}>{locationName(item.locationId) ?? ''}</Row>
+            <Row label={t('โดย')}>{item.meta.movement.byUserName}</Row>
+            <Row label={t('เลขที่')}>
+              <span className="doc-no">{item.meta.movement.docNo}</span>
+            </Row>
+          </>
+        )}
         {(item.meta.kind === 'lowStock' || item.meta.kind === 'outOfStock') && (
           <ShortageBody
             meta={item.meta}
@@ -217,6 +249,45 @@ export function ItemDrawer({
             {t('ดูผู้ขาย')}
           </Button>
         )}
+        {item.meta.kind === 'reorder' && actor && (
+          <div className="flex flex-wrap gap-2">
+            {!inProgress && (
+              <Button onClick={() => go(`/requests/new?product=${item.productId}&location=${item.locationId}&qty=${item.meta.kind === 'reorder' ? item.meta.recommendedQty : ''}`)}>
+                <Icon name="cart" size={15} />
+                {t('สร้างรายการขอสั่งซื้อ')}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await snoozeReorder(item.productId!, item.locationId!, Date.now() + 7 * DAY_MS, actor)
+                  toast.success(t('ซ่อนคำแนะนำนี้ 7 วัน'))
+                  onClose()
+                } catch (e) {
+                  toast.error(errText(e, t))
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              <Icon name="clock" size={15} />
+              {t('ยังไม่สั่ง (ซ่อน 7 วัน)')}
+            </Button>
+            <Button variant="secondary" onClick={() => go(`/movements?product=${item.productId}&location=${item.locationId}`)}>
+              <Icon name="history" size={15} />
+              {t('ประวัติสินค้า')}
+            </Button>
+          </div>
+        )}
+        {(item.meta.kind === 'stockoutEstimate' || item.meta.kind === 'adjustment' || item.meta.kind === 'waste') && (
+          <Button variant="secondary" onClick={() => go(`/movements?product=${item.productId}${item.locationId ? `&location=${item.locationId}` : ''}`)}>
+            <Icon name="history" size={15} />
+            {t('ประวัติสินค้า')}
+          </Button>
+        )}
         {(item.meta.kind === 'lowStock' || item.meta.kind === 'outOfStock') && (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => go(`/movements?product=${item.productId}&location=${item.locationId}`)}>
@@ -262,6 +333,43 @@ export function ItemDrawer({
         />
       )}
     </Modal>
+  )
+}
+
+function reasonLabel(reason: string | undefined, t: (k: string) => string): string {
+  const r = ADJUST_REASONS.find((x) => x.value === reason)
+  return r ? t(r.label) : (reason ?? '')
+}
+
+function ReorderBody({ meta, inProgress }: { meta: Extract<CalendarItem['meta'], { kind: 'reorder' }>; inProgress: OpenPurchase | null }) {
+  const t = useT()
+  const u = meta.product.unitType
+  return (
+    <>
+      <Row label={t('สินค้า')}>
+        {meta.product.name}
+        <span className="doc-no ml-2 text-xs text-ink-faint">{meta.product.sku}</span>
+      </Row>
+      <Row label={t('คลัง/สาขา')}>{meta.location.name}</Row>
+      <Row label={t('แนะนำให้สั่ง')}>
+        <span className="num font-semibold text-ink">
+          {fmtQty(meta.recommendedQty)} {u}
+        </span>
+      </Row>
+      <Row label={t('คงเหลือ')}>
+        {fmtQty(meta.onHand)} {u}
+      </Row>
+      <Row label={t('กำลังมา')}>
+        {fmtQty(meta.incoming)} {u}
+      </Row>
+      <Row label={t('ใช้เฉลี่ยต่อวัน')}>{meta.avgDaily !== null ? `${fmtQty(meta.avgDaily)} ${u}` : <Muted>{t('ประวัติยังไม่พอ')}</Muted>}</Row>
+      {meta.daysLeft !== null && <Row label={t('คาดว่าจะหมดใน')}>{t('{n} วัน', { n: Math.floor(meta.daysLeft) })}</Row>}
+      <Row label={t('ผู้ขาย')}>{meta.supplier?.name ?? <Muted>{t('ยังไม่ระบุ')}</Muted>}</Row>
+      <Row label={t('คิดจาก')}>
+        {meta.basis === 'usage' ? t('อัตราการใช้ × (ระยะส่ง + วันสำรอง) + ขั้นต่ำ') : t('ยังไม่มีประวัติการใช้พอ — เติมให้ถึง 2 เท่าของขั้นต่ำ')}
+      </Row>
+      <Row label={t('การสั่งซื้อ')}>{inProgress ? <InProgress p={inProgress} /> : <Muted>{t('ยังไม่มี')}</Muted>}</Row>
+    </>
   )
 }
 

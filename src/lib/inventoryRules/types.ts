@@ -7,6 +7,7 @@ import type {
   StockMovement,
   Supplier,
 } from '../../types'
+import type { Insights } from './insights'
 
 /**
  * The inventory calendar's view of the world.
@@ -117,4 +118,6 @@ export interface FeedInput {
   /** The window on the calendar, ms epoch, inclusive. */
   range: { from: number; to: number }
   now: number
+  /** Reorder suggestions, estimated stock-outs and significant adjustments (insights.ts). */
+  insights?: Insights
 }

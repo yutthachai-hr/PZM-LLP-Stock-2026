@@ -564,6 +564,86 @@ export const DEFAULT_INVENTORY_SETTINGS: Omit<InventorySettings, 'updatedAt' | '
   usageWindowDays: 30,
 }
 
+// ---------------------------------------------------------------- notifications ----
+
+export type NotificationCategory = 'task' | 'inventory' | 'purchasing' | 'supplier' | 'system'
+export type NotificationPriority = 'critical' | 'high' | 'medium' | 'info'
+
+export type NotificationKind =
+  | 'taskSoon' // a task starts soon (or has started) and is not done
+  | 'taskOverdue' // past its deadline
+  | 'taskEscalated' // past its deadline long enough to tell the managers
+  | 'taskApproval' // handed in, waiting for a manager's sign-off
+  | 'prSubmitted' // a purchase request waiting for approval
+  | 'poArriving' // goods due today
+  | 'poDelayed' // goods late
+  | 'cutoffToday' // a supplier's order cut-off is today
+  | 'lowStock'
+  | 'outOfStock'
+  | 'stockoutSoon' // at the current rate of use, gone before the next delivery could land
+  | 'reorder' // worth ordering now
+  | 'adjustment' // a significant stock adjustment
+  | 'waste' // significant waste or loss
+  | 'dailyBrief'
+  | 'weeklySummary'
+
+/** Who a notification is for: everyone, some roles, some people — any that match. */
+export interface NotificationAudience {
+  all?: boolean
+  roles?: Role[]
+  uids?: string[]
+}
+
+/**
+ * One notification, one document. The id is the dedup key (`<kind>__<subject>[__<day>]`),
+ * so the Worker and the app writing the same fact write the same document. A state — low
+ * stock, a late order — stays `active` until it clears, and comes back only after that.
+ */
+export interface AppNotification {
+  id: string
+  kind: NotificationKind
+  category: NotificationCategory
+  priority: NotificationPriority
+  to: NotificationAudience
+  /** Fills the {slots} of the Thai title and body for this kind (lib/inventoryRules/copy.ts). */
+  params: Record<string, string | number>
+  /** Where tapping it goes: an in-app path. */
+  link: string
+  locationId?: string
+  productId?: string
+  supplierId?: string
+  active: boolean
+  resolvedAt?: number
+  /** uid → when that person read it. One key per reader, written by that reader only. */
+  readBy: Record<string, number>
+  source: 'worker' | 'client'
+  createdBy: string
+  createdAt: number
+  updatedAt: number
+  /** After this it is purged. */
+  expiresAt: number
+}
+
+/** What a person has turned off, per category: the priorities they do not want to see. */
+export interface NotificationPrefs {
+  id: string // prefs__<uid>
+  kind: 'prefs'
+  userId: string
+  mute: Partial<Record<NotificationCategory, NotificationPriority[]>>
+  updatedAt: number
+}
+
+/** "Not now" on a reorder suggestion, until a day. */
+export interface ReorderSnooze {
+  id: string // snooze__reorder__<productId>__<locationId>
+  kind: 'snooze'
+  until: number
+  by: string
+  byName: string
+  reason?: string
+  createdAt: number
+}
+
 // ---------------------------------------------------------------- purchase batches ----
 
 /**
@@ -812,6 +892,7 @@ export const COL = {
   supplierItems: 'supplierItems',
   events: 'stockEvents',
   inventorySchedules: 'inventorySchedules',
+  notifications: 'notifications',
   purchaseOrders: 'purchaseOrders',
   purchaseBatches: 'purchaseBatches',
   purchaseRequests: 'purchaseRequests',

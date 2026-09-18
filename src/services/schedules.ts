@@ -8,6 +8,7 @@ import {
   DEFAULT_INVENTORY_SETTINGS,
   type InventorySchedule,
   type InventorySettings,
+  type ReorderSnooze,
   type ScheduleFrequency,
   type StockEventPriority,
 } from '../types'
@@ -132,6 +133,7 @@ export async function saveSettings(
 
 let cached: InventorySchedule[] | null = null
 let cachedSettings: InventorySettings | null = null
+let cachedSnoozes: ReorderSnooze[] = []
 let inflight: Promise<void> | null = null
 const listeners = new Set<() => void>()
 const NONE: InventorySchedule[] = []
@@ -144,14 +146,15 @@ function announce(): void {
 export function invalidateScheduleCache(): void {
   cached = null
   cachedSettings = null
+  cachedSnoozes = []
   inflight = null
   announce()
 }
 
 onBrandChange(invalidateScheduleCache)
 
-export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedule[]; settings: InventorySettings }> {
-  if (cached && cachedSettings) return { schedules: cached, settings: cachedSettings }
+export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedule[]; settings: InventorySettings; snoozes: ReorderSnooze[] }> {
+  if (cached && cachedSettings) return { schedules: cached, settings: cachedSettings, snoozes: cachedSnoozes }
   if (!inflight) {
     inflight = (async () => {
       try {
@@ -163,10 +166,12 @@ export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedu
           .sort((a, b) => a.name.localeCompare(b.name))
         const settings = rows.find((r) => r.id === 'settings') as unknown as InventorySettings | undefined
         cachedSettings = { ...DEFAULTS, ...(settings ?? {}) }
+        cachedSnoozes = rows.filter((r) => r.kind === 'snooze') as unknown as ReorderSnooze[]
       } catch {
         // A refused read must not stop the calendar; it simply has no schedules to show.
         cached = NONE
         cachedSettings = DEFAULTS
+        cachedSnoozes = []
       } finally {
         inflight = null
         announce()
@@ -174,11 +179,33 @@ export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedu
     })()
   }
   await inflight
-  return { schedules: cached ?? NONE, settings: cachedSettings ?? DEFAULTS }
+  return { schedules: cached ?? NONE, settings: cachedSettings ?? DEFAULTS, snoozes: cachedSnoozes }
+}
+
+/**
+ * "Not now" on a reorder suggestion, until a day. Anyone may snooze (rules: snooze__…);
+ * the suggestion and its notification stay away until then.
+ */
+export async function snoozeReorder(
+  productId: string,
+  locationId: string,
+  until: number,
+  actor: { id: string; name: string },
+  reason?: string,
+): Promise<ReorderSnooze> {
+  const id = `snooze__reorder__${productId}__${locationId}`
+  const doc: ReorderSnooze = { id, kind: 'snooze', until, by: actor.id, byName: actor.name, createdAt: Date.now() }
+  if (reason?.trim()) doc.reason = reason.trim()
+  await scoped().set(COL.inventorySchedules, id, doc as unknown as Record<string, unknown>)
+  cachedSnoozes = [...cachedSnoozes.filter((s) => s.id !== id), doc]
+  // The hook's snapshot is the schedule list; a new array is what tells React to re-read.
+  if (cached) cached = [...cached]
+  announce()
+  return doc
 }
 
 /** The schedules and settings, fetched the first time a screen asks. */
-export function useScheduleConfig(): { schedules: InventorySchedule[]; settings: InventorySettings; loaded: boolean } {
+export function useScheduleConfig(): { schedules: InventorySchedule[]; settings: InventorySettings; snoozes: ReorderSnooze[]; loaded: boolean } {
   const snap = useSyncExternalStore(
     (fn) => {
       listeners.add(fn)
@@ -192,5 +219,5 @@ export function useScheduleConfig(): { schedules: InventorySchedule[]; settings:
   useEffect(() => {
     if (snap === null) void loadScheduleConfig()
   }, [snap])
-  return { schedules: snap ?? NONE, settings: cachedSettings ?? DEFAULTS, loaded: snap !== null }
+  return { schedules: snap ?? NONE, settings: cachedSettings ?? DEFAULTS, snoozes: cachedSnoozes, loaded: snap !== null }
 }

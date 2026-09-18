@@ -1044,6 +1044,61 @@ service cloud.firestore {
       allow delete: if active() && scheduleWriter(docId);
     }
 
+    // ---------------------------------------------------------------- notifications ----
+
+    /**
+     * One notification per document, under the id that makes it unique (`<kind>__…`), so
+     * the Worker and the app announcing the same thing write the same document. The Worker
+     * writes as a service account, outside these rules; what is here is the app's share.
+     *
+     * Anyone may create what their own action causes — a task handed in, a request sent, a
+     * big adjustment — in their own name; a manager may write any kind (the app stands in
+     * for the Worker when it is late). Reading one marks only your own key in `readBy`.
+     */
+    function validNotification(docId, d) {
+      return d.keys().hasAll(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
+          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt'])
+        && d.keys().hasOnly(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
+          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt', 'resolvedAt', 'locationId', 'productId', 'supplierId'])
+        && d.id == docId && text(d.kind, 40) && docId.matches('^' + d.kind + '__.+')
+        && d.category in ['task', 'inventory', 'purchasing', 'supplier', 'system']
+        && d.priority in ['critical', 'high', 'medium', 'info']
+        && d.to is map && d.params is map && d.params.size() <= 20 && text(d.link, 300)
+        && d.active is bool && d.readBy is map && d.source in ['worker', 'client']
+        && text(d.createdBy, 200) && epochMs(d.createdAt) && epochMs(d.updatedAt) && epochMs(d.expiresAt)
+        && (!('resolvedAt' in d) || epochMs(d.resolvedAt));
+    }
+
+    function notificationCreate(docId) {
+      let d = request.resource.data;
+      return validNotification(docId, d) && d.source == 'client' && d.createdBy == request.auth.uid
+        && d.readBy.size() == 0 && d.active == true
+        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste']);
+    }
+
+    function notificationUpdate(docId) {
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.id == old.id && d.kind == old.kind && (
+        (d.diff(old).affectedKeys().hasOnly(['readBy', 'updatedAt']) && d.readBy is map
+          && d.readBy.diff(old.readBy).affectedKeys().hasOnly([request.auth.uid]))
+        || (roleIsManager() && validNotification(docId, d)));
+    }
+
+    match /notifications/{docId} {
+      allow read: if active();
+      allow create: if active() && notificationCreate(docId);
+      allow update: if active() && notificationUpdate(docId);
+      allow delete: if admin();
+    }
+
+    match /lelapin__notifications/{docId} {
+      allow read: if active();
+      allow create: if active() && notificationCreate(docId);
+      allow update: if active() && notificationUpdate(docId);
+      allow delete: if admin();
+    }
+
     // ---------------------------------------------------------------- revocation ----
 
     // One document per removed account, keyed by uid. Admins add and (to re-hire someone)

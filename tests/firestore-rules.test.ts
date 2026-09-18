@@ -1234,3 +1234,49 @@ test('both brands enforce the same rules', async () => {
   await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__locations/l1'), location('l1')))
   expect(true).toBe(true)
 })
+
+describe('notifications', () => {
+  const note = (id: string, over: Record<string, unknown> = {}) => ({
+    id, kind: id.split('__')[0], category: 'task', priority: 'medium', to: { roles: ['manager', 'admin'] },
+    params: { title: 'x' }, link: '/calendar', active: true, readBy: {}, source: 'client',
+    createdBy: STAFF, createdAt: ts(), updatedAt: ts(), expiresAt: ts() + 86400000, ...over,
+  })
+
+  test('anyone active reads them; nobody signed out or pending does', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), 'notifications/dailyBrief__20260918'), note('dailyBrief__20260918', { source: 'worker', createdBy: 'worker' })))
+    await assertSucceeds(getDoc(doc(as(STAFF), 'notifications/dailyBrief__20260918')))
+    await assertSucceeds(getDocs(collection(as(STAFF), 'lelapin__notifications')))
+    await assertFails(getDoc(doc(as(PENDING), 'notifications/dailyBrief__20260918')))
+    await assertFails(getDoc(doc(anon(), 'notifications/dailyBrief__20260918')))
+  })
+
+  test('staff announce only what their own action caused, in their own name', async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), 'notifications/taskApproval__e1__1'), note('taskApproval__e1__1')))
+    await assertSucceeds(setDoc(doc(as(STAFF), 'lelapin__notifications/prSubmitted__pr1__1'), note('prSubmitted__pr1__1', { category: 'purchasing' })))
+    // Not a kind their action produces, not in a colleague's name, not pretending to be the Worker.
+    await assertFails(setDoc(doc(as(STAFF), 'notifications/outOfStock__p1__l1'), note('outOfStock__p1__l1', { category: 'inventory', priority: 'critical' })))
+    await assertFails(setDoc(doc(as(STAFF), 'notifications/taskApproval__e2__1'), note('taskApproval__e2__1', { createdBy: MANAGER })))
+    await assertFails(setDoc(doc(as(STAFF), 'notifications/taskApproval__e3__1'), note('taskApproval__e3__1', { source: 'worker' })))
+    // The id has to say what it is.
+    await assertFails(setDoc(doc(as(STAFF), 'notifications/random'), note('random', { kind: 'taskApproval' })))
+    // Born unread and live.
+    await assertFails(setDoc(doc(as(STAFF), 'notifications/taskApproval__e4__1'), note('taskApproval__e4__1', { readBy: { [MANAGER]: 1 } })))
+  })
+
+  test('a manager stands in for the Worker: any kind, re-arm and resolve', async () => {
+    await assertSucceeds(setDoc(doc(as(MANAGER), 'notifications/lowStock__p1__l1'), note('lowStock__p1__l1', { category: 'inventory', createdBy: MANAGER })))
+    await assertSucceeds(updateDoc(doc(as(MANAGER), 'notifications/lowStock__p1__l1'), { active: false, resolvedAt: ts(), updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'notifications/lowStock__p1__l1'), { active: true, updatedAt: ts() }))
+  })
+
+  test('reading marks your own key and nothing else', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), 'notifications/poArriving__o1__20260918'), note('poArriving__o1__20260918', { to: { all: true }, readBy: { [MANAGER]: 5 } })))
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'notifications/poArriving__o1__20260918'), { [`readBy.${STAFF}`]: ts(), updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'notifications/poArriving__o1__20260918'), { [`readBy.${ADMIN}`]: ts(), updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'notifications/poArriving__o1__20260918'), { readBy: {}, updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'notifications/poArriving__o1__20260918'), { [`readBy.${STAFF}`]: ts(), priority: 'info' }))
+    // Deleting is the purge's, which is an admin's (or the Worker's).
+    await assertFails(deleteDoc(doc(as(MANAGER), 'notifications/poArriving__o1__20260918')))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'notifications/poArriving__o1__20260918')))
+  })
+})
