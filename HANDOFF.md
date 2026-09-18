@@ -145,7 +145,7 @@ npm run i18n:check      # ครบทุกข้อความ
 
 ## 6. ค้างอยู่ / ต้องตัดสินใจต่อ
 
--2. **18 ก.ย. — branch `fix/po-history`** (วันที่รับของ, ยกเลิกไม่ลบ, กำหนดส่งตอนสร้าง, PO Revision): commit แล้ว **รอ `npx firebase login --reauth` → deploy rules → merge main → verify bundle**; หลัง deploy เจ้าของกด "ซ่อมวันที่รับของตามใบรับสินค้า" ทั้งสองแบรนด์. Phase B ของปฏิทินค้างอยู่ใน `git stash` ชื่อ `phase-b-wip` บน `feat/inventory-calendar` (types/rules/tests/schedules.ts/events.ts/automation.ts/services/schedules.ts) — `git stash pop` แล้ว merge main เข้า (ชนที่ types.ts, firestore.rules, Settings.tsx, en.ts) ก่อนทำ UI ต่อ
+-2. **18 ก.ย. — branch `fix/po-history`** (วันที่รับของ, ยกเลิกไม่ลบ, กำหนดส่งตอนสร้าง, PO Revision): **ขึ้นของจริงแล้ว 18 ก.ย.** (rules deploy → merge main `875e9df` → bundle `index-aGpUe7cg.js` ตรงกับ build ในเครื่อง); ที่เหลือ: เจ้าของกด "ซ่อมวันที่รับของตามใบรับสินค้า" ทั้งสองแบรนด์. Phase B ของปฏิทินค้างอยู่ใน `git stash` ชื่อ `phase-b-wip` บน `feat/inventory-calendar` (types/rules/tests/schedules.ts/events.ts/automation.ts/services/schedules.ts) — `git stash pop` แล้ว merge main เข้า (ชนที่ types.ts, firestore.rules, Settings.tsx, en.ts) ก่อนทำ UI ต่อ
 
 -1. **รายการขอสั่งซื้อ — ขึ้นของจริงแล้ว 15 ก.ย.** สิ่งที่เจ้าของต้องทำเอง: (ก) Settings → ผู้ใช้ → ตั้งบทบาท "หัวหน้า" ให้คนที่อนุมัติ (ทั้งสองแบรนด์ถ้าจำเป็น); (ข) กด "จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย" ใน Settings (ทั้งสองแบรนด์) ให้เลข PO เดิมเรียงต่อผู้ขายตามที่ตัดสินไว้; (ค) บอกพนักงานว่าทางเข้าใหม่คือเมนู "รายการขอสั่งซื้อ" Excel เหลือเป็นทางเลือกในหน้าสั่งซื้อ
 
