@@ -155,8 +155,9 @@ describe('placing an order', () => {
     ])
     expect(plan.counters.get('purchaseOrder__sup-n')).toBe(1)
 
-    const changed = await renumberOrdersPerSupplier()
+    const { changed, failed } = await renumberOrdersPerSupplier()
     expect(changed).toHaveLength(4)
+    expect(failed).toEqual([])
     const by = (name: string) =>
       orders().filter((o) => o.supplierName === name).sort((a, b) => a.orderedAt - b.orderedAt).map((o) => o.docNo)
     expect(by('BETAGRO')).toEqual(['PO-00001', 'PO-00002'])
@@ -174,7 +175,7 @@ describe('placing an order', () => {
     })
     expect(by('BETAGRO')).toEqual(['PO-00001', 'PO-00002', 'PO-00003'])
     // Running it again changes nothing.
-    expect(await renumberOrdersPerSupplier()).toEqual([])
+    expect(await renumberOrdersPerSupplier()).toEqual({ changed: [], failed: [] })
   })
 
   test('each line records the product name and unit as they were', async () => {

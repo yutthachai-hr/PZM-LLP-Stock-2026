@@ -79,6 +79,16 @@
   /* The logo colour as drawn. Decoration only — it does not meet contrast for text
      (the Le Lapin orange measures 2.28:1 on white), which is what --color-brand is for. */
   --color-brand-vivid: var(--brand-accent-vivid, #e01f26);
+
+  /* One pale tint per site, so a column of figures reads by colour before by name —
+     the owner's choice (18 Sep 2026): Sukhumvit (main warehouse) red, Sarasin orange,
+     On Nut light purple. Text on each tint measures above 7:1. */
+  --color-site-a: #b91c1c;
+  --color-site-a-soft: #fef2f2;
+  --color-site-b: #c2410c;
+  --color-site-b-soft: #fff7ed;
+  --color-site-c: #6d28d9;
+  --color-site-c-soft: #f5f3ff;
 }
 
 :root {

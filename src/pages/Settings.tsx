@@ -693,8 +693,19 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
         confirmText: t('จัดเลขใหม่'),
       })
       if (!ok) return
-      const changed = await renumberOrdersPerSupplier()
-      toast.success(t('จัดเลขใหม่แล้ว {n} ใบ', { n: changed.length }))
+      const { changed, failed } = await renumberOrdersPerSupplier()
+      if (failed.length === 0) {
+        toast.success(t('จัดเลขใหม่แล้ว {n} ใบ — ใบใหม่ของแต่ละผู้ขายจะนับต่อจากนี้', { n: changed.length }))
+      } else {
+        await confirm({
+          title: t('จัดเลขใหม่ไม่ครบ'),
+          message:
+            t('เปลี่ยนแล้ว {ok} ใบ ไม่สำเร็จ {bad} ใบ — ตัวนับเลขยังไม่ถูกปรับ กดจัดเลขใหม่อีกครั้งได้ ถ้ายังไม่ผ่านให้ส่งข้อความนี้ให้ผู้ดูแล', { ok: changed.length, bad: failed.length }) +
+            '\n\n' +
+            failed.slice(0, 8).map((f) => `${f.supplierName}: ${f.from} → ${f.to} — ${f.error}`).join('\n'),
+          confirmText: t('ปิด'),
+        })
+      }
     } catch (e) {
       toast.error(errText(e, t))
     } finally {

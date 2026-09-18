@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Icon } from '../../components/Icon'
 import { useT } from '../../i18n/I18nContext'
 import { formatThaiDateShort } from '../../lib/format'
@@ -28,6 +28,7 @@ export function MonthGrid({
   now,
   onPick,
   onPickDay,
+  onShift,
 }: {
   anchor: number
   range: { from: number; to: number }
@@ -35,6 +36,8 @@ export function MonthGrid({
   now: number
   onPick: (i: CalendarItem) => void
   onPickDay: (ms: number) => void
+  /** The mouse wheel over the grid: -1 the month before, 1 the month after. */
+  onShift?: (dir: -1 | 1) => void
 }) {
   const t = useT()
   const month = new Date(anchor).getMonth()
@@ -46,13 +49,40 @@ export function MonthGrid({
   const byDay = useMemo(() => groupByDay(items), [items])
   const todayKey = bkkDayStart(now)
 
+  // The wheel pages through months while the pointer is over the grid (owner, 18 Sep).
+  // A native listener, because React's is passive and could not stop the page scrolling
+  // at the same time. Deltas are summed so a trackpad's many small events make one step,
+  // and a short pause after each step stops one flick skipping three months.
+  const grid = useRef<HTMLDivElement>(null)
+  const shift = useRef(onShift)
+  shift.current = onShift
+  useEffect(() => {
+    const el = grid.current
+    if (!el) return
+    let sum = 0
+    let until = 0
+    const onWheel = (ev: WheelEvent) => {
+      if (!shift.current || ev.ctrlKey || Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) return
+      ev.preventDefault()
+      const now = Date.now()
+      if (now < until) return
+      sum += ev.deltaY
+      if (Math.abs(sum) < 40) return
+      shift.current(sum > 0 ? 1 : -1)
+      sum = 0
+      until = now + 350
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
   return (
     // Seven columns at any width; below sm it scrolls sideways rather than squeezing a
     // day into 43px — which is why the phone opens on the agenda instead.
     // The look the owner picked (a content-calendar template): white cells, hairline
     // rules, small grey weekday captions, a bold day number at the top-left, and each
     // entry a soft pastel pill — the colour carries the meaning, the whitespace does the rest.
-    <div className="overflow-x-auto">
+    <div ref={grid} className="overflow-x-auto">
       <div className="min-w-[640px]">
         <div className="grid grid-cols-7 border-b border-line text-left text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
           {DAY_NAMES.map((d) => (
@@ -80,7 +110,7 @@ export function MonthGrid({
                   }
                 }}
                 aria-label={formatThaiDateShort(day)}
-                className={`group min-h-32 cursor-pointer border-b border-r border-line p-2 outline-none transition-colors duration-150 last:border-r-0 hover:bg-sunken/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 ${
+                className={`group min-h-32 cursor-pointer border-b border-r border-line p-2 outline-none transition-colors duration-150 last:border-r-0 hover:bg-danger-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 ${
                   outside ? 'bg-sunken/40' : 'bg-surface'
                 }`}
               >

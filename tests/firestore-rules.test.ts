@@ -907,6 +907,21 @@ describe('orders placed with suppliers', () => {
     await assertFails(updateDoc(at(STAFF), { createdBy: ADMIN, updatedAt: ts() }))
   })
 
+  test('renumbering reaches received orders and lowers a counter (owner report 18 Sep)', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'purchaseOrders/po1'), order({
+        docNo: 'PO-00008', status: 'received', invoiceNo: 'IV1', movementDocNo: 'RC-00001',
+        receivedBy: STAFF, receivedByName: 'Staff', receivedAt: ts(), shareStatus: 'sent',
+      }))
+      await setDoc(doc(ctx.firestore(), 'counters/purchaseOrder__sup1'), { id: 'purchaseOrder__sup1', value: 9 })
+    })
+    await assertSucceeds(updateDoc(at(ADMIN), { docNo: 'PO-00001', updatedAt: ts() }))
+    // A counter only ever goes up by update, so coming down is delete + create.
+    await assertFails(setDoc(doc(as(ADMIN), 'counters/purchaseOrder__sup1'), { id: 'purchaseOrder__sup1', value: 1 }))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'counters/purchaseOrder__sup1')))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'counters/purchaseOrder__sup1'), { id: 'purchaseOrder__sup1', value: 1 }))
+  })
+
   test('whoever checks the delivery in signs for it themselves', async () => {
     await assertSucceeds(setDoc(at(STAFF), order()))
     await assertFails(

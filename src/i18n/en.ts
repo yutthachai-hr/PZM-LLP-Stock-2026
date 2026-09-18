@@ -1048,7 +1048,6 @@ export const EN: Record<string, string> = {
   'จัดเลขใบสั่งซื้อใหม่ตามผู้ขาย': 'Renumber orders per supplier',
   'จะเปลี่ยนเลข {n} ใบ ให้แต่ละผู้ขายนับ 1, 2, 3 ตามลำดับที่สั่ง เลขที่เคยส่งให้ผู้ขายไปแล้วจะไม่ตรงกับในระบบ': '{n} orders will be renumbered so each supplier counts 1, 2, 3 in the order placed. Numbers already sent to suppliers will no longer match the system',
   'จัดเลขใหม่': 'Renumber',
-  'จัดเลขใหม่แล้ว {n} ใบ': 'Renumbered {n} orders',
   'กำลังตรวจเลข...': 'Checking numbers...',
   // ---- purchase requests -------------------------------------------------------------
   'หัวหน้า': 'Manager',
@@ -1243,7 +1242,6 @@ export const EN: Record<string, string> = {
   ภาษา: 'Language',
   'คงเหลือตอนขอ': 'On hand when requested',
   'คงเหลือทุกคลังตอนขอ': 'On hand everywhere when requested',
-  'ทุกคลัง {n}': 'all locations {n}',
   'ผู้ขาย:': 'Supplier:',
   'รายการตามวัน': 'Agenda',
   'ชื่อภาษาอังกฤษ': 'English name',
@@ -1449,4 +1447,8 @@ export const EN: Record<string, string> = {
   'เลือกสิ่งที่อยากเห็นในกระดิ่ง — ระดับวิกฤตแสดงเสมอ': 'Choose what shows in your bell — critical always shows',
   'หมวด': 'Category',
   'วิกฤต — แสดงเสมอ': 'Critical — always shown',
+  'จัดเลขใหม่แล้ว {n} ใบ — ใบใหม่ของแต่ละผู้ขายจะนับต่อจากนี้': "Renumbered {n} orders — each supplier's next order continues from here",
+  'จัดเลขใหม่ไม่ครบ': 'Renumbering incomplete',
+  'เปลี่ยนแล้ว {ok} ใบ ไม่สำเร็จ {bad} ใบ — ตัวนับเลขยังไม่ถูกปรับ กดจัดเลขใหม่อีกครั้งได้ ถ้ายังไม่ผ่านให้ส่งข้อความนี้ให้ผู้ดูแล':
+    'Changed {ok}, failed {bad} — the counters were left as they were. Press renumber again; if it still fails, send this message to the administrator',
 }
