@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useAutomation } from '../data/useAutomation'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
@@ -42,6 +43,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const drawer = useRef<HTMLElement>(null)
+  // The background jobs the cron Worker also runs — see data/useAutomation.ts.
+  useAutomation()
 
   // Close the drawer on Escape and keep Tab inside it while it is open, matching Modal.
   useEffect(() => {

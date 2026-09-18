@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
+import { stockView } from '../lib/inventoryRules/stockView'
 import { useAuth } from '../auth/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
 import {
@@ -10,7 +11,9 @@ import {
   type StockMovement,
   type MinOverride,
   type AppUser,
+  type AppNotification,
 } from '../types'
+import { NOTIFICATION_WINDOW_DAYS } from '../lib/inventoryRules/notifications'
 
 interface DataState {
   products: Product[]
@@ -22,6 +25,11 @@ interface DataState {
   movements: StockMovement[]
   minOverrides: MinOverride[]
   users: AppUser[]
+  /**
+   * Notifications created in the last week, every recipient's — the bell filters them to
+   * the signed-in person. The seventh listener (it took the slot `notes` had).
+   */
+  notifications: AppNotification[]
   loading: boolean
 
   /** Business date of the oldest movement currently subscribed to. */
@@ -98,16 +106,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   })
   const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides)
   const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin })
+  // Fixed for the session: a moving lower bound would re-subscribe (and re-read) every render.
+  const [notificationsFrom] = useState(() => Date.now() - NOTIFICATION_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+  const { data: notifications } = useLive<AppNotification>(COL.notifications, {
+    enabled: !!user,
+    sinceField: 'createdAt',
+    sinceValue: notificationsFrom,
+  })
 
   const value = useMemo<DataState>(() => {
     const productMap = new Map(products.map((p) => [p.id, p]))
     const locationMap = new Map(locations.map((l) => [l.id, l]))
-    // Only the product's own unit. A row for a unit someone keyed carries the same
-    // locationId and productId, so keying this map on those alone would let a Pack balance
-    // overwrite the KG one and every total on every screen would quietly be the wrong row.
-    const levelMap = new Map(
-      levels.filter((l) => !l.unit).map((l) => [`${l.locationId}__${l.productId}`, l.qty]),
-    )
     // Every unit a product has a balance in, per location, base unit first. Balances are
     // never added across units — ten Pack and two KG are two numbers a person reconciles.
     const byUnit = new Map<string, { unit: string; qty: number }[]>()
@@ -121,25 +130,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       else if (l.unit) list.push(row)
       else list.unshift(row)
     }
-    const overrideMap = new Map(
-      minOverrides.map((o) => [`${o.locationId}__${o.productId}`, o.minStock]),
-    )
-
-    // Where a product has ever actually been. A balance row is only written when stock
-    // moves, so its existence is the record of "this has been kept here" — including a row
-    // that has since fallen to zero, which is exactly when a shortage matters.
-    const stockedAt = new Set(levels.map((l) => `${l.locationId}__${l.productId}`))
-    const stockedAnywhere = new Set(levels.map((l) => l.productId))
-    // One place to chase something nobody has ever received: the main warehouse. Picked by
-    // type rather than by name, and the oldest of them, so it does not move about.
-    const home =
-      [...locations]
-        .filter((l) => l.active !== false)
-        .sort(
-          (a, b) =>
-            (a.type === 'warehouse' ? 0 : 1) - (b.type === 'warehouse' ? 0 : 1) ||
-            (a.createdAt ?? 0) - (b.createdAt ?? 0),
-        )[0]?.id ?? ''
+    // The same rule the cron Worker applies — see lib/inventoryRules/stockView.ts.
+    const view = stockView({ locations, levels, minOverrides })
 
     return {
       products,
@@ -149,18 +141,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       movements,
       minOverrides,
       users,
+      notifications,
       loading: pLoading || lLoading || sLoading || mLoading,
       movementsFrom,
       ensureMovementsFrom,
       productById: (id) => productMap.get(id),
       locationById: (id) => locationMap.get(id),
-      qtyAt: (locationId, productId) => levelMap.get(`${locationId}__${productId}`) ?? 0,
+      qtyAt: view.qtyAt,
       qtyByUnit: (locationId, productId) => byUnit.get(`${locationId}__${productId}`) ?? [],
-      minFor: (product, locationId) =>
-        overrideMap.get(`${locationId}__${product.id}`) ?? product.minStock ?? 0,
-      tracksProduct: (locationId, productId) =>
-        stockedAt.has(`${locationId}__${productId}`) ||
-        (!stockedAnywhere.has(productId) && locationId === home),
+      minFor: view.minFor,
+      tracksProduct: view.tracksProduct,
     }
   }, [
     products,
@@ -170,6 +160,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     movements,
     minOverrides,
     users,
+    notifications,
     pLoading,
     lLoading,
     sLoading,

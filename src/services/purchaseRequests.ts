@@ -6,6 +6,8 @@ import { canEditItems, canTransition, isManager, liveItems } from '../lib/purcha
 import { sameUnit } from '../lib/units'
 import { requireQty } from '../lib/validate'
 import { createPurchaseOrder } from './purchaseOrders'
+import { deliver } from './notifications'
+import { prSubmittedDraft } from '../lib/inventoryRules/notifications'
 import {
   COL,
   type Product,
@@ -455,7 +457,7 @@ export async function submitRequest(params: {
   }
   actor: Actor
 }): Promise<PurchaseRequest> {
-  return mutate(params.id, (pr) => {
+  const sent = await mutate(params.id, (pr) => {
     if (!(pr.requestedBy === params.actor.id || isManager(params.actor.role))) {
       throw new AppError('ส่งได้เฉพาะผู้ขอหรือหัวหน้า')
     }
@@ -489,6 +491,10 @@ export async function submitRequest(params: {
       history: [...pr.history, entry(params.actor, resubmit ? 'resubmitted' : 'submitted', resubmit ? { newValue: String(pr.revision + 1) } : {})],
     }
   })
+  // The managers hear of it now rather than at the next job run.
+  const name = (id: string | undefined) => params.ctx.locations.find((l) => l.id === id)?.name ?? ''
+  await deliver(prSubmittedDraft(sent, name), params.actor)
+  return sent
 }
 
 export async function returnRequest(params: { id: string; reason: string; actor: Actor }): Promise<PurchaseRequest> {

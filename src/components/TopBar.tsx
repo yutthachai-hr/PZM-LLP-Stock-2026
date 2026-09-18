@@ -7,6 +7,7 @@ import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
 import { Icon } from './Icon'
 import { LangButton } from './LangButton'
+import { NotificationBell } from './notifications/NotificationBell'
 import { ProductThumb } from './ProductThumb'
 import { looseScore } from '../lib/search'
 
@@ -19,8 +20,9 @@ import { looseScore } from '../lib/search'
  * about a thing, not a page, so the search is global and its results carry the answer to
  * "how much have we got" before you click anything.
  *
- * The bell is the low-stock count. The dashboard has always had that number; it was only
- * visible once you were already looking at the dashboard.
+ * The warning sign is the low-stock count. The dashboard has always had that number; it was
+ * only visible once you were already looking at the dashboard. The bell beside it is the
+ * notification centre (components/notifications).
  */
 
 const MAX_RESULTS = 8
@@ -204,6 +206,8 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
               </span>
             )}
           </button>
+
+          <NotificationBell />
 
           <LangButton />
         </div>

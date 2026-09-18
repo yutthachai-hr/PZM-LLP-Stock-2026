@@ -16,6 +16,10 @@ import { ProductThumb } from '../components/ProductThumb'
 import { QtyInput } from '../components/QtyInput'
 import { useEntryUnits } from '../services/entryUnits'
 import { adjustStock } from '../services/stock'
+import { deliver } from '../services/notifications'
+import { useScheduleConfig } from '../services/schedules'
+import { significance } from '../lib/inventoryRules/adjustments'
+import { adjustmentDraft } from '../lib/inventoryRules/notifications'
 import { dateInputToMs, fmtQty, msToDateInput, todayMs } from '../lib/format'
 import { ADJUST_REASONS, type Product } from '../types'
 import { useT } from '../i18n/I18nContext'
@@ -28,6 +32,7 @@ export function AdjustPage() {
   const { products, locations, qtyAt } = useData()
   const { user } = useAuth()
   const toast = useToast()
+  const { settings } = useScheduleConfig()
 
   const active = useMemo(() => locations.filter((l) => l.active !== false), [locations])
   const [locationId, setLocationId] = useState('')
@@ -81,6 +86,14 @@ export function AdjustPage() {
         note: note.trim() || undefined,
       })
       toast.success(t('ปรับสต๊อกเรียบร้อย (เลขที่ {docNo})', { docNo }))
+      // A large adjustment or waste is told to the managers now, not at the next job run.
+      if (!entryUnit || entryUnit === product.unitType) {
+        const moved = { docNo, productId: product.id, productName: product.name, qty, unit: product.unitType, reason, byUserName: user!.name,
+          ...(direction === 'out' ? { fromLocationId: locationId } : { toLocationId: locationId }) }
+        const now = direction === 'out' ? current - qty : current + qty
+        const sig = significance({ ...moved, id: docNo, type: 'adjust', date: Date.now(), byUserId: user!.id, createdAt: Date.now() }, product, now, settings)
+        if (sig) void deliver(adjustmentDraft(moved, sig.kind, sig.value, (id) => locations.find((l) => l.id === id)?.name ?? ''), { id: user!.id })
+      }
       setProduct(null)
       setQty(0)
       setNote('')

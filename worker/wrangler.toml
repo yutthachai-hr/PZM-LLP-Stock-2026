@@ -1,0 +1,15 @@
+# pzmstock-cron — the inventory calendar's background jobs (worker/src/index.ts, HANDOFF §10).
+# Deploy:  npm run worker:deploy          Logs:  npx wrangler tail -c worker/wrangler.toml
+# Secret:  npx wrangler secret put FIREBASE_SERVICE_ACCOUNT -c worker/wrangler.toml
+name = "pzmstock-cron"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# "false" stops every job without a redeploy (dashboard → Settings → Variables).
+WORKER_ENABLED = "true"
+
+# UTC. Bangkok is UTC+7: 07:00, 00:05 and Monday 07:30 Bangkok. Must match CRONS in src/jobs.ts.
+[triggers]
+crons = ["*/30 * * * *", "0 0 * * *", "5 17 * * *", "30 0 * * 1"]

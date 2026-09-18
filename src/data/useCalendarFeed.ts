@@ -3,6 +3,8 @@ import { buildFeed } from '../lib/inventoryRules/calendarFeed'
 import { DAY_MS } from '../lib/inventoryRules/time'
 import type { CalendarItem } from '../lib/inventoryRules/types'
 import { useSuppliers } from '../services/suppliers'
+import { useScheduleConfig } from '../services/schedules'
+import { inventoryInsights } from '../lib/inventoryRules/insights'
 import type { PurchaseOrder, PurchaseRequest, StockEvent } from '../types'
 import { useData } from './DataContext'
 import * as events from './eventCache'
@@ -42,6 +44,7 @@ export interface CalendarFeed {
 export function useCalendarFeed(range: { from: number; to: number }, now: number): CalendarFeed {
   const data = useData()
   const suppliers = useSuppliers()
+  const config = useScheduleConfig()
   const [rows, setRows] = useState<{
     events: StockEvent[]
     orders: PurchaseOrder[]
@@ -91,6 +94,27 @@ export function useCalendarFeed(range: { from: number; to: number }, now: number
     return () => offs.forEach((off) => off())
   }, [range.from, range.to, ordersFrom, requestsFrom])
 
+  // Reorder suggestions, estimated stock-outs and big adjustments — all from memory: the
+  // 30-day ledger, balances, and the orders and requests read above.
+  const insights = useMemo(() => {
+    if (!rows) return undefined
+    return inventoryInsights({
+      products: data.products,
+      locations: data.locations,
+      qtyAt: data.qtyAt,
+      minFor: data.minFor,
+      tracksProduct: data.tracksProduct,
+      movements: data.movements,
+      orders: rows.orders,
+      requests: rows.requests,
+      suppliers,
+      settings: config.settings,
+      snoozes: config.snoozes,
+      now,
+      adjustmentsSince: range.from,
+    })
+  }, [rows, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, data.movements, suppliers, config.settings, config.snoozes, now, range.from])
+
   const items = useMemo(() => {
     if (!rows) return []
     return buildFeed({
@@ -105,8 +129,9 @@ export function useCalendarFeed(range: { from: number; to: number }, now: number
       tracksProduct: data.tracksProduct,
       range,
       now,
+      insights,
     })
-  }, [rows, suppliers, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, range, now])
+  }, [rows, suppliers, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, range, now, insights])
 
   return {
     items,
