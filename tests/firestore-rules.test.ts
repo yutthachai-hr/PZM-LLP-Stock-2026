@@ -739,10 +739,26 @@ describe('orders placed with suppliers', () => {
     await assertFails(setDoc(at(STAFF), order({ status: 'received' })))
   })
 
-  test('the delivery date is kept, and may be moved while the goods are out', async () => {
+  test('the delivery date is kept, and is an epoch', async () => {
     await assertSucceeds(setDoc(at(STAFF), order({ expectedAt: ts() + 86_400_000 })))
-    await assertSucceeds(updateDoc(at(STAFF), { expectedAt: ts() + 2 * 86_400_000, updatedAt: ts() }))
     await assertFails(setDoc(at(STAFF, 'po2'), order({ id: 'po2', expectedAt: 'Thursday' })))
+  })
+
+  test('a placed order changes only as a numbered, signed, explained revision', async () => {
+    // The supplier holds the number; a silent change to the lines or the date is exactly
+    // what an audit cannot follow (owner, 18 Sep 2026).
+    await assertSucceeds(setDoc(at(STAFF), order({ expectedAt: ts() + 86_400_000 })))
+    const lines = [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 5 }]
+    await assertFails(updateDoc(at(STAFF), { lines, updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { expectedAt: ts() + 2 * 86_400_000, updatedAt: ts() }))
+    const rev = (n: number) => ({ rev: n, at: ts(), by: STAFF, byName: 'Staff', reason: 'short', changes: [] })
+    await assertSucceeds(updateDoc(at(STAFF), { lines, expectedAt: ts() + 2 * 86_400_000, revision: 1, revisions: [rev(1)], updatedAt: ts() }))
+    // Revisions only grow.
+    await assertFails(updateDoc(at(STAFF), { lines, revision: 2, revisions: [], updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(STAFF), { lines, revision: 2, revisions: [rev(1), rev(2)], updatedAt: ts() }))
+    // A draft is still being written: its lines move freely.
+    await assertSucceeds(setDoc(at(STAFF, 'po2'), order({ id: 'po2', status: 'draft', batchId: 'b1' })))
+    await assertSucceeds(updateDoc(at(STAFF, 'po2'), { lines, updatedAt: ts() }))
   })
 
   test('the shape is pinned, and an empty order is not one', async () => {

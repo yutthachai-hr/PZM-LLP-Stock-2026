@@ -21,6 +21,7 @@ vi.mock('../src/backend', async () => {
 const { resetMemory, seed, raw, memoryBackend } = await import('./helpers/memory-backend')
 const {
   CHASE_AFTER_DAYS,
+  amendPurchaseOrder,
   approvePurchaseOrder,
   createPurchaseOrder,
   setShareStatus,
@@ -28,6 +29,7 @@ const {
   cancelPurchaseOrder,
   deletePurchaseOrder,
   listOrdersInRange,
+  needsResend,
   overdueOrders,
   receivePurchaseOrder,
   repairReceivedDates,
@@ -472,6 +474,62 @@ describe('reading orders back', () => {
     const rows = summariseBySupplier(orders())
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ supplierName: 'OLIVA', orders: 2, lines: 3, items: 17 })
+  })
+})
+
+describe('revising a placed order', () => {
+  test('the number stays, the change is numbered, signed and explained', async () => {
+    const id = await placeOrder()
+    await expect(
+      amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 12 }], reason: '', products, actor: ACTOR }),
+    ).rejects.toThrow()
+    const next = await amendPurchaseOrder({
+      id,
+      lines: [{ productId: 'p1', qty: 12 }, { productId: 'p3', qty: 1 }],
+      expectedAt: new Date(2026, 8, 20).getTime(),
+      reason: 'ผู้ขายมีของไม่พอ',
+      products,
+      actor: ACTOR,
+    })
+    expect(next.docNo).toBe('PO-00001')
+    expect(next.revision).toBe(1)
+    expect(next.lines.map((l) => [l.productId, l.orderedQty])).toEqual([['p1', 12], ['p3', 1]])
+    const [r] = next.revisions!
+    expect(r).toMatchObject({ rev: 1, by: ACTOR.id, reason: 'ผู้ขายมีของไม่พอ' })
+    expect(r.changes.map((c) => c.kind).sort()).toEqual(['add', 'expectedAt', 'qty', 'remove'])
+    expect(orders()[0].revision).toBe(1)
+  })
+
+  test('nothing changed is not a revision', async () => {
+    const id = await placeOrder()
+    await expect(
+      amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 10 }, { productId: 'p2', qty: 5 }], reason: 'x', products, actor: ACTOR }),
+    ).rejects.toThrow()
+    expect(orders()[0].revision).toBeUndefined()
+  })
+
+  test('a received order is closed', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-1',
+      lines: [
+        { productId: 'p1', receivedQty: 0, checked: true },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+    })
+    await expect(amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 1 }], reason: 'x', products, actor: ACTOR })).rejects.toThrow()
+  })
+
+  test('a revised order that went out before needs sending again', async () => {
+    const id = await placeOrder()
+    await setShareStatus(id, 'sent', ACTOR, 1)
+    const before = orders()[0]
+    expect(needsResend(before)).toBe(false)
+    await new Promise((r) => setTimeout(r, 2))
+    const next = await amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 1 }], reason: 'x', products, actor: ACTOR })
+    expect(needsResend(next)).toBe(true)
   })
 })
 

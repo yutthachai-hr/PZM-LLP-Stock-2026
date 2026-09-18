@@ -19,14 +19,17 @@ import {
   PageHeader,
   Select,
   Spinner,
+  Textarea,
 } from '../components/ui'
 import {
   CHASE_AFTER_DAYS,
+  amendPurchaseOrder,
   cancelPurchaseOrder,
   createPurchaseOrder,
   daysWaiting,
   expectedDeliveryAt,
   listOrdersInRange,
+  needsResend,
   overdueOrders,
   receivePurchaseOrder,
   summariseBySupplier,
@@ -41,7 +44,7 @@ import { sameUnit } from '../lib/units'
 import { fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput, dateInputToMs } from '../lib/format'
 import { useI18n, useT, type Lang } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
-import type { Product, PurchaseOrder, Supplier } from '../types'
+import type { PoRevisionChange, PoRevisionEntry, Product, PurchaseOrder, Supplier } from '../types'
 import { looseMatch } from '../lib/search'
 
 /**
@@ -83,6 +86,7 @@ export function OrdersPage() {
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null)
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null)
   const [cancelling, setCancelling] = useState<PurchaseOrder | null>(null)
+  const [amending, setAmending] = useState<PurchaseOrder | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -171,6 +175,7 @@ export function OrdersPage() {
                   ? t('ยกเลิกแล้ว')
                   : t('สั่งแล้ว'),
           [t('กำหนดส่ง')]: o.expectedAt ? formatThaiDate(o.expectedAt) : '',
+          [t('แก้ไขครั้งที่')]: o.revision ?? '',
           [t('จำนวนที่รับ')]: o.status === 'received' ? (l.receivedQty ?? '') : '',
           [t('วันที่รับ')]: o.receivedAt ? formatThaiDate(o.receivedAt) : '',
           [t('เลขที่บิล')]: o.invoiceNo ?? '',
@@ -321,6 +326,7 @@ export function OrdersPage() {
                 locationName={locationById(o.locationId)?.name ?? ''}
                 onOpen={() => setViewing(o)}
                 onReceive={() => setReceiving(o)}
+                onAmend={() => setAmending(o)}
                 onCancel={() => setCancelling(o)}
               />
             ))}
@@ -347,6 +353,15 @@ export function OrdersPage() {
         />
       )}
       {viewing && <OrderSheet order={viewing} locationName={locationById(viewing.locationId)?.name ?? ''} onClose={() => setViewing(null)} />}
+      {amending && user && (
+        <AmendOrderModal
+          order={amending}
+          products={products}
+          actor={{ id: user.id, name: user.name }}
+          onClose={() => setAmending(null)}
+          onDone={(next) => setOrders((cur) => cur.map((o) => (o.id === next.id ? next : o)))}
+        />
+      )}
       {cancelling && (
         <ReasonModal
           title={t('ยกเลิกใบสั่งซื้อ {docNo}', { docNo: cancelling.docNo })}
@@ -402,6 +417,7 @@ function OrderRow({
   locationName,
   onOpen,
   onReceive,
+  onAmend,
   onCancel,
 }: {
   order: PurchaseOrder
@@ -411,6 +427,7 @@ function OrderRow({
   locationName: string
   onOpen: () => void
   onReceive: () => void
+  onAmend: () => void
   onCancel: () => void
 }) {
   const t = useT()
@@ -432,7 +449,12 @@ function OrderRow({
           ) : (
             <Badge color={late ? 'red' : 'blue'}>{t('สั่งแล้ว')}</Badge>
           )}
-          {order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>}
+          {order.revision ? <Badge color="amber">Rev.{order.revision}</Badge> : null}
+          {needsResend(order) ? (
+            <Badge color="red">{t('แก้ไขแล้ว — ยังไม่ส่งใหม่')}</Badge>
+          ) : (
+            order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>
+          )}
           {order.requestId && (
             <Link to={`/requests/${order.requestId}`} className="text-xs text-brand hover:underline">
               {t('จากรายการขอสั่งซื้อ')}
@@ -463,6 +485,11 @@ function OrderRow({
         <Button variant="ghost" onClick={onOpen}>
           {t('ดูใบสั่ง')}
         </Button>
+        {!done && !draft && (
+          <Button variant="ghost" onClick={onAmend}>
+            {t('แก้ไข')}
+          </Button>
+        )}
         {!done && !draft && <Button onClick={onReceive}>{t('ตรวจรับของ')}</Button>}
         {!done && (
           <button
@@ -516,6 +543,213 @@ function SupplierSummary({
  * The staff member types quantities against the few they want rather than hunting for each
  * product, which is the whole reason the supplier link exists.
  */
+type LineDraft = Record<string, { qty: number; unit: string }>
+
+/** The supplier's products with a quantity box each — the body of placing and of amending. */
+function LineList({
+  products,
+  lines,
+  setLines,
+  plainUnits,
+}: {
+  products: Product[]
+  lines: LineDraft
+  setLines: (fn: (cur: LineDraft) => LineDraft) => void
+  plainUnits: string[]
+}) {
+  const t = useT()
+  return (
+    <div className="max-h-80 overflow-auto rounded-lg border border-line">
+      {products.length === 0 ? (
+        <p className="p-6 text-center text-sm text-ink-soft">{t('ผู้ขายรายนี้ยังไม่มีสินค้าผูกไว้')}</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {products.map((p) => {
+            const line = lines[p.id]
+            const mismatch = !!line && line.qty > 0 && !sameUnit(line.unit, p.unitType)
+            return (
+              <li key={p.id} className="p-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-ink">{p.name}</span>
+                    <span className="flex gap-2 text-xs text-ink-faint">
+                      <span className="doc-no">{p.sku}</span>
+                      <span>
+                        {t('หน่วยรับเข้า')}: {p.unitType}
+                      </span>
+                    </span>
+                  </span>
+                  {/* The same box the receiving screen uses, so the units on offer
+                      here are the units the delivery can be keyed in. */}
+                  <div className="w-full shrink-0 sm:w-56">
+                    <QtyInput
+                      unitType={p.unitType}
+                      plainUnits={plainUnits}
+                      conversions={p.unitConversions}
+                      value={line?.qty ?? 0}
+                      onChange={(qty, unit) => setLines((cur) => ({ ...cur, [p.id]: { qty, unit } }))}
+                      invalid={mismatch}
+                    />
+                  </div>
+                </div>
+                {mismatch && (
+                  <p role="alert" className="mt-1 text-xs font-medium text-danger">
+                    {t('หน่วยที่คุณเลือกกับหน่วยรับเข้าสินค้าไม่ตรงกัน กรุณาตรวจสอบอีกครั้งก่อนกดยืนยัน')}
+                  </p>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Change a placed order: the PO revision. Starts from the order as it stands, with the
+ * supplier's other products below at zero for adding; a quantity set to zero drops the
+ * line. Asks why, because the supplier will get the sheet again and the audit will ask.
+ */
+function AmendOrderModal({
+  order,
+  products,
+  actor,
+  onClose,
+  onDone,
+}: {
+  order: PurchaseOrder
+  products: Product[]
+  actor: { id: string; name: string }
+  onClose: () => void
+  onDone: (next: PurchaseOrder) => void
+}) {
+  const t = useT()
+  const toast = useToast()
+  const plainUnits = useEntryUnits()
+  const [lines, setLines] = useState<LineDraft>(() =>
+    Object.fromEntries(order.lines.map((l) => [l.productId, { qty: l.orderedQty, unit: shownUnit(l) }])),
+  )
+  const [expected, setExpected] = useState(order.expectedAt !== undefined ? msToDateInput(order.expectedAt) : '')
+  const [note, setNote] = useState(order.note ?? '')
+  const [reason, setReason] = useState('')
+  const [search, setSearch] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  // The order's own lines first, whatever state their product is in now, then the rest of
+  // what the supplier sells.
+  const list = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const onOrder = new Set(order.lines.map((l) => l.productId))
+    const own = products.filter((p) => onOrder.has(p.id))
+    const others = products
+      .filter((p) => !onOrder.has(p.id) && p.supplierId === order.supplierId && p.active !== false)
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return [...own, ...others].filter((p) => looseMatch([p.name, p.sku], q))
+  }, [products, order, search])
+
+  const chosen = Object.entries(lines).filter(([, l]) => l.qty > 0)
+
+  async function save() {
+    setBusy(true)
+    try {
+      const next = await amendPurchaseOrder({
+        id: order.id,
+        lines: chosen.map(([productId, l]) => ({ productId, qty: l.qty, entryUnit: l.unit })),
+        ...(expected ? { expectedAt: dateInputToMs(expected) } : {}),
+        note,
+        reason,
+        products,
+        actor,
+      })
+      onDone(next)
+      toast.success(t('แก้ไขใบสั่งซื้อแล้ว (Rev.{n}) — อย่าลืมส่งใบใหม่ให้ผู้ขาย', { n: next.revision ?? 1 }))
+      onClose()
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={t('แก้ไขใบสั่งซื้อ {docNo}', { docNo: order.docNo })} wide>
+      <div className="space-y-4">
+        <p className="text-sm text-ink-soft">
+          {t('เลขที่เดิมคงไว้ ใบจะขึ้นเป็น Rev.{n} และต้องส่งให้ผู้ขายอีกครั้ง การแก้ทุกครั้งถูกบันทึกในใบ', { n: (order.revision ?? 0) + 1 })}
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t('ผู้ขาย')}>
+            <Input value={order.supplierName} readOnly />
+          </Field>
+          <Field label={t('วันที่ให้ส่งของ')}>
+            <Input type="date" value={expected} onChange={(e) => setExpected(e.target.value)} />
+          </Field>
+        </div>
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('ค้นหาในรายการของผู้ขายรายนี้')} />
+        <LineList products={list} lines={lines} setLines={setLines} plainUnits={plainUnits} />
+        <Field label={t('หมายเหตุในใบ')}>
+          <Input value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+        <Field label={t('เหตุผลที่แก้ไข')} required>
+          <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('เช่น ผู้ขายแจ้งว่าของไม่พอ / สาขาขอเพิ่ม')} />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            {t('ยกเลิก')}
+          </Button>
+          <Button onClick={() => void save()} disabled={busy || chosen.length === 0 || !reason.trim()}>
+            {busy ? t('กำลังบันทึก...') : t('บันทึกการแก้ไข ({count} รายการ)', { count: chosen.length })}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/** One revision's line in the history under the sheet: what moved, said in the reader's language. */
+function describeChange(c: PoRevisionChange, t: (k: string, p?: Record<string, string | number>) => string): string {
+  switch (c.kind) {
+    case 'qty':
+      return t('{name}: {from} → {to} {unit}', { name: c.productName, from: fmtQty(c.from), to: fmtQty(c.to), unit: c.unit })
+    case 'add':
+      return t('เพิ่ม {name} {qty} {unit}', { name: c.productName, qty: fmtQty(c.to), unit: c.unit })
+    case 'remove':
+      return t('ตัด {name} ({qty} {unit})', { name: c.productName, qty: fmtQty(c.from), unit: c.unit })
+    case 'expectedAt':
+      return t('กำหนดส่ง: {from} → {to}', { from: c.from !== undefined ? formatThaiDate(c.from) : '—', to: c.to !== undefined ? formatThaiDate(c.to) : '—' })
+    case 'note':
+      return t('หมายเหตุ: {from} → {to}', { from: c.from ?? '—', to: c.to ?? '—' })
+  }
+}
+
+function RevisionHistory({ revisions }: { revisions: PoRevisionEntry[] }) {
+  const t = useT()
+  return (
+    <div className="rounded-lg border border-line bg-sunken p-3 text-sm">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">{t('ประวัติการแก้ไขใบ')}</h3>
+      <ol className="space-y-2">
+        {[...revisions].reverse().map((r) => (
+          <li key={r.rev}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color="amber">Rev.{r.rev}</Badge>
+              <span className="text-xs text-ink-soft">
+                {formatThaiDateTime(r.at)} · {r.byName}
+              </span>
+            </div>
+            <div className="text-ink">{r.reason}</div>
+            <ul className="mt-0.5 list-inside list-disc text-xs text-ink-soft">
+              {r.changes.map((c, i) => (
+                <li key={i}>{describeChange(c, t)}</li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 function NewOrderModal({
   suppliers,
   products,
@@ -539,7 +773,7 @@ function NewOrderModal({
   // Quantity and the unit it was keyed in, per product. The unit is offered from the same
   // list the receiving screen offers — the product's own first, then the owner's — because
   // the owner's rule is that an order is placed in the unit the goods will be received in.
-  const [lines, setLines] = useState<Record<string, { qty: number; unit: string }>>({})
+  const [lines, setLines] = useState<LineDraft>({})
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   // The day the supplier is to deliver. Offered from their lead time; the person may say
@@ -635,54 +869,7 @@ function NewOrderModal({
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('ค้นหาในรายการของผู้ขายรายนี้')}
             />
-            <div className="max-h-80 overflow-auto rounded-lg border border-line">
-              {theirs.length === 0 ? (
-                <p className="p-6 text-center text-sm text-ink-soft">
-                  {t('ผู้ขายรายนี้ยังไม่มีสินค้าผูกไว้')}
-                </p>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {theirs.map((p) => {
-                    const line = lines[p.id]
-                    const mismatch = !!line && line.qty > 0 && !sameUnit(line.unit, p.unitType)
-                    return (
-                      <li key={p.id} className="p-2">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm text-ink">{p.name}</span>
-                            <span className="flex gap-2 text-xs text-ink-faint">
-                              <span className="doc-no">{p.sku}</span>
-                              <span>
-                                {t('หน่วยรับเข้า')}: {p.unitType}
-                              </span>
-                            </span>
-                          </span>
-                          {/* The same box the receiving screen uses, so the units on offer
-                              here are the units the delivery can be keyed in. */}
-                          <div className="w-full shrink-0 sm:w-56">
-                            <QtyInput
-                              unitType={p.unitType}
-                              plainUnits={plainUnits}
-                              conversions={p.unitConversions}
-                              value={line?.qty ?? 0}
-                              onChange={(qty, unit) =>
-                                setLines((cur) => ({ ...cur, [p.id]: { qty, unit } }))
-                              }
-                              invalid={mismatch}
-                            />
-                          </div>
-                        </div>
-                        {mismatch && (
-                          <p role="alert" className="mt-1 text-xs font-medium text-danger">
-                            {t('หน่วยที่คุณเลือกกับหน่วยรับเข้าสินค้าไม่ตรงกัน กรุณาตรวจสอบอีกครั้งก่อนกดยืนยัน')}
-                          </p>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
+            <LineList products={theirs} lines={lines} setLines={setLines} plainUnits={plainUnits} />
           </>
         )}
 
@@ -939,6 +1126,7 @@ function OrderSheet({
       <div className="space-y-3">
         <SheetLangToggle value={sheetLang} onChange={setSheetLang} />
         <PoSheet order={order} locationName={locationName} company={company} ref={sheet} lang={sheetLang} />
+        {order.revisions && order.revisions.length > 0 && <RevisionHistory revisions={order.revisions} />}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {t('ปิด')}

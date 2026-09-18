@@ -73,6 +73,7 @@ export function PoSheet({
           <div className="text-base font-bold">{received ? t('ใบรับของ') : t('ใบสั่งซื้อ')}</div>
           <div className="doc-no text-xs text-ink-faint">
             {order.docNo}
+            {order.revision ? ` · Rev.${order.revision}` : ''}
             {page && page.of > 1 ? ` · ${page.n}/${page.of}` : ''}
           </div>
         </div>

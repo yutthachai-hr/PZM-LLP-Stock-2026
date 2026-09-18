@@ -410,6 +410,7 @@ service cloud.firestore {
           'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
+          'revision', 'revisions',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ]);
     }
@@ -463,6 +464,9 @@ service cloud.firestore {
         && (!('cancelledByName' in d) || text(d.cancelledByName, 200))
         && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
         && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d))
+        // A placed order changed after the fact is a revision: numbered, signed, explained.
+        && (!('revision' in d) || nonneg(d.revision, 1000))
+        && (!('revisions' in d) || (d.revisions is list && d.revisions.size() <= 50))
         // An order that reached the books names the paper it came with. Without this the
         // invoice number is a habit the form could be talked out of.
         && (d.status != 'received' || ('invoiceNo' in d && 'movementDocNo' in d));
@@ -676,8 +680,15 @@ service cloud.firestore {
           // the sheet got to. Neither may be signed in someone else's name.
           'orderedAt', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
-          'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt'
+          'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
+          'revision', 'revisions'
         ])
+        // The lines of a placed order move only as a revision (or when the delivery is
+        // checked in), never quietly; a draft is still being written. Revisions only grow.
+        && (!editedKeys().hasAny(['lines', 'expectedAt']) || resource.data.status == 'draft'
+            || 'revisions' in editedKeys() || request.resource.data.status == 'received')
+        && (!('revisions' in editedKeys()) || !('revisions' in resource.data)
+            || request.resource.data.revisions.size() > resource.data.revisions.size())
         // The order date only moves when a draft is placed.
         && (!editedKeys().hasAny(['orderedAt']) || resource.data.status == 'draft')
         // Cancelling is signed by the caller, and a cancelled order is closed for good —
