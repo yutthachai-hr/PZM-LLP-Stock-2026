@@ -210,13 +210,25 @@ describe('product unit reference conversions', () => {
 })
 
 describe('calendar events', () => {
-  test('only an admin creates one, and only in their own name', async () => {
+  test('a manager or admin creates one, in their own name, not already decided', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1')))
-    await assertFails(setDoc(doc(as(STAFF), 'stockEvents/e2'), event('e2')))
-    // An admin cannot file an event as someone else.
-    await assertFails(
-      setDoc(doc(as(ADMIN), 'stockEvents/e3'), event('e3', { createdBy: STAFF })),
+    await assertSucceeds(setDoc(doc(as(MANAGER), 'stockEvents/e4'), event('e4', { createdBy: MANAGER })))
+    await assertFails(setDoc(doc(as(STAFF), 'stockEvents/e2'), event('e2', { createdBy: STAFF })))
+    // Nobody files an event as someone else, or born finished.
+    await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e3'), event('e3', { createdBy: STAFF })))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e5'), event('e5', { status: 'completed' })))
+  })
+
+  test('a generated task names its schedule and its id is the dedup key', async () => {
+    const id = 'sc__sched1__20260917'
+    await assertSucceeds(
+      setDoc(doc(as(MANAGER), 'stockEvents', id), event(id, { createdBy: MANAGER, sourceType: 'schedule', sourceId: 'sched1', scheduleId: 'sched1', refKey: id, requiresApproval: true, history: [{ at: ts(), by: MANAGER, byName: 'M', action: 'generated' }] })),
     )
+    // refKey has to be the document's own id, or the dedup means nothing.
+    await assertFails(
+      setDoc(doc(as(MANAGER), 'stockEvents/other'), event('other', { createdBy: MANAGER, sourceType: 'schedule', sourceId: 'sched1', scheduleId: 'sched1', refKey: id })),
+    )
+    await assertFails(setDoc(doc(as(MANAGER), 'stockEvents/e9'), event('e9', { createdBy: MANAGER, sourceType: 'robot' })))
   })
 
   test('staff read them — the work is theirs to do', async () => {
@@ -228,13 +240,18 @@ describe('calendar events', () => {
     await assertFails(getDoc(doc(as(PENDING), 'stockEvents/e1')))
   })
 
-  test('staff may move the status and nothing else', async () => {
+  test('staff may move the status forward and sign it, and nothing else', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'stockEvents/e1'), event('e1'))
     })
     await assertSucceeds(
-      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { status: 'inProgress', updatedAt: ts() }),
+      updateDoc(doc(as(STAFF), 'stockEvents/e1'), { status: 'inProgress', startedBy: STAFF, startedByName: 'Staff', startedAt: ts(), history: [{ at: ts(), by: STAFF, byName: 'Staff', action: 'started' }], updatedAt: ts() }),
     )
+    // Not in a colleague's name, not backwards, not approved by themselves.
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/e1'), { status: 'completed', completedBy: ADMIN, updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/e1'), { status: 'upcoming', updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/e1'), { status: 'completed', approvedBy: STAFF, approvedAt: ts(), updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/e1'), { startAt: ts() + 86400000, updatedAt: ts() }))
     // The things a staff member must not be able to rewrite on work assigned to them.
     await assertFails(
       updateDoc(doc(as(STAFF), 'stockEvents/e1'), { title: 'something else', updatedAt: ts() }),
@@ -261,6 +278,52 @@ describe('calendar events', () => {
     )
   })
 
+  test('every move along the workflow, or to another day, writes a history line signed by the mover', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/h1'), event('h1', { history: [{ at: 1, by: ADMIN, byName: 'A', action: 'created' }] }))
+    })
+    const prev = { at: 1, by: ADMIN, byName: 'A', action: 'created' }
+    // No line at all: refused, for staff and managers alike.
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/h1'), { status: 'inProgress', updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(MANAGER), 'stockEvents/h1'), { startAt: ts() + 86400000, updatedAt: ts() }))
+    // A line in a colleague's name: refused.
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/h1'), { status: 'inProgress', history: [prev, { at: ts(), by: ADMIN, byName: 'A', action: 'started' }], updatedAt: ts() }))
+    // Dropping the old line to make room: refused.
+    await assertFails(updateDoc(doc(as(MANAGER), 'stockEvents/h1'), { title: 'x', history: [], updatedAt: ts() }))
+    // Signed and appended: fine.
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'stockEvents/h1'), { status: 'inProgress', history: [prev, { at: ts(), by: STAFF, byName: 'S', action: 'started' }], updatedAt: ts() }))
+    // A manager's title edit needs no line; the editor adds one anyway.
+    await assertSucceeds(updateDoc(doc(as(MANAGER), 'stockEvents/h1'), { title: 'renamed', updatedAt: ts() }))
+  })
+
+  test('a task assigned to others is not the staff member\'s to move; one for everyone or nobody is', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/mine'), event('mine', { assignedTo: [STAFF] }))
+      await setDoc(doc(ctx.firestore(), 'stockEvents/theirs'), event('theirs', { assignedTo: [MANAGER] }))
+      await setDoc(doc(ctx.firestore(), 'stockEvents/all'), event('all', { assignedToAll: true }))
+    })
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'stockEvents/mine'), { status: 'completed', completedBy: STAFF, completedByName: 'S', completedAt: ts(), history: [{ at: ts(), by: STAFF, byName: 'S', action: 'completed' }], updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/theirs'), { status: 'completed', updatedAt: ts() }))
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'stockEvents/all'), { status: 'inProgress', history: [{ at: ts(), by: STAFF, byName: 'S', action: 'started' }], updatedAt: ts() }))
+    // A manager may take any task on, re-date it with the history growing, and sign off.
+    await assertSucceeds(
+      updateDoc(doc(as(MANAGER), 'stockEvents/theirs'), { startAt: ts() + 86400000, rescheduledFrom: ts(), history: [{ at: ts(), by: MANAGER, byName: 'M', action: 'rescheduled', oldValue: '1', newValue: '2' }], updatedAt: ts() }),
+    )
+    await assertFails(updateDoc(doc(as(MANAGER), 'stockEvents/theirs'), { status: 'completed', approvedBy: ADMIN, approvedAt: ts(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(doc(as(MANAGER), 'stockEvents/theirs'), { status: 'completed', approvedBy: MANAGER, approvedByName: 'M', approvedAt: ts(), history: [{ at: 1, by: MANAGER, byName: 'M', action: 'rescheduled' }, { at: ts(), by: MANAGER, byName: 'M', action: 'approved' }], updatedAt: ts() }))
+    // Once it is closed it is not staff's to reopen.
+    await assertFails(updateDoc(doc(as(STAFF), 'stockEvents/mine'), { status: 'inProgress', history: [{ at: 1, by: STAFF, byName: 'S', action: 'completed' }, { at: ts(), by: STAFF, byName: 'S', action: 'started' }], updatedAt: ts() }))
+    // The history never shrinks, whoever writes.
+    await assertFails(updateDoc(doc(as(MANAGER), 'stockEvents/theirs'), { history: [], updatedAt: ts() }))
+    // A manager clears a task they set or the schedule set, not one an admin set by hand.
+    await assertFails(deleteDoc(doc(as(MANAGER), 'stockEvents/theirs')))
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'stockEvents/gen'), event('gen', { sourceType: 'schedule' }))
+    })
+    await assertSucceeds(deleteDoc(doc(as(MANAGER), 'stockEvents/gen')))
+    await assertFails(deleteDoc(doc(as(STAFF), 'stockEvents/mine')))
+  })
+
   test('a staff set() cannot wipe the document under the edit guard', async () => {
     // editedHonestly() used to default to true, which let an active user replace a whole
     // document as long as the shape validated — rewriting who created it.
@@ -275,6 +338,7 @@ describe('calendar events', () => {
   test('the unions are closed', async () => {
     await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e1'), event('e1', { type: 'poDelay' })))
     await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e2'), event('e2', { status: 'waiting' })))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockEvents/e6'), event('e6', { requiresApproval: true })))
     await assertFails(setDoc(doc(as(ADMIN), 'stockEvents/e3'), event('e3', { priority: 'p1' })))
   })
 
@@ -705,6 +769,50 @@ describe('a balance counted in a unit somebody keyed', () => {
     await assertFails(
       setDoc(doc(as(STAFF), 'stockMovements/m-num'), movement('m-num', STAFF, { entryUnit: 7 })),
     )
+  })
+})
+
+describe('inventory schedules and settings', () => {
+  const schedule = (id: string, over: Record<string, unknown> = {}) => ({
+    id, kind: 'stockCount', name: 'นับคลังหลักทุกจันทร์', locationId: 'loc1', frequency: 'weekly', daysOfWeek: [1],
+    startTime: '09:00', priority: 'normal', enabled: true, createdBy: ADMIN, createdAt: ts(), updatedAt: ts(), ...over,
+  })
+
+  test('an admin writes schedules and settings; staff and managers read them', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'inventorySchedules/s1'), schedule('s1')))
+    await assertFails(setDoc(doc(as(MANAGER), 'inventorySchedules/s2'), schedule('s2')))
+    await assertFails(setDoc(doc(as(STAFF), 'inventorySchedules/s3'), schedule('s3')))
+    await assertSucceeds(getDoc(doc(as(STAFF), 'inventorySchedules/s1')))
+    await assertSucceeds(getDocs(collection(as(MANAGER), 'inventorySchedules')))
+    await assertFails(getDoc(doc(as(PENDING), 'inventorySchedules/s1')))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'inventorySchedules/settings'), { id: 'settings', kind: 'settings', adjustValueBaht: 1000, adjustPct: 20, wasteValueBaht: 500, coverDays: 7, reminderBeforeMin: 60, escalateAfterHours: 4, usageWindowDays: 30, updatedAt: ts() }))
+    await assertFails(setDoc(doc(as(ADMIN), 'inventorySchedules/settings'), { id: 'settings', kind: 'settings', adjustPct: 200, updatedAt: ts() }))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'inventorySchedules/s1')))
+  })
+
+  test('the schedule shape is pinned', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'inventorySchedules/s1'), schedule('s1', { frequency: 'hourly' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'inventorySchedules/s1'), schedule('s1', { dayOfMonth: 32 })))
+    await assertFails(setDoc(doc(as(ADMIN), 'inventorySchedules/s1'), schedule('s1', { cron: '* * * * *' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'inventorySchedules/s1'), schedule('s1', { kind: 'audit' })))
+  })
+
+  test('everyone keeps their own preferences and nobody else\'s; snoozes are anyone\'s', async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), `inventorySchedules/prefs__${STAFF}`), { id: `prefs__${STAFF}`, kind: 'prefs', userId: STAFF, mute: { inventory: ['info'] }, updatedAt: ts() }))
+    await assertFails(setDoc(doc(as(STAFF), `inventorySchedules/prefs__${MANAGER}`), { id: `prefs__${MANAGER}`, kind: 'prefs', userId: MANAGER, mute: {}, updatedAt: ts() }))
+    await assertFails(setDoc(doc(as(STAFF), `inventorySchedules/prefs__${STAFF}`), { id: `prefs__${STAFF}`, kind: 'prefs', userId: MANAGER, mute: {}, updatedAt: ts() }))
+    await assertSucceeds(setDoc(doc(as(STAFF), 'inventorySchedules/snooze__reorder__p1__loc1'), { id: 'snooze__reorder__p1__loc1', kind: 'snooze', until: ts() + 86400000, by: STAFF, byName: 'S', createdAt: ts() }))
+    await assertFails(setDoc(doc(as(STAFF), 'inventorySchedules/snooze__x'), { id: 'snooze__x', kind: 'snooze', until: ts(), by: ADMIN, byName: 'A', createdAt: ts() }))
+    // The other brand has its own.
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__inventorySchedules/s1'), schedule('s1')))
+  })
+
+  test('the cron status is readable and never written from a client', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'meta/cronStatus'), { pizza: { lastRunAt: ts() } })
+    })
+    await assertSucceeds(getDoc(doc(as(STAFF), 'meta/cronStatus')))
+    await assertFails(setDoc(doc(as(ADMIN), 'meta/cronStatus'), { pizza: { lastRunAt: ts() } }))
   })
 })
 

@@ -143,7 +143,10 @@ service cloud.firestore {
         // A confirmed spelling that turns out wrong is unlearned by deleting it.
         || kind(name) == 'productAliases'
         // A draft is a proposal the import screen rebuilds; nothing placed is ever deleted.
-        || (kind(name) == 'purchaseOrders' && resource.data.status == 'draft');
+        || (kind(name) == 'purchaseOrders' && resource.data.status == 'draft')
+        // A manager clears a task they set, or one the schedule set.
+        || (kind(name) == 'stockEvents' && roleIsManager()
+            && (resource.data.createdBy == request.auth.uid || resource.data.get('sourceType', '') == 'schedule'));
     }
 
     // ---------------------------------------------------------------- values ----
@@ -322,18 +325,41 @@ service cloud.firestore {
     // Low stock is deliberately NOT one of these. It is already derived for free from
     // balances the app holds in memory, and one document per low product per location
     // would be over a thousand documents that then have to be cleared again.
+    /**
+     * A task on the calendar. Split the way orders and requests are: what it IS is checked
+     * when it is filed and frozen by eventEdit(); what may move is checked on every write —
+     * the expression budget again (see validShape).
+     */
     function validEvent(d) {
-      return d.keys().hasAll(['id', 'title', 'type', 'startAt', 'status', 'priority',
+      return eventFrozen(d) && eventLive(d)
+        && d.keys().hasAll(['id', 'title', 'type', 'startAt', 'status', 'priority',
           'createdBy', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'title', 'type', 'locationId', 'startAt', 'dueAt',
           'status', 'priority', 'assignedTo', 'assignedToAll', 'assignedToName', 'note',
-          'createdBy', 'createdAt', 'updatedAt'])
-        && text(d.title, 300)
-        && d.type in ['stockCount', 'audit', 'delivery', 'transfer', 'inventoryTask', 'other']
-        && d.status in ['upcoming', 'inProgress', 'completed', 'cancelled']
+          'productId', 'supplierId', 'sourceType', 'sourceId', 'scheduleId', 'refKey',
+          'requiresApproval', 'history', 'rescheduledFrom',
+          'startedBy', 'startedByName', 'startedAt', 'completedBy', 'completedByName', 'completedAt',
+          'approvedBy', 'approvedByName', 'approvedAt', 'cancelReason',
+          'createdBy', 'createdAt', 'updatedAt']);
+    }
+
+    function eventFrozen(d) {
+      return d.type in ['stockCount', 'audit', 'delivery', 'transfer', 'inventoryTask', 'other']
+        && text(d.createdBy, 200) && epochMs(d.createdAt)
+        && (!('productId' in d) || text(d.productId, 200))
+        && (!('supplierId' in d) || text(d.supplierId, 200))
+        // A generated task says which schedule made it; its id doubles as the dedup key.
+        && (!('sourceType' in d) || d.sourceType in ['manual', 'schedule'])
+        && (!('sourceId' in d) || text(d.sourceId, 200))
+        && (!('scheduleId' in d) || text(d.scheduleId, 200))
+        && (!('refKey' in d) || (text(d.refKey, 200) && d.refKey == d.id));
+    }
+
+    function eventLive(d) {
+      return text(d.title, 300)
+        && d.status in ['upcoming', 'inProgress', 'waitingApproval', 'completed', 'cancelled']
         && d.priority in ['normal', 'high', 'critical']
-        && epochMs(d.startAt) && epochMs(d.createdAt) && epochMs(d.updatedAt)
-        && text(d.createdBy, 200)
+        && epochMs(d.startAt) && epochMs(d.updatedAt)
         && (!('locationId' in d) || text(d.locationId, 200))
         && (!('dueAt' in d) || epochMs(d.dueAt) && d.dueAt >= d.startAt)
         // Who it is for: a list of uids, or — for events written before the list — one uid
@@ -342,20 +368,72 @@ service cloud.firestore {
             || (d.assignedTo is list && d.assignedTo.size() >= 1 && d.assignedTo.size() <= 50))
         && (!('assignedToAll' in d) || d.assignedToAll is bool)
         && (!('assignedToName' in d) || text(d.assignedToName, 1000))
-        && (!('note' in d) || d.note is string && d.note.size() <= 2000)
-        // Where this supplier's goods usually land, and how many days they take. Both are
-        // defaults the automatic order offers; neither is a rule it enforces.
-        && (!('defaultLocationId' in d) || text(d.defaultLocationId, 200))
-        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365));
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('requiresApproval' in d) || d.requiresApproval is bool)
+        && (!('history' in d) || (d.history is list && d.history.size() <= 100))
+        && (!('rescheduledFrom' in d) || epochMs(d.rescheduledFrom))
+        && (!('startedBy' in d) || text(d.startedBy, 200))
+        && (!('completedBy' in d) || text(d.completedBy, 200))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        // A signed-off task names who signed it.
+        && (d.status != 'completed' || !('requiresApproval' in d) || d.requiresApproval == false || 'approvedBy' in d);
     }
 
     // Staff may move an event along and nothing else. Without this the catch-all lets any
     // active user replace a whole document via set(), rewriting who created it and when.
+    /**
+     * What may change on a task, and by whom.
+     *
+     * A manager may change everything that is not what the task IS (its type, origin and
+     * author). Staff may only move a task assigned to them (or to everyone, or to nobody)
+     * forward — start it, finish it, hand it in for approval — signing in their own name and
+     * adding to the history; they cannot move it back, re-date it or approve it.
+     */
     function eventEdit() {
-      return admin() || (
-        editedKeys().hasOnly(['status', 'updatedAt'])
-        && request.resource.data.createdBy == resource.data.createdBy
-      );
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.createdBy == old.createdBy
+        && historyKept(d, old)
+        && (roleIsManager()
+          ? editedKeys().hasOnly(['title', 'status', 'priority', 'startAt', 'dueAt', 'locationId',
+              'assignedTo', 'assignedToAll', 'assignedToName', 'note', 'requiresApproval',
+              'history', 'rescheduledFrom', 'startedBy', 'startedByName', 'startedAt',
+              'completedBy', 'completedByName', 'completedAt', 'approvedBy', 'approvedByName', 'approvedAt',
+              'cancelReason', 'updatedAt'])
+            && (!('approvedBy' in editedKeys()) || d.approvedBy == request.auth.uid)
+          : editedKeys().hasOnly(['status', 'updatedAt', 'history', 'startedBy', 'startedByName', 'startedAt',
+              'completedBy', 'completedByName', 'completedAt'])
+            && d.status in ['inProgress', 'waitingApproval', 'completed']
+            // Forward only: a task handed in or closed is the manager's to reopen.
+            && old.status in ['upcoming', 'inProgress']
+            && (!('startedBy' in editedKeys()) || d.startedBy == request.auth.uid)
+            && (!('completedBy' in editedKeys()) || d.completedBy == request.auth.uid)
+            && assignedToMe(old));
+    }
+
+    /**
+     * The history only grows, each new line is signed by whoever is writing, and a move
+     * along the workflow or to another time always writes one — so "who moved this and why"
+     * cannot be skipped. (At the 100-entry cap the app drops the oldest after the first,
+     * so the size holds rather than grows.) Same limit as appendedOwnEdit(): earlier lines
+     * are not compared one by one.
+     */
+    function historyKept(d, old) {
+      let next = d.get('history', null);
+      return (!editedKeys().hasAny(['status', 'startAt']) || 'history' in editedKeys())
+        && (!('history' in editedKeys())
+          || (next is list && next.size() >= 1
+              && next.size() >= old.get('history', []).size()
+              && next[next.size() - 1].by == request.auth.uid));
+    }
+
+    /** The task is for this person: named, or for everyone, or for nobody in particular. */
+    function assignedToMe(old) {
+      return old.get('assignedToAll', false) == true
+        || !('assignedTo' in old)
+        || (old.assignedTo is list && request.auth.uid in old.assignedTo)
+        || old.assignedTo == request.auth.uid;
     }
 
     // One product a supplier sells us. buyingPrice is optional: it is not always known,
@@ -594,7 +672,7 @@ service cloud.firestore {
         : k == 'locations' ? validLocation(d)
         : k == 'notes' ? validNote(d)
         : k == 'productMinOverrides' ? validMinOverride(d)
-        : k == 'stockEvents' ? validEvent(d)
+        : k == 'stockEvents' ? (fresh ? validEvent(d) : eventLive(d))
         : k == 'suppliers' ? validSupplier(d)
         : k == 'supplierItems' ? validSupplierItem(d)
         : k == 'purchaseBatches' ? validBatch(d)
@@ -617,7 +695,8 @@ service cloud.firestore {
     function createdHonestly(name) {
       let k = kind(name);
       return k == 'stockEvents'
-        ? admin() && request.resource.data.createdBy == request.auth.uid
+        ? manager() && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status == 'upcoming'
         // An order is filed by whoever placed it. Ordering is everyday work, so staff may do
         // it, but not in a colleague's name — the dashboard's "who ordered this" has to mean
         // something when the goods do not turn up.
@@ -874,6 +953,95 @@ service cloud.firestore {
       allow create, update: if admin() && validUnitList(request.resource.data);
       // Emptying the dropdown is not an edit anyone needs; shortening it is.
       allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------- automation ----
+
+    // Written only by the cron Worker (service account, outside these rules). Screens read
+    // it to say when the automation last ran.
+    match /meta/cronStatus {
+      allow get: if active();
+      allow write: if false;
+    }
+
+    /**
+     * How the calendar is configured, per brand: stock-count schedules and thresholds
+     * (admin), each person's notification preferences (their own), and reorder snoozes
+     * (anyone active). The document id says which, so who may write is decided from the
+     * id before the document is looked at. Not in brandData on purpose — the catch-all
+     * below must not also answer for it.
+     */
+    function scheduleWriter(docId) {
+      return docId.matches('^prefs__.*') ? docId == 'prefs__' + request.auth.uid
+        : docId.matches('^snooze__.*') ? true
+        : roleIsAdmin();
+    }
+
+    function validScheduleDoc(docId, d) {
+      return d.id == docId && (
+        d.kind == 'stockCount' ? validStockCountSchedule(d)
+        : d.kind == 'settings' ? validInventorySettings(d)
+        : d.kind == 'prefs' ? validPrefs(d)
+        : d.kind == 'snooze' ? validSnooze(d)
+        : false
+      );
+    }
+
+    function validStockCountSchedule(d) {
+      return d.keys().hasAll(['id', 'kind', 'name', 'locationId', 'frequency', 'startTime', 'priority',
+          'enabled', 'createdBy', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'kind', 'name', 'locationId', 'frequency', 'daysOfWeek', 'dayOfMonth',
+          'intervalDays', 'anchorDay', 'startTime', 'durationMin', 'assignedTo', 'assignedToAll',
+          'assignedToName', 'requiresApproval', 'priority', 'enabled', 'note',
+          'createdBy', 'createdAt', 'updatedAt'])
+        && text(d.name, 200) && text(d.locationId, 200)
+        && d.frequency in ['daily', 'weekly', 'biweekly', 'monthly', 'custom']
+        && text(d.startTime, 5)
+        && d.priority in ['normal', 'high', 'critical']
+        && d.enabled is bool
+        && (!('daysOfWeek' in d) || (d.daysOfWeek is list && d.daysOfWeek.size() <= 7))
+        && (!('dayOfMonth' in d) || (d.dayOfMonth is int && d.dayOfMonth >= 1 && d.dayOfMonth <= 31))
+        && (!('intervalDays' in d) || (d.intervalDays is int && d.intervalDays >= 1 && d.intervalDays <= 365))
+        && (!('anchorDay' in d) || epochMs(d.anchorDay))
+        && (!('durationMin' in d) || nonneg(d.durationMin, 1440))
+        && (!('assignedTo' in d) || (d.assignedTo is list && d.assignedTo.size() <= 50))
+        && (!('assignedToAll' in d) || d.assignedToAll is bool)
+        && (!('assignedToName' in d) || text(d.assignedToName, 1000))
+        && (!('requiresApproval' in d) || d.requiresApproval is bool)
+        && (!('note' in d) || text(d.note, 2000))
+        && text(d.createdBy, 200) && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    function validInventorySettings(d) {
+      return d.keys().hasOnly(['id', 'kind', 'adjustValueBaht', 'adjustPct', 'wasteValueBaht', 'coverDays',
+          'reminderBeforeMin', 'escalateAfterHours', 'usageWindowDays', 'updatedBy', 'updatedAt'])
+        && d.id == 'settings'
+        && nonneg(d.adjustValueBaht, 100000000) && nonneg(d.adjustPct, 100) && nonneg(d.wasteValueBaht, 100000000)
+        && nonneg(d.coverDays, 365) && nonneg(d.reminderBeforeMin, 10080) && nonneg(d.escalateAfterHours, 720)
+        && nonneg(d.usageWindowDays, 365) && epochMs(d.updatedAt);
+    }
+
+    function validPrefs(d) {
+      return d.keys().hasOnly(['id', 'kind', 'userId', 'mute', 'updatedAt'])
+        && d.userId == request.auth.uid && d.mute is map && epochMs(d.updatedAt);
+    }
+
+    function validSnooze(d) {
+      return d.keys().hasOnly(['id', 'kind', 'until', 'by', 'byName', 'reason', 'createdAt'])
+        && epochMs(d.until) && d.by == request.auth.uid && text(d.byName, 200) && epochMs(d.createdAt)
+        && (!('reason' in d) || text(d.reason, 2000));
+    }
+
+    match /inventorySchedules/{docId} {
+      allow read: if active();
+      allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
+      allow delete: if active() && scheduleWriter(docId);
+    }
+
+    match /lelapin__inventorySchedules/{docId} {
+      allow read: if active();
+      allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
+      allow delete: if active() && scheduleWriter(docId);
     }
 
     // ---------------------------------------------------------------- revocation ----

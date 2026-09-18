@@ -45,7 +45,7 @@ const BASE = {
 
 describe('reading a range', () => {
   test('a range already read is served from memory', async () => {
-    await createEvent(BASE, ADMIN)
+    await createEvent(BASE, { id: ADMIN, name: 'Admin' })
     const reads = countReads()
     const { from, to } = monthGridBounds(2026, 8)
 
@@ -57,7 +57,7 @@ describe('reading a range', () => {
   })
 
   test('paging away and back costs one read, not two', async () => {
-    await createEvent(BASE, ADMIN)
+    await createEvent(BASE, { id: ADMIN, name: 'Admin' })
     const reads = countReads()
     const sep = monthGridBounds(2026, 8)
     const oct = monthGridBounds(2026, 9)
@@ -78,7 +78,7 @@ describe('reading a range', () => {
   })
 
   test('the other brand is a different cache, never the same answer', async () => {
-    await createEvent(BASE, ADMIN)
+    await createEvent(BASE, { id: ADMIN, name: 'Admin' })
     const { from, to } = monthGridBounds(2026, 8)
     expect(await cache.fetchRange(from, to)).toHaveLength(1)
 

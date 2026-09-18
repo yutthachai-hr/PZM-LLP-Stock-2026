@@ -4,7 +4,7 @@ import { Button, Field, Input, Modal, Select, Textarea } from '../../components/
 import { useData } from '../../data/DataContext'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
-import { assigneesOf, createEvent, updateEvent, type EventInput } from '../../services/events'
+import { assigneesOf, createEvent, getEvent, updateEvent, type Actor, type EventInput } from '../../services/events'
 import type { StockEvent, StockEventPriority, StockEventType } from '../../types'
 import { PRIORITY_LABEL, TASK_TYPES, TYPE_LABEL } from './chips'
 
@@ -26,18 +26,32 @@ export function fromInputs(date: string, time: string): number {
   return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 9, mm ?? 0).getTime()
 }
 
+/**
+ * What was written, as the database has it — the history line and the cleared fields
+ * included — so the drawer shows the same thing a reload would. Falls back to the local
+ * guess when the read is refused or fails.
+ */
+async function reread(id: string, guess: StockEvent): Promise<StockEvent> {
+  try {
+    return (await getEvent(id)) ?? guess
+  } catch {
+    return guess
+  }
+}
+
 /** The form for a task: create, or change one. Only the types this calendar still offers. */
 export function EventEditor({
   event,
   initialStart,
-  userId,
+  actor,
   onClose,
   onSaved,
 }: {
   event: StockEvent | null
   /** For a new task opened from a day: that day, at the current time of day. */
   initialStart?: number
-  userId: string
+  /** Who is saving: the author of a new task, and the name on the history line. */
+  actor: Actor
   onClose: () => void
   onSaved: (saved: StockEvent) => void
 }) {
@@ -62,6 +76,13 @@ export function EventEditor({
     setAssignedTo((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
   }
   const [note, setNote] = useState(event?.note ?? '')
+  const [requiresApproval, setRequiresApproval] = useState(!!event?.requiresApproval)
+  // Only an admin may read the roster (firestore.rules, users). A manager assigns to
+  // everyone or to themselves; people already on a task stay on it under the name it
+  // was saved with.
+  const roster = users.length > 0 ? users.filter((u) => u.active !== false) : [{ id: actor.id, name: actor.name }]
+  const known = new Set(roster.map((u) => u.id))
+  const kept = assignedTo.filter((id) => !known.has(id))
   const [busy, setBusy] = useState(false)
   // A type this calendar no longer offers stays on an old task; the list adds it so the
   // select is not blank.
@@ -83,19 +104,20 @@ export function EventEditor({
         // Stored so a staff member holding a uid does not have to read `users` to show it.
         assignedToName: assignedToAll
           ? t('ทุกคน')
-          : assignedTo
-              .map((id) => users.find((u) => u.id === id)?.name)
-              .filter((n): n is string => !!n)
-              .join(', ') || undefined,
+          : [
+              ...(kept.length > 0 && event?.assignedToName ? [event.assignedToName] : []),
+              ...assignedTo.map((id) => roster.find((u) => u.id === id)?.name).filter((n): n is string => !!n),
+            ].join(', ') || undefined,
         note,
+        requiresApproval: requiresApproval || undefined,
       }
       const now = Date.now()
       if (event) {
-        await updateEvent(event.id, input)
-        onSaved({ ...event, ...input, updatedAt: now } as StockEvent)
+        await updateEvent(event.id, input, actor, event)
+        onSaved(await reread(event.id, { ...event, ...input, updatedAt: now } as StockEvent))
       } else {
-        const id = await createEvent(input, userId)
-        onSaved({ id, ...input, status: 'upcoming', createdBy: userId, createdAt: now, updatedAt: now } as StockEvent)
+        const id = await createEvent(input, actor)
+        onSaved(await reread(id, { id, ...input, status: 'upcoming', createdBy: actor.id, createdAt: now, updatedAt: now } as StockEvent))
       }
       toast.success(t('บันทึกแล้ว'))
       onClose()
@@ -168,9 +190,19 @@ export function EventEditor({
               />
               {t('ทุกคน')}
             </label>
-            {users
-              .filter((u) => u.active !== false)
-              .map((u) => (
+            {kept.length > 0 && (
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm text-ink hover:bg-sunken">
+                <input
+                  type="checkbox"
+                  checked={!assignedToAll}
+                  disabled={assignedToAll}
+                  onChange={() => setAssignedTo((cur) => cur.filter((id) => known.has(id)))}
+                  className="h-4 w-4 accent-brand"
+                />
+                {event?.assignedToName ?? t('ผู้ที่มอบหมายไว้เดิม')}
+              </label>
+            )}
+            {roster.map((u) => (
                 <label
                   key={u.id}
                   className={`flex min-h-11 items-center gap-3 px-3 text-sm ${
@@ -195,6 +227,10 @@ export function EventEditor({
         <Field label={t('หมายเหตุ')}>
           <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-ink">
+          <input type="checkbox" checked={requiresApproval} onChange={(e) => setRequiresApproval(e.target.checked)} className="h-4 w-4 accent-brand" />
+          {t('ต้องให้หัวหน้าอนุมัติเมื่อเสร็จ')}
+        </label>
       </div>
 
       <div className="mt-6 flex justify-end gap-2">

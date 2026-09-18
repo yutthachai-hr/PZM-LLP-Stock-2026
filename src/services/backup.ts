@@ -39,8 +39,10 @@ import { orderCounterFloors } from './purchaseOrders'
  *  - 4: imported order lists (purchaseBatches) and confirmed spellings (productAliases).
  *    A version-3 file still restores; both are read as empty.
  *  - 5: purchase requests (purchaseRequests). A version-4 file still restores.
+ *  - 6: the calendar's configuration (inventorySchedules: stock-count schedules, the
+ *    thresholds, people's notification preferences). A version-5 file still restores.
  */
-const FORMAT_VERSION = 5
+const FORMAT_VERSION = 6
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,
@@ -63,6 +65,9 @@ const COLLECTIONS = [
   // Version 4: the spellings people confirmed for the order workbook.
   COL.productAliases,
   COL.events,
+  // Version 6: stock-count schedules and thresholds. Before the tasks' ledger neighbours
+  // only by convention — a task names its schedule, nothing checks it.
+  COL.inventorySchedules,
   COL.notes,
   COL.movements,
   COL.movementImages,
@@ -89,6 +94,7 @@ const OVERWRITABLE: readonly string[] = [
   COL.supplierItems,
   COL.productAliases,
   COL.events,
+  COL.inventorySchedules,
   COL.notes,
   COL.movementImages,
 ]
@@ -120,7 +126,12 @@ const BACKUP_ONLY: readonly string[] = [COL.meta]
  * revoked account, say — must not stop the stock data being recovered. Stock collections
  * stay strict: a movement that will not write is a reason to stop and look.
  */
-const BEST_EFFORT: readonly string[] = [COL.users]
+const BEST_EFFORT: readonly string[] = [
+  COL.users,
+  // Each person's notification preferences are theirs alone to write (prefs__<uid>), so
+  // an admin restoring the file is refused the others'; the schedules still go back.
+  COL.inventorySchedules,
+]
 
 export const RESTORE_MODES = {
   /** Write only what is missing. Anything changed since the backup is left alone. */
