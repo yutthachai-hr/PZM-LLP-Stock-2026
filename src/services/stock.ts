@@ -10,6 +10,8 @@ import {
   type AppUser,
   type StockLevel,
   type StockLocation,
+  type MovementEdit,
+  type MovementEditField,
 } from '../types'
 import { genId } from '../lib/id'
 import { getBrand } from '../brand/brand'
@@ -687,38 +689,46 @@ export async function editMovement(params: {
     })
 
     const changed: string[] = []
+    const changes: NonNullable<MovementEdit['changes']> = []
     const write: Record<string, unknown> = {}
+    // `changed` keeps the Thai label the reports have always printed; `changes` carries the
+    // field by key with the old and new value, for the activity log.
+    const note = (label: string, field: MovementEditField, before: unknown, after: unknown) => {
+      changed.push(label)
+      changes.push({ field, from: String(before ?? ''), to: String(after ?? '') })
+    }
     if (qty !== mv.qty) {
       write.qty = qty
-      changed.push('จำนวน') // i18n-key
+      note('จำนวน', 'qty', mv.qty, qty) // i18n-key
     }
     if (patch.date !== undefined && patch.date !== mv.date) {
       write.date = patch.date
-      changed.push('วันที่') // i18n-key
+      note('วันที่', 'date', mv.date, patch.date) // i18n-key
     }
     if (patch.note !== undefined && patch.note !== (mv.note ?? '')) {
       write.note = patch.note
-      changed.push('หมายเหตุ') // i18n-key
+      note('หมายเหตุ', 'note', mv.note, patch.note) // i18n-key
     }
     if (entryUnit !== (mv.entryUnit ?? '')) {
       write.entryUnit = entryUnit || DELETE_FIELD
-      changed.push('หน่วย') // i18n-key
+      note('หน่วย', 'unit', mv.entryUnit || mv.unit, entryUnit || mv.unit) // i18n-key
     }
     if (from !== mv.fromLocationId) {
       write.fromLocationId = from
-      changed.push('คลังต้นทาง') // i18n-key
+      note('คลังต้นทาง', 'from', mv.fromLocationId, from) // i18n-key
     }
     if (to !== mv.toLocationId) {
       write.toLocationId = to
-      changed.push('คลังปลายทาง') // i18n-key
+      note('คลังปลายทาง', 'to', mv.toLocationId, to) // i18n-key
     }
     if (changed.length === 0) return
 
     tx.update(COL.movements, movementId, {
       ...write,
       // Appended, never replaced. The rules check it grew by exactly one and that the new
-      // entry names the caller, so an edit cannot be filed under somebody else.
-      edits: [...(mv.edits ?? []), { by: actor.id, byName: actor.name, at: now, changed }],
+      // entry names the caller, so an edit cannot be filed under somebody else. The old and
+      // new values ride along so the activity log can say what the row used to say.
+      edits: [...(mv.edits ?? []), { by: actor.id, byName: actor.name, at: now, changed, changes }],
       updatedBy: actor.id,
       updatedByName: actor.name,
       updatedAt: now,

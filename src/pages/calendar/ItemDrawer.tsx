@@ -14,12 +14,13 @@ import type { CalendarItem, ItemStatus } from '../../lib/inventoryRules/types'
 import { useSuppliers } from '../../services/suppliers'
 import { PR_STATUS_KEYS } from '../../lib/purchaseRequestStatus'
 import { approveEvent, cancelEvent, completeEvent, reopenEvent, rescheduleEvent, startEvent } from '../../services/events'
-import { ADJUST_REASONS, type EventHistoryAction, type EventHistoryEntry, type PurchaseOrder, type PurchaseRequest, type Role, type StockEvent } from '../../types'
+import { ADJUST_REASONS, type EventHistoryEntry, type PurchaseOrder, type PurchaseRequest, type Role, type StockEvent } from '../../types'
 import { snoozeReorder } from '../../services/schedules'
 import { DAY_MS } from '../../lib/inventoryRules/time'
 import {
   DAY_NAMES,
   EVENT_STATUS_LABEL,
+  HISTORY_LABEL,
   KIND_LABEL,
   PRIORITY_COLOR,
   PRIORITY_LABEL,
@@ -443,18 +444,6 @@ function signed(name: string, at?: number): string {
   return at ? `${name} · ${formatThaiDateTime(at)}` : name
 }
 
-const HISTORY_LABEL: Record<EventHistoryAction, string> = {
-  created: 'สร้างงาน', // i18n-key
-  generated: 'สร้างจากตาราง', // i18n-key
-  assigned: 'มอบหมาย', // i18n-key
-  started: 'เริ่มทำ', // i18n-key
-  completed: 'ทำเสร็จ', // i18n-key
-  approved: 'อนุมัติ', // i18n-key
-  rescheduled: 'เลื่อนงาน', // i18n-key
-  cancelled: 'ยกเลิกงาน', // i18n-key
-  edited: 'แก้ไข', // i18n-key
-  reopened: 'ส่งกลับให้ทำใหม่', // i18n-key
-}
 
 const isMs = (v?: string) => !!v && /^[0-9]+$/.test(v)
 

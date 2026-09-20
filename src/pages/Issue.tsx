@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { Button, Card, Field, FormActions, Input, PageHeader, SegTab, Select, Textarea } from '../components/ui'
 import { LineBuilder, type Line } from '../components/LineBuilder'
+import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
 import { issueStock, consumeStock } from '../services/stock'
 import { compressImage } from '../lib/image'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
@@ -18,7 +19,7 @@ export function IssuePage() {
   const [mode, setMode] = useState<Mode>('transfer')
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <PageHeader
         icon="truck"
         tone="out"
@@ -99,6 +100,7 @@ function TransferForm() {
   }
 
   return (
+    <WithTodayPanel panel={<TodayTransactions types={['issue']} date={dateInputToMs(dateStr)} title={t('เบิก/โอนที่ทำวันนี้')} />}>
     <Card className="space-y-4 p-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t("จากคลัง (ต้นทาง)")} required>
@@ -152,6 +154,7 @@ function TransferForm() {
         </Button>
       </FormActions>
     </Card>
+    </WithTodayPanel>
   )
 }
 
@@ -222,6 +225,7 @@ function ConsumeForm() {
   }
 
   return (
+    <WithTodayPanel panel={<TodayTransactions types={['consume']} date={dateInputToMs(dateStr)} title={t('เบิกใช้ที่ทำวันนี้')} />}>
     <Card className="space-y-4 p-4">
       <div className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
         {t("เบิกของออกจากคลังไปใช้/ขายหน้าร้าน (เช่น สาขาสุขุมวิทที่อยู่ที่เดียวกับคลัง) — ตัดสต๊อกออก ไม่เพิ่มเข้าสาขาอื่น")}
@@ -306,5 +310,6 @@ function ConsumeForm() {
         </Button>
       </FormActions>
     </Card>
+    </WithTodayPanel>
   )
 }

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
-import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
+import { SiteChip } from '../../components/SiteChip'
 import { Badge, Button, Card, EmptyState, PageHeader, SegTab, Spinner } from '../../components/ui'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
@@ -25,7 +25,6 @@ export function PurchaseRequestsPage() {
   const toast = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { locationById } = useData()
   const [params, setParams] = useSearchParams()
   const manager = isManager(user?.role)
   const [rows, setRows] = useState<PurchaseRequest[]>([])
@@ -126,8 +125,8 @@ export function PurchaseRequestsPage() {
                     {r.revision > 1 && <Badge>{t('ครั้งที่ {n}', { n: r.revision })}</Badge>}
                     {live.some((i) => i.supplierChoice === 'custom') && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                   </div>
-                  <div className="text-xs text-ink-soft">
-                    {locationById(r.locationId)?.name ?? ''} · {t('{n} ผู้ขาย · {m} รายการ', { n: suppliers, m: live.length })}
+                  <div className="flex flex-wrap items-center gap-1 text-xs text-ink-soft">
+                    <SiteChip locationId={r.locationId} /> · {t('{n} ผู้ขาย · {m} รายการ', { n: suppliers, m: live.length })}
                   </div>
                   <div className="text-xs text-ink-faint">
                     {formatThaiDateTime(r.submittedAt ?? r.createdAt)} · {r.requestedByName}

@@ -34,6 +34,12 @@ export interface Line {
  */
 export type LineDirection = 'in' | 'out'
 
+/**
+ * How many matches the box lists. Eight was too few: with several sizes of one product the
+ * one wanted was often ninth (owner, 20 Sep 2026). The box scrolls.
+ */
+const MAX_MATCHES = 40
+
 export function LineBuilder({
   products,
   lines,
@@ -76,12 +82,14 @@ export function LineBuilder({
       .filter((p) => !chosen.has(p.id))
       .filter((p) => looseMatch([p.name, p.sku], q))
       .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
-      .slice(0, 8)
+      .slice(0, MAX_MATCHES)
   }, [search, products, lines])
 
   function addProduct(p: Product) {
     onChange([...lines, { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }])
     setSearch('')
+    // Straight on to the next line: the cursor stays in the search box after every add.
+    setTimeout(() => searchBox.current?.focus(), 0)
   }
 
   function setQty(id: string, qty: number, entryUnit: string) {
@@ -111,13 +119,19 @@ export function LineBuilder({
           placeholder={t("ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && matches[0]) {
+              e.preventDefault()
+              addProduct(matches[0])
+            }
+          }}
           autoComplete="off"
           // Product codes and names are not prose; the browser's dictionary only gets in
           // the way and covers the field in red underlines.
           spellCheck={false}
         />
         {matches.length > 0 && (
-          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-lg">
+          <div className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-lg border border-line bg-surface shadow-lg">
             {matches.map((p) => (
               <button
                 key={p.id}

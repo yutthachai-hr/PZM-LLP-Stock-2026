@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { Button, Card, Field, FormActions, Input, PageHeader, Select, Textarea } from '../components/ui'
 import { LineBuilder, type Line } from '../components/LineBuilder'
+import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
 import { receiveStock } from '../services/stock'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
@@ -62,7 +63,7 @@ export function ReceivePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <PageHeader
         icon="receive"
         tone="in"
@@ -70,6 +71,7 @@ export function ReceivePage() {
         subtitle={t("คีย์รับสินค้าใหม่ → เพิ่มเข้าคลังอัตโนมัติ")}
       />
 
+      <WithTodayPanel panel={<TodayTransactions types={['receive']} date={dateInputToMs(dateStr)} title={t('รับเข้าที่ทำวันนี้')} />}>
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label={t("คลังปลายทาง")} required>
@@ -119,6 +121,7 @@ export function ReceivePage() {
           </Button>
         </FormActions>
       </Card>
+      </WithTodayPanel>
     </div>
   )
 }

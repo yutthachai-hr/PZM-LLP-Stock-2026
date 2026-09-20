@@ -192,3 +192,34 @@ export function editorsOf(m: { edits?: { byName: string }[]; updatedByName?: str
   // Rows edited before the history existed still know who touched them last.
   return m.updatedByName ? [m.updatedByName] : []
 }
+
+/**
+ * How much each balance has moved since the end of a day — what to take off today's
+ * figure to see what was on the shelf then. Keyed by location, product and the unit the
+ * movement was counted in (the product's own unit is the empty string), the same
+ * split the balances themselves keep. Voided rows moved nothing in the end and are skipped.
+ *
+ * `asOfDay` is the start of the day being asked about; a movement dated that day counts
+ * as already on the shelf by its end.
+ */
+export function movedSince(
+  movements: readonly StockMovement[],
+  asOfDay: number,
+  baseUnitOf: (productId: string) => string | undefined,
+): Map<string, number> {
+  const out = new Map<string, number>()
+  const cut = asOfDay + 86_400_000
+  const bump = (locationId: string | undefined, m: StockMovement, delta: number) => {
+    if (!locationId) return
+    const base = baseUnitOf(m.productId) ?? m.unit
+    const u = shownUnit(m)
+    const key = `${locationId}__${m.productId}__${u === base ? '' : u}`
+    out.set(key, Math.round(((out.get(key) ?? 0) + delta) * 1000) / 1000)
+  }
+  for (const m of movements) {
+    if (m.voided || m.date < cut) continue
+    bump(m.toLocationId, m, m.qty)
+    bump(m.fromLocationId, m, -m.qty)
+  }
+  return out
+}

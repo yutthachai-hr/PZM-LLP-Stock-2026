@@ -2,18 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
+import { SiteChip } from '../components/SiteChip'
+import { ActivityLog } from './reports/ActivityLog'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { Button, Card, EmptyState, Field, Input, PageHeader, SegTab, Select } from '../components/ui'
-import {
-  dateInputToMs,
-  dayRange,
-  fmtMoney,
-  fmtQty,
-  formatThaiDate,
-  formatThaiDateTime,
-} from '../lib/format'
-import { editorsOf, shownUnit, stockCard } from '../lib/ledger'
+import { dateInputToMs, dayRange, fmtMoney, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput, todayMs } from '../lib/format'
+import { editorsOf, movedSince, shownUnit, stockCard } from '../lib/ledger'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { DataTable, type Column } from '../components/DataTable'
@@ -31,6 +26,7 @@ interface MovementRow {
 interface SnapshotRow {
   name: string
   category: string
+  locationId: string
   locationName: string
   qty: number
   unit: string
@@ -59,7 +55,7 @@ const TYPE_LABEL: Record<MovementType, string> = {
   consume: 'เบิกใช้', // i18n-key
 }
 
-type ReportMode = 'movement' | 'snapshot'
+type ReportMode = 'movement' | 'snapshot' | 'activity'
 
 export function ReportsPage() {
   const t = useT()
@@ -88,6 +84,9 @@ export function ReportsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
+  // The stock report answers "what was on the shelf at the end of this day" — today when
+  // empty. Earlier days are today's figure with everything moved since taken back off.
+  const [asOfStr, setAsOfStr] = useState('')
   const [busy, setBusy] = useState('')
 
   // Picking a date before the loaded window would silently show nothing, so widen it.
@@ -97,6 +96,9 @@ export function ReportsPage() {
   useEffect(() => {
     if (fromStr) ensureMovementsFrom(dateInputToMs(fromStr))
   }, [fromStr, ensureMovementsFrom])
+  useEffect(() => {
+    if (asOfStr) ensureMovementsFrom(dateInputToMs(asOfStr))
+  }, [asOfStr, ensureMovementsFrom])
 
   // ---------- movement dataset ----------
   // Balances come from every movement in scope, not from the rows that survived the
@@ -125,26 +127,46 @@ export function ReportsPage() {
   )
 
   // ---------- snapshot dataset ----------
+  const asOfDay = asOfStr ? dateInputToMs(asOfStr) : null
+  const rewind = useMemo(() => {
+    if (asOfDay === null || asOfDay >= todayMs()) return null
+    const byId = new Map(products.map((p) => [p.id, p.unitType]))
+    return movedSince(movements, asOfDay, (id) => byId.get(id))
+  }, [asOfDay, movements, products])
+
   const snapshotRows = useMemo<SnapshotRow[]>(() => {
     const scope = locationId ? locations.filter((l) => l.id === locationId) : locations
     const rows: SnapshotRow[] = []
+    const at = (loc: string, pid: string, unit: string, now: number) =>
+      rewind ? Math.round((now - (rewind.get(`${loc}__${pid}__${unit}`) ?? 0)) * 1000) / 1000 : now
     for (const p of products) {
       if (productId && p.id !== productId) continue
       for (const l of scope) {
-        const qty = qtyAt(l.id, p.id)
-        const where = { name: p.name, category: p.category, locationName: l.name }
+        const qty = at(l.id, p.id, '', qtyAt(l.id, p.id))
+        const where = { name: p.name, category: p.category, locationId: l.id, locationName: l.name }
         rows.push({ ...where, qty, unit: p.unitType, min: minFor(p, l.id), value: qty * (p.cost ?? 0) })
         // Anything keyed in another unit is its own line rather than folded into the one
         // above. Leaving it out is how a report can say a product is empty while ten Pack of
         // it are on the shelf.
+        const seen = new Set<string>()
         for (const other of qtyByUnit(l.id, p.id)) {
           if (other.unit === p.unitType) continue
-          rows.push({ ...where, qty: other.qty, unit: other.unit, min: null, value: null })
+          seen.add(other.unit)
+          rows.push({ ...where, qty: at(l.id, p.id, other.unit, other.qty), unit: other.unit, min: null, value: null })
+        }
+        // A unit that held stock on that day but is empty now has no balance row left;
+        // it still had goods then.
+        if (rewind) {
+          for (const [key, moved] of rewind) {
+            const [loc, pid, unit] = key.split('__')
+            if (loc !== l.id || pid !== p.id || !unit || seen.has(unit)) continue
+            rows.push({ ...where, qty: Math.round(-moved * 1000) / 1000, unit, min: null, value: null })
+          }
         }
       }
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit))
-  }, [products, locations, productId, locationId, qtyAt, qtyByUnit, minFor])
+  }, [products, locations, productId, locationId, qtyAt, qtyByUnit, minFor, rewind])
 
   const branchName = locationId ? (locationById(locationId)?.name ?? '') : t("ทุกคลัง")
   const productName = productId
@@ -167,7 +189,7 @@ export function ReportsPage() {
     return [
       t('คลัง/สาขา: {name}', { name: branchName }),
       t('สินค้า: {name}', { name: productName }),
-      ...(mode === 'movement' ? [t('ช่วงวันที่: {range}', { range: rangeText })] : []),
+      ...(mode === 'movement' ? [t('ช่วงวันที่: {range}', { range: rangeText })] : [t('ณ สิ้นวันที่: {date}', { date: asOfDay !== null ? formatThaiDate(asOfDay) : t('ปัจจุบัน') })]),
       t('ออกรายงานโดย: {user} เมื่อ {when}', { user: user?.name ?? '', when: formatThaiDateTime(Date.now()), }),
     ]
   }
@@ -330,6 +352,17 @@ export function ReportsPage() {
       },
       { key: 'type', header: t('ประเภท'), cell: ({ m }) => t(TYPE_LABEL[m.type]) },
       {
+        key: 'site',
+        header: t('คลัง'),
+        cell: ({ m }) => (
+          <span className="inline-flex flex-wrap items-center gap-1">
+            <SiteChip locationId={m.fromLocationId} />
+            {m.fromLocationId && m.toLocationId ? <span className="text-ink-faint">→</span> : null}
+            <SiteChip locationId={m.toLocationId} />
+          </span>
+        ),
+      },
+      {
         key: 'in',
         header: t('รับเข้า'),
         align: 'right',
@@ -386,7 +419,7 @@ export function ReportsPage() {
   const snapshotColumns = useMemo<Column<SnapshotRow>[]>(
     () => [
       { key: 'product', header: t('สินค้า'), primary: true, cell: (r) => r.name },
-      { key: 'location', header: t('คลัง'), className: 'text-ink-soft', cell: (r) => r.locationName },
+      { key: 'location', header: t('คลัง'), className: 'text-ink-soft', cell: (r) => <SiteChip locationId={r.locationId} /> },
       {
         key: 'qty',
         header: t('คงเหลือ'),
@@ -412,6 +445,24 @@ export function ReportsPage() {
     [t],
   )
 
+  const tabs = (
+    <div className="flex gap-1 rounded-lg bg-sunken p-1">
+      <SegTab label={t("การเคลื่อนไหว")} active={mode === 'movement'} onClick={() => setMode('movement')} />
+      <SegTab label={t("สต๊อกคงเหลือ")} active={mode === 'snapshot'} onClick={() => setMode('snapshot')} />
+      <SegTab label={t('บันทึกกิจกรรมทั้งระบบ')} active={mode === 'activity'} onClick={() => setMode('activity')} />
+    </div>
+  )
+
+  if (mode === 'activity') {
+    return (
+      <div className="space-y-4">
+        <PageHeader icon="report" title={t("รายงาน")} subtitle={t('ทุกการกระทำในระบบ ย้อนดูได้ ดาวน์โหลดได้ แก้ไขไม่ได้')} />
+        {tabs}
+        <ActivityLog />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -421,18 +472,7 @@ export function ReportsPage() {
       />
 
       <Card className="space-y-4 p-4">
-        <div className="flex gap-1 rounded-lg bg-sunken p-1">
-          <SegTab
-            label={t("การเคลื่อนไหว")}
-            active={mode === 'movement'}
-            onClick={() => setMode('movement')}
-          />
-          <SegTab
-            label={t("สต๊อกคงเหลือ")}
-            active={mode === 'snapshot'}
-            onClick={() => setMode('snapshot')}
-          />
-        </div>
+        {tabs}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label={t("คลัง/สาขา")}>
@@ -477,6 +517,11 @@ export function ReportsPage() {
                 <Input type="date" value={toStr} onChange={(e) => setToStr(e.target.value)} />
               </Field>
             </>
+          )}
+          {mode === 'snapshot' && (
+            <Field label={t('ณ สิ้นวันที่')} hint={t('ว่างไว้ = ปัจจุบัน ย้อนหลังคำนวณจากประวัติการเคลื่อนไหว')}>
+              <Input type="date" value={asOfStr} max={msToDateInput(todayMs())} onChange={(e) => setAsOfStr(e.target.value)} />
+            </Field>
           )}
         </div>
 
