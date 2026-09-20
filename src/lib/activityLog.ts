@@ -1,5 +1,5 @@
 import type { MovementEditField, PurchaseOrder, PurchaseRequest, StockEvent, StockMovement } from '../types'
-import { shownUnit } from './ledger'
+import { describeQty } from './inventoryRules/uom'
 
 /**
  * Everything that happened in the system, as one list nobody can edit.
@@ -71,7 +71,7 @@ export function buildActivityLog(input: ActivityInput): ActivityEntry[] {
       m.fromLocationId && m.toLocationId
         ? `${input.locationName(m.fromLocationId)} → ${input.locationName(m.toLocationId)}`
         : input.locationName(m.fromLocationId ?? m.toLocationId)
-    const subject = `${m.productName} · ${input.fmtQty(m.qty)} ${shownUnit(m)} · ${where}`
+    const subject = `${m.productName} · ${describeQty(m, input.fmtQty)} · ${where}`
     const link = `/movements?product=${m.productId}`
     push({
       key: `mv:${m.id}:0`,

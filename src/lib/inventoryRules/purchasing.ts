@@ -94,7 +94,10 @@ export function incomingFor(productId: string, locationId: string, orders: reado
   for (const po of orders) {
     if (po.status !== 'ordered' || po.locationId !== locationId) continue
     for (const l of po.lines) {
-      if (l.productId === productId && !l.entryUnit) n += l.orderedQty
+      if (l.productId !== productId) continue
+      // A line keyed in another unit carries its base equivalent (placed since 20 Sep 2026);
+      // an older such line has none and is left out rather than guessed.
+      n += l.baseQty ?? (l.entryUnit ? 0 : l.orderedQty)
     }
   }
   return n

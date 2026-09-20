@@ -8,6 +8,7 @@ import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
+import { describeQty, type QtyEntry } from '../lib/uom'
 
 export interface Line {
   productId: string
@@ -15,12 +16,12 @@ export interface Line {
   /** The product's own unit. The balance this line belongs to, unless entryUnit says otherwise. */
   unit: string
   /**
-   * The unit the person actually picked, when it is not the product's own.
-   *
-   * Carried separately so the movement can be filed under what was keyed while the line
-   * still knows which product unit it started from.
+   * The unit the person actually picked, when it is not the product's own, and how many
+   * of it. `qty` is always the product's own unit — converted at the product's rate
+   * (lib/uom.ts) — so the balance check and the ledger read one number.
    */
   entryUnit?: string
+  entryQty?: number
   qty: number
 }
 
@@ -92,8 +93,14 @@ export function LineBuilder({
     setTimeout(() => searchBox.current?.focus(), 0)
   }
 
-  function setQty(id: string, qty: number, entryUnit: string) {
-    onChange(lines.map((l) => (l.productId === id ? { ...l, qty, entryUnit } : l)))
+  function setQty(id: string, e: QtyEntry) {
+    onChange(
+      lines.map((l) =>
+        l.productId === id
+          ? { ...l, qty: e.qty, ...(e.entryUnit ? { entryUnit: e.entryUnit, entryQty: e.entryQty } : { entryUnit: undefined, entryQty: undefined }) }
+          : l,
+      ),
+    )
   }
 
   function remove(id: string) {
@@ -157,7 +164,8 @@ export function LineBuilder({
           {lines.map((l) => {
             const avail = availableAt?.(l.productId)
             const over = avail !== undefined && l.qty > avail
-            const conversions = products.find((p) => p.id === l.productId)?.unitConversions
+            const product = products.find((p) => p.id === l.productId)
+            const conversions = product?.unitConversions
             return (
               <div
                 key={l.productId}
@@ -178,6 +186,9 @@ export function LineBuilder({
                         {t('คงเหลือต้นทาง')}: <span className="num">{fmtQty(avail)}</span> {l.unit}
                       </div>
                     )}
+                    {l.entryUnit && l.entryQty !== undefined && (
+                      <div className="text-xs text-ink-faint">{describeQty(l, fmtQty)}</div>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
@@ -187,7 +198,8 @@ export function LineBuilder({
                       plainUnits={plainUnits}
                       conversions={conversions}
                       value={l.qty}
-                      onChange={(v, u) => setQty(l.productId, v, u)}
+                      onChange={(e) => setQty(l.productId, e)}
+                      product={product}
                       invalid={over}
                     />
                   </div>

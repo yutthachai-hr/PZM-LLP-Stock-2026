@@ -46,15 +46,15 @@ export interface Product {
   alternateSupplierIds?: string[]
   cost?: number // optional unit cost for inventory value
   /**
-   * Reference multipliers for units this product might be keyed in — "1 ลัง = 288 EA".
+   * The rates this product is keyed at — "1 ลัง = 288 EA": one `label` is `size` of the
+   * product's own unit.
    *
-   * The same product can be ordered by the ลัง, issued by the แพ็ค, and received by the
-   * ชิ้น, and each of those is its own separate balance (see `entryUnit` on
-   * StockMovement) — nothing here changes that. This is purely a number shown beside the
-   * quantity box so a person can see the arithmetic before they type, because a case from
-   * one supplier is not the size of a case from another and the owner's rule is that the
-   * number typed is the number recorded. Safe to change at any time: nothing reads it but
-   * the entry screens, and no movement ever stores it.
+   * Authoritative since 20 Sep 2026 (before that, a hint only): a quantity keyed in one of
+   * these units is converted into the product's own unit at filing, and the movement keeps
+   * both numbers. Changing a rate changes future filings only — every row already filed
+   * carries the rate it was converted at (see `entryQty` on StockMovement). A unit with no
+   * rate here (or in the standard table, g/ml) cannot be filed until one is stated; the
+   * entry screens ask for it once, and anyone may state it (see lib/uom.ts).
    */
   unitConversions?: { label: string; size: number }[]
   hasImage: boolean
@@ -98,9 +98,11 @@ export interface StockLevel {
   /**
    * The unit this balance is counted in, when it is not the product's own.
    *
-   * Absent means the product's own unit. Balances are never converted between units: a
-   * delivery keyed as 10 Pack and one keyed as 2 KG are two balances, shown side by side,
-   * because adding them would invent a pack size nobody stated.
+   * Legacy (rule of 13 Sep 2026): rows keyed in another unit used to be filed on their own
+   * balance rather than converted. Since 20 Sep every filing converts into the product's
+   * own unit, so no new `#Unit` balance is written; the ones that exist are folded into
+   * the base balance by the migration tool (Settings → ดูแลข้อมูล) once the owner states
+   * each rate, and are zeroed then.
    */
   unit?: string
   qty: number
@@ -121,12 +123,17 @@ export interface StockMovement {
   /**
    * The unit the person actually picked, present only when it is not the product's own.
    *
-   * Nothing is converted between the two: a line keyed as "10 Pack" is filed as 10 Pack and
-   * counted against a Pack balance. Keeping `unit` alongside it is what lets a void find the
-   * same balance the movement first touched.
+   * Since 20 Sep 2026 the row is converted: `qty` is in the product's own unit and
+   * `entryQty` is what was keyed, so "2 Carton" is filed as qty 1000, entryQty 2,
+   * entryUnit Carton — the rate it was converted at is qty/entryQty, kept forever on the
+   * row. A row with `entryUnit` and no `entryQty` was filed under the earlier rule, on its
+   * own `#Unit` balance; it stays there until the migration tool converts it.
    */
   entryUnit?: string
-  qty: number // always positive; direction implied by type + from/to
+  /** As keyed, when keyed in another unit. Absent = keyed in the product's own unit, or legacy. */
+  entryQty?: number
+  /** In the product's own unit (for converted rows); always positive; direction implied by type + from/to. */
+  qty: number
   fromLocationId?: string // issue/adjust-out
   toLocationId?: string // receive/issue-in/adjust-in
   note?: string
@@ -165,7 +172,7 @@ export interface MovementEdit {
   changes?: { field: MovementEditField; from: string; to: string }[]
 }
 
-export type MovementEditField = 'qty' | 'date' | 'note' | 'unit' | 'from' | 'to'
+export type MovementEditField = 'qty' | 'entryQty' | 'date' | 'note' | 'unit' | 'from' | 'to'
 
 export interface Note {
   id: string
@@ -278,6 +285,13 @@ export interface PurchaseOrderLine {
    */
   entryUnit?: string
   orderedQty: number
+  /**
+   * `orderedQty` in the product's own unit, converted at the rate the product had when the
+   * order was placed. The receipt converts what arrives at this same rate (baseQty /
+   * orderedQty), so a rate changed later cannot skew a delivery already promised. Absent
+   * on lines placed in the product's own unit and on orders from before 20 Sep 2026.
+   */
+  baseQty?: number
   /**
    * What actually arrived, filled in during the receiving check.
    *

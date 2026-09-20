@@ -8,7 +8,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { Button, Card, EmptyState, Field, Input, PageHeader, SegTab, Select } from '../components/ui'
 import { dateInputToMs, dayRange, fmtMoney, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput, todayMs } from '../lib/format'
-import { editorsOf, movedSince, shownUnit, stockCard } from '../lib/ledger'
+import { balanceUnit, editorsOf, movedSince, stockCard } from '../lib/ledger'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { DataTable, type Column } from '../components/DataTable'
@@ -230,7 +230,8 @@ export function ReportsPage() {
         [t("ไป")]: m.toLocationId ? (locationById(m.toLocationId)?.name ?? '') : '',
         [t("รับเข้า")]: inQty || '',
         [t("เบิกออก")]: outQty || '',
-        [t("หน่วย")]: shownUnit(m),
+        [t("หน่วย")]: balanceUnit(m),
+        [t("ที่คีย์")]: m.entryQty !== undefined && m.entryUnit ? `${m.entryQty} ${m.entryUnit}` : '',
         ...(showBalance ? { [t("คงเหลือ")]: balance ?? '' } : {}),
         [t("ผู้ทำ")]: m.byUserName,
         // A note is free text, except for the constants the services write ("ตั้งยอดคงเหลือ") —
@@ -283,7 +284,7 @@ export function ReportsPage() {
         m.toLocationId ? (locationById(m.toLocationId)?.name ?? '') : '-',
         inQty ? fmtQty(inQty) : '',
         outQty ? fmtQty(outQty) : '',
-        shownUnit(m),
+        balanceUnit(m),
         ...(showBalance ? [fmtQty(balance ?? 0)] : []),
         m.note ?? '',
         m.byUserName,
@@ -380,7 +381,12 @@ export function ReportsPage() {
         key: 'unit',
         header: t('หน่วย'),
         className: 'text-ink-soft',
-        cell: ({ m }) => shownUnit(m),
+        cell: ({ m }) => (
+          <>
+            {balanceUnit(m)}
+            {m.entryQty !== undefined && m.entryUnit ? <span className="ml-1 text-xs text-ink-faint">({fmtQty(m.entryQty)} {m.entryUnit})</span> : null}
+          </>
+        ),
       },
       {
         key: 'editors',

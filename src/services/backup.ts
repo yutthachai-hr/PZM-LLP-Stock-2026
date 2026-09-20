@@ -41,8 +41,11 @@ import { orderCounterFloors } from './purchaseOrders'
  *  - 5: purchase requests (purchaseRequests). A version-4 file still restores.
  *  - 6: the calendar's configuration (inventorySchedules: stock-count schedules, the
  *    thresholds, people's notification preferences). A version-5 file still restores.
+ *  - 7: no new collection — movements may now carry `entryQty` (20 Sep 2026 unit rule) and
+ *    order lines `baseQty`; both pass through untouched and the restore rebuilds balances
+ *    from the ledger as before. A version-6 file still restores.
  */
-const FORMAT_VERSION = 6
+const FORMAT_VERSION = 7
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,

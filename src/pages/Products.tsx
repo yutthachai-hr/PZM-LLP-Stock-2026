@@ -89,12 +89,11 @@ export function ProductsPage() {
   }, [locations, locId, qtyAt])
 
   /**
-   * Balances keyed in some other unit, added up over the locations in view.
+   * Legacy balances still kept in some other unit, added up over the locations in view.
    *
-   * These are deliberately kept apart from the number above rather than folded into it. Two
-   * people recording the same delivery — one as "10 Pack", one as "2 KG" — leaves two
-   * balances, and only a person can say which is right; a conversion here would be a guess
-   * written into the stock figure.
+   * Rows filed before 20 Sep 2026 in another unit sit on their own balance until the
+   * migration tool (Settings → ดูแลข้อมูล) converts them at the product's rate. Shown so
+   * nobody thinks the goods are gone; not added, because no rate may be stated yet.
    */
   const otherUnits = useMemo(() => {
     const active = locId ? locations.filter((l) => l.id === locId) : locations
@@ -264,11 +263,11 @@ export function ProductsPage() {
                   <Badge color="red">{t('ใกล้หมด')}</Badge>
                 </span>
               )}
-              {/* Someone keyed this product in a unit of its own. Shown, never added. */}
+              {/* A legacy balance in another unit, not yet converted. Shown, not added. */}
               {others.map((o) => (
-                <span key={o.unit} className="ml-2 align-middle">
+                <span key={o.unit} className="ml-2 align-middle" title={t('ยอดเก่าแยกหน่วย — แปลงได้ที่ ตั้งค่า → ดูแลข้อมูล')}>
                   <Badge color="amber">
-                    {fmtQty(o.qty)} {o.unit}
+                    {fmtQty(o.qty)} {o.unit} · {t('ยังไม่แปลง')}
                   </Badge>
                 </span>
               ))}
@@ -948,17 +947,15 @@ function ProductEditor({
       </div>
 
       {/**
-       * Reference conversions: "1 ลัง = 288 EA". Advisory only — the entry screens show it
-       * as a hint beside the quantity box, and nothing here ever changes what a movement
-       * records. A case is not the same size from every supplier, so the owner's rule
-       * stands: the number typed is the number kept. This exists for the item that gets
-       * ordered by the case, issued by the pack, and received by the piece, so whoever is
-       * keying any of those sees the arithmetic instead of doing it in their head.
+       * The rates this product is keyed at: "1 ลัง = 288 EA". Authoritative since 20 Sep
+       * 2026 — the item ordered by the case, issued by the pack and received by the piece
+       * is one balance in EA, and every screen converts with these (lib/uom.ts). Anyone may
+       * add one the first time they key a unit; this is where it is corrected.
        */}
       <div className="mt-5 rounded-lg border border-line bg-sunken/60 p-4">
-        <div className="mb-1 text-sm font-semibold text-ink">{t('อัตราแปลงหน่วย (อ้างอิงเท่านั้น)')}</div>
+        <div className="mb-1 text-sm font-semibold text-ink">{t('อัตราแปลงหน่วย')}</div>
         <p className="mb-3 text-xs text-ink-faint">
-          {t('ไม่บันทึกแปลงอัตโนมัติ — แค่โชว์ตัวเลขช่วยคูณตอนกรอก เช่น 1 ลัง = 288 {unit}', {
+          {t('เช่น 1 ลัง = 288 {unit} — ระบบบันทึกสต๊อกเป็น {unit} จริงตามอัตรานี้ทุกครั้งที่คีย์เป็นลัง ประวัติเก่าคงอัตราที่บันทึกไว้ตอนนั้น', {
             unit: form.unitType || t('หน่วย'),
           })}
         </p>
@@ -1039,7 +1036,7 @@ function ProductEditor({
             }
           >
             <Icon name="plus" size={16} />
-            {t('เพิ่มหน่วยอ้างอิง')}
+            {t('เพิ่มอัตราแปลง')}
           </Button>
         )}
       </div>

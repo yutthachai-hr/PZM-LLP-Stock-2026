@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { resolveFactor } from '../lib/uom'
 import type { TxContext } from '../backend/types'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
@@ -441,6 +442,8 @@ export function blockingIssues(
     if (!p || p.active === false) out.push(`${i.productName}: สินค้าไม่พร้อมใช้งาน`)
     if (!s || s.active === false) out.push(`${i.productName}: ผู้ขายไม่พร้อมใช้งาน`)
     if (!(typeof q === 'number' && q > 0)) out.push(`${i.productName}: จำนวนต้องมากกว่า 0`)
+    // An order cannot be placed in a unit the product has no rate for (lib/uom.ts).
+    if (p && i.entryUnit && resolveFactor(p, i.entryUnit) === null) out.push(`${i.productName}: ยังไม่ได้กำหนดอัตราแปลง "${i.entryUnit}"`)
   }
   return out
 }

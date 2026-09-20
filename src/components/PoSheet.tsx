@@ -137,7 +137,12 @@ export function PoSheet({
                 <td className={`num whitespace-nowrap py-1 text-right ${received ? 'text-ink-soft' : 'font-semibold'}`}>
                   {fmtQty(l.orderedQty)}
                 </td>
-                <td className="whitespace-nowrap py-1 pl-2 text-ink-soft">{shownUnit(l)}</td>
+                <td className="whitespace-nowrap py-1 pl-2 text-ink-soft">
+                  {shownUnit(l)}
+                  {l.baseQty !== undefined && (
+                    <span className="block text-[10px] text-ink-faint">= {fmtQty(l.baseQty)} {l.unit}</span>
+                  )}
+                </td>
               </tr>
             )
           })}

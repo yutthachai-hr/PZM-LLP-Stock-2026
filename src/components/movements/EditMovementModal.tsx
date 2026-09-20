@@ -6,8 +6,12 @@ import { useToast } from '../Toast'
 import { Button, Field, Input, Modal, Select } from '../ui'
 import { editMovement } from '../../services/stock'
 import { useEntryUnits } from '../../services/entryUnits'
-import { formatThaiDate, msToDateInput, dateInputToMs } from '../../lib/format'
+import { fmtQty, formatThaiDate, msToDateInput, dateInputToMs } from '../../lib/format'
 import { shownUnit } from '../../lib/ledger'
+import { sameUnit } from '../../lib/units'
+import { factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../../lib/uom'
+import { entryUnitsFor } from '../QtyInput'
+import { DefineConversionModal } from '../DefineConversionModal'
 import type { StockMovement } from '../../types'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
@@ -26,24 +30,45 @@ export function EditMovementModal({
   const { locations, productById } = useData()
   const toast = useToast()
   const plainUnits = useEntryUnits()
-  const [qty, setQty] = useState(movement.qty)
+  // The number shown is the one that was keyed: entryQty for a row keyed in another unit,
+  // qty for one keyed in the product's own. The engine converts (lib/uom.ts).
+  const keyed = shownUnit(movement)
+  const [qty, setQty] = useState(movement.entryQty ?? movement.qty)
   const [dateStr, setDateStr] = useState(msToDateInput(movement.date))
   const [note, setNote] = useState(movement.note ?? '')
-  const [entryUnit, setEntryUnit] = useState(shownUnit(movement))
+  const [entryUnit, setEntryUnit] = useState(keyed)
   const [fromId, setFromId] = useState(movement.fromLocationId ?? '')
   const [toId, setToId] = useState(movement.toLocationId ?? '')
   const [busy, setBusy] = useState(false)
+  const [asking, setAsking] = useState<string | null>(null)
 
-  // The units this row could be counted in: the product's own, plus whatever the owner
-  // maintains in Settings. No conversion — changing this moves the number to another
-  // balance, it does not rescale it.
-  const baseUnit = productById(movement.productId)?.unitType ?? movement.unit
+  const product = productById(movement.productId)
+  const baseUnit = product?.unitType ?? movement.unit
+  const legacy = isLegacyUnitRow(movement)
+  // The units this row could be keyed in, each with its rate for this product, or none
+  // yet. Whatever it is filed under now stays offered even if the owner has since removed it.
   const unitChoices = useMemo(() => {
-    const out = [baseUnit, ...plainUnits]
-    // Whatever it is filed under now stays offered even if the owner has since removed it.
-    if (!out.some((u) => u === entryUnit)) out.push(entryUnit)
-    return [...new Set(out.filter(Boolean))]
-  }, [baseUnit, plainUnits, entryUnit])
+    const out = entryUnitsFor(baseUnit, plainUnits, product?.unitConversions)
+    if (!out.some((u) => sameUnit(u.records, keyed))) {
+      out.push({ key: `plain:${keyed}`, label: keyed, records: keyed, factor: resolveFactor({ unitType: baseUnit, unitConversions: product?.unitConversions }, keyed) })
+    }
+    return out
+  }, [baseUnit, plainUnits, product?.unitConversions, keyed])
+  const chosen = unitChoices.find((u) => sameUnit(u.records, entryUnit)) ?? unitChoices[0]
+  const isBase = sameUnit(entryUnit, baseUnit)
+  // What will be filed, at the rate this row already carries when the unit is unchanged,
+  // else at the product's current rate.
+  const factor = isBase ? 1 : sameUnit(entryUnit, keyed) && !legacy ? factorOf(movement) : chosen.factor
+  const preview = factor !== null && qty > 0 ? toBase(qty, factor) : null
+
+  function pickUnit(next: string) {
+    const u = unitChoices.find((x) => sameUnit(x.records, next))
+    if (u && u.factor === null && !sameUnit(next, keyed)) {
+      if (product) setAsking(next)
+      return
+    }
+    setEntryUnit(next)
+  }
 
   const active = useMemo(() => locations.filter((l) => l.active !== false), [locations])
 
@@ -54,11 +79,12 @@ export function EditMovementModal({
       await editMovement({
         movementId: movement.id,
         patch: {
-          qty,
+          // A row keyed in the product's own unit is edited by qty; any other by entryQty.
+          ...(isBase ? { qty } : { entryQty: qty }),
           date: dateInputToMs(dateStr),
           note,
           // The product's own unit is stored as "no unit of its own", same as when keyed.
-          entryUnit: entryUnit === baseUnit ? '' : entryUnit,
+          entryUnit: isBase ? '' : entryUnit,
           ...(movement.fromLocationId ? { fromLocationId: fromId } : {}),
           ...(movement.toLocationId ? { toLocationId: toId } : {}),
         },
@@ -81,7 +107,7 @@ export function EditMovementModal({
           <span className="text-ink-soft"> — {t(TYPE_LABEL[movement.type])}</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t("จำนวน")} required>
+          <Field label={t("จำนวน")} required hint={preview !== null && !isBase ? `= ${fmtQty(preview)} ${baseUnit}` : undefined}>
             <Input
               type="number"
               step="any"
@@ -91,17 +117,25 @@ export function EditMovementModal({
             />
           </Field>
           {/* Correcting the unit here is the point: the alternative was cancelling the row
-              and keying the whole delivery again. */}
+              and keying the whole delivery again. The quantity is re-converted. */}
           <Field label={t("หน่วย")}>
-            <Select value={entryUnit} onChange={(e) => setEntryUnit(e.target.value)}>
+            <Select value={chosen.records} onChange={(e) => pickUnit(e.target.value)}>
               {unitChoices.map((u) => (
-                <option key={u} value={u}>
-                  {u}
+                <option key={u.key} value={u.records} disabled={u.factor === null && !product && !sameUnit(u.records, keyed)}>
+                  {u.translate ? t(u.label) : u.label}
+                  {u.factor === null && !sameUnit(u.records, keyed) ? ` ${t('(ยังไม่มีอัตรา)')}` : ''}
                 </option>
               ))}
             </Select>
           </Field>
         </div>
+        {legacy && (
+          <p className="rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">
+            {factor === null
+              ? t('รายการนี้บันทึกไว้เป็น {unit} ตามกติกาเดิม (ยอดแยกหน่วย) ยังไม่มีอัตราแปลงของ {unit} — แก้ได้เฉพาะวันที่/หมายเหตุ จนกว่าจะกำหนดอัตราที่สินค้า', { unit: keyed })
+              : t('รายการนี้บันทึกไว้เป็น {unit} ตามกติกาเดิม (ยอดแยกหน่วย) เมื่อบันทึก ระบบจะแปลงเป็น {base} ตามอัตราของสินค้าและรวมเข้ายอดหลัก', { unit: keyed, base: baseUnit })}
+          </p>
+        )}
         {/* Only the sides this movement already has. A receipt has no source, and giving it
             one would quietly turn it into a transfer under the same document number. */}
         {movement.fromLocationId && (
@@ -148,6 +182,17 @@ export function EditMovementModal({
           </Button>
         </div>
       </div>
+      {asking && product && (
+        <DefineConversionModal
+          product={product}
+          label={asking}
+          onClose={() => setAsking(null)}
+          onSaved={() => {
+            setEntryUnit(asking)
+            setAsking(null)
+          }}
+        />
+      )}
     </Modal>
   )
 }

@@ -134,9 +134,10 @@ describe('what the dropdown does with it', () => {
     expect(units[0].factor).toBe(1)
   })
 
-  test('a custom unit records what was typed, under its own name', () => {
+  test('a custom unit records its own name, and has no rate until the product gives it one', () => {
     const carton = entryUnitsFor('KG', ['Carton'])[2]
-    expect(carton).toMatchObject({ label: 'Carton', factor: 1, records: 'Carton' })
+    expect(carton).toMatchObject({ label: 'Carton', factor: null, records: 'Carton' })
+    expect(entryUnitsFor('KG', ['Carton'], [{ label: 'Carton', size: 12 }])[2].factor).toBe(12)
   })
 
   test('the built-in list stands in until the real one has loaded', () => {

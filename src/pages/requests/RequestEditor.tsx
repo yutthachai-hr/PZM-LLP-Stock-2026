@@ -6,7 +6,7 @@ import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
-import { entryUnitsFor } from '../../components/QtyInput'
+import { entryUnitsFor, UnitSelect } from '../../components/QtyInput'
 import { Badge, Button, Card, Field, Input, PageHeader, SectionHeader, Select, Textarea } from '../../components/ui'
 import { useEntryUnits } from '../../services/entryUnits'
 import * as S from '../../services/purchaseRequests'
@@ -15,7 +15,6 @@ import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { fmtQty } from '../../lib/format'
 import { liveItems, PR_STATUS_KEYS, prBadgeColor } from '../../lib/purchaseRequestStatus'
-import { sameUnit } from '../../lib/units'
 import type { PurchaseRequest, PurchaseRequestItem, Role } from '../../types'
 import { ProductPicker, type PickedLine } from './ProductPicker'
 
@@ -293,18 +292,18 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                               }}
                               aria-label={t('จำนวน')}
                             />
-                            <Select
-                              value={item.entryUnit ?? ''}
-                              onChange={(e) => void setQty(item, item.requestedQty ?? 0, e.target.value)}
-                              aria-label={t('หน่วย')}
-                            >
-                              {units.length === 0 && <option value="">{item.unit}</option>}
-                              {units.map((u) => (
-                                <option key={u.key} value={sameUnit(u.records, item.unit) ? '' : u.records}>
-                                  {u.translate ? t(u.label) : u.label}
-                                </option>
-                              ))}
-                            </Select>
+                            {units.length === 0 ? (
+                              <Select value="" disabled aria-label={t('หน่วย')}>
+                                <option value="">{item.unit}</option>
+                              </Select>
+                            ) : (
+                              <UnitSelect
+                                units={units}
+                                value={item.entryUnit ?? ''}
+                                onChange={(u) => void setQty(item, item.requestedQty ?? 0, u)}
+                                product={p}
+                              />
+                            )}
                             <Select value={item.supplierId} onChange={(e) => void changeSupplier(item, e.target.value)} aria-label={t('ผู้ขาย')}>
                               {supplierOptionsFor(item).map(({ s, listed, primary }) => (
                                 <option key={s.id} value={s.id}>

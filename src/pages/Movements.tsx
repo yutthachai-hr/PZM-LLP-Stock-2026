@@ -23,7 +23,8 @@ import { EditMovementModal } from '../components/movements/EditMovementModal'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { fmtQty, formatThaiDate, dateInputToMs, dayRange } from '../lib/format'
-import { effectAt, effectOverall, shownUnit, stockCard } from '../lib/ledger'
+import { effectAt, effectOverall, stockCard } from '../lib/ledger'
+import { describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
@@ -208,16 +209,14 @@ export function MovementsPage() {
           // says what moved; the sign belongs to a site's own stock card.
           if (!locationId && m.fromLocationId && m.toLocationId) {
             return (
-              <span className="text-ink">
-                {fmtQty(m.qty)} {shownUnit(m)}
-              </span>
+              <span className="text-ink">{describeQty(m, fmtQty)}</span>
             )
           }
           const eff = locationId ? effectAt(m, locationId) : effectOverall(m)
           return (
             <span className={eff < 0 ? 'text-out' : 'text-in'}>
-              {eff > 0 ? '+' : ''}
-              {fmtQty(eff)} {shownUnit(m)}
+              {eff > 0 ? '+' : eff < 0 ? '−' : ''}
+              {describeQty(m, fmtQty)}
             </span>
           )
         },

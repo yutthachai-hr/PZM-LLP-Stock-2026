@@ -1,4 +1,5 @@
 import type { InventorySettings, Product, StockMovement } from '../../types'
+import { isLegacyUnitRow } from './uom'
 import { LOSS_REASONS } from './usage'
 
 /**
@@ -27,7 +28,7 @@ export function significance(
   onHandNow: number,
   settings: Pick<InventorySettings, 'adjustValueBaht' | 'adjustPct' | 'wasteValueBaht'>,
 ): Significance | null {
-  if (m.type !== 'adjust' || m.voided || m.entryUnit) return null
+  if (m.type !== 'adjust' || m.voided || isLegacyUnitRow(m)) return null
   const out = !!m.fromLocationId
   const cost = product?.cost
   const value = cost !== undefined && cost > 0 ? m.qty * cost : null

@@ -1,9 +1,9 @@
 import { backend } from '../backend'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
-import { COL, type ProductImage, type StockLevel } from '../types'
+import { COL, type Product, type ProductImage, type StockLevel } from '../types'
 import { QTY_MAX } from '../lib/validate'
-import { normaliseConversions, type UnitConversion } from '../lib/units'
+import { normaliseConversions, sameUnit, type UnitConversion } from '../lib/units'
 
 export interface ProductInput {
   /** Who we buy it from. Empty means nobody has said yet. */
@@ -108,6 +108,27 @@ export async function updateProduct(
     write.unitConversions = conversions.length ? conversions : DELETE_FIELD
   }
   await backend.update(COL.products, id, write)
+}
+
+/**
+ * State the rate for one unit of this product — "1 Carton = 500 EA" — the first time
+ * somebody keys that unit (owner, 20 Sep 2026). Anyone active may do this; the rules let
+ * staff touch nothing else on a product. Replaces an existing rate for the same label,
+ * so the product page can correct one through the same call.
+ */
+export async function addConversion(
+  product: Pick<Product, 'id' | 'unitType' | 'unitConversions'>,
+  label: string,
+  size: number,
+): Promise<{ label: string; size: number }[]> {
+  const clean = label.trim()
+  if (!clean) throw new AppError('กรุณาระบุหน่วย')
+  if (sameUnit(clean, product.unitType)) throw new AppError('หน่วยนี้คือหน่วยหลักของสินค้าอยู่แล้ว')
+  if (!Number.isFinite(size) || size <= 0) throw new AppError('อัตราแปลงต้องเป็นตัวเลขมากกว่า 0')
+  const kept = (product.unitConversions ?? []).filter((c) => !sameUnit(c.label, clean))
+  const next = normaliseConversions([...kept, { label: clean, size }])
+  await backend.update(COL.products, product.id, { unitConversions: next, updatedAt: Date.now() })
+  return next
 }
 
 export async function deleteProduct(id: string): Promise<void> {

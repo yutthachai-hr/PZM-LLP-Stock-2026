@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
 import { useT } from '../../i18n/I18nContext'
 import { fmtQty, formatThaiDateShort } from '../../lib/format'
-import { shownUnit } from '../../lib/ledger'
+import { describeQty } from '../../lib/uom'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../../types'
 import { Icon } from '../Icon'
 import { SiteChip } from '../SiteChip'
@@ -74,7 +74,7 @@ export function TodayTransactions({
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className={`truncate font-medium ${m.voided ? 'line-through' : 'text-ink'}`}>{m.productName}</span>
                   <span className="num shrink-0 font-semibold text-ink">
-                    {fmtQty(m.qty)} {shownUnit(m)}
+                    {describeQty(m, fmtQty)}
                   </span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-ink-soft">

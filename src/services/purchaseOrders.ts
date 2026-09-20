@@ -5,9 +5,10 @@ import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
+import { resolveFactor, toBase } from '../lib/uom'
 import { requireEpochMs } from '../lib/validate'
 import { orderCache } from '../data/orderCache'
-import { receiveStock } from './stock'
+import { receiveStock, type MovementLine } from './stock'
 import {
   COL,
   type Product,
@@ -263,11 +264,18 @@ function buildLines(input: readonly OrderLineInput[], products: readonly Product
     const p = byId.get(l.productId)
     if (!p) throw new AppError('ไม่พบสินค้า')
     const entryUnit = (l.entryUnit ?? '').trim()
+    const keyed = entryUnit && !sameUnit(entryUnit, p.unitType) ? entryUnit : ''
+    // A line in another unit carries its base equivalent at today's rate, so the receipt
+    // converts at the rate the order was placed at (lib/uom.ts). No rate, no order.
+    const factor = resolveFactor(p, keyed || undefined)
+    if (factor === null) {
+      throw new AppError('ยังไม่ได้กำหนดอัตราแปลง "{unit}" ของ "{name}" — กำหนดที่หน้าสินค้าก่อน', { unit: keyed, name: p.name })
+    }
     lines.push({
       productId: p.id,
       productName: p.name,
       unit: p.unitType,
-      ...(entryUnit && !sameUnit(entryUnit, p.unitType) ? { entryUnit } : {}),
+      ...(keyed ? { entryUnit: keyed, baseQty: toBase(l.qty, factor) } : {}),
       orderedQty: l.qty,
     })
   }
@@ -544,18 +552,30 @@ export async function receivePurchaseOrder(params: {
   const arrived = settled.filter((l) => (l.receivedQty ?? 0) > 0)
   if (arrived.length === 0) throw new AppError('ไม่มีรายการที่รับเข้า')
 
+  // What arrived, in the product's own unit. A line ordered in another unit converts at
+  // the rate it was placed at (baseQty / orderedQty); a line from before that was kept
+  // takes the product's rate today, and is refused if there is none — never guessed.
+  const stockLines: MovementLine[] = []
+  for (const l of arrived) {
+    if (!l.entryUnit) {
+      stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, qty: l.receivedQty! })
+      continue
+    }
+    let factor = l.baseQty !== undefined && l.orderedQty > 0 ? l.baseQty / l.orderedQty : null
+    if (factor === null) {
+      const p = await db.getOne<Product>(COL.products, l.productId)
+      factor = p ? resolveFactor(p, l.entryUnit) : null
+      if (factor === null) {
+        throw new AppError('ยังไม่ได้กำหนดอัตราแปลง "{unit}" ของ "{name}" — กำหนดที่หน้าสินค้าก่อน', { unit: l.entryUnit, name: l.productName })
+      }
+    }
+    stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, entryUnit: l.entryUnit, entryQty: l.receivedQty!, qty: toBase(l.receivedQty!, factor) })
+  }
+
   // Stock first. If this fails nothing has been marked received, and the check can be redone.
   const docNo = await receiveStock({
     toLocationId: order.locationId,
-    lines: arrived.map((l) => ({
-      productId: l.productId,
-      productName: l.productName,
-      unit: l.unit,
-      // Into the balance for the unit it was ordered in, exactly as the receiving screen
-      // would file it if the same person keyed the same delivery by hand.
-      ...(l.entryUnit ? { entryUnit: l.entryUnit } : {}),
-      qty: l.receivedQty!,
-    })),
+    lines: stockLines,
     actor,
     date: params.date ?? Date.now(),
     note: invoiceNo,
