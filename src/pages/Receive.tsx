@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, FormActions, Input, PageHeader, Select, Textarea } from '../components/ui'
+import { Button, Card, Field, FormActions, Input, PageHeader, Textarea } from '../components/ui'
 import { LineBuilder, type Line } from '../components/LineBuilder'
 import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
 import { receiveStock } from '../services/stock'
@@ -75,13 +76,7 @@ export function ReceivePage() {
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label={t("คลังปลายทาง")} required>
-            <Select value={toLocationId} onChange={(e) => setToLocationId(e.target.value)}>
-              {warehouses.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={toLocationId} onChange={setToLocationId} locations={warehouses} />
           </Field>
           <Field label={t("วันที่รับ")} required>
             <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />

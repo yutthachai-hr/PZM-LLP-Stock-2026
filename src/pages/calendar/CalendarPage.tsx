@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { SiteSelect } from '../../components/SiteChip'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useConfirm } from '../../components/Confirm'
@@ -246,14 +247,7 @@ export function CalendarPage() {
           </option>
         ))}
       </Select>
-      <Select value={loc} onChange={(e) => setLoc(e.target.value)} className="sm:w-36" aria-label={t('คลัง/สาขา')}>
-        <option value="">{t('ทุกคลัง')}</option>
-        {locations.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.name}
-          </option>
-        ))}
-      </Select>
+      <SiteSelect value={loc} onChange={setLoc} locations={locations} emptyLabel={t('ทุกคลัง')} className="sm:w-36" aria-label={t('คลัง/สาขา')} />
       <Select value={supplier} onChange={(e) => setSupplier(e.target.value)} className="sm:w-40" aria-label={t('ผู้ขาย')}>
         <option value="">{t('ทุกผู้ขาย')}</option>
         {suppliers

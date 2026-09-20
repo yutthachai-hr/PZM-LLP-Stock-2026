@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SiteSelect } from '../../components/SiteChip'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -216,19 +217,14 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
       <Card className="p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t('คลังปลายทาง')} required>
-            <Select
+            <SiteSelect
               value={locationId}
-              onChange={(e) => {
-                setLocationId(e.target.value)
-                void saveHeader({ locationId: e.target.value })
+              onChange={(id) => {
+                setLocationId(id)
+                void saveHeader({ locationId: id })
               }}
-            >
-              {activeLocations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+              locations={activeLocations}
+            />
           </Field>
           <Field label={t('หมายเหตุถึงหัวหน้า (ไม่บังคับ)')}>
             <Textarea rows={1} value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => void saveHeader({ note })} />

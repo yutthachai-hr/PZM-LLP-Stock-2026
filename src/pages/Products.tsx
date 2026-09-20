@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { SiteChip } from '../components/SiteChip'
+import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
@@ -452,14 +452,7 @@ export function ProductsPage() {
           </Field>
 
           <Field label={t("ดูคงเหลือของ")}>
-            <Select value={locId} onChange={(e) => setLocId(e.target.value)} className="w-[170px]">
-              <option value="">{t("ทุกคลังรวมกัน")}</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={locId} onChange={setLocId} locations={locations} emptyLabel={t("ทุกคลังรวมกัน")} className="w-[170px]" />
           </Field>
 
           <Field label={t("เรียงตาม")}>

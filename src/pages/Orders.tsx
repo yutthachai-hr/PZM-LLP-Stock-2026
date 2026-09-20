@@ -7,7 +7,7 @@ import { useData } from '../data/DataContext'
 import { orderCache } from '../data/orderCache'
 import { useToast } from '../components/Toast'
 import { DataTable } from '../components/DataTable'
-import { SiteChip } from '../components/SiteChip'
+import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { Icon } from '../components/Icon'
 import { ReasonModal } from './requests/ReasonModal'
 import {
@@ -839,13 +839,7 @@ function NewOrderModal({
             </Select>
           </Field>
           <Field label={t('คลังปลายทาง')} required>
-            <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              {active.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={locationId} onChange={setLocationId} locations={active} />
           </Field>
           <Field label={t('วันที่ให้ส่งของ')} hint={t('ว่างไว้ = ยังไม่ทราบ ปฏิทินจะใช้ระยะส่งของผู้ขายแทน')}>
             <Input type="date" value={expected} onChange={(e) => setExpected(e.target.value)} />

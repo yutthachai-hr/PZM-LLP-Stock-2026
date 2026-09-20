@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SiteSelect } from '../components/SiteChip'
 import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, FormActions, Input, PageHeader, SegTab, Select, Textarea } from '../components/ui'
+import { Button, Card, Field, FormActions, Input, PageHeader, SegTab, Textarea } from '../components/ui'
 import { LineBuilder, type Line } from '../components/LineBuilder'
 import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
 import { issueStock, consumeStock } from '../services/stock'
@@ -104,25 +105,15 @@ function TransferForm() {
     <Card className="space-y-4 p-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t("จากคลัง (ต้นทาง)")} required>
-          <Select value={fromLocationId} onChange={(e) => setFromLocationId(e.target.value)}>
-            {active.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </Select>
+          <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
         </Field>
         <Field label={t("ไปยังสาขา (ปลายทาง)")} required>
-          <Select value={toLocationId} onChange={(e) => setToLocationId(e.target.value)}>
-            <option value="">{t("— เลือก —")}</option>
-            {active
-              .filter((l) => l.id !== fromLocationId)
-              .map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-          </Select>
+          <SiteSelect
+            value={toLocationId}
+            onChange={setToLocationId}
+            locations={active.filter((l) => l.id !== fromLocationId)}
+            emptyLabel={t("— เลือก —")}
+          />
         </Field>
         <Field label={t("วันที่เบิก")} required>
           <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
@@ -233,13 +224,7 @@ function ConsumeForm() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label={t("เบิกจากคลัง")} required>
-          <Select value={fromLocationId} onChange={(e) => setFromLocationId(e.target.value)}>
-            {active.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </Select>
+          <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
         </Field>
         <Field label={t("วันที่เบิก")} required>
           <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />

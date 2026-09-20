@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SiteSelect } from '../../components/SiteChip'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../Toast'
@@ -105,24 +106,12 @@ export function EditMovementModal({
             one would quietly turn it into a transfer under the same document number. */}
         {movement.fromLocationId && (
           <Field label={t("คลังต้นทาง")}>
-            <Select value={fromId} onChange={(e) => setFromId(e.target.value)}>
-              {active.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={fromId} onChange={setFromId} locations={active} />
           </Field>
         )}
         {movement.toLocationId && (
           <Field label={t("คลังปลายทาง")}>
-            <Select value={toId} onChange={(e) => setToId(e.target.value)}>
-              {active.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={toId} onChange={setToId} locations={active} />
           </Field>
         )}
         <Field label={t("วันที่")}>

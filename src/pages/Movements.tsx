@@ -21,7 +21,7 @@ import { DataTable, type Column } from '../components/DataTable'
 import { voidMovement, getMovementImage } from '../services/stock'
 import { EditMovementModal } from '../components/movements/EditMovementModal'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
-import { SiteChip } from '../components/SiteChip'
+import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { fmtQty, formatThaiDate, dateInputToMs, dayRange } from '../lib/format'
 import { effectAt, effectOverall, shownUnit, stockCard } from '../lib/ledger'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
@@ -299,14 +299,7 @@ export function MovementsPage() {
             </Select>
           </Field>
           <Field label={t("คลัง/สาขา")}>
-            <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              <option value="">{t("ทุกคลัง")}</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={locationId} onChange={setLocationId} locations={locations} emptyLabel={t("ทุกคลัง")} />
           </Field>
           <Field label={t("ประเภท")}>
             <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>

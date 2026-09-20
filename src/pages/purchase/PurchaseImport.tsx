@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SiteSelect } from '../../components/SiteChip'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -274,13 +275,7 @@ export function PurchaseImportPage() {
               </Select>
             </Field>
             <Field label={t('คลังปลายทาง')} required>
-              <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-                {activeLocations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </Select>
+              <SiteSelect value={locationId} onChange={setLocationId} locations={activeLocations} />
             </Field>
           </div>
         </Card>

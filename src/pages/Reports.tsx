@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
-import { SiteChip } from '../components/SiteChip'
+import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { ActivityLog } from './reports/ActivityLog'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -476,14 +476,7 @@ export function ReportsPage() {
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label={t("คลัง/สาขา")}>
-            <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              <option value="">{t("ทุกคลัง")}</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={locationId} onChange={setLocationId} locations={locations} emptyLabel={t("ทุกคลัง")} />
           </Field>
           <Field label={t("สินค้า")}>
             <Select value={productId} onChange={(e) => setProductId(e.target.value)}>

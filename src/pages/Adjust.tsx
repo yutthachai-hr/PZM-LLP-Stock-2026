@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -125,13 +126,7 @@ export function AdjustPage() {
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("คลัง/สาขา")} required>
-            <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              {active.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={locationId} onChange={setLocationId} locations={active} />
           </Field>
           <Field label={t("วันที่")} required>
             <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />

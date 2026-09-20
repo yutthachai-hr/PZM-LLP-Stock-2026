@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SiteSelect } from '../../components/SiteChip'
 import { useToast } from '../../components/Toast'
 import { Button, Field, Input, Modal, Select, Textarea } from '../../components/ui'
 import { useData } from '../../data/DataContext'
@@ -166,14 +167,7 @@ export function EventEditor({
           <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
         <Field label={t('คลัง/สาขา')}>
-          <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-            <option value="">{t('ไม่ระบุ')}</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </Select>
+          <SiteSelect value={locationId} onChange={setLocationId} locations={locations} emptyLabel={t('ไม่ระบุ')} />
         </Field>
         <fieldset>
           <legend className="mb-1.5 block text-sm font-medium text-ink">{t('ผู้รับผิดชอบ')}</legend>

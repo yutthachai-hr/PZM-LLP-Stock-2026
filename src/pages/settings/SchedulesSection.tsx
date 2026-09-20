@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SiteSelect } from '../../components/SiteChip'
 import { useAuth } from '../../auth/AuthContext'
 import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
@@ -216,13 +217,7 @@ function ScheduleEditor({ schedule, onClose }: { schedule: InventorySchedule | n
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('คลัง/สาขา')} required>
-            <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </Select>
+            <SiteSelect value={locationId} onChange={setLocationId} locations={locations} />
           </Field>
           <Field label={t('ความถี่')}>
             <Select value={frequency} onChange={(e) => setFrequency(e.target.value as ScheduleFrequency)}>
