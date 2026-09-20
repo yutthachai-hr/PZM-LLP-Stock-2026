@@ -1,6 +1,6 @@
 import type { IconName } from '../../components/Icon'
 import type { CalendarItem, CalendarKind, ItemPriority, ItemStatus } from '../../lib/inventoryRules/types'
-import type { StockEventStatus, StockEventType } from '../../types'
+import type { EventHistoryAction, StockEventStatus, StockEventType } from '../../types'
 
 /**
  * How each kind of calendar item looks: its icon, its name, and the tone of its chip.
@@ -129,3 +129,17 @@ export function chipClass(item: CalendarItem): string {
 
 export const timeOf = (ms: number) =>
   new Date(ms).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+
+/** What each step in a task's history is called. */
+export const HISTORY_LABEL: Record<EventHistoryAction, string> = {
+  created: 'สร้างงาน', // i18n-key
+  generated: 'สร้างจากตาราง', // i18n-key
+  assigned: 'มอบหมาย', // i18n-key
+  started: 'เริ่มทำ', // i18n-key
+  completed: 'ทำเสร็จ', // i18n-key
+  approved: 'อนุมัติ', // i18n-key
+  rescheduled: 'เลื่อนงาน', // i18n-key
+  cancelled: 'ยกเลิกงาน', // i18n-key
+  edited: 'แก้ไข', // i18n-key
+  reopened: 'ส่งกลับให้ทำใหม่', // i18n-key
+}

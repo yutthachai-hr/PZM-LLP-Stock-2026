@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { SiteChip } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
@@ -1061,7 +1062,7 @@ function ProductEditor({
           <div className="grid gap-3 sm:grid-cols-2">
             {locations.map((l) => (
               <div key={l.id} className="flex items-center gap-2">
-                <span className="flex-1 truncate text-sm text-ink-soft">{l.name}</span>
+                <span className="flex-1 truncate text-sm text-ink-soft"><SiteChip locationId={l.id} /></span>
                 <input
                   type="number"
                   step="any"

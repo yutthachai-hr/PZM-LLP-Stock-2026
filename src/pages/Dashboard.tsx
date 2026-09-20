@@ -19,6 +19,7 @@ import {
 } from '../components/ui'
 import { DataTable, type Column } from '../components/DataTable'
 import { ProductThumb } from '../components/ProductThumb'
+import { SiteChip } from '../components/SiteChip'
 import { fmtMoney, fmtQty, formatThaiDateShort, todayMs } from '../lib/format'
 import type { Product, StockLocation } from '../types'
 import { useT } from '../i18n/I18nContext'
@@ -333,7 +334,7 @@ export function DashboardPage() {
                         {it.product.name}
                       </span>
                       <span className="block truncate text-xs text-ink-faint">
-                        {scope === ALL ? it.location.name : it.product.category}
+                        {scope === ALL ? <SiteChip locationId={it.location.id} /> : it.product.category}
                       </span>
                     </span>
                     <span className="num shrink-0 text-right text-sm font-semibold text-warn">

@@ -7,6 +7,7 @@ import { useData } from '../data/DataContext'
 import { orderCache } from '../data/orderCache'
 import { useToast } from '../components/Toast'
 import { DataTable } from '../components/DataTable'
+import { SiteChip } from '../components/SiteChip'
 import { Icon } from '../components/Icon'
 import { ReasonModal } from './requests/ReasonModal'
 import {
@@ -312,7 +313,7 @@ export function OrdersPage() {
         {tab === 'summary' ? (
           <SupplierSummary rows={summary} />
         ) : tab === 'cancelled' ? (
-          <CancelledTable rows={cancelled} locationName={(id) => locationById(id)?.name ?? ''} onOpen={setViewing} />
+          <CancelledTable rows={cancelled} onOpen={setViewing} />
         ) : shown.length === 0 ? (
           <p className="p-8 text-center text-sm text-ink-soft">{t('ไม่มีใบสั่งซื้อในช่วงนี้')}</p>
         ) : (
@@ -323,7 +324,6 @@ export function OrdersPage() {
                 order={o}
                 late={lateIds.has(o.id)}
                 expectedAt={expectedDeliveryAt(o, leadTimeOf(o.supplierId))}
-                locationName={locationById(o.locationId)?.name ?? ''}
                 onOpen={() => setViewing(o)}
                 onReceive={() => setReceiving(o)}
                 onAmend={() => setAmending(o)}
@@ -377,15 +377,7 @@ export function OrdersPage() {
 }
 
 /** The orders called off, as a table: the trail an audit reads. */
-function CancelledTable({
-  rows,
-  locationName,
-  onOpen,
-}: {
-  rows: PurchaseOrder[]
-  locationName: (id: string) => string
-  onOpen: (o: PurchaseOrder) => void
-}) {
+function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: PurchaseOrder) => void }) {
   const t = useT()
   const sorted = [...rows].sort((a, b) => (b.cancelledAt ?? 0) - (a.cancelledAt ?? 0))
   return (
@@ -399,7 +391,7 @@ function CancelledTable({
           { key: 'docNo', header: t('เลขที่'), primary: true, cell: (o) => <span className="doc-no">{o.docNo}</span> },
           { key: 'supplier', header: t('ผู้ขาย'), cell: (o) => o.supplierName },
           { key: 'ordered', header: t('วันที่สั่ง'), cell: (o) => formatThaiDate(o.orderedAt) },
-          { key: 'location', header: t('คลังปลายทาง'), cell: (o) => locationName(o.locationId) },
+          { key: 'location', header: t('คลังปลายทาง'), cell: (o) => <SiteChip locationId={o.locationId} /> },
           { key: 'lines', header: t('รายการ'), align: 'right', cell: (o) => o.lines.length },
           { key: 'by', header: t('ผู้ยกเลิก'), cell: (o) => o.cancelledByName ?? '' },
           { key: 'at', header: t('ยกเลิกเมื่อ'), cell: (o) => (o.cancelledAt ? formatThaiDateTime(o.cancelledAt) : '') },
@@ -414,7 +406,6 @@ function OrderRow({
   order,
   late,
   expectedAt,
-  locationName,
   onOpen,
   onReceive,
   onAmend,
@@ -424,7 +415,6 @@ function OrderRow({
   late: boolean
   /** The day the goods are due — written on the order, or counted from the lead time. */
   expectedAt?: number
-  locationName: string
   onOpen: () => void
   onReceive: () => void
   onAmend: () => void
@@ -466,8 +456,8 @@ function OrderRow({
             </Badge>
           )}
         </div>
-        <div className="text-xs text-ink-soft">
-          {formatThaiDate(order.orderedAt)} · {locationName} ·{' '}
+        <div className="flex flex-wrap items-center gap-1 text-xs text-ink-soft">
+          {formatThaiDate(order.orderedAt)} · <SiteChip locationId={order.locationId} /> ·{' '}
           {t('{count} รายการ', { count: order.lines.length })}
           {order.invoiceNo ? ` · ${t('บิล')} ${order.invoiceNo}` : ''}
           {/* The day the supplier is to deliver — set when the order is placed (by hand or

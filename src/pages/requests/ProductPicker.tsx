@@ -26,7 +26,7 @@ import { looseMatch, looseScore } from '../../lib/search'
  * manager when they do. No modal opens from here; the cart beside it updates in place.
  */
 
-const MAX_RESULTS = 12
+const MAX_RESULTS = 40
 const DEBOUNCE_MS = 120
 
 export type PickerMode = 'product' | 'supplier'

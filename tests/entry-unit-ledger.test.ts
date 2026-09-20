@@ -482,3 +482,23 @@ describe('correcting a product whose unit was set up wrong', () => {  const prod
     ).rejects.toThrow()
   })
 })
+
+describe('what an edit remembers', () => {
+  test('each change is kept by field with its old and new value', async () => {
+    // The activity log says what the row used to say; the label list alone could not.
+    await receive(10, 'Pack')
+    const [m] = movements()
+    await editMovement({
+      movementId: m.id as string,
+      patch: { qty: 12, entryUnit: 'Carton', note: 'recount' },
+      actor: ACTOR,
+    })
+    const [edit] = movements()[0].edits as { changed: string[]; changes: { field: string; from: string; to: string }[] }[]
+    expect(edit.changed).toEqual(['จำนวน', 'หมายเหตุ', 'หน่วย'])
+    expect(edit.changes).toEqual([
+      { field: 'qty', from: '10', to: '12' },
+      { field: 'note', from: 'IV-1', to: 'recount' },
+      { field: 'unit', from: 'Pack', to: 'Carton' },
+    ])
+  })
+})

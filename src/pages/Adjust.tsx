@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -14,6 +14,7 @@ import {
 } from '../components/ui'
 import { ProductThumb } from '../components/ProductThumb'
 import { QtyInput } from '../components/QtyInput'
+import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
 import { useEntryUnits } from '../services/entryUnits'
 import { adjustStock } from '../services/stock'
 import { deliver } from '../services/notifications'
@@ -25,6 +26,9 @@ import { ADJUST_REASONS, type Product } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
+
+/** Enough of the list that the item wanted is on it; the box scrolls past the first eight. */
+const MAX_MATCHES = 40
 
 export function AdjustPage() {
   const t = useT()
@@ -61,8 +65,9 @@ export function AdjustPage() {
       .filter((p) => p.active !== false)
       .filter((p) => looseMatch([p.name, p.sku], q))
       .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
-      .slice(0, 8)
+      .slice(0, MAX_MATCHES)
   }, [search, products])
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const current = product ? qtyAt(locationId, product.id) : 0
 
@@ -98,6 +103,8 @@ export function AdjustPage() {
       setQty(0)
       setNote('')
       setSearch('')
+      // The next adjustment starts in the search box, not with a reach for the mouse.
+      setTimeout(() => searchRef.current?.focus(), 0)
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
@@ -106,7 +113,7 @@ export function AdjustPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <PageHeader
         icon="adjust"
         tone="warn"
@@ -114,6 +121,7 @@ export function AdjustPage() {
         subtitle={t("แก้ไขยอดกรณีของหาย เสียหาย หมดอายุ หรือปรับตามการนับจริง")}
       />
 
+      <WithTodayPanel panel={<TodayTransactions types={['adjust']} date={dateInputToMs(dateStr)} title={t('ปรับสต๊อกที่ทำวันนี้')} />}>
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("คลัง/สาขา")} required>
@@ -148,12 +156,22 @@ export function AdjustPage() {
           ) : (
             <div className="relative">
               <Input
+                ref={searchRef}
                 placeholder={t("ค้นหาสินค้า")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && matches[0]) {
+                    e.preventDefault()
+                    setProduct(matches[0])
+                    setSearch('')
+                  }
+                }}
+                autoComplete="off"
+                spellCheck={false}
               />
               {matches.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-lg">
+                <div className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-lg border border-line bg-surface shadow-lg">
                   {matches.map((p) => (
                     <button
                       key={p.id}
@@ -227,6 +245,7 @@ export function AdjustPage() {
           </Button>
         </FormActions>
       </Card>
+      </WithTodayPanel>
     </div>
   )
 }

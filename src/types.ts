@@ -158,7 +158,14 @@ export interface MovementEdit {
   at: number
   /** Which fields this edit changed, for the report to name them. */
   changed: string[]
+  /**
+   * The old and new value of each, as text, so the activity log can say what the row used
+   * to say. Absent on edits made before 20 Sep 2026, which named the field only.
+   */
+  changes?: { field: MovementEditField; from: string; to: string }[]
 }
+
+export type MovementEditField = 'qty' | 'date' | 'note' | 'unit' | 'from' | 'to'
 
 export interface Note {
   id: string
