@@ -64,17 +64,65 @@ export interface UnitBearer {
   unitConversions?: readonly UnitConversion[]
 }
 
+/** Deeper than this a chain is a mistake, not a hierarchy. */
+const MAX_CHAIN = 6
+
 /**
  * The rate for keying this product in `entryUnit`: how many base units one `entryUnit`
- * is. The product's own rate wins over the standard table, so an owner can state that
- * their "g" pack is nominal if they must. Null = no rate known = cannot be filed.
+ * is. The product's own rows win over the standard table, so an owner can state that
+ * their "g" pack is nominal if they must. A row may be stated in another row's unit
+ * ("1 Carton = 12 Pack", "1 Pack = 25 EA") and is followed down to the base; a row's
+ * `per` divides ("1 EA = 2.72 KG" is stored as 2.72 KG = 1 EA). Null = no rate known =
+ * cannot be filed.
  */
-export function resolveFactor(product: UnitBearer, entryUnit: string | undefined): number | null {
+export function resolveFactor(product: UnitBearer, entryUnit: string | undefined, depth = 0): number | null {
   const base = product.unitType
   if (!entryUnit || sameUnit(entryUnit, base)) return 1
+  if (depth > MAX_CHAIN) return null
   const own = product.unitConversions?.find((c) => sameUnit(c.label, entryUnit))
-  if (own && Number.isFinite(own.size) && own.size > 0) return own.size
+  if (own && Number.isFinite(own.size) && own.size > 0 && (own.per === undefined || own.per > 0)) {
+    const step = own.size / (own.per ?? 1)
+    if (!own.of || sameUnit(own.of, base)) return step
+    if (sameUnit(own.of, entryUnit)) return null
+    const rest = resolveFactor(product, own.of, depth + 1)
+    return rest === null ? null : step * rest
+  }
   return standardFactor(entryUnit, base)
+}
+
+/**
+ * A base quantity said in the product's larger units, largest first: 320 EA with a Carton
+ * of 12 Pack and a Pack of 25 EA reads "1 Carton 0 Pack 20 EA" → "1 Carton 20 EA". Only
+ * whole counts of each unit are taken; the remainder stays in the base unit. Units whose
+ * rate is under one base unit (a piece of a kilo) are not used — they would never fit
+ * whole in front of the base. Empty when the product has no usable larger unit.
+ */
+export function breakdown(qtyBase: number, product: UnitBearer, fmt: (n: number) => string = String): string {
+  const rows = (product.unitConversions ?? [])
+    .map((c) => ({ label: c.label, factor: resolveFactor(product, c.label) }))
+    .filter((r): r is { label: string; factor: number } => r.factor !== null && r.factor > 1)
+    .sort((a, b) => b.factor - a.factor)
+  if (rows.length === 0 || !(qtyBase > 0)) return ''
+  const parts: string[] = []
+  let rest = qtyBase
+  for (const r of rows) {
+    const n = Math.floor(rest / r.factor + 1e-9)
+    if (n <= 0) continue
+    parts.push(`${fmt(n)} ${r.label}`)
+    rest = roundQty(rest - n * r.factor)
+  }
+  if (parts.length === 0) return ''
+  if (rest > 0) parts.push(`${fmt(rest)} ${product.unitType}`)
+  return parts.join(' ')
+}
+
+/**
+ * Whether a base quantity is a whole number of a counting unit. A count unit (EA, Pack,
+ * Carton, Lot — anything that is not a standard measure) cannot really hold 0.368 of
+ * itself; the screens warn when a conversion lands there, and let the person decide.
+ */
+export function isCountUnit(unit: string): boolean {
+  return measureOf(unit) === null
 }
 
 export function toBase(entryQty: number, factor: number): number {

@@ -51,12 +51,16 @@ export interface Product {
    *
    * Authoritative since 20 Sep 2026 (before that, a hint only): a quantity keyed in one of
    * these units is converted into the product's own unit at filing, and the movement keeps
-   * both numbers. Changing a rate changes future filings only — every row already filed
+   * both numbers. Read each row as "`per` label = `size` of `of`" (`per` 1 and `of` the
+   * product's own unit when absent), so the five units chain the way the company uses
+   * them: {Carton, 12, of: 'Pack'} + {Pack, 25} makes a Carton 300 EA; {KG, 1, per: 2.72}
+   * on an EA product says one piece weighs 2.72 KG; {EA, 1, per: 10} on a KG product says
+   * ten pieces to the kilo. Changing a rate changes future filings only — every row already filed
    * carries the rate it was converted at (see `entryQty` on StockMovement). A unit with no
    * rate here (or in the standard table, g/ml) cannot be filed until one is stated; the
    * entry screens ask for it once, and anyone may state it (see lib/uom.ts).
    */
-  unitConversions?: { label: string; size: number }[]
+  unitConversions?: { label: string; size: number; per?: number; of?: string }[]
   hasImage: boolean
   active: boolean
   createdAt: number

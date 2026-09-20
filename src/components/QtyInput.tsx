@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useT } from '../i18n/I18nContext'
 import { sameUnit, type UnitConversion } from '../lib/units'
-import { resolveFactor, type QtyEntry } from '../lib/uom'
+import { isCountUnit, resolveFactor, type QtyEntry } from '../lib/uom'
 import { blurOnWheel } from './ui'
 import { DefineConversionModal } from './DefineConversionModal'
 
@@ -213,6 +213,13 @@ export function QtyInput({ // i18n-key
       {converted !== null && (
         <p className="mt-1 text-right text-xs text-ink-soft">
           = <span className="num font-semibold text-ink">{converted}</span> {unitType}
+        </p>
+      )}
+      {/* A count unit cannot really hold 0.368 of itself. Said, not blocked: the person
+          may know the piece was cut, or may have the wrong unit. */}
+      {converted !== null && isCountUnit(unitType) && !Number.isInteger(converted) && (
+        <p className="mt-0.5 text-right text-xs font-medium text-warn">
+          {t('จะบันทึก {qty} {unit} (ไม่เต็มหน่วย) — ตรวจสอบหน่วยอีกครั้ง', { qty: converted, unit: unitType })}
         </p>
       )}
       {asking && product && (

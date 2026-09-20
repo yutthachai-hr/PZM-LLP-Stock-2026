@@ -70,7 +70,7 @@ export async function createProduct(input: ProductInput): Promise<string> {
   // Optional fields are omitted rather than written empty: the rules pin the shape with
   // hasOnly, and a blank string is still a present key.
   const { unitConversions, supplierId, alternateSupplierIds, ...rest } = input
-  const conversions = unitConversions ? normaliseConversions(unitConversions) : []
+  const conversions = unitConversions ? normaliseConversions(unitConversions, input.unitType) : []
   const alternates = normaliseAlternates(alternateSupplierIds, supplierId)
   return backend.add(COL.products, {
     ...rest,
@@ -104,7 +104,7 @@ export async function updateProduct(
   if ('supplierId' in patch) write.supplierId = supplierId ? supplierId : DELETE_FIELD
   // Clearing the last row has to remove the key too, for the same reason.
   if ('unitConversions' in patch) {
-    const conversions = unitConversions ? normaliseConversions(unitConversions) : []
+    const conversions = unitConversions ? normaliseConversions(unitConversions, patch.unitType) : []
     write.unitConversions = conversions.length ? conversions : DELETE_FIELD
   }
   await backend.update(COL.products, id, write)
@@ -120,13 +120,18 @@ export async function addConversion(
   product: Pick<Product, 'id' | 'unitType' | 'unitConversions'>,
   label: string,
   size: number,
-): Promise<{ label: string; size: number }[]> {
+  /** "`per` label = `size` of `of`" — `of` another of the product's units, or its own when absent. */
+  opts: { per?: number; of?: string } = {},
+): Promise<UnitConversion[]> {
   const clean = label.trim()
   if (!clean) throw new AppError('กรุณาระบุหน่วย')
   if (sameUnit(clean, product.unitType)) throw new AppError('หน่วยนี้คือหน่วยหลักของสินค้าอยู่แล้ว')
   if (!Number.isFinite(size) || size <= 0) throw new AppError('อัตราแปลงต้องเป็นตัวเลขมากกว่า 0')
+  if (opts.per !== undefined && !(Number.isFinite(opts.per) && opts.per > 0)) throw new AppError('อัตราแปลงต้องเป็นตัวเลขมากกว่า 0')
   const kept = (product.unitConversions ?? []).filter((c) => !sameUnit(c.label, clean))
-  const next = normaliseConversions([...kept, { label: clean, size }])
+  const row: UnitConversion = { label: clean, size, ...(opts.per !== undefined ? { per: opts.per } : {}), ...(opts.of ? { of: opts.of } : {}) }
+  const next = normaliseConversions([...kept, row], product.unitType)
+  if (!next.some((c) => sameUnit(c.label, clean))) throw new AppError('อัตรานี้อ้างอิงหน่วยที่ยังไม่มีอัตรา — กำหนดหน่วยนั้นก่อน')
   await backend.update(COL.products, product.id, { unitConversions: next, updatedAt: Date.now() })
   return next
 }
