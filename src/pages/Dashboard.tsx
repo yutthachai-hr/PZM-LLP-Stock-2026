@@ -23,6 +23,8 @@ import { SiteChip } from '../components/SiteChip'
 import { fmtMoney, fmtQty, formatThaiDateShort, todayMs } from '../lib/format'
 import type { Product, StockLocation } from '../types'
 import { useT } from '../i18n/I18nContext'
+import { useViewport } from '../lib/viewport'
+import { PhoneHome } from './PhoneHome'
 import { looseMatch } from '../lib/search'
 
 const ALL = '__all__'
@@ -43,6 +45,8 @@ interface LowItem {
 
 export function DashboardPage() {
   const t = useT()
+  // A phone gets its own first screen (spec §2, 21 Sep 2026); this dashboard is for desks.
+  const phone = useViewport() === 'phone'
   const { products, locations, qtyAt, minFor, tracksProduct, movements, loading } = useData()
   const [scope, setScope] = useState<string>(ALL)
   const [search, setSearch] = useState('')
@@ -187,6 +191,7 @@ export function DashboardPage() {
 
   if (loading) return <Spinner label={t('กำลังโหลดภาพรวม...')} />
 
+  if (phone) return <PhoneHome />
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">

@@ -639,7 +639,7 @@ export function StatGroup({
   return (
     <Card className="p-4">
       {title && <CardTitle title={title} action={action} className="mb-3" />}
-      <div className={`grid grid-cols-1 gap-3 divide-y divide-line sm:gap-0 sm:divide-y-0 sm:divide-line ${grid[columns]}`}>
+      <div className={`grid grid-cols-2 gap-x-2 gap-y-3 sm:gap-0 sm:divide-y-0 sm:divide-x sm:divide-line ${grid[columns]}`}>
         {children}
       </div>
     </Card>

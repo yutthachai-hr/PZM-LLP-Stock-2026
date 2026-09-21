@@ -1618,4 +1618,6 @@ export const EN: Record<string, string> = {
   'ตกลง': 'OK',
   'แสดง {to} จาก {total} รายการ': 'Showing {to} of {total}',
   'โหลดเพิ่ม ({n} รายการที่เหลือ)': 'Load more ({n} left)',
+  'สวัสดี {name}': 'Hello {name}',
+  'รายการที่ฉันทำวันนี้': 'What I keyed today',
 }
