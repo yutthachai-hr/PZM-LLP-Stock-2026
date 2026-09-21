@@ -185,7 +185,7 @@ export function QtyInput({ // i18n-key
             setText(e.target.value)
             commit(e.target.value, unit, factor)
           }}
-          className={`num min-h-11 w-full rounded-lg border px-3 py-2 text-right text-base font-semibold text-ink outline-none transition-[border-color,box-shadow] duration-150 focus-visible:ring-2 ${
+          className={`num min-h-11 w-full min-w-[6.5rem] rounded-lg border px-3 py-2 text-right text-base font-semibold text-ink outline-none transition-[border-color,box-shadow] duration-150 focus-visible:ring-2 ${
             invalid
               ? 'border-danger bg-danger-soft focus-visible:border-danger focus-visible:ring-danger/25'
               : 'border-line-strong focus-visible:border-brand focus-visible:ring-brand/25'
@@ -198,7 +198,7 @@ export function QtyInput({ // i18n-key
         <select
           value={unit.key}
           onChange={(e) => pick(units.find((u) => u.key === e.target.value) ?? units[0])}
-          className="min-h-11 w-32 shrink-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
+          className="min-h-11 w-auto max-w-[9rem] shrink-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
           aria-label={t('เลือกหน่วยที่กรอก')}
         >
           {units.map((u) => (

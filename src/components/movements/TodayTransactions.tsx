@@ -71,9 +71,9 @@ export function TodayTransactions({
           {shown.map((m) => (
             <li key={m.id} className={`flex items-start gap-2 px-3 py-2 text-sm ${m.voided ? 'bg-sunken text-ink-faint' : ''}`}>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className={`truncate font-medium ${m.voided ? 'line-through' : 'text-ink'}`}>{m.productName}</span>
-                  <span className="num shrink-0 font-semibold text-ink">
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`min-w-0 truncate font-medium ${m.voided ? 'line-through' : 'text-ink'}`} title={m.productName}>{m.productName}</span>
+                  <span className="num shrink-0 whitespace-nowrap font-semibold text-ink">
                     {describeQty(m, fmtQty)}
                   </span>
                 </div>

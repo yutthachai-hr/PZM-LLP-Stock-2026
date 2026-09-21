@@ -571,7 +571,7 @@ function LineList({
                   </span>
                   {/* The same box the receiving screen uses, so the units on offer
                       here are the units the delivery can be keyed in. */}
-                  <div className="w-full shrink-0 sm:w-56">
+                  <div className="w-full shrink-0 sm:w-64">
                     <QtyInput
                       unitType={p.unitType}
                       plainUnits={plainUnits}

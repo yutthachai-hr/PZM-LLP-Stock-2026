@@ -192,7 +192,7 @@ export function LineBuilder({
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
-                  <div className="w-full sm:w-44">
+                  <div className="w-full sm:w-64">
                     <QtyInput
                       unitType={l.unit}
                       plainUnits={plainUnits}
