@@ -142,7 +142,8 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 - `Modal` บนมือถือเต็มจอ (หัวติดบน, prop `footer` ติดล่าง); `compact` = แผ่นสั้นจากล่าง (Confirm ใช้); `FormActions` ติดเหนือแถบล่าง (`--tabbar-h` ใน index.css); DemoBanner ก็อยู่เหนือแถบ
 - **รอบ 2 หน้าคีย์ (branch `feat/mobile-keying`)**: `components/QtySheet.tsx` (จำนวน+หน่วยบนมือถือ ใช้ Modal compact+footer; กันเบิกเกินคงเหลือ), `lib/lines.ts` (`upsertLine` — สินค้าเดิม = แถวเดิม, ทดสอบ `tests/lines.test.ts`), `LineBuilder` แยกโหมด phone (ผลค้นหาเป็นลิสต์ใต้ช่อง + การ์ด + ชีต) / อื่น (แถวเดิม), `TodayTransactions` พับได้บนมือถือ, `WithTodayPanel` วางข้างจาก `lg`; ปรับสต๊อกบนมือถือใช้ชีตเดียวกัน (ทิศทาง+เหตุผลอยู่ในชีต, แถวสรุปแตะเพื่อแก้)
 - **รอบ 3 รายการ (branch `feat/mobile-lists`)**: `DataTable` การ์ดต่ำกว่า `md` — `Column.card` = 'value' (ตัวเลขใหญ่ข้างชื่อ) / 'meta' (บรรทัดเดียว, ค่าเริ่มต้น) / 'hidden'; `cardParts()` ทดสอบ `tests/data-table-cards.test.ts`; `Pagination` บนมือถือเป็นปุ่ม 'โหลดเพิ่ม' (ขยาย pageSize); ฟิลเตอร์หน้ารายงาน/ประวัติเป็น 2 คอลัมน์บนมือถือ; หน้าสินค้าโชว์หน่วยติดตัวเลขบนการ์ด
-- spec `docs/superpowers/specs/2026-09-21-mobile-tablet-ui-design.md`, แผน `docs/superpowers/plans/2026-09-21-mobile-shells.md`, `…-mobile-keying.md`, `…-mobile-lists.md`; รอบถัดไป: หน้าแรกมือถือ + เก็บงาน (ปฏิทิน ตั้งค่า ตรวจรับ ส่ง LINE)
+- **รอบ 4 หน้าแรก (branch `feat/mobile-home`)**: `pages/PhoneHome.tsx` (= TodayPanel ของแดชบอร์ด + `TodayTransactions` ทุกประเภทกรอง `byUserId` เปิดไว้ (`startOpen`) + RequestWidget; `DashboardPage` คืน PhoneHome เมื่อ `useViewport()==='phone'`); `StatGroup` 2 คอลัมน์บนมือถือ; เดินตรวจ 375px แล้ว: ปฏิทิน (มี agenda อยู่แล้ว) ตั้งค่า ตรวจรับของ ส่ง LINE ขอสั่งซื้อ — ไม่มีอะไรล้นจอ
+- spec `docs/superpowers/specs/2026-09-21-mobile-tablet-ui-design.md`, แผน `docs/superpowers/plans/2026-09-21-mobile-{shells,keying,lists,home}.md` — **ครบ 4 รอบแล้ว (21 ก.ย.)**
 
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
