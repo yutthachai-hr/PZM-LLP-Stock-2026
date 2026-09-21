@@ -135,6 +135,13 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 
 ---
 
+### UI สามขนาดหน้าจอ (21 ก.ย., branch `feat/mobile-shells` → main)
+- **มือถือ <768**: แถบล่าง หน้าแรก·สต๊อก·**+**·ประวัติ·เพิ่มเติม (`components/nav/BottomTabBar.tsx`; ปุ่ม + เปิด `ActionSheet` รับเข้า/เบิก-โอน/ปรับ/ขอสั่งซื้อ (+สั่งของใหม่สำหรับหัวหน้า/ผู้ดูแล)); `/more` (`pages/More.tsx`) คือเมนูที่เหลือ+ภาษา/สลับแบรนด์/ออกจากระบบ; ลิ้นชักเมนูเดิมเอาออกแล้ว ไม่มี hamburger
+- **แท็บเล็ต 768–1279**: รางซ้าย 72px (`NavRail.tsx`) ไอคอน+คำ ทุกเมนู ปุ่ม + ในราง; **คอม ≥1280**: เมนูซ้าย 256px + sheet ขาว เหมือนเดิม (ย้าย breakpoint จาก `lg` เป็น `xl`)
+- เมนูทุกแบบอ่านจาก `components/nav/navItems.ts` ที่เดียว (`navFor`, `TAB_ITEMS`, `actionsFor`, `moreItemsFor`, `isMoreRoute`, `titleFor` — เทสต์ `tests/nav-items.test.ts`); `lib/viewport.ts` (`useViewport()`) ใช้เฉพาะเมื่อพฤติกรรมต่างกัน ไม่ใช่ layout
+- `Modal` บนมือถือเต็มจอ (หัวติดบน, prop `footer` ติดล่าง); `compact` = แผ่นสั้นจากล่าง (Confirm ใช้); `FormActions` ติดเหนือแถบล่าง (`--tabbar-h` ใน index.css); DemoBanner ก็อยู่เหนือแถบ
+- spec `docs/superpowers/specs/2026-09-21-mobile-tablet-ui-design.md`, แผนรอบ 1 `docs/superpowers/plans/2026-09-21-mobile-shells.md`; รอบถัดไป: หน้าคีย์ (QtySheet), รายการเป็นการ์ด, หน้าแรกมือถือ
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
