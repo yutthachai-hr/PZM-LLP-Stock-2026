@@ -27,6 +27,7 @@ import { ADJUST_REASONS, type Product } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
+import type { QtyEntry } from '../lib/uom'
 
 /** Enough of the list that the item wanted is on it; the box scrolls past the first eight. */
 const MAX_MATCHES = 40
@@ -44,10 +45,10 @@ export function AdjustPage() {
   const [search, setSearch] = useState('')
   const [product, setProduct] = useState<Product | null>(null)
   const [direction, setDirection] = useState<'in' | 'out'>('out')
-  const [qty, setQty] = useState(0)
-  // What the person picked in the unit box. Empty until they touch it, which means the
-  // product's own unit.
-  const [entryUnit, setEntryUnit] = useState('')
+  // As keyed and as filed: `qty` is the product's own unit, `entryQty` what was typed in
+  // `entryUnit` when that differs (lib/uom.ts).
+  const [entry, setEntry] = useState<QtyEntry>({ qty: 0, entryQty: 0, factor: 1 })
+  const qty = entry.qty
   const [reason, setReason] = useState<string>(ADJUST_REASONS[0].value)
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
@@ -82,7 +83,7 @@ export function AdjustPage() {
         productId: product.id,
         productName: product.name,
         unit: product.unitType,
-        entryUnit: entryUnit || undefined,
+        ...(entry.entryUnit ? { entryUnit: entry.entryUnit, entryQty: entry.entryQty } : {}),
         locationId,
         direction,
         qty,
@@ -93,7 +94,8 @@ export function AdjustPage() {
       })
       toast.success(t('ปรับสต๊อกเรียบร้อย (เลขที่ {docNo})', { docNo }))
       // A large adjustment or waste is told to the managers now, not at the next job run.
-      if (!entryUnit || entryUnit === product.unitType) {
+      // `qty` is the product's own unit whatever was keyed, so the value is right either way.
+      {
         const moved = { docNo, productId: product.id, productName: product.name, qty, unit: product.unitType, reason, byUserName: user!.name,
           ...(direction === 'out' ? { fromLocationId: locationId } : { toLocationId: locationId }) }
         const now = direction === 'out' ? current - qty : current + qty
@@ -101,7 +103,7 @@ export function AdjustPage() {
         if (sig) void deliver(adjustmentDraft(moved, sig.kind, sig.value, (id) => locations.find((l) => l.id === id)?.name ?? ''), { id: user!.id })
       }
       setProduct(null)
-      setQty(0)
+      setEntry({ qty: 0, entryQty: 0, factor: 1 })
       setNote('')
       setSearch('')
       // The next adjustment starts in the search box, not with a reach for the mouse.
@@ -204,10 +206,9 @@ export function AdjustPage() {
               plainUnits={plainUnits}
               conversions={product?.unitConversions}
               value={qty}
-              onChange={(v, u) => {
-                setQty(v)
-                setEntryUnit(u)
-              }}
+              onChange={setEntry}
+              product={product ?? undefined}
+              onRateDefined={(list) => setProduct((p) => (p ? { ...p, unitConversions: list } : p))}
             />
           </Field>
           <Field label={t("เหตุผล")} required>

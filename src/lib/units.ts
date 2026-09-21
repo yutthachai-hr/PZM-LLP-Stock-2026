@@ -47,7 +47,12 @@ export function sameUnit(a: string | undefined, b: string | undefined): boolean 
  */
 export interface UnitConversion {
   label: string
+  /** `per` label = `size` of `of`. */
   size: number
+  /** How many `label` the `size` is for; 1 when absent. Lets "1 EA = 2.72 KG" be stored as {KG, 1, per 2.72}. */
+  per?: number
+  /** The unit `size` is measured in: another row's label, or the product's own unit when absent. */
+  of?: string
 }
 
 const MAX_CONVERSIONS = 20
@@ -59,15 +64,35 @@ const MAX_CONVERSION_LABEL = 40
  * the product editor shows the person exactly what saving will keep — the same shape
  * `normaliseUnits` in `services/entryUnits.ts` keeps for the owner's unit list.
  */
-export function normaliseConversions(raw: readonly UnitConversion[]): UnitConversion[] {
+export function normaliseConversions(raw: readonly UnitConversion[], baseUnit?: string): UnitConversion[] {
   const out: UnitConversion[] = []
-  for (const { label, size } of raw) {
+  for (const { label, size, per, of } of raw) {
     const clean = label.trim().slice(0, MAX_CONVERSION_LABEL)
     if (!clean) continue
+    if (baseUnit !== undefined && sameUnit(clean, baseUnit)) continue // the base is not a conversion of itself
     if (!Number.isFinite(size) || size <= 0) continue
+    if (per !== undefined && !(Number.isFinite(per) && per > 0)) continue
     if (out.some((c) => sameUnit(c.label, clean))) continue
-    out.push({ label: clean, size })
+    const ref = (of ?? '').trim().slice(0, MAX_CONVERSION_LABEL)
+    const row: UnitConversion = { label: clean, size }
+    if (per !== undefined && per !== 1) row.per = per
+    // A reference to the base unit is the default and is not stored; a self-reference is nonsense.
+    if (ref && !sameUnit(ref, clean) && !(baseUnit !== undefined && sameUnit(ref, baseUnit))) row.of = ref
+    out.push(row)
     if (out.length >= MAX_CONVERSIONS) break
   }
-  return out
+  // A row pointing at a unit no row defines (or round in a circle) can never resolve; drop it
+  // rather than store a rate that refuses every entry.
+  return out.filter((c) => {
+    let cur: UnitConversion | undefined = c
+    const seen = new Set<string>()
+    for (let hops = 0; cur && cur.of; hops++) {
+      if (hops > out.length || seen.has(cur.label.toLowerCase())) return false
+      seen.add(cur.label.toLowerCase())
+      const next: UnitConversion | undefined = out.find((o) => sameUnit(o.label, cur!.of))
+      if (!next) return false
+      cur = next
+    }
+    return true
+  })
 }

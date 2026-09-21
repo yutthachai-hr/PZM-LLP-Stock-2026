@@ -13,12 +13,21 @@
 //  3. Picking EA still filed the row as KG, because the movement was always stamped with the
 //     product's own unit. "ระบบต้องรับรู้แค่หน่วยที่ชั้นใส่เข้าไปเท่านั้น ห้ามแปลงค่าเองโดยเด็ดขาด."
 //
-// So: one conversion survives, grams to kilograms, because the owner kept it explicitly.
-// Everything else is a label, recorded exactly as keyed.
+// And the fourth, 20 Sep 2026, which reversed report 3: with "1 Carton = 500 EA" on the
+// product, keying 1 Carton must move 500 EA on the one balance. So now every unit carries
+// its rate for the product — grams and millilitres from the standard table, everything
+// else from the product's own list — or `null` when nobody has stated one, in which case
+// choosing it asks for the rate. The unit keyed is still recorded (`records`), beside the
+// converted quantity.
 
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import type { WheelEvent } from 'react'
-import { PLAIN_UNITS, entryUnitsFor, subUnitsFor } from '../src/components/QtyInput'
+
+vi.mock('../src/backend', async () => {
+  const m = await import('./helpers/memory-backend')
+  return { backend: m.memoryBackend, BACKEND_MODE: 'local' }
+})
+const { PLAIN_UNITS, entryUnitsFor, subUnitsFor } = await import('../src/components/QtyInput')
 import { blurOnWheel } from '../src/components/ui'
 import { normaliseConversions } from '../src/lib/units'
 
@@ -34,11 +43,11 @@ describe('the unit list is never empty', () => {
     expect(entryUnitsFor('')[0].label).toBe('-')
   })
 
-  test('every unit has a distinct key, because nearly all of them share the factor 1', () => {
-    const units = entryUnitsFor('KG', ['Carton'])
+  test('every unit has a distinct key, because several may share a rate', () => {
+    const units = entryUnitsFor('KG', ['Carton', 'Pack'], [{ label: 'Carton', size: 10 }, { label: 'Pack', size: 10 }])
     const keys = units.map((u) => u.key)
     expect(new Set(keys).size).toBe(keys.length)
-    expect(units.filter((u) => u.factor === 1).length).toBeGreaterThan(1)
+    expect(units.filter((u) => u.factor === 10).length).toBe(2)
   })
 })
 
@@ -63,32 +72,31 @@ describe('what is printed on the box is always offered', () => {
   })
 })
 
-describe('nothing converts except grams and millilitres', () => {
-  test('kilograms can be keyed in grams, and the row still says KG', () => {
+describe('the standard measures: grams and millilitres', () => {
+  test('kilograms can be keyed in grams; the row records g and converts to KG', () => {
     const [kg, g] = entryUnitsFor('KG')
     expect(kg).toMatchObject({ factor: 1, records: 'KG' })
-    // The one exception the owner kept: "แต่กรัม แปลงได้ 500=0.5".
-    expect(g).toMatchObject({ label: 'กรัม (g)', factor: 0.001, records: 'KG' })
+    // "แต่กรัม แปลงได้ 500=0.5".
+    expect(g).toMatchObject({ label: 'กรัม (g)', factor: 0.001, records: 'g' })
   })
 
   test('litres can be keyed in millilitres, however the unit is spelled', () => {
     for (const spelling of ['L', 'lt', 'Liter', 'ลิตร']) {
       const [base, sub] = entryUnitsFor(spelling)
       expect([base.factor, sub.factor]).toEqual([1, 0.001])
-      expect(sub.records).toBe(base.label)
+      expect(sub.records).toBe('ml')
     }
   })
 
-  test('every other unit multiplies by exactly one', () => {
+  test('a unit with no rate for the product is offered with none, and the owner\'s list is unchanged', () => {
     for (const u of entryUnitsFor('KG', ['Carton']).filter((x) => x.key.startsWith('plain:'))) {
-      expect(u.factor).toBe(1)
+      expect(u.factor).toBeNull()
     }
     expect(PLAIN_UNITS).toEqual(['Lot', 'Pack', 'EA'])
   })
 
-  test('a chosen unit is what the movement is filed under', () => {
-    // This is the whole of report 3: picking Carton has to reach the ledger as Carton.
-    const carton = entryUnitsFor('KG', ['Carton']).find((u) => u.label === 'Carton')!
+  test('the unit keyed is what the movement records as entryUnit', () => {
+    const carton = entryUnitsFor('KG', ['Carton'], [{ label: 'Carton', size: 10 }]).find((u) => u.label === 'Carton')!
     expect(carton.records).toBe('Carton')
     const base = entryUnitsFor('KG')[0]
     expect(base.records).toBe('KG')
@@ -96,45 +104,42 @@ describe('nothing converts except grams and millilitres', () => {
 })
 
 describe('what reaches the ledger', () => {
-  const keyed = (typed: number, factor: number) => Math.round(typed * factor * 1000) / 1000
+  const keyed = (typed: number, factor: number | null) => Math.round(typed * (factor ?? NaN) * 1000) / 1000
 
   test('500 grams becomes half a kilogram', () => {
     expect(keyed(500, entryUnitsFor('KG')[1].factor)).toBe(0.5)
   })
 
-  test('one Lot is one Lot — no size is invented for it', () => {
-    const lot = entryUnitsFor('KG').find((u) => u.label === 'Lot')!
-    expect(keyed(1, lot.factor)).toBe(1)
-    expect(lot.records).toBe('Lot')
+  test('one Carton is what the product says a Carton is', () => {
+    const carton = entryUnitsFor('EA', ['Carton'], [{ label: 'Carton', size: 500 }]).find((u) => u.label === 'Carton')!
+    expect(keyed(2, carton.factor)).toBe(1000)
+    expect(carton.records).toBe('Carton')
   })
 
-  test('ten Pack of a KG product stays ten, under Pack', () => {
+  test('a Pack nobody has sized cannot be filed — its rate is null, not one', () => {
     const pack = entryUnitsFor('KG').find((u) => u.label === 'Pack')!
-    expect(keyed(10, pack.factor)).toBe(10)
-    expect(pack.records).toBe('Pack')
+    expect(pack.factor).toBeNull()
   })
 })
 
 // The item that started this: ordered by the case, issued by the pack, received by the
-// piece. A reference multiplier is a hint next to the box, not a second way to convert.
-describe('a reference multiplier is a hint, not a conversion', () => {
-  test('the unit still records itself untouched, even with a reference size attached', () => {
+// piece. The product's rate is the conversion.
+describe('a product\'s own rate converts', () => {
+  test('the unit records itself, and its rate is the product\'s size', () => {
     const lang = entryUnitsFor('EA', ['ลัง'], [{ label: 'ลัง', size: 288 }]).find(
       (u) => u.label === 'ลัง',
     )!
-    expect(lang.factor).toBe(1)
+    expect(lang.factor).toBe(288)
     expect(lang.records).toBe('ลัง')
-    expect(lang.refSize).toBe(288)
   })
 
-  test('a conversion makes its own unit selectable, even off the owner\'s shared list', () => {
+  test('a rate makes its own unit selectable, even off the owner\'s shared list', () => {
     // Setting "1 ลัง = 288 EA" on one product would do nothing if ลัง were not offered —
     // and it has no business on the shared list, since a case is a different size on
-    // every other product. This is what made it selectable in the browser check: before
-    // this, the reference sat on the product with nowhere to be picked from.
+    // every other product.
     const units = entryUnitsFor('EA', ['Pack'], [{ label: 'ลัง', size: 288 }])
     expect(units.map((u) => u.label)).toContain('ลัง')
-    expect(units.find((u) => u.label === 'ลัง')!.refSize).toBe(288)
+    expect(units.find((u) => u.label === 'ลัง')!.factor).toBe(288)
   })
 
   test('a conversion label cannot duplicate the metric sub-unit row', () => {
@@ -160,7 +165,7 @@ describe('a reference multiplier is a hint, not a conversion', () => {
     // "ลัง " with trailing space, "LANG" any-case — a product edited by hand should not
     // lose its reference over spelling that the rest of the app already treats as the same.
     const units = entryUnitsFor('EA', ['ลัง'], [{ label: ' ลัง ', size: 288 }])
-    expect(units.find((u) => u.label === 'ลัง')!.refSize).toBe(288)
+    expect(units.find((u) => u.label === 'ลัง')!.factor).toBe(288)
   })
 
   test('the base unit and the metric sub-units never carry one', () => {

@@ -1,4 +1,5 @@
 import type { StockMovement } from '../../types'
+import { isLegacyUnitRow } from './uom'
 import { bkkDayStart, bkkDaysBetween, DAY_MS } from './time'
 
 /**
@@ -13,8 +14,9 @@ import { bkkDayStart, bkkDaysBetween, DAY_MS } from './time'
  * day". Below two outgoing movements, or under a week of history at the location, the rate
  * is `null` and the callers fall back to the minimum stock, saying so.
  *
- * Only the product's own unit counts; a line keyed in another unit (Pack, Carton) is a
- * separate balance and is never converted (see StockMovement.entryUnit).
+ * Every converted row counts in the product's own unit (`qty`). Only a legacy row from
+ * before 20 Sep 2026 — keyed in another unit and never converted, on its own balance —
+ * is left out, as it always was (see StockMovement.entryUnit).
  */
 
 export const LOSS_REASONS = ['lost', 'broken', 'expired', 'damage'] as const
@@ -50,7 +52,7 @@ export function usageIndex(movements: readonly StockMovement[], now: number, win
     return a
   }
   for (const m of movements) {
-    if (m.voided || m.entryUnit || m.date < from || m.date > now) continue
+    if (m.voided || isLegacyUnitRow(m) || m.date < from || m.date > now) continue
     // Any movement at a location is history there, receipts included.
     if (m.toLocationId) touch(key(m.toLocationId, m.productId), m.date)
     if (!m.fromLocationId) continue

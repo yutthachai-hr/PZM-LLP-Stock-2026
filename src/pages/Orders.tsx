@@ -533,7 +533,8 @@ function SupplierSummary({
  * The staff member types quantities against the few they want rather than hunting for each
  * product, which is the whole reason the supplier link exists.
  */
-type LineDraft = Record<string, { qty: number; unit: string }>
+/** One line as keyed for the supplier (qty in `unit`), and the same in the product's own unit. */
+type LineDraft = Record<string, { qty: number; unit: string; base: number }>
 
 /** The supplier's products with a quantity box each — the body of placing and of amending. */
 function LineList({
@@ -556,7 +557,6 @@ function LineList({
         <ul className="divide-y divide-line">
           {products.map((p) => {
             const line = lines[p.id]
-            const mismatch = !!line && line.qty > 0 && !sameUnit(line.unit, p.unitType)
             return (
               <li key={p.id} className="p-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -576,17 +576,17 @@ function LineList({
                       unitType={p.unitType}
                       plainUnits={plainUnits}
                       conversions={p.unitConversions}
-                      value={line?.qty ?? 0}
-                      onChange={(qty, unit) => setLines((cur) => ({ ...cur, [p.id]: { qty, unit } }))}
-                      invalid={mismatch}
+                      value={line?.base ?? 0}
+                      onChange={(e) => setLines((cur) => ({ ...cur, [p.id]: { qty: e.entryQty, unit: e.entryUnit ?? p.unitType, base: e.qty } }))}
+                      product={p}
                     />
+                    {line && line.qty > 0 && !sameUnit(line.unit, p.unitType) && (
+                      <p className="mt-1 text-right text-xs text-ink-faint">
+                        {t('ผู้ขายเห็น {qty} {unit}', { qty: fmtQty(line.qty), unit: line.unit })}
+                      </p>
+                    )}
                   </div>
                 </div>
-                {mismatch && (
-                  <p role="alert" className="mt-1 text-xs font-medium text-danger">
-                    {t('หน่วยที่คุณเลือกกับหน่วยรับเข้าสินค้าไม่ตรงกัน กรุณาตรวจสอบอีกครั้งก่อนกดยืนยัน')}
-                  </p>
-                )}
               </li>
             )
           })}
@@ -618,7 +618,7 @@ function AmendOrderModal({
   const toast = useToast()
   const plainUnits = useEntryUnits()
   const [lines, setLines] = useState<LineDraft>(() =>
-    Object.fromEntries(order.lines.map((l) => [l.productId, { qty: l.orderedQty, unit: shownUnit(l) }])),
+    Object.fromEntries(order.lines.map((l) => [l.productId, { qty: l.orderedQty, unit: shownUnit(l), base: l.baseQty ?? l.orderedQty }])),
   )
   const [expected, setExpected] = useState(order.expectedAt !== undefined ? msToDateInput(order.expectedAt) : '')
   const [note, setNote] = useState(order.note ?? '')
@@ -783,12 +783,6 @@ function NewOrderModal({
   }, [products, supplierId, search])
 
   const chosen = Object.entries(lines).filter(([, l]) => l.qty > 0)
-  // Lines keyed in a unit other than the one the product is counted in. Allowed — one
-  // supplier really does sell by the carton — but said out loud before the order goes.
-  const offUnit = chosen.filter(([id, l]) => {
-    const p = products.find((x) => x.id === id)
-    return p && !sameUnit(l.unit, p.unitType)
-  })
 
   async function save() {
     setBusy(true)
@@ -857,11 +851,6 @@ function NewOrderModal({
           </>
         )}
 
-        {offUnit.length > 0 && (
-          <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
-            {t('มี {n} รายการที่หน่วยไม่ตรงกับหน่วยรับเข้าสินค้า — ตรวจสอบอีกครั้งก่อนกดยืนยัน', { n: offUnit.length })}
-          </p>
-        )}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             {t('ยกเลิก')}

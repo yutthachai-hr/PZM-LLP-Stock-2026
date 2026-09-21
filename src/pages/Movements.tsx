@@ -23,14 +23,15 @@ import { EditMovementModal } from '../components/movements/EditMovementModal'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { fmtQty, formatThaiDate, dateInputToMs, dayRange } from '../lib/format'
-import { effectAt, effectOverall, shownUnit, stockCard } from '../lib/ledger'
+import { effectAt, effectOverall, stockCard } from '../lib/ledger'
+import { breakdown, describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 
 export function MovementsPage() {
   const t = useT()
-  const { movements, locations, products, ensureMovementsFrom } = useData()
+  const { movements, locations, products, productById, ensureMovementsFrom } = useData()
   const { user } = useAuth()
   const toast = useToast() // i18n-key
   const confirm = useConfirm()
@@ -208,16 +209,14 @@ export function MovementsPage() {
           // says what moved; the sign belongs to a site's own stock card.
           if (!locationId && m.fromLocationId && m.toLocationId) {
             return (
-              <span className="text-ink">
-                {fmtQty(m.qty)} {shownUnit(m)}
-              </span>
+              <span className="text-ink">{describeQty(m, fmtQty)}</span>
             )
           }
           const eff = locationId ? effectAt(m, locationId) : effectOverall(m)
           return (
             <span className={eff < 0 ? 'text-out' : 'text-in'}>
-              {eff > 0 ? '+' : ''}
-              {fmtQty(eff)} {shownUnit(m)}
+              {eff > 0 ? '+' : eff < 0 ? '−' : ''}
+              {describeQty(m, fmtQty)}
             </span>
           )
         },
@@ -229,7 +228,17 @@ export function MovementsPage() {
         header: t('คงเหลือ'),
         align: 'right',
         className: 'num font-semibold text-ink',
-        cell: (m) => fmtQty(balances.get(m.id) ?? 0),
+        cell: (m) => {
+          const bal = balances.get(m.id) ?? 0
+          const p = productById(m.productId)
+          const more = p?.unitConversions?.length ? breakdown(bal, p, fmtQty) : ''
+          return (
+            <>
+              {fmtQty(bal)}
+              {more && <span className="ml-1 text-xs font-normal text-ink-faint">(= {more})</span>}
+            </>
+          )
+        },
       })
     }
     list.push(
@@ -274,7 +283,7 @@ export function MovementsPage() {
     return list
     // doVoid closes over the toast/confirm helpers, which are stable for the page's life.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, locationId, stockCardMode, balances, isAdmin])
+  }, [t, locationId, stockCardMode, balances, isAdmin, productById])
 
   return (
     <div className="space-y-4">

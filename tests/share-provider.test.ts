@@ -41,6 +41,7 @@ const payload = (): SharePayload => ({
   page: { n: 1, of: 1 },
   file: new File([new Uint8Array([1, 2, 3])], 'PO-00001.jpg', { type: 'image/jpeg' }),
   hosted: { url: 'https://x/po/a.jpg', previewUrl: 'https://x/po/b.jpg', version: 1, expiresAt: 1 },
+  caption: 'ใบสั่งซื้อ PO-00001 — Pizza Mania',
 })
 
 beforeEach(() => {
@@ -50,11 +51,16 @@ beforeEach(() => {
 })
 
 describe('the LINE (LIFF) provider', () => {
-  test('sends an image message with the hosted URLs, to one or many recipients', async () => {
+  test('sends the caption and then the picture, to one or many recipients', async () => {
+    // The phone's share sheet carries the title itself; the picker has to say it as a
+    // message, or the supplier gets a bare picture (owner, 21 Sep 2026).
     const out = await lineLiffProvider.share(payload())
     expect(out).toBe('sent')
     expect(sdk.shareTargetPicker).toHaveBeenCalledWith(
-      [{ type: 'image', originalContentUrl: 'https://x/po/a.jpg', previewImageUrl: 'https://x/po/b.jpg' }],
+      [
+        { type: 'text', text: 'ใบสั่งซื้อ PO-00001 — Pizza Mania' },
+        { type: 'image', originalContentUrl: 'https://x/po/a.jpg', previewImageUrl: 'https://x/po/b.jpg' },
+      ],
       { isMultiple: true },
     )
     expect(statusFor(out)).toBe('sent')

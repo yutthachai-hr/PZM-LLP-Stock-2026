@@ -1,4 +1,5 @@
 import type { MovementType, StockMovement } from '../types'
+import { isLegacyUnitRow } from './uom'
 import { roundQty } from './validate'
 
 // ---------------------------------------------------------------------------
@@ -178,6 +179,14 @@ export function shownUnit(m: { unit: string; entryUnit?: string }): string {
 }
 
 /**
+ * The unit a row's `qty` is in: the product's own for a converted row (since 20 Sep 2026),
+ * the keyed unit for a legacy row still on its own balance. What the balance columns print.
+ */
+export function balanceUnit(m: { unit: string; entryUnit?: string; entryQty?: number }): string {
+  return isLegacyUnitRow(m) ? shownUnit(m) : m.unit
+}
+
+/**
  * Everyone who has changed a row since it was filed, oldest first.
  *
  * The owner asked for this by name: if more than one account has touched a movement, the
@@ -212,7 +221,8 @@ export function movedSince(
   const bump = (locationId: string | undefined, m: StockMovement, delta: number) => {
     if (!locationId) return
     const base = baseUnitOf(m.productId) ?? m.unit
-    const u = shownUnit(m)
+    // A converted row's qty is the base unit; only a legacy row sits on a `#Unit` balance.
+    const u = isLegacyUnitRow(m) ? shownUnit(m) : base
     const key = `${locationId}__${m.productId}__${u === base ? '' : u}`
     out.set(key, Math.round(((out.get(key) ?? 0) + delta) * 1000) / 1000)
   }

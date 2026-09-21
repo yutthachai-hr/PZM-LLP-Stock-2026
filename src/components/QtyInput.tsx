@@ -1,93 +1,76 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useT } from '../i18n/I18nContext'
 import { sameUnit, type UnitConversion } from '../lib/units'
+import { isCountUnit, resolveFactor, type QtyEntry } from '../lib/uom'
 import { blurOnWheel } from './ui'
+import { DefineConversionModal } from './DefineConversionModal'
 
-// Quantity input with the unit beside it. The VALUE handed to the parent is always in the
-// product's base unit, so every balance stays one comparable number.
+// Quantity input with the unit beside it. What is handed to the parent is a QtyEntry: the
+// number as keyed, the unit it was keyed in, and the same quantity in the product's own
+// unit — which is what every balance is kept in (owner's rule, 20 Sep 2026; lib/uom.ts).
 
 export interface EntryUnit {
-  /** Stable identity, and the <select> value. Several units share the factor 1. */
+  /** Stable identity, and the <select> value. */
   key: string
   label: string
-  /** Multiplier applied to the typed number. Only grams and millilitres are ever not 1. */
-  factor: number
   /**
-   * The unit the ledger records for this choice.
-   *
-   * Grams convert into the product's own unit, so keying 500 g files 0.5 KG and the row
-   * says KG. Everything else files the label itself, untouched.
+   * How many of the product's own unit one of these is. Null when nobody has stated it
+   * for this product yet: the unit is offered, and choosing it asks for the rate.
    */
+  factor: number | null
+  /** The unit stamped on the row as `entryUnit`; the product's own unit for the base choice. */
   records: string
   /** True when the label is a translation key rather than stored data. */
   translate?: boolean
-  /**
-   * The owner's reference multiplier for this unit, if they set one — "1 ลัง = 288 EA".
-   *
-   * Advisory only, and unrelated to `factor`: `factor` stays 1, so nothing is converted
-   * into the ledger, and this only drives the hint text under the box.
-   */
-  refSize?: number
 }
 
 /**
- * Smaller units a base unit divides into cleanly.
- *
- * Only weight and volume are here, because only they have a factor that is true for every
- * product in the world: a gram is a thousandth of a kilo whatever is being weighed.
+ * Smaller units a base unit divides into by a rate true for every product in the world:
+ * grams into kilograms, millilitres into litres. The owner asked for these two and no others.
  */
 export function subUnitsFor(unitType: string): EntryUnit[] {
   const base = (unitType || '').trim()
-  const u = base.toUpperCase()
-  if (u === 'KG')
-    return [{ key: 'sub', label: 'กรัม (g)', factor: 0.001, translate: true, records: base }] // i18n-key
-  if (u === 'L' || u === 'LT' || u === 'LITER' || u === 'ลิตร') // i18n-key
-    return [{ key: 'sub', label: 'มล. (ml)', factor: 0.001, translate: true, records: base }] // i18n-key
+  const g = resolveFactor({ unitType: base }, 'g')
+  if (g !== null && !sameUnit(base, 'g')) return [{ key: 'sub', label: 'กรัม (g)', factor: g, translate: true, records: 'g' }] // i18n-key
+  const ml = resolveFactor({ unitType: base }, 'ml')
+  if (ml !== null && !sameUnit(base, 'ml')) return [{ key: 'sub', label: 'มล. (ml)', factor: ml, translate: true, records: 'ml' }] // i18n-key
   return []
 }
 
 /**
- * Units printed on the boxes people receive, offered on every product.
- *
- * Nothing here converts. The owner's rule, stated plainly: the system records the unit the
- * person keyed and never rewrites it — one Lot is 10 kg from one supplier and 2 kg from
- * another, so any factor this code invented would be a guess written into the ledger.
- *
- * This is only the starting list. The owner maintains the real one in Settings, which is
- * where Carton and anything else they receive by gets added.
+ * Units printed on the boxes people receive, offered on every product until the owner's
+ * own list (Settings) loads. A unit here has no rate of its own; the product supplies it.
  */
 export const PLAIN_UNITS = ['Lot', 'Pack', 'EA'] as const
 
 /**
- * Every unit this product may be keyed in, base unit first.
- *
- * Exported so the entry screens and their tests agree on one answer.
+ * Every unit this product may be keyed in, base unit first, each with its rate for THIS
+ * product or null when none is stated yet. Exported so the entry screens, the import and
+ * their tests agree on one answer.
  */
 export function entryUnitsFor(
   unitType: string,
   /** The owner's list from Settings. Undefined until it loads; PLAIN_UNITS stands in. */
   plainUnits?: readonly string[],
-  /** This product's reference multipliers, matched to a unit by name. */
+  /** This product's rates. */
   conversions?: readonly UnitConversion[],
 ): EntryUnit[] {
   const base = (unitType || '').trim()
+  const product = { unitType: base, unitConversions: conversions }
   const out: EntryUnit[] = [{ key: 'base', label: base || '-', factor: 1, records: base }]
   out.push(...subUnitsFor(unitType))
   // Never list a unit already on `out` — its own name, or a metric sub-unit — twice.
-  const taken = new Set([base.toLowerCase(), ...out.map((u) => u.label.toLowerCase())])
-  // The owner's shared list, plus — a product with its own conversions gets its own units
-  // offered too, whether or not the owner ever added them in Settings. A conversion set on
-  // one product ("1 ลัง = 288 EA" on this ice cream) says nothing about every other product,
-  // so it was never going to belong on the shared list; without this, setting it up would
-  // have done nothing, because ลัง still would not have been a choice to make.
+  const taken = new Set([base.toLowerCase(), ...out.map((u) => u.records.toLowerCase()), ...out.map((u) => u.label.toLowerCase())])
+  // The owner's shared list, plus this product's own rated units, whether or not the owner
+  // ever added them in Settings: a rate set on one product ("1 ลัง = 288 EA" on this ice
+  // cream) says nothing about any other product, so it belongs on the product.
   const labels = [...(plainUnits ?? PLAIN_UNITS), ...(conversions ?? []).map((c) => c.label)]
   for (const raw of labels) {
     const label = raw.trim()
     const key = label.toLowerCase()
     if (!label || taken.has(key)) continue
     taken.add(key) // a list edited by hand can repeat itself
-    const ref = conversions?.find((c) => sameUnit(c.label, label))
-    out.push({ key: `plain:${label}`, label, factor: 1, records: label, refSize: ref?.size })
+    out.push({ key: `plain:${label}`, label, factor: resolveFactor(product, label), records: label })
   }
   return out
 }
@@ -96,29 +79,41 @@ function round3(n: number): number {
   return Math.round(n * 1000) / 1000
 }
 
+/** The entry for a typed number in a unit, converted for the product. */
+export function entryOf(text: string, unit: EntryUnit, factor: number): QtyEntry {
+  const n = Number(text)
+  const entryQty = Number.isFinite(n) && n > 0 ? round3(n) : 0
+  const base = unit.key === 'base'
+  return { qty: round3(entryQty * factor), entryQty, ...(base ? {} : { entryUnit: unit.records }), factor }
+}
+
 export function QtyInput({ // i18n-key
   unitType,
   plainUnits,
   conversions,
   value,
   onChange,
+  product,
+  onRateDefined,
   className = '',
   invalid = false,
 }: {
   unitType: string
   /** The owner's unit list. Passed in rather than fetched here, so one screen reads once. */
   plainUnits?: readonly string[]
-  /** This product's reference multipliers — `product.unitConversions`, if it has any. */
+  /** This product's rates — `product.unitConversions`, if it has any. */
   conversions?: readonly UnitConversion[]
+  /** The current quantity in the product's own unit. */
   value: number
+  /** The quantity as keyed, the unit, and the same in the product's own unit. */
+  onChange: (entry: QtyEntry) => void
   /**
-   * The quantity, and the unit it is to be recorded under.
-   *
-   * The unit travels with the number because the screen above files both on the movement.
-   * Handing up only a number is what made this wrong before: the row was always stamped
-   * with the product's own unit, so picking EA changed nothing anyone could see afterwards.
+   * The product, so a unit with no rate yet can have one stated on the spot ("1 Pack =
+   * ? EA") and saved to the product. Without it such a unit is offered but cannot be picked.
    */
-  onChange: (qty: number, unit: string) => void
+  product?: { id: string; name: string; unitType: string; unitConversions?: UnitConversion[] }
+  /** Called after a rate is saved, with the product's new list, so the screen's copy follows. */
+  onRateDefined?: (conversions: UnitConversion[]) => void
   className?: string
   invalid?: boolean
 }) {
@@ -129,8 +124,9 @@ export function QtyInput({ // i18n-key
   )
   const [unitKey, setUnitKey] = useState('base')
   const unit = units.find((u) => u.key === unitKey) ?? units[0]
-  const factor = unit.factor
+  const factor = unit.factor ?? 1
   const [text, setText] = useState(value ? String(value) : '')
+  const [asking, setAsking] = useState<EntryUnit | null>(null)
 
   // Choosing grams for a KG product sets the multiplier to 0.001. The Adjust page reuses
   // this same component when the product changes, so switching products left the previous
@@ -156,16 +152,21 @@ export function QtyInput({ // i18n-key
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, factor])
 
-  function commit(nextText: string, next: EntryUnit) {
-    const n = Number(nextText)
-    onChange(Number.isFinite(n) ? round3(n * next.factor) : 0, next.records)
+  function commit(nextText: string, next: EntryUnit, f: number) {
+    onChange(entryOf(nextText, next, f))
   }
 
-  const converted = factor !== 1 && Number(text) > 0 ? round3(Number(text) * factor) : null
-  // The owner's own hint, not the ledger's: unlike `converted`, this is never what gets
-  // filed — it just does the multiplication for whoever is standing at the shelf.
-  const reference =
-    unit.refSize !== undefined && Number(text) > 0 ? round3(Number(text) * unit.refSize) : null
+  function pick(next: EntryUnit) {
+    if (next.factor === null) {
+      // No rate for this product yet. Ask for it once; the product remembers.
+      if (product) setAsking(next)
+      return
+    }
+    setUnitKey(next.key)
+    commit(text, next, next.factor)
+  }
+
+  const converted = unit.key !== 'base' && Number(text) > 0 ? round3(Number(text) * factor) : null
 
   return (
     <div>
@@ -182,7 +183,7 @@ export function QtyInput({ // i18n-key
           onWheel={blurOnWheel}
           onChange={(e) => {
             setText(e.target.value)
-            commit(e.target.value, unit)
+            commit(e.target.value, unit, factor)
           }}
           className={`num min-h-11 w-full rounded-lg border px-3 py-2 text-right text-base font-semibold text-ink outline-none transition-[border-color,box-shadow] duration-150 focus-visible:ring-2 ${
             invalid
@@ -196,37 +197,106 @@ export function QtyInput({ // i18n-key
             being nothing to choose. */}
         <select
           value={unit.key}
-          onChange={(e) => {
-            const next = units.find((u) => u.key === e.target.value) ?? units[0]
-            setUnitKey(next.key)
-            commit(text, next)
-          }}
-          className="min-h-11 w-28 shrink-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
+          onChange={(e) => pick(units.find((u) => u.key === e.target.value) ?? units[0])}
+          className="min-h-11 w-32 shrink-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
           aria-label={t('เลือกหน่วยที่กรอก')}
         >
           {units.map((u) => (
-            <option key={u.key} value={u.key}>
+            <option key={u.key} value={u.key} disabled={u.factor === null && !product}>
               {u.translate ? t(u.label) : u.label}
+              {u.factor === null ? ` ${t('(ยังไม่มีอัตรา)')}` : ''}
             </option>
           ))}
         </select>
       </div>
-      {/* Grams are the one conversion left, so this is the one case where what is filed is
-          not what was typed. Showing it before saving is the whole point. */}
+      {/* What gets filed, when it differs from what was typed. Definitive, not a hint. */}
       {converted !== null && (
         <p className="mt-1 text-right text-xs text-ink-soft">
           = <span className="num font-semibold text-ink">{converted}</span> {unitType}
         </p>
       )}
-      {/* "≈", not "=" — deliberately different from the line above. That one is what gets
-          filed; this is the owner's own multiplier, shown so someone can check it against
-          the delivery note before typing, not so the system can act on it. */}
-      {reference !== null && (
-        <p className="mt-1 text-right text-xs text-ink-faint">
-          ≈ <span className="num font-medium text-ink-soft">{reference}</span> {unitType}{' '}
-          {t('(อ้างอิง)')}
+      {/* A count unit cannot really hold 0.368 of itself. Said, not blocked: the person
+          may know the piece was cut, or may have the wrong unit. */}
+      {converted !== null && isCountUnit(unitType) && !Number.isInteger(converted) && (
+        <p className="mt-0.5 text-right text-xs font-medium text-warn">
+          {t('จะบันทึก {qty} {unit} (ไม่เต็มหน่วย) — ตรวจสอบหน่วยอีกครั้ง', { qty: converted, unit: unitType })}
         </p>
       )}
+      {asking && product && (
+        <DefineConversionModal
+          product={product}
+          label={asking.records}
+          onClose={() => setAsking(null)}
+          onSaved={(list, size) => {
+            setAsking(null)
+            onRateDefined?.(list)
+            setUnitKey(asking.key)
+            commit(text, asking, size)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/**
+ * A bare unit picker for screens that keep the number elsewhere (order lines, requests,
+ * the import review): the same list as QtyInput, the same "state the rate once" prompt.
+ * `value` is the entryUnit ('' = the product's own unit).
+ */
+export function UnitSelect({
+  units,
+  value,
+  onChange,
+  product,
+  onRateDefined,
+  className = '',
+}: {
+  units: EntryUnit[]
+  value: string
+  onChange: (entryUnit: string) => void
+  product?: { id: string; name: string; unitType: string; unitConversions?: UnitConversion[] }
+  onRateDefined?: (conversions: UnitConversion[]) => void
+  className?: string
+}) {
+  const t = useT()
+  const [asking, setAsking] = useState<EntryUnit | null>(null)
+  const base = units[0]?.records ?? ''
+  const current = units.find((u) => sameUnit(u.records, value || base)) ?? units[0]
+  return (
+    <>
+      <select
+        value={current?.key ?? 'base'}
+        onChange={(e) => {
+          const next = units.find((u) => u.key === e.target.value) ?? units[0]
+          if (next.factor === null) {
+            if (product) setAsking(next)
+            return
+          }
+          onChange(next.key === 'base' ? '' : next.records)
+        }}
+        className={`min-h-11 w-full rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25 ${className}`}
+        aria-label={t('เลือกหน่วยที่กรอก')}
+      >
+        {units.map((u) => (
+          <option key={u.key} value={u.key} disabled={u.factor === null && !product}>
+            {u.translate ? t(u.label) : u.label}
+            {u.factor === null ? ` ${t('(ยังไม่มีอัตรา)')}` : ''}
+          </option>
+        ))}
+      </select>
+      {asking && product && (
+        <DefineConversionModal
+          product={product}
+          label={asking.records}
+          onClose={() => setAsking(null)}
+          onSaved={(list) => {
+            setAsking(null)
+            onRateDefined?.(list)
+            onChange(asking.records)
+          }}
+        />
+      )}
+    </>
   )
 }

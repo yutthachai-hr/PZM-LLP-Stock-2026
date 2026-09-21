@@ -770,6 +770,40 @@ describe('a balance counted in a unit somebody keyed', () => {
       setDoc(doc(as(STAFF), 'stockMovements/m-num'), movement('m-num', STAFF, { entryUnit: 7 })),
     )
   })
+
+  test('a converted row carries what was keyed beside the base quantity (20 Sep 2026)', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(STAFF), 'stockMovements/m-conv'), movement('m-conv', STAFF, { qty: 1000, entryUnit: 'Carton', entryQty: 2 })),
+    )
+    await assertFails(
+      setDoc(doc(as(STAFF), 'stockMovements/m-zero'), movement('m-zero', STAFF, { qty: 1000, entryUnit: 'Carton', entryQty: 0 })),
+    )
+    await assertFails(
+      setDoc(doc(as(STAFF), 'stockMovements/m-str'), movement('m-str', STAFF, { qty: 1000, entryUnit: 'Carton', entryQty: '2' })),
+    )
+    // Re-keying the entry quantity is an edit like any other: signed, or refused.
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m-conv'), { qty: 1500, entryQty: 3, updatedAt: ts() }))
+    await assertSucceeds(
+      updateDoc(doc(as(STAFF), 'stockMovements/m-conv'), {
+        qty: 1500,
+        entryQty: 3,
+        edits: [{ by: STAFF, byName: 'Staff', at: ts(), changed: ['จำนวน'] }],
+        updatedBy: STAFF,
+        updatedByName: 'Staff',
+        updatedAt: ts(),
+      }),
+    )
+  })
+
+  test('staff may state a rate on a product, and nothing else about it', async () => {
+    // The first person to key "Carton" on a product states what a Carton is (owner, 20 Sep 2026).
+    await assertSucceeds(
+      updateDoc(doc(as(STAFF), 'products/p1'), { unitConversions: [{ label: 'Carton', size: 500 }], updatedAt: ts() }),
+    )
+    await assertFails(updateDoc(doc(as(STAFF), 'products/p1'), { unitConversions: [], name: 'X', updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'products/p1'), { minStock: 3, updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(PENDING), 'products/p1'), { unitConversions: [], updatedAt: ts() }))
+  })
 })
 
 describe('inventory schedules and settings', () => {

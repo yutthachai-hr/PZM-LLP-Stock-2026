@@ -69,7 +69,7 @@ const PRODUCTS = [
   product('p-blue-a', 'BLUE CHEESE 3 KG (TOPFOOD)', { supplierId: 's-thai', unitType: 'KG', unit: 'Kilogram' }),
   product('p-blue-b', 'BLUE CHEESE 3 KG (FOOD PROJECT)', { supplierId: 's-global', unitType: 'KG', unit: 'Kilogram' }),
   product('p-orphan', 'YEAST', { unitType: 'EA' }),
-  product('p-mozz', 'MOZZARELLA (X)', { supplierId: 's-global', unitType: 'KG', unit: 'Kilogram' }),
+  product('p-mozz', 'MOZZARELLA (X)', { supplierId: 's-global', unitType: 'KG', unit: 'Kilogram', unitConversions: [{ label: 'Pack', size: 2 }] }),
 ]
 
 function block(rows: [string, string, string | number][]): OrderBlock {
@@ -199,10 +199,14 @@ describe('units', () => {
     expect(row.issues).toEqual([])
   })
 
-  test('a unit the product has never been keyed in is a question, and grams never convert', () => {
+  test('a unit the product has no rate for is a question; a rated one, and grams, are fine', () => {
     const kg = PRODUCTS.find((p) => p.id === 'p-mozz')!
     expect(resolveUnit('ขา', kg, ['Pack'])).toBeNull()
-    expect(resolveUnit('กรัม (g)', kg, ['Pack'])).toBeNull()
+    // Grams have a rate for every KG product (lib/uom.ts): the line is kept as written
+    // and converted when the order is placed.
+    expect(resolveUnit('กรัม (g)', kg, ['Pack'])).toEqual({ entryUnit: 'g' })
+    // A unit on the owner's list that this product has no rate for is still a question.
+    expect(resolveUnit('Lot', kg, ['Lot', 'Pack'])).toBeNull()
     const [row] = assessed([['MOZZARELLA', 'ขา', 2]])
     expect(row.issues).toEqual([{ code: 'unitMismatch', severity: 'review', detail: 'ขา' }])
   })

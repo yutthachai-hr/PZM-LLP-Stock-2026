@@ -43,7 +43,7 @@ const MAIN = 'loc-main'
 const SUPPLIER = { id: 'sup-1', name: 'OLIVA' }
 
 const products: Product[] = [
-  { id: 'p1', sku: 'A-1', name: 'ANCHOVIES (OLIVA)', category: 'C', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: 1, updatedAt: 1 },
+  { id: 'p1', sku: 'A-1', name: 'ANCHOVIES (OLIVA)', category: 'C', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: 1, updatedAt: 1, unitConversions: [{ label: 'Pack', size: 2 }] },
   { id: 'p2', sku: 'A-2', name: 'OLIVES (OLIVA)', category: 'C', unit: 'Each', unitType: 'EA', minStock: 0, hasImage: false, active: true, createdAt: 1, updatedAt: 1 },
   { id: 'p3', sku: 'A-3', name: 'CAPERS (OLIVA)', category: 'C', unit: 'Each', unitType: 'EA', minStock: 0, hasImage: false, active: true, createdAt: 1, updatedAt: 1 },
 ]
@@ -207,39 +207,57 @@ describe('placing an order', () => {
   })
 })
 
-// The owner's rule for ordering, once the product's own unit became editable: the order
-// is keyed in whatever unit the goods will be received in — the same list the receiving
-// screen offers — and an order placed in Pack must arrive in the Pack balance, not be
-// silently counted as pieces. The unit travels on the line exactly as it does on a
-// movement: `unit` is the product's own, `entryUnit` is present only when someone chose
-// something else.
+// The order is keyed in whatever unit the supplier sells by — the same list the receiving
+// screen offers — and the supplier's sheet says that unit. Since 20 Sep 2026 the line also
+// carries the quantity in the product's own unit at the rate the product had when the
+// order was placed, and the receipt converts at that same rate, so the goods land on the
+// one balance and a rate corrected later cannot skew a delivery already promised.
 describe("ordering in a unit other than the product's own", () => {
-  test('the unit chosen is kept on the line, and only when it differs', async () => {
+  test('the unit chosen is kept on the line with its base equivalent, and only when it differs', async () => {
     await placeOrder([
       { productId: 'p1', qty: 3, entryUnit: 'Pack' },
       { productId: 'p2', qty: 5, entryUnit: 'EA' }, // p2's own unit, spelled the same
       { productId: 'p3', qty: 2, entryUnit: 'ea' }, // p3's own unit, spelled differently
     ])
     const [l1, l2, l3] = orders()[0].lines
-    expect(l1).toMatchObject({ unit: 'KG', entryUnit: 'Pack', orderedQty: 3 })
+    expect(l1).toMatchObject({ unit: 'KG', entryUnit: 'Pack', orderedQty: 3, baseQty: 6 })
     expect(l2).toMatchObject({ unit: 'EA', orderedQty: 5 })
     expect('entryUnit' in l2).toBe(false)
+    expect('baseQty' in l2).toBe(false)
     expect('entryUnit' in l3).toBe(false)
   })
 
-  test('receiving files the goods under the unit they were ordered in', async () => {
-    const id = await placeOrder([{ productId: 'p1', qty: 3, entryUnit: 'Pack' }])
+  test('a unit the product has no rate for cannot be ordered', async () => {
+    await expect(placeOrder([{ productId: 'p2', qty: 3, entryUnit: 'Carton' }])).rejects.toThrow(/Carton/)
+  })
+
+  test('receiving converts at the rate the order was placed at, not today\'s', async () => {
+    const id = await placeOrder([{ productId: 'p1', qty: 3, entryUnit: 'Pack' }]) // 3 Pack = 6 KG then
+    // The owner corrects the product afterwards: a Pack is 5 KG now. The order said 2.
+    await memoryBackend.update('products', 'p1', { unitConversions: [{ label: 'Pack', size: 5 }] })
     await receivePurchaseOrder({
       orderId: id,
       invoiceNo: 'IV-9100',
-      lines: [{ productId: 'p1', receivedQty: 0, checked: true }],
+      lines: [{ productId: 'p1', receivedQty: 2, checked: false, note: 'one short' }],
       actor: ACTOR,
     })
-    // The Pack balance, not the KG one: 3 Pack of anchovies is not 3 kg of them.
-    expect(movements()[0]).toMatchObject({ unit: 'KG', entryUnit: 'Pack', qty: 3 })
+    expect(movements()[0]).toMatchObject({ unit: 'KG', entryUnit: 'Pack', entryQty: 2, qty: 4 })
     const levels = raw('stockLevels')
-    expect(levels.find((d) => d.id === `${MAIN}__p1#Pack`)?.qty).toBe(3)
-    expect(levels.find((d) => d.id === `${MAIN}__p1`)).toBeUndefined()
+    expect(levels.find((d) => d.id === `${MAIN}__p1`)?.qty).toBe(4)
+    expect(levels.find((d) => d.id === `${MAIN}__p1#Pack`)).toBeUndefined()
+  })
+
+  test('an order line from before the rate existed is received at the product\'s rate, or refused', async () => {
+    seed('purchaseOrders', [{
+      id: 'old', docNo: 'PO-00009', supplierId: SUPPLIER.id, supplierName: SUPPLIER.name, status: 'ordered', locationId: MAIN, orderedAt: 1,
+      lines: [{ productId: 'p2', productName: 'OLIVES (OLIVA)', unit: 'EA', entryUnit: 'Carton', orderedQty: 2 }],
+      createdBy: 'x', createdByName: 'x', createdAt: 1, updatedAt: 1,
+    }])
+    const receive = () => receivePurchaseOrder({ orderId: 'old', invoiceNo: 'IV-1', lines: [{ productId: 'p2', receivedQty: 0, checked: true }], actor: ACTOR })
+    await expect(receive()).rejects.toThrow(/Carton/)
+    await memoryBackend.update('products', 'p2', { unitConversions: [{ label: 'Carton', size: 24 }] })
+    await receive()
+    expect(movements()[0]).toMatchObject({ entryUnit: 'Carton', entryQty: 2, qty: 48 })
   })
 })
 

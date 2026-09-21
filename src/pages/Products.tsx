@@ -21,6 +21,7 @@ import {
   blurOnWheel,
 } from '../components/ui'
 import { ProductThumb, invalidateThumb } from '../components/ProductThumb'
+import { ConversionRows } from '../components/ConversionRows'
 import { DataTable, type Column } from '../components/DataTable'
 import {
   createProduct,
@@ -36,6 +37,7 @@ import { changeProductUnit, setStockCount } from '../services/stock'
 import { useEntryUnits } from '../services/entryUnits'
 import { useSuppliers } from '../services/suppliers'
 import { sameUnit, unitNameFor } from '../lib/units'
+import { breakdown } from '../lib/inventoryRules/uom'
 import { compressImage } from '../lib/image'
 import { fmtQty } from '../lib/format'
 import type { Product } from '../types'
@@ -89,12 +91,11 @@ export function ProductsPage() {
   }, [locations, locId, qtyAt])
 
   /**
-   * Balances keyed in some other unit, added up over the locations in view.
+   * Legacy balances still kept in some other unit, added up over the locations in view.
    *
-   * These are deliberately kept apart from the number above rather than folded into it. Two
-   * people recording the same delivery — one as "10 Pack", one as "2 KG" — leaves two
-   * balances, and only a person can say which is right; a conversion here would be a guess
-   * written into the stock figure.
+   * Rows filed before 20 Sep 2026 in another unit sit on their own balance until the
+   * migration tool (Settings → ดูแลข้อมูล) converts them at the product's rate. Shown so
+   * nobody thinks the goods are gone; not added, because no rate may be stated yet.
    */
   const otherUnits = useMemo(() => {
     const active = locId ? locations.filter((l) => l.id === locId) : locations
@@ -259,16 +260,20 @@ export function ProductsPage() {
           return (
             <>
               <span className={low ? 'font-semibold text-warn' : 'text-ink'}>{fmtQty(total)}</span>
+              {/* The same figure in the product's larger units, for whoever counts by the case. */}
+              {p.unitConversions?.length ? (
+                <span className="ml-2 text-xs text-ink-faint">{breakdown(total, p, fmtQty) && `(= ${breakdown(total, p, fmtQty)})`}</span>
+              ) : null}
               {low && (
                 <span className="ml-2 align-middle">
                   <Badge color="red">{t('ใกล้หมด')}</Badge>
                 </span>
               )}
-              {/* Someone keyed this product in a unit of its own. Shown, never added. */}
+              {/* A legacy balance in another unit, not yet converted. Shown, not added. */}
               {others.map((o) => (
-                <span key={o.unit} className="ml-2 align-middle">
+                <span key={o.unit} className="ml-2 align-middle" title={t('ยอดเก่าแยกหน่วย — แปลงได้ที่ ตั้งค่า → ดูแลข้อมูล')}>
                   <Badge color="amber">
-                    {fmtQty(o.qty)} {o.unit}
+                    {fmtQty(o.qty)} {o.unit} · {t('ยังไม่แปลง')}
                   </Badge>
                 </span>
               ))}
@@ -597,26 +602,6 @@ function ProductEditor({
   /** One choice sets both boxes, because they are two views of the same fact. */
   function pickUnit(abbreviation: string) {
     setForm((f) => ({ ...f, unitType: abbreviation, unit: unitNameFor(abbreviation) }))
-  }
-
-  /**
-   * What a reference-conversion row may be set to: the owner's own unit list — the same
-   * one the receiving screen offers — minus this product's own unit (a reference for a
-   * unit against itself is meaningless) and minus whatever the other rows already claimed
-   * (one conversion per unit; picking a taken one would just be dropped silently on save).
-   * `currentLabel` is put back in if it is not otherwise on offer, so an older row set to
-   * a unit the owner's list has since dropped does not go blank the moment this opens.
-   */
-  function conversionUnitOptions(currentLabel: string): string[] {
-    const base = (form.unitType || '').trim()
-    const takenByOtherRows = (form.unitConversions ?? [])
-      .map((c) => c.label)
-      .filter((l) => !sameUnit(l, currentLabel))
-    const out = unitChoices.filter(
-      (u) => !sameUnit(u, base) && !takenByOtherRows.some((t) => sameUnit(t, u)),
-    )
-    if (currentLabel && !out.some((u) => sameUnit(u, currentLabel))) out.unshift(currentLabel)
-    return out
   }
 
   // current on-hand quantity per location (editable) + the original values to detect changes
@@ -948,100 +933,25 @@ function ProductEditor({
       </div>
 
       {/**
-       * Reference conversions: "1 ลัง = 288 EA". Advisory only — the entry screens show it
-       * as a hint beside the quantity box, and nothing here ever changes what a movement
-       * records. A case is not the same size from every supplier, so the owner's rule
-       * stands: the number typed is the number kept. This exists for the item that gets
-       * ordered by the case, issued by the pack, and received by the piece, so whoever is
-       * keying any of those sees the arithmetic instead of doing it in their head.
+       * The rates this product is keyed at: "1 ลัง = 288 EA". Authoritative since 20 Sep
+       * 2026 — the item ordered by the case, issued by the pack and received by the piece
+       * is one balance in EA, and every screen converts with these (lib/uom.ts). Anyone may
+       * add one the first time they key a unit; this is where it is corrected.
        */}
       <div className="mt-5 rounded-lg border border-line bg-sunken/60 p-4">
-        <div className="mb-1 text-sm font-semibold text-ink">{t('อัตราแปลงหน่วย (อ้างอิงเท่านั้น)')}</div>
+        <div className="mb-1 text-sm font-semibold text-ink">{t('อัตราแปลงหน่วย')}</div>
         <p className="mb-3 text-xs text-ink-faint">
-          {t('ไม่บันทึกแปลงอัตโนมัติ — แค่โชว์ตัวเลขช่วยคูณตอนกรอก เช่น 1 ลัง = 288 {unit}', {
+          {t('เช่น "1 Carton = 12 Pack", "1 Pack = 25 {unit}", "2.72 KG = 1 {unit}" — ระบบบันทึกสต๊อกเป็น {unit} จริงตามอัตราเหล่านี้ ประวัติเก่าคงอัตราที่บันทึกไว้ตอนนั้น', {
             unit: form.unitType || t('หน่วย'),
           })}
         </p>
-        <div className="space-y-2">
-          {(form.unitConversions ?? []).map((c, i) => (
-            <div key={i} className="flex items-center gap-2">
-              {/* The width goes on a wrapper, not on Input's own className: Input carries
-                  w-full itself, and a narrower class placed beside it loses that fight —
-                  the size box took the whole row and pushed the delete button off the
-                  dialog's edge. Same bug, same fix, as the order form's quantity box. */}
-              <div className="min-w-0 flex-1">
-                {/* A dropdown, not a text box: typed by hand this became "1 carton" on one
-                    row and "Carton" already on the owner's own list on another — two
-                    spellings the entry screens would never recognise as the same unit.
-                    Picking from the units already in use is the one way to guarantee a
-                    conversion actually attaches to something selectable later. */}
-                <Select
-                  value={c.label}
-                  onChange={(e) => {
-                    const next = [...(form.unitConversions ?? [])]
-                    next[i] = { ...next[i], label: e.target.value }
-                    setForm({ ...form, unitConversions: next })
-                  }}
-                  disabled={!canEdit}
-                >
-                  <option value="">{t('— เลือกหน่วย —')}</option>
-                  {conversionUnitOptions(c.label).map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <span className="shrink-0 text-sm text-ink-faint">=</span>
-              <div className="w-24 shrink-0">
-                <Input
-                  type="number"
-                  step="any"
-                  min={0}
-                  value={c.size ?? ''}
-                  onChange={(e) => {
-                    const next = [...(form.unitConversions ?? [])]
-                    next[i] = { ...next[i], size: Number(e.target.value) }
-                    setForm({ ...form, unitConversions: next })
-                  }}
-                  disabled={!canEdit}
-                  className="num text-right"
-                />
-              </div>
-              <span className="w-10 shrink-0 text-sm text-ink-faint">{form.unitType}</span>
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm({
-                      ...form,
-                      unitConversions: (form.unitConversions ?? []).filter((_, j) => j !== i),
-                    })
-                  }
-                  className="shrink-0 rounded p-2 text-ink-faint hover:bg-danger-soft hover:text-danger"
-                  aria-label={t('ลบแถวนี้')}
-                >
-                  <Icon name="trash" size={16} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {canEdit && (
-          <Button
-            variant="ghost"
-            className="mt-2"
-            onClick={() =>
-              setForm({
-                ...form,
-                unitConversions: [...(form.unitConversions ?? []), { label: '', size: 0 }],
-              })
-            }
-          >
-            <Icon name="plus" size={16} />
-            {t('เพิ่มหน่วยอ้างอิง')}
-          </Button>
-        )}
+        <ConversionRows
+          baseUnit={form.unitType}
+          rows={form.unitConversions ?? []}
+          onChange={(rows) => setForm({ ...form, unitConversions: rows })}
+          unitChoices={unitChoices}
+          disabled={!canEdit}
+        />
       </div>
 
       {product && canEdit && (

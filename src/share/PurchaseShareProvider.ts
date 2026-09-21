@@ -26,6 +26,13 @@ export interface SharePayload {
   file: File
   /** The picture on a public address, for providers that take a URL. */
   hosted?: HostedImage
+  /**
+   * The line of text that goes with the picture — "ใบสั่งซื้อ PO-00003 — Pizza Mania".
+   * A phone's share sheet sends it as the message title; the LINE picker sends it as a
+   * text message ahead of the picture, so the two routes read the same in the chat
+   * (owner, 21 Sep 2026: the tablet and the computer were sending a bare picture).
+   */
+  caption: string
 }
 
 export interface PurchaseShareProvider {

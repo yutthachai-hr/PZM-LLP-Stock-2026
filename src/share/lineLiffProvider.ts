@@ -100,8 +100,11 @@ export const lineLiffProvider: PurchaseShareProvider = {
       throw new AppError('LINE รุ่นนี้หรือการตั้งค่า LIFF ยังไม่รองรับการเลือกผู้รับ')
     }
     if (!payload.hosted) throw new AppError('ยังไม่มีรูปสำหรับส่ง')
+    // The caption first, then the picture — what the supplier sees is the same as when
+    // the sheet is shared from a phone, where the share sheet carries the title itself.
     const result = await sdk.shareTargetPicker(
       [
+        { type: 'text', text: payload.caption },
         {
           type: 'image',
           originalContentUrl: payload.hosted.url,

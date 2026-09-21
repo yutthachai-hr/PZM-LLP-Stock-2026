@@ -345,7 +345,7 @@ describe('what arrived after the backup was written', () => {
     seed('productAliases', [{ id: 'alias-1', key: 'X', productId: 'p1', sourceName: 'X ', createdBy: 'u', createdByName: 'U', createdAt: 1 }])
     seed('purchaseBatches', [{ id: 'pb1', batchNo: 'PB-20260914-001', locationId: MAIN, sourceFileName: 'f', fileHash: 'h', sheetName: 's', blockLabel: 'x', status: 'ready', rows: [], groups: [], history: [], createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 }])
     const b = await buildBackup('Owner')
-    expect(b.version).toBe(6)
+    expect(b.version).toBe(7)
     expect(b.data.productAliases).toHaveLength(1)
     expect(b.data.purchaseBatches).toHaveLength(1)
 
@@ -376,9 +376,13 @@ describe('what arrived after the backup was written', () => {
     await expect(restoreBackup(file, RESTORE_MODES.repair)).resolves.toBeTruthy()
   })
 
-  test('a balance kept in a unit other than the product\'s own survives a restore', async () => {
+  test('a legacy balance kept in another unit, and a converted row, both survive a restore', async () => {
+    // A row filed under the old rule (Pack on its own balance) and one under the new
+    // (2 Pack converted to 6 KG at the product's rate) — the ledger carries both shapes.
+    seed('stockMovements', [{ id: 'legacy', docNo: 'RC-00000', type: 'receive', productId: 'p1', productName: 'Mozzarella', unit: 'KG', entryUnit: 'Pack', qty: 10, toLocationId: MAIN, date: 1, byUserId: 'old', byUserName: 'Old', createdAt: 1 }])
+    seed('stockLevels', [{ id: `${MAIN}__p1#Pack`, productId: 'p1', locationId: MAIN, unit: 'Pack', qty: 10, updatedAt: 1, updatedBy: 'old' }])
     await receiveStock({
-      lines: [{ productId: 'p1', productName: 'Mozzarella', unit: 'KG', entryUnit: 'Pack', qty: 10 }],
+      lines: [{ productId: 'p1', productName: 'Mozzarella', unit: 'KG', entryUnit: 'Pack', entryQty: 2, qty: 6 }],
       toLocationId: MAIN,
       date: Date.now(),
       actor: ACTOR,
@@ -391,7 +395,7 @@ describe('what arrived after the backup was written', () => {
     await restoreBackup(file, RESTORE_MODES.repair)
     const levels = raw('stockLevels') as { id: string; qty: number; unit?: string }[]
     expect(levels.find((l) => l.id === `${MAIN}__p1#Pack`)).toMatchObject({ qty: 10, unit: 'Pack' })
-    expect(levels.find((l) => l.id === `${MAIN}__p1`)?.qty).toBe(2)
+    expect(levels.find((l) => l.id === `${MAIN}__p1`)?.qty).toBe(8)
   })
 
   test('each supplier\'s order counter is rebuilt, so the next order is not numbered twice', async () => {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { UnitMigrationSection } from './settings/UnitMigrationSection'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -69,6 +70,7 @@ export function SettingsPage() {
       {isManager && <AutomationStatus />}
       {isAdmin && <BackupSection />}
       {isAdmin && user && <MaintenanceSection actor={{ id: user.id, name: user.name }} />}
+      {isAdmin && user && <UnitMigrationSection actor={{ id: user.id, name: user.name }} />}
 
       {!isAdmin && (
         <Card className="p-4 text-sm text-ink-soft">
@@ -85,9 +87,9 @@ export function SettingsPage() {
 /**
  * The words a quantity may be keyed in — Lot, Pack, Carton.
  *
- * These are labels, not conversions: picking one records the number as typed, in the
- * product's own unit. A unit that should multiply belongs on the product as ขนาดบรรจุ,
- * which is per-product because one supplier's carton is not another's.
+ * Labels only: how many of the product's own unit one of these is belongs on each
+ * product ("1 Carton = 500 EA"), because one supplier's carton is not another's. Since
+ * 20 Sep 2026 the first person to key a unit on a product states that rate once.
  *
  * Saved as a single shared document, so adding a unit costs one write and reading the list
  * costs one read for the whole session.
@@ -145,7 +147,7 @@ function UnitsSection() {
       <SectionHeader
         icon="package"
         title={t('หน่วยที่เลือกได้ตอนกรอก')}
-        description={t('ตัวเลือกหน่วยในหน้ารับเข้า / เบิกออก / ปรับสต๊อก — เป็นชื่อหน่วยเฉย ๆ ไม่ได้คูณจำนวน ถ้าต้องการให้คูณ ให้ตั้ง "ขนาดบรรจุ" ที่สินค้าแต่ละตัว')}
+        description={t('ตัวเลือกหน่วยในหน้ารับเข้า / เบิกออก / ปรับสต๊อก / สั่งซื้อ — เป็นชื่อหน่วย ส่วนอัตราแปลง (1 Carton = กี่ EA) ตั้งที่สินค้าแต่ละตัว หรือระบบจะถามครั้งแรกที่คีย์')}
       />
       <div className="flex flex-wrap gap-2">
         {units.map((u) => (

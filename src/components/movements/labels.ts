@@ -17,6 +17,7 @@ export const TYPE_COLOR: Record<MovementType, 'green' | 'blue' | 'amber' | 'red'
 /** The field an edit changed, as the history names it. */
 export const EDIT_FIELD_LABEL: Record<MovementEditField, string> = {
   qty: 'จำนวน', // i18n-key
+  entryQty: 'จำนวน', // i18n-key
   date: 'วันที่', // i18n-key
   note: 'หมายเหตุ', // i18n-key
   unit: 'หน่วย', // i18n-key

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
 import { Badge, Button, Field, Input, Modal, Select } from '../../components/ui'
-import { entryUnitsFor } from '../../components/QtyInput'
+import { entryUnitsFor, UnitSelect } from '../../components/QtyInput'
 import { useEntryUnits } from '../../services/entryUnits'
 import { useT } from '../../i18n/I18nContext'
 import { buildMatchIndex, matchProduct, normaliseName, similarity, type ProductAlias } from '../../lib/productMatch'
@@ -116,8 +116,9 @@ export function ResolveRowModal({
     // Carry the workbook's unit across when the new product knows it; otherwise its own.
     if (p) {
       const wanted = canonicalUnit(row.rawUnit)
+      // Only a unit with a rate for this product can be filed; the rest stay a question.
       const hit = entryUnitsFor(p.unitType, plainUnits, p.unitConversions).find(
-        (u) => u.factor === 1 && (sameUnit(u.label, wanted) || sameUnit(u.records, wanted)),
+        (u) => u.factor !== null && (sameUnit(u.label, wanted) || sameUnit(u.records, wanted)),
       )
       setEntryUnit(hit && !sameUnit(hit.records, p.unitType) ? hit.records : '')
     }
@@ -277,13 +278,7 @@ export function ResolveRowModal({
               <Input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(e.target.value)} />
             </Field>
             <Field label={t('หน่วย')}>
-              <Select value={entryUnit} onChange={(e) => setEntryUnit(e.target.value)}>
-                {units.map((u) => (
-                  <option key={u.key} value={sameUnit(u.records, product.unitType) ? '' : u.records}>
-                    {u.translate ? t(u.label) : u.label}
-                  </option>
-                ))}
-              </Select>
+              <UnitSelect units={units} value={entryUnit} onChange={setEntryUnit} product={product} />
             </Field>
           </div>
         )}

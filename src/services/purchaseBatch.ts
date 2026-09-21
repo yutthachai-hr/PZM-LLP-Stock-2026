@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { resolveFactor, toBase } from '../lib/uom'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { entryUnitsFor } from '../components/QtyInput'
@@ -109,9 +110,10 @@ export function resolveUnit(
   if (!wanted || sameUnit(wanted, product.unitType)) return {}
   const allowed = entryUnitsFor(product.unitType, plainUnits, product.unitConversions)
   const hit = allowed.find((u) => sameUnit(u.label, wanted) || sameUnit(u.records, wanted))
-  // A unit that converts (grams into kilograms) would need the quantity multiplied, and
-  // this reads quantities as written — so it is a question, not a silent ×0.001.
-  if (!hit || hit.factor !== 1) return null
+  // A unit this product has no rate for cannot be filed; it is a question for a person,
+  // who states the rate once (owner, 20 Sep 2026). A rated unit is fine: the order line
+  // keeps the quantity as written and converts at placing.
+  if (!hit || hit.factor === null) return null
   return sameUnit(hit.records, product.unitType) ? {} : { entryUnit: hit.records }
 }
 
@@ -253,7 +255,10 @@ export function assessRows(rows: readonly BatchRow[], ctx: AssessContext): Batch
 
     if (supplier && row.qty !== undefined) {
       const min = moq.get(`${supplier.id}/${product.id}`)
-      if (min !== undefined && row.qty < min) issues.push(issue('belowMoq', 'warn', String(min)))
+      // The minimum is in the product's own unit; a row keyed by the carton is compared
+      // after conversion (a rate the product is known to have, or the row would be a question).
+      const baseQty = toBase(row.qty, resolveFactor(product, entryUnit) ?? 1)
+      if (min !== undefined && baseQty < min) issues.push(issue('belowMoq', 'warn', String(min)))
 
       const past = history.get(`${product.id}|${entryUnit ?? product.unitType}`) ?? []
       if (past.length >= SUSPICIOUS_MIN_HISTORY) {

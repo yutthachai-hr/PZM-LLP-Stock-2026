@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, Button, Input, SegTab, Select } from '../../components/ui'
 import { Icon } from '../../components/Icon'
-import { entryUnitsFor } from '../../components/QtyInput'
+import { entryUnitsFor, UnitSelect } from '../../components/QtyInput'
 import { useEntryUnits } from '../../services/entryUnits'
 import { supplierChoiceFor, type LineInput } from '../../services/purchaseRequests'
 import { useT } from '../../i18n/I18nContext'
@@ -300,13 +300,13 @@ function ByProduct({
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-ink">{t('หน่วย')}</label>
-              <Select value={entryUnit} onChange={(e) => setEntryUnit(e.target.value)}>
-                {units.map((u) => (
-                  <option key={u.key} value={sameUnit(u.records, picked.unitType) ? '' : u.records}>
-                    {u.translate ? t(u.label) : u.label}
-                  </option>
-                ))}
-              </Select>
+              <UnitSelect
+                units={units}
+                value={entryUnit}
+                onChange={setEntryUnit}
+                product={picked}
+                onRateDefined={(list) => setPicked((cur) => (cur ? { ...cur, unitConversions: list } : cur))}
+              />
             </div>
           </div>
           <div className="mt-3 flex justify-end">

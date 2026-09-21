@@ -16,6 +16,7 @@ import {
 import { genId } from '../lib/id'
 import { getBrand } from '../brand/brand'
 import { sameUnit } from '../lib/units'
+import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
 import {
   QTY_STEP,
   requireQty,
@@ -47,6 +48,13 @@ export interface MovementLine {
   unit: string
   /** What the person picked in the unit box, when it is not the product's own. */
   entryUnit?: string
+  /**
+   * As keyed, in `entryUnit`. Required whenever `entryUnit` is given: the caller converted
+   * with the product's rate (see lib/uom.ts `entryFor`) and `qty` below is already the
+   * product's own unit.
+   */
+  entryQty?: number
+  /** In the product's own unit. */
   qty: number
   note?: string
 }
@@ -66,14 +74,14 @@ const PREFIX: Record<MovementType, string> = {
 /**
  * Which balance a movement belongs to.
  *
- * A product has one balance per unit anyone has keyed it in. The product's own unit keeps
- * the plain `location__product` key that every balance written before units were selectable
- * already uses, so nothing has to be migrated and no existing number moves; any other unit
- * gets its own row behind a `#`.
+ * One balance per product per location, in the product's own unit, under the plain
+ * `location__product` key (owner's rule of 20 Sep 2026 — see lib/uom.ts). A row keyed in
+ * another unit is converted before it gets here, so it lands on that same balance.
  *
- * Balances are never added across units. Ten Pack and two KG of the same prawns are two
- * rows shown side by side, and a person decides what to do about it — summing them would
- * mean inventing a pack size nobody wrote down.
+ * The `#Unit` rows are the legacy of the earlier rule (13–20 Sep 2026), under which a row
+ * keyed as "10 Pack" was filed on its own Pack balance. A movement from that time carries
+ * `entryUnit` and no `entryQty`; it keeps filing to its `#Unit` row until the migration
+ * tool converts it, so voiding or editing an old row still finds the balance it moved.
  */
 function levelId(locationId: string, productId: string, unit?: string, baseUnit?: string): string {
   const base = `${locationId}__${productId}`
@@ -89,20 +97,30 @@ function levelId(locationId: string, productId: string, unit?: string, baseUnit?
  */
 const UNIT_SEP = '#'
 
-/** The unit a line is filed under — what was keyed, falling back to the product's own. */
-function filedUnit(l: { unit: string; entryUnit?: string }): string {
-  return (l.entryUnit ?? '').trim() || l.unit
+/**
+ * The unit a row's balance is counted in: the product's own, except for a legacy row that
+ * was never converted, which stays on the balance of the unit it was keyed in.
+ */
+function filedUnit(l: { unit: string; entryUnit?: string; entryQty?: number }): string {
+  return isLegacyUnitRow(l) ? l.entryUnit!.trim() : l.unit
 }
 
-/**
- * The keyed unit, but only when it differs from the product's own.
- *
- * This is what gets written — to the movement and to the balance row — so a document that
- * was keyed in the product's own unit keeps exactly the shape it has always had.
- */
-function extraUnit(x: { unit: string; entryUnit?: string }): string | undefined {
+/** The balance unit, but only when it is not the product's own — what a legacy `#Unit` row is stamped with. */
+function extraUnit(x: { unit: string; entryUnit?: string; entryQty?: number }): string | undefined {
   const filed = filedUnit(x)
   return filed === x.unit ? undefined : filed
+}
+
+/** The unit keyed, when it differs from the product's own — what the movement records. */
+function keyedUnit(x: { unit: string; entryUnit?: string }): string | undefined {
+  const u = (x.entryUnit ?? '').trim()
+  return u && !sameUnit(u, x.unit) ? u : undefined
+}
+
+/** The entryUnit/entryQty pair to write on a movement, or nothing for a base-unit row. */
+function keyedFields(x: { unit: string; entryUnit?: string; entryQty?: number }): { entryUnit: string; entryQty: number } | Record<string, never> {
+  const u = keyedUnit(x)
+  return u && x.entryQty !== undefined ? { entryUnit: u, entryQty: x.entryQty } : {}
 }
 
 /**
@@ -113,12 +131,23 @@ function extraUnit(x: { unit: string; entryUnit?: string }): string | undefined 
  */
 function levelRef(
   locationId: string,
-  x: { productId: string; unit: string; entryUnit?: string },
+  x: { productId: string; unit: string; entryUnit?: string; entryQty?: number },
 ): { id: string; unit?: string } {
   return {
     id: levelId(locationId, x.productId, filedUnit(x), x.unit),
     unit: extraUnit(x),
   }
+}
+
+/** "สต๊อกไม่พอ" with the base balance, and what was keyed when that differs. */
+function shortMessage(l: MovementLine, avail: number): AppError {
+  const keyed = keyedUnit(l)
+  if (keyed && l.entryQty !== undefined) {
+    return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit}) — {entryQty} {entryUnit} = {need} {unit}', {
+      name: l.productName, qty: avail, unit: l.unit, entryQty: l.entryQty, entryUnit: keyed, need: l.qty,
+    })
+  }
+  return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
 }
 
 /** Split a balance key back into its parts. The unit is absent for the product's own. */
@@ -187,16 +216,32 @@ function scoped(): Backend {
 function mergeLines(lines: MovementLine[]): MovementLine[] {
   if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
   const byProduct = new Map<string, MovementLine>()
-  for (const l of lines) {
-    requireId(l.productId, l.productName || 'productId')
-    const qty = requireQty(l.qty, l.productName)
+  for (const raw of lines) {
+    requireId(raw.productId, raw.productName || 'productId')
+    const qty = requireQty(raw.qty, raw.productName)
+    // A line keyed in another unit says how many of that unit: the caller converted it
+    // (lib/uom.ts) and `qty` is already the product's own unit. A line without that is
+    // not a converted line, and the old per-unit filing is not offered to new rows.
+    const keyed = keyedUnit(raw)
+    if (keyed && !(raw.entryQty !== undefined && raw.entryQty > 0)) {
+      throw new AppError('รายการ "{name}" คีย์เป็น {unit} แต่ไม่ได้ระบุจำนวนที่คีย์', { name: raw.productName, unit: keyed })
+    }
+    const l: MovementLine = keyed ? { ...raw, qty, entryUnit: keyed } : { ...raw, qty, entryUnit: undefined, entryQty: undefined }
     const existing = byProduct.get(l.productId)
     if (!existing) {
-      byProduct.set(l.productId, { ...l, qty })
+      byProduct.set(l.productId, l)
       continue
     }
     const notes = [existing.note, l.note].filter(Boolean)
     existing.qty = requireQty(existing.qty + qty, l.productName)
+    // Two lines in the same keyed unit add up in it; in different units the merged line is
+    // simply so many of the product's own unit, which is always true.
+    if (existing.entryUnit && l.entryUnit && sameUnit(existing.entryUnit, l.entryUnit)) {
+      existing.entryQty = roundQty((existing.entryQty ?? 0) + (l.entryQty ?? 0))
+    } else {
+      delete existing.entryUnit
+      delete existing.entryQty
+    }
     existing.note = notes.length > 0 ? [...new Set(notes)].join('; ') : undefined
   }
   return [...byProduct.values()]
@@ -281,7 +326,7 @@ export async function receiveStock(params: {
         productId: l.productId,
         productName: l.productName,
         unit: l.unit,
-        ...(extraUnit(l) ? { entryUnit: filedUnit(l) } : {}),
+        ...keyedFields(l),
         qty: l.qty,
         toLocationId,
         note: l.note ?? note,
@@ -331,9 +376,7 @@ export async function issueStock(params: {
     // validate availability — one line per product, so this is the whole demand for it
     lines.forEach((l, i) => {
       const avail = fromLevels[i]?.qty ?? 0
-      if (l.qty > avail) {
-        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
-      }
+      if (l.qty > avail) throw shortMessage(l, avail)
     })
     // ---- writes ----
     const docNo = makeDocNo('issue', seq)
@@ -358,7 +401,7 @@ export async function issueStock(params: {
         productId: l.productId,
         productName: l.productName,
         unit: l.unit,
-        ...(extraUnit(l) ? { entryUnit: filedUnit(l) } : {}),
+        ...keyedFields(l),
         qty: l.qty,
         fromLocationId,
         toLocationId,
@@ -412,9 +455,7 @@ export async function consumeStock(params: {
     )
     lines.forEach((l, i) => {
       const avail = levels[i]?.qty ?? 0
-      if (l.qty > avail) {
-        throw new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
-      }
+      if (l.qty > avail) throw shortMessage(l, avail)
     })
     // ---- writes ----
     const doc = makeDocNo('consume', seq)
@@ -436,7 +477,7 @@ export async function consumeStock(params: {
         productId: l.productId,
         productName: l.productName,
         unit: l.unit,
-        ...(extraUnit(l) ? { entryUnit: filedUnit(l) } : {}),
+        ...keyedFields(l),
         qty: l.qty,
         fromLocationId,
         note: l.note ?? note,
@@ -465,17 +506,21 @@ export async function adjustStock(params: {
   unit: string
   /** What the person picked in the unit box, when it is not the product's own. */
   entryUnit?: string
+  /** As keyed in `entryUnit`; `qty` is already the product's own unit. */
+  entryQty?: number
   locationId: string
   direction: 'in' | 'out'
+  /** In the product's own unit. */
   qty: number
   reason: string
   date: number
   actor: Actor
   note?: string
 }): Promise<string> {
-  const { productId, productName, unit, entryUnit, locationId, actor, note } = params
-  const ref = levelRef(locationId, { productId, unit, entryUnit })
-  const qty = requireQty(params.qty, productName)
+  const { productId, productName, unit, locationId, actor, note } = params
+  const [line] = mergeLines([{ productId, productName, unit, entryUnit: params.entryUnit, entryQty: params.entryQty, qty: params.qty }])
+  const ref = levelRef(locationId, line)
+  const qty = line.qty
   const direction = requireOneOf(params.direction, ['in', 'out'] as const)
   const reason = requireOneOf(
     params.reason,
@@ -494,8 +539,7 @@ export async function adjustStock(params: {
     const cur = level?.qty ?? 0
     const delta = direction === 'in' ? qty : -qty
     const next = roundQty(cur + delta)
-    if (next < 0)
-      throw new AppError('สต๊อกไม่พอ (คงเหลือ {qty} {unit})', { qty: cur, unit: ref.unit ?? unit })
+    if (next < 0) throw shortMessage(line, cur)
 
     const docNo = makeDocNo('adjust', seq)
     tx.set(COL.counters, 'adjust', { value: seq })
@@ -511,7 +555,7 @@ export async function adjustStock(params: {
       productId,
       productName,
       unit,
-      ...(ref.unit ? { entryUnit: ref.unit } : {}),
+      ...keyedFields(line),
       qty,
       ...(direction === 'in' ? { toLocationId: locationId } : { fromLocationId: locationId }),
       reason,
@@ -596,10 +640,13 @@ export async function setStockCount(params: {
 const MAX_EDITS = 200
 
 export interface MovementPatch {
+  /** In the product's own unit. Only for a row keyed in that unit — otherwise give `entryQty`. */
   qty?: number
+  /** As keyed, for a row keyed in another unit; `qty` follows at the row's own rate. */
+  entryQty?: number
   date?: number
   note?: string
-  /** The unit this row is counted in. Empty string puts it back on the product's own. */
+  /** The unit this row is keyed in. Empty string puts it back on the product's own. */
   entryUnit?: string
   fromLocationId?: string
   toLocationId?: string
@@ -638,8 +685,6 @@ export async function editMovement(params: {
       throw new AppError('รายการนี้ถูกแก้ไขหลายครั้งเกินไป — กรุณายกเลิกแล้วบันทึกใหม่')
     }
 
-    const qty = patch.qty ?? mv.qty
-    const entryUnit = patch.entryUnit === undefined ? (mv.entryUnit ?? '') : patch.entryUnit.trim()
     const from = patch.fromLocationId ?? mv.fromLocationId
     const to = patch.toLocationId ?? mv.toLocationId
     // A receipt has a destination and no source; an issue has both. Gaining or losing a side
@@ -650,15 +695,60 @@ export async function editMovement(params: {
     if (from && to && from === to) throw new AppError('คลังต้นทางและปลายทางต้องต่างกัน')
     await requireMasterData(tx, [], [from, to].filter((x): x is string => !!x))
 
-    const before = { productId: mv.productId, unit: mv.unit, entryUnit: mv.entryUnit }
-    const after = { productId: mv.productId, unit: mv.unit, entryUnit: entryUnit || undefined }
+    // What the row is keyed in after the edit, and how many of that.
+    //
+    // A row keyed in the product's own unit is edited by `qty`. A row keyed in another unit
+    // is edited by `entryQty`, and its base quantity follows at the rate the row itself was
+    // converted at — the product's rate may have changed since, and this row's history must
+    // not. Changing the unit re-converts at the product's current rate, which is the one
+    // case that needs the product read; a legacy row (never converted) is converted the
+    // first time it is touched, and moves from its `#Unit` balance to the base balance.
+    const nextUnit = patch.entryUnit === undefined ? (mv.entryUnit ?? '') : patch.entryUnit.trim()
+    const keyedNext = nextUnit && !sameUnit(nextUnit, mv.unit) ? nextUnit : ''
+    const unitChanged = !sameUnit(keyedNext, keyedUnit(mv) ?? '')
+    const legacy = isLegacyUnitRow(mv)
+    let qty: number
+    let entryQty: number | undefined
+    if (!keyedNext) {
+      if (patch.entryQty !== undefined && !unitChanged) throw new AppError('รายการนี้คีย์เป็น {unit} อยู่แล้ว', { unit: mv.unit })
+      qty = patch.qty ?? (unitChanged ? (patch.entryQty ?? mv.entryQty ?? mv.qty) : mv.qty)
+      entryQty = undefined
+    } else {
+      if (patch.qty !== undefined) throw new AppError('รายการที่คีย์เป็น {unit} แก้จำนวนที่ช่อง {unit}', { unit: keyedNext })
+      entryQty = patch.entryQty ?? (legacy ? mv.qty : (mv.entryQty ?? mv.qty))
+      requireQty(entryQty)
+      let factor: number | null
+      if (unitChanged || legacy) {
+        const product = await tx.get<Product>(COL.products, mv.productId)
+        if (!product) throw new AppError('ไม่พบสินค้าในระบบแล้ว (อาจถูกลบไป) — โปรดเลือกใหม่')
+        factor = resolveFactor(product, keyedNext)
+        // A legacy row whose unit still has no rate may keep its note or date corrected
+        // without being converted; its quantity or unit cannot move until the rate is stated.
+        if (factor === null && !(legacy && !unitChanged && patch.entryQty === undefined)) {
+          throw new AppError('ยังไม่ได้กำหนดอัตราแปลง "{unit}" ของ "{name}" — กำหนดที่หน้าสินค้าก่อน', { unit: keyedNext, name: product.name })
+        }
+      } else {
+        factor = factorOf(mv)
+      }
+      if (factor === null) {
+        qty = mv.qty
+        entryQty = undefined
+      } else {
+        qty = toBase(entryQty, factor)
+      }
+    }
+    requireQty(qty, mv.productName)
+    const stillLegacy = legacy && entryQty === undefined && !!keyedNext
+
+    const before = { productId: mv.productId, unit: mv.unit, entryUnit: mv.entryUnit, entryQty: mv.entryQty }
+    const after = { productId: mv.productId, unit: mv.unit, entryUnit: keyedNext || undefined, entryQty }
 
     // Net change per balance row. A unit or location that did not move cancels itself out
     // here and is never written, so an edit of the note alone touches no balance at all.
     const touched = new Map<string, { locationId: string; unit?: string; delta: number }>()
     function touch(
       locationId: string | undefined,
-      x: { productId: string; unit: string; entryUnit?: string },
+      x: { productId: string; unit: string; entryUnit?: string; entryQty?: number },
       delta: number,
     ) {
       if (!locationId) return
@@ -697,9 +787,11 @@ export async function editMovement(params: {
       changed.push(label)
       changes.push({ field, from: String(before ?? ''), to: String(after ?? '') })
     }
-    if (qty !== mv.qty) {
+    const said = (x: { qty: number; entryQty?: number; entryUnit?: string }) => describeQty({ ...x, unit: mv.unit })
+    if (qty !== mv.qty || entryQty !== mv.entryQty) {
       write.qty = qty
-      note('จำนวน', 'qty', mv.qty, qty) // i18n-key
+      write.entryQty = entryQty === undefined ? DELETE_FIELD : entryQty
+      note('จำนวน', entryQty === undefined && mv.entryQty === undefined ? 'qty' : 'entryQty', said(mv), said({ qty, entryQty, entryUnit: keyedNext || undefined })) // i18n-key
     }
     if (patch.date !== undefined && patch.date !== mv.date) {
       write.date = patch.date
@@ -709,9 +801,9 @@ export async function editMovement(params: {
       write.note = patch.note
       note('หมายเหตุ', 'note', mv.note, patch.note) // i18n-key
     }
-    if (entryUnit !== (mv.entryUnit ?? '')) {
-      write.entryUnit = entryUnit || DELETE_FIELD
-      note('หน่วย', 'unit', mv.entryUnit || mv.unit, entryUnit || mv.unit) // i18n-key
+    if (unitChanged || (legacy && keyedNext && !stillLegacy)) {
+      write.entryUnit = keyedNext || DELETE_FIELD
+      if (unitChanged) note('หน่วย', 'unit', mv.entryUnit || mv.unit, keyedNext || mv.unit) // i18n-key
     }
     if (from !== mv.fromLocationId) {
       write.fromLocationId = from
@@ -771,6 +863,12 @@ export async function changeProductUnit(params: {
   // the same unit, and restamping a ledger over a capital letter would be indefensible.
   if (sameUnit(product.unitType, unitType) && sameUnit(product.unit, unit)) return 0
 
+  // The rates on the product are stated in its current unit ("1 Carton = 500 EA"), and so
+  // is every converted row; relabelling underneath them would make all of them lies.
+  if (!sameUnit(product.unitType, unitType) && (product.unitConversions?.length ?? 0) > 0) {
+    throw new AppError('ลบอัตราแปลงหน่วยของสินค้านี้ออกก่อน จึงจะเปลี่ยนหน่วยนับได้')
+  }
+
   // One equality read for this product's rows, not the whole ledger.
   const mine = await db.getBy<StockMovement>(COL.movements, 'productId', productId)
   if (mine.length > MAX_RELABEL) {
@@ -778,6 +876,9 @@ export async function changeProductUnit(params: {
       'สินค้านี้มีประวัติ {count} รายการ มากเกินกว่าจะเปลี่ยนหน่วยทั้งหมดได้ — กรุณาสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง',
       { count: mine.length },
     )
+  }
+  if (!sameUnit(product.unitType, unitType) && mine.some((m) => m.entryQty !== undefined)) {
+    throw new AppError('สินค้านี้มีประวัติที่แปลงหน่วยไว้แล้ว เปลี่ยนหน่วยนับไม่ได้ — กรุณาสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง')
   }
 
   const now = Date.now()
@@ -809,27 +910,41 @@ export async function changeProductUnit(params: {
     unit: unitType,
     entryUnit: sameUnit(mv.entryUnit, unitType) && mv.entryUnit ? undefined : mv.entryUnit,
   }))
-  const wanted = balancesFromLedger(relabelled)
-  const existing = (await db.getBy<StockLevel>(COL.stockLevels, 'productId', productId)) ?? []
-  for (const [id, qty] of wanted) {
-    const parsed = parseLevelId(id)
-    await db.set(
-      COL.stockLevels,
-      id,
-      levelDoc(parsed.locationId, productId, qty, actor, now, parsed.unit),
-    )
-  }
-  for (const lv of existing) {
-    if (wanted.has(lv.id)) continue
-    await db.set(
-      COL.stockLevels,
-      lv.id,
-      levelDoc(lv.locationId, productId, 0, actor, now, lv.unit ?? parseLevelId(lv.id).unit),
-    )
-  }
+  await rebuildProductLevels(db, productId, relabelled, actor, now)
 
   await db.update(COL.products, productId, { unitType, unit, updatedAt: now })
   return mine.length
+}
+
+/**
+ * Write this one product's balances from its own ledger rows: every balance the ledger
+ * calls for is set, and every existing row it no longer calls for is zeroed (a balance
+ * cannot be deleted — the rules keep them). Shared by the unit change and the unit
+ * migration. Refuses a ledger that sums below zero anywhere, like recomputeLevels.
+ */
+export async function rebuildProductLevels(
+  db: Backend,
+  productId: string,
+  movements: readonly StockMovement[],
+  actor: Actor,
+  now: number,
+): Promise<void> {
+  const wanted = balancesFromLedger([...movements])
+  for (const [id, qty] of wanted) {
+    if (qty < 0) {
+      const parsed = parseLevelId(id)
+      throw new AppError('ยอดคงเหลือจะติดลบที่ {location} ({qty} {unit}) — แก้ประวัติก่อน', { location: parsed.locationId, qty, unit: parsed.unit ?? '' })
+    }
+  }
+  const existing = (await db.getBy<StockLevel>(COL.stockLevels, 'productId', productId)) ?? []
+  for (const [id, qty] of wanted) {
+    const parsed = parseLevelId(id)
+    await db.set(COL.stockLevels, id, levelDoc(parsed.locationId, productId, qty, actor, now, parsed.unit))
+  }
+  for (const lv of existing) {
+    if (wanted.has(lv.id)) continue
+    await db.set(COL.stockLevels, lv.id, levelDoc(lv.locationId, productId, 0, actor, now, lv.unit ?? parseLevelId(lv.id).unit))
+  }
 }
 
 /**

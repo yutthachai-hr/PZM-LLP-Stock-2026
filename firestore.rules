@@ -180,7 +180,7 @@ service cloud.firestore {
           'date', 'byUserId', 'byUserName', 'createdAt'
         ])
         && d.keys().hasOnly([
-          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'entryUnit', 'qty',
+          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'entryUnit', 'entryQty', 'qty',
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'date', 'byUserId', 'byUserName', 'createdAt',
           'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
@@ -190,9 +190,11 @@ service cloud.firestore {
         && text(d.unit, 40) && text(d.byUserId, 200) && text(d.byUserName, 200)
         && positive(d.qty, 1000000000)
         && epochMs(d.date) && epochMs(d.createdAt)
-        // Present only when the person keyed a unit other than the product's own. Nothing
-        // is converted between the two; this is what the row is counted in.
+        // Present only when the person keyed a unit other than the product's own. Since
+        // 20 Sep 2026 `qty` is the base quantity and `entryQty` is what was keyed; a row
+        // with entryUnit and no entryQty is one filed under the old rule, on its own balance.
         && (!('entryUnit' in d) || text(d.entryUnit, 20))
+        && (!('entryQty' in d) || positive(d.entryQty, 1000000000))
         // Appended by editMovement, one entry per correction. Rules cannot look inside a
         // list's maps, so the guarantees that matter are made on update: see appendedOwnEdit.
         && (!('edits' in d) || (d.edits is list && d.edits.size() <= 200))
@@ -247,10 +249,9 @@ service cloud.firestore {
         && (!('cost' in d) || nonneg(d.cost, 1000000000))
         // Who we buy it from. Absent on a product whose name never named anyone.
         && (!('supplierId' in d) || text(d.supplierId, 200))
-        // Reference multipliers shown beside the quantity box — see the field's own
-        // comment in types.ts for why nothing here ever converts a ledger entry. Bounded
-        // like every other list in this file; not validated element by element, the same
-        // as an order's lines.
+        // The rates this product is keyed at ("1 Carton = 500 EA") — since 20 Sep 2026
+        // the ledger converts with these. Bounded like every other list in this file; not
+        // validated element by element, the same as an order's lines.
         && (!('unitConversions' in d) || (d.unitConversions is list && d.unitConversions.size() <= 20))
         // Other suppliers it can come from, for a person to pick when the usual one is out.
         // The automatic order never chooses one of these by itself.
@@ -853,7 +854,7 @@ service cloud.firestore {
 
     function movementEdit() {
       return editedKeys().hasOnly([
-          'qty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
+          'qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
           'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
         ])
         && (!editedKeys().hasAny(['voided']) || roleIsAdmin())
@@ -862,7 +863,7 @@ service cloud.firestore {
         // Changing what a row says means appending to its history, in the caller's own name.
         // `unit` is here because correcting a product's unit restamps every row filed under
         // the old one, and that is an edit like any other: it signs itself.
-        && (!editedKeys().hasAny(['qty', 'date', 'note', 'unit', 'entryUnit',
+        && (!editedKeys().hasAny(['qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit',
                                   'fromLocationId', 'toLocationId'])
             || appendedOwnEdit());
     }
@@ -1127,6 +1128,13 @@ service cloud.firestore {
       allow update: if writer(collection)
         && validShape(collection, docId, request.resource.data, false)
         && editedHonestly(collection);
+
+      // The one catalogue field staff may set: a unit's rate for this product, stated the
+      // first time somebody keys that unit (owner, 20 Sep 2026). Everything else about a
+      // product stays with the admin.
+      allow update: if active() && kind(collection) == 'products'
+        && editedKeys().hasOnly(['unitConversions', 'updatedAt'])
+        && validShape(collection, docId, request.resource.data, false);
 
       allow delete: if active() && staffDeletable(collection);
       allow delete: if admin() && brandData(collection) && !ledger(collection)
