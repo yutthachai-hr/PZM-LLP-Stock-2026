@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
+import { overlayRecent, subscribeRecentWrites } from './recentWrites'
 import { stockView } from '../lib/inventoryRules/stockView'
 import { useAuth } from '../auth/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
@@ -100,10 +101,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setMovementsFrom((cur) => (date < cur ? date : cur))
   }, [])
 
-  const { data: movements, loading: mLoading } = useLive<StockMovement>(COL.movements, {
+  const { data: liveMovements, loading: mLoading } = useLive<StockMovement>(COL.movements, {
     sinceField: 'date',
     sinceValue: movementsFrom,
   })
+  // Rows this device just wrote, shown until the listener confirms them (recentWrites.ts).
+  const [recent, setRecent] = useState<StockMovement[]>([])
+  useEffect(() => subscribeRecentWrites(setRecent), [])
+  const movements = useMemo(() => overlayRecent(liveMovements, recent), [liveMovements, recent])
   const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides)
   const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin })
   // Fixed for the session: a moving lower bound would re-subscribe (and re-read) every render.

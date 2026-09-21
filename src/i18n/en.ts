@@ -1601,4 +1601,6 @@ export const EN: Record<string, string> = {
   'ค้นหาการตั้งค่า...': 'Search settings...',
   'ไม่พบการตั้งค่าที่ตรงกับคำค้น': 'No settings match your search',
   'การตั้งค่าทั้งหมด': 'All settings',
+  'ล้างแบบร่าง': 'Discard draft',
+  'กู้คืนรายการที่คีย์ค้างไว้ในเครื่องนี้ — ตรวจสอบก่อนบันทึก': 'Restored what was keyed on this device — check it before saving',
 }

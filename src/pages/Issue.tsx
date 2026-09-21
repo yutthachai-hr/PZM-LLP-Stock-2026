@@ -12,6 +12,8 @@ import { compressImage } from '../lib/image'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
+import { useDraft } from '../lib/useDraft'
+import { DraftNotice } from '../components/DraftNotice'
 
 type Mode = 'transfer' | 'consume'
 
@@ -59,6 +61,26 @@ function TransferForm() {
 
   const [busy, setBusy] = useState(false)
 
+  // Half-keyed transfers survive leaving the screen (lib/useDraft.ts).
+  const draft = useMemo(() => ({ fromLocationId, toLocationId, dateStr, note, lines }), [fromLocationId, toLocationId, dateStr, note, lines])
+  const { restored, clear: clearDraft } = useDraft(
+    'issue-transfer',
+    draft,
+    (d) => {
+      if (d.fromLocationId) setFromLocationId(d.fromLocationId)
+      if (d.toLocationId) setToLocationId(d.toLocationId)
+      if (d.dateStr) setDateStr(d.dateStr)
+      setNote(d.note ?? '')
+      setLines(Array.isArray(d.lines) ? d.lines : [])
+    },
+    (d) => d.lines.length === 0 && !d.note.trim(),
+  )
+  function discardDraft() {
+    setLines([])
+    setNote('')
+    clearDraft()
+  }
+
   useEffect(() => {
     if (!fromLocationId && defaultFrom) setFromLocationId(defaultFrom.id)
   }, [fromLocationId, defaultFrom])
@@ -93,6 +115,7 @@ function TransferForm() {
       setLines([])
       setFocusOn((n) => n + 1)
       setNote('')
+      clearDraft()
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
@@ -102,6 +125,7 @@ function TransferForm() {
 
   return (
     <WithTodayPanel panel={<TodayTransactions types={['issue']} date={dateInputToMs(dateStr)} title={t('เบิก/โอนที่ทำวันนี้')} />}>
+    {restored && <DraftNotice onDiscard={discardDraft} />}
     <Card className="space-y-4 p-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t("จากคลัง (ต้นทาง)")} required>
@@ -171,6 +195,25 @@ function ConsumeForm() {
   const [photo, setPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  // Half-keyed issues survive leaving the screen (lib/useDraft.ts). The photo does not:
+  // it is retaken, and a data URL is too big to keep.
+  const draft = useMemo(() => ({ fromLocationId, dateStr, note, lines }), [fromLocationId, dateStr, note, lines])
+  const { restored, clear: clearDraft } = useDraft(
+    'issue-consume',
+    draft,
+    (d) => {
+      if (d.fromLocationId) setFromLocationId(d.fromLocationId)
+      if (d.dateStr) setDateStr(d.dateStr)
+      if (typeof d.note === 'string') setNote(d.note)
+      setLines(Array.isArray(d.lines) ? d.lines : [])
+    },
+    (d) => d.lines.length === 0,
+  )
+  function discardDraft() {
+    setLines([])
+    clearDraft()
+  }
+
   useEffect(() => {
     if (!fromLocationId && defaultFrom) setFromLocationId(defaultFrom.id)
   }, [fromLocationId, defaultFrom])
@@ -208,6 +251,7 @@ function ConsumeForm() {
       setLines([])
       setFocusOn((n) => n + 1)
       setPhoto(null)
+      clearDraft()
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
@@ -217,6 +261,7 @@ function ConsumeForm() {
 
   return (
     <WithTodayPanel panel={<TodayTransactions types={['consume']} date={dateInputToMs(dateStr)} title={t('เบิกใช้ที่ทำวันนี้')} />}>
+    {restored && <DraftNotice onDiscard={discardDraft} />}
     <Card className="space-y-4 p-4">
       <div className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
         {t("เบิกของออกจากคลังไปใช้/ขายหน้าร้าน (เช่น สาขาสุขุมวิทที่อยู่ที่เดียวกับคลัง) — ตัดสต๊อกออก ไม่เพิ่มเข้าสาขาอื่น")}

@@ -10,6 +10,8 @@ import { receiveStock } from '../services/stock'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
+import { useDraft } from '../lib/useDraft'
+import { DraftNotice } from '../components/DraftNotice'
 
 export function ReceivePage() {
   const t = useT()
@@ -32,6 +34,25 @@ export function ReceivePage() {
   const [focusOn, setFocusOn] = useState(0)
 
   const [busy, setBusy] = useState(false)
+
+  // Half-keyed notes survive leaving the screen (lib/useDraft.ts).
+  const draft = useMemo(() => ({ toLocationId, dateStr, note, lines }), [toLocationId, dateStr, note, lines])
+  const { restored, clear: clearDraft } = useDraft(
+    'receive',
+    draft,
+    (d) => {
+      if (d.toLocationId) setToLocationId(d.toLocationId)
+      if (d.dateStr) setDateStr(d.dateStr)
+      setNote(d.note ?? '')
+      setLines(Array.isArray(d.lines) ? d.lines : [])
+    },
+    (d) => d.lines.length === 0 && !d.note.trim(),
+  )
+  function discardDraft() {
+    setLines([])
+    setNote('')
+    clearDraft()
+  }
 
   // set the default warehouse once locations have loaded
   useEffect(() => {
@@ -56,6 +77,7 @@ export function ReceivePage() {
       setLines([])
       setFocusOn((n) => n + 1)
       setNote('')
+      clearDraft()
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
@@ -73,6 +95,7 @@ export function ReceivePage() {
       />
 
       <WithTodayPanel panel={<TodayTransactions types={['receive']} date={dateInputToMs(dateStr)} title={t('รับเข้าที่ทำวันนี้')} />}>
+      {restored && <DraftNotice onDiscard={discardDraft} />}
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label={t("คลังปลายทาง")} required>

@@ -28,6 +28,8 @@ import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
 import type { QtyEntry } from '../lib/uom'
+import { useDraft } from '../lib/useDraft'
+import { DraftNotice } from '../components/DraftNotice'
 
 /** Enough of the list that the item wanted is on it; the box scrolls past the first eight. */
 const MAX_MATCHES = 40
@@ -53,6 +55,35 @@ export function AdjustPage() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // A half-keyed adjustment survives leaving the screen (lib/useDraft.ts). The product is
+  // kept by id and looked up again, so a renamed product comes back under its new name.
+  const draft = useMemo(
+    () => ({ locationId, productId: product?.id ?? '', direction, entry, reason, dateStr, note }),
+    [locationId, product, direction, entry, reason, dateStr, note],
+  )
+  const { restored, clear: clearDraft } = useDraft(
+    'adjust',
+    draft,
+    (d) => {
+      if (d.locationId) setLocationId(d.locationId)
+      const p = products.find((x) => x.id === d.productId) ?? null
+      setProduct(p)
+      if (d.direction === 'in' || d.direction === 'out') setDirection(d.direction)
+      if (d.entry && typeof d.entry.qty === 'number') setEntry(d.entry)
+      if (d.reason) setReason(d.reason)
+      if (d.dateStr) setDateStr(d.dateStr)
+      setNote(d.note ?? '')
+    },
+    (d) => !d.productId && !d.note.trim() && !(d.entry.qty > 0),
+  )
+  function discardDraft() {
+    setProduct(null)
+    setEntry({ qty: 0, entryQty: 0, factor: 1 })
+    setNote('')
+    setSearch('')
+    clearDraft()
+  }
 
   useEffect(() => {
     if (!locationId && active[0]) setLocationId(active[0].id)
@@ -106,6 +137,7 @@ export function AdjustPage() {
       setEntry({ qty: 0, entryQty: 0, factor: 1 })
       setNote('')
       setSearch('')
+      clearDraft()
       // The next adjustment starts in the search box, not with a reach for the mouse.
       setTimeout(() => searchRef.current?.focus(), 0)
     } catch (e) {
@@ -125,6 +157,7 @@ export function AdjustPage() {
       />
 
       <WithTodayPanel panel={<TodayTransactions types={['adjust']} date={dateInputToMs(dateStr)} title={t('ปรับสต๊อกที่ทำวันนี้')} />}>
+      {restored && <DraftNotice onDiscard={discardDraft} />}
       <Card className="space-y-4 p-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("คลัง/สาขา")} required>

@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { noteWritten } from '../data/recentWrites'
 import { DELETE_FIELD, type Backend, type TxContext } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import {
@@ -205,6 +206,39 @@ function scoped(): Backend {
 }
 
 /**
+ * A transaction that files movement rows, and tells the screen about them the moment it
+ * commits (data/recentWrites.ts). `file` is the only way rows are written here, so nothing
+ * reaches the ledger unnoted. The sink is reset on every attempt: Firestore re-runs the
+ * callback on contention, and rows from an attempt that never committed must not show.
+ */
+async function filing<R>(
+  db: Backend,
+  run: (tx: TxContext, file: (mv: Omit<StockMovement, 'id'>) => void) => Promise<R>,
+): Promise<R> {
+  let sink: StockMovement[] = []
+  const result = await db.transaction(async (tx) => {
+    sink = []
+    return run(tx, (mv) => {
+      const id = genId()
+      tx.set(COL.movements, id, mv as Record<string, unknown>)
+      sink.push({ ...mv, id } as StockMovement)
+    })
+  })
+  noteWritten(sink)
+  return result
+}
+
+/** A changed row, as the screen should show it until the listener confirms it. */
+function noteChanged(mv: StockMovement, patch: Record<string, unknown>): void {
+  const next: Record<string, unknown> = { ...mv }
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === DELETE_FIELD) delete next[k]
+    else next[k] = v
+  }
+  noteWritten([next as unknown as StockMovement])
+}
+
+/**
  * Collapse a document's lines to one entry per product, validating as it goes.
  *
  * Two lines for the same product used to be two independent reads of the same balance and
@@ -297,7 +331,7 @@ export async function receiveStock(params: {
   requireId(toLocationId, 'toLocationId')
   const db = scoped()
 
-  return db.transaction(async (tx) => {
+  return filing(db, async (tx, file) => {
     // ---- reads ----
     await requireMasterData(
       tx,
@@ -335,7 +369,7 @@ export async function receiveStock(params: {
         byUserName: actor.name,
         createdAt: now,
       }
-      tx.set(COL.movements, genId(), mv as Record<string, unknown>)
+      file(mv)
     })
     return docNo
   })
@@ -358,7 +392,7 @@ export async function issueStock(params: {
   requireId(toLocationId, 'toLocationId')
   const db = scoped()
 
-  return db.transaction(async (tx) => {
+  return filing(db, async (tx, file) => {
     // ---- reads ----
     await requireMasterData(
       tx,
@@ -411,7 +445,7 @@ export async function issueStock(params: {
         byUserName: actor.name,
         createdAt: now,
       }
-      tx.set(COL.movements, genId(), mv as Record<string, unknown>)
+      file(mv)
     })
     return docNo
   })
@@ -441,7 +475,7 @@ export async function consumeStock(params: {
   requireId(fromLocationId, 'fromLocationId')
   const db = scoped()
 
-  return db.transaction(async (tx) => {
+  return filing(db, async (tx, file) => {
     // ---- reads ----
     await requireMasterData(
       tx,
@@ -487,7 +521,7 @@ export async function consumeStock(params: {
         byUserName: actor.name,
         createdAt: now,
       }
-      tx.set(COL.movements, genId(), mv as Record<string, unknown>)
+      file(mv)
     })
     return doc
   })
@@ -531,7 +565,7 @@ export async function adjustStock(params: {
   requireId(locationId, 'locationId')
   const db = scoped()
 
-  return db.transaction(async (tx) => {
+  return filing(db, async (tx, file) => {
     await requireMasterData(tx, [productId], [locationId])
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
     const seq = (counter?.value ?? 0) + 1
@@ -565,7 +599,7 @@ export async function adjustStock(params: {
       byUserName: actor.name,
       createdAt: now,
     }
-    tx.set(COL.movements, genId(), mv as Record<string, unknown>)
+    file(mv)
     return docNo
   })
 }
@@ -597,7 +631,7 @@ export async function setStockCount(params: {
   const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
   const db = scoped()
 
-  return db.transaction(async (tx) => {
+  return filing(db, async (tx, file) => {
     await requireMasterData(tx, [productId], [locationId])
     // A count is someone standing in front of the shelf reconciling the product's own
     // balance, so it always lands on that row — there is no unit box on that screen.
@@ -630,7 +664,7 @@ export async function setStockCount(params: {
       byUserName: actor.name,
       createdAt: now,
     }
-    tx.set(COL.movements, genId(), mv as Record<string, unknown>)
+    file(mv)
     return true
   })
 }
@@ -677,7 +711,9 @@ export async function editMovement(params: {
   if (patch.date !== undefined) requireEpochMs(patch.date)
   const db = scoped()
 
-  return db.transaction(async (tx) => {
+  let noted = () => {}
+  await db.transaction(async (tx) => {
+    noted = () => {}
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) throw new AppError('รายการนี้ถูกยกเลิกแล้ว')
@@ -815,7 +851,7 @@ export async function editMovement(params: {
     }
     if (changed.length === 0) return
 
-    tx.update(COL.movements, movementId, {
+    const patchDoc = {
       ...write,
       // Appended, never replaced. The rules check it grew by exactly one and that the new
       // entry names the caller, so an edit cannot be filed under somebody else. The old and
@@ -824,8 +860,11 @@ export async function editMovement(params: {
       updatedBy: actor.id,
       updatedByName: actor.name,
       updatedAt: now,
-    })
+    }
+    tx.update(COL.movements, movementId, patchDoc)
+    noted = () => noteChanged(mv, patchDoc)
   })
+  noted()
 }
 
 /** Above this, relabelling would eat a noticeable share of the day's write allowance. */
@@ -959,7 +998,9 @@ export async function rebuildProductLevels(
  */
 export async function voidMovement(movementId: string, actor: Actor): Promise<void> {
   const db = scoped()
-  return db.transaction(async (tx) => {
+  let noted = () => {}
+  await db.transaction(async (tx) => {
+    noted = () => {}
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) return
@@ -996,13 +1037,11 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
         levelDoc(mv.toLocationId, mv.productId, next, actor, now, levelRef(mv.toLocationId, mv).unit),
       )
     }
-    tx.update(COL.movements, movementId, {
-      voided: true,
-      updatedBy: actor.id,
-      updatedByName: actor.name,
-      updatedAt: now,
-    })
+    const patchDoc = { voided: true, updatedBy: actor.id, updatedByName: actor.name, updatedAt: now }
+    tx.update(COL.movements, movementId, patchDoc)
+    noted = () => noteChanged(mv, patchDoc)
   })
+  noted()
 }
 
 /** Balances rebuilt from the ledger, keyed `${locationId}__${productId}`. */

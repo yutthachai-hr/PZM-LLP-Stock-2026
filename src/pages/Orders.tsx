@@ -49,6 +49,8 @@ import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
 import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { SendWizard } from './purchase/SendWizard'
+import { useDraft } from '../lib/useDraft'
+import { DraftNotice } from '../components/DraftNotice'
 import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
@@ -954,6 +956,24 @@ function NewOrderModal({
   // Read once for the whole form, not once per line.
   const plainUnits = useEntryUnits()
 
+  // A half-keyed order survives closing the dialog (lib/useDraft.ts).
+  const draft = useMemo(() => ({ supplierId, locationId, lines, expected }), [supplierId, locationId, lines, expected])
+  const { restored, clear: clearDraft } = useDraft(
+    'new-order',
+    draft,
+    (d) => {
+      if (d.supplierId) setSupplierId(d.supplierId)
+      if (d.locationId) setLocationId(d.locationId)
+      if (d.lines && typeof d.lines === 'object') setLines(d.lines)
+      if (typeof d.expected === 'string') setExpected(d.expected)
+    },
+    (d) => !Object.values(d.lines).some((l) => l.qty > 0),
+  )
+  function discardDraft() {
+    setLines({})
+    clearDraft()
+  }
+
   // Free: the catalogue is already in memory, and the link is a field on each product.
   const theirs = useMemo(() => {
     if (!supplierId) return []
@@ -980,6 +1000,7 @@ function NewOrderModal({
         ...(expected ? { expectedAt: dateInputToMs(expected) } : {}),
       })
       toast.success(t('สั่งของแล้ว'))
+      clearDraft()
       onDone()
       onClose()
     } catch (e) {
@@ -992,6 +1013,7 @@ function NewOrderModal({
   return (
     <Modal open onClose={onClose} title={t('สั่งของใหม่')} wide>
       <div className="space-y-4">
+        {restored && <DraftNotice onDiscard={discardDraft} />}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t('ผู้ขาย')} required>
             <Select
