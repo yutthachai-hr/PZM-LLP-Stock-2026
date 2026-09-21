@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { UnitMigrationSection } from './settings/UnitMigrationSection'
 import { RebaseUnitSection } from './settings/RebaseUnitSection'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
+import { useBrand } from '../brand/BrandContext'
+import { LangToggle } from '../i18n/LangToggle'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { BackupSection } from '../components/BackupSection'
@@ -10,7 +13,7 @@ import { AutomationStatus } from './settings/AutomationStatus'
 import { NotificationPrefsSection } from './settings/NotificationPrefsSection'
 import { SchedulesSection } from './settings/SchedulesSection'
 import { ThresholdsSection } from './settings/ThresholdsSection'
-import { Icon } from '../components/Icon'
+import { Icon, type IconName } from '../components/Icon'
 import {
   Badge,
   Button,
@@ -47,41 +50,263 @@ import { DataTable } from '../components/DataTable'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 
+/**
+ * Settings as a menu, then one topic at a time.
+ *
+ * It used to be every section stacked on one page — thirteen cards for an admin, each with
+ * its own buttons, so finding "users" meant scrolling past backups and unit migrations. The
+ * owner's mock-up (21 Sep 2026) is the phone settings pattern people already know: grouped
+ * rows with an icon, a name and a chevron, and each row opens its topic on its own.
+ *
+ * The topic lives in the URL (/settings/users), so the back button works, a link can go
+ * straight to one, and nothing is read for a topic nobody opened — each section loads its
+ * own data when it mounts, and Firestore reads are the budget this app lives within.
+ *
+ * On a desktop the menu stays on the left and the topic opens beside it.
+ */
+type SectionKey =
+  | 'notifications'
+  | 'cloud'
+  | 'locations'
+  | 'units'
+  | 'thresholds'
+  | 'schedules'
+  | 'users'
+  | 'automation'
+  | 'backup'
+  | 'maintenance'
+  | 'unitMigration'
+  | 'rebaseUnit'
+
+interface MenuItem {
+  key: SectionKey
+  label: string
+  hint: string
+  icon: IconName
+  /** Whether this person may open it; filtered out of the menu when false. */
+  show?: boolean
+}
+
+interface MenuGroup {
+  title: string
+  items: MenuItem[]
+}
+
+function useIsDesktop(): boolean {
+  const query = '(min-width: 1024px)'
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
+  useEffect(() => {
+    const m = window.matchMedia(query)
+    const on = () => setWide(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [])
+  return wide
+}
+
 export function SettingsPage() {
   const t = useT()
-  const { user, mode } = useAuth()
+  const { user, mode, logout } = useAuth()
+  const { reset } = useBrand()
+  const navigate = useNavigate()
+  const { section } = useParams<{ section?: string }>()
+  const desktop = useIsDesktop()
   const isAdmin = user?.role === 'admin'
   const isManager = isAdmin || user?.role === 'manager'
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader icon="settings" title={t("ตั้งค่า")} />
+  // Only what this person may open. A row that leads to "you do not have permission" is a
+  // row that should not be there.
+  const groups: MenuGroup[] = useMemo(() => {
+    const all: MenuGroup[] = [
+      {
+        title: t('บัญชีของฉัน'),
+        items: [
+          { key: 'notifications', label: t('การแจ้งเตือนของฉัน'), hint: t('เลือกสิ่งที่อยากเห็นในกระดิ่ง'), icon: 'bell', show: true },
+          { key: 'cloud', label: t('การเชื่อมต่อ Cloud'), hint: t('สถานะการเชื่อมต่อฐานข้อมูล'), icon: 'cloud', show: !isDemoMode() },
+        ],
+      },
+      {
+        title: t('คลังและสินค้า'),
+        items: [
+          { key: 'locations', label: t('คลัง / สาขา'), hint: t('เพิ่ม แก้ชื่อ หรือปิดใช้คลังและสาขา'), icon: 'building', show: isAdmin },
+          { key: 'units', label: t('หน่วยที่เลือกได้ตอนกรอก'), hint: t('Lot, Pack, Carton ที่ให้เลือกตอนคีย์จำนวน'), icon: 'package', show: isAdmin },
+          { key: 'thresholds', label: t('เกณฑ์แจ้งเตือนคลัง'), hint: t('เมื่อไรถือว่าใกล้หมดหรือค้างนาน'), icon: 'warning', show: isAdmin },
+          { key: 'schedules', label: t('ตารางนับสต๊อก'), hint: t('รอบนับสต๊อกที่ขึ้นในปฏิทิน'), icon: 'calendar', show: isAdmin },
+        ],
+      },
+      {
+        title: t('ผู้ใช้และระบบ'),
+        items: [
+          { key: 'users', label: t('ผู้ใช้งาน'), hint: t('เพิ่มผู้ใช้ กำหนดสิทธิ์ ปิดการเข้าใช้'), icon: 'users', show: isAdmin },
+          { key: 'automation', label: t('งานอัตโนมัติ'), hint: t('งานที่ระบบทำเองตามเวลา'), icon: 'clock', show: isManager },
+        ],
+      },
+      {
+        title: t('ข้อมูล'),
+        items: [
+          { key: 'backup', label: t('สำรอง / กู้คืนข้อมูล'), hint: t('ดาวน์โหลดไฟล์สำรอง หรือกู้คืนจากไฟล์'), icon: 'download', show: isAdmin },
+          { key: 'maintenance', label: t('ดูแลข้อมูล'), hint: t('ตรวจยอดคงเหลือให้ตรงกับประวัติ'), icon: 'refresh', show: isAdmin },
+          { key: 'unitMigration', label: t('แปลงยอดแยกหน่วยเป็นหน่วยหลัก'), hint: t('รวมยอดที่เคยเก็บแยกหน่วย'), icon: 'adjust', show: isAdmin },
+          { key: 'rebaseUnit', label: t('เปลี่ยนหน่วยหลักพร้อมคำนวณ'), hint: t('เปลี่ยนหน่วยหลักของสินค้าและคำนวณยอดใหม่'), icon: 'swap', show: isAdmin },
+        ],
+      },
+    ]
+    return all
+      .map((g) => ({ title: g.title, items: g.items.filter((i) => i.show !== false) }))
+      .filter((g) => g.items.length > 0)
+  }, [t, isAdmin, isManager])
 
-      {/* Hidden in a demo build: a config saved here is ignored by getFirebaseConfig(),
-          so connecting would silently do nothing. */}
-      {!isDemoMode() && <CloudSection mode={mode} />}
+  const keys = groups.flatMap((g) => g.items.map((i) => i.key))
+  const chosen = keys.includes(section as SectionKey) ? (section as SectionKey) : null
+  // A desktop has room for the menu and a topic side by side, so it never shows an empty
+  // right half: with nothing chosen, the first topic is open.
+  const open: SectionKey | null = chosen ?? (desktop ? keys[0] ?? null : null)
+  const openItem = groups.flatMap((g) => g.items).find((i) => i.key === open)
 
-      <NotificationPrefsSection />
+  function renderSection(key: SectionKey) {
+    const actor = user ? { id: user.id, name: user.name } : null
+    switch (key) {
+      case 'notifications':
+        return <NotificationPrefsSection />
+      case 'cloud':
+        return <CloudSection mode={mode} />
+      case 'locations':
+        return <LocationsSection />
+      case 'units':
+        return <UnitsSection />
+      case 'thresholds':
+        return <ThresholdsSection />
+      case 'schedules':
+        return <SchedulesSection />
+      case 'users':
+        return user ? <UsersSection currentUserId={user.id} /> : null
+      case 'automation':
+        return <AutomationStatus />
+      case 'backup':
+        return <BackupSection />
+      case 'maintenance':
+        return actor && <MaintenanceSection actor={actor} />
+      case 'unitMigration':
+        return actor && <UnitMigrationSection actor={actor} />
+      case 'rebaseUnit':
+        return actor && <RebaseUnitSection actor={actor} />
+    }
+  }
 
-      {isAdmin && <LocationsSection />}
-      {isAdmin && <UnitsSection />}
-      {isAdmin && <UsersSection currentUserId={user!.id} />}
-      {isAdmin && <SchedulesSection />}
-      {isAdmin && <ThresholdsSection />}
-      {isManager && <AutomationStatus />}
-      {isAdmin && <BackupSection />}
-      {isAdmin && user && <MaintenanceSection actor={{ id: user.id, name: user.name }} />}
-      {isAdmin && user && <UnitMigrationSection actor={{ id: user.id, name: user.name }} />}
-      {isAdmin && user && <RebaseUnitSection actor={{ id: user.id, name: user.name }} />}
+  const menu = (
+    <nav aria-label={t('ตั้งค่า')} className="space-y-5">
+      {groups.map((g) => (
+        <section key={g.title}>
+          <h2 className="mb-2 px-1 text-sm font-semibold text-ink">{g.title}</h2>
+          <ul className="overflow-hidden rounded-2xl bg-sunken ring-1 ring-inset ring-line/70">
+            {g.items.map((it) => {
+              const active = desktop && it.key === open
+              return (
+                <li key={it.key} className="border-b border-line/70 last:border-0">
+                  <button
+                    onClick={() => navigate(`/settings/${it.key}`)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 ${
+                      active ? 'bg-brand-soft' : 'hover:bg-line/40'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                        active ? 'bg-surface text-brand' : 'bg-surface text-ink-soft'
+                      }`}
+                    >
+                      <Icon name={it.icon} size={19} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-[15px] font-semibold ${active ? 'text-brand' : 'text-ink'}`}>
+                        {it.label}
+                      </span>
+                      <span className="block truncate text-xs text-ink-faint">{it.hint}</span>
+                    </span>
+                    <Icon name="chevronRight" size={18} className="text-ink-faint" />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ))}
+
+      <section>
+        <h2 className="mb-2 px-1 text-sm font-semibold text-ink">{t('ทั่วไป')}</h2>
+        <ul className="overflow-hidden rounded-2xl bg-sunken ring-1 ring-inset ring-line/70">
+          <li className="flex min-h-14 items-center gap-3 border-b border-line/70 px-4 py-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-ink-soft">
+              <Icon name="globe" size={19} />
+            </span>
+            <span className="min-w-0 flex-1 text-[15px] font-semibold text-ink">{t('ภาษา')}</span>
+            <LangToggle className="w-28" />
+          </li>
+          <li className="border-b border-line/70">
+            <button onClick={reset} className={actionRow}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-ink-soft">
+                <Icon name="swap" size={19} />
+              </span>
+              <span className="min-w-0 flex-1 text-[15px] font-semibold text-ink">{t('สลับแบรนด์')}</span>
+            </button>
+          </li>
+          <li>
+            <button onClick={() => void logout()} className={actionRow}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-danger-soft text-danger">
+                <Icon name="logout" size={19} />
+              </span>
+              <span className="min-w-0 flex-1 text-[15px] font-semibold text-danger">{t('ออกจากระบบ')}</span>
+            </button>
+          </li>
+        </ul>
+      </section>
 
       {!isAdmin && (
-        <Card className="p-4 text-sm text-ink-soft">
+        <p className="px-1 text-xs leading-relaxed text-ink-faint">
           {t('การจัดการคลัง ผู้ใช้ และข้อมูล ต้องเป็นสิทธิ์ผู้ดูแลระบบ (Admin)')}
-        </Card>
+        </p>
       )}
+    </nav>
+  )
+
+  // Phone, topic open: the topic alone, with the way back to the menu above it.
+  if (!desktop && open && openItem) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-4">
+        <button
+          onClick={() => navigate('/settings')}
+          className="-ml-2 inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand outline-none hover:bg-brand-soft focus-visible:ring-2 focus-visible:ring-brand/40"
+        >
+          <Icon name="chevronLeft" size={20} />
+          {t('ตั้งค่า')}
+        </button>
+        {renderSection(open)}
+      </div>
+    )
+  }
+
+  if (!desktop) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-5">
+        <PageHeader icon="settings" title={t('ตั้งค่า')} />
+        {menu}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader icon="settings" title={t('ตั้งค่า')} />
+      <div className="grid grid-cols-[20rem_minmax(0,1fr)] items-start gap-6">
+        <div>{menu}</div>
+        <div className="min-w-0">{open && renderSection(open)}</div>
+      </div>
     </div>
   )
 }
+
+const actionRow =
+  'flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-line/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40'
 
 
 // ---------------- Entry units ----------------

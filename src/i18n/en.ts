@@ -1579,4 +1579,22 @@ export const EN: Record<string, string> = {
   'แสดงทั้งหมด': 'Show all',
   'ไม่พบใบสั่งซื้อที่ตรงกับคำค้น': 'No orders match your search',
   'กำหนด {date}': 'Due {date}',
+
+  // Settings menu (21 Sep 2026)
+  'บัญชีของฉัน': 'My account',
+  'เลือกสิ่งที่อยากเห็นในกระดิ่ง': 'Choose what shows in the bell',
+  'สถานะการเชื่อมต่อฐานข้อมูล': 'Database connection status',
+  'คลังและสินค้า': 'Stock and products',
+  'เพิ่ม แก้ชื่อ หรือปิดใช้คลังและสาขา': 'Add, rename or retire warehouses and branches',
+  'Lot, Pack, Carton ที่ให้เลือกตอนคีย์จำนวน': 'Lot, Pack, Carton offered when keying quantities',
+  'เมื่อไรถือว่าใกล้หมดหรือค้างนาน': 'When stock counts as low or stale',
+  'รอบนับสต๊อกที่ขึ้นในปฏิทิน': 'Stock-count rounds shown on the calendar',
+  'ผู้ใช้และระบบ': 'Users and system',
+  'เพิ่มผู้ใช้ กำหนดสิทธิ์ ปิดการเข้าใช้': 'Add users, set roles, revoke access',
+  'งานที่ระบบทำเองตามเวลา': 'Jobs the system runs on a schedule',
+  'ดาวน์โหลดไฟล์สำรอง หรือกู้คืนจากไฟล์': 'Download a backup, or restore from one',
+  'ตรวจยอดคงเหลือให้ตรงกับประวัติ': 'Check balances match the history',
+  'รวมยอดที่เคยเก็บแยกหน่วย': 'Merge balances once kept per unit',
+  'เปลี่ยนหน่วยหลักของสินค้าและคำนวณยอดใหม่': "Change a product's base unit and recalculate",
+  'ทั่วไป': 'General',
 }

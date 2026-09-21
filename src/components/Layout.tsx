@@ -147,7 +147,10 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           onMenu={() => setOpen(true)}
-          title={t(NAV.find((n) => n.to === location.pathname)?.label ?? '')}
+          title={t(
+            // A sub-page (/settings/users, /requests/abc) keeps its section's name.
+            NAV.find((n) => n.to === location.pathname || (n.to !== '/' && location.pathname.startsWith(`${n.to}/`)))?.label ?? '',
+          )}
         />
 
         {/* The page column is capped: a stock table stretched across a 27" monitor puts the

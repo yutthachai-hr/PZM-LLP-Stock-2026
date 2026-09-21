@@ -85,6 +85,7 @@ function Gate() {
           <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/:section" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
