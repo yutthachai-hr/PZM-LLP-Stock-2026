@@ -5,7 +5,7 @@ import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { canEditItems, canTransition, isManager, liveItems } from '../lib/purchaseRequestStatus'
 import { sameUnit } from '../lib/units'
-import { requireQty } from '../lib/validate'
+import { requireQty, roundQty } from '../lib/validate'
 import { createPurchaseOrder } from './purchaseOrders'
 import { deliver } from './notifications'
 import { prSubmittedDraft } from '../lib/inventoryRules/notifications'
@@ -219,6 +219,31 @@ export async function addItem(params: {
     const idx = pr.items.reduce((m, i) => Math.max(m, i.idx + 1), 0)
     const item = buildItem(idx, params.line, params.products, params.suppliers)
     const byManager = pr.status === 'pendingApproval'
+    // The same product from the same supplier in the same unit is one line, not two:
+    // adding it again adds to the quantity. Two lines for one product reached a supplier
+    // as "PARIS HAM 10 KG / PARIS HAM 20 KG" on 21 Sep 2026, keyed twice in the picker.
+    const twin = liveItems(pr.items).find(
+      (x) => x.productId === item.productId && x.supplierId === item.supplierId && sameUnit(x.entryUnit ?? '', item.entryUnit ?? ''),
+    )
+    if (twin) {
+      const field = byManager ? 'approvedQty' : 'requestedQty'
+      const before = twin[field] ?? twin.requestedQty ?? 0
+      const after = roundQty(before + item.requestedQty!)
+      const merged = { ...twin, [field]: after }
+      return {
+        ...pr,
+        items: pr.items.map((x) => (x.idx === twin.idx ? merged : x)),
+        history: [
+          ...pr.history,
+          entry(params.actor, byManager ? 'managerQtyChanged' : 'qtyChanged', {
+            itemIdx: twin.idx,
+            detail: twin.productName,
+            oldValue: describe(twin, before),
+            newValue: describe(merged, after),
+          }),
+        ],
+      }
+    }
     const stored: PurchaseRequestItem = byManager
       ? { ...item, requestedQty: null, approvedQty: item.requestedQty!, managerAdded: true }
       : item

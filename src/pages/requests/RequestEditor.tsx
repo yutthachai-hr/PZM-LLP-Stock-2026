@@ -280,7 +280,11 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                             </button>
                           </div>
                           <div className="mt-2 grid grid-cols-3 gap-2">
+                            {/* Uncontrolled so typing is not fought over; keyed on the stored
+                                quantity so a merge from the picker (the same product added
+                                again) shows the new total instead of the stale box. */}
                             <Input
+                              key={`${item.idx}:${item.requestedQty ?? ''}`}
                               type="number"
                               min={0}
                               step="any"

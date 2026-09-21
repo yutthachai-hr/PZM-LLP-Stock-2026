@@ -276,6 +276,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                           {reviewing ? (
                             <div className="ml-auto w-24">
                               <Input
+                                key={`${item.idx}:${item.approvedQty ?? ''}`}
                                 type="number"
                                 min={0}
                                 step="any"

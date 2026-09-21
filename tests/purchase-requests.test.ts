@@ -116,6 +116,21 @@ describe('building a request', () => {
     await expect(S.addItem({ id: pr.id, line: { productId: 'p-redoak', supplierId: 'nope', qty: 1 }, products, suppliers, actor: STAFF })).rejects.toThrow()
   })
 
+  // "PARIS HAM 10 KG / PARIS HAM 20 KG" on one sheet, 21 Sep 2026: the product was keyed
+  // twice in the picker and each press made a line.
+  test('the same product from the same supplier keyed twice is one line with the sum', async () => {
+    const pr = await draftWith([
+      { productId: 'p-redoak', supplierId: 's-ack', qty: 10 },
+      { productId: 'p-rocket', supplierId: 's-ack', qty: 3 },
+      { productId: 'p-redoak', supplierId: 's-ack', qty: 20 },
+    ])
+    expect(pr.items.map((i) => [i.productName, i.requestedQty])).toEqual([['RED OAK SALAD', 30], ['ROCKET SALAD', 3]])
+    expect(pr.history.at(-1)).toMatchObject({ action: 'qtyChanged', itemIdx: 0, oldValue: 'RED OAK SALAD 10 KG', newValue: 'RED OAK SALAD 30 KG' })
+    // A different unit, or a different supplier, is its own line.
+    const more = await S.addItem({ id: pr.id, line: { productId: 'p-rocket', supplierId: 's-other', qty: 1 }, products, suppliers, actor: STAFF })
+    expect(more.items).toHaveLength(3)
+  })
+
   test('another staff member cannot edit my draft; a manager can', async () => {
     const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 5 }])
     await expect(S.setRequestedQty({ id: pr.id, idx: 0, qty: 6, actor: OTHER_STAFF })).rejects.toThrow()

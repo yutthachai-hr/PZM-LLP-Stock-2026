@@ -32,12 +32,15 @@ export function SendWizard({
   orders,
   onStatus,
   onClose,
+  resend = false,
 }: {
   /** The batch's placed orders, in the order they should be sent. */
   orders: PurchaseOrder[]
   /** Called after every status written, with the order as it now stands. */
   onStatus: (order: PurchaseOrder) => Promise<void>
   onClose: () => void
+  /** Send again even if already marked sent — a corrected order, or one sent from the list. */
+  resend?: boolean
 }) {
   const t = useT()
   const { lang: screenLang } = useI18n()
@@ -47,7 +50,13 @@ export function SendWizard({
   const { locationById } = useData()
   const company = brand ? brandDef(brand).name : ''
 
-  const pending = useMemo(() => orders.filter((o) => o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'), [orders])
+  // Once an order has been sent (or skipped) in THIS wizard it is done; `resend` only
+  // decides whether one that was already sent before the wizard opened is offered again.
+  const doneHere = useRef(new Set<string>())
+  const pending = useMemo(
+    () => orders.filter((o) => !doneHere.current.has(o.id) && (resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'))),
+    [orders, resend],
+  )
   const [provider, setProvider] = useState<PurchaseShareProvider | null>(null)
   const [currentId, setCurrentId] = useState<string | null>(pending[0]?.id ?? null)
   const [pageIdx, setPageIdx] = useState(0)
@@ -82,6 +91,7 @@ export function SendWizard({
   async function record(order: PurchaseOrder, status: 'shareOpened' | 'sent' | 'skipped' | 'failed', version?: number) {
     if (!user) return
     await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
+    if (status === 'sent' || status === 'skipped') doneHere.current.add(order.id)
     await onStatus({ ...order, shareStatus: status })
   }
 

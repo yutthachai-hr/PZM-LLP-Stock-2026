@@ -8,6 +8,7 @@ import { useT } from '../../i18n/I18nContext'
 import { normaliseName, similarity } from '../../lib/productMatch'
 import { sameUnit } from '../../lib/units'
 import type { Product, Supplier } from '../../types'
+import type { UnitConversion } from '../../lib/units'
 import { looseMatch, looseScore } from '../../lib/search'
 
 /**
@@ -337,7 +338,12 @@ function BySupplier({
   const [filter, setFilter] = useState('')
   const df = useDebounced(filter, DEBOUNCE_MS)
   const [qtys, setQtys] = useState<Record<string, string>>({})
+  // The unit each row is keyed in ('' = the product's own), and a rate stated from a row
+  // before the catalogue listener has caught up with it.
+  const [units, setUnits] = useState<Record<string, string>>({})
+  const [rates, setRates] = useState<Record<string, UnitConversion[]>>({})
   const [busy, setBusy] = useState('')
+  const plainUnits = useEntryUnits()
 
   const supplier = suppliers.find((s) => s.id === supplierId)
   const mine = useMemo(() => {
@@ -352,9 +358,17 @@ function BySupplier({
   async function add(p: Product) {
     const n = Number(qtys[p.id])
     if (!(n > 0) || !supplier) return
+    const entryUnit = units[p.id] ?? ''
     setBusy(p.id)
     try {
-      await onAdd({ productId: p.id, productName: p.name, supplierId: supplier.id, supplierName: supplier.name, qty: n })
+      await onAdd({
+        productId: p.id,
+        productName: p.name,
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        qty: n,
+        ...(entryUnit && !sameUnit(entryUnit, p.unitType) ? { entryUnit } : {}),
+      })
       setQtys((q) => ({ ...q, [p.id]: '' }))
     } finally {
       setBusy('')
@@ -408,7 +422,18 @@ function BySupplier({
                   aria-label={t('จำนวน')}
                 />
               </div>
-              <span className="w-10 text-xs text-ink-soft">{p.unitType}</span>
+              {/* The unit the quantity is in — a Carton ordered from a supplier's list
+                  must not land as one bag. Same list and same "state the rate once" prompt
+                  as the product tab (owner, 21 Sep 2026). */}
+              <div className="w-32">
+                <UnitSelect
+                  units={entryUnitsFor(p.unitType, plainUnits, rates[p.id] ?? p.unitConversions)}
+                  value={units[p.id] ?? ''}
+                  onChange={(u) => setUnits((cur) => ({ ...cur, [p.id]: u }))}
+                  product={rates[p.id] ? { ...p, unitConversions: rates[p.id] } : p}
+                  onRateDefined={(list) => setRates((cur) => ({ ...cur, [p.id]: list }))}
+                />
+              </div>
               <Button variant="secondary" onClick={() => void add(p)} disabled={busy === p.id || !(Number(qtys[p.id]) > 0)}>
                 <Icon name="plus" size={14} />
                 {t('เพิ่ม')}

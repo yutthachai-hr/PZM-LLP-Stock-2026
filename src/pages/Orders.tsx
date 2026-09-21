@@ -39,6 +39,7 @@ import { useSuppliers } from '../services/suppliers'
 import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
 import { PoSheet, SheetLangToggle } from '../components/PoSheet'
+import { SendWizard } from './purchase/SendWizard'
 import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
@@ -88,6 +89,9 @@ export function OrdersPage() {
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null)
   const [cancelling, setCancelling] = useState<PurchaseOrder | null>(null)
   const [amending, setAmending] = useState<PurchaseOrder | null>(null)
+  // One order sent to LINE from this list — the same wizard the batch and request
+  // screens use, so what is recorded on the order is the same (owner, 21 Sep 2026).
+  const [sending, setSending] = useState<PurchaseOrder | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -325,6 +329,7 @@ export function OrdersPage() {
                 late={lateIds.has(o.id)}
                 expectedAt={expectedDeliveryAt(o, leadTimeOf(o.supplierId))}
                 onOpen={() => setViewing(o)}
+                onSend={() => setSending(o)}
                 onReceive={() => setReceiving(o)}
                 onAmend={() => setAmending(o)}
                 onCancel={() => setCancelling(o)}
@@ -352,7 +357,22 @@ export function OrdersPage() {
           onDone={() => void load()}
         />
       )}
-      {viewing && <OrderSheet order={viewing} locationName={locationById(viewing.locationId)?.name ?? ''} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <OrderSheet
+          order={viewing}
+          locationName={locationById(viewing.locationId)?.name ?? ''}
+          onClose={() => setViewing(null)}
+          onSend={viewing.status === 'ordered' ? () => { setViewing(null); setSending(viewing) } : undefined}
+        />
+      )}
+      {sending && (
+        <SendWizard
+          orders={[sending]}
+          resend
+          onStatus={async (o) => setOrders((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))}
+          onClose={() => setSending(null)}
+        />
+      )}
       {amending && user && (
         <AmendOrderModal
           order={amending}
@@ -410,6 +430,7 @@ function OrderRow({
   onReceive,
   onAmend,
   onCancel,
+  onSend,
 }: {
   order: PurchaseOrder
   late: boolean
@@ -419,6 +440,7 @@ function OrderRow({
   onReceive: () => void
   onAmend: () => void
   onCancel: () => void
+  onSend: () => void
 }) {
   const t = useT()
   const done = order.status === 'received'
@@ -478,6 +500,12 @@ function OrderRow({
         {!done && !draft && (
           <Button variant="ghost" onClick={onAmend}>
             {t('แก้ไข')}
+          </Button>
+        )}
+        {!done && !draft && (
+          <Button variant="ghost" onClick={onSend}>
+            <Icon name="share" size={16} />
+            {t('ส่ง LINE')}
           </Button>
         )}
         {!done && !draft && <Button onClick={onReceive}>{t('ตรวจรับของ')}</Button>}
@@ -1035,10 +1063,13 @@ function OrderSheet({
   order,
   locationName,
   onClose,
+  onSend,
 }: {
   order: PurchaseOrder
   locationName: string
   onClose: () => void
+  /** Offered on an order still waiting for goods: opens the LINE send wizard for it. */
+  onSend?: () => void
 }) {
   const t = useT()
   const { lang } = useI18n()
@@ -1108,10 +1139,16 @@ function OrderSheet({
             <Icon name="download" size={16} />
             {t('พิมพ์ / บันทึก PDF (A5)')}
           </Button>
-          <Button onClick={() => void shareImage()} disabled={sharing}>
+          <Button variant={onSend ? 'secondary' : 'primary'} onClick={() => void shareImage()} disabled={sharing}>
             <Icon name="share" size={16} />
             {sharing ? t('กำลังสร้างรูป...') : t('แชร์เป็นรูป (JPG)')}
           </Button>
+          {onSend && (
+            <Button onClick={onSend}>
+              <Icon name="share" size={16} />
+              {t('ส่ง LINE')}
+            </Button>
+          )}
         </div>
       </div>
     </Modal>

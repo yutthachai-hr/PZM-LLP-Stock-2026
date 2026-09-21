@@ -657,3 +657,13 @@ describe('where the sheet has got to', () => {
     expect(o.sentAt).toBeGreaterThan(0)
   })
 })
+
+test('one product keyed twice in the same unit is one line with the sum', async () => {
+  await placeOrder([
+    { productId: 'p1', qty: 10 },
+    { productId: 'p2', qty: 5 },
+    { productId: 'p1', qty: 20 },
+  ])
+  const [o] = orders()
+  expect(o.lines.map((l) => [l.productId, l.orderedQty])).toEqual([['p1', 30], ['p2', 5]])
+})

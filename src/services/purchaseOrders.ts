@@ -6,7 +6,7 @@ import { AppError } from '../i18n/AppError'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
 import { resolveFactor, toBase } from '../lib/uom'
-import { requireEpochMs } from '../lib/validate'
+import { requireEpochMs, roundQty } from '../lib/validate'
 import { orderCache } from '../data/orderCache'
 import { receiveStock, type MovementLine } from './stock'
 import {
@@ -270,6 +270,14 @@ function buildLines(input: readonly OrderLineInput[], products: readonly Product
     const factor = resolveFactor(p, keyed || undefined)
     if (factor === null) {
       throw new AppError('ยังไม่ได้กำหนดอัตราแปลง "{unit}" ของ "{name}" — กำหนดที่หน้าสินค้าก่อน', { unit: keyed, name: p.name })
+    }
+    // One product in one unit is one line: keyed twice, the quantities add up. A sheet
+    // reading "PARIS HAM 10 KG / PARIS HAM 20 KG" is a question for the supplier, not an order.
+    const twin = lines.find((x) => x.productId === p.id && sameUnit(x.entryUnit ?? '', keyed))
+    if (twin) {
+      twin.orderedQty = roundQty(twin.orderedQty + l.qty)
+      if (keyed) twin.baseQty = roundQty((twin.baseQty ?? 0) + toBase(l.qty, factor))
+      continue
     }
     lines.push({
       productId: p.id,
