@@ -50,7 +50,6 @@ export const EN: Record<string, string> = {
   หมด: 'Out',
   ใกล้หมด: 'Low',
   'ล่าสุด': 'Last used',
-  'เมนู': 'Menu',
   'ผู้ใช้': 'User',
   '— เลือก —': '— Select —',
   '(ยกเลิก)': '(voided)',

@@ -40,6 +40,8 @@
 --------------------------------------------------------------------------- */
 
 @theme {
+  /* The phone tab bar; the page and the save bar leave this much room above the bottom. */
+  --tabbar-h: 4rem;
   --font-sans: 'LINE Seed Sans TH', 'Noto Sans Thai', 'Leelawadee UI', system-ui,
     -apple-system, sans-serif;
 

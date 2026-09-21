@@ -29,7 +29,7 @@ import { looseScore } from '../lib/search'
 
 const MAX_RESULTS = 8
 
-export function TopBar({ onMenu, title }: { onMenu: () => void; title: string }) {
+export function TopBar({ title }: { title: string }) {
   const t = useT()
   const navigate = useNavigate()
   const { products, locations, qtyAt, minFor, tracksProduct } = useData()
@@ -185,16 +185,6 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
       <div className="flex items-center gap-2 px-2 py-2 sm:px-4 lg:px-6">
-        {/* The drawer trigger, and the brand stripe that goes with it, only below lg —
-            above that the sidebar is on screen and carries both. */}
-        <button
-          onClick={onMenu}
-          className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 lg:hidden"
-          aria-label={t('เมนู')}
-        >
-          <Icon name="menu" size={22} />
-        </button>
-
         {/* On a phone the field would leave no room for anything else, so it opens over
             the bar instead of sitting in it. */}
         <div className={`min-w-0 flex-1 ${mobileSearch ? '' : 'hidden sm:block'}`}>{search}</div>
