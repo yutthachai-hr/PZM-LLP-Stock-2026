@@ -104,7 +104,13 @@ export function SendWizard({
       // truth: this one was started and not finished.
       if (current.shareStatus !== 'shareOpened') await record(current, 'shareOpened')
       setBusy('share')
-      const outcome = await provider.share({ order: current, page, file, hosted })
+      const outcome = await provider.share({
+        order: current,
+        page,
+        file,
+        hosted,
+        caption: t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + (page.of > 1 ? ` (${page.n}/${page.of})` : ''),
+      })
       if (outcome === 'cancelled') return
       if (!isLast) {
         // More pages of the same order: stay on it, move to the next page.

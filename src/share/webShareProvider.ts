@@ -22,7 +22,7 @@ export const webShareProvider: PurchaseShareProvider = {
     const { file } = payload
     if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: file.name })
+        await navigator.share({ files: [file], title: payload.caption, text: payload.caption })
         return 'shareOpened'
       } catch (e) {
         if ((e as { name?: string }).name === 'AbortError') return 'cancelled'
