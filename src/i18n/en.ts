@@ -150,11 +150,7 @@ export const EN: Record<string, string> = {
   พนักงาน: 'Staff',
 
   // ---- brand picker ------------------------------------------------------------
-  เลือกแบรนด์ที่จะจัดการ: 'Choose a brand to manage',
-  'สวัสดี {name} — ข้อมูลสต๊อกของแต่ละแบรนด์แยกกันสมบูรณ์':
-    'Hello {name} — each brand keeps its stock data completely separate',
-  ระบบสต๊อกพิซซ่า: 'Pizza stock system',
-  ระบบสต๊อกแซนด์วิช: 'Sandwich stock system',
+  'เลือกแบรนด์': 'Choose a brand',
 
   // ---- login / auth ------------------------------------------------------------
   เข้าสู่ระบบ: 'Sign in',
