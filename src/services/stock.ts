@@ -175,7 +175,7 @@ export function parseLevelId(id: string): {
  * comparing every write against the ledger, and the free plan has no room for one — so the
  * next best thing is that every balance in the database names whoever last wrote it.
  */
-function levelDoc(
+export function levelDoc(
   locationId: string,
   productId: string,
   qty: number,
@@ -195,7 +195,7 @@ function levelDoc(
   }
 }
 
-function makeDocNo(type: MovementType, seq: number): string {
+export function makeDocNo(type: MovementType, seq: number): string {
   return `${PREFIX[type]}-${String(seq).padStart(5, '0')}`
 }
 
@@ -866,7 +866,7 @@ export async function changeProductUnit(params: {
   // The rates on the product are stated in its current unit ("1 Carton = 500 EA"), and so
   // is every converted row; relabelling underneath them would make all of them lies.
   if (!sameUnit(product.unitType, unitType) && (product.unitConversions?.length ?? 0) > 0) {
-    throw new AppError('ลบอัตราแปลงหน่วยของสินค้านี้ออกก่อน จึงจะเปลี่ยนหน่วยนับได้')
+    throw new AppError('สินค้านี้มีอัตราแปลงหน่วยอยู่ — เปลี่ยนหน่วยนับได้ที่ ตั้งค่า → เปลี่ยนหน่วยหลักพร้อมคำนวณ')
   }
 
   // One equality read for this product's rows, not the whole ledger.
@@ -878,7 +878,7 @@ export async function changeProductUnit(params: {
     )
   }
   if (!sameUnit(product.unitType, unitType) && mine.some((m) => m.entryQty !== undefined)) {
-    throw new AppError('สินค้านี้มีประวัติที่แปลงหน่วยไว้แล้ว เปลี่ยนหน่วยนับไม่ได้ — กรุณาสร้างสินค้าใหม่ด้วยหน่วยที่ถูกต้อง')
+    throw new AppError('สินค้านี้มีประวัติที่แปลงหน่วยไว้แล้ว — เปลี่ยนหน่วยนับได้ที่ ตั้งค่า → เปลี่ยนหน่วยหลักพร้อมคำนวณ')
   }
 
   const now = Date.now()

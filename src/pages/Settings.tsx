@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { UnitMigrationSection } from './settings/UnitMigrationSection'
+import { RebaseUnitSection } from './settings/RebaseUnitSection'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -71,6 +72,7 @@ export function SettingsPage() {
       {isAdmin && <BackupSection />}
       {isAdmin && user && <MaintenanceSection actor={{ id: user.id, name: user.name }} />}
       {isAdmin && user && <UnitMigrationSection actor={{ id: user.id, name: user.name }} />}
+      {isAdmin && user && <RebaseUnitSection actor={{ id: user.id, name: user.name }} />}
 
       {!isAdmin && (
         <Card className="p-4 text-sm text-ink-soft">
