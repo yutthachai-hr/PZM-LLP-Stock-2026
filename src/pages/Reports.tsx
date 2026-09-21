@@ -365,6 +365,7 @@ export function ReportsPage() {
       },
       {
         key: 'in',
+        card: 'value',
         header: t('รับเข้า'),
         align: 'right',
         className: 'num text-in',
@@ -399,6 +400,7 @@ export function ReportsPage() {
     if (showBalance) {
       list.push({
         key: 'balance',
+        card: 'hidden',
         header: t('คงเหลือ'),
         align: 'right',
         className: 'num font-semibold',
@@ -428,6 +430,7 @@ export function ReportsPage() {
       { key: 'location', header: t('คลัง'), className: 'text-ink-soft', cell: (r) => <SiteChip locationId={r.locationId} /> },
       {
         key: 'qty',
+        card: 'value',
         header: t('คงเหลือ'),
         align: 'right',
         className: 'num font-semibold',
@@ -480,7 +483,7 @@ export function ReportsPage() {
       <Card className="space-y-4 p-4">
         {tabs}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Field label={t("คลัง/สาขา")}>
             <SiteSelect value={locationId} onChange={setLocationId} locations={locations} emptyLabel={t("ทุกคลัง")} />
           </Field>

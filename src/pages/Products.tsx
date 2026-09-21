@@ -250,6 +250,7 @@ export function ProductsPage() {
       { key: 'category', header: t('หมวดหมู่'), className: 'text-ink-soft', cell: (p) => p.category },
       {
         key: 'qty',
+        card: 'value',
         header: locId ? (locations.find((l) => l.id === locId)?.name ?? '') : t('คงเหลือรวม'),
         align: 'right',
         className: 'num font-semibold',
@@ -260,6 +261,8 @@ export function ProductsPage() {
           return (
             <>
               <span className={low ? 'font-semibold text-warn' : 'text-ink'}>{fmtQty(total)}</span>
+              {/* The unit rides with the figure on a phone card, where the unit column is not shown. */}
+              <span className="ml-1 text-xs font-normal text-ink-soft md:hidden">{p.unitType}</span>
               {/* The same figure in the product's larger units, for whoever counts by the case. */}
               {p.unitConversions?.length ? (
                 <span className="ml-2 text-xs text-ink-faint">{breakdown(total, p, fmtQty) && `(= ${breakdown(total, p, fmtQty)})`}</span>
@@ -288,7 +291,7 @@ export function ProductsPage() {
         className: 'num text-ink-soft',
         cell: (p) => fmtQty(minShown(p)),
       },
-      { key: 'unit', header: t('หน่วย'), className: 'text-ink-soft', cell: (p) => p.unitType },
+      { key: 'unit', card: 'hidden', header: t('หน่วย'), className: 'text-ink-soft', cell: (p) => p.unitType },
       {
         key: 'actions',
         header: '',
