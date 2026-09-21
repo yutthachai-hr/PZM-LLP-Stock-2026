@@ -332,6 +332,7 @@ export function SuppliersPage() {
       },
       {
         key: 'onTheWay',
+        card: 'value',
         header: t('กำลังจะเข้า'),
         align: 'right',
         className: 'text-ink-faint',

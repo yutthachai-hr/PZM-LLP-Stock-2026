@@ -288,6 +288,7 @@ export function OrdersPage() {
     },
     {
       key: 'ordered',
+      card: 'hidden',
       header: t('วันที่สั่ง'),
       cell: (o) => (
         <div className="flex items-start gap-2">

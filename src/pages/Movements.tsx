@@ -200,6 +200,7 @@ export function MovementsPage() {
       },
       {
         key: 'qty',
+        card: 'value',
         header: t('จำนวน'),
         align: 'right',
         className: 'num font-semibold',
@@ -225,6 +226,7 @@ export function MovementsPage() {
     if (stockCardMode) {
       list.push({
         key: 'balance',
+        card: 'hidden',
         header: t('คงเหลือ'),
         align: 'right',
         className: 'num font-semibold text-ink',
@@ -294,7 +296,7 @@ export function MovementsPage() {
       />
 
       <Card className="p-3">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Field label={t("สินค้า")}>
             <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
               <option value="">{t("ทุกสินค้า")}</option>
