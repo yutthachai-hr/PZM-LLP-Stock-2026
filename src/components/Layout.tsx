@@ -5,36 +5,13 @@ import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useT } from '../i18n/I18nContext'
-import { Icon, type IconName } from './Icon'
+import { Icon } from './Icon'
 import { isDemoMode } from '../firebase/config'
 import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
-
-interface NavItem {
-  to: string
-  label: string
-  icon: IconName
-  adminOnly?: boolean
-}
-
-// Labels are translation keys — NavItemLink renders them through t(). i18n-key
-const NAV: NavItem[] = [
-  { to: '/', label: 'ภาพรวม', icon: 'dashboard' }, // i18n-key
-  { to: '/products', label: 'สินค้าคงคลัง', icon: 'package' }, // i18n-key
-  { to: '/receive', label: 'รับสินค้าเข้า', icon: 'receive' }, // i18n-key
-  { to: '/issue', label: 'เบิก/โอนสาขา', icon: 'truck' }, // i18n-key
-  { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust' }, // i18n-key
-  { to: '/calendar', label: 'ปฏิทินคลัง', icon: 'calendar' }, // i18n-key
-  { to: '/movements', label: 'ประวัติ/Stock Card', icon: 'history' }, // i18n-key
-  { to: '/reports', label: 'รายงาน', icon: 'report' }, // i18n-key
-  { to: '/requests', label: 'รายการขอสั่งซื้อ', icon: 'note' }, // i18n-key
-  { to: '/orders', label: 'สั่งซื้อ', icon: 'truck' }, // i18n-key
-  { to: '/suppliers', label: 'ผู้ขาย', icon: 'users' }, // i18n-key
-  { to: '/import', label: 'นำเข้า Excel', icon: 'upload', adminOnly: true }, // i18n-key
-  { to: '/settings', label: 'ตั้งค่า', icon: 'settings' }, // i18n-key
-]
+import { navFor, titleFor, type NavItem } from './nav/navItems'
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout, mode } = useAuth()
@@ -82,7 +59,7 @@ export function Layout({ children }: { children: ReactNode }) {
   }, [open])
 
   const def = brand ? brandDef(brand) : null
-  const items = NAV.filter((n) => !n.adminOnly || user?.role === 'admin')
+  const items = navFor(user?.role)
   // One read per session, shared with the calendar's own cache — see useTodayEventCount.
   const todayCount = useTodayEventCount(!!user)
 
@@ -147,10 +124,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           onMenu={() => setOpen(true)}
-          title={t(
-            // A sub-page (/settings/users, /requests/abc) keeps its section's name.
-            NAV.find((n) => n.to === location.pathname || (n.to !== '/' && location.pathname.startsWith(`${n.to}/`)))?.label ?? '',
-          )}
+          title={t(titleFor(location.pathname))}
         />
 
         {/* The page column is capped: a stock table stretched across a 27" monitor puts the
