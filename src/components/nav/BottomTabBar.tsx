@@ -28,12 +28,12 @@ export function BottomTabBar() {
       <Link
         key={item.to}
         to={item.to}
-        className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
+        className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
           active ? 'font-semibold text-brand' : 'text-ink-soft'
         }`}
         aria-current={active ? 'page' : undefined}
       >
-        <Icon name={item.icon} size={22} />
+        <Icon name={item.icon} size={26} />
         <span>{t(item.label)}</span>
       </Link>
     )
@@ -52,9 +52,9 @@ export function BottomTabBar() {
             type="button"
             onClick={() => setSheet(true)}
             aria-label={t('ทำรายการ')}
-            className="absolute -top-5 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-brand text-white shadow-lg outline-none active:brightness-110 focus-visible:ring-2 focus-visible:ring-brand/40"
+            className="absolute -top-6 flex h-16 w-16 cursor-pointer items-center justify-center rounded-full bg-brand text-white shadow-lg outline-none active:brightness-110 focus-visible:ring-2 focus-visible:ring-brand/40"
           >
-            <Icon name="plus" size={28} />
+            <Icon name="plus" size={32} />
           </button>
         </div>
         {tab(TAB_ITEMS[2])}

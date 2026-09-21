@@ -24,10 +24,10 @@ export function ActionSheet({ open, onClose }: { open: boolean; onClose: () => v
               onClose()
               navigate(a.to)
             }}
-            className="flex min-h-24 cursor-pointer flex-col items-start justify-end gap-1 rounded-xl border border-line bg-surface p-3 text-left outline-none active:bg-brand-soft focus-visible:ring-2 focus-visible:ring-brand/40"
+            className="flex min-h-28 cursor-pointer flex-col items-start justify-end gap-1.5 rounded-2xl border border-line bg-surface p-4 text-left outline-none active:bg-brand-soft focus-visible:ring-2 focus-visible:ring-brand/40"
           >
-            <Icon name={a.icon} size={24} className="text-brand" />
-            <span className="text-sm font-semibold text-ink">{t(a.label)}</span>
+            <Icon name={a.icon} size={30} className="text-brand" />
+            <span className="text-base font-semibold text-ink">{t(a.label)}</span>
             <span className="text-xs text-ink-soft">{t(a.hint)}</span>
           </button>
         ))}

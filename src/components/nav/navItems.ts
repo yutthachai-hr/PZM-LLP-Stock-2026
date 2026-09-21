@@ -89,5 +89,7 @@ export function isMoreRoute(pathname: string): boolean {
 /** The section's label for the top bar; a sub-page keeps its section's name. */
 export function titleFor(pathname: string): string {
   if (pathname === '/more') return MORE.label
+  // The bar's title is read on phones only, where "/" is the home screen, not the overview.
+  if (pathname === '/') return TAB_ITEMS[0].label
   return NAV.find((n) => n.to === pathname || (n.to !== '/' && pathname.startsWith(`${n.to}/`)))?.label ?? ''
 }
