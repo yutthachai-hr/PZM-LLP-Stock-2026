@@ -25,11 +25,17 @@ export function TodayTransactions({
   types,
   date,
   title,
+  byUserId,
+  startOpen = false,
 }: {
   types: readonly MovementType[]
   /** The business day the form is keying, ms. Rows are the ones filed under that day. */
   date: number
   title?: string
+  /** Only rows this person keyed — the phone's home screen shows what I did today. */
+  byUserId?: string
+  /** On a phone the panel starts folded; the home screen wants it open. */
+  startOpen?: boolean
 }) {
   const t = useT()
   const navigate = useNavigate()
@@ -40,7 +46,7 @@ export function TodayTransactions({
   // On a phone the panel sits under the form and starts folded to one line with the
   // count, so the form keeps the screen (spec §3, 21 Sep 2026); a tap opens it.
   const phone = useViewport() === 'phone'
-  const [openPanel, setOpenPanel] = useState(false)
+  const [openPanel, setOpenPanel] = useState(startOpen)
 
   const day = new Date(date)
   const from = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime()
@@ -49,9 +55,9 @@ export function TodayTransactions({
   const rows = useMemo(
     () =>
       movements
-        .filter((m) => types.includes(m.type) && m.date >= from && m.date < to)
+        .filter((m) => types.includes(m.type) && m.date >= from && m.date < to && (!byUserId || m.byUserId === byUserId))
         .sort((a, b) => b.createdAt - a.createdAt),
-    [movements, types, from, to],
+    [movements, types, from, to, byUserId],
   )
   const shown = showAll ? rows : rows.slice(0, 30)
 
