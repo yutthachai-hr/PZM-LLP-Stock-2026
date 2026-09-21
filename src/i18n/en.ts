@@ -1620,4 +1620,6 @@ export const EN: Record<string, string> = {
   'โหลดเพิ่ม ({n} รายการที่เหลือ)': 'Load more ({n} left)',
   'สวัสดี {name}': 'Hello {name}',
   'รายการที่ฉันทำวันนี้': 'What I keyed today',
+  'เลยกำหนด': 'Overdue',
+  'ใบขอสั่งซื้อรออนุมัติ': 'Requests to approve',
 }

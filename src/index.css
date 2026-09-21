@@ -41,7 +41,7 @@
 
 @theme {
   /* The phone tab bar; the page and the save bar leave this much room above the bottom. */
-  --tabbar-h: 4rem;
+  --tabbar-h: 4.5rem;
   --font-sans: 'LINE Seed Sans TH', 'Noto Sans Thai', 'Leelawadee UI', system-ui,
     -apple-system, sans-serif;
 
@@ -217,5 +217,13 @@ input[type='number'] {
     border: 0;
     padding: 0;
     box-shadow: none;
+  }
+}
+
+/* A phone is read at arm's length with a thumb: everything a step larger and looser
+   than the desk. Sizes are rem-based, so one number does it (owner, 22 Sep 2026). */
+@media (max-width: 767px) {
+  html {
+    font-size: 17px;
   }
 }

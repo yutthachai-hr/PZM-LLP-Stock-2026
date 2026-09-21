@@ -361,6 +361,7 @@ export function ProductsPage() {
                 </Button>
               )}
               {products.length > 0 && catalogCount > 0 && (
+                <span className="hidden md:contents">
                 <Button variant="secondary" onClick={handleReset} disabled={resetting}>
                   {resetting ? (
                     t("กำลังนำเข้า...")
@@ -371,6 +372,7 @@ export function ProductsPage() {
                     </>
                   )}
                 </Button>
+                </span>
               )}
               <Button onClick={() => setCreating(true)}>
                 <Icon name="plus" size={16} />
@@ -519,11 +521,6 @@ export function ProductsPage() {
             minWidth={640}
             maxHeight="calc(100vh - 260px)"
             onRowClick={(p) => setEditing(p)}
-            cardActions={(p) => (
-              <Button variant="secondary" onClick={() => setEditing(p)}>
-                {isAdmin ? t('แก้ไข') : t('ดู')}
-              </Button>
-            )}
           />
         </Card>
       )}

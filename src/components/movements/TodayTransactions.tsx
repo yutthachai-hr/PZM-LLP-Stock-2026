@@ -97,11 +97,11 @@ export function TodayTransactions({
       ) : (
         <ul className="divide-y divide-line overflow-auto">
           {shown.map((m) => (
-            <li key={m.id} className={`flex items-start gap-2 px-3 py-2 text-sm ${m.voided ? 'bg-sunken text-ink-faint' : ''}`}>
+            <li key={m.id} className={`flex items-start gap-2 px-4 py-3 text-sm ${m.voided ? 'bg-sunken text-ink-faint' : ''}`}>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`min-w-0 truncate font-medium ${m.voided ? 'line-through' : 'text-ink'}`} title={m.productName}>{m.productName}</span>
-                  <span className="num shrink-0 whitespace-nowrap font-semibold text-ink">
+                  <span className={`min-w-0 truncate text-[15px] font-semibold ${m.voided ? 'line-through' : 'text-ink'}`} title={m.productName}>{m.productName}</span>
+                  <span className="num shrink-0 whitespace-nowrap text-base font-bold text-ink">
                     {describeQty(m, fmtQty)}
                   </span>
                 </div>
@@ -113,7 +113,8 @@ export function TodayTransactions({
                   <span className="doc-no">{m.docNo}</span>
                   {m.reason && <span>· {t(ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason)}</span>}
                   {m.note && <span className="truncate">· {m.note}</span>}
-                  <span>· {m.byUserName}</span>
+                  {/* Whose row it is — not needed when the panel is already "mine". */}
+                  {!byUserId && <span>· {m.byUserName}</span>}
                   {m.updatedByName && <span className="text-warn">· {t('แก้ไข:')} {m.updatedByName}</span>}
                   {m.voided && <span>· {t('(ยกเลิก)')}</span>}
                 </div>

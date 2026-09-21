@@ -391,21 +391,23 @@ export function PageHeader({
     out: 'bg-out-soft text-out',
     warn: 'bg-warn-soft text-warn',
   }
+  // On a phone the top bar already says where you are, so the block is only its actions:
+  // a heading, an icon and a sentence were a screen's worth of scrolling before the work.
   return (
     <div className="flex flex-wrap items-center gap-3 sm:gap-4">
       <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14 ${tones[tone]}`}
+        className={`hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14 md:flex ${tones[tone]}`}
       >
         <Icon name={icon} size={26} />
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="hidden min-w-0 flex-1 md:block">
         <h1 className="text-balance text-2xl font-bold leading-tight text-ink sm:text-[1.75rem]">
           {title}
         </h1>
         {subtitle && <p className="mt-0.5 text-sm text-ink-soft">{subtitle}</p>}
       </div>
       {actions && (
-        <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto">{actions}</div>
+        <div className="flex w-full shrink-0 flex-wrap gap-2 md:w-auto">{actions}</div>
       )}
     </div>
   )

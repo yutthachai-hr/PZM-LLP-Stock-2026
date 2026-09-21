@@ -81,15 +81,15 @@ export function DataTable<T>({
         {rows.map((row) => (
           <div
             key={rowKey(row)}
-            className={`p-3 ${onRowClick ? 'cursor-pointer active:bg-sunken' : ''} ${rowClassName?.(row) ?? ''}`}
+            className={`px-4 py-3.5 ${onRowClick ? 'cursor-pointer active:bg-sunken' : ''} ${rowClassName?.(row) ?? ''}`}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 font-medium text-ink">{title.cell(row)}</div>
-              {value && <div className="num shrink-0 text-right text-base font-semibold text-ink">{value.cell(row)}</div>}
+              <div className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{title.cell(row)}</div>
+              {value && <div className="num shrink-0 text-right text-lg font-bold text-ink">{value.cell(row)}</div>}
             </div>
             {meta.length > 0 && (
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-soft">
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-ink-soft">
                 {meta.map((c) => (
                   <span key={c.key} className="inline-flex min-w-0 items-center gap-1">
                     <span className="text-ink-faint">{c.header}</span>

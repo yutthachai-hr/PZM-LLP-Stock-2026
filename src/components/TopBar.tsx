@@ -190,7 +190,7 @@ export function TopBar({ title }: { title: string }) {
         <div className={`min-w-0 flex-1 ${mobileSearch ? '' : 'hidden sm:block'}`}>{search}</div>
 
         {!mobileSearch && (
-          <span className="truncate text-sm font-semibold text-ink sm:hidden">{title}</span>
+          <span className="truncate text-base font-bold text-ink sm:hidden">{title}</span>
         )}
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -207,7 +207,7 @@ export function TopBar({ title }: { title: string }) {
 
           <button
             onClick={() => navigate('/')}
-            className="relative inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
+            className="relative hidden h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 md:inline-flex"
             aria-label={t('สินค้าใกล้หมด ({n} รายการ)', { n: lowCount })}
           >
             <Icon name="warning" size={19} />
@@ -220,7 +220,9 @@ export function TopBar({ title }: { title: string }) {
 
           <NotificationBell />
 
-          <LangButton />
+          <span className="hidden md:contents">
+            <LangButton />
+          </span>
 
           <UserMenu />
         </div>
