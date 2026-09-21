@@ -814,8 +814,20 @@ export function Pagination({
     (n) => n === 1 || n === pages || Math.abs(n - page) <= 1,
   )
   const btn = `inline-flex h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
+  // A phone reads a list by scrolling, not by turning pages: one button that shows more
+  // (usePaged goes back to page 1 when the size grows, so nothing already shown is lost).
+  const remaining = total - to
   return (
-    <div className="flex flex-wrap items-center gap-3 px-1 pt-3 text-sm text-ink-soft">
+    <>
+    <div className="flex flex-col items-center gap-2 px-1 pt-3 text-sm text-ink-soft md:hidden">
+      <span className="num">{t('แสดง {to} จาก {total} รายการ', { to, total })}</span>
+      {remaining > 0 && (
+        <button className={`${btn} min-h-11 w-full border-line bg-surface text-ink hover:bg-sunken`} onClick={() => onPageSize(pageSize + sizes[1])}>
+          {t('โหลดเพิ่ม ({n} รายการที่เหลือ)', { n: remaining })}
+        </button>
+      )}
+    </div>
+    <div className="hidden flex-wrap items-center gap-3 px-1 pt-3 text-sm text-ink-soft md:flex">
       <span className="num">{t('แสดง {from} - {to} จาก {total} รายการ', { from, to, total })}</span>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <select
@@ -864,5 +876,6 @@ export function Pagination({
         </button>
       </div>
     </div>
+    </>
   )
 }

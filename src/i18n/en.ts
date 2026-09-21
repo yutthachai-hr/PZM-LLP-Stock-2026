@@ -1616,4 +1616,6 @@ export const EN: Record<string, string> = {
   'เกินคงเหลือ — บันทึกไม่ได้': 'More than on hand — cannot be filed',
   'ใส่จำนวน': 'Enter a quantity',
   'ตกลง': 'OK',
+  'แสดง {to} จาก {total} รายการ': 'Showing {to} of {total}',
+  'โหลดเพิ่ม ({n} รายการที่เหลือ)': 'Load more ({n} left)',
 }
