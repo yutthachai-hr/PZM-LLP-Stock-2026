@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useViewport } from '../lib/viewport'
+import { upsertLine } from '../lib/lines'
+import { QtySheet } from './QtySheet'
 import type { Product } from '../types'
 import { ProductThumb } from './ProductThumb'
 import { QtyInput } from './QtyInput'
@@ -67,6 +70,10 @@ export function LineBuilder({
   const t = useT()
   const [search, setSearch] = useState('')
   const searchBox = useRef<HTMLInputElement>(null)
+  // A phone keys through a sheet (spec §3, 21 Sep 2026): tapping a product opens it for
+  // that product, adding or editing its line. Tablets and desktops keep the inline rows.
+  const phone = useViewport() === 'phone'
+  const [sheetFor, setSheetFor] = useState<Product | null>(null)
 
   useEffect(() => {
     if (focusOn > 0) searchBox.current?.focus()
@@ -80,16 +87,28 @@ export function LineBuilder({
       // A hidden product is one nobody should be filing against any more. Unhide it in
       // สินค้าคงคลัง if it turns out they should.
       .filter((p) => p.active !== false)
-      .filter((p) => !chosen.has(p.id))
+      .filter((p) => phone || !chosen.has(p.id))
       .filter((p) => looseMatch([p.name, p.sku], q))
       .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
       .slice(0, MAX_MATCHES)
-  }, [search, products, lines])
+  }, [search, products, lines, phone])
 
   function addProduct(p: Product) {
+    if (phone) {
+      setSearch('')
+      setSheetFor(p)
+      return
+    }
     onChange([...lines, { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }])
     setSearch('')
     // Straight on to the next line: the cursor stays in the search box after every add.
+    setTimeout(() => searchBox.current?.focus(), 0)
+  }
+
+  function sheetSubmit(e: QtyEntry) {
+    if (!sheetFor) return
+    onChange(upsertLine(lines, sheetFor, e))
+    setSheetFor(null)
     setTimeout(() => searchBox.current?.focus(), 0)
   }
 
@@ -138,7 +157,7 @@ export function LineBuilder({
           spellCheck={false}
         />
         {matches.length > 0 && (
-          <div className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-lg border border-line bg-surface shadow-lg">
+          <div className="mt-1 max-h-80 w-full overflow-auto rounded-lg border border-line bg-surface shadow-lg md:absolute md:z-20">
             {matches.map((p) => (
               <button
                 key={p.id}
@@ -149,6 +168,11 @@ export function LineBuilder({
                 <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
                 <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
                 <span className="doc-no shrink-0 text-xs text-ink-faint">{p.sku}</span>
+                {availableAt && (
+                  <span className="num shrink-0 text-xs text-ink-soft">
+                    {fmtQty(availableAt(p.id))} {p.unitType}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -166,6 +190,52 @@ export function LineBuilder({
             const over = avail !== undefined && l.qty > avail
             const product = products.find((p) => p.id === l.productId)
             const conversions = product?.unitConversions
+            if (phone) {
+              return (
+                <button
+                  key={l.productId}
+                  type="button"
+                  onClick={() => setSheetFor(product ?? null)}
+                  className="flex w-full items-center gap-3 p-3 text-left outline-none active:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
+                >
+                  <span aria-hidden="true" className={`num w-4 shrink-0 text-center text-lg font-bold leading-none ${signColor}`}>
+                    {sign}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-ink">{l.productName}</div>
+                    <div className={`text-xs ${over ? 'font-medium text-danger' : 'text-ink-soft'}`}>
+                      {avail !== undefined ? (
+                        <>
+                          {t('คงเหลือต้นทาง')}: <span className="num">{fmtQty(avail)}</span> {l.unit}
+                        </>
+                      ) : (
+                        <span className="doc-no">{product?.sku}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="num shrink-0 text-right text-base font-semibold text-ink">{describeQty(l, fmtQty)}</div>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      remove(l.productId)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        remove(l.productId)
+                      }
+                    }}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-ink-faint active:bg-danger-soft active:text-danger"
+                    aria-label={t('ลบ "{name}" ออกจากรายการ', { name: l.productName })}
+                  >
+                    <Icon name="x" size={18} />
+                  </span>
+                </button>
+              )
+            }
             return (
               <div
                 key={l.productId}
@@ -217,6 +287,16 @@ export function LineBuilder({
           })}
         </div>
       )}
+      <QtySheet
+        open={!!sheetFor}
+        product={sheetFor}
+        initial={sheetFor ? lines.find((l) => l.productId === sheetFor.id) : undefined}
+        available={sheetFor && availableAt ? availableAt(sheetFor.id) : undefined}
+        direction={direction}
+        submitLabel={sheetFor && lines.some((l) => l.productId === sheetFor.id) ? t('บันทึก') : t('เพิ่มรายการ')}
+        onClose={() => setSheetFor(null)}
+        onSubmit={sheetSubmit}
+      />
     </div>
   )
 }
