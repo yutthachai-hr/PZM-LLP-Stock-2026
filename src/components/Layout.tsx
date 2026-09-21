@@ -160,7 +160,13 @@ export function Layout({ children }: { children: ReactNode }) {
           }`}
         >
           <InstallHint />
-          {children}
+          {/* On a desktop the page sits on one white sheet over the canvas (the owner's
+              mock-up, 21 Sep 2026): the screen reads as one document with its sections
+              inside it, rather than as loose boxes floating on grey. On a phone there is
+              no room for a margin around a sheet, so the canvas is the page. */}
+          <div className="lg:min-h-full lg:rounded-2xl lg:border lg:border-line lg:bg-surface lg:p-6 lg:shadow-sm">
+            {children}
+          </div>
         </main>
       </div>
     </div>
@@ -220,7 +226,7 @@ function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
       className={({ isActive }) =>
         `flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
           isActive
-            ? 'bg-brand-soft text-brand'
+            ? 'bg-brand-soft font-semibold text-brand ring-1 ring-inset ring-brand/20'
             : 'text-ink-soft hover:bg-sunken hover:text-ink'
         }`
       }

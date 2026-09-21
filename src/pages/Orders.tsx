@@ -11,17 +11,26 @@ import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { Icon } from '../components/Icon'
 import { ReasonModal } from './requests/ReasonModal'
 import {
+  AlertBanner,
   Badge,
   Button,
   Card,
+  EmptyState,
   Field,
   Input,
   Modal,
   PageHeader,
+  Pagination,
+  SearchInput,
   Select,
   Spinner,
+  StatusTabs,
   Textarea,
+  bannerAction,
+  type StatusTabItem,
 } from '../components/ui'
+import type { Column } from '../components/DataTable'
+import { usePaged } from '../lib/usePaged'
 import {
   CHASE_AFTER_DAYS,
   amendPurchaseOrder,
@@ -84,6 +93,9 @@ export function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('open')
   const [days, setDays] = useState(30)
+  const [search, setSearch] = useState('')
+  // Set from the late-deliveries banner: the open tab narrowed to the orders it counted.
+  const [lateOnly, setLateOnly] = useState(false)
   const [creating, setCreating] = useState(false)
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null)
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null)
@@ -135,8 +147,22 @@ export function OrdersPage() {
   const received = orders.filter((o) => o.status === 'received')
   // Cancelled orders stay in the list: the number, who called it off and why are the
   // trail an audit follows. Nothing on this screen deletes an order.
-  const cancelled = orders.filter((o) => o.status === 'cancelled')
+  // Newest cancellation first — sorted before paging, so page 1 is the latest.
+  const cancelled = orders
+    .filter((o) => o.status === 'cancelled')
+    .sort((a, b) => (b.cancelledAt ?? 0) - (a.cancelledAt ?? 0))
   const summary = useMemo(() => summariseBySupplier(orders), [orders])
+
+  // The tab's rows, narrowed by the search box: supplier, document number or any product on
+  // the order — the three things someone holding a delivery note would type.
+  const filtered = useMemo(() => {
+    const base = tab === 'open' ? open : tab === 'received' ? received : tab === 'cancelled' ? cancelled : []
+    const q = search.trim().toLowerCase()
+    return base
+      .filter((o) => !(lateOnly && tab === 'open') || lateIds.has(o.id))
+      .filter((o) => !q || looseMatch([o.supplierName, o.docNo, ...o.lines.map((l) => l.productName)], q))
+  }, [tab, open, received, cancelled, search, lateOnly, lateIds])
+  const paged = usePaged(filtered, 20, `${tab}|${search}|${lateOnly}|${days}`)
 
   async function cancel(order: PurchaseOrder, reason: string) {
     if (!user) return
@@ -227,12 +253,93 @@ export function OrdersPage() {
     }
   }
 
+  function actionsFor(o: PurchaseOrder) {
+    return {
+      onOpen: () => setViewing(o),
+      onSend: () => setSending(o),
+      onReceive: () => setReceiving(o),
+      onAmend: () => setAmending(o),
+      onCancel: () => setCancelling(o),
+    }
+  }
+
+  const orderColumns: Column<PurchaseOrder>[] = [
+    {
+      key: 'supplier',
+      header: t('ผู้ขาย / เลขที่ PO'),
+      primary: true,
+      className: 'min-w-44',
+      cell: (o) => (
+        <div className="min-w-0">
+          <div className="font-semibold text-ink">{o.supplierName}</div>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-faint">
+            <span className="doc-no">{o.docNo}</span>
+            {o.revision ? <Badge color="amber">Rev.{o.revision}</Badge> : null}
+            {o.requestId && (
+              <Link to={`/requests/${o.requestId}`} className="text-brand hover:underline">
+                {t('จากรายการขอสั่งซื้อ')}
+              </Link>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'ordered',
+      header: t('วันที่สั่ง'),
+      cell: (o) => (
+        <div className="flex items-start gap-2">
+          <Icon name="calendar" size={16} className="mt-0.5 text-ink-faint" />
+          <div>
+            <div className="num text-ink">{formatThaiDate(o.orderedAt)}</div>
+            <div className="text-xs">
+              <SiteChip locationId={o.locationId} />
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'lines',
+      header: t('รายการสินค้า'),
+      cell: (o) => (
+        <span className="inline-flex items-center gap-2 whitespace-nowrap text-ink">
+          <Icon name="box" size={16} className="text-warn" />
+          {t('{count} รายการ', { count: o.lines.length })}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: t('สถานะ'),
+      cell: (o) => <OrderStatus order={o} late={lateIds.has(o.id)} />,
+    },
+    {
+      key: 'due',
+      header: tab === 'received' ? t('รับของเมื่อ') : t('กำหนดรับของ'),
+      cell: (o) => (
+        <DueCell order={o} late={lateIds.has(o.id)} expectedAt={expectedDeliveryAt(o, leadTimeOf(o.supplierId))} />
+      ),
+    },
+    {
+      key: 'actions',
+      header: t('การดำเนินการ'),
+      tableOnly: true,
+      cell: (o) => <OrderActions order={o} compact {...actionsFor(o)} />,
+    },
+  ]
+
   if (loading) return <Spinner label={t('กำลังโหลดใบสั่งซื้อ...')} />
 
-  const shown = tab === 'open' ? open : tab === 'received' ? received : []
+  const tabItems: StatusTabItem<Tab>[] = [
+    { key: 'open', label: t('รอรับของ ({count})', { count: open.length }), icon: 'clock', tone: 'brand' },
+    { key: 'received', label: t('รับของแล้ว ({count})', { count: received.length }), icon: 'checkCircle', tone: 'in' },
+    { key: 'cancelled', label: t('ยกเลิกแล้ว ({count})', { count: cancelled.length }), icon: 'x', tone: 'plain' },
+    { key: 'summary', label: t('สรุปตามผู้ขาย'), icon: 'chart', tone: 'plain' },
+  ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
         icon="truck"
         title={t('สั่งซื้อ')}
@@ -255,89 +362,117 @@ export function OrdersPage() {
 
       {/* The thing worth interrupting someone about: goods that never turned up. */}
       {late.length > 0 && (
-        <Card className="border-danger/40 bg-danger-soft p-3">
-          <div className="flex items-center gap-2 text-sm">
-            <Icon name="warning" size={18} className="shrink-0 text-danger" />
-            <span className="font-medium text-danger">
-              {t('{count} ใบสั่งซื้อเกิน {days} วันแล้วยังไม่ได้รับของ', {
-                count: late.length,
-                days: CHASE_AFTER_DAYS,
-              })}
-            </span>
-          </div>
-        </Card>
+        <AlertBanner
+          action={
+            <button
+              className={bannerAction}
+              onClick={() => {
+                setTab('open')
+                setLateOnly(true)
+              }}
+            >
+              {t('ดูรายการที่ค้างนาน')}
+              <Icon name="arrowRight" size={16} />
+            </button>
+          }
+        >
+          {t('{count} ใบสั่งซื้อเกิน {days} วันแล้วยังไม่ได้รับของ', {
+            count: late.length,
+            days: CHASE_AFTER_DAYS,
+          })}
+        </AlertBanner>
       )}
 
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
-          {(['open', 'received', 'cancelled', 'summary'] as Tab[]).map((k) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={`min-h-9 cursor-pointer rounded-lg px-3 text-sm font-medium transition-colors duration-150 ${
-                tab === k ? 'bg-brand text-white' : 'text-ink-soft hover:bg-sunken'
-              }`}
-            >
-              {k === 'open'
-                ? t('รอรับของ ({count})', { count: open.length })
-                : k === 'received'
-                  ? t('รับของแล้ว ({count})', { count: received.length })
-                  : k === 'cancelled'
-                    ? t('ยกเลิกแล้ว ({count})', { count: cancelled.length })
-                    : t('สรุปตามผู้ขาย')}
-            </button>
-          ))}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Select value={String(days)} onChange={(e) => setDays(Number(e.target.value))}>
-              <option value="7">{t('7 วันล่าสุด')}</option>
-              <option value="30">{t('30 วันล่าสุด')}</option>
-              <option value="90">{t('90 วันล่าสุด')}</option>
-            </Select>
-            {/* What was ordered on which day, as a sheet — the summary the owner asked for
-                in a form that leaves the app. Exports what the tab shows. */}
-            <Button
-              variant="secondary"
-              onClick={() => void exportExcelFile()}
-              disabled={!!busyExport || orders.length === 0}
-            >
-              <Icon name="download" size={16} />
-              {busyExport === 'excel' ? t('กำลังสร้างไฟล์...') : 'Excel'}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => void exportPdfFile()}
-              disabled={!!busyExport || orders.length === 0}
-            >
-              <Icon name="download" size={16} />
-              {busyExport === 'pdf' ? t('กำลังสร้างไฟล์...') : 'PDF'}
-            </Button>
-          </div>
-        </div>
+      <StatusTabs
+        items={tabItems}
+        value={tab}
+        onChange={(k) => {
+          setTab(k)
+          setLateOnly(false)
+        }}
+      />
 
-        {tab === 'summary' ? (
-          <SupplierSummary rows={summary} />
-        ) : tab === 'cancelled' ? (
-          <CancelledTable rows={cancelled} onOpen={setViewing} />
-        ) : shown.length === 0 ? (
-          <p className="p-8 text-center text-sm text-ink-soft">{t('ไม่มีใบสั่งซื้อในช่วงนี้')}</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {shown.map((o) => (
-              <OrderRow
-                key={o.id}
-                order={o}
-                late={lateIds.has(o.id)}
-                expectedAt={expectedDeliveryAt(o, leadTimeOf(o.supplierId))}
-                onOpen={() => setViewing(o)}
-                onSend={() => setSending(o)}
-                onReceive={() => setReceiving(o)}
-                onAmend={() => setAmending(o)}
-                onCancel={() => setCancelling(o)}
-              />
-            ))}
-          </ul>
-        )}
+      <Card className="flex flex-wrap items-center gap-2 p-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t('ค้นหาชื่อผู้ขาย, เลขที่ PO, สินค้า...')}
+          className="min-w-56 flex-1"
+        />
+        <div className="relative">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
+            <Icon name="calendar" size={17} />
+          </span>
+          <Select
+            aria-label={t('ช่วงเวลา')}
+            value={String(days)}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className="w-auto pl-10 pr-8"
+          >
+            <option value="7">{t('7 วันล่าสุด')}</option>
+            <option value="30">{t('30 วันล่าสุด')}</option>
+            <option value="90">{t('90 วันล่าสุด')}</option>
+          </Select>
+        </div>
+        {/* What was ordered on which day, as a sheet — the summary the owner asked for
+            in a form that leaves the app. Exports what the tab shows. */}
+        <div className="flex gap-2 sm:ml-auto">
+          <Button
+            variant="sheet"
+            onClick={() => void exportExcelFile()}
+            disabled={!!busyExport || orders.length === 0}
+          >
+            <Icon name="fileSheet" size={17} />
+            {busyExport === 'excel' ? t('กำลังสร้างไฟล์...') : 'Excel'}
+          </Button>
+          <Button
+            variant="pdf"
+            onClick={() => void exportPdfFile()}
+            disabled={!!busyExport || orders.length === 0}
+          >
+            <Icon name="report" size={17} />
+            {busyExport === 'pdf' ? t('กำลังสร้างไฟล์...') : 'PDF'}
+          </Button>
+        </div>
       </Card>
+
+      {lateOnly && tab === 'open' && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+          <Badge color="red">{t('แสดงเฉพาะใบที่ค้างนาน')}</Badge>
+          <button className="cursor-pointer text-brand hover:underline" onClick={() => setLateOnly(false)}>
+            {t('แสดงทั้งหมด')}
+          </button>
+        </div>
+      )}
+
+      {tab === 'summary' ? (
+        <Card className="overflow-hidden">
+          <SupplierSummary rows={summary} />
+        </Card>
+      ) : (
+        <div>
+          <Card className="overflow-hidden">
+            {tab === 'cancelled' ? (
+              <CancelledTable rows={paged.rows} onOpen={setViewing} />
+            ) : (
+              <DataTable
+                rows={paged.rows}
+                rowKey={(o) => o.id}
+                minWidth={960}
+                empty={
+                  <EmptyState
+                    icon="truck"
+                    title={search.trim() ? t('ไม่พบใบสั่งซื้อที่ตรงกับคำค้น') : t('ไม่มีใบสั่งซื้อในช่วงนี้')}
+                  />
+                }
+                columns={orderColumns}
+                cardActions={(o) => <OrderActions order={o} {...actionsFor(o)} />}
+              />
+            )}
+          </Card>
+          <Pagination {...paged.pager} />
+        </div>
+      )}
 
       {creating && user && (
         <NewOrderModal
@@ -399,14 +534,13 @@ export function OrdersPage() {
 /** The orders called off, as a table: the trail an audit reads. */
 function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: PurchaseOrder) => void }) {
   const t = useT()
-  const sorted = [...rows].sort((a, b) => (b.cancelledAt ?? 0) - (a.cancelledAt ?? 0))
   return (
-    <div className="p-3">
+    <div>
       <DataTable
-        rows={sorted}
+        rows={rows}
         rowKey={(o) => o.id}
         onRowClick={onOpen}
-        empty={<p className="p-8 text-center text-sm text-ink-soft">{t('ไม่มีใบสั่งซื้อที่ยกเลิกในช่วงนี้')}</p>}
+        empty={<EmptyState icon="x" title={t('ไม่มีใบสั่งซื้อที่ยกเลิกในช่วงนี้')} />}
         columns={[
           { key: 'docNo', header: t('เลขที่'), primary: true, cell: (o) => <span className="doc-no">{o.docNo}</span> },
           { key: 'supplier', header: t('ผู้ขาย'), cell: (o) => o.supplierName },
@@ -422,26 +556,8 @@ function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: P
   )
 }
 
-function OrderRow({
-  order,
-  late,
-  expectedAt,
-  onOpen,
-  onReceive,
-  onAmend,
-  onCancel,
-  onSend,
-}: {
-  order: PurchaseOrder
-  late: boolean
-  /** The day the goods are due — written on the order, or counted from the lead time. */
-  expectedAt?: number
-  onOpen: () => void
-  onReceive: () => void
-  onAmend: () => void
-  onCancel: () => void
-  onSend: () => void
-}) {
+/** The order's state as badges: where it is, and anything about it that needs a person. */
+function OrderStatus({ order, late }: { order: PurchaseOrder; late: boolean }) {
   const t = useT()
   const done = order.status === 'received'
   // A draft is a proposal from an imported list that nobody has approved yet. It is
@@ -449,76 +565,125 @@ function OrderRow({
   // received — approving happens on the batch screen it came from.
   const draft = order.status === 'draft'
   return (
-    <li className="flex flex-wrap items-center gap-3 p-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-ink">{order.supplierName}</span>
-          <span className="doc-no text-xs text-ink-faint">{order.docNo}</span>
-          {done ? (
-            <Badge color="green">{t('รับของแล้ว')}</Badge>
-          ) : draft ? (
-            <Badge color="slate">{t('ร่าง — รออนุมัติ')}</Badge>
-          ) : (
-            <Badge color={late ? 'red' : 'blue'}>{t('สั่งแล้ว')}</Badge>
-          )}
-          {order.revision ? <Badge color="amber">Rev.{order.revision}</Badge> : null}
-          {needsResend(order) ? (
-            <Badge color="red">{t('แก้ไขแล้ว — ยังไม่ส่งใหม่')}</Badge>
-          ) : (
-            order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>
-          )}
-          {order.requestId && (
-            <Link to={`/requests/${order.requestId}`} className="text-xs text-brand hover:underline">
-              {t('จากรายการขอสั่งซื้อ')}
-            </Link>
-          )}
-          {late && (
-            <Badge color="red">
-              {t('รอมา {days} วัน', { days: daysWaiting(order) })}
-            </Badge>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-1 text-xs text-ink-soft">
-          {formatThaiDate(order.orderedAt)} · <SiteChip locationId={order.locationId} /> ·{' '}
-          {t('{count} รายการ', { count: order.lines.length })}
-          {order.invoiceNo ? ` · ${t('บิล')} ${order.invoiceNo}` : ''}
-          {/* The day the supplier is to deliver — set when the order is placed (by hand or
-              from a request) and read-only here; the calendar and the "late" flag follow it. */}
-          {!done && !draft && expectedAt !== undefined && (
-            <>
-              {' · '}
-              {t('กำหนดส่ง')} {formatThaiDate(expectedAt)}
-              {order.expectedAt === undefined && <span className="text-ink-faint"> ({t('ตามระยะส่งของผู้ขาย')})</span>}
-            </>
+    <div className="flex flex-wrap items-center gap-1.5">
+      {done ? (
+        <Badge color="green">{t('รับของแล้ว')}</Badge>
+      ) : draft ? (
+        <Badge color="slate">{t('ร่าง — รออนุมัติ')}</Badge>
+      ) : (
+        <Badge color={late ? 'red' : 'blue'}>{t('สั่งแล้ว')}</Badge>
+      )}
+      {needsResend(order) ? (
+        <Badge color="red">{t('แก้ไขแล้ว — ยังไม่ส่งใหม่')}</Badge>
+      ) : (
+        order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>
+      )}
+      {late && <Badge color="red">{t('รอมา {days} วัน', { days: daysWaiting(order) })}</Badge>}
+    </div>
+  )
+}
+
+/**
+ * When the goods are due, or when they came.
+ *
+ * The due day is set when the order is placed (by hand or from a request) and read-only
+ * here; the calendar and the "late" flag follow it. Without one, the supplier's lead time
+ * stands in, and says so.
+ */
+function DueCell({ order, late, expectedAt }: { order: PurchaseOrder; late: boolean; expectedAt?: number }) {
+  const t = useT()
+  if (order.status === 'received') {
+    return (
+      <div className="flex items-start gap-2">
+        <Icon name="checkCircle" size={16} className="mt-0.5 text-in" />
+        <div>
+          <div className="num text-ink">{order.receivedAt ? formatThaiDate(order.receivedAt) : '—'}</div>
+          {order.invoiceNo && (
+            <div className="text-xs text-ink-faint">
+              {t('บิล')} {order.invoiceNo}
+            </div>
           )}
         </div>
       </div>
-      <div className="flex shrink-0 gap-2">
-        <Button variant="ghost" onClick={onOpen}>
-          {t('ดูใบสั่ง')}
+    )
+  }
+  if (order.status === 'draft' || expectedAt === undefined) return <span className="text-ink-faint">—</span>
+  return (
+    <div className={`flex items-start gap-2 ${late ? 'text-danger' : 'text-ink-soft'}`}>
+      <Icon name="calendar" size={16} className="mt-0.5" />
+      <div>
+        <div className="num whitespace-nowrap">{t('กำหนด {date}', { date: formatThaiDate(expectedAt) })}</div>
+        {order.expectedAt === undefined && <div className="text-xs text-ink-faint">{t('ตามระยะส่งของผู้ขาย')}</div>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What can be done to an order, in the order it is usually done: look, change, send, receive.
+ *
+ * Receiving is the one filled button — it is the step that moves stock, and the reason most
+ * people open this list. Cancelling stays a text link at the end so it is never the thing a
+ * hurried tap lands on.
+ */
+function OrderActions({
+  order,
+  compact,
+  onOpen,
+  onReceive,
+  onAmend,
+  onCancel,
+  onSend,
+}: {
+  order: PurchaseOrder
+  /** Table row on a desktop: smaller buttons, one line. */
+  compact?: boolean
+  onOpen: () => void
+  onReceive: () => void
+  onAmend: () => void
+  onCancel: () => void
+  onSend: () => void
+}) {
+  const t = useT()
+  const live = order.status === 'ordered'
+  const size = compact ? 'sm' : 'md'
+  // In a table row narrower than a wide monitor the three quiet actions give up their words
+  // and keep their icons (named on hover and to a screen reader), so the row fits without
+  // scrolling sideways. Receiving keeps its label: it is the action the list exists for.
+  const label = compact ? 'hidden 2xl:inline' : ''
+  return (
+    <div className={`flex items-center gap-2 ${compact ? 'flex-nowrap' : 'flex-wrap'}`}>
+      <Button variant="outline" size={size} onClick={onOpen} title={t('ดูใบสั่ง')} aria-label={t('ดูใบสั่ง')}>
+        <Icon name="eye" size={16} />
+        <span className={label}>{t('ดูใบสั่ง')}</span>
+      </Button>
+      {live && (
+        <Button variant="outline" size={size} onClick={onAmend} title={t('แก้ไข')} aria-label={t('แก้ไข')}>
+          <Icon name="pencil" size={15} />
+          <span className={label}>{t('แก้ไข')}</span>
         </Button>
-        {!done && !draft && (
-          <Button variant="ghost" onClick={onAmend}>
-            {t('แก้ไข')}
-          </Button>
-        )}
-        {!done && !draft && (
-          <Button variant="ghost" onClick={onSend}>
-            <Icon name="share" size={16} />
-            {t('ส่ง LINE')}
-          </Button>
-        )}
-        {!done && !draft && <Button onClick={onReceive}>{t('ตรวจรับของ')}</Button>}
-        {!done && (
-          <button
-            onClick={onCancel}
-            className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
-          >
-            {t('ยกเลิก')}
-          </button>
-        )}
-      </div>
-    </li>
+      )}
+      {live && (
+        <Button variant="outline" size={size} onClick={onSend} title={t('ส่ง LINE')} aria-label={t('ส่ง LINE')}>
+          <Icon name="share" size={16} />
+          <span className={label}>{t('ส่ง LINE')}</span>
+        </Button>
+      )}
+      {live && (
+        <Button size={size} onClick={onReceive}>
+          <Icon name="truck" size={16} />
+          {t('ตรวจรับของ')}
+        </Button>
+      )}
+      {(order.status === 'ordered' || order.status === 'draft') && (
+        <button
+          onClick={onCancel}
+          className="min-h-10 cursor-pointer whitespace-nowrap rounded-lg px-2 text-sm font-medium text-danger hover:bg-danger-soft"
+        >
+          {t('ยกเลิก')}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -528,30 +693,19 @@ function SupplierSummary({
   rows: { supplierName: string; orders: number; lines: number; items: number }[]
 }) {
   const t = useT()
-  if (rows.length === 0) {
-    return <p className="p-8 text-center text-sm text-ink-soft">{t('ไม่มีใบสั่งซื้อในช่วงนี้')}</p>
-  }
   return (
-    <table className="w-full text-sm">
-      <thead className="bg-sunken text-xs text-ink-soft">
-        <tr>
-          <th className="p-2 text-left font-medium">{t('ผู้ขาย')}</th>
-          <th className="p-2 text-right font-medium">{t('ใบสั่ง')}</th>
-          <th className="p-2 text-right font-medium">{t('รายการ')}</th>
-          <th className="p-2 text-right font-medium">{t('จำนวนรวม')}</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-line">
-        {rows.map((r) => (
-          <tr key={r.supplierName}>
-            <td className="p-2 font-medium text-ink">{r.supplierName}</td>
-            <td className="num p-2 text-right">{r.orders}</td>
-            <td className="num p-2 text-right">{r.lines}</td>
-            <td className="num p-2 text-right">{fmtQty(r.items)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <DataTable
+      rows={rows}
+      rowKey={(r) => r.supplierName}
+      minWidth={480}
+      empty={<EmptyState icon="chart" title={t('ไม่มีใบสั่งซื้อในช่วงนี้')} />}
+      columns={[
+        { key: 'supplier', header: t('ผู้ขาย'), primary: true, cell: (r) => <span className="font-semibold text-ink">{r.supplierName}</span> },
+        { key: 'orders', header: t('ใบสั่ง'), align: 'right', cell: (r) => <span className="num">{r.orders}</span> },
+        { key: 'lines', header: t('รายการ'), align: 'right', cell: (r) => <span className="num">{r.lines}</span> },
+        { key: 'items', header: t('จำนวนรวม'), align: 'right', cell: (r) => <span className="num font-semibold text-ink">{fmtQty(r.items)}</span> },
+      ]}
+    />
   )
 }
 

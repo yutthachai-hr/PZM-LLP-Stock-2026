@@ -4,7 +4,8 @@ import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
 import { SiteChip } from '../../components/SiteChip'
-import { Badge, Button, Card, EmptyState, PageHeader, SegTab, Spinner } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, PageHeader, Spinner, StatusTabs } from '../../components/ui'
+import type { IconName } from '../../components/Icon'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { formatThaiDateTime } from '../../lib/format'
@@ -50,17 +51,18 @@ export function PurchaseRequestsPage() {
     void load()
   }, [load])
 
-  const filters: { key: Filter; label: string; n: number }[] = useMemo(() => {
+  type FilterTab = { key: Filter; label: string; n: number; icon: IconName; tone: 'brand' | 'in' | 'out' | 'warn' | 'plain' }
+  const filters: FilterTab[] = useMemo(() => {
     const count = (f: (r: PurchaseRequest) => boolean) => rows.filter(f).length
-    const list: { key: Filter; label: string; n: number }[] = [
-      { key: 'all', label: t('ทั้งหมด'), n: rows.length },
-      { key: 'pendingApproval', label: t('รออนุมัติ'), n: count((r) => r.status === 'pendingApproval') },
-      { key: 'returned', label: t('ส่งกลับให้แก้ไข'), n: count((r) => r.status === 'returned') },
-      { key: 'ready', label: t('พร้อมสร้าง PO'), n: count(isReadyForOrder) },
-      { key: 'poCreated', label: t('สร้างใบสั่งซื้อแล้ว'), n: count((r) => r.status === 'poCreated') },
-      { key: 'rejected', label: t('ไม่อนุมัติ'), n: count((r) => r.status === 'rejected') },
+    const list: FilterTab[] = [
+      { key: 'all', label: t('ทั้งหมด'), n: rows.length, icon: 'note', tone: 'plain' },
+      { key: 'pendingApproval', label: t('รออนุมัติ'), n: count((r) => r.status === 'pendingApproval'), icon: 'clock', tone: 'warn' },
+      { key: 'returned', label: t('ส่งกลับให้แก้ไข'), n: count((r) => r.status === 'returned'), icon: 'pencil', tone: 'out' },
+      { key: 'ready', label: t('พร้อมสร้าง PO'), n: count(isReadyForOrder), icon: 'check', tone: 'brand' },
+      { key: 'poCreated', label: t('สร้างใบสั่งซื้อแล้ว'), n: count((r) => r.status === 'poCreated'), icon: 'checkCircle', tone: 'in' },
+      { key: 'rejected', label: t('ไม่อนุมัติ'), n: count((r) => r.status === 'rejected'), icon: 'x', tone: 'plain' },
     ]
-    if (user) list.splice(1, 0, { key: 'mine', label: t('ของฉัน'), n: count((r) => r.requestedBy === user.id) })
+    if (user) list.splice(1, 0, { key: 'mine', label: t('ของฉัน'), n: count((r) => r.requestedBy === user.id), icon: 'users', tone: 'plain' })
     return list
   }, [rows, t, user])
 
@@ -90,17 +92,11 @@ export function PurchaseRequestsPage() {
         }
       />
 
-      <div className="flex flex-wrap gap-1 rounded-lg bg-sunken p-1">
-        {filters.map((f) => (
-          <SegTab
-            key={f.key}
-            label={f.n > 0 ? `${f.label} (${f.n})` : f.label}
-            active={filter === f.key}
-            onClick={() => setParams({ filter: f.key })}
-            grow={false}
-          />
-        ))}
-      </div>
+      <StatusTabs
+        items={filters.map((f) => ({ key: f.key, label: f.label, count: f.n, icon: f.icon, tone: f.tone }))}
+        value={filter}
+        onChange={(k) => setParams({ filter: k })}
+      />
 
       {loading ? (
         <Spinner label={t('กำลังโหลด...')} />

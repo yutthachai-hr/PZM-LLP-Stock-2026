@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
-import { Badge, Button, Card, EmptyState, PageHeader, SegTab, Spinner } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, PageHeader, Spinner, StatusTabs } from '../../components/ui'
+import type { IconName } from '../../components/Icon'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { formatThaiDateTime } from '../../lib/format'
@@ -21,12 +22,12 @@ import { badgeColor, batchStatusText } from './issues'
 const DAYS = 30
 type Filter = 'all' | 'needsReview' | 'ready' | 'sent' | 'failed'
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all', label: 'ทั้งหมด' }, // i18n-key
-  { key: 'needsReview', label: 'ต้องตรวจ' }, // i18n-key
-  { key: 'ready', label: 'พร้อม' }, // i18n-key
-  { key: 'sent', label: 'ส่งแล้ว' }, // i18n-key
-  { key: 'failed', label: 'ค้าง/ไม่สำเร็จ' }, // i18n-key
+const FILTERS: { key: Filter; label: string; icon: IconName; tone: 'brand' | 'in' | 'out' | 'warn' | 'plain' }[] = [
+  { key: 'all', label: 'ทั้งหมด', icon: 'upload', tone: 'plain' }, // i18n-key
+  { key: 'needsReview', label: 'ต้องตรวจ', icon: 'warning', tone: 'warn' }, // i18n-key
+  { key: 'ready', label: 'พร้อม', icon: 'check', tone: 'brand' }, // i18n-key
+  { key: 'sent', label: 'ส่งแล้ว', icon: 'checkCircle', tone: 'in' }, // i18n-key
+  { key: 'failed', label: 'ค้าง/ไม่สำเร็จ', icon: 'x', tone: 'out' }, // i18n-key
 ]
 
 function matches(b: PurchaseBatch, f: Filter): boolean {
@@ -91,17 +92,11 @@ export function PurchaseBatchesPage() {
         }
       />
 
-      <div className="flex flex-wrap gap-1">
-        {FILTERS.map((f) => (
-          <SegTab
-            key={f.key}
-            label={t(f.label)}
-            active={filter === f.key}
-            onClick={() => setParams(f.key === 'all' ? {} : { filter: f.key })}
-            grow={false}
-          />
-        ))}
-      </div>
+      <StatusTabs
+        items={FILTERS.map((f) => ({ key: f.key, label: t(f.label), count: batches.filter((b) => matches(b, f.key)).length, icon: f.icon, tone: f.tone }))}
+        value={filter}
+        onChange={(k) => setParams(k === 'all' ? {} : { filter: k })}
+      />
 
       {loading ? (
         <Spinner label={t('กำลังโหลด...')} />

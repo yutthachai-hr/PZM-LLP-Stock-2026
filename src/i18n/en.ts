@@ -1561,4 +1561,22 @@ export const EN: Record<string, string> = {
   'เปลี่ยนหน่วยหลักของ {name} เป็น {unit}': 'Change the base unit of {name} to {unit}',
   'จะเขียนประวัติ {n} รายการใหม่ในหน่วย {unit} (ตัวเลขที่คีย์ไว้เดิมยังอ่านได้ทุกรายการ) และตั้งยอดคงเหลือตามนี้': '{n} history rows will be rewritten in {unit} (every keyed figure stays readable) and the balances set as follows',
   'ใบสั่งซื้อที่เปิดอยู่จะถูกแก้เป็นหน่วยใหม่ (บันทึกเป็น Revision): {list}': 'Open orders will be restated in the new unit (filed as a revision): {list}',
+
+  // UI refresh (21 Sep 2026): shared list controls and the orders table
+  'บัญชีผู้ใช้': 'Account',
+  'แสดง {from} - {to} จาก {total} รายการ': 'Showing {from}–{to} of {total}',
+  'จำนวนต่อหน้า': 'Rows per page',
+  'แสดง {n} รายการ': 'Show {n}',
+  'หน้าก่อน': 'Previous page',
+  'หน้าถัดไป': 'Next page',
+  'ผู้ขาย / เลขที่ PO': 'Supplier / PO no.',
+  'กำหนดรับของ': 'Due',
+  'การดำเนินการ': 'Actions',
+  'ดูรายการที่ค้างนาน': 'Show overdue',
+  'ค้นหาชื่อผู้ขาย, เลขที่ PO, สินค้า...': 'Search supplier, PO no., product...',
+  'ช่วงเวลา': 'Period',
+  'แสดงเฉพาะใบที่ค้างนาน': 'Overdue orders only',
+  'แสดงทั้งหมด': 'Show all',
+  'ไม่พบใบสั่งซื้อที่ตรงกับคำค้น': 'No orders match your search',
+  'กำหนด {date}': 'Due {date}',
 }

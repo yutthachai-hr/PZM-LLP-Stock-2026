@@ -96,13 +96,13 @@ export function DataTable<T>({
         style={maxHeight ? { maxHeight } : undefined}
       >
         <table className="w-full text-sm" style={{ minWidth }}>
-          <thead className="sticky top-0 z-10 bg-sunken text-left text-xs uppercase text-ink-soft shadow-sm">
+          <thead className="sticky top-0 z-10 bg-sunken text-left text-[13px] text-ink-soft shadow-[inset_0_-1px_0_var(--color-line)]">
             <tr>
               {columns.map((c) => (
                 <th
                   key={c.key}
                   scope="col"
-                  className={`px-3 py-2 font-medium ${c.align === 'right' ? 'text-right' : ''} ${c.headerClassName ?? ''}`}
+                  className={`whitespace-nowrap px-4 py-3 font-semibold ${c.align === 'right' ? 'text-right' : ''} ${c.headerClassName ?? ''}`}
                 >
                   {c.header}
                 </th>
@@ -113,13 +113,13 @@ export function DataTable<T>({
             {rows.map((row) => (
               <tr
                 key={rowKey(row)}
-                className={`hover:bg-sunken ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`}
+                className={`transition-colors duration-100 hover:bg-sunken/70 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((c) => (
                   <td
                     key={c.key}
-                    className={`px-3 py-2 ${c.align === 'right' ? 'text-right' : ''} ${c.className ?? ''}`}
+                    className={`px-4 py-3 align-middle ${c.align === 'right' ? 'text-right' : ''} ${c.className ?? ''}`}
                   >
                     {c.cell(row)}
                   </td>

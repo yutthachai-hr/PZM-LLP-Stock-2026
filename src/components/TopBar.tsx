@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { shortages } from '../lib/inventoryRules/lowStock'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../auth/AuthContext'
+import { useBrand } from '../brand/BrandContext'
 import { useData } from '../data/DataContext'
 import { useT } from '../i18n/I18nContext'
 import { fmtQty } from '../lib/format'
@@ -61,6 +63,20 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
 
   useEffect(() => setActive(0), [q])
 
+  // Ctrl+K / ⌘K puts the cursor in the search from anywhere, the shortcut the hint in the
+  // field advertises. Only above sm, where the field is on screen to receive it.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        input.current?.focus()
+        input.current?.select()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
   // Close on a click anywhere else. The results overlay the page, so leaving them up while
   // someone reads what is underneath makes the page feel stuck.
   useEffect(() => {
@@ -119,8 +135,13 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder={t('ค้นหาสินค้า หรือรหัสสินค้า…')}
-        className="w-full min-h-11 rounded-lg border border-line bg-sunken pl-10 pr-3 text-sm text-ink placeholder:text-ink-faint outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-brand focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-brand/25"
+        className="w-full min-h-11 rounded-xl border border-line bg-sunken pl-10 pr-3 text-sm sm:pr-16 text-ink placeholder:text-ink-faint outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-brand focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-brand/25"
       />
+      {!q && (
+        <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-line bg-surface px-1.5 py-0.5 font-sans text-[11px] font-medium text-ink-faint sm:block">
+          Ctrl K
+        </kbd>
+      )}
       {open && q.trim().length >= 2 && (
         <div
           id="topbar-results"
@@ -210,8 +231,83 @@ export function TopBar({ onMenu, title }: { onMenu: () => void; title: string })
           <NotificationBell />
 
           <LangButton />
+
+          <UserMenu />
         </div>
       </div>
     </header>
+  )
+}
+
+/**
+ * Who is signed in, at the right of the bar, with the two things a person does about it.
+ *
+ * The sidebar carries the same two buttons, but below lg the sidebar is a drawer, and
+ * "which account is this tablet on" is a question asked before opening any menu.
+ */
+function UserMenu() {
+  const t = useT()
+  const { user, logout } = useAuth()
+  const { reset } = useBrand()
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (!box.current?.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  if (!user) return null
+  const role = user.role === 'admin' ? t('ผู้ดูแลระบบ') : user.role === 'manager' ? t('หัวหน้า') : t('พนักงาน')
+  const item =
+    'flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm text-ink-soft outline-none hover:bg-sunken hover:text-ink focus-visible:ring-2 focus-visible:ring-brand/40'
+
+  return (
+    <div ref={box} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t('บัญชีผู้ใช้')}
+        className="inline-flex h-11 cursor-pointer items-center gap-1 rounded-lg pl-1 pr-1.5 text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft font-bold text-brand">
+          {user.name.charAt(0).toUpperCase() || '?'}
+        </span>
+        <Icon name="chevronDown" size={16} className="hidden sm:block" />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-1 w-60 rounded-xl border border-line bg-surface p-1.5 shadow-xl"
+        >
+          <div className="border-b border-line px-3 pb-2 pt-1.5">
+            <div className="truncate text-sm font-semibold text-ink">{user.name}</div>
+            <div className="text-xs text-ink-faint">{role}</div>
+          </div>
+          <div className="pt-1.5">
+            <button role="menuitem" className={item} onClick={() => { setOpen(false); reset() }}>
+              <Icon name="swap" size={16} />
+              {t('สลับแบรนด์')}
+            </button>
+            <button role="menuitem" className={item} onClick={() => { setOpen(false); void logout() }}>
+              <Icon name="logout" size={16} />
+              {t('ออกจากระบบ')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

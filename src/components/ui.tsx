@@ -11,7 +11,7 @@ import type {
 import { useT } from '../i18n/I18nContext'
 import { Icon, type IconName } from './Icon'
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success'
+type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success' | 'outline' | 'sheet' | 'pdf'
 
 // `brand` resolves to the open brand's colour (see BrandContext), so Le Lapin stops
 // borrowing Pizza Mania's red. Destructive actions keep their own red whatever the brand:
@@ -22,6 +22,14 @@ const variants: Record<Variant, string> = {
   danger: 'bg-danger text-white hover:brightness-110',
   success: 'bg-in text-white hover:brightness-110',
   ghost: 'bg-transparent text-ink-soft hover:bg-sunken hover:text-ink',
+  // The row actions in a list: quiet until pointed at, so a column of them reads as one
+  // column rather than as a wall of buttons competing with the one filled action.
+  outline: 'bg-surface text-ink-soft border border-line hover:border-line-strong hover:text-ink',
+  // The two export buttons, tinted like the file each one makes (a green spreadsheet, a red
+  // PDF) so they are told apart without reading. Tints, not fills: an export is not the
+  // page's main action.
+  sheet: 'bg-in-soft text-in border border-in/25 hover:border-in/50',
+  pdf: 'bg-out-soft text-out border border-out/25 hover:border-out/50',
 }
 
 /**
@@ -31,7 +39,13 @@ const variants: Record<Variant, string> = {
  * delivery note — iOS asks for 44pt and Android for 48dp, and these were 36px. Hitting the
  * wrong row on a stock screen costs a correction and an audit trail entry.
  */
-const control = 'min-h-11 rounded-lg px-4 text-sm font-medium'
+const control = 'rounded-lg text-sm font-medium'
+const sizes = {
+  md: 'min-h-11 px-4',
+  // Dense list rows on a desktop, where six actions share a row. Still 40px — the pointer
+  // is a mouse there; on a phone the same actions render in the card at full size.
+  sm: 'min-h-10 whitespace-nowrap px-3',
+}
 
 // focus-visible, not focus: a mouse user clicking a button should not get a keyboard
 // focus ring, but a keyboard user must never lose track of where they are.
@@ -40,13 +54,14 @@ const focusRing =
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   className = '',
   children,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'md' | 'sm' }) {
   return (
     <button
-      className={`inline-flex cursor-pointer items-center justify-center gap-2 py-2 transition-[background-color,box-shadow,filter] duration-150 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 ${control} ${focusRing} ${variants[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center gap-2 py-2 transition-[background-color,border-color,color,box-shadow,filter] duration-150 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 ${control} ${sizes[size]} ${focusRing} ${variants[variant]} ${className}`}
       {...rest}
     >
       {children}
@@ -357,17 +372,17 @@ export function PageHeader({
     warn: 'bg-warn-soft text-warn',
   }
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14 ${tones[tone]}`}
       >
-        <Icon name={icon} size={22} />
+        <Icon name={icon} size={26} />
       </span>
       <div className="min-w-0 flex-1">
-        <h1 className="text-balance text-xl font-bold leading-tight text-ink sm:text-2xl">
+        <h1 className="text-balance text-2xl font-bold leading-tight text-ink sm:text-[1.75rem]">
           {title}
         </h1>
-        {subtitle && <p className="text-sm text-ink-soft">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 text-sm text-ink-soft">{subtitle}</p>}
       </div>
       {actions && (
         <div className="flex w-full shrink-0 flex-wrap gap-2 sm:w-auto">{actions}</div>
@@ -608,5 +623,224 @@ export function StatGroup({
         {children}
       </div>
     </Card>
+  )
+}
+
+/**
+ * The status filter at the top of a list: one big tab per state, each with its count.
+ *
+ * The owner's mock-up (21 Sep 2026) put these as cards rather than as a row of small pills,
+ * because the count is the reason someone opens the screen — "how many are still waiting" —
+ * and a number inside a pill the size of a word was being read past. The icon's tint is the
+ * state's own colour, so the tab reads before its label does.
+ */
+export interface StatusTabItem<K extends string> {
+  key: K
+  label: string
+  icon: IconName
+  count?: number
+  tone?: 'brand' | 'in' | 'out' | 'warn' | 'plain'
+}
+
+export function StatusTabs<K extends string>({
+  items,
+  value,
+  onChange,
+}: {
+  items: StatusTabItem<K>[]
+  value: K
+  onChange: (key: K) => void
+}) {
+  const chips = {
+    brand: 'bg-brand-soft text-brand',
+    in: 'bg-in-soft text-in',
+    out: 'bg-out-soft text-out',
+    warn: 'bg-warn-soft text-warn',
+    plain: 'bg-sunken text-ink-soft',
+  }
+  return (
+    <div role="tablist" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap sm:gap-3 sm:overflow-visible">
+      {items.map((it) => {
+        const on = it.key === value
+        return (
+          <button
+            key={it.key}
+            role="tab"
+            aria-selected={on}
+            onClick={() => onChange(it.key)}
+            className={`flex min-h-12 shrink-0 cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors duration-150 sm:min-w-40 sm:px-4 ${focusRing} ${
+              on
+                ? 'border-brand/30 bg-brand-soft text-brand shadow-sm'
+                : 'border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink'
+            }`}
+          >
+            <span
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                on ? 'bg-surface text-brand' : chips[it.tone ?? 'plain']
+              }`}
+            >
+              <Icon name={it.icon} size={17} />
+            </span>
+            <span className="whitespace-nowrap">
+              {it.label}
+              {it.count !== undefined && <span className="num"> ({it.count})</span>}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * A line across the page that something needs doing — late deliveries, a failed sync.
+ *
+ * One shape for all of them, with the way to act on it at the right, so it is read as an
+ * instruction rather than as decoration.
+ */
+export function AlertBanner({
+  tone = 'danger',
+  icon = 'warning',
+  children,
+  action,
+}: {
+  tone?: 'danger' | 'warn' | 'info'
+  icon?: IconName
+  children: ReactNode
+  action?: ReactNode
+}) {
+  const tones = {
+    danger: 'border-danger/30 bg-danger-soft text-danger',
+    warn: 'border-warn/30 bg-warn-soft text-warn',
+    info: 'border-brand/20 bg-brand-soft text-brand',
+  }
+  return (
+    <div
+      role="status"
+      className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-sm ${tones[tone]}`}
+    >
+      <Icon name={icon} size={20} className="shrink-0" />
+      <div className="min-w-0 flex-1 font-medium">{children}</div>
+      {action}
+    </div>
+  )
+}
+
+/** The small bordered button that sits at the right end of an AlertBanner. */
+export const bannerAction = `inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-current/25 bg-surface px-3 text-sm font-medium ${focusRing}`
+
+/** A search field with the magnifier inside it — the list pages' filter box. */
+export function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  className = '',
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  return (
+    <div className={`relative min-w-0 ${className}`}>
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
+        <Icon name="search" size={17} />
+      </span>
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`${inputBase} pl-10`}
+      />
+    </div>
+  )
+}
+
+/**
+ * Page through a long list: where you are, how many at once, and the pages.
+ *
+ * Pair with `usePaged` (lib/usePaged). Hidden when everything fits on one page of the
+ * smallest size, so a short list does not carry controls that do nothing.
+ */
+export function Pagination({
+  page,
+  pages,
+  total,
+  from,
+  to,
+  pageSize,
+  onPage,
+  onPageSize,
+  sizes = [10, 20, 50, 100],
+}: {
+  page: number
+  pages: number
+  total: number
+  from: number
+  to: number
+  pageSize: number
+  onPage: (page: number) => void
+  onPageSize: (size: number) => void
+  sizes?: number[]
+}) {
+  const t = useT()
+  if (total <= sizes[0]) return null
+  // First, last, and one either side of where you are — enough to jump without a row of
+  // forty numbers.
+  const shown = Array.from({ length: pages }, (_, i) => i + 1).filter(
+    (n) => n === 1 || n === pages || Math.abs(n - page) <= 1,
+  )
+  const btn = `inline-flex h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-1 pt-3 text-sm text-ink-soft">
+      <span className="num">{t('แสดง {from} - {to} จาก {total} รายการ', { from, to, total })}</span>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        <select
+          aria-label={t('จำนวนต่อหน้า')}
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          className={`${inputBase} min-h-10 w-auto py-1.5`}
+        >
+          {sizes.map((n) => (
+            <option key={n} value={n}>
+              {t('แสดง {n} รายการ', { n })}
+            </option>
+          ))}
+        </select>
+        <button
+          className={`${btn} border-line bg-surface text-ink-soft hover:bg-sunken`}
+          onClick={() => onPage(page - 1)}
+          disabled={page <= 1}
+          aria-label={t('หน้าก่อน')}
+        >
+          <Icon name="chevronLeft" size={18} />
+        </button>
+        {shown.map((n, i) => (
+          <span key={n} className="contents">
+            {i > 0 && n - shown[i - 1] > 1 && <span className="px-1 text-ink-faint">…</span>}
+            <button
+              className={`${btn} num ${
+                n === page
+                  ? 'border-brand bg-brand text-white'
+                  : 'border-line bg-surface text-ink-soft hover:bg-sunken'
+              }`}
+              aria-current={n === page ? 'page' : undefined}
+              onClick={() => onPage(n)}
+            >
+              {n}
+            </button>
+          </span>
+        ))}
+        <button
+          className={`${btn} border-line bg-surface text-ink-soft hover:bg-sunken`}
+          onClick={() => onPage(page + 1)}
+          disabled={page >= pages}
+          aria-label={t('หน้าถัดไป')}
+        >
+          <Icon name="chevronRight" size={18} />
+        </button>
+      </div>
+    </div>
   )
 }
