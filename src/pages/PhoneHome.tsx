@@ -7,7 +7,7 @@ import { Card } from '../components/ui'
 import { useCalendarFeed } from '../data/useCalendarFeed'
 import { useData } from '../data/DataContext'
 import { useT } from '../i18n/I18nContext'
-import { formatThaiDateShort } from '../lib/format'
+import { fmtMoney, formatThaiDateShort } from '../lib/format'
 import { shortages } from '../lib/inventoryRules/lowStock'
 import { bkkDayEnd, bkkDayStart, DAY_MS, isSameBkkDay } from '../lib/inventoryRules/time'
 import type { CalendarItem } from '../lib/inventoryRules/types'
@@ -42,6 +42,21 @@ export function PhoneHome() {
   const tasks = today.filter((i) => i.kind === 'task' && isOpen(i)).length
   const todayList = today.filter((i) => i.kind !== 'lowStock' && i.kind !== 'outOfStock' && isOpen(i)).slice(0, 4)
   const manager = isManager(user?.role)
+
+  // Stock value by category, all sites — the same figure as the desk's chart, drawn as
+  // bars a thumb can read: the widest is the largest, each labelled with its baht.
+  const byCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of products) {
+      const q = locations.reduce((sum, l) => sum + qtyAt(l.id, p.id), 0)
+      const v = q * (p.cost ?? 0)
+      if (v > 0) map.set(p.category, (map.get(p.category) ?? 0) + v)
+    }
+    return [...map.entries()].map(([category, value]) => ({ category, value: Math.round(value) })).sort((a, b) => b.value - a.value)
+  }, [products, locations, qtyAt])
+  const [allCategories, setAllCategories] = useState(false)
+  const shownCategories = allCategories ? byCategory : byCategory.slice(0, 6)
+  const maxValue = byCategory[0]?.value ?? 0
 
   return (
     <div className="space-y-5">
@@ -85,6 +100,33 @@ export function PhoneHome() {
         byUserId={user?.id}
         startOpen
       />
+
+      {byCategory.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <span className="text-base font-semibold text-ink">{t('มูลค่าสต๊อกตามหมวดหมู่')}</span>
+            <span className="num text-sm text-ink-soft">฿ {fmtMoney(byCategory.reduce((s, c) => s + c.value, 0))}</span> {/* ฿ is a currency symbol — i18n-key */}
+          </div>
+          <ul className="space-y-3">
+            {shownCategories.map((c) => (
+              <li key={c.category}>
+                <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate text-ink">{c.category}</span>
+                  <span className="num shrink-0 font-semibold text-ink">฿ {fmtMoney(c.value)}</span> {/* i18n-key */}
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-sunken">
+                  <div className="h-full rounded-full bg-brand" style={{ width: `${maxValue ? Math.max(2, (c.value / maxValue) * 100) : 0}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+          {byCategory.length > shownCategories.length && (
+            <button type="button" onClick={() => setAllCategories(true)} className="mt-3 min-h-11 w-full text-sm text-brand">
+              {t('ดูทุกหมวด ({n})', { n: byCategory.length })}
+            </button>
+          )}
+        </Card>
+      )}
     </div>
   )
 }

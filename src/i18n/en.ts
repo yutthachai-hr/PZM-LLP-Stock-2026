@@ -1618,4 +1618,6 @@ export const EN: Record<string, string> = {
   'รายการที่ฉันทำวันนี้': 'What I keyed today',
   'เลยกำหนด': 'Overdue',
   'ใบขอสั่งซื้อรออนุมัติ': 'Requests to approve',
+  'มูลค่าสต๊อกตามหมวดหมู่': 'Stock value by category',
+  'ดูทุกหมวด ({n})': 'All categories ({n})',
 }
