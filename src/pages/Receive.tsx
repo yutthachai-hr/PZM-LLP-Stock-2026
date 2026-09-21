@@ -97,14 +97,15 @@ export function ReceivePage() {
       <WithTodayPanel panel={<TodayTransactions types={['receive']} date={dateInputToMs(dateStr)} title={t('รับเข้าที่ทำวันนี้')} />}>
       {restored && <DraftNotice onDiscard={discardDraft} />}
       <Card className="space-y-4 p-4">
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* Site and date share one line on a phone; who keyed it is recorded anyway. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
           <Field label={t("คลังปลายทาง")} required>
             <SiteSelect value={toLocationId} onChange={setToLocationId} locations={warehouses} />
           </Field>
           <Field label={t("วันที่รับ")} required>
             <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
           </Field>
-          <Field label={t("ผู้รับเข้า (บันทึกอัตโนมัติ)")}>
+          <Field label={t("ผู้รับเข้า (บันทึกอัตโนมัติ)")} className="hidden sm:block">
             <Input value={user?.name ?? ''} disabled />
           </Field>
         </div>

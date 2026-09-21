@@ -127,7 +127,8 @@ function TransferForm() {
     <WithTodayPanel panel={<TodayTransactions types={['issue']} date={dateInputToMs(dateStr)} title={t('เบิก/โอนที่ทำวันนี้')} />}>
     {restored && <DraftNotice onDiscard={discardDraft} />}
     <Card className="space-y-4 p-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* From and to share one line on a phone, the date under them; who keyed it is recorded anyway. */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <Field label={t("จากคลัง (ต้นทาง)")} required>
           <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
         </Field>
@@ -139,10 +140,10 @@ function TransferForm() {
             emptyLabel={t("— เลือก —")}
           />
         </Field>
-        <Field label={t("วันที่เบิก")} required>
+        <Field label={t("วันที่เบิก")} required className="col-span-2 sm:col-span-1">
           <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
         </Field>
-        <Field label={t("ผู้เบิก (บันทึกอัตโนมัติ)")}>
+        <Field label={t("ผู้เบิก (บันทึกอัตโนมัติ)")} className="hidden sm:block">
           <Input value={user?.name ?? ''} disabled />
         </Field>
       </div>
@@ -267,14 +268,14 @@ function ConsumeForm() {
         {t("เบิกของออกจากคลังไปใช้/ขายหน้าร้าน (เช่น สาขาสุขุมวิทที่อยู่ที่เดียวกับคลัง) — ตัดสต๊อกออก ไม่เพิ่มเข้าสาขาอื่น")}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <Field label={t("เบิกจากคลัง")} required>
           <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
         </Field>
         <Field label={t("วันที่เบิก")} required>
           <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
         </Field>
-        <Field label={t("ผู้เบิก (บันทึกอัตโนมัติ)")}>
+        <Field label={t("ผู้เบิก (บันทึกอัตโนมัติ)")} className="hidden sm:block">
           <Input value={user?.name ?? ''} disabled />
         </Field>
       </div>

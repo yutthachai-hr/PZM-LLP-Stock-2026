@@ -159,7 +159,7 @@ export function AdjustPage() {
       <WithTodayPanel panel={<TodayTransactions types={['adjust']} date={dateInputToMs(dateStr)} title={t('ปรับสต๊อกที่ทำวันนี้')} />}>
       {restored && <DraftNotice onDiscard={discardDraft} />}
       <Card className="space-y-4 p-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <Field label={t("คลัง/สาขา")} required>
             <SiteSelect value={locationId} onChange={setLocationId} locations={active} />
           </Field>
