@@ -27,7 +27,7 @@ export function DemoBanner() {
   return (
     <div
       role="status"
-      className="fixed bottom-3 left-3 z-[35] flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
+      className="fixed left-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
     >
       <Icon name="warning" size={13} />
       <span>{t('โหมดสาธิต — ไม่ใช่สต๊อกจริง')}</span>
@@ -56,7 +56,7 @@ function LiveDataOnLocalhostWarning() {
   return (
     <div
       role="alert"
-      className="fixed bottom-3 left-3 z-[35] flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
+      className="fixed left-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
     >
       <Icon name="warning" size={13} />
       <span>{t('เซิร์ฟเวอร์ทดสอบนี้ต่อกับข้อมูลจริง — ใช้ npm run demo')}</span>

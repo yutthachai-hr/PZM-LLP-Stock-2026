@@ -1,95 +1,38 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useAutomation } from '../data/useAutomation'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useT } from '../i18n/I18nContext'
-import { Icon, type IconName } from './Icon'
+import { Icon } from './Icon'
 import { isDemoMode } from '../firebase/config'
 import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
-
-interface NavItem {
-  to: string
-  label: string
-  icon: IconName
-  adminOnly?: boolean
-}
-
-// Labels are translation keys — NavItemLink renders them through t(). i18n-key
-const NAV: NavItem[] = [
-  { to: '/', label: 'ภาพรวม', icon: 'dashboard' }, // i18n-key
-  { to: '/products', label: 'สินค้าคงคลัง', icon: 'package' }, // i18n-key
-  { to: '/receive', label: 'รับสินค้าเข้า', icon: 'receive' }, // i18n-key
-  { to: '/issue', label: 'เบิก/โอนสาขา', icon: 'truck' }, // i18n-key
-  { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust' }, // i18n-key
-  { to: '/calendar', label: 'ปฏิทินคลัง', icon: 'calendar' }, // i18n-key
-  { to: '/movements', label: 'ประวัติ/Stock Card', icon: 'history' }, // i18n-key
-  { to: '/reports', label: 'รายงาน', icon: 'report' }, // i18n-key
-  { to: '/requests', label: 'รายการขอสั่งซื้อ', icon: 'note' }, // i18n-key
-  { to: '/orders', label: 'สั่งซื้อ', icon: 'truck' }, // i18n-key
-  { to: '/suppliers', label: 'ผู้ขาย', icon: 'users' }, // i18n-key
-  { to: '/import', label: 'นำเข้า Excel', icon: 'upload', adminOnly: true }, // i18n-key
-  { to: '/settings', label: 'ตั้งค่า', icon: 'settings' }, // i18n-key
-]
+import { navFor, titleFor, type NavItem } from './nav/navItems'
+import { BottomTabBar } from './nav/BottomTabBar'
+import { NavRail } from './nav/NavRail'
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout, mode } = useAuth()
   const { brand, reset } = useBrand()
   const t = useT()
-  const [open, setOpen] = useState(false)
   const location = useLocation()
-  const drawer = useRef<HTMLElement>(null)
   // The background jobs the cron Worker also runs — see data/useAutomation.ts.
   useAutomation()
 
-  // Close the drawer on Escape and keep Tab inside it while it is open, matching Modal.
-  useEffect(() => {
-    if (!open) return
-    const returnTo = document.activeElement as HTMLElement | null
-    const focusables = () =>
-      Array.from(
-        drawer.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [],
-      ).filter((el) => el.offsetParent !== null)
-    focusables()[0]?.focus()
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        return
-      }
-      if (e.key !== 'Tab') return
-      const items = focusables()
-      if (items.length === 0) return
-      const first = items[0]
-      const last = items[items.length - 1]
-      if (e.shiftKey && (document.activeElement === first || !drawer.current?.contains(document.activeElement))) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true)
-      returnTo?.focus?.()
-    }
-  }, [open])
-
   const def = brand ? brandDef(brand) : null
-  const items = NAV.filter((n) => !n.adminOnly || user?.role === 'admin')
+  const items = navFor(user?.role)
   // One read per session, shared with the calendar's own cache — see useTodayEventCount.
   const todayCount = useTodayEventCount(!!user)
 
   return (
     <div className="flex min-h-screen bg-canvas">
-      {/* Sidebar (desktop) — sticky so it stays put while the content scrolls */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex">
+      {/* Sidebar (desktop, xl and up) — sticky so it stays put while the content scrolls.
+          A tablet gets the rail, a phone the tab bar (spec, 21 Sep 2026). */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface xl:flex">
         <Brand mode={mode} def={def} />
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {items.map((item) => (
@@ -107,71 +50,27 @@ export function Layout({ children }: { children: ReactNode }) {
           onSwitch={reset}
         />
       </aside>
-
-      {/* Mobile drawer — same dialog treatment as Modal: it covers the page, so it has
-          to announce itself, hold focus, and close on Escape. */}
-      {open && (
-        <div
-          className="fixed inset-0 z-40 overscroll-contain lg:hidden"
-          onClick={() => setOpen(false)}
-        >
-          <div className="absolute inset-0 bg-ink/50" />
-          <aside
-            ref={drawer}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('เมนู')}
-            className="absolute left-0 top-0 flex h-full w-72 flex-col bg-surface shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Brand mode={mode} def={def} />
-            <nav className="flex-1 space-y-1 overflow-y-auto p-3" onClick={() => setOpen(false)}>
-              {items.map((item) => (
-                <NavItemLink
-                  key={item.to}
-                  item={item}
-                  badge={item.to === '/calendar' ? todayCount : 0}
-                />
-              ))}
-            </nav>
-            <UserBox
-          name={user?.name ?? ''}
-          role={user?.role ?? 'staff'}
-          onLogout={() => void logout()}
-          onSwitch={reset}
-        />
-          </aside>
-        </div>
-      )}
+      <NavRail />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          onMenu={() => setOpen(true)}
-          title={t(
-            // A sub-page (/settings/users, /requests/abc) keeps its section's name.
-            NAV.find((n) => n.to === location.pathname || (n.to !== '/' && location.pathname.startsWith(`${n.to}/`)))?.label ?? '',
-          )}
-        />
+        <TopBar title={t(titleFor(location.pathname))} />
 
         {/* The page column is capped: a stock table stretched across a 27" monitor puts the
             product name and its quantity at opposite ends of the desk. */}
-        {/* The demo pill is pinned to the bottom-left, so a demo build needs room under the
-            last row for it to sit over nothing. */}
-        <main
-          className={`mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 sm:p-5 lg:p-6 ${
-            isDemoMode() ? 'pb-16 sm:pb-6' : ''
-          }`}
-        >
+        {/* On a phone the tab bar is fixed over the bottom edge, so the page keeps that
+            much clear below its last row (the demo pill sits above the bar too). */}
+        <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 [padding-bottom:calc(var(--tabbar-h)+1rem)] sm:p-5 sm:[padding-bottom:calc(var(--tabbar-h)+1.25rem)] md:[padding-bottom:1.25rem] lg:p-6 lg:[padding-bottom:1.5rem]">
           <InstallHint />
           {/* On a desktop the page sits on one white sheet over the canvas (the owner's
               mock-up, 21 Sep 2026): the screen reads as one document with its sections
               inside it, rather than as loose boxes floating on grey. On a phone there is
               no room for a margin around a sheet, so the canvas is the page. */}
-          <div className="lg:min-h-full lg:rounded-2xl lg:border lg:border-line lg:bg-surface lg:p-6 lg:shadow-sm">
+          <div className="xl:min-h-full xl:rounded-2xl xl:border xl:border-line xl:bg-surface xl:p-6 xl:shadow-sm">
             {children}
           </div>
         </main>
       </div>
+      <BottomTabBar />
     </div>
   )
 }

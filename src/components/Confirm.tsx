@@ -58,7 +58,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={confirm}>
       {children}
-      <Modal open={!!opts} onClose={() => close(false)} title={opts?.title ?? t('ยืนยัน')}>
+      <Modal open={!!opts} onClose={() => close(false)} title={opts?.title ?? t('ยืนยัน')} compact>
         <p className="whitespace-pre-line text-sm text-ink-soft">{opts?.message}</p>
 
         {phrase && (

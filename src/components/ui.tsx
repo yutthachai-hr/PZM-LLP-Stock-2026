@@ -209,12 +209,23 @@ export function Modal({
   wide,
   side,
   sheet,
+  compact,
+  footer,
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
   wide?: boolean
+  /**
+   * A short dialog — a confirm, a question with two buttons. On a phone it rises from the
+   * bottom as a small sheet under the thumb; above `md` it is the centred box it always was.
+   * Everything else fills a phone screen (spec, 21 Sep 2026): a form in a box that is
+   * narrower than the page with a margin around it is harder to use than the page itself.
+   */
+  compact?: boolean
+  /** Buttons that stay at the bottom of the dialog while its body scrolls. */
+  footer?: ReactNode
   /**
    * Slide in from the right instead of appearing in the middle.
    *
@@ -300,7 +311,9 @@ export function Modal({
           ? 'fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-ink/50 backdrop-blur-[2px] sm:items-stretch sm:justify-end'
           : side
             ? 'fixed inset-0 z-50 flex justify-end overscroll-contain bg-ink/50 backdrop-blur-[2px]'
-            : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-ink/50 p-4 backdrop-blur-[2px] sm:items-center'
+            : compact
+              ? 'fixed inset-0 z-50 flex items-end justify-center overscroll-contain bg-ink/50 backdrop-blur-[2px] md:items-center md:p-4'
+              : 'fixed inset-0 z-50 flex items-stretch justify-center overscroll-contain bg-ink/50 backdrop-blur-[2px] md:items-center md:overflow-y-auto md:p-4'
       }
       onMouseDown={(e) => {
         pressedOnOverlay.current = e.target === e.currentTarget
@@ -320,7 +333,9 @@ export function Modal({
             ? 'flex max-h-[92vh] w-full flex-col overflow-y-auto rounded-t-2xl bg-surface shadow-2xl sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none'
             : side
               ? 'flex h-full w-full max-w-md flex-col overflow-y-auto bg-surface shadow-2xl'
-              : `w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl bg-surface shadow-2xl`
+              : compact
+                ? 'flex max-h-[80vh] w-full flex-col overflow-y-auto rounded-t-2xl bg-surface shadow-2xl md:max-w-md md:rounded-xl'
+                : `flex h-full w-full flex-col overflow-y-auto bg-surface shadow-2xl md:h-auto md:max-h-[92vh] md:rounded-xl ${wide ? 'md:max-w-3xl' : 'md:max-w-lg'}`
         }
         onClick={(e) => e.stopPropagation()}
       >
@@ -337,7 +352,12 @@ export function Modal({
             <Icon name="x" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="flex-1 px-5 py-4">{children}</div>
+        {footer && (
+          <div className="sticky bottom-0 z-10 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur [padding-bottom:calc(0.75rem+env(safe-area-inset-bottom))]">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -481,11 +501,11 @@ export function SectionHeader({
  * On a phone it sticks to the bottom of the viewport, because the forms in this app run
  * longer than a screen once a few lines are on them and the save button would otherwise
  * sit below the fold — with the person scrolling back down to find it after every line.
- * `env(safe-area-inset-bottom)` keeps it clear of the home indicator.
+ * It sits just above the tab bar, which owns the home-indicator inset.
  */
 export function FormActions({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky bottom-0 -mx-4 mt-2 flex justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-filter-none [padding-bottom:calc(0.75rem+env(safe-area-inset-bottom))] sm:[padding-bottom:0]">
+    <div className="sticky -mx-4 mt-2 flex justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur [bottom:var(--tabbar-h)] md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-filter-none">
       {children}
     </div>
   )

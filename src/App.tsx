@@ -29,6 +29,7 @@ import { PurchaseRequestsPage } from './pages/requests/PurchaseRequests'
 import { RequestPage } from './pages/requests/RequestPage'
 import { CalendarPage } from './pages/calendar/CalendarPage'
 import { SettingsPage } from './pages/Settings'
+import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
 
 function Gate() {
@@ -86,6 +87,7 @@ function Gate() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/:section" element={<SettingsPage />} />
+          <Route path="/more" element={<MorePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
