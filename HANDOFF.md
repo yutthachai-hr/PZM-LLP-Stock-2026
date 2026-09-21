@@ -140,7 +140,8 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 - **แท็บเล็ต 768–1279**: รางซ้าย 72px (`NavRail.tsx`) ไอคอน+คำ ทุกเมนู ปุ่ม + ในราง; **คอม ≥1280**: เมนูซ้าย 256px + sheet ขาว เหมือนเดิม (ย้าย breakpoint จาก `lg` เป็น `xl`)
 - เมนูทุกแบบอ่านจาก `components/nav/navItems.ts` ที่เดียว (`navFor`, `TAB_ITEMS`, `actionsFor`, `moreItemsFor`, `isMoreRoute`, `titleFor` — เทสต์ `tests/nav-items.test.ts`); `lib/viewport.ts` (`useViewport()`) ใช้เฉพาะเมื่อพฤติกรรมต่างกัน ไม่ใช่ layout
 - `Modal` บนมือถือเต็มจอ (หัวติดบน, prop `footer` ติดล่าง); `compact` = แผ่นสั้นจากล่าง (Confirm ใช้); `FormActions` ติดเหนือแถบล่าง (`--tabbar-h` ใน index.css); DemoBanner ก็อยู่เหนือแถบ
-- spec `docs/superpowers/specs/2026-09-21-mobile-tablet-ui-design.md`, แผนรอบ 1 `docs/superpowers/plans/2026-09-21-mobile-shells.md`; รอบถัดไป: หน้าคีย์ (QtySheet), รายการเป็นการ์ด, หน้าแรกมือถือ
+- **รอบ 2 หน้าคีย์ (branch `feat/mobile-keying`)**: `components/QtySheet.tsx` (จำนวน+หน่วยบนมือถือ ใช้ Modal compact+footer; กันเบิกเกินคงเหลือ), `lib/lines.ts` (`upsertLine` — สินค้าเดิม = แถวเดิม, ทดสอบ `tests/lines.test.ts`), `LineBuilder` แยกโหมด phone (ผลค้นหาเป็นลิสต์ใต้ช่อง + การ์ด + ชีต) / อื่น (แถวเดิม), `TodayTransactions` พับได้บนมือถือ, `WithTodayPanel` วางข้างจาก `lg`; ปรับสต๊อกบนมือถือใช้ชีตเดียวกัน (ทิศทาง+เหตุผลอยู่ในชีต, แถวสรุปแตะเพื่อแก้)
+- spec `docs/superpowers/specs/2026-09-21-mobile-tablet-ui-design.md`, แผน `docs/superpowers/plans/2026-09-21-mobile-shells.md`, `…-mobile-keying.md`; รอบถัดไป: รายการเป็นการ์ด (สั่งซื้อ/ขอสั่งซื้อ/สินค้า/ประวัติ/รายงาน/ผู้ขาย), หน้าแรกมือถือ
 
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
