@@ -1613,4 +1613,7 @@ export const EN: Record<string, string> = {
   'สั่งกับผู้ขายเอง': 'Order from a supplier yourself',
   'ทำรายการ': 'New transaction',
   'เมนูหลัก': 'Main menu',
+  'เกินคงเหลือ — บันทึกไม่ได้': 'More than on hand — cannot be filed',
+  'ใส่จำนวน': 'Enter a quantity',
+  'ตกลง': 'OK',
 }

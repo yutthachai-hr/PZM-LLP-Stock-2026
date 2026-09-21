@@ -27,7 +27,9 @@ import { ADJUST_REASONS, type Product } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
-import type { QtyEntry } from '../lib/uom'
+import { describeQty, type QtyEntry } from '../lib/uom'
+import { useViewport } from '../lib/viewport'
+import { QtySheet } from '../components/QtySheet'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
 
@@ -55,6 +57,10 @@ export function AdjustPage() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  // A phone keys how many, which way and why in one sheet (spec §3, 21 Sep 2026);
+  // the inline row stays for tablets and desktops.
+  const phone = useViewport() === 'phone'
+  const [sheet, setSheet] = useState(false)
 
   // A half-keyed adjustment survives leaving the screen (lib/useDraft.ts). The product is
   // kept by id and looked up again, so a renamed product comes back under its new name.
@@ -159,7 +165,7 @@ export function AdjustPage() {
       <WithTodayPanel panel={<TodayTransactions types={['adjust']} date={dateInputToMs(dateStr)} title={t('ปรับสต๊อกที่ทำวันนี้')} />}>
       {restored && <DraftNotice onDiscard={discardDraft} />}
       <Card className="space-y-4 p-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <Field label={t("คลัง/สาขา")} required>
             <SiteSelect value={locationId} onChange={setLocationId} locations={active} />
           </Field>
@@ -195,6 +201,7 @@ export function AdjustPage() {
                     e.preventDefault()
                     setProduct(matches[0])
                     setSearch('')
+                    if (phone) setSheet(true)
                   }
                 }}
                 autoComplete="off"
@@ -209,6 +216,7 @@ export function AdjustPage() {
                       onClick={() => {
                         setProduct(p)
                         setSearch('')
+                        if (phone) setSheet(true)
                       }}
                       className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-sunken"
                     >
@@ -223,6 +231,24 @@ export function AdjustPage() {
           )}
         </Field>
 
+        {phone && product && (
+          <button
+            type="button"
+            onClick={() => setSheet(true)}
+            className="flex min-h-14 w-full cursor-pointer items-center justify-between gap-3 rounded-lg border border-line px-3 text-left outline-none active:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
+          >
+            <span className="text-sm text-ink-soft">
+              {direction === 'out' ? t('ลดออก (−)') : t('เพิ่มเข้า (+)')} · {t(ADJUST_REASONS.find((r) => r.value === reason)?.label ?? reason)}
+            </span>
+            <span className="num shrink-0 text-base font-semibold text-ink">
+              {entry.qty > 0
+                ? describeQty({ qty: entry.qty, entryQty: entry.entryQty, entryUnit: entry.entryUnit, unit: product.unitType }, fmtQty)
+                : t('ใส่จำนวน')}
+            </span>
+          </button>
+        )}
+
+        {!phone && (
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label={t("ทิศทาง")} required>
             <Select
@@ -254,6 +280,7 @@ export function AdjustPage() {
             </Select>
           </Field>
         </div>
+        )}
 
         <Field label={t("หมายเหตุ (ไม่บังคับ)")}>
           <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
@@ -275,6 +302,41 @@ export function AdjustPage() {
         </FormActions>
       </Card>
       </WithTodayPanel>
+      {phone && (
+        <QtySheet
+          open={sheet && !!product}
+          product={product}
+          initial={entry.qty > 0 ? { qty: entry.qty, entryQty: entry.entryQty, entryUnit: entry.entryUnit } : undefined}
+          available={direction === 'out' ? current : undefined}
+          direction={direction}
+          submitLabel={t('ตกลง')}
+          extra={
+            <div className="grid grid-cols-2 gap-2">
+              <Field label={t('ทิศทาง')}>
+                <Select value={direction} onChange={(e) => setDirection(e.target.value as 'in' | 'out')}>
+                  <option value="out">{t('ลดออก (−)')}</option>
+                  <option value="in">{t('เพิ่มเข้า (+)')}</option>
+                </Select>
+              </Field>
+              <Field label={t('เหตุผล')}>
+                <Select value={reason} onChange={(e) => setReason(e.target.value)}>
+                  {ADJUST_REASONS.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {t(r.label)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          }
+          onClose={() => setSheet(false)}
+          onSubmit={(e) => {
+            setEntry(e)
+            setSheet(false)
+          }}
+          onRateDefined={(list) => setProduct((p) => (p ? { ...p, unitConversions: list } : p))}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { useViewport } from '../../lib/viewport'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -36,6 +37,10 @@ export function TodayTransactions({
   const { user } = useAuth()
   const [editing, setEditing] = useState<StockMovement | null>(null)
   const [showAll, setShowAll] = useState(false)
+  // On a phone the panel sits under the form and starts folded to one line with the
+  // count, so the form keeps the screen (spec §3, 21 Sep 2026); a tap opens it.
+  const phone = useViewport() === 'phone'
+  const [openPanel, setOpenPanel] = useState(false)
 
   const day = new Date(date)
   const from = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime()
@@ -51,20 +56,37 @@ export function TodayTransactions({
   const shown = showAll ? rows : rows.slice(0, 30)
 
   return (
-    <Card className="flex max-h-[calc(100vh-8rem)] flex-col overflow-hidden xl:sticky xl:top-4">
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-ink">{title ?? t('รายการที่ทำวันนี้')}</div>
-          <div className="text-xs text-ink-faint">
-            {formatThaiDateShort(from)} · {t('{n} รายการ', { n: rows.length })}
+    <Card className={`flex flex-col overflow-hidden ${phone ? '' : 'max-h-[calc(100vh-8rem)] lg:sticky lg:top-4'}`}>
+      <div className={`flex items-center justify-between gap-2 px-3 py-2 ${!phone || openPanel ? 'border-b border-line' : ''}`}>
+        {phone ? (
+          <button
+            type="button"
+            onClick={() => setOpenPanel((v) => !v)}
+            aria-expanded={openPanel}
+            className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+          >
+            <Icon name={openPanel ? 'chevronDown' : 'chevronRight'} size={16} className="shrink-0 text-ink-faint" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-ink">{title ?? t('รายการที่ทำวันนี้')}</div>
+              <div className="text-xs text-ink-faint">
+                {formatThaiDateShort(from)} · {t('{n} รายการ', { n: rows.length })}
+              </div>
+            </div>
+          </button>
+        ) : (
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-ink">{title ?? t('รายการที่ทำวันนี้')}</div>
+            <div className="text-xs text-ink-faint">
+              {formatThaiDateShort(from)} · {t('{n} รายการ', { n: rows.length })}
+            </div>
           </div>
-        </div>
+        )}
         <Button variant="ghost" onClick={() => navigate('/movements')}>
           <Icon name="history" size={14} />
           {t('ประวัติทั้งหมด')}
         </Button>
       </div>
-      {rows.length === 0 ? (
+      {phone && !openPanel ? null : rows.length === 0 ? (
         <p className="p-6 text-center text-sm text-ink-soft">{t('ยังไม่มีรายการของวันนี้')}</p>
       ) : (
         <ul className="divide-y divide-line overflow-auto">
@@ -118,7 +140,7 @@ export function TodayTransactions({
 /** A form with the day's rows beside it on a wide screen, below it on a narrow one. */
 export function WithTodayPanel({ children, panel }: { children: ReactNode; panel: ReactNode }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px] xl:items-start">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
       <div className="min-w-0 space-y-4">{children}</div>
       {panel}
     </div>
