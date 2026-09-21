@@ -1597,4 +1597,8 @@ export const EN: Record<string, string> = {
   'รวมยอดที่เคยเก็บแยกหน่วย': 'Merge balances once kept per unit',
   'เปลี่ยนหน่วยหลักของสินค้าและคำนวณยอดใหม่': "Change a product's base unit and recalculate",
   'ทั่วไป': 'General',
+  'ตั้งค่าระบบ คลัง ผู้ใช้ และข้อมูล — เลือกหัวข้อที่ต้องการ': 'System, stock, users and data — pick a topic',
+  'ค้นหาการตั้งค่า...': 'Search settings...',
+  'ไม่พบการตั้งค่าที่ตรงกับคำค้น': 'No settings match your search',
+  'การตั้งค่าทั้งหมด': 'All settings',
 }

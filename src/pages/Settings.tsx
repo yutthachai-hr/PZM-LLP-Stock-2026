@@ -21,11 +21,14 @@ import {
   Field,
   Input,
   Modal,
+  EmptyState,
   PageHeader,
   rowAction,
+  SearchInput,
   SectionHeader,
   Select,
 } from '../components/ui'
+import { looseMatch } from '../lib/search'
 import { createLocation, updateLocation, deleteLocation } from '../services/locations'
 import {
   createUser,
@@ -111,6 +114,7 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const { section } = useParams<{ section?: string }>()
   const desktop = useIsDesktop()
+  const [query, setQuery] = useState('')
   const isAdmin = user?.role === 'admin'
   const isManager = isAdmin || user?.role === 'manager'
 
@@ -158,9 +162,7 @@ export function SettingsPage() {
 
   const keys = groups.flatMap((g) => g.items.map((i) => i.key))
   const chosen = keys.includes(section as SectionKey) ? (section as SectionKey) : null
-  // A desktop has room for the menu and a topic side by side, so it never shows an empty
-  // right half: with nothing chosen, the first topic is open.
-  const open: SectionKey | null = chosen ?? (desktop ? keys[0] ?? null : null)
+  const open: SectionKey | null = chosen
   const openItem = groups.flatMap((g) => g.items).find((i) => i.key === open)
 
   function renderSection(key: SectionKey) {
@@ -193,6 +195,7 @@ export function SettingsPage() {
     }
   }
 
+  // The phone's menu — the owner's mock-up. A desktop gets its own layout further down.
   const menu = (
     <nav aria-label={t('ตั้งค่า')} className="space-y-5">
       {groups.map((g) => (
@@ -200,27 +203,14 @@ export function SettingsPage() {
           <h2 className="mb-2 px-1 text-sm font-semibold text-ink">{g.title}</h2>
           <ul className="overflow-hidden rounded-2xl bg-sunken ring-1 ring-inset ring-line/70">
             {g.items.map((it) => {
-              const active = desktop && it.key === open
               return (
                 <li key={it.key} className="border-b border-line/70 last:border-0">
-                  <button
-                    onClick={() => navigate(`/settings/${it.key}`)}
-                    aria-current={active ? 'page' : undefined}
-                    className={`flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 ${
-                      active ? 'bg-brand-soft' : 'hover:bg-line/40'
-                    }`}
-                  >
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                        active ? 'bg-surface text-brand' : 'bg-surface text-ink-soft'
-                      }`}
-                    >
+                  <button onClick={() => navigate(`/settings/${it.key}`)} className={actionRow}>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-ink-soft">
                       <Icon name={it.icon} size={19} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-[15px] font-semibold ${active ? 'text-brand' : 'text-ink'}`}>
-                        {it.label}
-                      </span>
+                      <span className="block truncate text-[15px] font-semibold text-ink">{it.label}</span>
                       <span className="block truncate text-xs text-ink-faint">{it.hint}</span>
                     </span>
                     <Icon name="chevronRight" size={18} className="text-ink-faint" />
@@ -294,16 +284,155 @@ export function SettingsPage() {
     )
   }
 
+  // ---- Desktop -------------------------------------------------------------------------
+
+  // Nothing chosen: every topic as a tile, grouped, with a filter. A desktop has the room
+  // to show the whole of settings at once, so the first screen answers "what is in here"
+  // instead of guessing which topic someone came for.
+  if (!open || !openItem) {
+    const q = query.trim().toLowerCase()
+    const shown = groups
+      .map((g) => ({ ...g, items: g.items.filter((i) => !q || looseMatch([i.label, i.hint, g.title], q)) }))
+      .filter((g) => g.items.length > 0)
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          icon="settings"
+          title={t('ตั้งค่า')}
+          subtitle={t('ตั้งค่าระบบ คลัง ผู้ใช้ และข้อมูล — เลือกหัวข้อที่ต้องการ')}
+          actions={
+            <SearchInput value={query} onChange={setQuery} placeholder={t('ค้นหาการตั้งค่า...')} className="w-80" />
+          }
+        />
+
+        {shown.length === 0 && <EmptyState icon="search" title={t('ไม่พบการตั้งค่าที่ตรงกับคำค้น')} />}
+
+        {shown.map((g) => (
+          <section key={g.title}>
+            <h2 className="mb-3 text-base font-semibold text-ink">{g.title}</h2>
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+              {g.items.map((it) => (
+                <button
+                  key={it.key}
+                  onClick={() => navigate(`/settings/${it.key}`)}
+                  className="group flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-4 text-left outline-none transition-[border-color,box-shadow] duration-150 hover:border-brand/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand/40"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
+                    <Icon name={it.icon} size={21} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-ink">{it.label}</span>
+                    <span className="mt-0.5 block text-sm leading-snug text-ink-soft">{it.hint}</span>
+                  </span>
+                  <Icon
+                    name="chevronRight"
+                    size={18}
+                    className="mt-1 text-ink-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-brand"
+                  />
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {!q && (
+          <section>
+            <h2 className="mb-3 text-base font-semibold text-ink">{t('ทั่วไป')}</h2>
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+              <div className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sunken text-ink-soft">
+                  <Icon name="globe" size={21} />
+                </span>
+                <span className="min-w-0 flex-1 font-semibold text-ink">{t('ภาษา')}</span>
+                <LangToggle className="w-28" />
+              </div>
+              <button onClick={reset} className={tileAction}>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sunken text-ink-soft">
+                  <Icon name="swap" size={21} />
+                </span>
+                <span className="min-w-0 flex-1 font-semibold text-ink">{t('สลับแบรนด์')}</span>
+              </button>
+              <button onClick={() => void logout()} className={`${tileAction} hover:border-danger/40`}>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-danger-soft text-danger">
+                  <Icon name="logout" size={21} />
+                </span>
+                <span className="min-w-0 flex-1 font-semibold text-danger">{t('ออกจากระบบ')}</span>
+              </button>
+            </div>
+            {!isAdmin && (
+              <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+                {t('การจัดการคลัง ผู้ใช้ และข้อมูล ต้องเป็นสิทธิ์ผู้ดูแลระบบ (Admin)')}
+              </p>
+            )}
+          </section>
+        )}
+      </div>
+    )
+  }
+
+  // A topic open: a compact menu down the left for moving between topics without going
+  // back, and the topic beside it under a breadcrumb that says where you are.
+  const openGroup = groups.find((g) => g.items.some((i) => i.key === open))
   return (
-    <div className="space-y-5">
-      <PageHeader icon="settings" title={t('ตั้งค่า')} />
-      <div className="grid grid-cols-[20rem_minmax(0,1fr)] items-start gap-6">
-        <div>{menu}</div>
-        <div className="min-w-0">{open && renderSection(open)}</div>
+    <div className="grid grid-cols-[15rem_minmax(0,1fr)] items-start gap-8 xl:grid-cols-[16rem_minmax(0,1fr)]">
+      <aside className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto pr-1">
+        <button
+          onClick={() => navigate('/settings')}
+          className="mb-4 inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-ink-soft outline-none hover:bg-sunken hover:text-ink focus-visible:ring-2 focus-visible:ring-brand/40"
+        >
+          <Icon name="chevronLeft" size={18} />
+          {t('การตั้งค่าทั้งหมด')}
+        </button>
+        <nav aria-label={t('ตั้งค่า')} className="space-y-4">
+          {groups.map((g) => (
+            <div key={g.title}>
+              <div className="mb-1 px-3 text-xs font-semibold text-ink-faint">{g.title}</div>
+              <ul className="space-y-0.5">
+                {g.items.map((it) => {
+                  const active = it.key === open
+                  return (
+                    <li key={it.key}>
+                      <button
+                        onClick={() => navigate(`/settings/${it.key}`)}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
+                          active
+                            ? 'bg-brand-soft font-semibold text-brand ring-1 ring-inset ring-brand/20'
+                            : 'text-ink-soft hover:bg-sunken hover:text-ink'
+                        }`}
+                      >
+                        <Icon name={it.icon} size={17} />
+                        <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="min-w-0 space-y-4">
+        <div className="flex min-h-10 items-center">
+          <div className="flex items-center gap-1.5 text-sm text-ink-faint">
+            <button onClick={() => navigate('/settings')} className="cursor-pointer hover:text-brand hover:underline">
+              {t('ตั้งค่า')}
+            </button>
+            <Icon name="chevronRight" size={14} />
+            <span>{openGroup?.title}</span>
+            <Icon name="chevronRight" size={14} />
+            <span className="text-ink-soft">{openItem.label}</span>
+          </div>
+        </div>
+        <div className="max-w-4xl">{renderSection(open)}</div>
       </div>
     </div>
   )
 }
+
+const tileAction =
+  'flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface p-4 text-left outline-none transition-[border-color,box-shadow] duration-150 hover:border-line-strong hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand/40'
 
 const actionRow =
   'flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-line/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40'

@@ -751,6 +751,8 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        // The placeholder is the only words on the field, so it names it for a screen reader.
+        aria-label={placeholder}
         className={`${inputBase} pl-10`}
       />
     </div>
