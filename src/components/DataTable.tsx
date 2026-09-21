@@ -10,10 +10,11 @@ import { useT } from '../i18n/I18nContext'
  * headings scrolled off to the left by the time you reach the number you wanted. Branch
  * staff read these on phones.
  *
- * So below `sm` each row is rendered as a card instead: the primary column as its heading,
- * the rest as labelled lines. Nothing is hidden — a label is cheaper than a scrollbar, and
- * dropping columns on small screens means the answer someone came for is the one that is
- * missing.
+ * So below `md` — the phone shell's edge (spec, 21 Sep 2026) — each row is rendered as a
+ * card instead: the primary column as its heading, one column marked `card: 'value'` as
+ * the large figure beside it, the rest as one meta line. Nothing is hidden unless a page
+ * says so — a label is cheaper than a scrollbar, and dropping columns on small screens
+ * means the answer someone came for is the one that is missing.
  *
  * The desktop table keeps the sticky head and the scroll container the pages already used.
  */
@@ -27,10 +28,20 @@ export interface Column<T> {
   primary?: boolean
   /** Shown in the table, left out of the card — for row actions repeated in `cardActions`. */
   tableOnly?: boolean
+  /** Where the cell goes on a phone card: the large figure beside the title, the meta line (default), or nowhere. */
+  card?: 'value' | 'meta' | 'hidden'
   /** Applied to the cell, not the header. */
   className?: string
   /** Fixed width for the header cell, e.g. 'w-24'. */
   headerClassName?: string
+}
+
+/** Which columns go where on a phone card. */
+export function cardParts<T>(columns: Column<T>[]): { title: Column<T>; value?: Column<T>; meta: Column<T>[] } {
+  const title = columns.find((c) => c.primary) ?? columns[0]
+  const value = columns.find((c) => c.card === 'value' && c !== title)
+  const meta = columns.filter((c) => c !== title && c !== value && !c.tableOnly && c.card !== 'hidden')
+  return { title, value, meta }
 }
 
 export function DataTable<T>({
@@ -61,30 +72,32 @@ export function DataTable<T>({
   const t = useT()
   if (rows.length === 0) return <>{empty}</>
 
-  const primary = columns.find((c) => c.primary) ?? columns[0]
-  const rest = columns.filter((c) => c !== primary && !c.tableOnly)
+  const { title, value, meta } = cardParts(columns)
 
   return (
     <>
       {/* Phone: one card per row. */}
-      <div className="divide-y divide-line sm:hidden">
+      <div className="divide-y divide-line md:hidden">
         {rows.map((row) => (
           <div
             key={rowKey(row)}
             className={`p-3 ${onRowClick ? 'cursor-pointer active:bg-sunken' : ''} ${rowClassName?.(row) ?? ''}`}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
           >
-            <div className="font-medium text-ink">{primary.cell(row)}</div>
-            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-              {rest.map((c) => (
-                <div key={c.key} className="contents">
-                  <dt className="text-ink-faint">{c.header}</dt>
-                  <dd className={`min-w-0 text-ink-soft ${c.align === 'right' ? 'text-right' : ''}`}>
-                    {c.cell(row)}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 font-medium text-ink">{title.cell(row)}</div>
+              {value && <div className="num shrink-0 text-right text-base font-semibold text-ink">{value.cell(row)}</div>}
+            </div>
+            {meta.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-soft">
+                {meta.map((c) => (
+                  <span key={c.key} className="inline-flex min-w-0 items-center gap-1">
+                    <span className="text-ink-faint">{c.header}</span>
+                    <span className="min-w-0 text-ink">{c.cell(row)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             {cardActions && <div className="mt-2 flex flex-wrap gap-2">{cardActions(row)}</div>}
           </div>
         ))}
@@ -92,7 +105,7 @@ export function DataTable<T>({
 
       {/* Tablet and up: the table. */}
       <div
-        className="hidden overflow-auto sm:block"
+        className="hidden overflow-auto md:block"
         style={maxHeight ? { maxHeight } : undefined}
       >
         <table className="w-full text-sm" style={{ minWidth }}>
