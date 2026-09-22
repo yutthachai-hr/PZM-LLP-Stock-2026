@@ -157,6 +157,9 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 - **ปุ่ม "คำนวณยอดคงเหลือใหม่"/"ตรวจความสอดคล้องของยอด" ยังคงอ่านทั้ง collection ต่อการกด 1 ครั้ง** (คนละเรื่องกับบั๊กข้างบน — ธรรมชาติของการตรวจสอบทั้งหมดคือต้องอ่านทั้งหมด) เพิ่มคำเตือนใต้ปุ่มว่าไม่ควรกดซ้ำโดยไม่จำเป็น — วินัยการใช้ (ทั้งเจ้าของและผมเอง) สำคัญกว่าตัวโค้ด ต่อไปถ้าต้องตรวจสอบสินค้าเดียวหลัง unit rebase ให้ใช้ query แบบ scoped ต่อสินค้า (`getBy('productId', ...)` ที่ `rebuildProductLevels` ใช้อยู่แล้ว) แทนปุ่มตรวจทั้งระบบ
 - **ทดสอบฟีเจอร์ใหม่ต่อไปนี้**: ทำใน `npm run demo` (localhost:5175) ก่อนเสมอ — เป็นคนละ Firebase project กับของจริง ไม่กระทบโควตา ใช้ของจริง (Chrome tab ของเจ้าของ) เฉพาะตอนต้อง verify ด้วยข้อมูลจริงหรือแก้ข้อมูลจริงเท่านั้น และเลี่ยงการกด reload/สลับแบรนด์ซ้ำ ๆ โดยไม่จำเป็นระหว่างตรวจงาน
 
+### ส่ง LINE บนมือถือ — กลับมาที่ใบเดิมหลัง LINE Login (22 ก.ย., branch `fix/liff-resume`)
+อาการ: กด "ส่ง LINE" ครั้งแรกบนมือถือ → ไป LINE Login → กลับมาหน้ารายการสั่งซื้อโดยหน้าต่างส่งหายไป ("เด้งกลับมาหน้าเดิม"). แก้ใน `src/share/liffResume.ts`: `redirectUri` ของ `liff.login()` = หน้าเดิม + `?send=<orderId>` (ค่าเดินทางใน URL ไม่ใช่ storage เพราะบน iPhone แอปหน้าจอหลักกับ Safari ไม่แชร์ storage กัน) แล้ว `Orders.tsx` / `RequestReview.tsx` / `PurchaseBatchReview.tsx` อ่านพารามิเตอร์ครั้งเดียว เปิด `SendWizard` ที่ใบนั้น แล้วล้าง URL. **แอปที่ติดตั้งบนหน้าจอหลัก (PWA)** ทำ login round trip ไม่ได้เลย → พาไปเปิดหน้าเดิมในแอป LINE ผ่าน `https://liff.line.me/<liffId>/<path>?send=<id>` (`liffBoot.ts` แปลง `liff.state` กลับเป็นเส้นทาง) ซึ่งใน LINE ล็อกอินอยู่แล้ว — ครั้งแรกต้องเข้าระบบแอปในเบราว์เซอร์ของ LINE หนึ่งครั้ง (storage แยก). `SendWizard` แสดงข้อความบอกล่วงหน้าว่าจะเกิดอะไร (`liffNeedsLogin()`). tests: `tests/share-provider.test.ts` (+3).
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
