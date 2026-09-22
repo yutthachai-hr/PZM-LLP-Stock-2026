@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useT } from '../i18n/I18nContext'
+import { RowMenu, type RowMenuItem } from './frame/RowMenu'
 
 /**
  * A table that turns into a list of cards on a phone.
@@ -54,6 +55,8 @@ export function DataTable<T>({
   onRowClick,
   cardActions,
   rowClassName,
+  selection,
+  rowMenu,
 }: {
   rows: T[]
   columns: Column<T>[]
@@ -68,11 +71,38 @@ export function DataTable<T>({
   cardActions?: (row: T) => ReactNode
   /** Applied to the row and to the card, for states that colour the whole entry. */
   rowClassName?: (row: T) => string
+  /**
+   * Tick boxes down the left, and one in the head that ticks the rows shown (owner's
+   * mock-ups). The page owns the set, so a selection survives paging and filtering.
+   */
+  selection?: { selected: ReadonlySet<string>; onChange: (next: Set<string>) => void }
+  /** The `⋮` menu at the end of each row (and at the top right of each phone card). */
+  rowMenu?: (row: T) => RowMenuItem[]
 }) {
   const t = useT()
   if (rows.length === 0) return <>{empty}</>
 
   const { title, value, meta } = cardParts(columns)
+  const keys = rows.map(rowKey)
+  const allOn = !!selection && keys.every((k) => selection.selected.has(k))
+  const someOn = !!selection && keys.some((k) => selection.selected.has(k))
+  function toggle(key: string) {
+    if (!selection) return
+    const next = new Set(selection.selected)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    selection.onChange(next)
+  }
+  function toggleAll() {
+    if (!selection) return
+    const next = new Set(selection.selected)
+    for (const k of keys) {
+      if (allOn) next.delete(k)
+      else next.add(k)
+    }
+    selection.onChange(next)
+  }
+  const box = 'h-[18px] w-[18px] cursor-pointer rounded accent-[var(--color-brand)]'
 
   return (
     <>
@@ -85,8 +115,19 @@ export function DataTable<T>({
             onClick={onRowClick ? () => onRowClick(row) : undefined}
           >
             <div className="flex items-start justify-between gap-3">
+              {selection && (
+                <input
+                  type="checkbox"
+                  className={`${box} mt-1 shrink-0`}
+                  checked={selection.selected.has(rowKey(row))}
+                  onChange={() => toggle(rowKey(row))}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={t('เลือกแถวนี้')}
+                />
+              )}
               <div className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{title.cell(row)}</div>
               {value && <div className="num shrink-0 text-right text-lg font-bold text-ink">{value.cell(row)}</div>}
+              {rowMenu && <RowMenu items={rowMenu(row)} />}
             </div>
             {meta.length > 0 && (
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-ink-soft">
@@ -111,6 +152,20 @@ export function DataTable<T>({
         <table className="w-full text-sm" style={{ minWidth }}>
           <thead className="sticky top-0 z-10 bg-sunken text-left text-[13px] text-ink-soft shadow-[inset_0_-1px_0_var(--color-line)]">
             <tr>
+              {selection && (
+                <th scope="col" className="w-12 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className={box}
+                    checked={allOn}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someOn && !allOn
+                    }}
+                    onChange={toggleAll}
+                    aria-label={t('เลือกทั้งหมดในหน้านี้')}
+                  />
+                </th>
+              )}
               {columns.map((c) => (
                 <th
                   key={c.key}
@@ -120,6 +175,11 @@ export function DataTable<T>({
                   {c.header}
                 </th>
               ))}
+              {rowMenu && (
+                <th scope="col" className="w-16 px-4 py-3 text-center font-semibold">
+                  {t('จัดการ')}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -129,6 +189,17 @@ export function DataTable<T>({
                 className={`transition-colors duration-100 hover:bg-sunken/70 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
+                {selection && (
+                  <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className={box}
+                      checked={selection.selected.has(rowKey(row))}
+                      onChange={() => toggle(rowKey(row))}
+                      aria-label={t('เลือกแถวนี้')}
+                    />
+                  </td>
+                )}
                 {columns.map((c) => (
                   <td
                     key={c.key}
@@ -137,6 +208,11 @@ export function DataTable<T>({
                     {c.cell(row)}
                   </td>
                 ))}
+                {rowMenu && (
+                  <td className="px-4 py-3 text-center align-middle">
+                    <RowMenu items={rowMenu(row)} />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

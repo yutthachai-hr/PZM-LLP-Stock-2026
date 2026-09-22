@@ -5,7 +5,8 @@ import { useAuth } from '../../auth/AuthContext'
 import { useConfirm } from '../../components/Confirm'
 import { Icon, type IconName } from '../../components/Icon'
 import { useToast } from '../../components/Toast'
-import { Button, Card, EmptyState, Input, Modal, PageHeader, SegTab, Select, Spinner, StatGroup, StatTile } from '../../components/ui'
+import { Button, Card, EmptyState, Input, Modal, SegTab, Select, Spinner, StatGroup, StatTile } from '../../components/ui'
+import { PageHero } from '../../components/frame'
 import { useData } from '../../data/DataContext'
 import { useCalendarFeed } from '../../data/useCalendarFeed'
 import { errText } from '../../i18n/AppError'
@@ -324,7 +325,7 @@ export function CalendarPage() {
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <PageHeader icon="calendar" title={t('ปฏิทินคลัง')} subtitle={t('งาน ของที่จะเข้า คำขอที่รอ และของที่ใกล้หมด')} />
+      <PageHero icon="calendar" title={t('ปฏิทินคลัง')} subtitle={t('งาน ของที่จะเข้า คำขอที่รอ และของที่ใกล้หมด')} />
       {canManage && (
         <Button onClick={() => setCreating(true)}>
           <Icon name="plus" size={16} />

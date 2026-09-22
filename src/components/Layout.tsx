@@ -34,7 +34,7 @@ export function Layout({ children }: { children: ReactNode }) {
           A tablet gets the rail, a phone the tab bar (spec, 21 Sep 2026). */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface xl:flex">
         <Brand mode={mode} def={def} />
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {items.map((item) => (
             <NavItemLink
               key={item.to}
@@ -65,7 +65,10 @@ export function Layout({ children }: { children: ReactNode }) {
               mock-up, 21 Sep 2026): the screen reads as one document with its sections
               inside it, rather than as loose boxes floating on grey. On a phone there is
               no room for a margin around a sheet, so the canvas is the page. */}
-          <div className="xl:min-h-full xl:rounded-2xl xl:border xl:border-line xl:bg-surface xl:p-6 xl:shadow-sm">
+          {/* A page drawn in the 22 Sep frame (components/frame/FramePage) puts each block in
+              its own white card on the canvas, so it gets no sheet — a card on a white sheet
+              is white on white. Unconverted pages keep the sheet until their round. */}
+          <div className="xl:min-h-full xl:rounded-2xl xl:border xl:border-line xl:bg-surface xl:p-6 xl:shadow-sm xl:has-[[data-frame]]:rounded-none xl:has-[[data-frame]]:border-0 xl:has-[[data-frame]]:bg-transparent xl:has-[[data-frame]]:p-0 xl:has-[[data-frame]]:shadow-none">
             {children}
           </div>
         </main>
@@ -126,9 +129,9 @@ function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
       to={item.to}
       end={item.to === '/'}
       className={({ isActive }) =>
-        `flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
+        `flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-[15px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
           isActive
-            ? 'bg-brand-soft font-semibold text-brand ring-1 ring-inset ring-brand/20'
+            ? 'bg-brand-soft font-semibold text-brand'
             : 'text-ink-soft hover:bg-sunken hover:text-ink'
         }`
       }

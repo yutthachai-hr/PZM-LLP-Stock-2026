@@ -12,11 +12,11 @@ import {
   Field,
   Input,
   Modal,
-  PageHeader,
   Select,
   Spinner,
   Textarea,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { useData } from '../data/DataContext'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
@@ -385,7 +385,7 @@ export function SuppliersPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="users"
         title={t('ผู้ขาย')}
         subtitle={t('รายชื่อผู้ขายและสินค้าที่ซื้อจากแต่ละราย')}

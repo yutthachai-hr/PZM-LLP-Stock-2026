@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
-import { Badge, Button, Card, EmptyState, PageHeader, Spinner, StatusTabs } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, Spinner, StatusTabs } from '../../components/ui'
+import { PageHero } from '../../components/frame'
 import type { IconName } from '../../components/Icon'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
@@ -75,7 +76,7 @@ export function PurchaseBatchesPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="truck"
         title={t('สั่งซื้ออัตโนมัติ')}
         subtitle={t('นำเข้ารายการสั่งของจาก Excel → ระบบจัดกลุ่มตามผู้ขาย → อนุมัติ → ส่ง LINE ทีละราย')}

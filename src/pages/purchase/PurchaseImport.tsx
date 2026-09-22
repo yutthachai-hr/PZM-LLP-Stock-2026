@@ -6,7 +6,8 @@ import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
-import { Badge, Button, Card, Field, Input, PageHeader, SectionHeader, Select, Spinner } from '../../components/ui'
+import { Badge, Button, Card, Field, Input, SectionHeader, Select, Spinner } from '../../components/ui'
+import { PageHero } from '../../components/frame'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { fmtQty, formatThaiDate } from '../../lib/format'
@@ -186,7 +187,7 @@ export function PurchaseImportPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="upload"
         title={t('นำเข้ารายการสั่งซื้อจาก Excel')}
         subtitle={t('เลือกไฟล์รายการสั่งของ ระบบจับคู่สินค้ากับผู้ขายให้ แล้วสร้างร่างใบสั่งซื้อแยกตามผู้ขาย')}

@@ -1558,7 +1558,6 @@ export const EN: Record<string, string> = {
   'บัญชีผู้ใช้': 'Account',
   'แสดง {from} - {to} จาก {total} รายการ': 'Showing {from}–{to} of {total}',
   'จำนวนต่อหน้า': 'Rows per page',
-  'แสดง {n} รายการ': 'Show {n}',
   'หน้าก่อน': 'Previous page',
   'หน้าถัดไป': 'Next page',
   'ผู้ขาย / เลขที่ PO': 'Supplier / PO no.',
@@ -1668,4 +1667,14 @@ export const EN: Record<string, string> = {
   'ยืนยันรหัสผ่านใหม่ไม่ตรงกัน': 'The confirmation does not match the new password',
   'รหัสผ่านปัจจุบันไม่ถูกต้อง': 'Current password is incorrect',
   'ไม่พบบัญชีที่เข้าสู่ระบบ — กรุณาเข้าสู่ระบบใหม่': 'No signed-in account found — please sign in again',
+  // ---- restyle frame (22 Sep 2026) ----
+  'แสดง': 'Show',
+  'รายการต่อหน้า': 'per page',
+  'ไปยังหน้า': 'Go to page',
+  'รีเซ็ต': 'Reset',
+  'ตัวเลือกเพิ่มเติม': 'More options',
+  'เลือกแถวนี้': 'Select this row',
+  'เลือกทั้งหมดในหน้านี้': 'Select all on this page',
+  'จัดการ': 'Actions',
+  'สรุปและรายการล่าสุด': 'Summary and recent activity',
 }

@@ -7,7 +7,8 @@ import { useToast } from '../../components/Toast'
 import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
 import { entryUnitsFor, UnitSelect } from '../../components/QtyInput'
-import { Badge, Button, Card, Field, Input, PageHeader, SectionHeader, Select, Textarea } from '../../components/ui'
+import { Badge, Button, Card, Field, Input, SectionHeader, Select, Textarea } from '../../components/ui'
+import { PageHero } from '../../components/frame'
 import { useEntryUnits } from '../../services/entryUnits'
 import * as S from '../../services/purchaseRequests'
 import { useSuppliers } from '../../services/suppliers'
@@ -159,7 +160,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="note"
         title={pr ? t('รายการขอสั่งซื้อ {docNo}', { docNo: pr.docNo }) : t('สร้างรายการขอสั่งซื้อ')}
         subtitle={t('ค้นหาสินค้า ใส่จำนวน ระบบใส่ผู้ขายให้ — ส่งให้หัวหน้าตรวจเมื่อครบ')}

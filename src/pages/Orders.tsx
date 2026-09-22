@@ -19,7 +19,6 @@ import {
   Field,
   Input,
   Modal,
-  PageHeader,
   Pagination,
   SearchInput,
   Select,
@@ -29,6 +28,7 @@ import {
   bannerAction,
   type StatusTabItem,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import type { Column } from '../components/DataTable'
 import { usePaged } from '../lib/usePaged'
 import {
@@ -347,7 +347,7 @@ export function OrdersPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
+      <PageHero
         icon="truck"
         title={t('สั่งซื้อ')}
         subtitle={t('สั่งของกับผู้ขาย ตรวจรับ แล้วเข้าคลังในขั้นตอนเดียว')}

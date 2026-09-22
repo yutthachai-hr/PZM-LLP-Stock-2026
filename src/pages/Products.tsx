@@ -15,11 +15,11 @@ import {
   Field,
   Input,
   Modal,
-  PageHeader,
   Select,
   Spinner,
   blurOnWheel,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { ProductThumb, invalidateThumb } from '../components/ProductThumb'
 import { ConversionRows } from '../components/ConversionRows'
 import { DataTable, type Column } from '../components/DataTable'
@@ -343,7 +343,7 @@ export function ProductsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="package"
         title={t("สินค้าคงคลัง")}
         subtitle={t('{n} รายการ', { n: products.length })}

@@ -22,12 +22,12 @@ import {
   Input,
   Modal,
   EmptyState,
-  PageHeader,
   rowAction,
   SearchInput,
   SectionHeader,
   Select,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { looseMatch } from '../lib/search'
 import { createLocation, updateLocation, deleteLocation } from '../services/locations'
 import {
@@ -278,7 +278,7 @@ export function SettingsPage() {
   if (!desktop) {
     return (
       <div className="mx-auto max-w-2xl space-y-5">
-        <PageHeader icon="settings" title={t('ตั้งค่า')} />
+        <PageHero icon="settings" title={t('ตั้งค่า')} />
         {menu}
       </div>
     )
@@ -296,7 +296,7 @@ export function SettingsPage() {
       .filter((g) => g.items.length > 0)
     return (
       <div className="space-y-6">
-        <PageHeader
+        <PageHero
           icon="settings"
           title={t('ตั้งค่า')}
           subtitle={t('ตั้งค่าระบบ คลัง ผู้ใช้ และข้อมูล — เลือกหัวข้อที่ต้องการ')}

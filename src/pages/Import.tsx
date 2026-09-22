@@ -10,10 +10,10 @@ import {
   Button,
   Card,
   EmptyState,
-  PageHeader,
   SectionHeader,
   Select,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { useData } from '../data/DataContext'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
@@ -216,7 +216,7 @@ export function ImportPage() {
   if (!isAdmin) {
     return (
       <div className="space-y-4">
-        <PageHeader
+        <PageHero
           icon="upload"
           title={t('นำเข้าสต๊อกจาก Excel')}
           subtitle={t('ลงยอดนับจากไฟล์สต๊อกคงเหลือรายเดือน')}
@@ -234,7 +234,7 @@ export function ImportPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="upload"
         title={t('นำเข้าสต๊อกจาก Excel')}
         subtitle={t('ลงยอดนับจากไฟล์สต๊อกคงเหลือรายเดือน')}

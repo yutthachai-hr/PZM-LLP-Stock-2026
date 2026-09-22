@@ -4,7 +4,8 @@ import { useAuth } from '../../auth/AuthContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
 import { SiteChip } from '../../components/SiteChip'
-import { Badge, Button, Card, EmptyState, PageHeader, Spinner, StatusTabs } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, Spinner, StatusTabs } from '../../components/ui'
+import { PageHero } from '../../components/frame'
 import type { IconName } from '../../components/Icon'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
@@ -80,7 +81,7 @@ export function PurchaseRequestsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="note"
         title={t('รายการขอสั่งซื้อ')}
         subtitle={t('พนักงานขอ → หัวหน้าตรวจและอนุมัติ → สร้างใบสั่งซื้อ → ส่ง LINE')}

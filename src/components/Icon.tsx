@@ -87,6 +87,19 @@ const paths = {
   checkCircle: 'M21.801 10A10 10 0 1 1 17 3.335M9 11l3 3L22 4',
   cart: 'M2 2h2l2.5 12.5a2 2 0 0 0 2 1.5h9.5a2 2 0 0 0 2-1.5L22 6H6',
   box: 'M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16ZM12 22V12M3.3 7l8.7 5 8.7-5',
+  // the restyle's frame (owner's mock-ups, 22 Sep 2026)
+  moreVertical: 'M12 5h.01M12 12h.01M12 19h.01',
+  sparkles: 'M9.94 14.06 8 20l-1.94-5.94L0 12l6.06-1.94L8 4l1.94 6.06L16 12zM20 3v4M22 5h-4M19 17v4M21 19h-4',
+  zap: 'M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z',
+  grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+  list: 'M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13',
+  message: 'M7.9 20A9 9 0 1 0 4 16.1L2 22z',
+  xCircle: 'M15 9l-6 6M9 9l6 6',
+  rotateCcw: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5',
+  trendUp: 'M16 7h6v6M22 7l-8.5 8.5-5-5L2 17',
+  trendDown: 'M16 17h6v-6M22 17l-8.5-8.5-5 5L2 7',
+  lightbulb: 'M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5M9 18h6M10 22h4',
+  store: 'M2 7l2-4h16l2 4M2 7h20v3a3 3 0 0 1-5 2 3 3 0 0 1-5 0 3 3 0 0 1-5 0 3 3 0 0 1-5-2zM4 12v9h16v-9M9 21v-5h6v5',
 } as const
 
 export type IconName = keyof typeof paths
@@ -111,6 +124,7 @@ const circles: Partial<Record<IconName, { cx: number; cy: number; r: number }[]>
   globe: [{ cx: 12, cy: 12, r: 10 }],
   clock: [{ cx: 12, cy: 12, r: 10 }],
   alertCircle: [{ cx: 12, cy: 12, r: 10 }],
+  xCircle: [{ cx: 12, cy: 12, r: 10 }],
   cart: [
     { cx: 8, cy: 21, r: 1 },
     { cx: 19, cy: 21, r: 1 },

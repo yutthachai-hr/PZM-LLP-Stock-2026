@@ -91,6 +91,22 @@
   --color-site-b-soft: #fff7ed;
   --color-site-c: #6d28d9;
   --color-site-c-soft: #f5f3ff;
+
+  /* The pastel circles behind the icons on a row of figures (owner's mock-ups, 22 Sep
+     2026). Five hues so a row of five tiles tells its figures apart by colour — and a
+     `red` tile that is not the brand red, so Le Lapin's row does not turn orange in one
+     place only. Each icon colour clears the 3:1 a graphic needs on its own soft fill
+     (amber is the darker #b45309 because #d97706 came out at 2.9:1). */
+  --color-tile-red: #dc2626;
+  --color-tile-red-soft: #fee2e2;
+  --color-tile-green: #059669;
+  --color-tile-green-soft: #d1fae5;
+  --color-tile-amber: #b45309;
+  --color-tile-amber-soft: #fef3c7;
+  --color-tile-blue: #2563eb;
+  --color-tile-blue-soft: #dbeafe;
+  --color-tile-purple: #7c3aed;
+  --color-tile-purple-soft: #ede9fe;
 }
 
 :root {

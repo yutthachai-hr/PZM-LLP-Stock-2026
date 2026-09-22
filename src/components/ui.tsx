@@ -364,56 +364,6 @@ export function Modal({
 }
 
 /**
- * The title block at the top of a screen.
- *
- * `tone` colours the icon by what the screen DOES rather than by which brand is open:
- * receiving is inbound green, issuing is outbound red, adjusting is amber because it is a
- * correction. Someone who has walked away mid-document and come back can tell which form
- * they are on without reading it — which matters on a shared tablet where the last person
- * may have left something half-keyed.
- */
-export function PageHeader({
-  icon,
-  title,
-  subtitle,
-  tone = 'brand',
-  actions,
-}: {
-  icon: IconName
-  title: string
-  subtitle?: string
-  tone?: 'brand' | 'in' | 'out' | 'warn'
-  actions?: ReactNode
-}) {
-  const tones = {
-    brand: 'bg-brand-soft text-brand',
-    in: 'bg-in-soft text-in',
-    out: 'bg-out-soft text-out',
-    warn: 'bg-warn-soft text-warn',
-  }
-  // On a phone the top bar already says where you are, so the block is only its actions:
-  // a heading, an icon and a sentence were a screen's worth of scrolling before the work.
-  return (
-    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-      <span
-        className={`hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14 md:flex ${tones[tone]}`}
-      >
-        <Icon name={icon} size={26} />
-      </span>
-      <div className="hidden min-w-0 flex-1 md:block">
-        <h1 className="text-balance text-2xl font-bold leading-tight text-ink sm:text-[1.75rem]">
-          {title}
-        </h1>
-        {subtitle && <p className="mt-0.5 text-sm text-ink-soft">{subtitle}</p>}
-      </div>
-      {actions && (
-        <div className="flex w-full shrink-0 flex-wrap gap-2 md:w-auto">{actions}</div>
-      )}
-    </div>
-  )
-}
-
-/**
  * The class for a text action at the end of a list row — "แก้ไข", "ลบ", "ปิดใช้".
  *
  * These were bare <button> text at 20px tall. They sit inches from each other in the
@@ -830,8 +780,8 @@ export function Pagination({
       )}
     </div>
     <div className="hidden flex-wrap items-center gap-3 px-1 pt-3 text-sm text-ink-soft md:flex">
-      <span className="num">{t('แสดง {from} - {to} จาก {total} รายการ', { from, to, total })}</span>
-      <div className="ml-auto flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-2">
+        {t('แสดง')}
         <select
           aria-label={t('จำนวนต่อหน้า')}
           value={pageSize}
@@ -840,10 +790,14 @@ export function Pagination({
         >
           {sizes.map((n) => (
             <option key={n} value={n}>
-              {t('แสดง {n} รายการ', { n })}
+              {n}
             </option>
           ))}
         </select>
+        {t('รายการต่อหน้า')}
+      </label>
+      <span className="num text-ink-faint">{t('แสดง {from} - {to} จาก {total} รายการ', { from, to, total })}</span>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         <button
           className={`${btn} border-line bg-surface text-ink-soft hover:bg-sunken`}
           onClick={() => onPage(page - 1)}
@@ -876,6 +830,30 @@ export function Pagination({
         >
           <Icon name="chevronRight" size={18} />
         </button>
+        {pages > 5 && (
+          <label className="ml-2 hidden items-center gap-2 xl:flex">
+            {t('ไปยังหน้า')}
+            <input
+              key={page}
+              type="number"
+              min={1}
+              max={pages}
+              defaultValue={page}
+              onWheel={blurOnWheel}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                const n = Math.round(Number(e.currentTarget.value))
+                if (n >= 1 && n <= pages) onPage(n)
+              }}
+              onBlur={(e) => {
+                const n = Math.round(Number(e.currentTarget.value))
+                if (n >= 1 && n <= pages && n !== page) onPage(n)
+              }}
+              className={`${inputBase} num min-h-10 w-16 py-1.5 text-center`}
+            />
+            <span className="num">/ {pages}</span>
+          </label>
+        )}
       </div>
     </div>
     </>

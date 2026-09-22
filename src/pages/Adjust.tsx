@@ -9,10 +9,10 @@ import {
   Field,
   FormActions,
   Input,
-  PageHeader,
   Select,
   Textarea,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { ProductThumb } from '../components/ProductThumb'
 import { QtyInput } from '../components/QtyInput'
 import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
@@ -155,7 +155,7 @@ export function AdjustPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <PageHeader
+      <PageHero
         icon="adjust"
         tone="warn"
         title={t("ปรับสต๊อก")}

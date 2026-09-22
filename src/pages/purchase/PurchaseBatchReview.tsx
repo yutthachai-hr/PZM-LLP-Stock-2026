@@ -9,7 +9,8 @@ import { useToast } from '../../components/Toast'
 import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
 import { PoSheet } from '../../components/PoSheet'
-import { Badge, Button, Card, EmptyState, Modal, PageHeader, SectionHeader, Spinner } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, Modal, SectionHeader, Spinner } from '../../components/ui'
+import { PageHero } from '../../components/frame'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { fmtQty, formatThaiDateTime } from '../../lib/format'
@@ -254,7 +255,7 @@ export function PurchaseBatchReviewPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="truck"
         title={t('รายการสั่งซื้อ {no}', { no: batch.batchNo })}
         subtitle={`${batch.blockLabel} · ${batch.sourceFileName} · ${locationById(batch.locationId)?.name ?? ''}`}

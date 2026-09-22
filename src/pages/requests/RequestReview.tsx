@@ -8,7 +8,8 @@ import { brandDef } from '../../brand/brand'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
-import { Badge, Button, Card, Field, Input, Modal, PageHeader, SectionHeader, SegTab, Select } from '../../components/ui'
+import { Badge, Button, Card, Field, Input, Modal, SectionHeader, SegTab, Select } from '../../components/ui'
+import { PageHero } from '../../components/frame'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { dateInputToMs, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput } from '../../lib/format'
@@ -149,7 +150,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="note"
         title={t('รายการขอสั่งซื้อ {docNo}', { docNo: pr.docNo })}
         subtitle={`${formatThaiDate(pr.createdAt)} · ${locationName} · ${t('ผู้ขอ')}: ${pr.requestedByName}`}

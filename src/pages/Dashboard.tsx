@@ -11,12 +11,12 @@ import {
   CardTitle,
   EmptyState,
   Input,
-  PageHeader,
   SegTab,
   Spinner,
   StatGroup,
   StatTile,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { DataTable, type Column } from '../components/DataTable'
 import { ProductThumb } from '../components/ProductThumb'
 import { SiteChip } from '../components/SiteChip'
@@ -195,7 +195,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader icon="dashboard" title={t('ภาพรวมสต๊อก')} />
+        <PageHero icon="dashboard" title={t('ภาพรวมสต๊อก')} />
         <div className="flex flex-wrap gap-1 rounded-lg bg-sunken p-1">
           <SegTab
             grow={false}

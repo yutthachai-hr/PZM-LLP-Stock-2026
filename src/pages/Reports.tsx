@@ -7,7 +7,8 @@ import { ActivityLog } from './reports/ActivityLog'
 import { CostReport } from './reports/CostReport'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, EmptyState, Field, Input, PageHeader, SegTab, Select } from '../components/ui'
+import { Button, Card, EmptyState, Field, Input, SegTab, Select } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { dateInputToMs, dayRange, fmtMoney, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput, todayMs } from '../lib/format'
 import { balanceUnit, editorsOf, movedSince, stockCard } from '../lib/ledger'
 import { useBrand } from '../brand/BrandContext'
@@ -467,7 +468,7 @@ export function ReportsPage() {
   if (mode === 'cost') {
     return (
       <div className="space-y-4">
-        <PageHeader icon="report" title={t("รายงาน")} subtitle={t('ต้นทุนทุกสินค้า ราคาเก่า-ใหม่ และวันที่ปรับ')} />
+        <PageHero icon="report" title={t("รายงาน")} subtitle={t('ต้นทุนทุกสินค้า ราคาเก่า-ใหม่ และวันที่ปรับ')} />
         {tabs}
         <CostReport />
       </div>
@@ -477,7 +478,7 @@ export function ReportsPage() {
   if (mode === 'activity') {
     return (
       <div className="space-y-4">
-        <PageHeader icon="report" title={t("รายงาน")} subtitle={t('ทุกการกระทำในระบบ ย้อนดูได้ ดาวน์โหลดได้ แก้ไขไม่ได้')} />
+        <PageHero icon="report" title={t("รายงาน")} subtitle={t('ทุกการกระทำในระบบ ย้อนดูได้ ดาวน์โหลดได้ แก้ไขไม่ได้')} />
         {tabs}
         <ActivityLog />
       </div>
@@ -486,7 +487,7 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="report"
         title={t("รายงาน")}
         subtitle={t("ดึงรายงานตามสาขา/วันที่/สินค้า แล้วดาวน์โหลดเป็น Excel หรือ PDF")}

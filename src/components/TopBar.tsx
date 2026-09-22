@@ -117,7 +117,7 @@ export function TopBar({ title }: { title: string }) {
   }
 
   const search = (
-    <div ref={box} className="relative min-w-0 flex-1 md:max-w-lg">
+    <div ref={box} className="relative min-w-0 flex-1 md:max-w-lg xl:max-w-2xl">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
         <Icon name="search" size={17} />
       </span>
@@ -185,7 +185,7 @@ export function TopBar({ title }: { title: string }) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
-      <div className="flex items-center gap-2 px-2 py-2 sm:px-4 lg:px-6">
+      <div className="flex items-center gap-2 px-2 py-2 sm:px-4 lg:px-6 xl:py-2.5">
         {/* On a phone the field would leave no room for anything else, so it opens over
             the bar instead of sitting in it. */}
         <div className={`min-w-0 flex-1 ${mobileSearch ? '' : 'hidden sm:block'}`}>{search}</div>
@@ -279,6 +279,8 @@ function UserMenu() {
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft font-bold text-brand">
           {user.name.charAt(0).toUpperCase() || '?'}
         </span>
+        {/* Which account this tablet is on, readable without opening the menu (mock-up). */}
+        <span className="hidden max-w-32 truncate pl-1 text-sm font-semibold text-ink xl:block">{user.name}</span>
         <Icon name="chevronDown" size={16} className="hidden sm:block" />
       </button>
       {open && (

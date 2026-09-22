@@ -3,7 +3,8 @@ import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, FormActions, Input, PageHeader, Textarea } from '../components/ui'
+import { Button, Card, Field, FormActions, Input, Textarea } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { LineBuilder, type Line } from '../components/LineBuilder'
 import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
 import { receiveStock } from '../services/stock'
@@ -87,7 +88,7 @@ export function ReceivePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <PageHeader
+      <PageHero
         icon="receive"
         tone="in"
         title={t("รับสินค้าเข้า")}

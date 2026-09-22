@@ -14,9 +14,9 @@ import {
   Field,
   Input,
   Modal,
-  PageHeader,
   Select,
 } from '../components/ui'
+import { PageHero } from '../components/frame'
 import { DataTable, type Column } from '../components/DataTable'
 import { voidMovement, getMovementImage } from '../services/stock'
 import { EditMovementModal } from '../components/movements/EditMovementModal'
@@ -289,7 +289,7 @@ export function MovementsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <PageHero
         icon="history"
         title={t("ประวัติ / Stock Card")}
         subtitle={t('ทุกการเคลื่อนไหวถูกบันทึกถาวร — เลือกสินค้า + คลัง เพื่อดูยอดคงเหลือแบบ Stock Card')}
