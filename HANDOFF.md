@@ -145,6 +145,12 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 - **รอบ 4 หน้าแรก (branch `feat/mobile-home`)**: `pages/PhoneHome.tsx` (= TodayPanel ของแดชบอร์ด + `TodayTransactions` ทุกประเภทกรอง `byUserId` เปิดไว้ (`startOpen`) + RequestWidget; `DashboardPage` คืน PhoneHome เมื่อ `useViewport()==='phone'`); `StatGroup` 2 คอลัมน์บนมือถือ; เดินตรวจ 375px แล้ว: ปฏิทิน (มี agenda อยู่แล้ว) ตั้งค่า ตรวจรับของ ส่ง LINE ขอสั่งซื้อ — ไม่มีอะไรล้นจอ
 - spec `docs/superpowers/specs/2026-09-21-mobile-tablet-ui-design.md`, แผน `docs/superpowers/plans/2026-09-21-mobile-{shells,keying,lists,home}.md` — **ครบ 4 รอบแล้ว (21 ก.ย.)**
 
+### ต้นทุนและประวัติราคา (22 ก.ย., branch `feat/cost-history`)
+- `Product.cost` = ต้นทุนต่อหน่วยหลักเสมอ และเขียนโดย `services/productCost.ts` เท่านั้น (`setProductCost({price, unit, effectiveAt, note})` → คำนวณ `cost = price / resolveFactor(unit)` ทศนิยม 4 ตำแหน่ง, append ลง `Product.costHistory` (≤100 รายการ, เรียงตามวันที่มีผล), `cost` = รายการที่วันที่มีผลล่าสุด) — ฟอร์มสินค้าไม่เขียน `cost` อีกแล้ว (ตัด key ออกก่อน updateProduct/createProduct; สินค้าใหม่บันทึกราคาต่อจาก create)
+- ทำไม: ต้นทุนที่กรอกเป็นราคาลังทั้งที่หน่วยหลักเป็นซอง ทำให้ Ketchup 11,536 ซอง มีมูลค่า 3.4 ล้าน (22 ก.ย.) แก้ไปแล้ว 8 ตัวทั้งสองแบรนด์ (ดู samples/unit-audit-2026-09-21.md §F)
+- UI: `components/CostBlock.tsx` ในหน้าสินค้า (ราคา · ต่อ 1 [หน่วยหลัก/หน่วยที่มีอัตรา] · มีผลตั้งแต่ · หมายเหตุ → โชว์ '= ฿x ต่อ 1 EA' ก่อนบันทึก + ประวัติราคา); รายงาน → แท็บ **ราคาต้นทุน** (`pages/reports/CostReport.tsx`: ต้นทุนตอนนี้/ราคาที่กรอก/มีผล/ราคาก่อนหน้า+% /ครั้ง/โดย/มูลค่า, กรอง เคยปรับราคา/ยังไม่มีต้นทุน, Excel = ทุกแถวของประวัติ)
+- rules: `validProduct` เพิ่ม `costHistory` (list ≤100) — **ต้อง deploy rules ก่อน merge** (เทสต์ `tests/firestore-rules.test.ts` มีแล้ว); เทสต์ `tests/product-cost.test.ts`
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```

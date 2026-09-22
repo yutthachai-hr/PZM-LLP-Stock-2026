@@ -40,7 +40,9 @@ import { sameUnit, unitNameFor } from '../lib/units'
 import { breakdown } from '../lib/inventoryRules/uom'
 import { compressImage } from '../lib/image'
 import { fmtQty } from '../lib/format'
-import type { Product } from '../types'
+import type { CostEntry, Product } from '../types'
+import { CostBlock, type PriceDraft } from '../components/CostBlock'
+import { setProductCost } from '../services/productCost'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch } from '../lib/search'
@@ -570,6 +572,10 @@ function ProductEditor({
     alternateSupplierIds: product?.alternateSupplierIds ?? [],
     unitConversions: product?.unitConversions ?? [],
   })
+  // Prices are stated through the cost block and written by services/productCost.ts,
+  // never through the form: the form's `cost` is read-only here (owner, 22 Sep 2026).
+  const [costHistory, setCostHistory] = useState<CostEntry[]>(product?.costHistory ?? [])
+  const [priceDraft, setPriceDraft] = useState<PriceDraft | null>(null)
   const [existingImg, setExistingImg] = useState<string | null>(null)
   const [newImg, setNewImg] = useState<string | null>(null)
   const [imageLoaded, setImageLoaded] = useState(!product?.hasImage)
@@ -681,10 +687,18 @@ function ProductEditor({
             toast.success(t('เปลี่ยนหน่วยแล้ว — ปรับประวัติเก่า {count} รายการ', { count: touched }))
           }
         }
-        await updateProduct(id, form)
+        const { cost: _cost, ...patch } = form
+        void _cost
+        await updateProduct(id, patch)
       } else {
-        id = await createProduct(form)
+        const { cost: _cost, ...input } = form
+        void _cost
+        id = await createProduct(input)
         setCreatedId(id)
+        // A price keyed on a new product rides along with the creation.
+        if (priceDraft && user) {
+          await setProductCost({ productId: id, ...priceDraft, actor: { id: user.id, name: user.name } })
+        }
       }
       // image handling
       if (newImg) {
@@ -915,22 +929,27 @@ function ProductEditor({
             </div>
           </Field>
         )}
-        <Field label={t("ต้นทุน/หน่วย (ไม่บังคับ)")}>
-          <Input
-            type="number"
-            step="any"
-            min={0}
-            value={form.cost ?? ''}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                cost: e.target.value === '' ? undefined : Number(e.target.value),
-              })
-            }
-            disabled={!canEdit}
-          />
-        </Field>
       </div>
+
+      <CostBlock
+        product={{ name: form.name, unitType: form.unitType, unitConversions: form.unitConversions }}
+        history={costHistory}
+        disabled={!canEdit}
+        onSave={
+          product && user
+            ? async (d) => {
+                try {
+                  const entry = await setProductCost({ productId: product.id, ...d, actor: { id: user.id, name: user.name } })
+                  setCostHistory((h) => [...h, entry])
+                  toast.success(t('บันทึกราคาแล้ว — ฿{cost} ต่อ {unit}', { cost: entry.cost, unit: form.unitType }))
+                } catch (e) {
+                  toast.error(errText(e, t))
+                }
+              }
+            : undefined
+        }
+        onDraft={product ? undefined : setPriceDraft}
+      />
 
       {/**
        * The rates this product is keyed at: "1 ลัง = 288 EA". Authoritative since 20 Sep

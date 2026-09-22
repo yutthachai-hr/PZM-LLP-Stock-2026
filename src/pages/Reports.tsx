@@ -4,6 +4,7 @@ import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { ActivityLog } from './reports/ActivityLog'
+import { CostReport } from './reports/CostReport'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { Button, Card, EmptyState, Field, Input, PageHeader, SegTab, Select } from '../components/ui'
@@ -55,7 +56,7 @@ const TYPE_LABEL: Record<MovementType, string> = {
   consume: 'เบิกใช้', // i18n-key
 }
 
-type ReportMode = 'movement' | 'snapshot' | 'activity'
+type ReportMode = 'movement' | 'snapshot' | 'activity' | 'cost'
 
 export function ReportsPage() {
   const t = useT()
@@ -459,8 +460,19 @@ export function ReportsPage() {
       <SegTab label={t("การเคลื่อนไหว")} active={mode === 'movement'} onClick={() => setMode('movement')} />
       <SegTab label={t("สต๊อกคงเหลือ")} active={mode === 'snapshot'} onClick={() => setMode('snapshot')} />
       <SegTab label={t('บันทึกกิจกรรมทั้งระบบ')} active={mode === 'activity'} onClick={() => setMode('activity')} />
+      <SegTab label={t('ราคาต้นทุน')} active={mode === 'cost'} onClick={() => setMode('cost')} />
     </div>
   )
+
+  if (mode === 'cost') {
+    return (
+      <div className="space-y-4">
+        <PageHeader icon="report" title={t("รายงาน")} subtitle={t('ต้นทุนทุกสินค้า ราคาเก่า-ใหม่ และวันที่ปรับ')} />
+        {tabs}
+        <CostReport />
+      </div>
+    )
+  }
 
   if (mode === 'activity') {
     return (
