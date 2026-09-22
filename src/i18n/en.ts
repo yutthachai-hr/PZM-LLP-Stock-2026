@@ -1649,4 +1649,5 @@ export const EN: Record<string, string> = {
   '{n} รายการ · ต้นทุนคิดต่อหน่วยหลักของสินค้าเสมอ ราคาที่กรอกเป็นลัง/แพ็คจะถูกหารให้': '{n} products · cost is always per the product\'s own unit; a carton/pack price keyed in is divided for you',
   'ราคาต้นทุน': 'Costs',
   'ต้นทุนทุกสินค้า ราคาเก่า-ใหม่ และวันที่ปรับ': 'Every product\'s cost, old and new prices, and when they changed',
+  '“คำนวณยอดคงเหลือใหม่” และ “ตรวจความสอดคล้องของยอด” อ่านประวัติการเคลื่อนไหวทั้งหมดของแบรนด์นี้ทุกครั้งที่กด — ใช้เมื่อสงสัยว่ายอดไม่ตรงจริง ๆ ไม่ควรกดซ้ำหลายครั้งติดกันโดยไม่จำเป็น (มีผลต่อโควตาการอ่านข้อมูลรายวัน)': '"Recompute balances" and "Check balance consistency" both read this brand\'s entire movement history every time they are pressed — use them only when you genuinely suspect the balances are wrong, not repeatedly in a row (this affects the daily read quota)',
 }

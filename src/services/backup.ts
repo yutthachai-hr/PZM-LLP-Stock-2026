@@ -3,7 +3,7 @@ import type { Backend } from '../backend/types'
 import { COL, type PurchaseOrder, type StockMovement, type StockLevel } from '../types'
 import { brandDef, getBrand, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
-import { balancesFromLedger, parseLevelId } from './stock'
+import { balancesFromLedger, movementsChangedSince, parseLevelId } from './stock'
 import { orderCounterFloors } from './purchaseOrders'
 
 // ---------------------------------------------------------------------------
@@ -223,19 +223,29 @@ export async function buildBackup(createdBy: string): Promise<BackupFile> {
   const brand = getBrand()
   const db: Backend = backend.forBrand(brand)
 
-  const before = await db.getAll<StockMovement>(COL.movements)
+  // The ledger read once and kept for both the file and the drift check below. A second
+  // full read to "confirm nothing changed while backing up" used to triple this collection's
+  // cost on every backup — the very thing the owner is told to run every week (22 Sep 2026).
+  // A ranged check for movements filed or edited during the read answers the same question
+  // for a few reads instead of the whole collection again.
+  const readAt = Date.now()
+  const movements = await db.getAll<StockMovement>(COL.movements)
   const data: Record<string, Record<string, unknown>[]> = {}
   const counts: Record<string, number> = {}
 
   for (const name of ALL_COLLECTIONS) {
-    const docs = name === COL.meta ? await readMeta(db) : await db.getAll<Record<string, unknown>>(name)
+    const docs =
+      name === COL.movements
+        ? (movements as unknown as Record<string, unknown>[])
+        : name === COL.meta
+          ? await readMeta(db)
+          : await db.getAll<Record<string, unknown>>(name)
     data[name] = name === COL.users ? docs.map(withoutSecrets) : docs
     counts[name] = data[name].length
   }
 
-  const after = await db.getAll<StockMovement>(COL.movements)
   const levels = (data[COL.stockLevels] ?? []) as unknown as StockLevel[]
-  const expected = balancesFromLedger(after)
+  const expected = balancesFromLedger(movements)
   let drift = 0
   for (const id of new Set([...expected.keys(), ...levels.map((l) => l.id)])) {
     const want = expected.get(id) ?? 0
@@ -252,9 +262,9 @@ export async function buildBackup(createdBy: string): Promise<BackupFile> {
     createdBy,
     counts,
     integrity: {
-      ledgerStamp: ledgerStamp(after),
+      ledgerStamp: ledgerStamp(movements),
       drift,
-      consistent: ledgerStamp(before) === ledgerStamp(after),
+      consistent: !(await movementsChangedSince(db, readAt)),
     },
     data,
   }

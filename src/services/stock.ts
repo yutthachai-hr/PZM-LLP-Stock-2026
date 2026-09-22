@@ -1123,14 +1123,27 @@ export async function findLevelDrift(): Promise<LevelDrift[]> {
   return out.sort((a, b) => Math.abs(b.fromLedger - b.cached) - Math.abs(a.fromLedger - a.cached))
 }
 
-/** A cheap fingerprint of the ledger, for noticing that it moved under us. */
-function ledgerStamp(movements: StockMovement[]): string {
-  let latest = 0
-  for (const m of movements) {
-    const t = Math.max(m.createdAt ?? 0, m.updatedAt ?? 0)
-    if (t > latest) latest = t
-  }
-  return `${movements.length}:${latest}`
+/**
+ * Whether any movement was filed or edited at or after `since` — a cheap stand-in for
+ * re-reading the whole ledger just to ask "did anything change". Two range queries, each
+ * ordinarily empty, cost a handful of reads; re-reading the collection to answer the same
+ * question once cost as many reads as the ledger has rows, twice over on a brand with two
+ * months of history (22 Sep 2026 — a maintenance tool run repeatedly during an audit used
+ * a full day's read quota by lunchtime).
+ *
+ * `since` is the moment the caller started reading, and is itself excluded: a row stamped
+ * that same millisecond is the one the caller's own read already saw, not a new one — with
+ * `Date.now()`'s millisecond resolution, a fast in-memory write can land on the exact same
+ * tick as the read that is about to check for it.
+ */
+export async function movementsChangedSince(db: Backend, since: number): Promise<boolean> {
+  const from = since + 1
+  const now = Math.max(from, Date.now())
+  const [created, updated] = await Promise.all([
+    db.getRange<StockMovement>(COL.movements, 'createdAt', from, now),
+    db.getRange<StockMovement>(COL.movements, 'updatedAt', from, now),
+  ])
+  return created.length > 0 || updated.length > 0
 }
 
 /**
@@ -1146,9 +1159,9 @@ function ledgerStamp(movements: StockMovement[]): string {
  */
 export async function recomputeLevels(actor: Actor): Promise<void> {
   const db = scoped()
+  const readAt = Date.now()
   const movements = await db.getAll<StockMovement>(COL.movements)
   const levels = await db.getAll<StockLevel>(COL.stockLevels)
-  const before = ledgerStamp(movements)
   const map = balancesFromLedger(movements)
 
   // A ledger that adds up to less than nothing means the history itself is wrong, not the
@@ -1163,8 +1176,10 @@ export async function recomputeLevels(actor: Actor): Promise<void> {
   }
 
   // Last look before touching anything. If a movement was recorded while the totals were
-  // being worked out, those totals are already stale and writing them would erase it.
-  if (ledgerStamp(await db.getAll<StockMovement>(COL.movements)) !== before) {
+  // being worked out, those totals are already stale and writing them would erase it. A
+  // ranged check for "anything new since we started reading" answers this for a few reads
+  // instead of the whole collection again.
+  if (await movementsChangedSince(db, readAt)) {
     throw new AppError('มีการบันทึกรายการใหม่ระหว่างคำนวณ — ยังไม่ได้แก้ไขข้อมูลใด ๆ กรุณาลองใหม่')
   }
 
