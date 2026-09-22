@@ -1650,4 +1650,22 @@ export const EN: Record<string, string> = {
   '“คำนวณยอดคงเหลือใหม่” และ “ตรวจความสอดคล้องของยอด” อ่านประวัติการเคลื่อนไหวทั้งหมดของแบรนด์นี้ทุกครั้งที่กด — ใช้เมื่อสงสัยว่ายอดไม่ตรงจริง ๆ ไม่ควรกดซ้ำหลายครั้งติดกันโดยไม่จำเป็น (มีผลต่อโควตาการอ่านข้อมูลรายวัน)': '"Recompute balances" and "Check balance consistency" both read this brand\'s entire movement history every time they are pressed — use them only when you genuinely suspect the balances are wrong, not repeatedly in a row (this affects the daily read quota)',
   'ครั้งแรกจะเปิดใบนี้ในแอป LINE ให้ (แอปจากหน้าจอโฮมเข้าสู่ระบบ LINE เองไม่ได้) — กด "ส่ง LINE" ที่นั่นอีกครั้ง': 'The first tap opens this sheet inside the LINE app (a home-screen app cannot sign in to LINE by itself) — press "Send LINE" again there',
   'ครั้งแรกจะพาไปเข้าสู่ระบบ LINE แล้วกลับมาที่ใบนี้ — กด "ส่ง LINE" อีกครั้งเพื่อเลือกแชท': 'The first tap goes through LINE Login and comes back to this sheet — press "Send LINE" again to pick the chat',
+
+  // ---- edit-your-own-profile (22 Sep 2026) ---------------------------------------
+  'แก้ไขโปรไฟล์': 'Edit profile',
+  'โปรไฟล์ของฉัน': 'My profile',
+  'ชื่อที่แสดง': 'Display name',
+  'ชื่อนี้ขึ้นในเอกสารทุกจุดที่คุณเป็นคนทำรายการ': 'This name appears on every document you record',
+  'บันทึกชื่อ': 'Save name',
+  'บันทึกชื่อแล้ว': 'Name saved',
+  'เปลี่ยนรหัสผ่าน': 'Change password',
+  'เปลี่ยนรหัสผ่านแล้ว': 'Password changed',
+  'รหัสผ่านปัจจุบัน': 'Current password',
+  'รหัสผ่านใหม่': 'New password',
+  'ยืนยันรหัสผ่านใหม่': 'Confirm new password',
+  'กรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่': 'Enter the current password and a new one',
+  'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร': 'The new password must be at least 6 characters',
+  'ยืนยันรหัสผ่านใหม่ไม่ตรงกัน': 'The confirmation does not match the new password',
+  'รหัสผ่านปัจจุบันไม่ถูกต้อง': 'Current password is incorrect',
+  'ไม่พบบัญชีที่เข้าสู่ระบบ — กรุณาเข้าสู่ระบบใหม่': 'No signed-in account found — please sign in again',
 }

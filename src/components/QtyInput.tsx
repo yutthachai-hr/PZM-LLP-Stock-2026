@@ -185,7 +185,7 @@ export function QtyInput({ // i18n-key
             setText(e.target.value)
             commit(e.target.value, unit, factor)
           }}
-          className={`num min-h-11 w-full min-w-[6.5rem] rounded-lg border px-3 py-2 text-right text-base font-semibold text-ink outline-none transition-[border-color,box-shadow] duration-150 focus-visible:ring-2 ${
+          className={`num min-h-11 min-w-0 flex-1 rounded-lg border px-3 py-2 text-right text-base font-semibold text-ink outline-none transition-[border-color,box-shadow] duration-150 focus-visible:ring-2 ${
             invalid
               ? 'border-danger bg-danger-soft focus-visible:border-danger focus-visible:ring-danger/25'
               : 'border-line-strong focus-visible:border-brand focus-visible:ring-brand/25'
@@ -194,11 +194,14 @@ export function QtyInput({ // i18n-key
         {/* Always a select, even with one option. It used to fall back to plain text when
             a product had no sub-units, so every EA and Pack item simply had no unit
             control — which reads as the unit having gone missing rather than as there
-            being nothing to choose. */}
+            being nothing to choose. A fixed width, not one the browser sizes to the
+            selected option's own text: letting it size itself made every row a different
+            width depending on which unit happened to be picked ("EA" vs "grams"), so the
+            qty boxes above and below it no longer lined up (owner, 22 Sep 2026). */}
         <select
           value={unit.key}
           onChange={(e) => pick(units.find((u) => u.key === e.target.value) ?? units[0])}
-          className="min-h-11 w-auto max-w-[9rem] shrink-0 rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
+          className="min-h-11 w-28 shrink-0 truncate rounded-lg border border-line-strong bg-surface px-2 text-sm text-ink-soft outline-none transition-colors duration-150 focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
           aria-label={t('เลือกหน่วยที่กรอก')}
         >
           {units.map((u) => (

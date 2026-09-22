@@ -11,6 +11,7 @@ import { Icon } from './Icon'
 import { LangButton } from './LangButton'
 import { NotificationBell } from './notifications/NotificationBell'
 import { ProductThumb } from './ProductThumb'
+import { ProfileModal } from './ProfileModal'
 import { looseScore } from '../lib/search'
 
 /**
@@ -242,6 +243,7 @@ function UserMenu() {
   const { user, logout } = useAuth()
   const { reset } = useBrand()
   const [open, setOpen] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
   const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -289,6 +291,10 @@ function UserMenu() {
             <div className="text-xs text-ink-faint">{role}</div>
           </div>
           <div className="pt-1.5">
+            <button role="menuitem" className={item} onClick={() => { setOpen(false); setEditingProfile(true) }}>
+              <Icon name="pencil" size={16} />
+              {t('แก้ไขโปรไฟล์')}
+            </button>
             <button role="menuitem" className={item} onClick={() => { setOpen(false); reset() }}>
               <Icon name="swap" size={16} />
               {t('สลับแบรนด์')}
@@ -300,6 +306,7 @@ function UserMenu() {
           </div>
         </div>
       )}
+      {editingProfile && <ProfileModal onClose={() => setEditingProfile(false)} />}
     </div>
   )
 }

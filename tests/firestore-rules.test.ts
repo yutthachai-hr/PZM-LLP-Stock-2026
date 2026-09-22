@@ -566,11 +566,29 @@ describe('staff', () => {
     await assertFails(getDocs(collection(as(STAFF), 'users')))
     await assertFails(getDoc(doc(as(STAFF), 'users', ADMIN)))
     await assertFails(updateDoc(doc(as(STAFF), 'users', STAFF), { role: 'admin' }))
-    await assertFails(updateDoc(doc(as(STAFF), 'users', STAFF), { active: true }))
+    // Not { active: true } — STAFF is already active, and stating a field's own current
+    // value again changes nothing, so that write is harmless and the rule lets it through
+    // (the self-rename branch below only refuses an actual change to a field besides name).
+    await assertFails(updateDoc(doc(as(STAFF), 'users', STAFF), { active: false }))
   })
 
   test('can read their own profile', async () => {
     await assertSucceeds(getDoc(doc(as(STAFF), 'users', STAFF)))
+  })
+
+  // 22 Sep 2026, "edit profile": renaming yourself decides nothing the access model
+  // depends on, so it needs no admin — but it is the ONLY field a self-update may touch.
+  test('can rename themselves, and only themselves, and only the name', async () => {
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'users', STAFF), { name: 'New Name' }))
+    await assertFails(updateDoc(doc(as(STAFF), 'users', MANAGER), { name: 'Hijacked' }))
+    await assertFails(updateDoc(doc(as(STAFF), 'users', STAFF), { name: 'X', role: 'admin' }))
+    await assertFails(updateDoc(doc(as(STAFF), 'users', STAFF), { name: 'X', active: false }))
+    await assertFails(updateDoc(doc(as(STAFF), 'users', STAFF), { name: '' }))
+    await assertFails(updateDoc(doc(as(STAFF), 'users', STAFF), { name: 42 }))
+  })
+
+  test('a pending (inactive) account cannot rename itself', async () => {
+    await assertFails(updateDoc(doc(as(PENDING), 'users', PENDING), { name: 'New Name' }))
   })
 })
 
