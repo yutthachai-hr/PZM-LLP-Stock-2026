@@ -415,6 +415,52 @@ describe('calendar event assignees', () => {
   })
 })
 
+describe('the message board (22 Sep 2026)', () => {
+  const message = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    body: 'ของ FOODGALLERY มาบ่ายนี้',
+    byUserId: STAFF,
+    byUserName: 'Staff',
+    createdAt: Date.now(),
+    ...over,
+  })
+
+  test('any active person may post, in their own name only', async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), 'messages/m1'), message('m1')))
+    await assertFails(setDoc(doc(as(STAFF), 'messages/m2'), message('m2', { byUserId: MANAGER })))
+    await assertFails(setDoc(doc(as(PENDING), 'messages/m3'), message('m3', { byUserId: PENDING })))
+  })
+
+  test('an empty or over-long note, and any extra field, are refused', async () => {
+    await assertFails(setDoc(doc(as(STAFF), 'messages/m4'), message('m4', { body: '' })))
+    await assertFails(setDoc(doc(as(STAFF), 'messages/m5'), message('m5', { body: 'x'.repeat(1001) })))
+    await assertFails(setDoc(doc(as(STAFF), 'messages/m6'), message('m6', { mentions: ['someone'] })))
+  })
+
+  test('nobody edits what was said; a manager may pin it', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'messages/m7'), message('m7'))
+    })
+    await assertFails(updateDoc(doc(as(STAFF), 'messages/m7'), { body: 'something else' }))
+    await assertFails(updateDoc(doc(as(STAFF), 'messages/m7'), { pinned: true }))
+    await assertSucceeds(updateDoc(doc(as(MANAGER), 'messages/m7'), { pinned: true }))
+  })
+
+  test("your own note you may delete; another person's only an admin may", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'messages/m8'), message('m8'))
+      await setDoc(doc(ctx.firestore(), 'messages/m9'), message('m9', { byUserId: MANAGER }))
+    })
+    await assertFails(deleteDoc(doc(as(STAFF), 'messages/m9')))
+    await assertSucceeds(deleteDoc(doc(as(STAFF), 'messages/m8')))
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'messages/m9')))
+  })
+
+  test("the board is the brand's own — Le Lapin has its own", async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), 'lelapin__messages/m10'), message('m10')))
+  })
+})
+
 describe('product barcodes (22 Sep 2026)', () => {
   test('are allowed, bounded, and still nothing else is', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'products/b1'), product('b1', { barcode: '8851000654321' })))

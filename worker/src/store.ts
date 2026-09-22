@@ -30,7 +30,7 @@ export interface Store {
 }
 
 /** The allow-list the tests pin: the Worker writes these collections and no others. */
-export const WRITABLE = ['stockEvents', 'notifications', 'meta'] as const
+export const WRITABLE = ['stockEvents', 'notifications', 'meta', 'messages'] as const
 
 export function assertWritable(collection: string): void {
   const base = collection.includes('__') ? collection.split('__')[1] : collection

@@ -6,6 +6,7 @@ import { bkkDayEnd, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/tim
 import {
   COL,
   DEFAULT_INVENTORY_SETTINGS,
+  MESSAGE_DAYS,
   type AppNotification,
   type InventorySchedule,
   type InventorySettings,
@@ -87,6 +88,14 @@ export async function runForBrand(store: Store, kind: JobKind, prefix: string, n
     // Past their 30 days. A handful a day; capped so one run cannot spend the budget.
     const old = await store.query<{ id: string }>(col(COL.notifications), [{ field: 'expiresAt', op: '<', value: now }], { limit: 200 })
     report.purged = (await store.write(old.map((n) => ({ type: 'delete' as const, collection: col(COL.notifications), id: n.id })))).filter(Boolean).length
+    // The message board keeps 90 days (owner, 22 Sep 2026), pruned on the same daily pass
+    // and capped the same way.
+    const staleMessages = await store.query<{ id: string }>(
+      col(COL.messages),
+      [{ field: 'createdAt', op: '<', value: now - MESSAGE_DAYS * DAY_MS }],
+      { limit: 200 },
+    )
+    report.purged += (await store.write(staleMessages.map((m) => ({ type: 'delete' as const, collection: col(COL.messages), id: m.id })))).filter(Boolean).length
     return report
   }
 

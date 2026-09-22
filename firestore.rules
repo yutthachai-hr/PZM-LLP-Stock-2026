@@ -81,12 +81,12 @@ service cloud.firestore {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
         'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
-        'purchaseRequests',
+        'purchaseRequests', 'messages',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
         'lelapin__stockEvents', 'lelapin__purchaseOrders',
         'lelapin__purchaseBatches', 'lelapin__productAliases',
-        'lelapin__purchaseRequests'
+        'lelapin__purchaseRequests', 'lelapin__messages'
       ];
     }
 
@@ -136,10 +136,41 @@ service cloud.firestore {
       return kind(name) == 'purchaseOrders' && resource.data.status == 'received';
     }
 
+    /**
+     * A note on the board (22 Sep 2026): written once, never edited, and taken down only by
+     * the person who wrote it or an admin (the owner's choice). A manager may pin one.
+     */
+    function messageShape(d) {
+      return d.keys().hasAll(['id', 'body', 'byUserId', 'byUserName', 'createdAt'])
+        && d.keys().hasOnly(['id', 'body', 'byUserId', 'byUserName', 'createdAt', 'pinned'])
+        && d.body is string && d.body.size() > 0 && d.body.size() <= 1000
+        && text(d.byUserName, 100) && text(d.byUserId, 200)
+        && epochMs(d.createdAt)
+        && (!('pinned' in d) || d.pinned is bool);
+    }
+
+    // Posting: in your own name. Pinning (the only change allowed) is a manager's, and
+    // the author of an old note is not the person pinning it — so this is the create rule.
+    function validMessage(d) {
+      return messageShape(d) && d.byUserId == request.auth.uid;
+    }
+
+    // Only the pin may change, and only a manager may change it: a message that could be
+    // edited after the fact would not be a record of what was said.
+    function messageEdit() {
+      return roleIsManager()
+        && editedKeys().hasOnly(['pinned'])
+        && request.resource.data.byUserId == resource.data.byUserId
+        && request.resource.data.body == resource.data.body;
+    }
+
     function staffDeletable(name) {
       // A placed order is never deleted, only cancelled: every number stays on the books
       // with who cancelled it and why. (Until 18 Sep 2026 any unreceived order could go.)
       return kind(name) == 'notes'
+        // Your own note on the board, taken down. Anyone else's is an admin's to remove
+        // (owner, 22 Sep 2026).
+        || (kind(name) == 'messages' && resource.data.byUserId == request.auth.uid)
         // A confirmed spelling that turns out wrong is unlearned by deleting it.
         || kind(name) == 'productAliases'
         // A draft is a proposal the import screen rebuilds; nothing placed is ever deleted.
@@ -686,6 +717,7 @@ service cloud.firestore {
         : k == 'stockLevels' ? validLevel(d)
         : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
         : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d))
+        : k == 'messages' ? (fresh ? validMessage(d) : messageShape(d))
         : k == 'counters' ? validCounter(d)
         : k == 'products' ? validProduct(d)
         : k == 'locations' ? validLocation(d)
@@ -757,6 +789,7 @@ service cloud.firestore {
         : k == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
         : k == 'stockMovements' ? movementEdit()
+        : k == 'messages' ? messageEdit()
         : k == 'stockEvents' ? eventEdit()
         : k == 'counters' ? request.resource.data.value > resource.data.value
         : true;
@@ -948,10 +981,12 @@ service cloud.firestore {
         )
       ) || (
         active() && uid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'messagesReadAt'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 100
+        // When this person last opened the message board — what the unread badge counts from.
+        && (!('messagesReadAt' in request.resource.data) || epochMs(request.resource.data.messagesReadAt))
       );
 
       // Deleting your own profile would lock you out of your own database. The tombstone

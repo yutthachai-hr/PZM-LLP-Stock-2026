@@ -98,8 +98,8 @@ describe('the half-hourly job', () => {
 })
 
 describe('what it may write', () => {
-  test('tasks, notifications and its own status — nothing else, either brand', () => {
-    for (const c of ['stockEvents', 'lelapin__notifications', 'meta']) expect(() => assertWritable(c)).not.toThrow()
+  test('tasks, notifications, the message board and its own status — nothing else, either brand', () => {
+    for (const c of ['stockEvents', 'lelapin__notifications', 'meta', 'messages', 'lelapin__messages']) expect(() => assertWritable(c)).not.toThrow()
     for (const c of ['products', 'stockMovements', 'lelapin__stockLevels', 'users']) expect(() => assertWritable(c)).toThrow()
   })
 

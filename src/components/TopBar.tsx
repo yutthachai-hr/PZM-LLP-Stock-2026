@@ -10,6 +10,7 @@ import type { Product } from '../types'
 import { Icon } from './Icon'
 import { LangButton } from './LangButton'
 import { NotificationBell } from './notifications/NotificationBell'
+import { MessagesButton } from './messages/MessagesButton'
 import { ProductThumb } from './ProductThumb'
 import { ProfileModal } from './ProfileModal'
 import { looseScore } from '../lib/search'
@@ -221,6 +222,8 @@ export function TopBar({ title }: { title: string }) {
           </button>
 
           <NotificationBell />
+
+          <MessagesButton />
 
           <span className="hidden md:contents">
             <LangButton />

@@ -1949,4 +1949,18 @@ export const EN: Record<string, string> = {
   'ผูกบาร์โค้ดกับ "{name}"': 'Attach a barcode to "{name}"',
   'ผูกบาร์โค้ด {code} กับ "{name}" แล้ว': 'Barcode {code} attached to "{name}"',
   'บาร์โค้ดนี้ใช้กับ "{name}" อยู่แล้ว': '"{name}" already carries this barcode',
+  // ---- R9 messages (22 Sep 2026) ----
+  'ข้อความภายใน ({n} ใหม่)': 'Message board ({n} new)',
+  'ข้อความภายใน': 'Message board',
+  'เช่น ของ FOODGALLERY มาบ่ายนี้': 'e.g. the FOODGALLERY delivery comes this afternoon',
+  'ข้อความใหม่': 'New message',
+  'ส่งข้อความ': 'Post',
+  'ข้อความถึงทุกคนในแบรนด์นี้ เก็บไว้ 90 วัน — แก้ไขไม่ได้หลังส่ง': 'A note to everyone in this brand, kept for 90 days — it cannot be edited once posted',
+  'ยังไม่มีข้อความ': 'No messages yet',
+  'เลิกปักหมุด': 'Unpin',
+  'ปักหมุด': 'Pin',
+  'โหลดข้อความเก่ากว่านี้ ({n} วัน)': 'Load older messages (past {n} days)',
+  'พิมพ์ข้อความก่อนส่ง': 'Type a message first',
+  'ข้อความยาวเกิน {n} ตัวอักษร': 'Longer than {n} characters',
+  'ลบได้เฉพาะข้อความของตัวเอง': 'You can only delete your own messages',
 }

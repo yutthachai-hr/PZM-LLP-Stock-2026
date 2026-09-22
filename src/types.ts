@@ -14,6 +14,8 @@ export interface AppUser {
   active: boolean
   // Only used by the local (offline) backend for demo login. Never used with Firebase Auth.
   localPassword?: string
+  /** When this person last opened the message board — the unread badge counts from here. */
+  messagesReadAt?: number
   createdAt: number
 }
 
@@ -979,6 +981,7 @@ export interface PurchaseRequest {
 
 export const COL = {
   users: 'users',
+  messages: 'messages',
   products: 'products',
   productImages: 'productImages',
   movementImages: 'movementImages',
@@ -1000,6 +1003,29 @@ export const COL = {
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const
+
+/**
+ * A note to everyone in the brand (owner, 22 Sep 2026): "ของ FOODGALLERY มาบ่ายนี้".
+ *
+ * Not a chat — there is no listener, no read receipts and no replies. It is a board the
+ * whole shift can see, kept for 90 days, and a message cannot be edited once sent: what
+ * was said stands, and the person who said it (or an admin) can take it down.
+ */
+export interface AppMessage {
+  id: string
+  body: string
+  byUserId: string
+  byUserName: string
+  createdAt: number
+  /** Kept at the top of the list by a manager or an admin. */
+  pinned?: boolean
+}
+
+/** The longest a message may be — a note, not a document. */
+export const MESSAGE_MAX = 1000
+
+/** How long messages are kept (owner, 22 Sep 2026). The cron Worker removes older ones. */
+export const MESSAGE_DAYS = 90
 
 // Labels are translation keys — screens render them through t(). i18n-key
 export const ADJUST_REASONS = [

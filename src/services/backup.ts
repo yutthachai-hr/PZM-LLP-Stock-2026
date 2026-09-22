@@ -45,7 +45,7 @@ import { orderCounterFloors } from './purchaseOrders'
  *    order lines `baseQty`; both pass through untouched and the restore rebuilds balances
  *    from the ledger as before. A version-6 file still restores.
  */
-const FORMAT_VERSION = 7
+const FORMAT_VERSION = 8
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,
@@ -80,6 +80,9 @@ const COLLECTIONS = [
   COL.purchaseBatches,
   // Version 5: purchase requests, which point at the orders they became.
   COL.purchaseRequests,
+  // Version 8: the message board (22 Sep 2026). Notes people left each other; they say
+  // nothing about stock, but losing them in a restore would still lose what was said.
+  COL.messages,
 ] as const
 
 /** Rebuilt from the ledger on restore, so they are stored for reference only. */
