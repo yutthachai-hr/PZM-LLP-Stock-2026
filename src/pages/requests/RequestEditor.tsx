@@ -11,12 +11,13 @@ import { Badge, Button, Card, Field, Input, SectionHeader, Select, Textarea } fr
 import { PageHero } from '../../components/frame'
 import { useEntryUnits } from '../../services/entryUnits'
 import * as S from '../../services/purchaseRequests'
+import { UrgencySelect } from './Urgency'
 import { useSuppliers } from '../../services/suppliers'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { fmtQty } from '../../lib/format'
 import { liveItems, PR_STATUS_KEYS, prBadgeColor } from '../../lib/purchaseRequestStatus'
-import type { PurchaseRequest, PurchaseRequestItem, Role } from '../../types'
+import type { PurchaseRequest, PurchaseRequestItem, RequestUrgency, Role } from '../../types'
 import { ProductPicker, type PickedLine } from './ProductPicker'
 
 /**
@@ -111,6 +112,11 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
   async function remove(item: PurchaseRequestItem) {
     if (!pr || !actor) return
     await run(`rm-${item.idx}`, async () => setPr(await S.removeItem({ id: pr.id, idx: item.idx, actor })))
+  }
+
+  async function setUrgency(item: PurchaseRequestItem, urgency: RequestUrgency) {
+    if (!pr || !actor) return
+    await run(`urg-${item.idx}`, async () => setPr(await S.setItemUrgency({ id: pr.id, idx: item.idx, urgency, actor })))
   }
 
   async function changeSupplier(item: PurchaseRequestItem, supplierId: string) {
@@ -318,7 +324,13 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                               ))}
                             </Select>
                           </div>
-                          <div className="mt-1 text-xs text-ink-faint">
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-ink-faint">
+                            <UrgencySelect
+                              value={item.urgency}
+                              onChange={(u) => void setUrgency(item, u)}
+                              disabled={!!busy}
+                              label={t('ความเร่งด่วนของ "{name}"', { name: item.productName })}
+                            />
                             {t('ขอ {qty} {unit}', { qty: fmtQty(item.requestedQty ?? 0), unit: item.entryUnit ?? item.unit })}
                           </div>
                         </li>

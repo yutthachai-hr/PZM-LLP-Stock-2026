@@ -363,3 +363,25 @@ describe('the acceptance scenario', () => {
     expect(orders()).toHaveLength(1)
   })
 })
+
+describe('urgency (owner, 22 Sep 2026)', () => {
+  test('starts normal, the requester sets it while drafting, and every change is in the history', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 5 }])
+    expect(pr.items[0].urgency).toBeUndefined()
+    const next = await S.setItemUrgency({ id: pr.id, idx: pr.items[0].idx, urgency: 'urgent', actor: STAFF })
+    expect(next.items[0].urgency).toBe('urgent')
+    expect(next.history.at(-1)).toMatchObject({ action: 'urgencyChanged', oldValue: 'normal', newValue: 'urgent', by: STAFF.id })
+    // Back to normal is stored as nothing, like a request from before this existed.
+    const back = await S.setItemUrgency({ id: pr.id, idx: pr.items[0].idx, urgency: 'normal', actor: STAFF })
+    expect('urgency' in back.items[0]).toBe(false)
+  })
+
+  test('a manager sets it during review; the requester cannot once it is submitted; nonsense is refused', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 5 }])
+    const sent = await S.submitRequest({ id: pr.id, ctx, actor: STAFF })
+    await expect(S.setItemUrgency({ id: sent.id, idx: sent.items[0].idx, urgency: 'critical', actor: STAFF })).rejects.toThrow()
+    const byManager = await S.setItemUrgency({ id: sent.id, idx: sent.items[0].idx, urgency: 'critical', actor: MANAGER })
+    expect(byManager.items[0].urgency).toBe('critical')
+    await expect(S.setItemUrgency({ id: sent.id, idx: sent.items[0].idx, urgency: 'soon' as never, actor: MANAGER })).rejects.toThrow()
+  })
+})

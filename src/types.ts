@@ -844,6 +844,14 @@ export type PurchaseRequestStatus =
 /** How the supplier on a line was arrived at — the manager sees `custom` flagged. */
 export type SupplierChoice = 'primary' | 'alternate' | 'custom'
 
+export type RequestUrgency = 'normal' | 'urgent' | 'critical'
+
+export const URGENCIES: { value: RequestUrgency; label: string }[] = [
+  { value: 'normal', label: 'ปกติ' }, // i18n-key
+  { value: 'urgent', label: 'เร่งด่วน' }, // i18n-key
+  { value: 'critical', label: 'ด่วนมาก' }, // i18n-key
+]
+
 export interface PurchaseRequestItem {
   /** Position in the request. Stable: history entries point at lines by this. */
   idx: number
@@ -868,6 +876,12 @@ export interface PurchaseRequestItem {
   approvedQty?: number
   managerAdded?: boolean
   note?: string
+  /**
+   * How soon it is needed (owner, 22 Sep 2026): "normal" unless someone says otherwise —
+   * the requester while drafting, the manager while reviewing. Absent reads as normal, so
+   * every request filed before this existed is simply normal.
+   */
+  urgency?: RequestUrgency
   /**
    * The balance when the request was sent for review — at the request's warehouse and
    * across every location — so the manager weighs the ask against what was on the shelf

@@ -16,9 +16,10 @@ import { dateInputToMs, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInpu
 import { isManager, isReadyForOrder, isUnderReview, liveItems, PR_STATUS_KEYS, prBadgeColor } from '../../lib/purchaseRequestStatus'
 import { exportRequestExcel, exportRequestPdf, groupedBySupplier } from '../../lib/requestExport'
 import * as S from '../../services/purchaseRequests'
+import { UrgencyChip, UrgencySelect } from './Urgency'
 import { getPurchaseOrder } from '../../services/purchaseOrders'
 import { useSuppliers } from '../../services/suppliers'
-import type { PurchaseOrder, PurchaseRequest, PurchaseRequestItem, Role } from '../../types'
+import { URGENCIES, type PurchaseOrder, type PurchaseRequest, type PurchaseRequestItem, type RequestUrgency, type Role } from '../../types'
 import { SendWizard } from '../purchase/SendWizard'
 import { ProductPicker, type PickedLine } from './ProductPicker'
 import { ReasonModal } from './ReasonModal'
@@ -33,6 +34,9 @@ import { ReasonModal } from './ReasonModal'
  */
 export function RequestReview({ initial, onChange }: { initial: PurchaseRequest; onChange: (pr: PurchaseRequest) => void }) {
   const t = useT()
+  // Urgency is stored as a code; the history shows its word.
+  const shownValue = (action: string, v: string) =>
+    action === 'urgencyChanged' ? t(URGENCIES.find((u) => u.value === v)?.label ?? v) : v
   const toast = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -108,6 +112,11 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
     if (!actor || note === (item.note ?? '')) return
     await run(`note-${item.idx}`, async () => setPr(await S.setItemNote({ id: pr.id, idx: item.idx, note, actor })))
   }
+  async function setUrgency(item: PurchaseRequestItem, urgency: RequestUrgency) {
+    if (!actor) return
+    await run(`urg-${item.idx}`, async () => setPr(await S.setItemUrgency({ id: pr.id, idx: item.idx, urgency, actor })))
+  }
+
   async function changeSupplier(item: PurchaseRequestItem, supplierId: string) {
     if (!actor || !supplierId || supplierId === item.supplierId) return
     await run(`sup-${item.idx}`, async () => setPr(await S.changeSupplier({ id: pr.id, idx: item.idx, supplierId, products, suppliers, actor })))
@@ -241,7 +250,18 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                             {item.managerAdded && <Badge color="blue">{t('หัวหน้าเพิ่ม')}</Badge>}
                             {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                             {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}
+                            {!reviewing && (item.urgency ?? 'normal') !== 'normal' && <UrgencyChip value={item.urgency} />}
                           </div>
+                          {reviewing && (
+                            <div className="mt-1.5">
+                              <UrgencySelect
+                                value={item.urgency}
+                                onChange={(u) => void setUrgency(item, u)}
+                                disabled={!!busy}
+                                label={t('ความเร่งด่วนของ "{name}"', { name: item.productName })}
+                              />
+                            </div>
+                          )}
                         </td>
                         {/* What was on the shelf when this was sent for review — at the
                             request's warehouse, then one tinted chip per site (the owner's
@@ -465,8 +485,8 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                   {h.detail && <span className="text-ink-soft"> — {h.detail}</span>}
                   {(h.oldValue !== undefined || h.newValue !== undefined) && (
                     <div className="text-xs text-ink-faint">
-                      {h.oldValue !== undefined && h.oldValue !== '' ? `${h.oldValue} → ` : ''}
-                      {h.newValue ?? ''}
+                      {h.oldValue !== undefined && h.oldValue !== '' ? `${shownValue(h.action, h.oldValue)} → ` : ''}
+                      {shownValue(h.action, h.newValue ?? '')}
                     </div>
                   )}
                 </div>
@@ -588,6 +608,7 @@ export function historyText(action: string, t: (k: string) => string): string {
     itemRemoved: t('ลบสินค้า'),
     supplierChanged: t('เปลี่ยนผู้ขาย'),
     itemNoteChanged: t('แก้หมายเหตุรายการ'),
+    urgencyChanged: t('เปลี่ยนความเร่งด่วน'),
     warehouseChanged: t('เปลี่ยนคลัง'),
     noteChanged: t('แก้หมายเหตุ'),
     submitted: t('ส่งให้หัวหน้าตรวจ'),

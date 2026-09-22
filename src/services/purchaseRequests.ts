@@ -21,6 +21,8 @@ import {
   type StockLocation,
   type Supplier,
   type SupplierChoice,
+  type RequestUrgency,
+  URGENCIES,
 } from '../types'
 
 /**
@@ -410,6 +412,30 @@ export async function setItemNote(params: { id: string; idx: number; note: strin
       ...pr,
       items,
       history: [...pr.history, entry(params.actor, 'itemNoteChanged', { itemIdx: params.idx, detail: item.productName, oldValue: item.note ?? '', newValue: note })],
+    }
+  })
+}
+
+/**
+ * How soon a line is needed. The same hands as the note: the requester while the request
+ * is theirs to edit, a manager while reviewing it (owner, 22 Sep 2026). "normal" is kept as
+ * an absent field, so a request never touched reads exactly as one from before this existed.
+ */
+export async function setItemUrgency(params: { id: string; idx: number; urgency: RequestUrgency; actor: Actor }): Promise<PurchaseRequest> {
+  if (!URGENCIES.some((u) => u.value === params.urgency)) throw new AppError('ความเร่งด่วนไม่ถูกต้อง')
+  return mutate(params.id, (pr) => {
+    requireEditable(pr, params.actor)
+    const item = pr.items.find((x) => x.idx === params.idx)
+    if (!item || item.removed) throw new AppError('ไม่พบรายการ')
+    const before = item.urgency ?? 'normal'
+    if (before === params.urgency) return pr
+    const { urgency: _old, ...rest } = item
+    void _old
+    const items = pr.items.map((x) => (x.idx === params.idx ? { ...rest, ...(params.urgency === 'normal' ? {} : { urgency: params.urgency }) } : x))
+    return {
+      ...pr,
+      items,
+      history: [...pr.history, entry(params.actor, 'urgencyChanged', { itemIdx: params.idx, detail: item.productName, oldValue: before, newValue: params.urgency })],
     }
   })
 }

@@ -23,12 +23,11 @@ import {
   SearchInput,
   Select,
   Spinner,
-  StatusTabs,
   Textarea,
   bannerAction,
   type StatusTabItem,
 } from '../components/ui'
-import { PageHero } from '../components/frame'
+import { ChipRow, FilterBar, FilterField, FramePage, ItemCell, PageHero, frameCard, type Tone } from '../components/frame'
 import type { Column } from '../components/DataTable'
 import { usePaged } from '../lib/usePaged'
 import {
@@ -107,6 +106,13 @@ export function OrdersPage() {
   // One order sent to LINE from this list — the same wizard the batch and request
   // screens use, so what is recorded on the order is the same (owner, 21 Sep 2026).
   const [sending, setSending] = useState<PurchaseOrder | null>(null)
+  // Several orders to LINE in one go — ticked in the list (owner's mock-up 09); the wizard
+  // walks them one supplier at a time, as it does for a request's orders.
+  const [sendingMany, setSendingMany] = useState<PurchaseOrder[] | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [supplierFilter, setSupplierFilter] = useState('')
+  type StateFilter = '' | 'late' | 'sent' | 'unsent' | 'draft'
+  const [stateFilter, setStateFilter] = useState<StateFilter>('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -166,9 +172,24 @@ export function OrdersPage() {
     const q = search.trim().toLowerCase()
     return base
       .filter((o) => !(lateOnly && tab === 'open') || lateIds.has(o.id))
+      .filter((o) => !supplierFilter || o.supplierId === supplierFilter)
+      .filter((o) => {
+        if (!stateFilter) return true
+        if (stateFilter === 'late') return lateIds.has(o.id)
+        if (stateFilter === 'draft') return o.status === 'draft'
+        if (stateFilter === 'sent') return o.shareStatus === 'sent' && !needsResend(o)
+        return o.status === 'ordered' && (o.shareStatus !== 'sent' || needsResend(o))
+      })
       .filter((o) => !q || looseMatch([o.supplierName, o.docNo, ...o.lines.map((l) => l.productName)], q))
-  }, [tab, open, received, cancelled, search, lateOnly, lateIds])
-  const paged = usePaged(filtered, 20, `${tab}|${search}|${lateOnly}|${days}`)
+  }, [tab, open, received, cancelled, search, lateOnly, lateIds, supplierFilter, stateFilter])
+  const paged = usePaged(filtered, 20, `${tab}|${search}|${lateOnly}|${days}|${supplierFilter}|${stateFilter}`)
+  const supplierOptions = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const o of orders) m.set(o.supplierId, o.supplierName)
+    return [...m].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [orders])
+  const toSend = useMemo(() => orders.filter((o) => selected.has(o.id) && o.status === 'ordered'), [orders, selected])
+  const filtersOn = !!(search.trim() || supplierFilter || stateFilter || lateOnly)
 
   async function cancel(order: PurchaseOrder, reason: string) {
     if (!user) return
@@ -276,7 +297,12 @@ export function OrdersPage() {
       primary: true,
       className: 'min-w-44',
       cell: (o) => (
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-3">
+          {/* No supplier logos exist, so the initials in a tinted circle stand in for one. */}
+          <span className="hidden md:block">
+            <ItemCell title="" avatar={o.supplierName} tone={avatarTone(o.supplierName)} />
+          </span>
+          <div className="min-w-0">
           <div className="font-semibold text-ink">{o.supplierName}</div>
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-faint">
             <span className="doc-no">{o.docNo}</span>
@@ -286,6 +312,7 @@ export function OrdersPage() {
                 {t('จากรายการขอสั่งซื้อ')}
               </Link>
             )}
+          </div>
           </div>
         </div>
       ),
@@ -346,7 +373,7 @@ export function OrdersPage() {
   ]
 
   return (
-    <div className="space-y-5">
+    <FramePage>
       <PageHero
         icon="truck"
         title={t('สั่งซื้อ')}
@@ -383,65 +410,92 @@ export function OrdersPage() {
             </button>
           }
         >
-          {t('{count} ใบสั่งซื้อเกิน {days} วันแล้วยังไม่ได้รับของ', {
-            count: late.length,
-            days: CHASE_AFTER_DAYS,
-          })}
+          <span className="block">
+            {t('{count} ใบสั่งซื้อเกิน {days} วันแล้วยังไม่ได้รับของ', {
+              count: late.length,
+              days: CHASE_AFTER_DAYS,
+            })}
+          </span>
+          <span className="block text-xs font-normal opacity-80">{t('กรุณาตรวจสอบและดำเนินการรับสินค้าเข้าคลัง')}</span>
         </AlertBanner>
       )}
 
-      <StatusTabs
-        items={tabItems}
-        value={tab}
-        onChange={(k) => {
-          setTab(k)
-          setLateOnly(false)
-        }}
-      />
-
-      <Card className="flex flex-wrap items-center gap-2 p-3">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder={t('ค้นหาชื่อผู้ขาย, เลขที่ PO, สินค้า...')}
-          className="min-w-56 flex-1"
-        />
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
-            <Icon name="calendar" size={17} />
-          </span>
-          <Select
-            aria-label={t('ช่วงเวลา')}
-            value={String(days)}
-            onChange={(e) => setDays(Number(e.target.value))}
-            className="w-auto pl-10 pr-8"
-          >
-            <option value="7">{t('7 วันล่าสุด')}</option>
-            <option value="30">{t('30 วันล่าสุด')}</option>
-            <option value="90">{t('90 วันล่าสุด')}</option>
-          </Select>
+      <div className={`${frameCard} flex flex-wrap items-center gap-3 p-3 md:p-4`}>
+        <div className="min-w-0 flex-1">
+          <ChipRow<Tab>
+            label={t('สถานะใบสั่งซื้อ')}
+            value={tab}
+            onChange={(k) => {
+              setTab(k)
+              setLateOnly(false)
+              setSelected(new Set())
+            }}
+            chips={tabItems.map((x) => ({ key: x.key, label: x.label }))}
+          />
         </div>
-        {/* What was ordered on which day, as a sheet — the summary the owner asked for
-            in a form that leaves the app. Exports what the tab shows. */}
-        <div className="flex gap-2 sm:ml-auto">
-          <Button
-            variant="sheet"
-            onClick={() => void exportExcelFile()}
-            disabled={!!busyExport || orders.length === 0}
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
+              <Icon name="calendar" size={17} />
+            </span>
+            <Select
+              aria-label={t('ช่วงเวลา')}
+              value={String(days)}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="w-auto pl-10 pr-8"
+            >
+              <option value="7">{t('7 วันล่าสุด')}</option>
+              <option value="30">{t('30 วันล่าสุด')}</option>
+              <option value="90">{t('90 วันล่าสุด')}</option>
+            </Select>
+          </div>
+          {/* What was ordered on which day, as a sheet — the summary the owner asked for
+              in a form that leaves the app. Exports what the tab shows. */}
+          <Button variant="sheet" onClick={() => void exportExcelFile()} disabled={!!busyExport || orders.length === 0}>
             <Icon name="fileSheet" size={17} />
             {busyExport === 'excel' ? t('กำลังสร้างไฟล์...') : 'Excel'}
           </Button>
-          <Button
-            variant="pdf"
-            onClick={() => void exportPdfFile()}
-            disabled={!!busyExport || orders.length === 0}
-          >
+          <Button variant="pdf" onClick={() => void exportPdfFile()} disabled={!!busyExport || orders.length === 0}>
             <Icon name="report" size={17} />
             {busyExport === 'pdf' ? t('กำลังสร้างไฟล์...') : 'PDF'}
           </Button>
         </div>
-      </Card>
+      </div>
+
+      {tab !== 'summary' && (
+        <FilterBar
+          search={<SearchInput value={search} onChange={setSearch} placeholder={t('ค้นหาเลข PO, ชื่อผู้ขาย, สินค้า...')} />}
+          onReset={() => {
+            setSearch('')
+            setSupplierFilter('')
+            setStateFilter('')
+            setLateOnly(false)
+          }}
+          resetDisabled={!filtersOn}
+        >
+          <FilterField label={t('ผู้ขาย')}>
+            <Select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+              <option value="">{t('ผู้ขายทั้งหมด')}</option>
+              {supplierOptions.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+          </FilterField>
+          {tab === 'open' && (
+            <FilterField label={t('สถานะ')}>
+              <Select value={stateFilter} onChange={(e) => setStateFilter(e.target.value as StateFilter)}>
+                <option value="">{t('สถานะทั้งหมด')}</option>
+                <option value="late">{t('ล่าช้า')}</option>
+                <option value="sent">{t('ส่งเข้า LINE แล้ว')}</option>
+                <option value="unsent">{t('ยังไม่ได้ส่ง LINE')}</option>
+                <option value="draft">{t('ร่าง — รออนุมัติ')}</option>
+              </Select>
+            </FilterField>
+          )}
+        </FilterBar>
+      )}
 
       {lateOnly && tab === 'open' && (
         <div className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
@@ -466,6 +520,7 @@ export function OrdersPage() {
                 rows={paged.rows}
                 rowKey={(o) => o.id}
                 minWidth={960}
+                selection={tab === 'open' ? { selected, onChange: setSelected } : undefined}
                 empty={
                   <EmptyState
                     icon="truck"
@@ -478,6 +533,18 @@ export function OrdersPage() {
             )}
           </Card>
           <Pagination {...paged.pager} />
+          {tab === 'open' && toSend.length > 0 && (
+            <div className="sticky bottom-4 z-20 mt-3 hidden flex-wrap items-center gap-2 rounded-2xl border border-brand/30 bg-surface px-4 py-3 shadow-lg md:flex">
+              <span className="mr-auto text-sm font-semibold text-ink">{t('เลือก {n} ใบ', { n: toSend.length })}</span>
+              <Button size="sm" variant="success" onClick={() => setSendingMany(toSend)}>
+                <Icon name="share" size={16} />
+                {t('ส่ง LINE ({n} ใบ)', { n: toSend.length })}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                {t('ล้างที่เลือก')}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -507,6 +574,17 @@ export function OrdersPage() {
           onSend={viewing.status === 'ordered' ? () => { setViewing(null); setSending(viewing) } : undefined}
         />
       )}
+      {sendingMany && (
+        <SendWizard
+          orders={sendingMany}
+          resend
+          onStatus={async (o) => setOrders((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))}
+          onClose={() => {
+            setSendingMany(null)
+            setSelected(new Set())
+          }}
+        />
+      )}
       {sending && (
         <SendWizard
           orders={[sending]}
@@ -534,8 +612,16 @@ export function OrdersPage() {
           onConfirm={(reason) => cancel(cancelling, reason)}
         />
       )}
-    </div>
+    </FramePage>
   )
+}
+
+/** A steady colour per supplier, from its name, for the initials circle. */
+const AVATAR_TONES: Tone[] = ['red', 'blue', 'green', 'amber', 'purple']
+function avatarTone(name: string): Tone {
+  let h = 0
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return AVATAR_TONES[h % AVATAR_TONES.length]
 }
 
 /** The orders called off, as a table: the trail an audit reads. */
