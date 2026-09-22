@@ -94,7 +94,7 @@ export function TopBar({ title }: { title: string }) {
     setMobileSearch(false)
     setQ('')
     // The stock card: what it is, where it is, and everything that moved it.
-    navigate(`/movements?product=${encodeURIComponent(p.id)}`)
+    navigate(`/products/${encodeURIComponent(p.id)}/card`)
   }
 
   function onKeyDown(e: React.KeyboardEvent) {

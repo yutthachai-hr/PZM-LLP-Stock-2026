@@ -5,10 +5,11 @@ import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { ActivityLog } from './reports/ActivityLog'
 import { CostReport } from './reports/CostReport'
+import { ReportsOverview } from './reports/ReportsOverview'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, EmptyState, Field, Input, SegTab, Select } from '../components/ui'
-import { PageHero } from '../components/frame'
+import { Button, Card, EmptyState, Field, Input, Select } from '../components/ui'
+import { ChipRow, FramePage, PageHero, frameCard } from '../components/frame'
 import { dateInputToMs, dayRange, fmtMoney, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput, todayMs } from '../lib/format'
 import { balanceUnit, editorsOf, movedSince, stockCard } from '../lib/ledger'
 import { useBrand } from '../brand/BrandContext'
@@ -57,7 +58,7 @@ const TYPE_LABEL: Record<MovementType, string> = {
   consume: 'เบิกใช้', // i18n-key
 }
 
-type ReportMode = 'movement' | 'snapshot' | 'activity' | 'cost'
+type ReportMode = 'overview' | 'movement' | 'snapshot' | 'activity' | 'cost'
 
 export function ReportsPage() {
   const t = useT()
@@ -80,7 +81,8 @@ export function ReportsPage() {
   // was open, so a Le Lapin report went out under the wrong company.
   const company = brand ? brandDef(brand).name : ''
 
-  const [mode, setMode] = useState<ReportMode>('movement')
+  // The overview opens first (owner's mock-up 07); the detailed reports are one tap away.
+  const [mode, setMode] = useState<ReportMode>('overview')
   const [locationId, setLocationId] = useState('')
   const [productId, setProductId] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
@@ -457,44 +459,64 @@ export function ReportsPage() {
   )
 
   const tabs = (
-    <div className="flex gap-1 rounded-lg bg-sunken p-1">
-      <SegTab label={t("การเคลื่อนไหว")} active={mode === 'movement'} onClick={() => setMode('movement')} />
-      <SegTab label={t("สต๊อกคงเหลือ")} active={mode === 'snapshot'} onClick={() => setMode('snapshot')} />
-      <SegTab label={t('บันทึกกิจกรรมทั้งระบบ')} active={mode === 'activity'} onClick={() => setMode('activity')} />
-      <SegTab label={t('ราคาต้นทุน')} active={mode === 'cost'} onClick={() => setMode('cost')} />
+    <div className={`${frameCard} p-3`}>
+      <ChipRow<ReportMode>
+        label={t('ประเภทรายงาน')}
+        value={mode}
+        onChange={setMode}
+        chips={[
+          { key: 'overview', label: t('ภาพรวม') },
+          { key: 'movement', label: t('การเคลื่อนไหว') },
+          { key: 'snapshot', label: t('สต๊อกคงเหลือ') },
+          { key: 'activity', label: t('บันทึกกิจกรรมทั้งระบบ') },
+          { key: 'cost', label: t('ราคาต้นทุน') },
+        ]}
+      />
     </div>
   )
 
+  if (mode === 'overview') {
+    return (
+      <FramePage>
+        <PageHero icon="report" title={t('รายงาน')} subtitle={t('วิเคราะห์ข้อมูลคลังสินค้า เพื่อการตัดสินใจที่ดีขึ้น')} />
+        {tabs}
+        <LedgerWindowNotice />
+        <ReportsOverview />
+      </FramePage>
+    )
+  }
+
   if (mode === 'cost') {
     return (
-      <div className="space-y-4">
+      <FramePage>
         <PageHero icon="report" title={t("รายงาน")} subtitle={t('ต้นทุนทุกสินค้า ราคาเก่า-ใหม่ และวันที่ปรับ')} />
         {tabs}
         <CostReport />
-      </div>
+      </FramePage>
     )
   }
 
   if (mode === 'activity') {
     return (
-      <div className="space-y-4">
+      <FramePage>
         <PageHero icon="report" title={t("รายงาน")} subtitle={t('ทุกการกระทำในระบบ ย้อนดูได้ ดาวน์โหลดได้ แก้ไขไม่ได้')} />
         {tabs}
         <ActivityLog />
-      </div>
+      </FramePage>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <FramePage>
       <PageHero
         icon="report"
         title={t("รายงาน")}
         subtitle={t("ดึงรายงานตามสาขา/วันที่/สินค้า แล้วดาวน์โหลดเป็น Excel หรือ PDF")}
       />
 
+      {tabs}
+
       <Card className="space-y-4 p-4">
-        {tabs}
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <Field label={t("คลัง/สาขา")}>
@@ -608,7 +630,7 @@ export function ReportsPage() {
           )}
         </Card>
       )}
-    </div>
+    </FramePage>
   )
 }
 

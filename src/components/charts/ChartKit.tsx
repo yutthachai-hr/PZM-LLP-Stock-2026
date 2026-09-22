@@ -117,7 +117,7 @@ export function AreaTrendChart({
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line)" vertical={false} />
           <XAxis dataKey={xKey} tick={axisTick} tickLine={false} axisLine={false} minTickGap={12} />
-          <YAxis tick={axisTick} tickLine={false} axisLine={false} width={48} tickFormatter={format} />
+          <YAxis tick={axisTick} tickLine={false} axisLine={false} width={48} tickFormatter={format} allowDecimals={false} />
           <Tooltip contentStyle={tooltipStyle} formatter={format ? (v) => format(Number(v)) : undefined} />
           {series.map((s) => (
             <Area

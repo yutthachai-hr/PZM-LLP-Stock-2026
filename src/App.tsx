@@ -14,6 +14,7 @@ import { BrandPicker } from './components/BrandPicker'
 import { LoginPage } from './pages/Login'
 import { DashboardPage } from './pages/Dashboard'
 import { ProductsPage } from './pages/Products'
+import { StockCardPage } from './pages/StockCardPage'
 import { ReceivePage } from './pages/Receive'
 import { IssuePage } from './pages/Issue'
 import { AdjustPage } from './pages/Adjust'
@@ -71,6 +72,7 @@ function Gate() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/products/:id/card" element={<StockCardPage />} />
           <Route path="/receive" element={<ReceivePage />} />
           <Route path="/issue" element={<IssuePage />} />
           <Route path="/adjust" element={<AdjustPage />} />

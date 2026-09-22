@@ -140,7 +140,7 @@ export function productMenu(
   t: TFn,
   opts: { isAdmin: boolean; locId: string; go: (to: string) => void; edit: () => void; toggleHidden: () => void },
 ): RowMenuItem[] {
-  const card = `/movements?product=${encodeURIComponent(r.p.id)}${opts.locId ? `&location=${encodeURIComponent(opts.locId)}` : ''}`
+  const card = `/products/${encodeURIComponent(r.p.id)}/card`
   const items: RowMenuItem[] = [
     { key: 'card', label: t('ดู Stock Card / ประวัติ'), icon: 'history', onSelect: () => opts.go(card) },
     { key: 'edit', label: opts.isAdmin ? t('แก้ไข') : t('ดูรายละเอียด'), icon: opts.isAdmin ? 'pencil' : 'eye', onSelect: opts.edit },

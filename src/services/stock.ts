@@ -527,6 +527,26 @@ export async function consumeStock(params: {
   })
 }
 
+/**
+ * Every movement of one product — the Stock Card page's ledger (spec §2.7).
+ *
+ * One equality query on `productId`, the same read `rebuildProductLevels` makes: it costs
+ * that product's rows, never the whole collection. Kept for the session per brand, so
+ * going back and forth between products does not read the same rows twice; the screen
+ * lays the live listener's rows over it, so anything filed or edited since is current.
+ */
+const ledgerCache = new Map<string, StockMovement[]>()
+
+export async function readProductLedger(productId: string, opts: { force?: boolean } = {}): Promise<StockMovement[]> {
+  requireId(productId, 'productId')
+  const key = `${getBrand()}::${productId}`
+  const hit = ledgerCache.get(key)
+  if (hit && !opts.force) return hit
+  const rows = (await scoped().getBy<StockMovement>(COL.movements, 'productId', productId)) ?? []
+  ledgerCache.set(key, rows)
+  return rows
+}
+
 /** Fetch the proof photo attached to a movement document (by docNo). */
 export async function getMovementImage(docNo: string): Promise<string | null> {
   const img = await scoped().getOne<{ dataUrl: string }>(COL.movementImages, docNo)

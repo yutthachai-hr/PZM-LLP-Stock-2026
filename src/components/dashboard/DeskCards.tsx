@@ -62,7 +62,7 @@ export function LowStockCard({ low }: { low: StockShortage[] }) {
         <ul className="divide-y divide-line px-4 pb-2 md:hidden">
           {top.map((s) => (
             <li key={`${s.location.id}-${s.product.id}`}>
-              <Link to={`/movements?product=${encodeURIComponent(s.product.id)}`} className="flex items-center gap-3 py-2.5">
+              <Link to={`/products/${encodeURIComponent(s.product.id)}/card`} className="flex items-center gap-3 py-2.5">
                 <span className="min-w-0 flex-1">
                   <ItemCell title={s.product.name} sub={s.location.name} productId={s.product.id} hasImage={s.product.hasImage} />
                 </span>
@@ -90,7 +90,7 @@ export function LowStockCard({ low }: { low: StockShortage[] }) {
               {top.map((s) => (
                 <tr key={`${s.location.id}-${s.product.id}`}>
                   <td className="px-3 py-2.5">
-                    <Link to={`/movements?product=${encodeURIComponent(s.product.id)}`} className="block hover:underline">
+                    <Link to={`/products/${encodeURIComponent(s.product.id)}/card`} className="block hover:underline">
                       <ItemCell
                         title={s.product.name}
                         sub={`${s.product.sku} · ${s.location.name}`}

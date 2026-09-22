@@ -109,6 +109,13 @@ export interface StockCardQuery extends LedgerScope {
   to?: number
   /** show only this kind of movement — affects the rows, never the balances */
   type?: MovementType | ''
+  /**
+   * Carry a running balance even with no location chosen — the product across every site,
+   * with transfers between sites netting to nothing. Only for a caller that holds the
+   * product's WHOLE ledger (the Stock Card page reads it by product), where that total is
+   * a real number; off everywhere else.
+   */
+  overallBalance?: boolean
 }
 
 /**
@@ -152,7 +159,7 @@ export function stockCard(all: StockMovement[], q: StockCardQuery): StockCard {
       movement: m,
       inQty,
       outQty,
-      balance: q.locationId ? running : null,
+      balance: q.locationId || q.overallBalance ? running : null,
     })
   }
   if (!seenStart) opening = running
