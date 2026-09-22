@@ -240,13 +240,16 @@ service cloud.firestore {
         ])
         && d.keys().hasOnly([
           'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock', 'cost',
-          'unitConversions', 'supplierId', 'alternateSupplierIds',
+          'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
           'hasImage', 'active', 'createdAt', 'updatedAt'
         ])
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
         && text(d.unit, 60) && text(d.unitType, 20)
         && nonneg(d.minStock, 1000000000)
         && (!('cost' in d) || nonneg(d.cost, 1000000000))
+        // Every price ever stated for it (22 Sep 2026), newest applying as `cost`. Bounded
+        // like the other lists and not validated element by element.
+        && (!('costHistory' in d) || (d.costHistory is list && d.costHistory.size() <= 100))
         // Who we buy it from. Absent on a product whose name never named anyone.
         && (!('supplierId' in d) || text(d.supplierId, 200))
         // The rates this product is keyed at ("1 Carton = 500 EA") — since 20 Sep 2026

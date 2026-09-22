@@ -195,6 +195,12 @@ describe('product unit reference conversions', () => {
     )
   })
 
+  test('a price history rides on the product, bounded to 100 entries (22 Sep 2026)', async () => {
+    const entry = { price: 297.9, unit: 'Carton', factor: 300, cost: 0.993, effectiveAt: 1, at: 1, by: 'admin', byName: 'A' }
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { cost: 0.993, costHistory: [entry] })))
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { costHistory: Array(101).fill(entry) })))
+  })
+
   test('a product without any reference conversions is still valid', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p9'), product('p9')))
   })

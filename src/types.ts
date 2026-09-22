@@ -17,6 +17,28 @@ export interface AppUser {
   createdAt: number
 }
 
+/**
+ * One stated price of a product, as the person keyed it and as the books use it.
+ *
+ * `price` in `unit` (a carton, a piece, a kilo — any unit the product has a rate for) is
+ * what was on the invoice; `cost` is that brought to one of the product's own unit at
+ * `factor`, which is what a valuation multiplies. `effectiveAt` is the day the price
+ * applies from (suppliers change prices by the month); `at`/`by` say who wrote it when.
+ */
+export interface CostEntry {
+  price: number
+  unit: string
+  factor: number
+  cost: number
+  effectiveAt: number
+  at: number
+  by: string
+  byName: string
+  note?: string
+}
+
+export const MAX_COST_HISTORY = 100
+
 export interface Product {
   id: string
   sku: string
@@ -44,7 +66,15 @@ export interface Product {
    * to remember it.
    */
   alternateSupplierIds?: string[]
-  cost?: number // optional unit cost for inventory value
+  /**
+   * Cost per one of the product's own unit (EA, KG…), for the stock valuation. Always the
+   * latest entry of `costHistory` once one exists; the two are written together by
+   * services/productCost.ts. Nothing else writes it — the price of a carton keyed here by
+   * mistake once valued 11,536 sachets of ketchup at 3.4 million baht (22 Sep 2026).
+   */
+  cost?: number
+  /** Every price ever stated, newest last (kept to the last MAX_COST_HISTORY). */
+  costHistory?: CostEntry[]
   /**
    * The rates this product is keyed at — "1 ลัง = 288 EA": one `label` is `size` of the
    * product's own unit.
