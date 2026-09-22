@@ -36,7 +36,7 @@ export function SectionCard({
         {icon && <Icon name={icon} size={20} className={toneText[tone]} />}
         <h2 className="min-w-0 flex-1 text-base font-bold text-ink md:text-lg">
           {title}
-          {count !== undefined && <span className="ml-1.5 text-sm font-normal text-ink-soft">{count}</span>}
+          {count !== undefined && <span className="ml-1.5 whitespace-nowrap text-sm font-normal text-ink-soft">{count}</span>}
         </h2>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>

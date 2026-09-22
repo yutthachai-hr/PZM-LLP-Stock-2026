@@ -74,6 +74,8 @@ export function DataTable<T>({
   /**
    * Tick boxes down the left, and one in the head that ticks the rows shown (owner's
    * mock-ups). The page owns the set, so a selection survives paging and filtering.
+   * Tablet and up only: on a phone card the box took the room the name needed, and acting
+   * on twenty products at once is a desk job.
    */
   selection?: { selected: ReadonlySet<string>; onChange: (next: Set<string>) => void }
   /** The `⋮` menu at the end of each row (and at the top right of each phone card). */
@@ -115,16 +117,6 @@ export function DataTable<T>({
             onClick={onRowClick ? () => onRowClick(row) : undefined}
           >
             <div className="flex items-start justify-between gap-3">
-              {selection && (
-                <input
-                  type="checkbox"
-                  className={`${box} mt-1 shrink-0`}
-                  checked={selection.selected.has(rowKey(row))}
-                  onChange={() => toggle(rowKey(row))}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={t('เลือกแถวนี้')}
-                />
-              )}
               <div className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{title.cell(row)}</div>
               {value && <div className="num shrink-0 text-right text-lg font-bold text-ink">{value.cell(row)}</div>}
               {rowMenu && <RowMenu items={rowMenu(row)} />}

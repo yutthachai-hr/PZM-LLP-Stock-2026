@@ -44,7 +44,8 @@ export function ItemCell({
         </span>
       )}
       <div className="min-w-0">
-        <div className="truncate font-semibold text-ink">{title}</div>
+        {/* Two lines on a phone card, where the name is the heading; one line in a table row. */}
+        <div className="line-clamp-2 font-semibold leading-snug text-ink md:truncate">{title}</div>
         {sub && <div className="truncate text-xs text-ink-faint">{sub}</div>}
       </div>
     </div>

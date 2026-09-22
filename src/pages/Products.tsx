@@ -1,69 +1,67 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { SiteChip, SiteSelect } from '../components/SiteChip'
+import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Field,
-  Input,
-  Modal,
-  Select,
-  Spinner,
-  blurOnWheel,
-} from '../components/ui'
-import { PageHero } from '../components/frame'
-import { ProductThumb, invalidateThumb } from '../components/ProductThumb'
-import { ConversionRows } from '../components/ConversionRows'
-import { DataTable, type Column } from '../components/DataTable'
-import {
-  createProduct,
-  updateProduct,
-  deleteProduct,
-  setProductImage,
-  removeProductImage,
-  getProductImage,
-  type ProductInput,
-} from '../services/products'
+import { Button, EmptyState, Field, Input, Modal, Pagination, SearchInput, Select, Spinner, blurOnWheel } from '../components/ui'
+import { ChipRow, FilterBar, FilterField, FramePage, PageHero, SectionCard, type Chip } from '../components/frame'
+import { DataTable } from '../components/DataTable'
+import { updateProduct } from '../services/products'
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
-import { changeProductUnit, setStockCount } from '../services/stock'
-import { useEntryUnits } from '../services/entryUnits'
-import { useSuppliers } from '../services/suppliers'
-import { sameUnit, unitNameFor } from '../lib/units'
-import { breakdown } from '../lib/inventoryRules/uom'
-import { compressImage } from '../lib/image'
+import { exportExcel } from '../lib/export'
 import { fmtQty } from '../lib/format'
-import type { CostEntry, Product } from '../types'
-import { CostBlock, type PriceDraft } from '../components/CostBlock'
-import { setProductCost } from '../services/productCost'
+import { valueAsOf } from '../lib/stats/periodCompare'
+import { DAY_MS } from '../lib/inventoryRules/time'
+import { usePaged } from '../lib/usePaged'
+import type { Product } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch } from '../lib/search'
+import { ProductEditor } from './products/ProductEditor'
+import { ProductStats } from './products/ProductStats'
+import { ProductGrid, productColumns, productMenu, type ProductRow } from './products/ProductTable'
+import { STATE_LOOK, stockState, type StockState } from './products/productStatus'
 
-type SearchIn = 'all' | 'name' | 'sku'
-type StockStatus = 'all' | 'low' | 'out' | 'in' | 'hidden'
-type SortKey = 'name-asc' | 'name-desc' | 'sku-asc' | 'sku-desc' | 'qty-desc' | 'qty-asc'
+type StatusFilter = 'all' | StockState | 'in' | 'hidden'
+type SortKey = 'name-asc' | 'name-desc' | 'sku-asc' | 'sku-desc' | 'qty-desc' | 'qty-asc' | 'updated-desc'
+type View = 'table' | 'grid'
 
 const SORTS: { value: SortKey; label: string }[] = [
-  { value: 'name-asc', label: 'ชื่อ ก→ฮ / A→Z' }, // i18n-key
-  { value: 'name-desc', label: 'ชื่อ ฮ→ก / Z→A' }, // i18n-key
+  { value: 'name-asc', label: 'ชื่อสินค้า (A - Z)' }, // i18n-key
+  { value: 'name-desc', label: 'ชื่อสินค้า (Z - A)' }, // i18n-key
   { value: 'sku-asc', label: 'รหัสสินค้า น้อย→มาก' }, // i18n-key
   { value: 'sku-desc', label: 'รหัสสินค้า มาก→น้อย' }, // i18n-key
   { value: 'qty-desc', label: 'คงเหลือ มาก→น้อย' }, // i18n-key
   { value: 'qty-asc', label: 'คงเหลือ น้อย→มาก' }, // i18n-key
+  { value: 'updated-desc', label: 'อัปเดตล่าสุดก่อน' }, // i18n-key
 ]
 
+/** How many category chips sit above the list; the rest are in the dropdown. */
+const CHIP_LIMIT = 8
+const VIEW_KEY = 'pzm:products:view'
+
+function readView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'grid' ? 'grid' : 'table'
+  } catch {
+    return 'table'
+  }
+}
+
+/**
+ * สินค้าคงคลัง, as the owner's mock-up 02 draws it (spec §2.2): five figures that double as
+ * the status filter, a filter card with category chips, and the list as a table or a grid,
+ * paged, with tick boxes for acting on several products at once.
+ */
 export function ProductsPage() {
   const t = useT()
-  const { products, locations, qtyAt, qtyByUnit, minFor, tracksProduct, levels, minOverrides, loading } =
-    useData()
+  const navigate = useNavigate()
+  const { products, locations, qtyAt, qtyByUnit, minFor, tracksProduct, levels, movements, movementsFrom, loading } = useData()
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast()
@@ -72,115 +70,140 @@ export function ProductsPage() {
   const catalogCount = brand ? catalogSize(brand) : 0
 
   const [search, setSearch] = useState('')
-  const [searchIn, setSearchIn] = useState<SearchIn>('all')
   const [cat, setCat] = useState('')
-  const [status, setStatus] = useState<StockStatus>('all')
+  const [status, setStatus] = useState<StatusFilter>('all')
   const [locId, setLocId] = useState('')
   const [sort, setSort] = useState<SortKey>('name-asc')
+  const [view, setViewState] = useState<View>(readView)
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [editing, setEditing] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
   const [seeding, setSeeding] = useState(false)
   const [resetting, setResetting] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
+  const [settingMin, setSettingMin] = useState(false)
+
+  function setView(v: View) {
+    setViewState(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      /* private window — the choice lasts until reload */
+    }
+  }
 
   const categories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products])
-
-  // Quantity the list works with: one location when the location filter is set, otherwise
-  // every location added up. Both the "คงเหลือ" column and the qty sorts use this.
-  const shownQty = useMemo(() => {
-    const active = locId ? locations.filter((l) => l.id === locId) : locations
-    return (productId: string) => active.reduce((sum, l) => sum + qtyAt(l.id, productId), 0)
-  }, [locations, locId, qtyAt])
+  const siteName = (id: string) => locations.find((l) => l.id === id)?.name ?? ''
 
   /**
-   * Legacy balances still kept in some other unit, added up over the locations in view.
+   * Every product worked out once for the locations in view: its balance, its minimum, its
+   * state, where it is held and when its balance last changed.
    *
-   * Rows filed before 20 Sep 2026 in another unit sit on their own balance until the
-   * migration tool (Settings → ดูแลข้อมูล) converts them at the product's rate. Shown so
-   * nobody thinks the goods are gone; not added, because no rate may be stated yet.
+   * With a location chosen, the minimum is that location's override — the same number the
+   * dashboard and the reports use — and the list is what that location carries, not the
+   * whole catalogue with zeros against it.
    */
-  const otherUnits = useMemo(() => {
-    const active = locId ? locations.filter((l) => l.id === locId) : locations
-    return (product: Product) => {
-      const totals = new Map<string, number>()
-      for (const l of active) {
-        for (const row of qtyByUnit(l.id, product.id)) {
-          if (row.unit === product.unitType) continue
-          totals.set(row.unit, (totals.get(row.unit) ?? 0) + row.qty)
-        }
-      }
-      return [...totals].map(([unit, qty]) => ({ unit, qty }))
+  const allRows = useMemo<ProductRow[]>(() => {
+    const inView = locId ? locations.filter((l) => l.id === locId) : locations
+    const inViewIds = new Set(inView.map((l) => l.id))
+    const updated = new Map<string, number>()
+    for (const lv of levels) {
+      if (!inViewIds.has(lv.locationId)) continue
+      if ((updated.get(lv.productId) ?? 0) < lv.updatedAt) updated.set(lv.productId, lv.updatedAt)
     }
-  }, [locations, locId, qtyByUnit])
+    return products
+      .filter((p) => !locId || tracksProduct(locId, p.id))
+      .map((p) => {
+        let qty = 0
+        const sites: string[] = []
+        const others = new Map<string, number>()
+        for (const l of inView) {
+          const q = qtyAt(l.id, p.id)
+          qty += q
+          if (q > 0) sites.push(l.id)
+          for (const row of qtyByUnit(l.id, p.id)) {
+            if (row.unit === p.unitType) continue
+            others.set(row.unit, (others.get(row.unit) ?? 0) + row.qty)
+          }
+        }
+        const min = locId ? minFor(p, locId) : p.minStock
+        return {
+          p,
+          qty,
+          min,
+          state: stockState(qty, min),
+          sites,
+          updatedAt: updated.get(p.id) ?? 0,
+          others: [...others].map(([unit, q]) => ({ unit, qty: q })),
+        }
+      })
+  }, [products, locations, locId, levels, qtyAt, qtyByUnit, minFor, tracksProduct])
 
-  /**
-   * The minimum this list should judge a product against.
-   *
-   * With a location chosen, that is the per-location override — the same number the
-   * dashboard and the reports use. This page used the global `minStock` everywhere, so a
-   * product with a global minimum of 5, an override of 20 at the branch and 10 on hand read
-   * as "low" on the dashboard and "normal" here, and the "low stock" filter did not find it.
-   */
-  const minShown = useMemo(() => {
-    return (p: Product) => (locId ? minFor(p, locId) : p.minStock)
-  }, [locId, minFor])
+  const activeRows = useMemo(() => allRows.filter((r) => r.p.active !== false), [allRows])
+  const hiddenCount = allRows.length - activeRows.length
 
-  const filterCount =
-    (search.trim() ? 1 : 0) + (cat ? 1 : 0) + (status !== 'all' ? 1 : 0) + (locId ? 1 : 0)
+  const counts = useMemo(() => {
+    const c: Record<StockState, number> = { normal: 0, low: 0, out: 0 }
+    for (const r of activeRows) c[r.state]++
+    return c
+  }, [activeRows])
 
+  const value = useMemo(() => activeRows.reduce((s, r) => s + Math.max(0, r.qty) * (r.p.cost ?? 0), 0), [activeRows])
+  const valueBefore = useMemo(() => {
+    const costs = new Map(products.map((p) => [p.id, p.cost ?? 0]))
+    const scope = locId ? new Set([locId]) : undefined
+    return valueAsOf(value, movements, Date.now() - 30 * DAY_MS, movementsFrom, (id) => costs.get(id) ?? 0, scope)
+  }, [value, products, movements, movementsFrom, locId])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const rows = (status === 'hidden' ? allRows.filter((r) => r.p.active === false) : activeRows)
+      .filter((r) => (cat ? r.p.category === cat : true))
+      .filter((r) => !q || looseMatch([r.p.name, r.p.sku, r.p.category], q))
+      .filter((r) => {
+        if (status === 'all' || status === 'hidden') return true
+        if (status === 'in') return r.qty > 0
+        return r.state === status
+      })
+    const byName = (a: ProductRow, b: ProductRow) => a.p.name.localeCompare(b.p.name)
+    return rows.sort((a, b) => {
+      switch (sort) {
+        case 'name-desc':
+          return b.p.name.localeCompare(a.p.name)
+        case 'sku-asc':
+          return a.p.sku.localeCompare(b.p.sku)
+        case 'sku-desc':
+          return b.p.sku.localeCompare(a.p.sku)
+        case 'qty-desc':
+          return b.qty - a.qty || byName(a, b)
+        case 'qty-asc':
+          return a.qty - b.qty || byName(a, b)
+        case 'updated-desc':
+          return b.updatedAt - a.updatedAt || byName(a, b)
+        default:
+          return byName(a, b)
+      }
+    })
+  }, [allRows, activeRows, search, cat, status, sort])
+
+  const { rows: pageRows, pager } = usePaged(filtered, 20, `${search}|${cat}|${status}|${locId}|${sort}`)
+
+  // Category chips: the biggest few by count, plus the one chosen from the dropdown if it
+  // is not among them — twenty chips in a row would push the list off the screen.
+  const chips = useMemo<Chip<string>[]>(() => {
+    const n = new Map<string, number>()
+    for (const r of activeRows) n.set(r.p.category, (n.get(r.p.category) ?? 0) + 1)
+    const top = [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, CHIP_LIMIT)
+    if (cat && !top.some(([c]) => c === cat)) top.push([cat, n.get(cat) ?? 0])
+    return [{ key: '', label: t('ทั้งหมด'), count: activeRows.length }, ...top.map(([c, count]) => ({ key: c, label: c, count }))]
+  }, [activeRows, cat, t])
+
+  const filterCount = (search.trim() ? 1 : 0) + (cat ? 1 : 0) + (status !== 'all' ? 1 : 0) + (locId ? 1 : 0)
   function clearFilters() {
     setSearch('')
-    setSearchIn('all')
     setCat('')
     setStatus('all')
     setLocId('')
   }
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const matches = (p: Product) => {
-      if (!q) return true
-      if (searchIn === 'name') return looseMatch([p.name], q)
-      if (searchIn === 'sku') return looseMatch([p.sku], q)
-      return looseMatch([p.name, p.sku, p.category], q)
-    }
-    const inStatus = (p: Product) => {
-      if (status === 'all' || status === 'hidden') return true
-      const qty = shownQty(p.id)
-      if (status === 'out') return qty <= 0
-      if (status === 'in') return qty > 0
-      const min = minShown(p)
-      return min > 0 && qty <= min
-    }
-    return products
-      // Hidden products stay out of the way unless they are what is being looked for.
-      // Hiding is the alternative to deleting: the catalogue keeps the item, its history and
-      // its balance, so putting it back is one click rather than keying it in again.
-      .filter((p) => (status === 'hidden' ? p.active === false : p.active !== false))
-      // Viewing one location lists what that location carries, not the whole catalogue with
-      // zeros against it — a product that has never been sent to a branch is not a line the
-      // branch is short of.
-      .filter((p) => !locId || tracksProduct(locId, p.id))
-      .filter((p) => (cat ? p.category === cat : true))
-      .filter(matches)
-      .filter(inStatus)
-      .sort((a, b) => {
-        switch (sort) {
-          case 'name-desc':
-            return b.name.localeCompare(a.name)
-          case 'sku-asc':
-            return a.sku.localeCompare(b.sku)
-          case 'sku-desc':
-            return b.sku.localeCompare(a.sku)
-          case 'qty-desc':
-            return shownQty(b.id) - shownQty(a.id) || a.name.localeCompare(b.name)
-          case 'qty-asc':
-            return shownQty(a.id) - shownQty(b.id) || a.name.localeCompare(b.name)
-          default:
-            return a.name.localeCompare(b.name)
-        }
-      })
-  }, [products, search, searchIn, cat, status, sort, shownQty, minShown, locId, tracksProduct])
 
   async function toggleHidden(p: Product) {
     const hide = p.active !== false
@@ -192,15 +215,47 @@ export function ProductsPage() {
     }
   }
 
+  const chosen = useMemo(() => allRows.filter((r) => selected.has(r.p.id)), [allRows, selected])
+
+  async function hideChosen() {
+    const targets = chosen.filter((r) => r.p.active !== false)
+    if (targets.length === 0) return
+    const ok = await confirm({
+      title: t('ซ่อนสินค้าที่เลือก'),
+      message: t('ซ่อน {n} รายการ? ยอดและประวัติยังอยู่ครบ เลิกซ่อนได้จากตัวกรอง "ที่ซ่อนไว้"', { n: targets.length }),
+      confirmText: t('ซ่อน'),
+    })
+    if (!ok) return
+    try {
+      for (const r of targets) await updateProduct(r.p.id, { active: false })
+      toast.success(t('ซ่อนแล้ว {n} รายการ', { n: targets.length }))
+      setSelected(new Set())
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
+
+  function exportChosen() {
+    const rows = (chosen.length ? chosen : filtered).map((r) => ({
+      [t('รหัสสินค้า')]: r.p.sku,
+      [t('ชื่อสินค้า')]: r.p.name,
+      [t('หมวดหมู่')]: r.p.category,
+      [t('หน่วย')]: r.p.unitType,
+      [t('คงเหลือ')]: r.qty,
+      [t('จุดสั่งซื้อ')]: r.min,
+      [t('สถานะ')]: r.p.active === false ? t('ที่ซ่อนไว้') : t(STATE_LOOK[r.state].label),
+      [t('คลังสินค้า')]: locId ? siteName(locId) : r.sites.map(siteName).join(', '),
+    }))
+    exportExcel(`products-${new Date().toISOString().slice(0, 10)}`, t('สินค้าคงคลัง'), rows)
+  }
+
   async function handleSeed() {
     setSeeding(true)
     try {
       const r = await seedInitialData()
-      toast.success(
-        t('นำเข้าสินค้า {products} รายการ, คลัง {locations} แห่ง', { products: r.products, locations: r.locations, }),
-      )
+      toast.success(t('นำเข้าสินค้า {products} รายการ, คลัง {locations} แห่ง', { products: r.products, locations: r.locations }))
     } catch (e) {
-      toast.error(t("นำเข้าไม่สำเร็จ:") + ' ' + errText(e, t))
+      toast.error(t('นำเข้าไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
       setSeeding(false)
     }
@@ -209,13 +264,13 @@ export function ProductsPage() {
   async function handleReset() {
     const name = brand ? brandDef(brand).name : ''
     const ok = await confirm({
-      title: t("ล้างและนำเข้าสินค้าใหม่"),
+      title: t('ล้างและนำเข้าสินค้าใหม่'),
       message:
-        t('ลบสินค้าทั้ง {count} รายการของ {brand} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า {catalog} รายการแทน?', { count: products.length, brand: name, catalog: catalogCount, }) +
+        t('ลบสินค้าทั้ง {count} รายการของ {brand} ทิ้ง (รวมรูปและยอดคงเหลือของสินค้านั้น) แล้วนำเข้าแคตตาล็อกจริงจากไฟล์รหัสสินค้า {catalog} รายการแทน?', { count: products.length, brand: name, catalog: catalogCount }) +
         '\n\n' +
         t('ประวัติการเคลื่อนไหวจะยังอยู่ครบ แต่ยอดคงเหลือที่นับไว้จะหายทั้งหมด — ย้อนกลับไม่ได้'),
       danger: true,
-      confirmText: t("ล้างและนำเข้าใหม่"),
+      confirmText: t('ล้างและนำเข้าใหม่'),
       // The one action in the app that destroys counted stock with no way back.
       typeToConfirm: name,
     })
@@ -223,308 +278,225 @@ export function ProductsPage() {
     setResetting(true)
     try {
       const r = await resetCatalog()
-      toast.success(
-        t('ลบ {removed} รายการ, นำเข้าใหม่ {imported} รายการ', { removed: r.removed, imported: r.imported, }),
-      )
+      toast.success(t('ลบ {removed} รายการ, นำเข้าใหม่ {imported} รายการ', { removed: r.removed, imported: r.imported }))
     } catch (e) {
-      toast.error(t("นำเข้าไม่สำเร็จ:") + ' ' + errText(e, t))
+      toast.error(t('นำเข้าไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
       setResetting(false)
     }
   }
 
-  const columns = useMemo<Column<Product>[]>(
-    () => [
-      {
-        key: 'product',
-        header: t('สินค้า'),
-        primary: true,
-        cell: (p) => (
-          <div className="flex items-center gap-3">
-            <ProductThumb productId={p.id} hasImage={p.hasImage} />
-            <div className="min-w-0">
-              <div className="truncate font-medium text-ink">{p.name}</div>
-              <div className="doc-no text-xs text-ink-faint">{p.sku}</div>
-            </div>
-          </div>
-        ),
-      },
-      { key: 'category', header: t('หมวดหมู่'), className: 'text-ink-soft', cell: (p) => p.category },
-      {
-        key: 'qty',
-        card: 'value',
-        header: locId ? (locations.find((l) => l.id === locId)?.name ?? '') : t('คงเหลือรวม'),
-        align: 'right',
-        className: 'num font-semibold',
-        cell: (p) => {
-          const total = shownQty(p.id)
-          const low = minShown(p) > 0 && total <= minShown(p)
-          const others = otherUnits(p)
-          return (
-            <>
-              <span className={low ? 'font-semibold text-warn' : 'text-ink'}>{fmtQty(total)}</span>
-              {/* The unit rides with the figure on a phone card, where the unit column is not shown. */}
-              <span className="ml-1 text-xs font-normal text-ink-soft md:hidden">{p.unitType}</span>
-              {/* The same figure in the product's larger units, for whoever counts by the case. */}
-              {p.unitConversions?.length ? (
-                <span className="ml-2 text-xs text-ink-faint">{breakdown(total, p, fmtQty) && `(= ${breakdown(total, p, fmtQty)})`}</span>
-              ) : null}
-              {low && (
-                <span className="ml-2 align-middle">
-                  <Badge color="red">{t('ใกล้หมด')}</Badge>
-                </span>
-              )}
-              {/* A legacy balance in another unit, not yet converted. Shown, not added. */}
-              {others.map((o) => (
-                <span key={o.unit} className="ml-2 align-middle" title={t('ยอดเก่าแยกหน่วย — แปลงได้ที่ ตั้งค่า → ดูแลข้อมูล')}>
-                  <Badge color="amber">
-                    {fmtQty(o.qty)} {o.unit} · {t('ยังไม่แปลง')}
-                  </Badge>
-                </span>
-              ))}
-            </>
-          )
-        },
-      },
-      {
-        key: 'min',
-        header: t('ขั้นต่ำ'),
-        align: 'right',
-        className: 'num text-ink-soft',
-        cell: (p) => fmtQty(minShown(p)),
-      },
-      { key: 'unit', card: 'hidden', header: t('หน่วย'), className: 'text-ink-soft', cell: (p) => p.unitType },
-      {
-        key: 'actions',
-        header: '',
-        align: 'right',
-        tableOnly: true,
-        cell: (p) => (
-          <div className="flex items-center justify-end gap-1">
-            {/* Hide rather than delete. A deleted product takes its history with it and has
-                to be keyed in again from scratch; a hidden one is one click from coming
-                back, with its balance and its movements intact. */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  void toggleHidden(p)
-                }}
-                title={p.active === false ? t('เลิกซ่อนสินค้านี้') : t('ซ่อนสินค้านี้')}
-                aria-label={p.active === false ? t('เลิกซ่อนสินค้านี้') : t('ซ่อนสินค้านี้')}
-                className={`inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 ${
-                  p.active === false ? 'text-warn' : 'text-ink-faint hover:text-ink'
-                }`}
-              >
-                <Icon name={p.active === false ? 'eyeOff' : 'eye'} size={18} />
-              </button>
-            )}
-            <Button
-              variant="ghost"
-              onClick={(e) => {
-                e.stopPropagation()
-                setEditing(p)
-              }}
-            >
-              {isAdmin ? t('แก้ไข') : t('ดู')}
-            </Button>
-          </div>
-        ),
-      },
-    ],
-    // shownQty and minShown read the live balances through the data context.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, locId, locations, isAdmin, levels, minOverrides],
-  )
+  const columns = useMemo(() => productColumns(t, siteName, locId), [t, locId, locations]) // eslint-disable-line react-hooks/exhaustive-deps
 
-
-  if (loading) return <Spinner label={t("กำลังโหลดสินค้า...")} />
+  if (loading) return <Spinner label={t('กำลังโหลดสินค้า...')} />
 
   return (
-    <div className="space-y-4">
+    <FramePage>
       <PageHero
         icon="package"
-        title={t("สินค้าคงคลัง")}
-        subtitle={t('{n} รายการ', { n: products.length })}
+        title={t('สินค้าคงคลัง')}
+        subtitle={t('ตรวจสอบสต๊อกคงเหลือ จัดการสินค้า และติดตามสถานะสินค้า')}
         actions={
           isAdmin ? (
             <>
               {products.length === 0 && catalogCount > 0 && (
                 <Button variant="secondary" onClick={handleSeed} disabled={seeding}>
-                  {seeding ? (
-                    t("กำลังนำเข้า...")
-                  ) : (
+                  {seeding ? t('กำลังนำเข้า...') : (
                     <>
                       <Icon name="download" size={16} />
-                      {t('นำเข้าแคตตาล็อกสินค้า ({n} รายการ)', { n: catalogCount, })}
+                      {t('นำเข้าแคตตาล็อกสินค้า ({n} รายการ)', { n: catalogCount })}
                     </>
                   )}
                 </Button>
               )}
               {products.length > 0 && catalogCount > 0 && (
                 <span className="hidden md:contents">
-                <Button variant="secondary" onClick={handleReset} disabled={resetting}>
-                  {resetting ? (
-                    t("กำลังนำเข้า...")
-                  ) : (
-                    <>
-                      <Icon name="refresh" size={16} />
-                      {t("ล้างและนำเข้าใหม่")}
-                    </>
-                  )}
-                </Button>
+                  <Button variant="secondary" onClick={handleReset} disabled={resetting}>
+                    {resetting ? t('กำลังนำเข้า...') : (
+                      <>
+                        <Icon name="refresh" size={16} />
+                        {t('ล้างและนำเข้าใหม่')}
+                      </>
+                    )}
+                  </Button>
                 </span>
               )}
+              <Link
+                to="/import"
+                className="hidden min-h-11 items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium text-ink hover:bg-sunken md:inline-flex"
+              >
+                <Icon name="upload" size={16} />
+                {t('นำเข้า Excel (เพิ่ม/อัปเดต)')}
+              </Link>
               <Button onClick={() => setCreating(true)}>
                 <Icon name="plus" size={16} />
-                {t("เพิ่มสินค้า")}
+                {t('เพิ่มสินค้าใหม่')}
               </Button>
             </>
           ) : undefined
         }
       />
 
-      <Card className="p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex min-w-[260px] flex-1 gap-2">
-            <Field label={t("ค้นหา")} className="min-w-0 flex-1">
-              <Input
-                placeholder={
-                  searchIn === 'sku'
-                    ? t("เช่น VGT-01")
-                    : searchIn === 'name'
-                      ? t("เช่น MOZZARELLA")
-                      : t("ชื่อ / รหัส / หมวดหมู่...")
-                }
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </Field>
-            <Field label={t("ค้นจาก")}>
-              <Select
-                value={searchIn}
-                onChange={(e) => setSearchIn(e.target.value as SearchIn)}
-                className="w-[130px]"
-              >
-                <option value="all">{t("ทั้งหมด")}</option>
-                <option value="name">{t("ชื่อสินค้า")}</option>
-                <option value="sku">{t("รหัสสินค้า")}</option>
+      <ProductStats
+        total={activeRows.length}
+        hidden={hiddenCount}
+        counts={counts}
+        value={value}
+        valueBefore={valueBefore}
+        selected={status === 'normal' || status === 'low' || status === 'out' ? status : null}
+        onSelect={(s) => setStatus(s ?? 'all')}
+      />
+
+      <FilterBar
+        search={<SearchInput value={search} onChange={setSearch} placeholder={t('ค้นหาสินค้า ชื่อสินค้า, SKU, หมวดหมู่...')} />}
+        onReset={clearFilters}
+        resetDisabled={filterCount === 0}
+        below={<ChipRow label={t('หมวดหมู่')} chips={chips} value={cat} onChange={setCat} />}
+      >
+        <FilterField label={t('หมวดหมู่')}>
+          <Select value={cat} onChange={(e) => setCat(e.target.value)}>
+            <option value="">{t('ทั้งหมด')}</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+        </FilterField>
+        <FilterField label={t('สถานะสต๊อก')}>
+          <Select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)}>
+            <option value="all">{t('ทั้งหมด')}</option>
+            <option value="normal">{t('ปกติ')}</option>
+            <option value="low">{t('ใกล้หมด')}</option>
+            <option value="out">{t('หมดสต๊อก')}</option>
+            <option value="in">{t('มีของ')}</option>
+            <option value="hidden">{t('ที่ซ่อนไว้')}</option>
+          </Select>
+        </FilterField>
+        <FilterField label={t('คลังสินค้า')}>
+          <SiteSelect value={locId} onChange={setLocId} locations={locations} emptyLabel={t('ทั้งหมด')} className="w-full" />
+        </FilterField>
+      </FilterBar>
+
+      <SectionCard
+        title={t('รายการสินค้า')}
+        count={t('({n} รายการ)', { n: filtered.length })}
+        flush
+        actions={
+          <>
+            <label className="flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft">
+              <Icon name="swap" size={16} className="rotate-90" />
+              <span className="hidden sm:inline">{t('เรียงตาม')}</span>
+              <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="w-auto min-w-44">
+                {SORTS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {t(s.label)}
+                  </option>
+                ))}
               </Select>
-            </Field>
-          </div>
-
-          <Button
-            variant={showFilters || filterCount > 0 ? 'secondary' : 'ghost'}
-            onClick={() => setShowFilters((v) => !v)}
-            aria-expanded={showFilters}
-            aria-controls="product-filters"
-          >
-            <Icon name="adjust" size={16} />
-            {filterCount > 0 ? t('ตัวกรอง ({n})', { n: filterCount }) : t('ตัวกรอง')}
-            <Icon
-              name="chevronDown"
-              size={14}
-              className={showFilters ? 'rotate-180 transition-transform' : 'transition-transform'}
-            />
-          </Button>
-        </div>
-
-        <div
-          id="product-filters"
-          // `hidden` alone would lose to the `flex` utility, so the collapsed state has to
-          // be the class itself.
-          className={
-            showFilters ? 'mt-3 flex flex-wrap items-end gap-3 border-t border-line pt-3' : 'hidden'
-          }
-        >
-          <Field label={t("หมวดหมู่")}>
-            <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-[190px]">
-              <option value="">{t("ทุกหมวดหมู่")}</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+            </label>
+            <div className="hidden overflow-hidden rounded-lg border border-line md:flex" role="group" aria-label={t('มุมมอง')}>
+              {(['table', 'grid'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={view === v}
+                  aria-label={v === 'table' ? t('มุมมองตาราง') : t('มุมมองการ์ด')}
+                  onClick={() => setView(v)}
+                  className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center ${view === v ? 'bg-brand text-white' : 'bg-surface text-ink-soft hover:bg-sunken'}`}
+                >
+                  <Icon name={v === 'table' ? 'list' : 'grid'} size={18} />
+                </button>
               ))}
-            </Select>
-          </Field>
-
-          <Field label={t("สถานะ")}>
-            <Select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as StockStatus)}
-              className="w-[140px]"
-            >
-              <option value="all">{t("ทุกสถานะ")}</option>
-              <option value="low">{t("ใกล้หมด")}</option>
-              <option value="out">{t("หมดสต๊อก")}</option>
-              <option value="in">{t("มีของ")}</option>
-              <option value="hidden">{t("ที่ซ่อนไว้")}</option>
-            </Select>
-          </Field>
-
-          <Field label={t("ดูคงเหลือของ")}>
-            <SiteSelect value={locId} onChange={setLocId} locations={locations} emptyLabel={t("ทุกคลังรวมกัน")} className="w-[170px]" />
-          </Field>
-
-          <Field label={t("เรียงตาม")}>
-            <Select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              className="w-[190px]"
-            >
-              {SORTS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {t(s.label)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-
-        <div className="mt-3 flex items-center gap-3 border-t border-line pt-2 text-xs text-ink-soft">
-          <span>
-            {t('แสดง {shown} จาก {total} รายการ', { shown: filtered.length, total: products.length, })}
-          </span>
-          {filterCount > 0 && (
-            <button onClick={clearFilters} className="font-medium text-brand hover:underline">
-              {t('ล้างตัวกรอง ({n})', { n: filterCount })}
-            </button>
-          )}
-        </div>
-      </Card>
-
-      {filtered.length === 0 ? (
-        <Card>
-          {products.length > 0 ? (
-            <EmptyState
-              icon="search"
-              title={t("ไม่พบสินค้าที่ตรงกับตัวกรอง")}
-              hint={t("ลองล้างตัวกรองแล้วค้นใหม่")}
-            />
+            </div>
+          </>
+        }
+      >
+        {filtered.length === 0 ? (
+          products.length > 0 ? (
+            <EmptyState icon="search" title={t('ไม่พบสินค้าที่ตรงกับตัวกรอง')} hint={t('ลองล้างตัวกรองแล้วค้นใหม่')} />
           ) : (
             <EmptyState
               icon="package"
-              title={t("ยังไม่มีสินค้า")}
-              hint={
-                isAdmin
-                  ? t("กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”")
-                  : t("ยังไม่มีข้อมูลสินค้า")
-              }
+              title={t('ยังไม่มีสินค้า')}
+              hint={isAdmin ? t('กด “นำเข้าแคตตาล็อกสินค้า” หรือ “เพิ่มสินค้า”') : t('ยังไม่มีข้อมูลสินค้า')}
             />
+          )
+        ) : (
+          <div className="pb-4">
+            {view === 'grid' ? (
+              <div className="px-4 md:px-5">
+                <ProductGrid rows={pageRows} onOpen={setEditing} t={t} />
+              </div>
+            ) : (
+              <div className="md:px-5">
+                <DataTable
+                  rows={pageRows}
+                  columns={columns}
+                  rowKey={(r) => r.p.id}
+                  minWidth={960}
+                  onRowClick={(r) => setEditing(r.p)}
+                  selection={{ selected, onChange: setSelected }}
+                  rowMenu={(r) =>
+                    productMenu(r, t, {
+                      isAdmin,
+                      locId,
+                      go: navigate,
+                      edit: () => setEditing(r.p),
+                      toggleHidden: () => void toggleHidden(r.p),
+                    })
+                  }
+                />
+              </div>
+            )}
+            <div className="px-4 md:px-5">
+              <Pagination {...pager} sizes={[10, 20, 50, 100]} />
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Acting on several at once — tablet and up, where the tick boxes are. */}
+      {selected.size > 0 && (
+        <div className="sticky bottom-4 z-20 hidden flex-wrap items-center gap-2 rounded-2xl border border-brand/30 bg-surface px-4 py-3 shadow-lg md:flex">
+          <span className="mr-auto text-sm font-semibold text-ink">{t('เลือก {n} รายการ', { n: selected.size })}</span>
+          {isAdmin && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => void hideChosen()}>
+                <Icon name="eyeOff" size={16} />
+                {t('ซ่อน')}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setSettingMin(true)}>
+                <Icon name="adjust" size={16} />
+                {t('ตั้งขั้นต่ำ')}
+              </Button>
+            </>
           )}
-        </Card>
-      ) : (
-        <Card className="overflow-hidden">
-          <DataTable
-            rows={filtered}
-            columns={columns}
-            rowKey={(p) => p.id}
-            minWidth={640}
-            maxHeight="calc(100vh - 260px)"
-            onRowClick={(p) => setEditing(p)}
-          />
-        </Card>
+          <Button variant="sheet" size="sm" onClick={exportChosen}>
+            <Icon name="fileSheet" size={16} />
+            {t('ส่งออก Excel')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+            {t('ล้างที่เลือก')}
+          </Button>
+        </div>
+      )}
+
+      {settingMin && (
+        <SetMinModal
+          count={chosen.length}
+          onClose={() => setSettingMin(false)}
+          onSave={async (min) => {
+            try {
+              for (const r of chosen) await updateProduct(r.p.id, { minStock: min })
+              toast.success(t('ตั้งขั้นต่ำ {min} ให้ {n} รายการแล้ว', { min: fmtQty(min), n: chosen.length }))
+              setSettingMin(false)
+              setSelected(new Set())
+            } catch (e) {
+              toast.error(errText(e, t))
+            }
+          }}
+        />
       )}
 
       {(creating || editing) && (
@@ -538,488 +510,47 @@ export function ProductsPage() {
           }}
         />
       )}
-    </div>
+    </FramePage>
   )
 }
 
-function ProductEditor({
-  product,
-  categories,
-  canEdit,
-  onClose,
-}: {
-  product: Product | null
-  categories: string[]
-  canEdit: boolean
-  onClose: () => void
-}) {
+/**
+ * One minimum for every ticked product. This is the catalogue-wide minimum
+ * (`minStock`); a site's own override is still set on the product.
+ */
+function SetMinModal({ count, onClose, onSave }: { count: number; onClose: () => void; onSave: (min: number) => Promise<void> }) {
   const t = useT()
-  const toast = useToast()
-  const confirm = useConfirm()
-  const { locations, qtyAt } = useData()
-  const { user } = useAuth()
-  const { brand } = useBrand()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [form, setForm] = useState<ProductInput>({
-    sku: product?.sku ?? '',
-    name: product?.name ?? '',
-    category: product?.category ?? '',
-    unit: product?.unit ?? t("หน่วย"),
-    unitType: product?.unitType ?? 'EA',
-    minStock: product?.minStock ?? 0,
-    cost: product?.cost,
-    supplierId: product?.supplierId,
-    alternateSupplierIds: product?.alternateSupplierIds ?? [],
-    unitConversions: product?.unitConversions ?? [],
-  })
-  // Prices are stated through the cost block and written by services/productCost.ts,
-  // never through the form: the form's `cost` is read-only here (owner, 22 Sep 2026).
-  const [costHistory, setCostHistory] = useState<CostEntry[]>(product?.costHistory ?? [])
-  const [priceDraft, setPriceDraft] = useState<PriceDraft | null>(null)
-  const [existingImg, setExistingImg] = useState<string | null>(null)
-  const [newImg, setNewImg] = useState<string | null>(null)
-  const [imageLoaded, setImageLoaded] = useState(!product?.hasImage)
-  const [removeImg, setRemoveImg] = useState(false)
-  const [busy, setBusy] = useState(false)
-  /** Set once this dialog has created a product, so a retry updates it instead of adding another. */
-  const [createdId, setCreatedId] = useState<string | null>(null)
-  /**
-   * A product that has been counted or moved cannot change its unit.
-   *
-   * Switching KG to EA does not convert anything: the balance keeps its number and gains a
-   * new meaning, and every past movement still says KG. Only a person knows how many pieces
-   * are in a kilogram of this particular thing, so the app refuses rather than guesses. The
-   * service enforces it; this just stops the form offering something that will be rejected.
-   */
-  /**
-   * The units this product may be measured in: the owner's list from Settings, plus whatever
-   * this product already uses if that is no longer on it — editing an old product must not
-   * silently change its unit just because the list has moved on.
-   */
-  const plainUnits = useEntryUnits()
-  // Read once per session, not once per dialog: it is about a hundred documents.
-  const supplierChoices = useSuppliers()
-  const unitChoices = useMemo(() => {
-    const out = [...plainUnits]
-    if (form.unitType && !out.some((u) => sameUnit(u, form.unitType))) out.unshift(form.unitType)
-    return out
-  }, [plainUnits, form.unitType])
-
-  /** One choice sets both boxes, because they are two views of the same fact. */
-  function pickUnit(abbreviation: string) {
-    setForm((f) => ({ ...f, unitType: abbreviation, unit: unitNameFor(abbreviation) }))
-  }
-
-  // current on-hand quantity per location (editable) + the original values to detect changes
-  const [counts, setCounts] = useState<Record<string, number>>({})
-  const [origCounts, setOrigCounts] = useState<Record<string, number>>({})
-
-  // initialise editable on-hand quantities from the live balances
-  useEffect(() => {
-    if (!product) return
-    const map: Record<string, number> = {}
-    for (const l of locations) map[l.id] = qtyAt(l.id, product.id)
-    setCounts(map)
-    setOrigCounts(map)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.id, locations])
-
-  // load existing image for preview
-  useEffect(() => {
-    let on = true
-    if (product?.hasImage) {
-      getProductImage(product.id).then((u) => {
-        if (!on) return
-        setExistingImg(u)
-        setImageLoaded(true)
-      })
-    } else {
-      setImageLoaded(true)
-    }
-    return () => {
-      on = false
-    }
-  }, [product])
-
-  async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    try {
-      const compressed = await compressImage(file)
-      setNewImg(compressed)
-      setRemoveImg(false)
-    } catch {
-      toast.error(t("อ่านรูปไม่สำเร็จ"))
-    }
-  }
-
-  async function save() {
-    if (!form.name.trim()) return toast.error(t("กรุณาใส่ชื่อสินค้า"))
-    if (!form.category.trim()) return toast.error(t("กรุณาใส่หมวดหมู่"))
-    // A product with no unit cannot be received against, counted, or reported on.
-    if (!form.unitType.trim()) return toast.error(t("กรุณาเลือกหน่วย"))
-    setBusy(true)
-    try {
-      // Saving is several writes: the product, then its image, then a stock count per
-      // location. If a later one failed, the dialog stayed open still believing it was
-      // creating something new, so pressing save again made a SECOND product. Remembering
-      // the id the first attempt created turns a retry into finishing the job.
-      let id = product?.id ?? createdId
-      if (id) {
-        // Correcting the unit restamps every row already filed under the old one, so it is
-        // its own operation rather than a field in the patch. It runs first: if it fails,
-        // nothing else has been written and the product still reads as it did.
-        // Compared loosely on purpose: the catalogue holds "Kilogram" where the list now
-        // offers "kilogram", and a difference of capitals is not a change of unit. Treating
-        // it as one would restamp a product's whole ledger every time somebody opened it and
-        // pressed save.
-        const unitChanged =
-          !!product &&
-          (!sameUnit(product.unitType, form.unitType) || !sameUnit(product.unit, form.unit))
-        if (unitChanged && user) {
-          const touched = await changeProductUnit({
-            productId: id,
-            unitType: form.unitType,
-            unit: form.unit,
-            actor: { id: user.id, name: user.name },
-          })
-          if (touched > 0) {
-            toast.success(t('เปลี่ยนหน่วยแล้ว — ปรับประวัติเก่า {count} รายการ', { count: touched }))
-          }
-        }
-        const { cost: _cost, ...patch } = form
-        void _cost
-        await updateProduct(id, patch)
-      } else {
-        const { cost: _cost, ...input } = form
-        void _cost
-        id = await createProduct(input)
-        setCreatedId(id)
-        // A price keyed on a new product rides along with the creation.
-        if (priceDraft && user) {
-          await setProductCost({ productId: id, ...priceDraft, actor: { id: user.id, name: user.name } })
-        }
-      }
-      // image handling
-      if (newImg) {
-        await setProductImage(id, newImg)
-        invalidateThumb(id)
-      } else if (removeImg && product?.hasImage) {
-        await removeProductImage(id)
-        invalidateThumb(id)
-      }
-      // apply on-hand quantity changes (records an audited "opening" adjustment per location)
-      if (product && user) {
-        for (const loc of locations) {
-          const target = counts[loc.id] ?? 0
-          if (Math.abs(target - (origCounts[loc.id] ?? 0)) > 1e-9) {
-            await setStockCount({
-              productId: id,
-              productName: form.name.trim(),
-              unit: form.unitType,
-              locationId: loc.id,
-              targetQty: target,
-              actor: { id: user.id, name: user.name },
-            })
-          }
-        }
-      }
-      toast.success(product ? t("บันทึกการแก้ไขแล้ว") : t("เพิ่มสินค้าแล้ว"))
-      onClose()
-    } catch (e) {
-      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function remove() {
-    if (!product) return
-    const ok = await confirm({
-      title: t("ลบสินค้า"),
-      message: t('ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ', { name: product.name, }),
-      danger: true,
-      confirmText: t("ลบ"),
-    })
-    if (!ok) return
-    setBusy(true)
-    try {
-      await deleteProduct(product.id)
-      toast.success(t("ลบแล้ว"))
-      onClose()
-    } catch (e) {
-      toast.error(t("ลบไม่สำเร็จ:") + ' ' + errText(e, t))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const preview = removeImg ? null : (newImg ?? existingImg)
-
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const n = Number(value)
+  const valid = value.trim() !== '' && Number.isFinite(n) && n >= 0
   return (
-    <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2 flex items-center gap-4">
-          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-line bg-sunken">
-            {!imageLoaded ? (
-              <div className="flex h-full items-center justify-center text-ink-faint">...</div>
-            ) : preview ? (
-              <img src={preview} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center text-3xl text-ink-faint">
-                {brand ? brandDef(brand).productIcon : '📦'}
-              </div>
-            )}
-          </div>
-          {canEdit && (
-            <div className="space-y-2">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={pickImage}
-              />
-              <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-                <Icon name="camera" size={16} />
-                {t("เลือกรูป / ถ่ายรูป")}
-              </Button>
-              {preview && (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setNewImg(null)
-                    setRemoveImg(true)
-                  }}
-                >
-                  {t("ลบรูป")}
-                </Button>
-              )}
-              <p className="text-xs text-ink-faint">{t("รูปจะถูกย่อให้เล็กอัตโนมัติ")}</p>
-            </div>
-          )}
-        </div>
-
-        <Field label={t("ชื่อสินค้า")} required>
-          <Input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            disabled={!canEdit}
-          />
-        </Field>
-        <Field label={t("SKU / รหัส")}>
-          <Input
-            value={form.sku}
-            onChange={(e) => setForm({ ...form, sku: e.target.value })}
-            disabled={!canEdit}
-          />
-        </Field>
-        <Field label={t("หมวดหมู่")} required>
-          <Input
-            list="cat-list"
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-            disabled={!canEdit}
-          />
-          <datalist id="cat-list">
-            {categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </Field>
-        {/* Two boxes for one fact, so they are driven by one list and set together. Typed
-            by hand they drifted — "Kilogram" against "EA", or a unit nobody could receive
-            against because it matched nothing in the entry list. */}
-        <Field label={t("หน่วยนับ (แสดงผล)")} required>
-          <Select
-            value={form.unitType}
-            onChange={(e) => pickUnit(e.target.value)}
-            disabled={!canEdit}
-          >
-            <option value="">{t("— เลือกหน่วย —")}</option>
-            {unitChoices.map((u) => (
-              <option key={u} value={u}>
-                {unitNameFor(u)}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={t("ตัวย่อหน่วย")} required>
-          <Select
-            value={form.unitType}
-            onChange={(e) => pickUnit(e.target.value)}
-            disabled={!canEdit}
-          >
-            <option value="">{t("— เลือกหน่วย —")}</option>
-            {unitChoices.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label={t("สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อถึง)")}>
-          <Input
-            type="number"
-            step="any"
-            min={0}
-            value={form.minStock}
-            onChange={(e) => setForm({ ...form, minStock: Number(e.target.value) })}
-            disabled={!canEdit}
-          />
-        </Field>
-        {/* Most products name their supplier in brackets and were linked by the import.
-            This is for the handful whose names never did, and for changing one by hand. */}
-        <Field label={t("ผู้ขาย")}>
-          <Select
-            value={form.supplierId ?? ''}
-            onChange={(e) => setForm({ ...form, supplierId: e.target.value || undefined })}
-            disabled={!canEdit}
-          >
-            <option value="">{t("— ยังไม่ระบุ —")}</option>
-            {/* An id that matches nobody here (a supplier deleted, or one from the other
-                brand) is shown as such rather than quietly reading as "not set" — the
-                person sees there is something to fix and can pick the right one. */}
-            {form.supplierId && !supplierChoices.some((s) => s.id === form.supplierId) && (
-              <option value={form.supplierId}>{t('ผู้ขายที่ไม่พบในแบรนด์นี้ — เลือกใหม่')}</option>
-            )}
-            {/* Hidden suppliers are not offered — except the one this product already has,
-                or the select would show blank for a product whose supplier was hidden. */}
-            {supplierChoices
-              .filter((s) => s.active !== false || s.id === form.supplierId)
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.active === false ? ` (${t('ซ่อนไว้')})` : ''}
-                </option>
-              ))}
-          </Select>
-        </Field>
-        {/* Who else sells it. The automatic order never picks one of these by itself; it is
-            the list a person sees when the usual supplier cannot deliver. */}
-        {supplierChoices.filter((s) => s.active !== false && s.id !== form.supplierId).length >
-          0 && (
-          <Field label={t('ผู้ขายสำรอง (ไม่บังคับ)')}>
-            <div className="flex max-h-32 flex-col gap-1 overflow-y-auto rounded-lg border border-line p-2 text-sm">
-              {supplierChoices
-                .filter((s) => s.active !== false && s.id !== form.supplierId)
-                .map((s) => {
-                  const on = (form.alternateSupplierIds ?? []).includes(s.id)
-                  return (
-                    <label key={s.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        disabled={!canEdit}
-                        onChange={(e) => {
-                          const cur = form.alternateSupplierIds ?? []
-                          setForm({
-                            ...form,
-                            alternateSupplierIds: e.target.checked
-                              ? [...cur, s.id]
-                              : cur.filter((id) => id !== s.id),
-                          })
-                        }}
-                      />
-                      <span className="text-ink">{s.name}</span>
-                    </label>
-                  )
-                })}
-            </div>
-          </Field>
-        )}
-      </div>
-
-      <CostBlock
-        product={{ name: form.name, unitType: form.unitType, unitConversions: form.unitConversions }}
-        history={costHistory}
-        disabled={!canEdit}
-        onSave={
-          product && user
-            ? async (d) => {
-                try {
-                  const entry = await setProductCost({ productId: product.id, ...d, actor: { id: user.id, name: user.name } })
-                  setCostHistory((h) => [...h, entry])
-                  toast.success(t('บันทึกราคาแล้ว — ฿{cost} ต่อ {unit}', { cost: entry.cost, unit: form.unitType }))
-                } catch (e) {
-                  toast.error(errText(e, t))
-                }
-              }
-            : undefined
-        }
-        onDraft={product ? undefined : setPriceDraft}
-      />
-
-      {/**
-       * The rates this product is keyed at: "1 ลัง = 288 EA". Authoritative since 20 Sep
-       * 2026 — the item ordered by the case, issued by the pack and received by the piece
-       * is one balance in EA, and every screen converts with these (lib/uom.ts). Anyone may
-       * add one the first time they key a unit; this is where it is corrected.
-       */}
-      <div className="mt-5 rounded-lg border border-line bg-sunken/60 p-4">
-        <div className="mb-1 text-sm font-semibold text-ink">{t('อัตราแปลงหน่วย')}</div>
-        <p className="mb-3 text-xs text-ink-faint">
-          {t('เช่น "1 Carton = 12 Pack", "1 Pack = 25 {unit}", "2.72 KG = 1 {unit}" — ระบบบันทึกสต๊อกเป็น {unit} จริงตามอัตราเหล่านี้ ประวัติเก่าคงอัตราที่บันทึกไว้ตอนนั้น', {
-            unit: form.unitType || t('หน่วย'),
-          })}
-        </p>
-        <ConversionRows
-          baseUnit={form.unitType}
-          rows={form.unitConversions ?? []}
-          onChange={(rows) => setForm({ ...form, unitConversions: rows })}
-          unitChoices={unitChoices}
-          disabled={!canEdit}
-        />
-      </div>
-
-      {product && canEdit && (
-        <div className="mt-5 rounded-lg border border-line bg-sunken/60 p-4">
-          <div className="mb-1 text-sm font-semibold text-ink">
-            {t("ยอดคงเหลือปัจจุบัน (พิมพ์จำนวนที่มีจริง)")}
-          </div>
-          <p className="mb-3 text-xs text-ink-faint">
-            {t('แก้ตัวเลขให้ตรงกับของจริงในคลัง — ระบบจะบันทึกเป็นรายการ “ตั้งยอด/ยอดยกมา” ให้อัตโนมัติ (เก็บประวัติครบ)')}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {locations.map((l) => (
-              <div key={l.id} className="flex items-center gap-2">
-                <span className="flex-1 truncate text-sm text-ink-soft"><SiteChip locationId={l.id} /></span>
-                <input
-                  type="number"
-                  step="any"
-                  min={0}
-                  value={counts[l.id] ?? 0}
-                  onWheel={blurOnWheel}
-                  onChange={(e) => setCounts({ ...counts, [l.id]: Number(e.target.value) })}
-                  className="num min-h-11 w-28 rounded-lg border border-line-strong px-3 py-2 text-right text-sm outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25"
-                />
-                <span className="w-10 text-sm text-ink-soft">{form.unitType}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 flex items-center justify-between">
-        <div>
-          {canEdit && product && (
-            <Button variant="danger" onClick={remove} disabled={busy}>
-              {t("ลบสินค้า")}
-            </Button>
-          )}
-        </div>
-        <div className="flex gap-2">
+    <Modal
+      open
+      compact
+      onClose={onClose}
+      title={t('ตั้งขั้นต่ำให้ {n} รายการ', { n: count })}
+      footer={
+        <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            {t("ปิด")}
+            {t('ยกเลิก')}
           </Button>
-          {canEdit && (
-            <Button onClick={save} disabled={busy}>
-              {busy ? t("กำลังบันทึก...") : t("บันทึก")}
-            </Button>
-          )}
+          <Button
+            disabled={!valid || saving}
+            onClick={async () => {
+              setSaving(true)
+              await onSave(n)
+              setSaving(false)
+            }}
+          >
+            {t('บันทึก')}
+          </Button>
         </div>
-      </div>
+      }
+    >
+      <Field label={t('สต๊อกขั้นต่ำ (แจ้งเตือนเมื่อต่ำ)')} hint={t('ใช้กับทุกคลัง — ขั้นต่ำเฉพาะคลังยังตั้งได้ที่หน้าสินค้า')}>
+        <Input type="number" min={0} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} onWheel={blurOnWheel} autoFocus />
+      </Field>
     </Modal>
   )
 }
