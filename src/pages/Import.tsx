@@ -13,7 +13,7 @@ import {
   SectionHeader,
   Select,
 } from '../components/ui'
-import { PageHero } from '../components/frame'
+import { FramePage, PageHero } from '../components/frame'
 import { useData } from '../data/DataContext'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
@@ -233,7 +233,7 @@ export function ImportPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <FramePage>
       <PageHero
         icon="upload"
         title={t('นำเข้าสต๊อกจาก Excel')}
@@ -548,7 +548,7 @@ export function ImportPage() {
           />
         </Card>
       )}
-    </div>
+    </FramePage>
   )
 }
 

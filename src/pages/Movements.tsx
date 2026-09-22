@@ -16,7 +16,7 @@ import {
   Modal,
   Select,
 } from '../components/ui'
-import { PageHero } from '../components/frame'
+import { FramePage, PageHero } from '../components/frame'
 import { DataTable, type Column } from '../components/DataTable'
 import { voidMovement, getMovementImage } from '../services/stock'
 import { EditMovementModal } from '../components/movements/EditMovementModal'
@@ -288,7 +288,7 @@ export function MovementsPage() {
   }, [t, locationId, stockCardMode, balances, isAdmin, productById])
 
   return (
-    <div className="space-y-4">
+    <FramePage>
       <PageHero
         icon="history"
         title={t("ประวัติ / Stock Card")}
@@ -366,7 +366,7 @@ export function MovementsPage() {
 
       {editing && <EditMovementModal movement={editing} onClose={() => setEditing(null)} />}
       {photoDoc && <PhotoModal docNo={photoDoc} onClose={() => setPhotoDoc(null)} />}
-    </div>
+    </FramePage>
   )
 }
 

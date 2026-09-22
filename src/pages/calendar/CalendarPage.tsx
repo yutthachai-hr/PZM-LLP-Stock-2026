@@ -5,8 +5,8 @@ import { useAuth } from '../../auth/AuthContext'
 import { useConfirm } from '../../components/Confirm'
 import { Icon, type IconName } from '../../components/Icon'
 import { useToast } from '../../components/Toast'
-import { Button, Card, EmptyState, Input, Modal, SegTab, Select, Spinner, StatGroup, StatTile } from '../../components/ui'
-import { PageHero } from '../../components/frame'
+import { Button, Card, EmptyState, Input, Modal, Select, Spinner } from '../../components/ui'
+import { ChipRow, FramePage, PageHero, SectionCard, SeeAll, WithSidePanel, frameCard } from '../../components/frame'
 import { useData } from '../../data/DataContext'
 import { useCalendarFeed } from '../../data/useCalendarFeed'
 import { errText } from '../../i18n/AppError'
@@ -20,11 +20,11 @@ import { assigneesOf, dayBounds, deleteEvent, monthGridBounds, weekBounds } from
 import { useSuppliers } from '../../services/suppliers'
 import type { Role, StockEvent } from '../../types'
 import { AgendaList } from './AgendaList'
-import { KIND_LABEL, PRIORITY_LABEL, STATUS_LABEL } from './chips'
+import { KIND_ICON, KIND_LABEL, PRIORITY_LABEL, STATUS_LABEL, chipClass, timeOf } from './chips'
 import { CompactMonth } from './CompactMonth'
 import { EventEditor } from './EventEditor'
 import { ItemDrawer } from './ItemDrawer'
-import { ItemRow, itemSubtitle, itemTitle } from './ItemRow'
+import { ItemRow, itemIcon, itemSubtitle, itemTitle } from './ItemRow'
 import { MonthGrid } from './MonthGrid'
 import { WeekView } from './WeekView'
 
@@ -324,15 +324,19 @@ export function CalendarPage() {
   )
 
   const header = (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <PageHero icon="calendar" title={t('ปฏิทินคลัง')} subtitle={t('งาน ของที่จะเข้า คำขอที่รอ และของที่ใกล้หมด')} />
-      {canManage && (
-        <Button onClick={() => setCreating(true)}>
-          <Icon name="plus" size={16} />
-          {t('เพิ่มงาน')}
-        </Button>
-      )}
-    </div>
+    <PageHero
+      icon="calendar"
+      title={t('ปฏิทินคลัง')}
+      subtitle={t('ดูแผนงานและกิจกรรมที่เกี่ยวข้องกับคลังสินค้าในแบบรายเดือน')}
+      actions={
+        canManage && (
+          <Button onClick={() => setCreating(true)}>
+            <Icon name="plus" size={16} />
+            {t('เพิ่มงาน')}
+          </Button>
+        )
+      }
+    />
   )
 
   const errorBox = feed.error ? (
@@ -357,7 +361,7 @@ export function CalendarPage() {
       { key: 'upcoming', title: t('7 วันข้างหน้า'), icon: 'arrowRight', rows: visible.filter((i) => i.at > bkkDayEnd(now) && i.at <= upcomingTo && !needsAttention(i)) },
     ]
     return (
-      <div className="space-y-4">
+      <FramePage>
         {header}
         {errorBox}
         <Card className="space-y-2 p-2">
@@ -409,65 +413,170 @@ export function CalendarPage() {
         {dayPanel}
         {drawer}
         {editor}
-      </div>
+      </FramePage>
     )
   }
 
   // ---------------------------------------------------------------- desktop
+  // The owner's mock-up 05: filters and a colour legend on top, the month as cards, and a
+  // column of what is coming and what this month held. The quick filters that used to be
+  // six tiles are a row of chips — the dashboard still links straight to each of them.
+  const quickChips = [
+    { key: 'all' as Quick, label: t('ทั้งหมด') },
+    { key: 'today' as Quick, label: t('วันนี้'), count: counts.today },
+    { key: 'attention' as Quick, label: t('ต้องดูก่อน'), count: counts.attention },
+    { key: 'tasks' as Quick, label: t('งานค้าง'), count: counts.tasks },
+    { key: 'purchasing' as Quick, label: t('จัดซื้อ'), count: counts.purchasing },
+    { key: 'stock' as Quick, label: t('ใกล้หมด/หมด'), count: counts.stock },
+    { key: 'completed' as Quick, label: t('เสร็จแล้ว'), count: counts.completed },
+  ]
+  const upcoming = feed.items
+    .filter((i) => i.at >= bkkDayStart(now) && (isOpen(i) || i.status === 'info') && i.kind !== 'lowStock' && i.kind !== 'outOfStock')
+    .sort((x, y) => x.at - y.at)
+    .slice(0, 5)
+  const monthRange = (() => {
+    const d = new Date(anchor)
+    const from = new Date(d.getFullYear(), d.getMonth(), 1).getTime()
+    return { from, to: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - 1 }
+  })()
+  const inMonth = visible.filter((i) => i.at >= monthRange.from && i.at <= monthRange.to)
+  const byKind = KINDS.map((k) => ({ k, n: inMonth.filter((i) => i.kind === k).length })).filter((x) => x.n > 0)
+  const legend: { label: string; cls: string }[] = [
+    { label: t('งาน'), cls: 'bg-brand' },
+    { label: t('รับของ'), cls: 'bg-in' },
+    { label: t('จัดซื้อ / ใกล้หมด'), cls: 'bg-warn' },
+    { label: t('หมด / ล่าช้า'), cls: 'bg-out' },
+    { label: t('เสร็จแล้ว'), cls: 'bg-line-strong' },
+  ]
+  const views: { key: View; label: string }[] = [
+    { key: 'month', label: t('เดือน') },
+    { key: 'week', label: t('สัปดาห์') },
+    { key: 'day', label: t('วัน') },
+    { key: 'agenda', label: t('รายการ') },
+  ]
+
   return (
-    <div className="space-y-4">
+    <FramePage>
       {header}
       {errorBox}
 
-      <StatGroup title={t('สรุปช่วงที่ดูอยู่')} columns={3}>
-        <SummaryTile icon="calendar" active={quick === 'today'} onClick={() => pickQuick('today')} value={counts.today} label={t('วันนี้')} />
-        <SummaryTile icon="warning" tone="out" active={quick === 'attention'} onClick={() => pickQuick('attention')} value={counts.attention} label={t('ต้องดูก่อน')} />
-        <SummaryTile icon="note" active={quick === 'tasks'} onClick={() => pickQuick('tasks')} value={counts.tasks} label={t('งานค้าง')} />
-        <SummaryTile icon="cart" tone="warn" active={quick === 'purchasing'} onClick={() => pickQuick('purchasing')} value={counts.purchasing} label={t('จัดซื้อ')} />
-        <SummaryTile icon="alertCircle" tone="warn" active={quick === 'stock'} onClick={() => pickQuick('stock')} value={counts.stock} label={t('ใกล้หมด/หมด')} />
-        <SummaryTile icon="check" tone="in" active={quick === 'completed'} onClick={() => pickQuick('completed')} value={counts.completed} label={t('เสร็จแล้ว')} />
-      </StatGroup>
-
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
-          <div className="flex gap-1 rounded-lg bg-sunken p-1">
-            <SegTab grow={false} label={t('เดือน')} active={view === 'month'} onClick={() => setView('month')} />
-            <SegTab grow={false} label={t('สัปดาห์')} active={view === 'week'} onClick={() => setView('week')} />
-            <SegTab grow={false} label={t('วัน')} active={view === 'day'} onClick={() => setView('day')} />
-            <SegTab grow={false} label={t('รายการตามวัน')} active={view === 'agenda'} onClick={() => setView('agenda')} />
-          </div>
-          <div className="flex items-center gap-1">
-            <IconButton label={t('ก่อนหน้า')} icon="arrowRight" flip onClick={() => shift(-1)} />
-            <button
-              type="button"
-              onClick={() => setAnchor(Date.now())}
-              className="min-h-11 cursor-pointer rounded-lg px-3 text-sm font-medium text-ink-soft hover:bg-sunken"
-            >
-              {t('วันนี้')}
-            </button>
-            <IconButton label={t('ถัดไป')} icon="arrowRight" onClick={() => shift(1)} />
-          </div>
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{label}</span>
+      <div className={`${frameCard} space-y-3 p-4`}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          {filterBar}
         </div>
-        <div className="border-b border-line p-3">{filterBar}</div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+          <ChipRow<Quick> label={t('ตัวกรองด่วน')} chips={quickChips} value={quick} onChange={(k) => (k === 'all' ? setQuick('all') : pickQuick(k))} />
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft" aria-label={t('คำอธิบายสี')}>
+            {legend.map((l) => (
+              <li key={l.label} className="inline-flex items-center gap-1.5">
+                <span className={`h-2.5 w-2.5 rounded-full ${l.cls}`} />
+                {l.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
-        {feed.loading ? (
-          <div className="p-8">
-            <Spinner label={t('กำลังโหลดปฏิทิน...')} />
+      <WithSidePanel
+        side={
+          <>
+            <SectionCard icon="calendar" title={t('งานที่จะมาถึง')} actions={<SeeAll to="/calendar?filter=tasks" />}>
+              {upcoming.length === 0 ? (
+                <p className="py-4 text-center text-sm text-ink-faint">{t('ไม่มีงานที่จะมาถึง')}</p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {upcoming.map((i) => (
+                    <li key={i.id}>
+                      <button type="button" onClick={() => setSelectedId(i.id)} className="flex w-full items-center gap-3 py-2.5 text-left hover:bg-sunken">
+                        <span className="w-16 shrink-0 text-xs font-semibold text-brand">
+                          {isSameBkkDay(i.at, now) ? t('วันนี้') : isSameBkkDay(i.at, now + DAY_MS) ? t('พรุ่งนี้') : formatThaiDateShort(i.at)}
+                        </span>
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${chipClass(i)}`}>
+                          <Icon name={itemIcon(i)} size={17} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-ink">{itemTitle(i, t)}</span>
+                          <span className="block truncate text-xs text-ink-faint">
+                            {i.allDay ? t('ทั้งวัน') : timeOf(i.at)} · {itemSubtitle(i, t, locationName)}
+                          </span>
+                        </span>
+                        <Icon name="chevronRight" size={16} className="shrink-0 text-ink-faint" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SectionCard>
+            <SectionCard icon="chart" title={t('สรุปกิจกรรมเดือนนี้')}>
+              {byKind.length === 0 ? (
+                <p className="py-4 text-center text-sm text-ink-faint">{t('ไม่มีกิจกรรมในเดือนนี้')}</p>
+              ) : (
+                <ul className="divide-y divide-line text-sm">
+                  {byKind.map(({ k, n }) => (
+                    <li key={k} className="flex items-center gap-3 py-2">
+                      <Icon name={KIND_ICON[k]} size={16} className="text-ink-faint" />
+                      <span className="flex-1 text-ink-soft">{t(KIND_LABEL[k])}</span>
+                      <span className="num font-semibold text-ink">{t('{n} รายการ', { n })}</span>
+                    </li>
+                  ))}
+                  <li className="flex items-center gap-3 py-2 font-bold text-ink">
+                    <span className="w-4 text-center">Σ</span>
+                    <span className="flex-1">{t('รวมทั้งหมด')}</span>
+                    <span className="num">{t('{n} รายการ', { n: inMonth.length })}</span>
+                  </li>
+                </ul>
+              )}
+            </SectionCard>
+          </>
+        }
+      >
+        <div className={`${frameCard} overflow-hidden`}>
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 border-b border-line p-3">
+            <div className="flex items-center gap-1">
+              <IconButton label={t('ก่อนหน้า')} icon="chevronLeft" onClick={() => shift(-1)} />
+              <IconButton label={t('ถัดไป')} icon="chevronRight" onClick={() => shift(1)} />
+              <button
+                type="button"
+                onClick={() => setAnchor(Date.now())}
+                className="min-h-11 cursor-pointer rounded-lg border border-line px-3 text-sm font-medium text-ink-soft hover:bg-sunken"
+              >
+                {t('วันนี้')}
+              </button>
+            </div>
+            <span className="min-w-0 truncate text-center text-lg font-bold text-ink md:text-xl">{label}</span>
+            <div role="group" aria-label={t('มุมมอง')} className="flex overflow-hidden rounded-lg border border-line">
+              {views.map((v) => (
+                <button
+                  key={v.key}
+                  type="button"
+                  aria-pressed={view === v.key}
+                  onClick={() => setView(v.key)}
+                  className={`min-h-11 cursor-pointer px-3 text-sm font-medium ${view === v.key ? 'bg-brand-soft text-brand' : 'bg-surface text-ink-soft hover:bg-sunken'}`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
           </div>
-        ) : view === 'month' ? (
-          <MonthGrid anchor={anchor} range={range} items={visible} now={now} onPick={(i) => setSelectedId(i.id)} onPickDay={setPickedDay} onShift={shift} />
-        ) : view === 'week' ? (
-          <WeekView range={range} items={visible} now={now} onPick={(i) => setSelectedId(i.id)} onPickDay={(d) => { setAnchor(d); setView('day') }} />
-        ) : (
-          <AgendaList items={visible} now={now} onPick={(i) => setSelectedId(i.id)} empty={empty} />
-        )}
-      </Card>
+
+          {feed.loading ? (
+            <div className="p-8">
+              <Spinner label={t('กำลังโหลดปฏิทิน...')} />
+            </div>
+          ) : view === 'month' ? (
+            <MonthGrid anchor={anchor} range={range} items={visible} now={now} onPick={(i) => setSelectedId(i.id)} onPickDay={setPickedDay} onShift={shift} />
+          ) : view === 'week' ? (
+            <WeekView range={range} items={visible} now={now} onPick={(i) => setSelectedId(i.id)} onPickDay={(d) => { setAnchor(d); setView('day') }} />
+          ) : (
+            <AgendaList items={visible} now={now} onPick={(i) => setSelectedId(i.id)} empty={empty} />
+          )}
+        </div>
+      </WithSidePanel>
 
       {dayPanel}
       {drawer}
       {editor}
-    </div>
+    </FramePage>
   )
 }
 
@@ -481,35 +590,6 @@ function IconButton({ label, icon, onClick, flip }: { label: string; icon: IconN
       className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
     >
       <Icon name={icon} size={18} className={flip ? 'rotate-180' : ''} />
-    </button>
-  )
-}
-
-function SummaryTile({
-  icon,
-  value,
-  label,
-  tone,
-  active,
-  onClick,
-}: {
-  icon: IconName
-  value: number
-  label: string
-  tone?: 'warn' | 'in' | 'out'
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
-        active ? 'bg-brand-soft ring-1 ring-brand/30' : 'hover:bg-sunken'
-      }`}
-    >
-      <StatTile icon={icon} value={`${value}`} label={label} tone={value > 0 ? tone : undefined} />
     </button>
   )
 }

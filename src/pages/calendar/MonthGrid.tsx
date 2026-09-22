@@ -4,10 +4,10 @@ import { useT } from '../../i18n/I18nContext'
 import { formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import type { CalendarItem } from '../../lib/inventoryRules/types'
-import { chipClass, DAY_NAMES } from './chips'
+import { chipClass, DAY_NAMES, timeOf } from './chips'
 import { itemIcon, itemTitle } from './ItemRow'
 
-const CHIPS_PER_DAY = 3
+const CHIPS_PER_DAY = 2
 
 /** Items by the Bangkok day they fall on. */
 export function groupByDay(items: readonly CalendarItem[]): Map<number, CalendarItem[]> {
@@ -84,9 +84,9 @@ export function MonthGrid({
     // entry a soft pastel pill — the colour carries the meaning, the whitespace does the rest.
     <div ref={grid} className="overflow-x-auto">
       <div className="min-w-[640px]">
-        <div className="grid grid-cols-7 border-b border-line text-left text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
-          {DAY_NAMES.map((d) => (
-            <div key={d} className="px-3 py-2.5">
+        <div className="grid grid-cols-7 border-b border-line bg-sunken text-center text-[13px] font-semibold text-ink-soft">
+          {DAY_NAMES.map((d, i) => (
+            <div key={d} className={`px-3 py-2.5 ${i === 0 ? 'text-brand' : ''}`}>
               {t(d)}
             </div>
           ))}
@@ -110,7 +110,7 @@ export function MonthGrid({
                   }
                 }}
                 aria-label={formatThaiDateShort(day)}
-                className={`group min-h-32 cursor-pointer border-b border-r border-line p-2 outline-none transition-colors duration-150 last:border-r-0 hover:bg-danger-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 ${
+                className={`group min-h-36 cursor-pointer border-b border-r border-line p-2 outline-none transition-colors duration-150 last:border-r-0 hover:bg-danger-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40 ${
                   outside ? 'bg-sunken/40' : 'bg-surface'
                 }`}
               >
@@ -134,10 +134,17 @@ export function MonthGrid({
                         onPick(item)
                       }}
                       title={itemTitle(item, t)}
-                      className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] font-medium leading-4 transition hover:brightness-95 ${chipClass(item)}`}
+                      className={`block w-full rounded-lg px-2 py-1.5 text-left transition hover:brightness-95 ${chipClass(item)}`}
                     >
-                      <Icon name={itemIcon(item)} size={11} className="shrink-0 opacity-80" />
-                      <span className="min-w-0 flex-1 truncate">{itemTitle(item, t)}</span>
+                      {/* A card, as the owner's mock-up 05 draws it: what, and when. */}
+                      <span className="flex items-center gap-1.5 text-[12px] font-semibold leading-4">
+                        <Icon name={itemIcon(item)} size={13} className="shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{itemTitle(item, t)}</span>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-4 opacity-80">
+                        <Icon name="clock" size={11} className="shrink-0" />
+                        {item.allDay ? t('ทั้งวัน') : timeOf(item.at)}
+                      </span>
                     </button>
                   ))}
                   {list.length > CHIPS_PER_DAY && (
