@@ -13,6 +13,8 @@ import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poI
 import { imageHostAvailable, uploadPoImage } from '../../services/poImages'
 import { setShareStatus } from '../../services/purchaseOrders'
 import { pickShareProvider, statusFor, type PurchaseShareProvider } from '../../share'
+import { liffNeedsLogin } from '../../share/lineLiffProvider'
+import { isStandalone } from '../../share/liffResume'
 import type { PurchaseOrder } from '../../types'
 
 /**
@@ -65,8 +67,12 @@ export function SendWizard({
   const [askOutcome, setAskOutcome] = useState(false)
   const sheet = useRef<HTMLDivElement>(null)
 
+  const [needsLogin, setNeedsLogin] = useState(false)
   useEffect(() => {
-    void pickShareProvider().then(setProvider)
+    void pickShareProvider().then(async (p) => {
+      setProvider(p)
+      if (p.id === 'line-liff') setNeedsLogin(await liffNeedsLogin())
+    })
   }, [])
 
   // Follow the list as orders get their status: the current one is the first still pending.
@@ -228,7 +234,11 @@ export function SendWizard({
         )}
         <p className="text-xs text-ink-faint">
           {provider?.id === 'line-liff'
-            ? t('กด "ส่ง LINE" → เลือกแชทของผู้ขาย → ส่ง แล้วกลับมาที่นี่ ระบบจะไปรายถัดไปเอง')
+            ? needsLogin
+              ? isStandalone()
+                ? t('ครั้งแรกจะเปิดใบนี้ในแอป LINE ให้ (แอปจากหน้าจอโฮมเข้าสู่ระบบ LINE เองไม่ได้) — กด "ส่ง LINE" ที่นั่นอีกครั้ง')
+                : t('ครั้งแรกจะพาไปเข้าสู่ระบบ LINE แล้วกลับมาที่ใบนี้ — กด "ส่ง LINE" อีกครั้งเพื่อเลือกแชท')
+              : t('กด "ส่ง LINE" → เลือกแชทของผู้ขาย → ส่ง แล้วกลับมาที่นี่ ระบบจะไปรายถัดไปเอง')
             : t('เครื่องนี้ไม่มี LINE (LIFF) — จะเปิดเมนูแชร์ของเครื่องแทน เลือก LINE แล้วเลือกแชทของผู้ขาย')}
         </p>
       </div>

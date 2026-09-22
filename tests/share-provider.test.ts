@@ -21,6 +21,7 @@ vi.stubEnv('VITE_LIFF_ID', '1234567890-abcdefgh')
 
 const { lineLiffProvider } = await import('../src/share/lineLiffProvider')
 const { statusFor } = await import('../src/share/PurchaseShareProvider')
+const { RESUME_PARAM, resumeUrl, liffUrl, isStandalone } = await import('../src/share/liffResume')
 import type { SharePayload } from '../src/share/PurchaseShareProvider'
 
 const payload = (): SharePayload => ({
@@ -83,6 +84,41 @@ describe('the LINE (LIFF) provider', () => {
     expect(await lineLiffProvider.share(payload())).toBe('cancelled')
     expect(sdk.login).toHaveBeenCalledTimes(1)
     expect(sdk.shareTargetPicker).not.toHaveBeenCalled()
+  })
+
+  // 22 Sep 2026: on a phone the first tap went to LINE Login and came back to the orders
+  // list with the wizard gone ("เด้งกลับมาหน้าเดิม"). The order rides along in the URL so the
+  // page can reopen the wizard on it; a home-screen app, which cannot finish the round trip,
+  // is sent to the same page inside LINE instead.
+  describe('coming back to the sheet after LINE Login', () => {
+
+    test('the login redirect carries ?send=<order> on the same page', async () => {
+      vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/orders?tab=open', pathname: '/orders', hostname: 'pzmstock.pages.dev' })
+      sdk.isLoggedIn.mockReturnValue(false)
+      await lineLiffProvider.share(payload())
+      const { redirectUri } = sdk.login.mock.calls[0][0] as { redirectUri: string }
+      expect(redirectUri).toBe(`https://pzmstock.pages.dev/orders?tab=open&${RESUME_PARAM}=o1`)
+      vi.unstubAllGlobals()
+    })
+
+    test('a home-screen app goes to the LIFF address of the same page, not to LINE Login', async () => {
+      const here = { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev' }
+      vi.stubGlobal('location', here)
+      vi.stubGlobal('navigator', { standalone: true })
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) })
+      expect(isStandalone()).toBe(true)
+      sdk.isLoggedIn.mockReturnValue(false)
+      expect(await lineLiffProvider.share(payload())).toBe('cancelled')
+      expect(sdk.login).not.toHaveBeenCalled()
+      expect(here.href).toBe(liffUrl('o1'))
+      expect(here.href).toBe('https://liff.line.me/1234567890-abcdefgh/orders?send=o1')
+      vi.unstubAllGlobals()
+    })
+
+    test('outside a browser there is no address to come back to, and nothing throws', () => {
+      expect(resumeUrl('o1')).toBeUndefined()
+      expect(isStandalone()).toBe(false)
+    })
   })
 
   test('is available before login (login comes first), and only with the picker after', async () => {

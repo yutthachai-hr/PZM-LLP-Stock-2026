@@ -49,6 +49,7 @@ import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
 import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { SendWizard } from './purchase/SendWizard'
+import { RESUME_PARAM } from '../share/liffResume'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
 import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
@@ -127,14 +128,17 @@ export function OrdersPage() {
   }, [load])
 
   // Opened from the calendar: ?po=<id> shows the sheet, ?receive=<id> opens the check-in.
-  // Consumed once the list is here, and cleared so a refresh does not reopen it.
+  // Back from LINE Login (or opened inside LINE): ?send=<id> reopens the send wizard on
+  // that order (share/liffResume.ts). Consumed once the list is here, and cleared so a
+  // refresh does not reopen it.
   useEffect(() => {
     if (loading) return
     const po = params.get('po')
     const receive = params.get('receive')
-    if (!po && !receive) return
-    const hit = orders.find((o) => o.id === (po ?? receive))
-    if (hit) (po ? setViewing : setReceiving)(hit)
+    const send = params.get(RESUME_PARAM)
+    if (!po && !receive && !send) return
+    const hit = orders.find((o) => o.id === (po ?? receive ?? send))
+    if (hit) (po ? setViewing : receive ? setReceiving : setSending)(hit)
     setParams({}, { replace: true })
   }, [loading, orders, params, setParams])
 

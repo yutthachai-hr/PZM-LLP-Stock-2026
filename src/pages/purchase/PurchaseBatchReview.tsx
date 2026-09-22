@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { RESUME_PARAM } from '../../share/liffResume'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
 import { brandDef } from '../../brand/brand'
@@ -61,6 +62,14 @@ export function PurchaseBatchReviewPage() {
   const [resolving, setResolving] = useState<BatchRow | null>(null)
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null)
   const [sending, setSending] = useState(false)
+  // Back from LINE Login: ?send=<orderId> reopens the wizard (share/liffResume.ts).
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    const send = params.get(RESUME_PARAM)
+    if (!send || orders.size === 0) return
+    if (orders.has(send)) setSending(true)
+    setParams({}, { replace: true })
+  }, [params, setParams, orders])
 
   const actor = useMemo(() => (user ? { id: user.id, name: user.name } : null), [user])
   const isAdmin = user?.role === 'admin'

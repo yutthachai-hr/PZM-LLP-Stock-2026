@@ -482,8 +482,6 @@ export const EN: Record<string, string> = {
   'คำนวณใหม่ไม่ได้: ประวัติทำให้ยอดติดลบ {count} รายการ (เช่น {example}) — ตรวจรายการที่ถูกยกเลิกก่อน':
     'Cannot recalculate: the history adds up to a negative balance in {count} place(s) (for example {example}) — check the voided movements first',
   คำนวณยอดคงเหลือใหม่จากประวัติเรียบร้อย: 'Balances recalculated from history',
-  '“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)':
-    '“Recalculate balances” rebuilds every balance from the full movement history — use it if a number looks wrong.',
   นำเข้าแคตตาล็อกสินค้า: 'Import product catalogue',
   'นำเข้าแคตตาล็อกสินค้า + คลังเริ่มต้น? (ข้ามถ้ามีข้อมูลอยู่แล้ว)':
     'Import the product catalogue and default locations? (Existing data is skipped.)',
@@ -1650,4 +1648,6 @@ export const EN: Record<string, string> = {
   'ราคาต้นทุน': 'Costs',
   'ต้นทุนทุกสินค้า ราคาเก่า-ใหม่ และวันที่ปรับ': 'Every product\'s cost, old and new prices, and when they changed',
   '“คำนวณยอดคงเหลือใหม่” และ “ตรวจความสอดคล้องของยอด” อ่านประวัติการเคลื่อนไหวทั้งหมดของแบรนด์นี้ทุกครั้งที่กด — ใช้เมื่อสงสัยว่ายอดไม่ตรงจริง ๆ ไม่ควรกดซ้ำหลายครั้งติดกันโดยไม่จำเป็น (มีผลต่อโควตาการอ่านข้อมูลรายวัน)': '"Recompute balances" and "Check balance consistency" both read this brand\'s entire movement history every time they are pressed — use them only when you genuinely suspect the balances are wrong, not repeatedly in a row (this affects the daily read quota)',
+  'ครั้งแรกจะเปิดใบนี้ในแอป LINE ให้ (แอปจากหน้าจอโฮมเข้าสู่ระบบ LINE เองไม่ได้) — กด "ส่ง LINE" ที่นั่นอีกครั้ง': 'The first tap opens this sheet inside the LINE app (a home-screen app cannot sign in to LINE by itself) — press "Send LINE" again there',
+  'ครั้งแรกจะพาไปเข้าสู่ระบบ LINE แล้วกลับมาที่ใบนี้ — กด "ส่ง LINE" อีกครั้งเพื่อเลือกแชท': 'The first tap goes through LINE Login and comes back to this sheet — press "Send LINE" again to pick the chat',
 }
