@@ -239,13 +239,36 @@ export type SupplierType = 'takingReturn' | 'notTakingReturn'
  * product into the supplier would make "this supplier also sells us three other things"
  * unrepresentable.
  */
+/** A document about a supplier, kept where the company already keeps it (Google Drive). */
+export interface SupplierLink {
+  label: string
+  url: string
+}
+
 export interface Supplier {
   id: string
   name: string
+  /**
+   * V-00001, V-00002 … issued from a counter like a document number (owner, 22 Sep 2026).
+   * Absent only until the admin presses "ออกรหัสให้ผู้ขายเดิม" once; new suppliers get one
+   * as they are created.
+   */
+  code?: string
   contactNumber: string
   email: string
   type: SupplierType
   note?: string
+  /** Who to ask for, and their second number — what a person needs to place an order. */
+  contactName?: string
+  phone2?: string
+  address?: string
+  taxId?: string
+  /** As the company says it: "เครดิต 30 วัน", "เงินสด". Free text, never calculated with. */
+  paymentTerms?: string
+  /** The supplier's own grouping — vegetables, packaging. Free text, not the product category. */
+  category?: string
+  /** Links to papers kept elsewhere (Drive, Dropbox). Nothing is uploaded: Spark has no Storage. */
+  links?: SupplierLink[]
   /** Where this supplier's deliveries usually land. The automatic order offers it first. */
   defaultLocationId?: string
   /** Days from order to delivery, as the owner knows it. Shown, never enforced. */

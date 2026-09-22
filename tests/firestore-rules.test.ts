@@ -444,7 +444,29 @@ describe('suppliers', () => {
   test('order days and a cut-off time are kept for the calendar, within their shape', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { orderDays: [1, 3, 5], cutoffTime: '14:00' })))
     await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s2'), supplier('s2', { orderDays: 'Mon' })))
-    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s3'), supplier('s3', { cutoffTime: 'two in the afternoon' })))
+  })
+
+  test('a cut-off has to look like a time', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s9'), supplier('s9', { cutoffTime: 'two in the afternoon' })))
+  })
+
+  test('the details the owner asked for (22 Sep 2026) are optional, bounded, and nothing else gets in', async () => {
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'suppliers/s3'), supplier('s3', {
+        code: 'V-00001',
+        contactName: 'คุณเอ',
+        phone2: '02-000-0000',
+        address: '99/1 ถนนสุขุมวิท',
+        taxId: '0105500000000',
+        paymentTerms: 'เครดิต 30 วัน',
+        category: 'ผัก',
+        links: [{ label: 'ใบทะเบียน', url: 'https://drive.example/abc' }],
+      })),
+    )
+    // Too long, wrong type, and a field nobody agreed on.
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s4'), supplier('s4', { taxId: '0'.repeat(31) })))
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s5'), supplier('s5', { links: 'https://drive.example' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s6'), supplier('s6', { creditLimit: 5000 })))
   })
 
   test('note is optional, and bounded', async () => {

@@ -154,8 +154,10 @@ describe('accepting the proposal', () => {
     const [written] = raw('suppliers') as Record<string, unknown>[]
     expect(['takingReturn', 'notTakingReturn']).toContain(written.type)
     expect(Object.keys(written).sort()).toEqual(
-      ['active', 'contactNumber', 'createdAt', 'email', 'id', 'name', 'type', 'updatedAt'],
+      ['active', 'code', 'contactNumber', 'createdAt', 'email', 'id', 'name', 'type', 'updatedAt'],
     )
+    // A supplier read out of the catalogue is numbered like any other (owner, 22 Sep 2026).
+    expect(written.code).toMatch(/^V-\d{5}$/)
   })
 
   test('running it again reuses the supplier rather than making a second one', async () => {

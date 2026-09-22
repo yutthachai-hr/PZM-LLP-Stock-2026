@@ -3,7 +3,7 @@ import { onBrandChange } from '../brand/brand'
 import { backend } from '../backend'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
-import { COL, type Product, type Supplier, type SupplierItem, type SupplierType } from '../types'
+import { COL, type Product, type Supplier, type SupplierItem, type SupplierLink, type SupplierType } from '../types'
 import { updateProduct } from './products'
 
 /**
@@ -43,6 +43,60 @@ export interface SupplierInput {
   orderDays?: number[]
   /** Time of day an order has to be in by, HH:mm. Undefined = none. */
   cutoffTime?: string
+  /** The supplier's own details (owner's mock-up 10). All optional, all free text. */
+  contactName?: string
+  phone2?: string
+  address?: string
+  taxId?: string
+  paymentTerms?: string
+  category?: string
+  links?: SupplierLink[]
+}
+
+/** The optional free-text fields, handled the same way on create and on update. */
+const DETAIL_KEYS = ['contactName', 'phone2', 'address', 'taxId', 'paymentTerms', 'category'] as const
+const DETAIL_MAX: Record<(typeof DETAIL_KEYS)[number], number> = {
+  contactName: 200,
+  phone2: 40,
+  address: 500,
+  taxId: 30,
+  paymentTerms: 100,
+  category: 100,
+}
+
+/** Links are kept as given, trimmed, and only when they have both a label and a URL. */
+function cleanLinks(links: SupplierLink[] | undefined): SupplierLink[] | undefined {
+  if (!links) return undefined
+  const kept = links
+    .map((l) => ({ label: clean(l.label).slice(0, 100), url: clean(l.url).slice(0, 500) }))
+    .filter((l) => l.label && l.url)
+    .slice(0, 20)
+  return kept.length > 0 ? kept : undefined
+}
+
+const CODE_COUNTER = 'supplierCode'
+
+/** V-00001, V-00002 … — a supplier's code, numbered like a document. */
+export function makeSupplierCode(seq: number): string {
+  return `V-${String(seq).padStart(5, '0')}`
+}
+
+/**
+ * The next code, from the shared counter, floored past anything already issued.
+ *
+ * The floor matters because the codes are handed out in a batch to suppliers that predate
+ * them (the owner's choice, 22 Sep 2026): if the counter were ever reset, or the batch run
+ * twice, two suppliers would otherwise carry one code.
+ */
+async function nextCode(existing: readonly Supplier[]): Promise<{ seq: number; code: string }> {
+  const counter = await backend.getOne<{ value: number }>(COL.counters, CODE_COUNTER)
+  let floor = counter?.value ?? 0
+  for (const s of existing) {
+    const n = Number(s.code?.slice(2) ?? 0)
+    if (Number.isFinite(n) && n > floor) floor = n
+  }
+  const seq = floor + 1
+  return { seq, code: makeSupplierCode(seq) }
 }
 
 function checkLeadTime(days: number | undefined): void {
@@ -81,8 +135,20 @@ export async function createSupplier(input: SupplierInput): Promise<string> {
   checkLeadTime(input.leadTimeDays)
   checkCutoff(input.cutoffTime)
   const now = Date.now()
+  // A new supplier is numbered as it is created; the codes for the ones that came before
+  // are issued in one go from the suppliers screen (assignSupplierCodes).
+  const all = (await backend.getAll<Supplier>(COL.suppliers)) ?? []
+  const { seq, code } = await nextCode(all)
+  await backend.set(COL.counters, CODE_COUNTER, { value: seq })
+  const details = Object.fromEntries(
+    DETAIL_KEYS.map((k) => [k, clean(input[k] ?? '').slice(0, DETAIL_MAX[k])]).filter(([, v]) => v),
+  )
+  const links = cleanLinks(input.links)
   const id = await backend.add(COL.suppliers, {
     name,
+    code,
+    ...details,
+    ...(links ? { links } : {}),
     contactNumber: clean(input.contactNumber),
     email: clean(input.email),
     type: input.type,
@@ -117,6 +183,15 @@ export async function updateSupplier(
   if (patch.email !== undefined) next.email = clean(patch.email)
   if (patch.type !== undefined) next.type = patch.type
   if (patch.note !== undefined) next.note = clean(patch.note)
+  for (const k of DETAIL_KEYS) {
+    if (!(k in patch)) continue
+    const v = clean(patch[k] ?? '').slice(0, DETAIL_MAX[k])
+    next[k] = v ? v : DELETE_FIELD
+  }
+  if ('links' in patch) {
+    const links = cleanLinks(patch.links)
+    next.links = links ?? DELETE_FIELD
+  }
   // Both are optional keys under hasOnly, so clearing one removes it rather than writing
   // an empty value — the same rule a product's supplierId follows.
   if ('defaultLocationId' in patch) {
@@ -375,4 +450,25 @@ export function useSuppliers(): Supplier[] {
     void loadSuppliers()
   }, [])
   return rows ?? NONE
+}
+
+/**
+ * Give every supplier without one a code, oldest first (owner, 22 Sep 2026: retrospectively,
+ * for all of them). Safe to press twice: a supplier that already has a code is skipped, and
+ * the counter is floored past the highest code in use, so no number is handed out twice.
+ */
+export async function assignSupplierCodes(): Promise<{ issued: number; from?: string; to?: string }> {
+  const all = (await backend.getAll<Supplier>(COL.suppliers)) ?? []
+  const missing = all.filter((s) => !s.code).sort((a, b) => a.createdAt - b.createdAt || a.name.localeCompare(b.name))
+  if (missing.length === 0) return { issued: 0 }
+  let { seq } = await nextCode(all)
+  const first = makeSupplierCode(seq)
+  for (const s of missing) {
+    const code = makeSupplierCode(seq)
+    await backend.update(COL.suppliers, s.id, { code, updatedAt: Date.now() })
+    patchSupplierCache(s.id, { ...s, code })
+    seq++
+  }
+  await backend.set(COL.counters, CODE_COUNTER, { value: seq - 1 })
+  return { issued: missing.length, from: first, to: makeSupplierCode(seq - 1) }
 }

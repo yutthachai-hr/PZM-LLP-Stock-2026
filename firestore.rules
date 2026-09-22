@@ -304,7 +304,8 @@ service cloud.firestore {
     function validSupplier(d) {
       return d.keys().hasAll(['id', 'name', 'contactNumber', 'email', 'type', 'active',
           'createdAt', 'updatedAt'])
-        && d.keys().hasOnly(['id', 'name', 'contactNumber', 'email', 'type', 'note',
+        && d.keys().hasOnly(['id', 'name', 'code', 'contactNumber', 'email', 'type', 'note',
+          'contactName', 'phone2', 'address', 'taxId', 'paymentTerms', 'category', 'links',
           'defaultLocationId', 'leadTimeDays', 'orderDays', 'cutoffTime',
           'active', 'createdAt', 'updatedAt'])
         && text(d.name, 200)
@@ -321,7 +322,18 @@ service cloud.firestore {
         // Which weekdays (0 = Sunday) an order may be placed, and the time of day it has to
         // be in by. The calendar shows them as cut-offs; nothing refuses an order after one.
         && (!('orderDays' in d) || (d.orderDays is list && d.orderDays.size() <= 7))
-        && (!('cutoffTime' in d) || text(d.cutoffTime, 5));
+        && (!('cutoffTime' in d) || text(d.cutoffTime, 5))
+        // The supplier's own details (owner's mock-up 10, 22 Sep 2026). All optional, all
+        // free text: a payment term is what the company calls it, not a number to compute
+        // with. `links` point at papers kept in Drive — nothing is uploaded here.
+        && (!('code' in d) || text(d.code, 20))
+        && (!('contactName' in d) || text(d.contactName, 200))
+        && (!('phone2' in d) || text(d.phone2, 40))
+        && (!('address' in d) || text(d.address, 500))
+        && (!('taxId' in d) || text(d.taxId, 30))
+        && (!('paymentTerms' in d) || text(d.paymentTerms, 100))
+        && (!('category' in d) || text(d.category, 100))
+        && (!('links' in d) || (d.links is list && d.links.size() <= 20));
     }
 
     // A planned piece of work: a count, an audit, an expected delivery, a task.

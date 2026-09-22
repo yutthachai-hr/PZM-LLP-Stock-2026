@@ -7,16 +7,33 @@ import { useToast } from '../components/Toast'
 import {
   Badge,
   Button,
-  Card,
   EmptyState,
   Field,
   Input,
   Modal,
+  SearchInput,
   Select,
   Spinner,
   Textarea,
 } from '../components/ui'
-import { PageHero } from '../components/frame'
+import {
+  FilterBar,
+  FilterField,
+  FramePage,
+  ItemCell,
+  PageHero,
+  SectionCard,
+  StatRow,
+  StatTile,
+  StatusChip,
+  WithSidePanel,
+  type RowMenuItem,
+  type Tone,
+} from '../components/frame'
+import { SupplierDetail } from './suppliers/SupplierDetail'
+import { orderCache } from '../data/orderCache'
+import { bkkDayEnd, bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
+import type { PurchaseOrder } from '../types'
 import { useData } from '../data/DataContext'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
@@ -25,18 +42,19 @@ import {
   buildSupplierProposal,
   renameSupplier,
 } from '../services/supplierImport'
-import { fmtMoney, fmtQty } from '../lib/format'
+import { formatThaiDate } from '../lib/format'
 import {
+  assignSupplierCodes,
   createSupplier,
   deleteSupplier,
   linkProduct,
   listSupplierItems,
   listSuppliers,
+  type SupplierInput,
   unlinkProduct,
   updateSupplier,
-  type SupplierInput,
 } from '../services/suppliers'
-import type { Product, Supplier, SupplierItem, SupplierType } from '../types'
+import type { Product, Supplier, SupplierItem, SupplierLink, SupplierType } from '../types'
 import { looseMatch } from '../lib/search'
 
 // Sunday first, matching Date#getDay(). i18n-key
@@ -99,14 +117,16 @@ export function SuppliersPage() {
   const [addingTo, setAddingTo] = useState<Supplier | null>(null)
   const [search, setSearch] = useState('')
   const [importing, setImporting] = useState(false)
-  // The same shape as the products screen: search stays out, the rest folds behind a
-  // button that says how many are on. Hidden suppliers are out of the default view, and
-  // "ที่ซ่อนไว้" is where they are found again.
-  const [showFilters, setShowFilters] = useState(false)
   const [shown, setShown] = useState<Shown>('active')
   const [returns, setReturns] = useState<Returns>('all')
   const [sort, setSort] = useState<SortKey>('name')
-  const filterCount = (shown !== 'active' ? 1 : 0) + (returns !== 'all' ? 1 : 0)
+  const [category, setCategory] = useState('')
+  const [terms, setTerms] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [orders, setOrders] = useState<PurchaseOrder[]>([])
+  const [issuing, setIssuing] = useState(false)
+  const filterCount =
+    (shown !== 'active' ? 1 : 0) + (returns !== 'all' ? 1 : 0) + (category ? 1 : 0) + (terms ? 1 : 0) + (search.trim() ? 1 : 0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -125,6 +145,26 @@ export function SuppliersPage() {
     void load()
   }, [load])
 
+  // The orders of the last 90 days, through the shared cache the calendar and the orders
+  // screen already fill — "last order" on a row, and the detail panel's history.
+  useEffect(() => {
+    let alive = true
+    const now = Date.now()
+    orderCache
+      .fetchRange(bkkDayStart(now) - 90 * DAY_MS, bkkDayEnd(now))
+      .then((rows) => alive && setOrders(rows))
+      .catch(() => alive && setOrders([]))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const ordersOf = useCallback(
+    (supplierId: string) => orders.filter((o) => o.supplierId === supplierId).sort((a, b) => b.orderedAt - a.orderedAt),
+    [orders],
+  )
+
+  // Price rows by supplier+product — the detail panel prints them beside each product.
   const priceOf = useMemo(() => {
     const m = new Map<string, SupplierItem>()
     for (const i of items) m.set(`${i.supplierId}/${i.productId}`, i)
@@ -145,6 +185,8 @@ export function SuppliersPage() {
       if (shown === 'active' && hidden) continue
       if (shown === 'hidden' && !hidden) continue
       if (returns !== 'all' && supplier.type !== returns) continue
+      if (category && (supplier.category ?? '') !== category) continue
+      if (terms && (supplier.paymentTerms ?? '') !== terms) continue
       const mine = products.filter((p) => p.supplierId === supplier.id).sort(byName)
       if (!q) {
         out.push({ supplier, products: mine, shown: mine })
@@ -162,19 +204,37 @@ export function SuppliersPage() {
       )
     }
     return out
-  }, [suppliers, products, q, shown, returns, sort])
+  }, [suppliers, products, q, shown, returns, sort, category, terms])
 
-  // Which suppliers are unfolded. A search unfolds every row it kept, because the row was
-  // kept for what is inside it.
-  const [open, setOpen] = useState<Set<string>>(() => new Set())
-  const isOpen = (id: string) => !!q || open.has(id)
-  function toggle(id: string) {
-    setOpen((cur) => {
-      const next = new Set(cur)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  const categories = useMemo(() => [...new Set(suppliers.map((s) => s.category).filter(Boolean) as string[])].sort(), [suppliers])
+  const termsList = useMemo(() => [...new Set(suppliers.map((s) => s.paymentTerms).filter(Boolean) as string[])].sort(), [suppliers])
+  const selected = suppliers.find((s) => s.id === selectedId) ?? null
+  const noCode = suppliers.filter((s) => !s.code).length
+
+  async function issueCodes() {
+    setIssuing(true)
+    try {
+      const r = await assignSupplierCodes()
+      toast.success(r.issued === 0 ? t('ผู้ขายทุกรายมีรหัสแล้ว') : t('ออกรหัสให้ {n} ราย ({from} – {to})', { n: r.issued, from: r.from ?? '', to: r.to ?? '' }))
+      await load()
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setIssuing(false)
+    }
+  }
+
+  function menuFor(sup: Supplier): RowMenuItem[] {
+    const items: RowMenuItem[] = [{ key: 'view', label: t('ดูรายละเอียด'), icon: 'eye', onSelect: () => setSelectedId(sup.id) }]
+    if (isAdmin) {
+      items.push(
+        { key: 'edit', label: t('แก้ไข'), icon: 'pencil', onSelect: () => setEditing(sup) },
+        { key: 'add', label: t('เพิ่มสินค้า'), icon: 'plus', onSelect: () => setAddingTo(sup) },
+        { key: 'hide', label: sup.active === false ? t('เลิกซ่อนผู้ขายรายนี้') : t('ซ่อนผู้ขายรายนี้'), icon: sup.active === false ? 'eye' : 'eyeOff', onSelect: () => void toggleHidden(sup) },
+        { key: 'del', label: t('ลบ'), icon: 'trash', danger: true, onSelect: () => void removeSupplier(sup) },
+      )
+    }
+    return items
   }
 
   const linkedCount = useMemo(() => products.filter((p) => !!p.supplierId).length, [products])
@@ -232,166 +292,104 @@ export function SuppliersPage() {
         key: 'supplier',
         header: t('ผู้ขาย'),
         primary: true,
+        className: 'md:max-w-[240px]',
         cell: (r) => (
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-medium text-ink">{r.supplier.name}</span>
-              {r.supplier.active === false && <Badge color="amber">{t('ซ่อนไว้')}</Badge>}
-            </div>
-            {r.supplier.note && (
-              <div className="truncate text-xs text-ink-faint">{r.supplier.note}</div>
-            )}
-          </div>
+          <ItemCell
+            title={r.supplier.name}
+            avatar={r.supplier.name}
+            tone={avatarTone(r.supplier.name)}
+            sub={
+              <>
+                <span className="doc-no">{r.supplier.code ?? '—'}</span>
+                {r.supplier.contactNumber ? ` · ${r.supplier.contactNumber}` : ''}
+                {r.supplier.email ? ` · ${r.supplier.email}` : ''}
+              </>
+            }
+          />
         ),
       },
       {
-        key: 'product',
-        header: t('สินค้า'),
+        key: 'category',
+        header: t('หมวดหมู่'),
         cell: (r) =>
-          r.products.length === 0 ? (
-            <span className="text-xs text-ink-faint">{t('ยังไม่ได้ผูกสินค้า')}</span>
+          r.supplier.category ? (
+            <StatusChip tone="blue" icon={null} size="sm">
+              {r.supplier.category}
+            </StatusChip>
           ) : (
-            <div className="min-w-0">
-              <button
-                type="button"
-                onClick={() => toggle(r.supplier.id)}
-                aria-expanded={isOpen(r.supplier.id)}
-                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink hover:bg-sunken"
-              >
-                <Icon
-                  name="chevronDown"
-                  size={14}
-                  className={`transition-transform ${isOpen(r.supplier.id) ? 'rotate-180' : ''}`}
-                />
-                {q && r.shown.length !== r.products.length
-                  ? t('{n} รายการ (ตรง {m})', { n: r.products.length, m: r.shown.length })
-                  : t('{n} รายการ', { n: r.products.length })}
-              </button>
-              {isOpen(r.supplier.id) && (
-                <ul className="mt-1 divide-y divide-line rounded-lg border border-line bg-sunken/60">
-                  {r.shown.map((p) => {
-                    const link = priceOf.get(`${r.supplier.id}/${p.id}`)
-                    const price = link?.buyingPrice
-                    return (
-                      <li key={p.id} className="flex items-center gap-3 px-3 py-1.5">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm text-ink">{p.name}</div>
-                          <div className="flex gap-2 text-xs text-ink-faint">
-                            <span className="doc-no">{p.sku}</span>
-                            <span>{p.unitType}</span>
-                            {price !== undefined && (
-                              <span className="num">
-                                ฿ {fmtMoney(price)} {/* ฿ is a currency symbol — i18n-key */}
-                              </span>
-                            )}
-                            {link?.minOrderQty !== undefined && (
-                              <span className="num">
-                                {t('ขั้นต่ำ {n}', { n: fmtQty(link.minOrderQty) })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => unlink(p)}
-                            className="shrink-0 rounded px-2 py-1 text-xs font-medium text-danger hover:bg-danger-soft"
-                          >
-                            {t('ปลด')}
-                          </button>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
+            <span className="text-ink-faint">—</span>
           ),
       },
+      { key: 'terms', header: t('เงื่อนไขชำระเงิน'), className: 'text-ink-soft', cell: (r) => r.supplier.paymentTerms || '—' },
       {
-        key: 'contact',
-        header: t('เบอร์ติดต่อ'),
-        className: 'text-ink-soft',
-        cell: (r) => r.supplier.contactNumber || '—',
+        key: 'lead',
+        header: t('ระยะเวลาส่ง'),
+        className: 'num whitespace-nowrap text-ink-soft',
+        cell: (r) => (r.supplier.leadTimeDays === undefined ? '—' : t('{n} วัน', { n: r.supplier.leadTimeDays })),
       },
       {
-        key: 'email',
-        header: t('อีเมล'),
-        className: 'text-ink-soft',
-        cell: (r) => r.supplier.email || '—',
-      },
-      {
-        key: 'type',
-        header: t('รับคืนของ'),
-        cell: (r) =>
-          r.supplier.type === 'takingReturn' ? (
-            <Badge color="green">{t('รับคืน')}</Badge>
-          ) : (
-            <Badge color="red">{t('ไม่รับคืน')}</Badge>
-          ),
-      },
-      {
-        key: 'onTheWay',
+        key: 'products',
+        header: t('สินค้าที่ผูก'),
         card: 'value',
-        header: t('กำลังจะเข้า'),
         align: 'right',
-        className: 'text-ink-faint',
-        // A count of open purchase orders. There is no PO module, so there is no number to
-        // show — and a zero would read as "nothing is coming" rather than "we do not know".
-        cell: () => '—',
+        className: 'num text-ink-soft',
+        cell: (r) => r.products.length,
       },
       {
-        key: 'actions',
-        header: '',
-        align: 'right',
-        tableOnly: true,
+        key: 'last',
+        header: t('สั่งซื้อล่าสุด'),
+        card: 'hidden',
+        className: 'hidden whitespace-nowrap text-ink-soft 2xl:table-cell',
+        headerClassName: 'hidden 2xl:table-cell',
+        cell: (r) => {
+          const last = ordersOf(r.supplier.id)[0]
+          if (!last) return <span className="text-ink-faint">—</span>
+          return (
+            <span className="block">
+              <span className="num block text-xs">{formatThaiDate(last.orderedAt)}</span>
+              <span className="doc-no block text-xs text-ink-faint">{last.docNo}</span>
+            </span>
+          )
+        },
+      },
+      {
+        key: 'status',
+        header: t('สถานะ'),
         cell: (r) =>
-          isAdmin ? (
-            <div className="flex items-center justify-end gap-1">
-              <button
-                type="button"
-                onClick={() => void toggleHidden(r.supplier)}
-                title={r.supplier.active === false ? t('เลิกซ่อนผู้ขายรายนี้') : t('ซ่อนผู้ขายรายนี้')}
-                aria-label={r.supplier.active === false ? t('เลิกซ่อนผู้ขายรายนี้') : t('ซ่อนผู้ขายรายนี้')}
-                className={`inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 ${
-                  r.supplier.active === false ? 'text-warn' : 'text-ink-faint hover:text-ink'
-                }`}
-              >
-                <Icon name={r.supplier.active === false ? 'eyeOff' : 'eye'} size={18} />
-              </button>
-              <Button variant="ghost" className="whitespace-nowrap" onClick={() => setAddingTo(r.supplier)}>
-                {t('เพิ่มสินค้า')}
-              </Button>
-              <Button variant="ghost" className="whitespace-nowrap" onClick={() => setEditing(r.supplier)}>
-                {t('แก้ไข')}
-              </Button>
-              <button
-                onClick={() => removeSupplier(r.supplier)}
-                className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
-              >
-                {t('ลบ')}
-              </button>
-            </div>
-          ) : null,
+          r.supplier.active === false ? (
+            <StatusChip tone="slate" size="sm">{t('ไม่ใช้งาน')}</StatusChip>
+          ) : (
+            <StatusChip tone="green" size="sm">{t('ใช้งานอยู่')}</StatusChip>
+          ),
       },
     ],
-    // unlink/removeSupplier close over state that changes with every load; the table is
-    // cheap to rebuild and this keeps the handlers pointing at current data.
+    // ordersOf and the handlers close over state that changes with every load; the table is
+    // cheap to rebuild and this keeps them pointing at current data.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, isAdmin, items, suppliers, products, open, q, priceOf],
+    [t, isAdmin, items, suppliers, products, ordersOf],
   )
 
   if (loading) return <Spinner label={t('กำลังโหลดผู้ขาย...')} />
 
+  const active = suppliers.filter((x) => x.active !== false).length
+
   return (
-    <div className="space-y-4">
+    <FramePage>
       <PageHero
         icon="users"
         title={t('ผู้ขาย')}
-        subtitle={t('รายชื่อผู้ขายและสินค้าที่ซื้อจากแต่ละราย')}
+        subtitle={t('รายชื่อผู้ขาย ข้อมูลติดต่อ เงื่อนไขการชำระเงิน และสินค้าที่ซื้อจากแต่ละราย')}
         actions={
           isAdmin ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {/* The owner's choice (22 Sep 2026): every supplier gets a code, the older
+                  ones in one batch. Safe to press twice — see assignSupplierCodes. */}
+              {noCode > 0 && (
+                <Button variant="secondary" onClick={() => void issueCodes()} disabled={issuing}>
+                  <Icon name="fileSheet" size={16} />
+                  {issuing ? t('กำลังออกรหัส...') : t('ออกรหัสผู้ขาย ({n} ราย)', { n: noCode })}
+                </Button>
+              )}
               {/* The catalogue already names its suppliers, in brackets. This reads them out
                   and shows what it found; nothing is written until it is accepted. */}
               <Button variant="secondary" onClick={() => setImporting(true)}>
@@ -407,111 +405,117 @@ export function SuppliersPage() {
         }
       />
 
-      <Card className="overflow-hidden">
-        <div className="border-b border-line p-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <Input
-              placeholder={t('ค้นหาผู้ขาย หรือสินค้า…')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full sm:max-w-xs"
+      <StatRow columns={4}>
+        <StatTile icon="users" tone="brand" label={t('ผู้ขายทั้งหมด')} value={suppliers.length} unit={t('ราย')} hint={t('ที่โหลดมา')} />
+        <StatTile icon="checkCircle" tone="green" label={t('ใช้งานอยู่')} value={active} unit={t('ราย')} onClick={() => setShown('active')} selected={shown === 'active'} />
+        <StatTile icon="eyeOff" tone="slate" label={t('ไม่ใช้งาน')} value={suppliers.length - active} unit={t('ราย')} onClick={() => setShown('hidden')} selected={shown === 'hidden'} />
+        <StatTile icon="package" tone="purple" label={t('สินค้าที่ผูกกับผู้ขาย')} value={linkedCount} unit={t('รายการ')} hint={t('จากแคตตาล็อกทั้งหมด')} />
+      </StatRow>
+
+      <FilterBar
+        search={<SearchInput value={search} onChange={setSearch} placeholder={t('ค้นหาผู้ขาย หรือสินค้า…')} />}
+        onReset={() => {
+          setSearch('')
+          setShown('active')
+          setReturns('all')
+          setCategory('')
+          setTerms('')
+        }}
+        resetDisabled={filterCount === 0}
+      >
+        <FilterField label={t('หมวดหมู่')}>
+          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">{t('ทั้งหมด')}</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+        </FilterField>
+        <FilterField label={t('สถานะ')}>
+          <Select value={shown} onChange={(e) => setShown(e.target.value as Shown)}>
+            <option value="active">{t('ที่ใช้งาน')}</option>
+            <option value="hidden">{t('ที่ซ่อนไว้')}</option>
+            <option value="all">{t('ทั้งหมด')}</option>
+          </Select>
+        </FilterField>
+        <FilterField label={t('เงื่อนไขชำระเงิน')}>
+          <Select value={terms} onChange={(e) => setTerms(e.target.value)}>
+            <option value="">{t('ทั้งหมด')}</option>
+            {termsList.map((x) => (
+              <option key={x} value={x}>
+                {x}
+              </option>
+            ))}
+          </Select>
+        </FilterField>
+        <FilterField label={t('รับคืนของ')}>
+          <Select value={returns} onChange={(e) => setReturns(e.target.value as Returns)}>
+            <option value="all">{t('ทั้งหมด')}</option>
+            <option value="takingReturn">{t('รับคืน')}</option>
+            <option value="notTakingReturn">{t('ไม่รับคืน')}</option>
+          </Select>
+        </FilterField>
+      </FilterBar>
+
+      <WithSidePanel
+        sideLabel={t('รายละเอียดผู้ขาย')}
+        side={
+          selected ? (
+            <SupplierDetail
+              supplier={selected}
+              products={products.filter((p) => p.supplierId === selected.id).sort((a2, b2) => a2.name.localeCompare(b2.name))}
+              orders={ordersOf(selected.id)}
+              priceOf={(productId) => priceOf.get(`${selected.id}/${productId}`)}
+              onUnlink={isAdmin ? unlink : undefined}
+              canEdit={isAdmin}
+              onEdit={() => setEditing(selected)}
+              onAddProduct={() => setAddingTo(selected)}
+              onClose={() => setSelectedId(null)}
             />
-            <Button
-              variant={showFilters || filterCount > 0 ? 'secondary' : 'ghost'}
-              onClick={() => setShowFilters((v) => !v)}
-              aria-expanded={showFilters}
-              aria-controls="supplier-filters"
-            >
-              <Icon name="adjust" size={16} />
-              {filterCount > 0 ? t('ตัวกรอง ({n})', { n: filterCount }) : t('ตัวกรอง')}
-              <Icon
-                name="chevronDown"
-                size={14}
-                className={showFilters ? 'rotate-180 transition-transform' : 'transition-transform'}
-              />
-            </Button>
-            <span className="ml-auto text-xs text-ink-faint">
-              {t('{s} ราย · {i} รายการสินค้า', { s: rows.length, i: linkedCount })}
-            </span>
-          </div>
-          <div
-            id="supplier-filters"
-            className={
-              showFilters ? 'mt-3 flex flex-wrap items-end gap-3 border-t border-line pt-3' : 'hidden'
-            }
-          >
-            <Field label={t('สถานะ')}>
-              <Select value={shown} onChange={(e) => setShown(e.target.value as Shown)} className="w-[150px]">
-                <option value="active">{t('ที่ใช้งาน')}</option>
-                <option value="hidden">{t('ที่ซ่อนไว้')}</option>
-                <option value="all">{t('ทั้งหมด')}</option>
-              </Select>
-            </Field>
-            <Field label={t('รับคืนของ')}>
-              <Select value={returns} onChange={(e) => setReturns(e.target.value as Returns)} className="w-[150px]">
-                <option value="all">{t('ทั้งหมด')}</option>
-                <option value="takingReturn">{t('รับคืน')}</option>
-                <option value="notTakingReturn">{t('ไม่รับคืน')}</option>
-              </Select>
-            </Field>
-            <Field label={t('เรียงตาม')}>
-              <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="w-[190px]">
+          ) : (
+            <SectionCard icon="users" title={t('รายละเอียดผู้ขาย')}>
+              <p className="py-6 text-center text-sm text-ink-faint">{t('เลือกผู้ขายจากรายการเพื่อดูรายละเอียด')}</p>
+            </SectionCard>
+          )
+        }
+      >
+        <SectionCard
+          icon="list"
+          title={t('รายชื่อผู้ขาย')}
+          count={t('({n} ราย)', { n: rows.length })}
+          flush
+          actions={
+            <label className="flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft">
+              {t('เรียงตาม')}
+              <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="w-auto">
                 <option value="name">{t('ชื่อ ก–ฮ / A–Z')}</option>
                 <option value="products">{t('จำนวนสินค้า มาก→น้อย')}</option>
               </Select>
-            </Field>
-            {filterCount > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShown('active')
-                  setReturns('all')
-                }}
-                className="min-h-11 text-sm font-medium text-brand hover:underline"
-              >
-                {t('ล้างตัวกรอง ({n})', { n: filterCount })}
-              </button>
-            )}
-          </div>
-        </div>
-        <DataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(r) => r.supplier.id}
-          rowClassName={(r) => (r.supplier.active === false ? 'opacity-60' : '')}
-          minWidth={900}
-          maxHeight="calc(100vh - 300px)"
-          empty={
-            <EmptyState
-              icon="users"
-              title={t('ยังไม่มีผู้ขาย')}
-              hint={
-                isAdmin
-                  ? t('กด "เพิ่มผู้ขาย" เพื่อเริ่ม')
-                  : t('ผู้ดูแลระบบเป็นผู้เพิ่มรายชื่อผู้ขาย')
+            </label>
+          }
+        >
+          <div className="pb-2 md:px-5 md:pb-5">
+            <DataTable
+              rows={rows}
+              columns={columns}
+              rowKey={(r) => r.supplier.id}
+              rowClassName={(r) => `${r.supplier.active === false ? 'opacity-60' : ''} ${r.supplier.id === selectedId ? 'bg-brand-soft/60' : ''}`}
+              minWidth={820}
+              onRowClick={(r) => setSelectedId(r.supplier.id)}
+              rowMenu={(r) => menuFor(r.supplier)}
+              empty={
+                <EmptyState
+                  icon="users"
+                  title={t('ยังไม่มีผู้ขาย')}
+                  hint={isAdmin ? t('กด "เพิ่มผู้ขาย" เพื่อเริ่ม') : t('ผู้ดูแลระบบเป็นผู้เพิ่มรายชื่อผู้ขาย')}
+                />
               }
             />
-          }
-          cardActions={
-            isAdmin
-              ? (r) => (
-                  <>
-                    <Button variant="secondary" onClick={() => void toggleHidden(r.supplier)}>
-                      <Icon name={r.supplier.active === false ? 'eyeOff' : 'eye'} size={16} />
-                      {r.supplier.active === false ? t('เลิกซ่อน') : t('ซ่อน')}
-                    </Button>
-                    <Button variant="secondary" onClick={() => setAddingTo(r.supplier)}>
-                      {t('เพิ่มสินค้า')}
-                    </Button>
-                    <Button variant="secondary" onClick={() => setEditing(r.supplier)}>
-                      {t('แก้ไข')}
-                    </Button>
-                  </>
-                )
-              : undefined
-          }
-        />
-      </Card>
+          </div>
+        </SectionCard>
+      </WithSidePanel>
 
       {(creating || editing) && (
         <SupplierEditor
@@ -524,9 +528,7 @@ export function SuppliersPage() {
         />
       )}
 
-      {importing && (
-        <ImportFromCatalogue onClose={() => setImporting(false)} onDone={() => void load()} />
-      )}
+      {importing && <ImportFromCatalogue onClose={() => setImporting(false)} onDone={() => void load()} />}
       {addingTo && (
         <AddProductModal
           supplier={addingTo}
@@ -538,8 +540,16 @@ export function SuppliersPage() {
           }
         />
       )}
-    </div>
+    </FramePage>
   )
+}
+
+/** A steady colour per supplier, from its name, for the initials circle. */
+const AVATAR_TONES: Tone[] = ['red', 'blue', 'green', 'amber', 'purple']
+function avatarTone(name: string): Tone {
+  let h = 0
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return AVATAR_TONES[h % AVATAR_TONES.length]
 }
 
 // ---------------------------------------------------------------- editors
@@ -706,6 +716,13 @@ function SupplierEditor({
     leadTimeDays: supplier?.leadTimeDays,
     orderDays: supplier?.orderDays ?? [],
     cutoffTime: supplier?.cutoffTime ?? '',
+    contactName: supplier?.contactName ?? '',
+    phone2: supplier?.phone2 ?? '',
+    address: supplier?.address ?? '',
+    taxId: supplier?.taxId ?? '',
+    paymentTerms: supplier?.paymentTerms ?? '',
+    category: supplier?.category ?? '',
+    links: supplier?.links ?? [],
   })
   const [busy, setBusy] = useState(false)
 
@@ -749,13 +766,25 @@ function SupplierEditor({
             placeholder={t('เช่น SIMUMMUANG')}
           />
         </Field>
-        <Field label={t('เบอร์ติดต่อ')}>
+        <Field label={t('ผู้ติดต่อ')}>
           <Input
-            value={form.contactNumber}
-            onChange={(e) => setForm({ ...form, contactNumber: e.target.value })}
-            inputMode="tel"
+            value={form.contactName ?? ''}
+            onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+            placeholder={t('เช่น คุณเอ (ฝ่ายขาย)')}
           />
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('เบอร์ติดต่อ')}>
+            <Input
+              value={form.contactNumber}
+              onChange={(e) => setForm({ ...form, contactNumber: e.target.value })}
+              inputMode="tel"
+            />
+          </Field>
+          <Field label={t('เบอร์สำรอง')}>
+            <Input value={form.phone2 ?? ''} onChange={(e) => setForm({ ...form, phone2: e.target.value })} inputMode="tel" />
+          </Field>
+        </div>
         <Field label={t('อีเมล')}>
           <Input
             type="email"
@@ -763,6 +792,21 @@ function SupplierEditor({
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </Field>
+        <Field label={t('ที่อยู่')}>
+          <Textarea rows={2} value={form.address ?? ''} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('หมวดหมู่')} hint={t('กลุ่มของผู้ขายตามที่บริษัทเรียก เช่น ผัก, บรรจุภัณฑ์')}>
+            <Input value={form.category ?? ''} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+          </Field>
+          <Field label={t('เลขผู้เสียภาษี')}>
+            <Input value={form.taxId ?? ''} onChange={(e) => setForm({ ...form, taxId: e.target.value })} inputMode="numeric" />
+          </Field>
+        </div>
+        <Field label={t('เงื่อนไขชำระเงิน')} hint={t('เช่น เงินสด, เครดิต 30 วัน')}>
+          <Input value={form.paymentTerms ?? ''} onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })} />
+        </Field>
+        <LinksEditor links={form.links ?? []} onChange={(links) => setForm({ ...form, links })} />
         <Field label={t('รับคืนของ')}>
           <Select
             value={form.type}
@@ -979,5 +1023,43 @@ function AddProductModal({
         </Button>
       </div>
     </Modal>
+  )
+}
+
+/**
+ * The supplier's papers, as links.
+ *
+ * Nothing is uploaded: Firebase's free plan has no Storage, and the company already keeps
+ * these in Drive. So the app keeps the label and the address, and opens them in a new tab.
+ */
+function LinksEditor({ links, onChange }: { links: SupplierLink[]; onChange: (links: SupplierLink[]) => void }) {
+  const t = useT()
+  const set = (i: number, patch: Partial<SupplierLink>) => onChange(links.map((l, j) => (i === j ? { ...l, ...patch } : l)))
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-medium text-ink">{t('เอกสาร (ลิงก์)')}</span>
+      <div className="space-y-2">
+        {links.map((l, i) => (
+          <div key={i} className="flex gap-2">
+            <Input value={l.label} onChange={(e) => set(i, { label: e.target.value })} placeholder={t('ชื่อเอกสาร')} className="w-2/5" />
+            <Input value={l.url} onChange={(e) => set(i, { url: e.target.value })} placeholder="https://drive.google.com/…" inputMode="url" />
+            <button
+              type="button"
+              onClick={() => onChange(links.filter((_, j) => j !== i))}
+              aria-label={t('ลบลิงก์')}
+              className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-danger/80 hover:bg-danger-soft"
+            >
+              <Icon name="trash" size={18} />
+            </button>
+          </div>
+        ))}
+        {links.length < 20 && (
+          <Button variant="secondary" size="sm" onClick={() => onChange([...links, { label: '', url: '' }])}>
+            <Icon name="plus" size={16} />
+            {t('เพิ่มลิงก์เอกสาร')}
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }

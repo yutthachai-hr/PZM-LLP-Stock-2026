@@ -21,6 +21,8 @@ const {
   removeSupplierItem,
   unlinkProduct,
   updateSupplier,
+  assignSupplierCodes,
+  makeSupplierCode,
 } = await import('../src/services/suppliers')
 import type { Product, SupplierItem } from '../src/types'
 
@@ -299,5 +301,49 @@ describe('supplier purchase defaults', () => {
     expect(item).toMatchObject({ supplierId: sid, productId: 'p1', minOrderQty: 5 })
     expect('buyingPrice' in (raw('supplierItems')[0] as object)).toBe(false)
     await expect(linkProduct(sid, 'p1', undefined, [item!], 0)).rejects.toThrow()
+  })
+})
+
+describe('supplier codes (owner, 22 Sep 2026)', () => {
+  test('a new supplier is numbered as it is created', async () => {
+    const a = await createSupplier({ name: 'ACK', contactNumber: '', email: '', type: 'takingReturn' })
+    const b = await createSupplier({ name: 'BCD', contactNumber: '', email: '', type: 'takingReturn' })
+    const rows = raw('suppliers')
+    expect(rows.find((s) => s.id === a)?.code).toBe(makeSupplierCode(1))
+    expect(rows.find((s) => s.id === b)?.code).toBe(makeSupplierCode(2))
+  })
+
+  test('the batch gives the older ones a code, oldest first, and pressing it again does nothing', async () => {
+    seed('suppliers', [
+      { id: 'old-b', name: 'B', contactNumber: '', email: '', type: 'takingReturn', active: true, createdAt: 20, updatedAt: 20 },
+      { id: 'old-a', name: 'A', contactNumber: '', email: '', type: 'takingReturn', active: true, createdAt: 10, updatedAt: 10 },
+    ])
+    const first = await assignSupplierCodes()
+    expect(first).toMatchObject({ issued: 2, from: 'V-00001', to: 'V-00002' })
+    const codeOf = (id: string) => raw('suppliers').find((s) => s.id === id)?.code
+    expect(codeOf('old-a')).toBe('V-00001')
+    expect(codeOf('old-b')).toBe('V-00002')
+    expect(await assignSupplierCodes()).toEqual({ issued: 0 })
+    // And the next new supplier carries on from there rather than repeating a number.
+    const next = await createSupplier({ name: 'C', contactNumber: '', email: '', type: 'takingReturn' })
+    expect(codeOf(next)).toBe('V-00003')
+  })
+
+  test('details and document links are kept, trimmed, and cleared when emptied', async () => {
+    const id = await createSupplier({
+      name: 'D',
+      contactNumber: '',
+      email: '',
+      type: 'takingReturn',
+      contactName: '  คุณเอ  ',
+      paymentTerms: 'เครดิต 30 วัน',
+      links: [{ label: ' ใบทะเบียน ', url: ' https://drive.example/abc ' }, { label: '', url: 'https://x' }],
+    })
+    const row = () => raw('suppliers').find((s) => s.id === id)!
+    expect(row().contactName).toBe('คุณเอ')
+    expect(row().links).toEqual([{ label: 'ใบทะเบียน', url: 'https://drive.example/abc' }])
+    await updateSupplier(id, { contactName: '', links: [] })
+    expect('contactName' in row()).toBe(false)
+    expect('links' in row()).toBe(false)
   })
 })
