@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SiteSelect } from '../components/SiteChip'
-import { Icon } from '../components/Icon'
+import { Icon, type IconName } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Card, Field, FormActions, Input, SegTab, Textarea } from '../components/ui'
-import { PageHero } from '../components/frame'
+import { Button, Field, Input, Textarea } from '../components/ui'
+import { FramePage, PageHero, SectionCard, WithSidePanel, frameCard } from '../components/frame'
 import { LineBuilder, type Line } from '../components/LineBuilder'
-import { TodayTransactions, WithTodayPanel } from '../components/movements/TodayTransactions'
+import { KeyingSide } from '../components/keying/KeyingSide'
+import { SubmitBar } from '../components/keying/SubmitBar'
 import { issueStock, consumeStock } from '../services/stock'
 import { compressImage } from '../lib/image'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
@@ -18,31 +19,72 @@ import { DraftNotice } from '../components/DraftNotice'
 
 type Mode = 'transfer' | 'consume'
 
+/**
+ * เบิก/โอนสาขา in the 22 Sep frame (owner's mock-up 03, spec §2.4). Filing is immediate —
+ * the mock-up's "รอดำเนินการ" state and two-step confirm are out (owner, 22 Sep: no
+ * approval step for transfers) — and documents keep their IS-/CS- numbers.
+ */
 export function IssuePage() {
   const t = useT()
   const [mode, setMode] = useState<Mode>('transfer')
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <FramePage>
       <PageHero
         icon="truck"
         tone="out"
-        title={t("เบิก / โอน / ตัดออก")}
-        subtitle={t("โอนของไปเก็บที่สาขา หรือเบิกของออกจากคลังไปใช้/ขายหน้าร้าน — ตัดสต๊อกอัตโนมัติ")}
+        title={t('เบิก/โอนสาขา')}
+        subtitle={t('โอนสินค้าระหว่างคลังและสาขา หรือเบิกใช้เพื่อตัดสต๊อกหน้าร้าน')}
       />
+      {mode === 'transfer' ? <TransferForm mode={mode} setMode={setMode} /> : <ConsumeForm mode={mode} setMode={setMode} />}
+    </FramePage>
+  )
+}
 
-      <div className="flex gap-1 rounded-lg bg-sunken p-1">
-        <SegTab label={t("โอนไปสาขา (เก็บสต๊อก)")} active={mode === 'transfer'} onClick={() => setMode('transfer')} />
-        <SegTab label={t("เบิกใช้ / ตัดออก (หน้าร้าน)")} active={mode === 'consume'} onClick={() => setMode('consume')} />
-      </div>
-
-      {mode === 'transfer' ? <TransferForm /> : <ConsumeForm />}
+/** The two big mode cards that replace the old segmented switch. */
+function ModeCards({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+  const t = useT()
+  const cards: { key: Mode; icon: IconName; title: string; hint: string }[] = [
+    { key: 'transfer', icon: 'swap', title: t('โอนไปสาขา (เก็บสต๊อก)'), hint: t('โอนสินค้าจากคลังไปยังสาขา') },
+    { key: 'consume', icon: 'report', title: t('เบิกใช้ / ตัดออก (หน้าร้าน)'), hint: t('เบิกสินค้าเพื่อตัดสต๊อก ใช้ในหน้าร้าน') },
+  ]
+  return (
+    <div role="radiogroup" aria-label={t('ประเภทการเบิก')} className={`${frameCard} grid grid-cols-2 gap-2 p-2`}>
+      {cards.map((c) => {
+        const on = c.key === mode
+        return (
+          <button
+            key={c.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => setMode(c.key)}
+            className={`flex min-h-16 cursor-pointer items-center justify-center gap-3 rounded-xl border-2 px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 ${
+              on ? 'border-brand bg-brand-soft text-brand' : 'border-transparent text-ink-soft hover:bg-sunken'
+            }`}
+          >
+            <Icon name={c.icon} size={26} className="shrink-0" />
+            <span className="min-w-0">
+              <span className="block text-sm font-bold md:text-base">{c.title}</span>
+              <span className={`hidden text-xs md:block ${on ? 'text-brand/80' : 'text-ink-faint'}`}>{c.hint}</span>
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
 
+const transferTips = (t: (s: string) => string) => (
+  <ul className="list-disc space-y-1 pl-4">
+    <li>{t('ตรวจสอบสต๊อกคงเหลือต้นทางก่อนโอน — ระบบไม่ให้โอนเกินที่มี')}</li>
+    <li>{t('โอนแล้วมีผลทันที ยอดต้นทางลด ยอดปลายทางเพิ่ม')}</li>
+    <li>{t('คีย์ผิดแก้ได้จากรายการวันนี้ด้านบน หรือยกเลิกจากหน้าประวัติ')}</li>
+  </ul>
+)
+
 // ------------------------------------------------------------------ Transfer
-function TransferForm() {
+function TransferForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
   const t = useT()
   const { products, locations, qtyAt } = useData()
   const { user } = useAuth()
@@ -56,14 +98,12 @@ function TransferForm() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
   const [lines, setLines] = useState<Line[]>([])
-  // Raised after a save so the cursor lands back in the product search: the next thing
-  // anyone does with a delivery note is key the next line off it.
   const [focusOn, setFocusOn] = useState(0)
-
   const [busy, setBusy] = useState(false)
 
   // Half-keyed transfers survive leaving the screen (lib/useDraft.ts).
   const draft = useMemo(() => ({ fromLocationId, toLocationId, dateStr, note, lines }), [fromLocationId, toLocationId, dateStr, note, lines])
+  const isEmpty = (d: typeof draft) => d.lines.length === 0 && !d.note.trim()
   const { restored, clear: clearDraft } = useDraft(
     'issue-transfer',
     draft,
@@ -74,7 +114,7 @@ function TransferForm() {
       setNote(d.note ?? '')
       setLines(Array.isArray(d.lines) ? d.lines : [])
     },
-    (d) => d.lines.length === 0 && !d.note.trim(),
+    isEmpty,
   )
   function discardDraft() {
     setLines([])
@@ -95,10 +135,10 @@ function TransferForm() {
   const availableAt = (productId: string) => qtyAt(fromLocationId, productId)
 
   async function submit() {
-    if (!fromLocationId || !toLocationId) return toast.error(t("เลือกต้นทางและปลายทาง"))
-    if (fromLocationId === toLocationId) return toast.error(t("ต้นทางและปลายทางต้องต่างกัน"))
-    if (lines.length === 0) return toast.error(t("เพิ่มรายการสินค้าก่อน"))
-    if (lines.some((l) => !(l.qty > 0))) return toast.error(t("จำนวนต้องมากกว่า 0"))
+    if (!fromLocationId || !toLocationId) return toast.error(t('เลือกต้นทางและปลายทาง'))
+    if (fromLocationId === toLocationId) return toast.error(t('ต้นทางและปลายทางต้องต่างกัน'))
+    if (lines.length === 0) return toast.error(t('เพิ่มรายการสินค้าก่อน'))
+    if (lines.some((l) => !(l.qty > 0))) return toast.error(t('จำนวนต้องมากกว่า 0'))
     const over = lines.find((l) => l.qty > availableAt(l.productId))
     if (over) return toast.error(t('สต๊อกไม่พอสำหรับ "{name}"', { name: over.productName }))
 
@@ -118,65 +158,69 @@ function TransferForm() {
       setNote('')
       clearDraft()
     } catch (e) {
-      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
+      toast.error(t('บันทึกไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
       setBusy(false)
     }
   }
 
+  const day = dateInputToMs(dateStr)
   return (
-    <WithTodayPanel panel={<TodayTransactions types={['issue']} date={dateInputToMs(dateStr)} title={t('เบิก/โอนที่ทำวันนี้')} />}>
-    {restored && <DraftNotice onDiscard={discardDraft} />}
-    <Card className="space-y-4 p-4">
-      {/* From and to share one line on a phone, the date under them; who keyed it is recorded anyway. */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <Field label={t("จากคลัง (ต้นทาง)")} required>
-          <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
-        </Field>
-        <Field label={t("ไปยังสาขา (ปลายทาง)")} required>
-          <SiteSelect
-            value={toLocationId}
-            onChange={setToLocationId}
-            locations={active.filter((l) => l.id !== fromLocationId)}
-            emptyLabel={t("— เลือก —")}
-          />
-        </Field>
-        <Field label={t("วันที่เบิก")} required className="col-span-2 sm:col-span-1">
-          <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
-        </Field>
-        <Field label={t("ผู้เบิก (บันทึกอัตโนมัติ)")} className="hidden sm:block">
-          <Input value={user?.name ?? ''} disabled />
-        </Field>
-      </div>
+    <WithSidePanel
+      side={<KeyingSide kind="transfer" day={day} title={t('สรุปการโอนวันนี้')} todayTitle={t('เบิก/โอนที่ทำวันนี้')} tips={transferTips(t)} />}
+    >
+      <ModeCards mode={mode} setMode={setMode} />
+      {restored && <DraftNotice onDiscard={discardDraft} />}
 
-      <div>
-        <div className="mb-2 text-sm font-medium text-ink">{t("รายการสินค้า")}</div>
-        <LineBuilder
-          products={products}
-          lines={lines}
-          onChange={setLines}
-          availableAt={availableAt}
-          direction="out"
-          focusOn={focusOn}
-        />
-      </div>
+      <SectionCard icon="note" title={t('ข้อมูลการโอนสินค้า')}>
+        <div className="space-y-3 md:space-y-4">
+          {/* From → to, with the arrow saying which way the goods go. */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 md:gap-3">
+            <Field label={t('จากคลัง (ต้นทาง)')} required>
+              <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
+            </Field>
+            <span className="mb-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-line bg-sunken text-ink-soft md:h-9 md:w-9" aria-hidden>
+              <Icon name="arrowRight" size={16} />
+            </span>
+            <Field label={t('ไปยังสาขา (ปลายทาง)')} required>
+              <SiteSelect
+                value={toLocationId}
+                onChange={setToLocationId}
+                locations={active.filter((l) => l.id !== fromLocationId)}
+                emptyLabel={t('— เลือก —')}
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+            <Field label={t('วันที่โอน')} required>
+              <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
+            </Field>
+            <Field label={t('ผู้โอน (บันทึกอัตโนมัติ)')}>
+              <Input value={user?.name ?? ''} disabled />
+            </Field>
+            <Field label={t('หมายเหตุ')} className="col-span-2 md:col-span-1">
+              <Textarea rows={1} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('ระบุหมายเหตุ (ถ้ามี)')} />
+            </Field>
+          </div>
+        </div>
+      </SectionCard>
 
-      <Field label={t("หมายเหตุ (ไม่บังคับ)")}>
-        <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-      </Field>
+      <SectionCard icon="package" title={t('รายการสินค้า')} count={lines.length ? t('({n} รายการ)', { n: lines.length }) : undefined}>
+        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" focusOn={focusOn} lineNotes />
+      </SectionCard>
 
-      <FormActions>
-        <Button onClick={submit} disabled={busy || lines.length === 0}>
-          {busy ? t("กำลังบันทึก...") : t('บันทึกโอนไปสาขา ({n} รายการ)', { n: lines.length })}
+      <SubmitBar hasDraft={!isEmpty(draft)}>
+        <Button onClick={submit} disabled={busy || lines.length === 0} className="w-full sm:w-auto sm:min-w-64">
+          <Icon name="check" size={18} />
+          {busy ? t('กำลังบันทึก...') : t('ยืนยันการโอนสินค้า ({n} รายการ)', { n: lines.length })}
         </Button>
-      </FormActions>
-    </Card>
-    </WithTodayPanel>
+      </SubmitBar>
+    </WithSidePanel>
   )
 }
 
 // ------------------------------------------------------------------ Consume
-function ConsumeForm() {
+function ConsumeForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
   const t = useT()
   const { products, locations, qtyAt } = useData()
   const { user } = useAuth()
@@ -190,16 +234,14 @@ function ConsumeForm() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('สุขุมวิท') // prefilled note saved as data, user-editable — i18n-key
   const [lines, setLines] = useState<Line[]>([])
-  // Raised after a save so the cursor lands back in the product search: the next thing
-  // anyone does with a delivery note is key the next line off it.
   const [focusOn, setFocusOn] = useState(0)
-
   const [photo, setPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   // Half-keyed issues survive leaving the screen (lib/useDraft.ts). The photo does not:
   // it is retaken, and a data URL is too big to keep.
   const draft = useMemo(() => ({ fromLocationId, dateStr, note, lines }), [fromLocationId, dateStr, note, lines])
+  const isEmpty = (d: typeof draft) => d.lines.length === 0
   const { restored, clear: clearDraft } = useDraft(
     'issue-consume',
     draft,
@@ -209,7 +251,7 @@ function ConsumeForm() {
       if (typeof d.note === 'string') setNote(d.note)
       setLines(Array.isArray(d.lines) ? d.lines : [])
     },
-    (d) => d.lines.length === 0,
+    isEmpty,
   )
   function discardDraft() {
     setLines([])
@@ -228,14 +270,14 @@ function ConsumeForm() {
     try {
       setPhoto(await compressImage(file))
     } catch {
-      toast.error(t("อ่านรูปไม่สำเร็จ"))
+      toast.error(t('อ่านรูปไม่สำเร็จ'))
     }
   }
 
   async function submit() {
-    if (!fromLocationId) return toast.error(t("เลือกคลังต้นทาง"))
-    if (lines.length === 0) return toast.error(t("เพิ่มรายการสินค้าก่อน"))
-    if (lines.some((l) => !(l.qty > 0))) return toast.error(t("จำนวนต้องมากกว่า 0"))
+    if (!fromLocationId) return toast.error(t('เลือกคลังต้นทาง'))
+    if (lines.length === 0) return toast.error(t('เพิ่มรายการสินค้าก่อน'))
+    if (lines.some((l) => !(l.qty > 0))) return toast.error(t('จำนวนต้องมากกว่า 0'))
     const over = lines.find((l) => l.qty > availableAt(l.productId))
     if (over) return toast.error(t('สต๊อกไม่พอสำหรับ "{name}"', { name: over.productName }))
 
@@ -255,93 +297,93 @@ function ConsumeForm() {
       setPhoto(null)
       clearDraft()
     } catch (e) {
-      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
+      toast.error(t('บันทึกไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
       setBusy(false)
     }
   }
 
+  const day = dateInputToMs(dateStr)
   return (
-    <WithTodayPanel panel={<TodayTransactions types={['consume']} date={dateInputToMs(dateStr)} title={t('เบิกใช้ที่ทำวันนี้')} />}>
-    {restored && <DraftNotice onDiscard={discardDraft} />}
-    <Card className="space-y-4 p-4">
-      <div className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
-        {t("เบิกของออกจากคลังไปใช้/ขายหน้าร้าน (เช่น สาขาสุขุมวิทที่อยู่ที่เดียวกับคลัง) — ตัดสต๊อกออก ไม่เพิ่มเข้าสาขาอื่น")}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-        <Field label={t("เบิกจากคลัง")} required>
-          <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
-        </Field>
-        <Field label={t("วันที่เบิก")} required>
-          <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
-        </Field>
-        <Field label={t("ผู้เบิก (บันทึกอัตโนมัติ)")} className="hidden sm:block">
-          <Input value={user?.name ?? ''} disabled />
-        </Field>
-      </div>
-
-      <div>
-        <div className="mb-2 text-sm font-medium text-ink">{t("รายการสินค้าที่เบิก")}</div>
-        <LineBuilder
-          products={products}
-          lines={lines}
-          onChange={setLines}
-          availableAt={availableAt}
-          direction="out"
-          focusOn={focusOn}
+    <WithSidePanel
+      side={
+        <KeyingSide
+          kind="consume"
+          day={day}
+          title={t('สรุปการเบิกวันนี้')}
+          todayTitle={t('เบิกใช้ที่ทำวันนี้')}
+          tips={
+            <ul className="list-disc space-y-1 pl-4">
+              <li>{t('เบิกใช้ = ตัดสต๊อกออก ไม่เพิ่มเข้าสาขาอื่น')}</li>
+              <li>{t('แนบรูปหลักฐานได้ทุกครั้ง ช่วยตรวจย้อนหลัง')}</li>
+            </ul>
+          }
         />
-      </div>
+      }
+    >
+      <ModeCards mode={mode} setMode={setMode} />
+      {restored && <DraftNotice onDiscard={discardDraft} />}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("เบิกไปใช้ที่ / หมายเหตุ")}>
-          <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("เช่น สุขุมวิท")} />
-        </Field>
-        <Field label={t("รูปหลักฐาน (แนบได้ทุกครั้ง)")}>
-          <div className="flex items-center gap-3">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={pickPhoto}
-            />
-            {photo ? (
-              <img
-                src={photo}
-                alt={t('หลักฐาน')}
-                className="h-16 w-16 rounded-lg border border-line object-cover"
-              />
-            ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-line-strong text-ink-faint">
-                <Icon name="camera" size={18} />
-              </div>
-            )}
-            <div className="space-y-1">
-              <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-                <Icon name="camera" size={16} />
-            {t("ถ่าย / เลือกรูป")}
-              </Button>
-              {photo && (
-                <button
-                  onClick={() => setPhoto(null)}
-                  className="block text-xs text-danger hover:underline"
-                >
-                  {t("ลบรูป")}
-                </button>
-              )}
-            </div>
+      <SectionCard icon="note" title={t('ข้อมูลการเบิกใช้')}>
+        <div className="space-y-3 md:space-y-4">
+          <div className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+            {t('เบิกของออกจากคลังไปใช้/ขายหน้าร้าน (เช่น สาขาสุขุมวิทที่อยู่ที่เดียวกับคลัง) — ตัดสต๊อกออก ไม่เพิ่มเข้าสาขาอื่น')}
           </div>
-        </Field>
-      </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+            <Field label={t('เบิกจากคลัง')} required>
+              <SiteSelect value={fromLocationId} onChange={setFromLocationId} locations={active} />
+            </Field>
+            <Field label={t('วันที่เบิก')} required>
+              <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
+            </Field>
+            <Field label={t('ผู้เบิก (บันทึกอัตโนมัติ)')} className="hidden md:block">
+              <Input value={user?.name ?? ''} disabled />
+            </Field>
+          </div>
+        </div>
+      </SectionCard>
 
-      <FormActions>
-        <Button onClick={submit} disabled={busy || lines.length === 0} variant="danger">
-          {busy ? t("กำลังบันทึก...") : t('บันทึกเบิกใช้ ({n} รายการ)', { n: lines.length })}
+      <SectionCard icon="package" title={t('รายการสินค้าที่เบิก')} count={lines.length ? t('({n} รายการ)', { n: lines.length }) : undefined}>
+        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" focusOn={focusOn} lineNotes />
+      </SectionCard>
+
+      <SectionCard icon="camera" title={t('ปลายทางและหลักฐาน')}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label={t('เบิกไปใช้ที่ / หมายเหตุ')}>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('เช่น สุขุมวิท')} />
+          </Field>
+          <Field label={t('รูปหลักฐาน (แนบได้ทุกครั้ง)')}>
+            <div className="flex items-center gap-3">
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pickPhoto} />
+              {photo ? (
+                <img src={photo} alt={t('หลักฐาน')} className="h-16 w-16 rounded-lg border border-line object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-line-strong text-ink-faint">
+                  <Icon name="camera" size={18} />
+                </div>
+              )}
+              <div className="space-y-1">
+                <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+                  <Icon name="camera" size={16} />
+                  {t('ถ่าย / เลือกรูป')}
+                </Button>
+                {photo && (
+                  <button onClick={() => setPhoto(null)} className="block text-xs text-danger hover:underline">
+                    {t('ลบรูป')}
+                  </button>
+                )}
+              </div>
+            </div>
+          </Field>
+        </div>
+      </SectionCard>
+
+      <SubmitBar hasDraft={!isEmpty(draft)}>
+        <Button onClick={submit} disabled={busy || lines.length === 0} variant="danger" className="w-full sm:w-auto sm:min-w-64">
+          <Icon name="check" size={18} />
+          {busy ? t('กำลังบันทึก...') : t('บันทึกเบิกใช้ ({n} รายการ)', { n: lines.length })}
         </Button>
-      </FormActions>
-    </Card>
-    </WithTodayPanel>
+      </SubmitBar>
+    </WithSidePanel>
   )
 }

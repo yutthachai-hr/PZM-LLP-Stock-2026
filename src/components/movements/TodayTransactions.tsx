@@ -27,6 +27,7 @@ export function TodayTransactions({
   title,
   byUserId,
   startOpen = false,
+  embedded = false,
 }: {
   types: readonly MovementType[]
   /** The business day the form is keying, ms. Rows are the ones filed under that day. */
@@ -36,6 +37,12 @@ export function TodayTransactions({
   byUserId?: string
   /** On a phone the panel starts folded; the home screen wants it open. */
   startOpen?: boolean
+  /**
+   * Inside a page's side column (components/keying/KeyingSide): the column scrolls with the
+   * page, so the panel neither sticks nor caps its height, and on a phone the column is
+   * already folded behind its own heading, so the panel starts open.
+   */
+  embedded?: boolean
 }) {
   const t = useT()
   const navigate = useNavigate()
@@ -46,7 +53,7 @@ export function TodayTransactions({
   // On a phone the panel sits under the form and starts folded to one line with the
   // count, so the form keeps the screen (spec §3, 21 Sep 2026); a tap opens it.
   const phone = useViewport() === 'phone'
-  const [openPanel, setOpenPanel] = useState(startOpen)
+  const [openPanel, setOpenPanel] = useState(startOpen || embedded)
 
   const day = new Date(date)
   const from = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime()
@@ -62,7 +69,7 @@ export function TodayTransactions({
   const shown = showAll ? rows : rows.slice(0, 30)
 
   return (
-    <Card className={`flex flex-col overflow-hidden ${phone ? '' : 'max-h-[calc(100vh-8rem)] lg:sticky lg:top-4'}`}>
+    <Card className={`flex flex-col overflow-hidden ${phone || embedded ? '' : 'max-h-[calc(100vh-8rem)] lg:sticky lg:top-4'} ${embedded ? '!rounded-2xl' : ''}`}>
       <div className={`flex items-center justify-between gap-2 px-3 py-2 ${!phone || openPanel ? 'border-b border-line' : ''}`}>
         {phone ? (
           <button

@@ -26,6 +26,8 @@ export interface Line {
   entryUnit?: string
   entryQty?: number
   qty: number
+  /** This line's own note — filed on its movement instead of the document's. */
+  note?: string
 }
 
 /**
@@ -51,12 +53,18 @@ export function LineBuilder({
   availableAt,
   direction = 'in',
   focusOn = 0,
+  onHandAt,
+  lineNotes = false,
 }: {
   products: Product[]
   lines: Line[]
   onChange: (lines: Line[]) => void
   /** optional: show current on-hand at source location + block over-issue */
   availableAt?: (productId: string) => number
+  /** Show a balance beside each line without blocking on it — where the goods are going. */
+  onHandAt?: (productId: string) => number
+  /** A note box on every line (owner's mock-up 03), from 2xl up where the table has room. */
+  lineNotes?: boolean
   direction?: LineDirection
   /**
    * Bump this to put the cursor back in the search box.
@@ -122,6 +130,10 @@ export function LineBuilder({
     )
   }
 
+  function setNote(id: string, note: string) {
+    onChange(lines.map((l) => (l.productId === id ? { ...l, note: note || undefined } : l)))
+  }
+
   function remove(id: string) {
     onChange(lines.filter((l) => l.productId !== id))
   }
@@ -183,14 +195,12 @@ export function LineBuilder({
         <div className="rounded-lg border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
           {t("ยังไม่มีรายการ — ค้นหาด้านบนเพื่อเพิ่มสินค้า")}
         </div>
-      ) : (
+      ) : phone ? (
         <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
           {lines.map((l) => {
             const avail = availableAt?.(l.productId)
             const over = avail !== undefined && l.qty > avail
             const product = products.find((p) => p.id === l.productId)
-            const conversions = product?.unitConversions
-            if (phone) {
               return (
                 <button
                   key={l.productId}
@@ -235,56 +245,96 @@ export function LineBuilder({
                   </span>
                 </button>
               )
-            }
-            return (
-              <div
-                key={l.productId}
-                className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3"
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  {/* Direction, restated on every line. */}
-                  <span
-                    aria-hidden="true"
-                    className={`num w-4 shrink-0 text-center text-lg font-bold leading-none ${signColor}`}
-                  >
-                    {sign}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-ink">{l.productName}</div>
-                    {avail !== undefined && (
-                      <div className={`text-xs ${over ? 'font-medium text-danger' : 'text-ink-soft'}`}>
-                        {t('คงเหลือต้นทาง')}: <span className="num">{fmtQty(avail)}</span> {l.unit}
-                      </div>
-                    )}
-                    {l.entryUnit && l.entryQty !== undefined && (
-                      <div className="text-xs text-ink-faint">{describeQty(l, fmtQty)}</div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
-                  <div className="w-full sm:w-64">
-                    <QtyInput
-                      unitType={l.unit}
-                      plainUnits={plainUnits}
-                      conversions={conversions}
-                      value={l.qty}
-                      onChange={(e) => setQty(l.productId, e)}
-                      product={product}
-                      invalid={over}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => remove(l.productId)}
-                    className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-faint outline-none transition-colors duration-150 hover:bg-danger-soft hover:text-danger focus-visible:ring-2 focus-visible:ring-brand/40"
-                    aria-label={t('ลบ "{name}" ออกจากรายการ', { name: l.productName })}
-                  >
-                    <Icon name="trash" size={18} />
-                  </button>
-                </div>
-              </div>
-            )
           })}
+        </div>
+      ) : (
+        /* Tablet and up: the lines as a table (owner's mock-up 03) — number, product, SKU,
+           quantity with its unit, what is on hand, a note, and remove. */
+        <div className="overflow-x-auto rounded-xl border border-line">
+          <table className="w-full min-w-[560px] table-fixed text-sm">
+            <thead className="bg-sunken text-left text-[13px] text-ink-soft">
+              <tr>
+                <th className="w-14 px-2 py-2.5 text-center font-semibold">{t('ลำดับ')}</th>
+                <th className="px-3 py-2.5 font-semibold">{t('สินค้า')}</th>
+                <th className="hidden w-36 px-3 py-2.5 font-semibold 2xl:table-cell">SKU</th>
+                <th className="w-56 px-3 py-2.5 font-semibold xl:w-[17rem]">{t('จำนวน / หน่วย')}</th>
+                {(availableAt || onHandAt) && (
+                  <th className="w-24 px-3 py-2.5 text-right font-semibold xl:w-28">{availableAt ? t('คงเหลือต้นทาง') : t('สต๊อกคงเหลือ')}</th>
+                )}
+                {lineNotes && <th className="hidden w-44 px-3 py-2.5 font-semibold 2xl:table-cell">{t('หมายเหตุ')}</th>}
+                <th className="w-14 px-1 py-2.5 text-center font-semibold">
+                  <span className="sr-only">{t('ลบ')}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {lines.map((l, i) => {
+                const avail = availableAt?.(l.productId)
+                const shown = avail ?? onHandAt?.(l.productId)
+                const over = avail !== undefined && l.qty > avail
+                const product = products.find((p) => p.id === l.productId)
+                return (
+                  <tr key={l.productId} className={over ? 'bg-danger-soft/40' : ''}>
+                    <td className="num whitespace-nowrap px-3 py-2 text-center text-ink-soft">
+                      {/* Direction, restated on every line. */}
+                      <span aria-hidden="true" className={`mr-1 font-bold ${signColor}`}>{sign}</span>
+                      {i + 1}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        {product && <ProductThumb productId={product.id} hasImage={product.hasImage} size={36} />}
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-ink" title={l.productName}>{l.productName}</div>
+                          <div className="doc-no truncate text-xs text-ink-faint 2xl:hidden">{product?.sku}</div>
+                          {l.entryUnit && l.entryQty !== undefined && (
+                            <div className="text-xs text-ink-faint">{describeQty(l, fmtQty)}</div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="doc-no hidden truncate px-3 py-2 text-ink-soft 2xl:table-cell">{product?.sku}</td>
+                    <td className="px-3 py-2">
+                      <QtyInput
+                        unitType={l.unit}
+                        plainUnits={plainUnits}
+                        conversions={product?.unitConversions}
+                        value={l.qty}
+                        onChange={(e) => setQty(l.productId, e)}
+                        product={product}
+                        invalid={over}
+                      />
+                    </td>
+                    {shown !== undefined && (
+                      <td className={`num whitespace-nowrap px-3 py-2 text-right ${over ? 'font-semibold text-danger' : 'text-ink-soft'}`}>
+                        {fmtQty(shown)} <span className="text-xs">{l.unit}</span>
+                      </td>
+                    )}
+                    {lineNotes && (
+                      <td className="hidden px-3 py-2 2xl:table-cell">
+                        <Input
+                          value={l.note ?? ''}
+                          onChange={(e) => setNote(l.productId, e.target.value)}
+                          placeholder={t('ระบุหมายเหตุ')}
+                          aria-label={t('หมายเหตุของ "{name}"', { name: l.productName })}
+                          maxLength={200}
+                        />
+                      </td>
+                    )}
+                    <td className="px-1 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => remove(l.productId)}
+                        className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-danger/80 outline-none transition-colors duration-150 hover:bg-danger-soft hover:text-danger focus-visible:ring-2 focus-visible:ring-brand/40"
+                        aria-label={t('ลบ "{name}" ออกจากรายการ', { name: l.productName })}
+                      >
+                        <Icon name="trash" size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
       <QtySheet

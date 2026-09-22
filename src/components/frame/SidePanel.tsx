@@ -9,7 +9,7 @@ import { focusRing, toneIcon, toneText, type Tone } from './tones'
  * A page with a column of summary cards beside it (owner's mock-ups: ~360px on the right).
  *
  * The three screen sizes each place that column differently (spec §1):
- * - desktop ≥1280: beside the page, 360px;
+ * - desktop ≥1280: beside the page, 320px (360px from 2xl, as the mock-ups draw it at 1672px);
  * - tablet: under the page, its cards two to a row — moved, not hidden;
  * - phone: under the page as one section that starts folded, so the form or list the
  *   person came for is the first thing on the screen.
@@ -27,7 +27,7 @@ export function WithSidePanel({
   const t = useT()
   const [open, setOpen] = useState(false)
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-5">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-5 2xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-4 xl:space-y-5">{children}</div>
       <aside className="min-w-0">
         <button
