@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { useState } from 'react'
 import { useAutomation } from '../data/useAutomation'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
@@ -10,7 +9,6 @@ import { Icon } from './Icon'
 import { isDemoMode } from '../firebase/config'
 import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
-import { ProfileModal } from './ProfileModal'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
 import { navFor, titleFor, type NavItem } from './nav/navItems'
@@ -161,7 +159,8 @@ function UserBox({
   onSwitch: () => void
 }) {
   const t = useT()
-  const [editingProfile, setEditingProfile] = useState(false)
+  // "แก้ไขโปรไฟล์" lives only in the TopBar account menu (owner, 22 Sep 2026: one place,
+  // not two) — this box keeps just the brand and session actions.
   return (
     <div className="border-t border-line p-3">
       <div className="mb-3 flex items-center gap-2.5">
@@ -175,11 +174,7 @@ function UserBox({
           </div>
         </div>
       </div>
-      <button onClick={() => setEditingProfile(true)} className={sideAction}>
-        <Icon name="pencil" size={16} />
-        {t('แก้ไขโปรไฟล์')}
-      </button>
-      <button onClick={onSwitch} className={`mt-2 ${sideAction}`}>
+      <button onClick={onSwitch} className={sideAction}>
         <Icon name="swap" size={16} />
         {t('สลับแบรนด์')}
       </button>
@@ -187,7 +182,6 @@ function UserBox({
         <Icon name="logout" size={16} />
         {t('ออกจากระบบ')}
       </button>
-      {editingProfile && <ProfileModal onClose={() => setEditingProfile(false)} />}
     </div>
   )
 }
