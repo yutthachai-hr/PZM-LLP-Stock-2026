@@ -13,6 +13,7 @@ import { bkkDayEnd, bkkDayStart, DAY_MS, isSameBkkDay } from '../lib/inventoryRu
 import type { CalendarItem } from '../lib/inventoryRules/types'
 import { isManager } from '../lib/purchaseRequestStatus'
 import { ItemRow } from './calendar/ItemRow'
+import { LowStockCard, QuickMenuCard } from '../components/dashboard/DeskCards'
 
 /**
  * The phone's first screen (spec §2, 21 Sep 2026; simplified 22 Sep after the owner
@@ -34,7 +35,11 @@ export function PhoneHome() {
   const range = useMemo(() => ({ from: bkkDayStart(now) - 7 * DAY_MS, to: bkkDayEnd(now) + 14 * DAY_MS }), [now])
   const feed = useCalendarFeed(range, now)
 
-  const low = useMemo(() => shortages({ products, locations, qtyAt, minFor, tracksProduct }).length, [products, locations, qtyAt, minFor, tracksProduct])
+  const lowItems = useMemo(
+    () => shortages({ products, locations, qtyAt, minFor, tracksProduct }).sort((a, b) => a.qty / a.min - b.qty / b.min),
+    [products, locations, qtyAt, minFor, tracksProduct],
+  )
+  const low = lowItems.length
   const today = useMemo(() => feed.items.filter((i) => isSameBkkDay(i.at, now)), [feed.items, now])
   const receiving = today.filter((i) => i.kind === 'poExpected' && isOpen(i)).length
   const overdue = feed.items.filter((i) => i.status === 'overdue').length
@@ -92,6 +97,11 @@ export function PhoneHome() {
           </ul>
         </Card>
       )}
+
+      {/* The five closest to running out, then the jobs people start from here (spec §2.1). */}
+      {lowItems.length > 0 && <LowStockCard low={lowItems} />}
+
+      <QuickMenuCard />
 
       <TodayTransactions
         types={['receive', 'issue', 'consume', 'adjust']}

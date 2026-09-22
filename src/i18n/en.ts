@@ -37,7 +37,6 @@ export const EN: Record<string, string> = {
   เลขที่: 'Doc no.',
   โดย: 'By',
   ชื่อ: 'Name',
-  รวม: 'Total',
   จาก: 'From',
   ไป: 'To',
   ประเภท: 'Type',
@@ -211,18 +210,10 @@ export const EN: Record<string, string> = {
     'Could not read that config — paste the whole object { apiKey: …, projectId: …, appId: … }',
 
   // ---- dashboard ---------------------------------------------------------------
-  'ภาพรวมสต๊อก': 'Stock overview',
   'กำลังโหลดภาพรวม...': 'Loading dashboard…',
   จำนวนสินค้า: 'Products',
-  มูลค่าสต๊อก: 'Stock value',
-  'มูลค่าสต๊อกตามหมวดหมู่ (บาท)': 'Stock value by category (THB)',
-  รวมทุกคลัง: 'All locations',
   อิงต้นทุนที่กรอก: 'Based on entered cost',
-  'ใกล้/ต่ำกว่าขั้นต่ำ': 'At or below minimum',
   ไม่พบสินค้า: 'No products found',
-  'ค้นหาสินค้าในคลังนี้…': 'Search products in this location…',
-  '* มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า':
-    '* Value appears once you enter a unit cost on the product page',
 
   // ---- products ----------------------------------------------------------------
   'กำลังโหลดสินค้า...': 'Loading products…',
@@ -752,15 +743,7 @@ export const EN: Record<string, string> = {
   'ตาราง {n} แถว': 'Table, {n} rows',
 
   // ---- dashboard (rebuilt) ------------------------------------------------------
-  '{n} รายการมีของ': '{n} in stock',
-  'ความเคลื่อนไหว 7 วัน': 'Movements, 7 days',
-  'ล่าสุด {date}': 'Last {date}',
   ยังไม่มีรายการ: 'Nothing yet',
-  คลังสินค้า: 'Locations',
-  ที่เลือก: 'Selected',
-  รายการที่มีของ: 'Items in stock',
-  ยังไม่มีมูลค่า: 'No value yet',
-  สินค้าใกล้หมด: 'Running low',
   'ไม่มีรายการที่ต่ำกว่าขั้นต่ำ': 'Nothing below its minimum',
 
   // ---- language switch -----------------------------------------------------------
@@ -1677,4 +1660,32 @@ export const EN: Record<string, string> = {
   'เลือกทั้งหมดในหน้านี้': 'Select all on this page',
   'จัดการ': 'Actions',
   'สรุปและรายการล่าสุด': 'Summary and recent activity',
+  // ---- R1 dashboard (22 Sep 2026) ----
+  'ความเคลื่อนไหวสินค้าคงคลัง': 'Inventory movement',
+  '(7 วันที่ผ่านมา · จำนวนรายการ)': '(last 7 days · lines)',
+  'ยังไม่มีความเคลื่อนไหวใน 7 วันที่ผ่านมา': 'No movement in the last 7 days',
+  'จ่ายออก': 'Out',
+  'โอนย้าย': 'Transfers',
+  'สินค้าคงเหลือน้อย': 'Low stock',
+  'ภาพรวมสาขา': 'Sites at a glance',
+  'สินค้าที่มีของ': 'Items in stock',
+  'มูลค่าสินค้า': 'Stock value',
+  'มีสินค้าใกล้หมด': 'Items running low',
+  'ส่งรายการขอสั่งซื้อ': 'Purchase request sent',
+  'กิจกรรมล่าสุด': 'Recent activity',
+  'เมนูด่วน': 'Quick actions',
+  'โอนสินค้าระหว่างสาขา': 'Transfer between sites',
+  'สั่งซื้อใหม่': 'New order',
+  'สวัสดี คุณ {name}': 'Hello, {name}',
+  'ภาพรวมสินค้าคงคลังของ {brand} ประจำวันที่ {date}': '{brand} inventory overview for {date}',
+  'รับสินค้าเข้าวันนี้': 'Received today',
+  'จากเมื่อวาน': 'vs yesterday',
+  'เมื่อวาน {n} ใบ': '{n} yesterday',
+  'รออนุมัติใบขอสั่งซื้อ': 'Requests awaiting approval',
+  'ใบขอใน 30 วันล่าสุด': 'Requests in the last 30 days',
+  'หมดแล้ว {n} รายการ': '{n} out of stock',
+  'ยังไม่มีรายการที่หมด': 'Nothing out of stock',
+  'โอนสาขาวันนี้': 'Transfers today',
+  'มูลค่าสินค้าคงคลัง': 'Inventory value',
+  'จาก 30 วันก่อน': 'vs 30 days ago',
 }

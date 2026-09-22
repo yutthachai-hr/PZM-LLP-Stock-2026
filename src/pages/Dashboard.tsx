@@ -1,380 +1,135 @@
-import { useEffect, useMemo, useState } from 'react'
-import { RequestWidget } from './requests/RequestWidget'
-import { TodayPanel } from '../components/dashboard/TodayPanel'
-import { shortages } from '../lib/inventoryRules/lowStock'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useAuth } from '../auth/AuthContext'
+import { useBrand } from '../brand/BrandContext'
+import { brandDef } from '../brand/brand'
 import { useData } from '../data/DataContext'
+import { Spinner } from '../components/ui'
+import { FramePage, PageHero, StatRow, StatTile, type Trend } from '../components/frame'
 import {
-  Badge,
-  Card,
-  CardTitle,
-  EmptyState,
-  Input,
-  SegTab,
-  Spinner,
-  StatGroup,
-  StatTile,
-} from '../components/ui'
-import { PageHero } from '../components/frame'
-import { DataTable, type Column } from '../components/DataTable'
-import { ProductThumb } from '../components/ProductThumb'
-import { SiteChip } from '../components/SiteChip'
-import { fmtMoney, fmtQty, formatThaiDateShort, todayMs } from '../lib/format'
-import type { Product, StockLocation } from '../types'
+  BranchOverviewCard,
+  LowStockCard,
+  QuickMenuCard,
+  RecentActivityCard,
+  WeeklyMovementCard,
+} from '../components/dashboard/DeskCards'
+import { useDashboardFigures } from '../components/dashboard/useDashboardFigures'
+import { fmtMoney, formatThaiDate } from '../lib/format'
+import { change } from '../lib/stats/periodCompare'
 import { useT } from '../i18n/I18nContext'
 import { useViewport } from '../lib/viewport'
 import { PhoneHome } from './PhoneHome'
-import { looseMatch } from '../lib/search'
 
-const ALL = '__all__'
-const WEEK = 7 * 86_400_000
-
-interface Row {
-  p: Product
-  total: number
-  min: number
-}
-
-interface LowItem {
-  product: Product
-  location: StockLocation
-  qty: number
-  min: number
-}
-
+/**
+ * The desk dashboard, as the owner's mock-up 01 draws it (spec §2.1): a greeting, five
+ * figures with what they were yesterday or a month ago, the week's movement, what is
+ * running low, each site at a glance, what just happened, and the jobs people start
+ * from here. A phone gets its own first screen (PhoneHome).
+ *
+ * The full stock table and the per-site switch that used to live here are on สินค้าคงคลัง,
+ * which is the screen for reading every balance.
+ */
 export function DashboardPage() {
   const t = useT()
-  // A phone gets its own first screen (spec §2, 21 Sep 2026); this dashboard is for desks.
   const phone = useViewport() === 'phone'
-  const { products, locations, qtyAt, minFor, tracksProduct, movements, loading } = useData()
-  const [scope, setScope] = useState<string>(ALL)
-  const [search, setSearch] = useState('')
-  // Recomputed on the hour so a screen left open overnight rolls over to the new day.
-  const [, setTick] = useState(0)
+  const { loading } = useData()
+  if (loading) return <Spinner label={t('กำลังโหลดภาพรวม...')} />
+  if (phone) return <PhoneHome />
+  return <DeskDashboard />
+}
+
+function DeskDashboard() {
+  const t = useT()
+  const { user } = useAuth()
+  const { brand } = useBrand()
+  const { movements } = useData()
+  // Re-read on the hour so a screen left open overnight rolls over to the new day.
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 60 * 60 * 1000)
+    const id = setInterval(() => setNow(Date.now()), 60 * 60 * 1000)
     return () => clearInterval(id)
   }, [])
+  const f = useDashboardFigures(now)
 
-  const scopeLocations = useMemo(
-    () => (scope === ALL ? locations : locations.filter((l) => l.id === scope)),
-    [scope, locations],
-  )
+  const items = t('รายการ')
+  const trend = (cur: number, before: number, suffix: string): Trend | undefined => {
+    const c = change(cur, before, { unit: items })
+    return c.flat ? undefined : { text: c.text, up: c.up, suffix }
+  }
+  const valueTrend = f.valueBefore !== null && f.valueBefore > 0 ? change(f.value, f.valueBefore) : null
 
-  const totalQtyOf = (p: Product) => scopeLocations.reduce((s, l) => s + qtyAt(l.id, p.id), 0)
-
-  // One rule, shared with the top bar and the calendar (lib/inventoryRules/lowStock.ts),
-  // so the badge, this list and the calendar cannot disagree.
-  const lowStock = useMemo(() => {
-    const items: LowItem[] = shortages({ products, locations: scopeLocations, qtyAt, minFor, tracksProduct })
-    return items.sort((a, b) => a.qty - a.min - (b.qty - b.min))
-  }, [products, scopeLocations, qtyAt, minFor, tracksProduct])
-
-  const stats = useMemo(() => {
-    let value = 0
-    let inStock = 0
-    for (const p of products) {
-      const q = totalQtyOf(p)
-      value += q * (p.cost ?? 0)
-      if (q > 0) inStock++
-    }
-    const inScope = new Set(scopeLocations.map((l) => l.id))
-    const mine = movements.filter(
-      (m) =>
-        !m.voided &&
-        (scope === ALL ||
-          (m.fromLocationId && inScope.has(m.fromLocationId)) ||
-          (m.toLocationId && inScope.has(m.toLocationId))),
-    )
-    // A week rather than today. "Movements today" reads zero on any morning before the
-    // first receipt is keyed, and on a Monday it reads zero for the whole weekend — which
-    // says nothing about whether the system is being used.
-    const since = todayMs() - WEEK
-    const recent = mine.filter((m) => m.date >= since).length
-    const lastAt = mine.reduce((max, m) => (m.date > max ? m.date : max), 0)
-    return { value, inStock, recent, lastAt }
-  }, [products, scopeLocations, movements, qtyAt, scope])
-
-  const byCategory = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const p of products) {
-      const val = totalQtyOf(p) * (p.cost ?? 0)
-      map.set(p.category, (map.get(p.category) ?? 0) + val)
-    }
-    return [...map.entries()]
-      .map(([category, value]) => ({ category, value: Math.round(value) }))
-      .filter((d) => d.value > 0)
-      .sort((a, b) => b.value - a.value)
-  }, [products, scopeLocations, qtyAt])
-
-  const rows = useMemo<Row[]>(() => {
-    const q = search.trim().toLowerCase()
-    return products
-      // Looking at one branch means looking at what that branch carries.
-      .filter((p) => scope === ALL || tracksProduct(scope, p.id))
-      .filter((p) => looseMatch([p.name, p.sku], q))
-      .map((p) => ({
-        p,
-        total: totalQtyOf(p),
-        min: scope === ALL ? p.minStock : minFor(p, scope),
-      }))
-      .sort((a, b) => a.p.name.localeCompare(b.p.name))
-  }, [products, search, scopeLocations, qtyAt, scope, minFor, tracksProduct])
-
-  const columns = useMemo<Column<Row>[]>(() => {
-    const cols: Column<Row>[] = [
-      {
-        key: 'product',
-        header: t('สินค้า'),
-        primary: true,
-        cell: ({ p }) => (
-          <div className="flex items-center gap-2">
-            <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
-            <div className="min-w-0">
-              <div className="truncate font-medium text-ink">{p.name}</div>
-              <div className="text-xs text-ink-faint">{p.category}</div>
-            </div>
-          </div>
-        ),
-      },
-    ]
-    if (scope === ALL) {
-      for (const l of locations) {
-        cols.push({
-          key: l.id,
-          header: l.name,
-          align: 'right',
-          className: 'num text-ink-soft',
-          cell: ({ p }) => fmtQty(qtyAt(l.id, p.id)),
-        })
-      }
-    }
-    cols.push(
-      {
-        key: 'total',
-        header: scope === ALL ? t('รวม') : t('คงเหลือ'),
-        align: 'right',
-        className: 'num',
-        cell: ({ p, total, min }) => (
-          <>
-            <span className={min > 0 && total <= min ? 'font-semibold text-warn' : 'font-semibold text-ink'}>
-              {fmtQty(total)}
-            </span>{' '}
-            <span className="text-xs font-normal text-ink-faint">{p.unitType}</span>
-          </>
-        ),
-      },
-      {
-        key: 'min',
-        header: t('ขั้นต่ำ'),
-        align: 'right',
-        className: 'num text-ink-soft',
-        cell: ({ min }) => fmtQty(min),
-      },
-      {
-        key: 'status',
-        header: t('สถานะ'),
-        align: 'right',
-        cell: ({ total, min }) =>
-          total <= 0 ? (
-            <Badge color="slate">{t('หมด')}</Badge>
-          ) : min > 0 && total <= min ? (
-            <Badge color="red">{t('ใกล้หมด')}</Badge>
-          ) : (
-            <Badge color="green">{t('ปกติ')}</Badge>
-          ),
-      },
-    )
-    return cols
-  }, [scope, locations, qtyAt, t])
-
-  if (loading) return <Spinner label={t('กำลังโหลดภาพรวม...')} />
-
-  if (phone) return <PhoneHome />
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHero icon="dashboard" title={t('ภาพรวมสต๊อก')} />
-        <div className="flex flex-wrap gap-1 rounded-lg bg-sunken p-1">
-          <SegTab
-            grow={false}
-            label={t('รวมทุกคลัง')}
-            active={scope === ALL}
-            onClick={() => setScope(ALL)}
-          />
-          {locations.map((l) => (
-            <SegTab
-              key={l.id}
-              grow={false}
-              label={l.name}
-              active={scope === l.id}
-              onClick={() => setScope(l.id)}
-            />
-          ))}
-        </div>
-      </div>
+    <FramePage>
+      <PageHero
+        icon="sparkles"
+        title={t('สวัสดี คุณ {name}', { name: user?.name ?? '' })}
+        subtitle={t('ภาพรวมสินค้าคงคลังของ {brand} ประจำวันที่ {date}', {
+          brand: brand ? brandDef(brand).name : '',
+          date: formatThaiDate(now),
+        })}
+      />
 
-      {/* One column on a phone, two on a tablet, the wide-plus-narrow pair on a desktop. */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <StatGroup title={t('ภาพรวม')}>
-            <StatTile
-              icon="report"
-              tone="brand"
-              value={`฿ ${fmtMoney(stats.value)}`} /* ฿ is a currency symbol — i18n-key */
-              label={t('มูลค่าสต๊อก')}
-              hint={t('อิงต้นทุนที่กรอก')}
-            />
-            <StatTile
-              icon="package"
-              value={`${products.length}`}
-              label={t('จำนวนสินค้า')}
-              hint={t('{n} รายการมีของ', { n: stats.inStock })}
-            />
-            <StatTile
-              icon="warning"
-              tone={lowStock.length > 0 ? 'warn' : 'plain'}
-              value={`${lowStock.length}`}
-              label={t('ใกล้/ต่ำกว่าขั้นต่ำ')}
-            />
-            <StatTile
-              icon="history"
-              value={`${stats.recent}`}
-              label={t('ความเคลื่อนไหว 7 วัน')}
-              hint={
-                stats.lastAt > 0
-                  ? t('ล่าสุด {date}', { date: formatThaiDateShort(stats.lastAt) })
-                  : t('ยังไม่มีรายการ')
-              }
-            />
-          </StatGroup>
-        </div>
-
-        <StatGroup title={t('คลังสินค้า')} columns={2}>
-          <StatTile
-            icon="building"
-            value={`${scopeLocations.length}`}
-            label={t('คลัง/สาขา')}
-            hint={scope === ALL ? t('ทั้งหมด') : t('ที่เลือก')}
-          />
-          <StatTile
-            icon="package"
-            tone="in"
-            value={`${stats.inStock}`}
-            label={t('รายการที่มีของ')}
-          />
-        </StatGroup>
-      </div>
-
-      <TodayPanel />
-
-      <RequestWidget />
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="p-4 lg:col-span-2">
-          <CardTitle title={t('มูลค่าสต๊อกตามหมวดหมู่ (บาท)')} className="mb-3" />
-          {byCategory.length === 0 ? (
-            <EmptyState
-              icon="report"
-              title={t('ยังไม่มีมูลค่า')}
-              hint={t('* มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า')}
-            />
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={byCategory} margin={{ left: 10, right: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line)" vertical={false} />
-                  <XAxis
-                    dataKey="category"
-                    tick={{ fontSize: 11 }}
-                    interval={0}
-                    angle={-20}
-                    textAnchor="end"
-                    height={60}
-                  />
-                  <YAxis tick={{ fontSize: 11 }} width={56} />
-                  <Tooltip formatter={(v) => `฿ ${fmtMoney(Number(v))}`} /* i18n-key */ />
-                  {/* The brand token, not a hex value: this bar used to be Pizza Mania red
-                      whichever company's books were open. */}
-                  <Bar dataKey="value" fill="var(--color-brand)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-1 text-xs text-ink-faint">
-                {t('* มูลค่าจะแสดงเมื่อกรอกต้นทุนต่อหน่วยในหน้าสินค้า')}
-              </p>
-            </>
-          )}
-        </Card>
-
-        <Card className="flex flex-col p-4">
-          <CardTitle
-            title={t('สินค้าใกล้หมด')}
-            className="mb-3"
-            action={
-              lowStock.length > 0 ? (
-                <Badge color="red">{lowStock.length}</Badge>
-              ) : (
-                <Badge color="green">{t('ปกติ')}</Badge>
-              )
-            }
-          />
-          {lowStock.length === 0 ? (
-            <EmptyState icon="check" title={t('ไม่มีรายการที่ต่ำกว่าขั้นต่ำ')} />
-          ) : (
-            <ul className="-mx-1 max-h-[300px] divide-y divide-line overflow-auto">
-              {lowStock.slice(0, 50).map((it) => (
-                <li key={`${it.location.id}-${it.product.id}`}>
-                  <Link
-                    to={`/movements?product=${encodeURIComponent(it.product.id)}`}
-                    className="flex items-center gap-2 px-1 py-2 hover:bg-sunken"
-                  >
-                    <ProductThumb
-                      productId={it.product.id}
-                      hasImage={it.product.hasImage}
-                      size={30}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-ink">
-                        {it.product.name}
-                      </span>
-                      <span className="block truncate text-xs text-ink-faint">
-                        {scope === ALL ? <SiteChip locationId={it.location.id} /> : it.product.category}
-                      </span>
-                    </span>
-                    <span className="num shrink-0 text-right text-sm font-semibold text-warn">
-                      {fmtQty(it.qty)}/{fmtQty(it.min)}
-                      <span className="ml-1 text-xs font-normal text-ink-faint">
-                        {it.product.unitType}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b border-line p-3">
-          <CardTitle title={t('สต๊อกคงเหลือ')} className="mr-auto" />
-          <Input
-            placeholder={t('ค้นหาสินค้าในคลังนี้…')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:max-w-xs"
-          />
-        </div>
-        <DataTable
-          rows={rows}
-          columns={columns}
-          rowKey={({ p }) => p.id}
-          minWidth={scope === ALL ? 720 : 560}
-          maxHeight="calc(100vh - 300px)"
-          empty={<EmptyState icon="package" title={t('ไม่พบสินค้า')} />}
+      <StatRow columns={5}>
+        <StatTile
+          icon="receive"
+          tone="green"
+          label={t('รับสินค้าเข้าวันนี้')}
+          value={f.receivedToday}
+          unit={items}
+          trend={trend(f.receivedToday, f.receivedYesterday, t('จากเมื่อวาน'))}
+          hint={t('เมื่อวาน {n} ใบ', { n: f.receivedYesterday })}
+          to="/movements"
         />
-      </Card>
-    </div>
+        <StatTile
+          icon="note"
+          tone="red"
+          label={t('รออนุมัติใบขอสั่งซื้อ')}
+          value={f.pendingRequests ?? '–'}
+          unit={items}
+          hint={t('ใบขอใน 30 วันล่าสุด')}
+          to="/requests?filter=pendingApproval"
+        />
+        <StatTile
+          icon="warning"
+          tone="amber"
+          label={t('สินค้าคงเหลือน้อย')}
+          value={f.low.length}
+          unit={items}
+          hint={f.outCount > 0 ? t('หมดแล้ว {n} รายการ', { n: f.outCount }) : t('ยังไม่มีรายการที่หมด')}
+          to="/products"
+        />
+        <StatTile
+          icon="swap"
+          tone="blue"
+          label={t('โอนสาขาวันนี้')}
+          value={f.transfersToday}
+          unit={items}
+          trend={trend(f.transfersToday, f.transfersYesterday, t('จากเมื่อวาน'))}
+          hint={t('เมื่อวาน {n} ใบ', { n: f.transfersYesterday })}
+          to="/issue"
+        />
+        <StatTile
+          icon="box"
+          tone="purple"
+          label={t('มูลค่าสินค้าคงคลัง')}
+          value={`฿ ${fmtMoney(f.value)}`} /* ฿ is a currency symbol — i18n-key */
+          trend={valueTrend && !valueTrend.flat ? { text: valueTrend.text, up: valueTrend.up, suffix: t('จาก 30 วันก่อน') } : undefined}
+          hint={t('อิงต้นทุนที่กรอก')}
+          to="/reports"
+        />
+      </StatRow>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
+        <WeeklyMovementCard weekly={f.weekly} />
+        <LowStockCard low={f.low} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.75fr)] xl:gap-5">
+        <div className="md:col-span-2 xl:col-span-1">
+          <BranchOverviewCard branches={f.branches} />
+        </div>
+        <RecentActivityCard movements={movements} requests={f.requests} orders={f.orders} />
+        <QuickMenuCard />
+      </div>
+    </FramePage>
   )
 }

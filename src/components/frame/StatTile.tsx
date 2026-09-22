@@ -59,8 +59,8 @@ export function StatTile({
       <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${toneIcon[tone]}`}>
         <Icon name={icon} size={22} />
       </span>
-      <div className="min-w-0 flex-1">
-        <div className={`truncate text-[13px] font-medium ${valueTone ? toneText[valueTone] : 'text-ink-soft'}`}>
+      <div className={`min-w-0 flex-1 ${to ? 'pr-3' : ''}`}>
+        <div className={`line-clamp-2 text-[13px] font-medium leading-snug ${valueTone ? toneText[valueTone] : 'text-ink-soft'}`}>
           {label}
         </div>
         <div className={`num mt-0.5 truncate text-2xl font-bold leading-tight ${valueTone ? toneText[valueTone] : 'text-ink'}`}>
@@ -80,13 +80,13 @@ export function StatTile({
         )}
       </div>
       {to && (
-        <span className="self-end text-brand" aria-hidden>
+        <span className="absolute bottom-3 right-3 text-brand" aria-hidden>
           <Icon name="arrowRight" size={16} />
         </span>
       )}
     </>
   )
-  const shell = `flex min-w-0 items-center gap-3 p-4 text-left transition-colors duration-150 ${frameCard} ${
+  const shell = `relative flex min-w-0 items-center gap-3 p-4 text-left transition-colors duration-150 ${frameCard} ${
     selected ? '!border-brand/30 !bg-brand-soft' : ''
   }`
   if (to)

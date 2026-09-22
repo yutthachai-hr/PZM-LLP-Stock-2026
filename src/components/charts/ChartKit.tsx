@@ -75,7 +75,7 @@ export function BarsChart({
         <BarChart data={data} margin={{ left: 0, right: 8, top: 8 }} barGap={4}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line)" vertical={false} />
           <XAxis dataKey={xKey} tick={axisTick} tickLine={false} axisLine={false} interval={0} />
-          <YAxis tick={axisTick} tickLine={false} axisLine={false} width={44} tickFormatter={format} />
+          <YAxis tick={axisTick} tickLine={false} axisLine={false} width={44} tickFormatter={format} allowDecimals={false} />
           <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-sunken)' }} formatter={format ? (v) => format(Number(v)) : undefined} />
           {series.map((s) => (
             <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={18} />
