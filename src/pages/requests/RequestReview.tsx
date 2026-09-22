@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { siteTones } from '../../lib/siteTone'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { RESUME_PARAM } from '../../share/liffResume'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
 import { brandDef } from '../../brand/brand'
@@ -53,6 +54,14 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
   const [ask, setAsk] = useState<null | 'return' | 'reject' | 'approve' | 'reopen' | { remove: PurchaseRequestItem }>(null)
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [sending, setSending] = useState(false)
+  // Back from LINE Login: ?send=<orderId> reopens the wizard (share/liffResume.ts).
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    const send = params.get(RESUME_PARAM)
+    if (!send || orders.length === 0) return
+    if (orders.some((o) => o.id === send)) setSending(true)
+    setParams({}, { replace: true })
+  }, [params, setParams, orders])
   const [converting, setConverting] = useState(false)
 
   const actor = useMemo(() => (user ? { id: user.id, name: user.name, role: user.role as Role } : null), [user])

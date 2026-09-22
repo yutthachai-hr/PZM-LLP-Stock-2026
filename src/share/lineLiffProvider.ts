@@ -1,4 +1,5 @@
 import { AppError } from '../i18n/AppError'
+import { isStandalone, liffUrl, resumeUrl } from './liffResume'
 import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './PurchaseShareProvider'
 
 /**
@@ -68,6 +69,20 @@ async function liff(): Promise<Liff> {
   return ready
 }
 
+/**
+ * Whether the first "ส่ง LINE" will leave the page for LINE Login (an ordinary browser,
+ * not yet signed in) — so the screen can say so before it happens.
+ */
+export async function liffNeedsLogin(): Promise<boolean> {
+  if (!liffId()) return false
+  try {
+    const sdk = await liff()
+    return !sdk.isInClient() && !sdk.isLoggedIn()
+  } catch {
+    return false
+  }
+}
+
 export const lineLiffProvider: PurchaseShareProvider = {
   id: 'line-liff',
   label: 'ส่ง LINE', // i18n-key
@@ -91,9 +106,16 @@ export const lineLiffProvider: PurchaseShareProvider = {
   async share(payload: SharePayload): Promise<ShareOutcome> {
     const sdk = await liff()
     if (!sdk.isLoggedIn()) {
-      // Off to LINE Login and back to this very page; the wizard resumes from the order's
-      // recorded status, so nothing is lost across the round trip.
-      sdk.login({ redirectUri: typeof location === 'undefined' ? undefined : location.href })
+      if (isStandalone()) {
+        // A home-screen app cannot finish a login round trip (the browser it comes back
+        // in is not the app), so the same page is opened inside LINE, where LIFF is
+        // signed in already and the picker just works (share/liffResume.ts).
+        location.href = liffUrl(payload.order.id)
+        return 'cancelled'
+      }
+      // Off to LINE Login and back to this very page with ?send=<order>, which reopens the
+      // wizard on that order (share/liffResume.ts) — the tap is not lost across the trip.
+      sdk.login({ redirectUri: resumeUrl(payload.order.id) })
       return 'cancelled'
     }
     if (!sdk.isApiAvailable('shareTargetPicker')) {
