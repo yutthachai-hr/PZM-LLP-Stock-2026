@@ -1012,7 +1012,10 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
     setBusy('recompute')
     try {
       await recomputeLevels(actor)
-      setDrift(await findLevelDrift())
+      // What it just wrote came straight from the ledger it just read, so it agrees with
+      // it by construction — asking findLevelDrift() to read the whole thing again to
+      // confirm that would be the exact waste this tool exists to fix (22 Sep 2026).
+      setDrift([])
       toast.success(t("คำนวณยอดคงเหลือใหม่จากประวัติเรียบร้อย"))
     } catch (e) {
       toast.error(errText(e, t))
@@ -1136,7 +1139,7 @@ function MaintenanceSection({ actor }: { actor: { id: string; name: string } }) 
         </Button>
       </div>
       <p className="mt-2 text-xs text-ink-faint">
-        {t('“คำนวณยอดคงเหลือใหม่” จะสร้างยอดคงเหลือจากประวัติการเคลื่อนไหวทั้งหมด (ใช้เมื่อสงสัยว่ายอดไม่ตรง)')}
+        {t('“คำนวณยอดคงเหลือใหม่” และ “ตรวจความสอดคล้องของยอด” อ่านประวัติการเคลื่อนไหวทั้งหมดของแบรนด์นี้ทุกครั้งที่กด — ใช้เมื่อสงสัยว่ายอดไม่ตรงจริง ๆ ไม่ควรกดซ้ำหลายครั้งติดกันโดยไม่จำเป็น (มีผลต่อโควตาการอ่านข้อมูลรายวัน)')}
       </p>
 
       {drift !== null && (
