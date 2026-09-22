@@ -415,6 +415,14 @@ describe('calendar event assignees', () => {
   })
 })
 
+describe('product barcodes (22 Sep 2026)', () => {
+  test('are allowed, bounded, and still nothing else is', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/b1'), product('b1', { barcode: '8851000654321' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'products/b2'), product('b2', { barcode: '8'.repeat(65) })))
+    await assertFails(setDoc(doc(as(ADMIN), 'products/b3'), product('b3', { barcode: 8851000654321 })))
+  })
+})
+
 describe('suppliers', () => {
   test('an admin may create one; staff may not', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1')))

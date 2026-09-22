@@ -89,3 +89,25 @@ describe('alternate suppliers', () => {
     expect('alternateSupplierIds' in row()).toBe(false)
   })
 })
+
+describe('barcodes (owner, 22 Sep 2026)', () => {
+  test('are optional, stored trimmed, and cleared as an absent field', async () => {
+    const id = await createProduct({ ...BASE, barcode: '  8851000654321 ' })
+    const row = () => (raw('products') as Record<string, unknown>[]).find((r) => r.id === id)!
+    expect(row().barcode).toBe('8851000654321')
+    await updateProduct(id, { barcode: '' })
+    expect('barcode' in row()).toBe(false)
+    const plain = await createProduct({ ...BASE, sku: 'GAS-02' })
+    expect('barcode' in (raw('products') as Record<string, unknown>[]).find((r) => r.id === plain)!).toBe(false)
+  })
+
+  test('cannot land on two products — a scan has to mean one thing', async () => {
+    await createProduct({ ...BASE, barcode: '111' })
+    await expect(createProduct({ ...BASE, sku: 'GAS-03', barcode: '111' })).rejects.toThrow()
+    const other = await createProduct({ ...BASE, sku: 'GAS-04' })
+    await expect(updateProduct(other, { barcode: '111' })).rejects.toThrow()
+    // Saving a product with the barcode it already has is not a clash with itself.
+    await expect(updateProduct(other, { barcode: '222' })).resolves.toBeUndefined()
+    await expect(updateProduct(other, { barcode: '222' })).resolves.toBeUndefined()
+  })
+})

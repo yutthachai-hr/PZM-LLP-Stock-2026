@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { getBrand } from '../brand/brand'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import { COL, type Product, type ProductImage, type StockLevel } from '../types'
@@ -12,6 +13,8 @@ export interface ProductInput {
   alternateSupplierIds?: string[]
   sku: string
   name: string
+  /** The number on the box. Empty clears it; it has to be unique within the brand. */
+  barcode?: string
   category: string
   unit: string
   unitType: string
@@ -64,16 +67,36 @@ export function normaliseAlternates(
   return out
 }
 
+/**
+ * Refuse a barcode another product already carries.
+ *
+ * Checked here rather than in the rules, which cannot query a collection. One equality
+ * read per save, and only when a barcode was actually typed or scanned.
+ */
+export async function checkBarcodeFree(barcode: string, exceptProductId?: string): Promise<void> {
+  const code = barcode.trim()
+  if (!code) return
+  const db = backend.forBrand(getBrand())
+  const clash = (await db.getBy<Product>(COL.products, 'barcode', code)).find((p) => p.id !== exceptProductId)
+  if (clash) {
+    throw new AppError('บาร์โค้ดนี้ใช้กับ "{name}" อยู่แล้ว', { name: clash.name })
+  }
+}
+
 export async function createProduct(input: ProductInput): Promise<string> {
   checkNumbers(input)
+  const barcode = input.barcode?.trim() ?? ''
+  await checkBarcodeFree(barcode)
   const now = Date.now()
   // Optional fields are omitted rather than written empty: the rules pin the shape with
   // hasOnly, and a blank string is still a present key.
-  const { unitConversions, supplierId, alternateSupplierIds, ...rest } = input
+  const { unitConversions, supplierId, alternateSupplierIds, barcode: _typed, ...rest } = input
+  void _typed
   const conversions = unitConversions ? normaliseConversions(unitConversions, input.unitType) : []
   const alternates = normaliseAlternates(alternateSupplierIds, supplierId)
   return backend.add(COL.products, {
     ...rest,
+    ...(barcode ? { barcode } : {}),
     ...(conversions.length ? { unitConversions: conversions } : {}),
     ...(supplierId ? { supplierId } : {}),
     ...(alternates.length ? { alternateSupplierIds: alternates } : {}),
@@ -92,8 +115,14 @@ export async function updateProduct(
   // An empty cost box means "no cost recorded", which has to remove the field rather than
   // send undefined — Firestore skips undefined values, so clearing a cost of 100 used to
   // save happily and leave the 100 in place, still counted in the stock valuation.
-  const { cost, unitConversions, supplierId, alternateSupplierIds, ...rest } = patch
+  const { cost, unitConversions, supplierId, alternateSupplierIds, barcode, ...rest } = patch
   const write: Record<string, unknown> = { ...rest, updatedAt: Date.now() }
+  // The number on the box: cleared it is an absent key, and a new one has to be free.
+  if ('barcode' in patch) {
+    const code = barcode?.trim() ?? ''
+    if (code) await checkBarcodeFree(code, id)
+    write.barcode = code ? code : DELETE_FIELD
+  }
   if ('alternateSupplierIds' in patch) {
     const alternates = normaliseAlternates(alternateSupplierIds, supplierId)
     write.alternateSupplierIds = alternates.length ? alternates : DELETE_FIELD

@@ -64,6 +64,7 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
               <>
                 <span className="doc-no md:hidden">{r.p.sku} · </span>
                 {r.p.category} · {r.p.unitType}
+                {r.p.barcode ? <span className="doc-no"> · {r.p.barcode}</span> : null}
               </>
             }
             productId={r.p.id}
@@ -138,7 +139,7 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
 export function productMenu(
   r: ProductRow,
   t: TFn,
-  opts: { isAdmin: boolean; locId: string; go: (to: string) => void; edit: () => void; toggleHidden: () => void },
+  opts: { isAdmin: boolean; locId: string; go: (to: string) => void; edit: () => void; toggleHidden: () => void; bindBarcode: () => void },
 ): RowMenuItem[] {
   const card = `/products/${encodeURIComponent(r.p.id)}/card`
   const items: RowMenuItem[] = [
@@ -151,6 +152,16 @@ export function productMenu(
       onSelect: () => opts.go(`/requests/new?product=${encodeURIComponent(r.p.id)}${opts.locId ? `&location=${encodeURIComponent(opts.locId)}` : ''}`),
     },
   ]
+  if (opts.isAdmin) {
+    // Scanning one product at a time, standing at the shelf — the other way in is the
+    // Barcode column of the Excel import (owner, 22 Sep 2026: both).
+    items.push({
+      key: 'barcode',
+      label: r.p.barcode ? t('เปลี่ยนบาร์โค้ด') : t('สแกนเพื่อผูกบาร์โค้ด'),
+      icon: 'barcode',
+      onSelect: opts.bindBarcode,
+    })
+  }
   // Hide rather than delete: a hidden product keeps its balance and its history and is one
   // click from coming back; a deleted one has to be keyed in again from scratch.
   if (opts.isAdmin)

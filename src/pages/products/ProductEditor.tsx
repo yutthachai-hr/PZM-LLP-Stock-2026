@@ -16,6 +16,7 @@ import {
   blurOnWheel,
 } from '../../components/ui'
 import { invalidateThumb } from '../../components/ProductThumb'
+import { BarcodeScanner } from '../../components/BarcodeScanner'
 import { ConversionRows } from '../../components/ConversionRows'
 import {
   createProduct,
@@ -56,8 +57,10 @@ export function ProductEditor({
   const { user } = useAuth()
   const { brand } = useBrand()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [scanning, setScanning] = useState(false)
   const [form, setForm] = useState<ProductInput>({
     sku: product?.sku ?? '',
+    barcode: product?.barcode ?? '',
     name: product?.name ?? '',
     category: product?.category ?? '',
     unit: product?.unit ?? t("หน่วย"),
@@ -311,6 +314,25 @@ export function ProductEditor({
             disabled={!canEdit}
           />
         </Field>
+        {/* The number on the box (owner, 22 Sep 2026). The SKU stays the identity; this is
+            a second way to find the product, and a scan fills it in. */}
+        <Field label={t('บาร์โค้ด')} hint={t('ไม่บังคับ — ใช้ค้นหาและสแกนตอนคีย์ของ')}>
+          <div className="flex gap-2">
+            <Input
+              value={form.barcode ?? ''}
+              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+              disabled={!canEdit}
+              inputMode="numeric"
+              placeholder={t('เช่น 8851000654321')}
+            />
+            {canEdit && (
+              <Button variant="secondary" onClick={() => setScanning(true)} className="shrink-0">
+                <Icon name="barcode" size={18} />
+                {t('สแกน')}
+              </Button>
+            )}
+          </div>
+        </Field>
         <Field label={t("หมวดหมู่")} required>
           <Input
             list="cat-list"
@@ -516,6 +538,14 @@ export function ProductEditor({
           )}
         </div>
       </div>
+      <BarcodeScanner
+        open={scanning}
+        onClose={() => setScanning(false)}
+        onRead={(code) => {
+          setForm((f) => ({ ...f, barcode: code }))
+          setScanning(false)
+        }}
+      />
     </Modal>
   )
 }

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@line/liff": "^2.31.0",
+    "@zxing/browser": "^0.2.1",
     "dayjs": "^1.11.21",
     "firebase": "^12.16.0",
     "html2canvas": "^1.4.1",

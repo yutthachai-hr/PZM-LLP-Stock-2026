@@ -11,6 +11,8 @@ import { useConfirm } from '../components/Confirm'
 import { Button, EmptyState, Field, Input, Modal, Pagination, SearchInput, Select, Spinner, blurOnWheel } from '../components/ui'
 import { ChipRow, FilterBar, FilterField, FramePage, PageHero, SectionCard, type Chip } from '../components/frame'
 import { DataTable } from '../components/DataTable'
+import { BarcodeScanner } from '../components/BarcodeScanner'
+import { BarcodeImportModal } from './products/BarcodeImportModal'
 import { updateProduct } from '../services/products'
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
 import { exportExcel } from '../lib/export'
@@ -81,6 +83,9 @@ export function ProductsPage() {
   const [seeding, setSeeding] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [settingMin, setSettingMin] = useState(false)
+  // Which product a scan is about to be attached to (spec §3).
+  const [binding, setBinding] = useState<Product | null>(null)
+  const [importingBarcodes, setImportingBarcodes] = useState(false)
 
   function setView(v: View) {
     setViewState(v)
@@ -321,6 +326,10 @@ export function ProductsPage() {
                   </Button>
                 </span>
               )}
+              <Button variant="secondary" onClick={() => setImportingBarcodes(true)} className="hidden md:inline-flex">
+                <Icon name="barcode" size={16} />
+                {t('นำเข้าบาร์โค้ด')}
+              </Button>
               <Link
                 to="/import"
                 className="hidden min-h-11 items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium text-ink hover:bg-sunken md:inline-flex"
@@ -444,6 +453,7 @@ export function ProductsPage() {
                       go: navigate,
                       edit: () => setEditing(r.p),
                       toggleHidden: () => void toggleHidden(r.p),
+                      bindBarcode: () => setBinding(r.p),
                     })
                   }
                 />
@@ -480,6 +490,29 @@ export function ProductsPage() {
             {t('ล้างที่เลือก')}
           </Button>
         </div>
+      )}
+
+      {importingBarcodes && (
+        <BarcodeImportModal products={products} onClose={() => setImportingBarcodes(false)} onDone={() => undefined} />
+      )}
+
+      {binding && (
+        <BarcodeScanner
+          open
+          title={t('ผูกบาร์โค้ดกับ "{name}"', { name: binding.name })}
+          onClose={() => setBinding(null)}
+          onRead={async (code) => {
+            const target = binding
+            setBinding(null)
+            if (!target) return
+            try {
+              await updateProduct(target.id, { barcode: code })
+              toast.success(t('ผูกบาร์โค้ด {code} กับ "{name}" แล้ว', { code, name: target.name }))
+            } catch (e) {
+              toast.error(errText(e, t))
+            }
+          }}
+        />
       )}
 
       {settingMin && (

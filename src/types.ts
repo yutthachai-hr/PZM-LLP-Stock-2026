@@ -42,6 +42,14 @@ export const MAX_COST_HISTORY = 100
 export interface Product {
   id: string
   sku: string
+  /**
+   * The number printed on the box, when someone has scanned it in (owner, 22 Sep 2026).
+   *
+   * Optional, and never a key: the SKU from the company's own workbooks stays the identity
+   * of a product. A barcode is a second way to find one, unique within the brand so a scan
+   * can only ever mean one thing.
+   */
+  barcode?: string
   name: string
   category: string
   unit: string // display unit, e.g. "Kilogram", "Bottle"

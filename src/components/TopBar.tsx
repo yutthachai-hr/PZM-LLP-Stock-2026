@@ -13,6 +13,7 @@ import { NotificationBell } from './notifications/NotificationBell'
 import { ProductThumb } from './ProductThumb'
 import { ProfileModal } from './ProfileModal'
 import { looseScore } from '../lib/search'
+import { searchFields } from '../lib/barcode'
 
 /**
  * The bar across the top of every screen: find a product, and see what is running out.
@@ -55,7 +56,7 @@ export function TopBar({ title }: { title: string }) {
     // from สินค้าคงคลัง with the "ที่ซ่อนไว้" filter.
     return products
       .filter((p) => p.active !== false)
-      .map((p) => ({ p, score: looseScore([p.name, p.sku], needle) }))
+      .map((p) => ({ p, score: looseScore(searchFields(p), needle) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name))
       .slice(0, MAX_RESULTS)

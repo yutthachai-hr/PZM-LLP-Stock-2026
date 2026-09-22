@@ -24,6 +24,8 @@ import { ADJUST_REASONS, type Product } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
+import { findByBarcode, searchFields } from '../lib/barcode'
+import { BarcodeScanner } from '../components/BarcodeScanner'
 import { useViewport } from '../lib/viewport'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
@@ -82,6 +84,7 @@ export function AdjustPage() {
   const [sheetDir, setSheetDir] = useState<'in' | 'out'>('out')
   const [sheetReason, setSheetReason] = useState<string>('count')
   const [busy, setBusy] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   // A half-keyed count survives leaving the screen (lib/useDraft.ts).
@@ -117,7 +120,7 @@ export function AdjustPage() {
     const chosen = new Set(rows.map((r) => r.productId))
     return products
       .filter((p) => p.active !== false && (phone || !chosen.has(p.id)))
-      .filter((p) => looseMatch([p.name, p.sku], q))
+      .filter((p) => looseMatch(searchFields(p), q))
       .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
       .slice(0, MAX_MATCHES)
   }, [search, products, rows, phone])
@@ -133,6 +136,13 @@ export function AdjustPage() {
     }
     setRows((rs) => [...rs, { productId: p.id, productName: p.name, unit: p.unitType, mode: 'count', value: null, reason: defaultReason }])
     setTimeout(() => searchRef.current?.focus(), 0)
+  }
+
+  function scanned(code: string) {
+    setScanning(false)
+    const hit = findByBarcode(products, code)
+    if (hit) add(hit)
+    else setSearch(code)
   }
 
   const patch = (id: string, p: Partial<AdjRow>) => setRows((rs) => rs.map((r) => (r.productId === id ? { ...r, ...p } : r)))
@@ -309,6 +319,15 @@ export function AdjustPage() {
                 autoComplete="off"
                 spellCheck={false}
               />
+              <button
+                type="button"
+                onClick={() => setScanning(true)}
+                aria-label={t('สแกนบาร์โค้ด')}
+                title={t('สแกนบาร์โค้ด')}
+                className="absolute right-1.5 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg text-ink-soft hover:bg-sunken hover:text-ink"
+              >
+                <Icon name="barcode" size={20} />
+              </button>
               {matches.length > 0 && (
                 <div className="mt-1 max-h-80 w-full overflow-auto rounded-lg border border-line bg-surface shadow-lg md:absolute md:z-20">
                   {matches.map((p) => (
@@ -509,6 +528,8 @@ export function AdjustPage() {
           </Button>
         </SubmitBar>
       </WithSidePanel>
+
+      <BarcodeScanner open={scanning} onClose={() => setScanning(false)} onRead={scanned} />
 
       {phone && (
         <QtySheet

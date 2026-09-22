@@ -11,6 +11,8 @@ import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
+import { findByBarcode, searchFields } from '../lib/barcode'
+import { BarcodeScanner } from './BarcodeScanner'
 import { describeQty, type QtyEntry } from '../lib/uom'
 
 export interface Line {
@@ -77,6 +79,7 @@ export function LineBuilder({
 }) {
   const t = useT()
   const [search, setSearch] = useState('')
+  const [scanning, setScanning] = useState(false)
   const searchBox = useRef<HTMLInputElement>(null)
   // A phone keys through a sheet (spec §3, 21 Sep 2026): tapping a product opens it for
   // that product, adding or editing its line. Tablets and desktops keep the inline rows.
@@ -96,7 +99,7 @@ export function LineBuilder({
       // สินค้าคงคลัง if it turns out they should.
       .filter((p) => p.active !== false)
       .filter((p) => phone || !chosen.has(p.id))
-      .filter((p) => looseMatch([p.name, p.sku], q))
+      .filter((p) => looseMatch(searchFields(p), q))
       .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
       .slice(0, MAX_MATCHES)
   }, [search, products, lines, phone])
@@ -111,6 +114,17 @@ export function LineBuilder({
     setSearch('')
     // Straight on to the next line: the cursor stays in the search box after every add.
     setTimeout(() => searchBox.current?.focus(), 0)
+  }
+
+  /** A scan is a decision, not a suggestion: the line goes on as soon as it reads. */
+  function scanned(code: string) {
+    setScanning(false)
+    const hit = findByBarcode(products, code)
+    if (!hit) {
+      setSearch(code)
+      return
+    }
+    addProduct(hit)
   }
 
   function sheetSubmit(e: QtyEntry) {
@@ -168,6 +182,16 @@ export function LineBuilder({
           // the way and covers the field in red underlines.
           spellCheck={false}
         />
+        {/* A scan puts the line on directly (spec §3). */}
+        <button
+          type="button"
+          onClick={() => setScanning(true)}
+          aria-label={t('สแกนบาร์โค้ด')}
+          title={t('สแกนบาร์โค้ด')}
+          className="absolute right-1.5 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg text-ink-soft hover:bg-sunken hover:text-ink"
+        >
+          <Icon name="barcode" size={20} />
+        </button>
         {matches.length > 0 && (
           <div className="mt-1 max-h-80 w-full overflow-auto rounded-lg border border-line bg-surface shadow-lg md:absolute md:z-20">
             {matches.map((p) => (
@@ -337,6 +361,7 @@ export function LineBuilder({
           </table>
         </div>
       )}
+      <BarcodeScanner open={scanning} onClose={() => setScanning(false)} onRead={scanned} />
       <QtySheet
         open={!!sheetFor}
         product={sheetFor}

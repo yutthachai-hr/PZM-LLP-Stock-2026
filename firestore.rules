@@ -239,11 +239,14 @@ service cloud.firestore {
           'hasImage', 'active', 'createdAt', 'updatedAt'
         ])
         && d.keys().hasOnly([
-          'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock', 'cost',
+          'id', 'sku', 'name', 'barcode', 'category', 'unit', 'unitType', 'minStock', 'cost',
           'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
           'hasImage', 'active', 'createdAt', 'updatedAt'
         ])
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
+        // The number on the box (22 Sep 2026). Uniqueness is checked by the app before it
+        // writes — a rule cannot query the collection — so this only pins the shape.
+        && (!('barcode' in d) || text(d.barcode, 64))
         && text(d.unit, 60) && text(d.unitType, 20)
         && nonneg(d.minStock, 1000000000)
         && (!('cost' in d) || nonneg(d.cost, 1000000000))
