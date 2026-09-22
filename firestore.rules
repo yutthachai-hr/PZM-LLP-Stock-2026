@@ -919,11 +919,24 @@ service cloud.firestore {
 
       // role and active ARE the access model — only an admin may change a profile, and an
       // admin may not change their own, so the last admin cannot lock the database's only
-      // way back in. Renaming yourself is still fine.
-      allow update: if admin() && (
-        uid != request.auth.uid
-        || (request.resource.data.role == resource.data.role
-            && request.resource.data.active == resource.data.active)
+      // way back in.
+      //
+      // Renaming yourself needs none of that: `name` decides nothing the access model
+      // depends on, so any active account may change its own (22 Sep 2026, "edit profile") —
+      // and only that field; role, active, email and everything else stay exactly as they
+      // were, changeable only through the admin branch above.
+      allow update: if (
+        admin() && (
+          uid != request.auth.uid
+          || (request.resource.data.role == resource.data.role
+              && request.resource.data.active == resource.data.active)
+        )
+      ) || (
+        active() && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
       );
 
       // Deleting your own profile would lock you out of your own database. The tombstone

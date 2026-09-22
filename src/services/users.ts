@@ -1,9 +1,16 @@
 import { initializeApp, deleteApp } from 'firebase/app'
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from 'firebase/auth'
 import { backend, BACKEND_MODE } from '../backend'
 import { AppError } from '../i18n/AppError'
 import { COL, type AppUser, type Role } from '../types'
 import { getFirebaseConfig } from '../firebase/config'
+import { getAuthInstance } from '../firebase/app'
 
 export async function countUsers(): Promise<number> {
   const all = await backend.getAll<AppUser>(COL.users)
@@ -95,6 +102,44 @@ export async function updateUserProfile(
   patch: Partial<Pick<AppUser, 'name' | 'role' | 'active'>>,
 ): Promise<void> {
   await backend.update(COL.users, id, patch as Record<string, unknown>)
+}
+
+/**
+ * Change your own password — nobody else's, and never without proving the old one first.
+ *
+ *  - cloud: Firebase Auth refuses `updatePassword` on a session older than a few minutes
+ *    ("requires-recent-login"), so the current password is used to re-authenticate right
+ *    before it, every time. A wrong current password fails there with a plain message
+ *    rather than Firebase's own wording, which names neither field.
+ *  - local: there is no Firebase Auth account to ask (services/users.ts createUser, local
+ *    branch) — the password is the profile doc's own `localPassword`, checked by hand.
+ */
+export async function changeOwnPassword(input: {
+  id: string
+  email: string
+  currentPassword: string
+  newPassword: string
+}): Promise<void> {
+  const { id, email, currentPassword, newPassword } = input
+  if (newPassword.length < 6) throw new AppError('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร')
+
+  if (BACKEND_MODE === 'cloud') {
+    const user = getAuthInstance().currentUser
+    if (!user) throw new AppError('ไม่พบบัญชีที่เข้าสู่ระบบ — กรุณาเข้าสู่ระบบใหม่')
+    try {
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(email, currentPassword))
+    } catch {
+      throw new AppError('รหัสผ่านปัจจุบันไม่ถูกต้อง')
+    }
+    await updatePassword(user, newPassword)
+    return
+  }
+
+  const me = await backend.getOne<AppUser>(COL.users, id)
+  if (!me || me.localPassword !== currentPassword) {
+    throw new AppError('รหัสผ่านปัจจุบันไม่ถูกต้อง')
+  }
+  await backend.update(COL.users, id, { localPassword: newPassword })
 }
 
 /**
