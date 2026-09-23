@@ -158,6 +158,21 @@
         "2026-09-23-SC-001-staff-branch-desktop",
         "2026-09-23-SC-005-staff-branch-desktop"
       ]
+    },
+    {
+      "id": "UX-0011",
+      "title": "ฟอร์มแก้ไขสินค้าเปิดให้พนักงานและหัวหน้าดูได้ แต่แก้ไม่ได้ บันทึกไม่ได้ และไม่บอกว่าทำไม",
+      "file": "issues/UX-0011-product-editor-is-read-only-without-saying-so.md",
+      "role": "staff",
+      "route": "/products",
+      "category": "UX_FRICTION",
+      "severity": "blocker",
+      "risk": "LOW",
+      "state": "REPRODUCED",
+      "frequency": 1,
+      "runs": [
+        "2026-09-23-SC-006-staff-branch-desktop"
+      ]
     }
   ]
 }
