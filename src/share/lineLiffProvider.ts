@@ -1,5 +1,5 @@
 import { AppError } from '../i18n/AppError'
-import { isStandalone, liffUrl, resumeUrl } from './liffResume'
+import { handedOverToLine, isStandalone, liffUrl, rememberHandOver, resumeUrl } from './liffResume'
 import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './PurchaseShareProvider'
 
 /**
@@ -106,10 +106,17 @@ export const lineLiffProvider: PurchaseShareProvider = {
   async share(payload: SharePayload): Promise<ShareOutcome> {
     const sdk = await liff()
     if (!sdk.isLoggedIn()) {
-      if (isStandalone()) {
-        // A home-screen app cannot finish a login round trip (the browser it comes back
-        // in is not the app), so the same page is opened inside LINE, where LIFF is
-        // signed in already and the picker just works (share/liffResume.ts).
+      // A home-screen app cannot finish a login round trip (the browser it comes back in
+      // is not the app), so the same page is opened inside LINE, where LIFF is signed in
+      // already and the picker just works (share/liffResume.ts).
+      //
+      // Only ever once, and never from inside LINE itself. Both guards are there because
+      // the hand-over used to fire inside LINE's own browser — which re-opened the page it
+      // was already on, so every tap reloaded and nothing was ever sent (owner's recording,
+      // 23 Sep 2026). Inside LINE, and on the way back from a hand-over that did not take,
+      // LINE Login is the way forward: it works in any webview that keeps cookies.
+      if (!sdk.isInClient() && isStandalone() && !handedOverToLine(payload.order.id)) {
+        rememberHandOver(payload.order.id)
         location.href = liffUrl(payload.order.id)
         return 'cancelled'
       }

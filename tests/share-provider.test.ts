@@ -21,7 +21,8 @@ vi.stubEnv('VITE_LIFF_ID', '1234567890-abcdefgh')
 
 const { lineLiffProvider } = await import('../src/share/lineLiffProvider')
 const { statusFor } = await import('../src/share/PurchaseShareProvider')
-const { RESUME_PARAM, resumeUrl, liffUrl, isStandalone } = await import('../src/share/liffResume')
+const { RESUME_PARAM, resumeUrl, liffUrl, isStandalone, brandToResume } = await import('../src/share/liffResume')
+const { setActiveBrand } = await import('../src/brand/brand')
 import type { SharePayload } from '../src/share/PurchaseShareProvider'
 
 const payload = (): SharePayload => ({
@@ -47,6 +48,7 @@ const payload = (): SharePayload => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  sdk.isInClient.mockReturnValue(false)
   sdk.isLoggedIn.mockReturnValue(true)
   sdk.isApiAvailable.mockReturnValue(true)
 })
@@ -97,7 +99,7 @@ describe('the LINE (LIFF) provider', () => {
       sdk.isLoggedIn.mockReturnValue(false)
       await lineLiffProvider.share(payload())
       const { redirectUri } = sdk.login.mock.calls[0][0] as { redirectUri: string }
-      expect(redirectUri).toBe(`https://pzmstock.pages.dev/orders?tab=open&${RESUME_PARAM}=o1`)
+      expect(redirectUri).toBe(`https://pzmstock.pages.dev/orders?tab=open&${RESUME_PARAM}=o1&brand=pizza`)
       vi.unstubAllGlobals()
     })
 
@@ -111,13 +113,89 @@ describe('the LINE (LIFF) provider', () => {
       expect(await lineLiffProvider.share(payload())).toBe('cancelled')
       expect(sdk.login).not.toHaveBeenCalled()
       expect(here.href).toBe(liffUrl('o1'))
-      expect(here.href).toBe('https://liff.line.me/1234567890-abcdefgh/orders?send=o1')
+      expect(here.href).toBe('https://liff.line.me/1234567890-abcdefgh/orders?send=o1&brand=pizza')
       vi.unstubAllGlobals()
     })
 
     test('outside a browser there is no address to come back to, and nothing throws', () => {
       expect(resumeUrl('o1')).toBeUndefined()
       expect(isStandalone()).toBe(false)
+    })
+
+    // The brand is chosen once per visit and kept in React state, so coming back from LINE
+    // used to land on the brand picker with no way to tell which brand the order was in.
+    test('the way back names the brand, so the sheet opens instead of the brand picker', async () => {
+      setActiveBrand('lelapin')
+      vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev', search: '' })
+      expect(resumeUrl('o1')).toBe('https://pzmstock.pages.dev/orders?send=o1&brand=lelapin')
+      expect(liffUrl('o1')).toBe('https://liff.line.me/1234567890-abcdefgh/orders?send=o1&brand=lelapin')
+
+      vi.stubGlobal('location', { search: '?send=o1&brand=lelapin' })
+      expect(brandToResume()).toBe('lelapin')
+      // An ordinary visit, and a made-up brand, still start at the picker.
+      vi.stubGlobal('location', { search: '?brand=lelapin' })
+      expect(brandToResume()).toBeNull()
+      vi.stubGlobal('location', { search: '?send=o1&brand=nonsense' })
+      expect(brandToResume()).toBeNull()
+      vi.unstubAllGlobals()
+      setActiveBrand('pizza')
+    })
+  })
+
+  // 23 Sep 2026: the owner filmed "ส่ง LINE" doing nothing but reload, over and over. An
+  // iOS webview inside another app reports `navigator.standalone === true` just as a
+  // home-screen app does, so inside LINE's own in-app browser the code took the "hand this
+  // over to LINE" branch — which re-opened the very page it was already on. Nothing could
+  // ever make progress, and there was no limit on how often it tried.
+  describe('the hand-over to LINE cannot loop', () => {
+    const inApp = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Line/14.9.0'
+    const homeScreen = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
+    const at = (userAgent: string) => {
+      const here = { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev' }
+      const store = new Map<string, string>()
+      vi.stubGlobal('location', here)
+      vi.stubGlobal('navigator', { standalone: true, userAgent })
+      vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) })
+      vi.stubGlobal('sessionStorage', {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+        removeItem: (k: string) => void store.delete(k),
+      })
+      return here
+    }
+
+    test("LINE's own browser is not a home-screen app: sign in there, do not hand over again", async () => {
+      const here = at(inApp)
+      expect(isStandalone()).toBe(false)
+      sdk.isLoggedIn.mockReturnValue(false)
+      expect(await lineLiffProvider.share(payload())).toBe('cancelled')
+      expect(here.href).toBe('https://pzmstock.pages.dev/orders')
+      expect(sdk.login).toHaveBeenCalledTimes(1)
+      vi.unstubAllGlobals()
+    })
+
+    test('a home-screen app hands over once; a second tap goes through LINE Login instead', async () => {
+      const here = at(homeScreen)
+      sdk.isLoggedIn.mockReturnValue(false)
+
+      await lineLiffProvider.share(payload())
+      expect(here.href).toBe(liffUrl('o1'))
+      expect(sdk.login).not.toHaveBeenCalled()
+
+      here.href = 'https://pzmstock.pages.dev/orders'
+      await lineLiffProvider.share(payload())
+      expect(here.href).toBe('https://pzmstock.pages.dev/orders')
+      expect(sdk.login).toHaveBeenCalledTimes(1)
+      vi.unstubAllGlobals()
+    })
+
+    test('inside a LIFF view the picker is used, never a hand-over', async () => {
+      const here = at(inApp)
+      sdk.isInClient.mockReturnValue(true)
+      sdk.isLoggedIn.mockReturnValue(false)
+      await lineLiffProvider.share(payload())
+      expect(here.href).toBe('https://pzmstock.pages.dev/orders')
+      vi.unstubAllGlobals()
     })
   })
 

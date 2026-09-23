@@ -11,6 +11,7 @@ import { UpdateBanner } from './pwa/UpdateBanner'
 import { DemoBanner } from './components/DemoBanner'
 import { Layout } from './components/Layout'
 import { BrandPicker } from './components/BrandPicker'
+import { brandToResume } from './share/liffResume'
 import { LoginPage } from './pages/Login'
 import { DashboardPage } from './pages/Dashboard'
 import { ProductsPage } from './pages/Products'
@@ -42,6 +43,15 @@ function Gate() {
   useEffect(() => {
     if (!user) reset()
   }, [user, reset])
+
+  // A send picked up after a trip through LINE says which brand its order belongs to, so
+  // it opens that one and lands on the sheet. Every other visit still starts at the picker
+  // (share/liffResume.ts).
+  useEffect(() => {
+    if (!user || brand) return
+    const wanted = brandToResume()
+    if (wanted) choose(wanted)
+  }, [user, brand, choose])
 
   // Make sure the chosen brand has its default locations.
   //
