@@ -63,6 +63,36 @@
       "runs": [
         "2026-09-23-SC-002-manager-desktop"
       ]
+    },
+    {
+      "id": "UX-0005",
+      "title": "ยืนยันส่ง LINE แล้ว แต่ตารางยังขึ้น \"ยังไม่ส่งใหม่\" จนกว่าจะโหลดหน้าใหม่",
+      "file": "issues/UX-0005-sent-badge-stays-stale.md",
+      "role": "manager",
+      "route": "/orders",
+      "category": "BUG",
+      "severity": "major",
+      "risk": "MEDIUM",
+      "state": "REPRODUCED",
+      "frequency": 1,
+      "runs": [
+        "2026-09-23-SC-015-manager-desktop"
+      ]
+    },
+    {
+      "id": "UX-0006",
+      "title": "หน้าต่างแก้ไขใบสั่งซื้อโชว์สินค้าของผู้ขายทั้งหมด ไม่ได้แยกว่าอันไหนอยู่ในใบ",
+      "file": "issues/UX-0006-amend-dialog-shows-unordered-lines.md",
+      "role": "manager",
+      "route": "/orders",
+      "category": "UX_FRICTION",
+      "severity": "minor",
+      "risk": "LOW",
+      "state": "REPRODUCED",
+      "frequency": 1,
+      "runs": [
+        "2026-09-23-SC-015-manager-desktop"
+      ]
     }
   ]
 }
