@@ -1,0 +1,91 @@
+# UX Lab
+
+เจ้าของระบบเป็นตัวกลางระหว่างพนักงานที่ติดอยู่หน้าจอ กับคนที่แก้หน้าจอนั้นได้ พนักงานบ่นให้ฟัง
+เจ้าของแปลเป็นคำสั่ง คนแก้แก้ แล้ววนใหม่ ที่นี่คือการเอาตัวกลางนั้นออก — ให้การใช้งานจริงกลายเป็นหลักฐาน
+หลักฐานกลายเป็นเรื่องที่มีโครงสร้าง และเรื่องนั้นเดินไปจนถึงการแก้ที่พิสูจน์แล้วว่าดีขึ้นจริง
+
+## วงจร
+
+รัน scenario → รายงาน → Issue → reproduce → patch เล็กที่สุด → regression test → ด่าน QA
+→ branch `demo` → retest → `VERIFIED` → เจ้าของสั่ง merge → `RELEASED` → `CLOSED`
+
+## เส้นที่ห้ามข้าม
+
+**ทุกอย่างวิ่งบน `npm run demo` เท่านั้น** — ไม่มีขั้นตอนไหนในวงจรนี้แตะ `pzm-stock-x5` ได้
+เดโมไม่มี Firebase config เลย (`src/backend/index.ts` จึงตกไปใช้ `createLocalBackend()`) ข้อมูลอยู่ในเบราว์เซอร์ล้วน
+
+**reproduce ไม่ได้ ห้ามแก้โค้ดแบบเดา** — ลง `NEEDS_MORE_DATA` แล้วรัน scenario เพิ่มเพื่อเก็บข้อมูล
+การแก้โค้ดตามอาการที่ยังทำซ้ำไม่ได้ คือการเพิ่มโค้ดที่ไม่มีใครรู้ว่าแก้อะไร
+
+**ห้าม push `main` ห้าม deploy** — เจ้าของเป็นคนสั่งเท่านั้น
+
+## Risk
+
+`risk` ตอบคำถามว่า **การแก้ตรงนี้อันตรายแค่ไหน**
+
+| Risk | ตัวอย่าง | ทำได้ถึงไหน |
+|---|---|---|
+| `LOW` | ระยะห่าง, ถ้อยคำ, responsive, layout | แก้ + ทดสอบ + ลง branch `demo` ได้เอง |
+| `MEDIUM` | ค้นหา, ตัวกรอง, validation, การกรอกฟอร์ม | เท่าข้างบน + ต้อง retest scenario เดิมให้ผ่านก่อน |
+| `HIGH` | ผู้ขาย, จำนวนที่อนุมัติ, สถานะอนุมัติ, การออกใบสั่งซื้อ | สร้าง patch ได้ แต่**ขึ้น `main` ต้องเจ้าของอนุมัติ** |
+| `CRITICAL` | จำนวนสต๊อก, มูลค่า, migration ที่ทำลายข้อมูล, auth/security | **ห้ามขึ้นอัตโนมัติเด็ดขาด** |
+
+ข้อนี้ไม่ได้อาศัยความจำของใคร — `validateLedger` ใน `scripts/ux-lab/ledger.ts` จะปฏิเสธทะเบียน
+ที่บอกว่าเรื่องระดับ `HIGH` หรือ `CRITICAL` ขึ้นของจริงไปแล้วโดยไม่มี `ownerApproved` และมีเทสต์คุมอยู่
+
+## Severity ไม่ใช่ Risk
+
+`severity` ตอบคนละคำถาม — **ปัญหานี้ขวางงานแค่ไหน**: `blocker` ทำงานต่อไม่ได้เลย · `major` ทำได้แต่เสียเวลามาก
+· `minor` รำคาญ · `cosmetic` แค่ไม่สวย
+
+ปุ่มเบี้ยวในหน้าอนุมัติมี severity ต่ำ แต่ risk สูง `severity` ใช้จัดลำดับว่าแก้อะไรก่อน `risk` ใช้ตัดสินว่าทำเองได้ถึงไหน
+
+## Category
+
+| Category | ความหมาย |
+|---|---|
+| `BUG` | ระบบทำงานไม่ตรงกับที่ตัวเองสัญญาไว้ |
+| `UX_FRICTION` | ระบบทำงานถูก แต่กว่าจะถึงปลายทางเสียแรงเกินจำเป็น |
+| `MISSING_FEATURE` | สิ่งที่งานจริงต้องการ แต่ระบบยังไม่มี |
+| `BUSINESS_RULE` | ระบบทำตามกติกา แต่กติกานั้นไม่ตรงกับที่บริษัททำจริง |
+| `TRAINING_ISSUE` | ระบบถูก คนไม่เข้าใจ |
+| `PERFORMANCE` | ช้าจนเปลี่ยนวิธีทำงานของคน |
+
+**`TRAINING_ISSUE` = ระบบถูกแต่คนไม่เข้าใจ → ห้ามแก้โค้ด เสนอได้แค่เปลี่ยนถ้อยคำ**
+ถ้าเจอ `TRAINING_ISSUE` ซ้ำ ๆ ที่หน้าเดียวกันหลาย run นั่นแปลว่าถ้อยคำผิด ไม่ใช่คนโง่ — ยกเป็น `UX_FRICTION` ได้
+
+## State
+
+```
+NEW                   → ANALYZING
+ANALYZING             → REPRODUCED | NEEDS_MORE_DATA | CLOSED
+NEEDS_MORE_DATA       → ANALYZING
+REPRODUCED            → FIXING
+FIXING                → QA_PASSED | QA_FAILED
+QA_FAILED             → FIXING
+QA_PASSED             → READY_FOR_USER_RETEST
+READY_FOR_USER_RETEST → VERIFIED | ANALYZING
+VERIFIED              → READY_FOR_RELEASE
+READY_FOR_RELEASE     → RELEASED
+RELEASED              → CLOSED
+CLOSED                → (จบ)
+```
+
+`ANALYZING → CLOSED` มีไว้สำหรับเรื่องที่วิเคราะห์แล้วพบว่าไม่ต้องแก้โค้ด เช่น `TRAINING_ISSUE`
+`READY_FOR_USER_RETEST → ANALYZING` คือ retest แล้วยังติด — ย้อนกลับไปที่การคิด ไม่ใช่ที่การแก้
+
+## ชื่อโฟลเดอร์ของ run
+
+```
+YYYY-MM-DD-SC-0NN-<persona>-<viewport>
+```
+
+`viewport` เป็น `desktop` หรือ `mobile` เท่านั้น การ retest เติม `-retest` ต่อท้าย
+
+## คำสั่ง
+
+```bash
+npm run ux-lab
+```
+
+ตรวจว่าทะเบียน (`ledger.json`) ยังตรงกับไฟล์ใน `issues/` และทุกหน้าของแอปมี scenario พาไปถึง — ไม่ตรงเมื่อไร exit 1
