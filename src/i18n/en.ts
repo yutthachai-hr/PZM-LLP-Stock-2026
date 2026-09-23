@@ -704,12 +704,13 @@ export const EN: Record<string, string> = {
 
   // ---- demo build --------------------------------------------------------------
   โหมดสาธิต: 'Demo mode',
-  'ลบข้อมูลในเครื่องนี้ทั้งหมด แล้วตั้งค่าใหม่: ผู้ดูแล 1 คน, คลังทั้งสองแบรนด์, และแคตตาล็อกสินค้า':
-    'Wipes everything on this device and sets it up again: one admin, both brands’ locations, and the product catalogs',
+  'ลบข้อมูลในเครื่องนี้ทั้งหมด แล้วตั้งค่าใหม่: ผู้ใช้ 3 บทบาท, คลังทั้งสองแบรนด์, และแคตตาล็อกสินค้า':
+    'Wipes everything on this device and sets it up again: one user per role, both brands’ locations, and the product catalogs',
   รีเซ็ตข้อมูลเดโม: 'Reset demo data',
   'กำลังเตรียม...': 'Setting up…',
   'เข้าสู่ระบบอัตโนมัติ — บัญชี {email} รหัส {password}':
     'Signs in automatically — account {email}, password {password}',
+  'ทดลองสิทธิ์อื่นได้ด้วยรหัสเดียวกัน: {others}': 'Other roles, same password: {others}',
   'รีเซ็ตข้อมูลเดโมได้เฉพาะในโหมดสาธิตเท่านั้น': 'Demo data can only be reset in a demo build',
 
   // ---- shell: top bar, shared table ---------------------------------------------

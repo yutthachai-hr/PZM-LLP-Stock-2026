@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { Button, Card, Field, Input } from '../components/ui'
 import { isDemoMode, parseConfigInput, saveFirebaseConfig } from '../firebase/config'
-import { DEMO_ADMIN, resetDemoData } from '../services/demoSeed'
+import { resetDemoData } from '../services/demoSeed'
+import { DEMO_ADMIN, DEMO_USERS } from '../services/demoUsers'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
@@ -245,7 +246,7 @@ function DemoSetup() {
     <div className="mt-4 rounded-lg border border-warn/30 bg-warn-soft p-3 text-center">
       <p className="text-xs font-medium text-ink">{t('โหมดสาธิต')}</p>
       <p className="mt-0.5 text-xs text-ink-soft">
-        {t('ลบข้อมูลในเครื่องนี้ทั้งหมด แล้วตั้งค่าใหม่: ผู้ดูแล 1 คน, คลังทั้งสองแบรนด์, และแคตตาล็อกสินค้า')}
+        {t('ลบข้อมูลในเครื่องนี้ทั้งหมด แล้วตั้งค่าใหม่: ผู้ใช้ 3 บทบาท, คลังทั้งสองแบรนด์, และแคตตาล็อกสินค้า')}
       </p>
       <Button
         variant="secondary"
@@ -260,6 +261,14 @@ function DemoSetup() {
         {t('เข้าสู่ระบบอัตโนมัติ — บัญชี {email} รหัส {password}', {
           email: DEMO_ADMIN.email,
           password: DEMO_ADMIN.password,
+        })}
+      </p>
+      {/* The other two exist so a screen can be tried as the person who actually uses it. */}
+      <p className="mt-1 text-xs text-ink-faint">
+        {t('ทดลองสิทธิ์อื่นได้ด้วยรหัสเดียวกัน: {others}', {
+          others: DEMO_USERS.filter((u) => u.email !== DEMO_ADMIN.email)
+            .map((u) => `${u.email} (${u.name})`)
+            .join(' · '),
         })}
       </p>
       {err && <p className="mt-2 text-xs text-danger">{err}</p>}

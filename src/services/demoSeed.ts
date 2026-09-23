@@ -3,6 +3,7 @@ import { BRANDS, getBrand, setActiveBrand, type BrandId } from '../brand/brand'
 import { isDemoMode } from '../firebase/config'
 import { AppError } from '../i18n/AppError'
 import { COL, type AppUser } from '../types'
+import { DEMO_ADMIN, DEMO_PASSWORD, DEMO_USERS } from './demoUsers'
 import { seedInitialData } from './seed'
 
 /**
@@ -17,11 +18,7 @@ import { seedInitialData } from './seed'
  * shipped to a device in cloud mode would be one click from clearing the warehouse.
  */
 
-export const DEMO_ADMIN = {
-  name: 'ผู้ดูแลเดโม',
-  email: 'demo@inventory-pzm.local',
-  password: 'demo1234',
-} as const
+export { DEMO_ADMIN, DEMO_PASSWORD, DEMO_USERS } from './demoUsers'
 
 const SESSION_KEY = 'pmstock:v1:session'
 const LOCAL_PREFIX = 'pmstock:v1:'
@@ -87,18 +84,22 @@ export async function resetDemoData(): Promise<DemoSeedResult> {
     setActiveBrand(was)
   }
 
-  // The admin is written directly rather than through signUp, so the demo does not have to
-  // be signed into by hand before it can be used. The password is a constant in this file
-  // and only reachable in a demo build.
-  const id = await backend.add(COL.users, {
-    name: DEMO_ADMIN.name,
-    email: DEMO_ADMIN.email,
-    role: 'admin',
-    active: true,
-    localPassword: DEMO_ADMIN.password,
-    createdAt: Date.now(),
-  })
-  localStorage.setItem(SESSION_KEY, id)
+  // Written directly rather than through signUp, so the demo does not have to be signed
+  // into by hand before it can be used. The password is a constant and only reachable in a
+  // demo build. All three roles are seeded: a rehearsal done only as an admin cannot show
+  // what a staffer or a manager is allowed to reach.
+  for (const u of DEMO_USERS) {
+    const id = await backend.add(COL.users, {
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      active: true,
+      localPassword: DEMO_PASSWORD,
+      createdAt: Date.now(),
+    })
+    // The admin is the one left signed in, so a showing opens straight into the app.
+    if (u.email === DEMO_ADMIN.email) localStorage.setItem(SESSION_KEY, id)
+  }
 
   return result
 }
