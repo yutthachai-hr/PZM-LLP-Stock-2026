@@ -172,3 +172,56 @@ describe('by recount: legs that each weigh differently', () => {
     expect(product().unitType).toBe('KG')
   })
 })
+
+// 23 Sep 2026: a carton of hand towels priced at ฿1,190 was rebased from Carton to EA and
+// kept the ฿1,190 — per piece. The stock of it was then valued at twenty-four times what it
+// was worth, which is the same fault that valued ketchup sachets at 3.4 million in
+// September ("หน่วยเพี้ยน"). What the invoice said never changes; what it comes to per unit
+// of stock does.
+describe('what it costs, after its unit changes', () => {
+  const towels = {
+    id: 'p1', sku: 'M-1', name: 'Hand towels', category: 'Office Supply', unit: 'carton',
+    unitType: 'Carton', minStock: 0, hasImage: false, active: true, createdAt: 1, updatedAt: 1,
+    unitConversions: [{ label: 'EA', size: 1, per: 24 }],
+    cost: 1190,
+    costHistory: [
+      { price: 1190, unit: 'Carton', factor: 1, cost: 1190, effectiveAt: 1, at: 1, by: 'u', byName: 'Owner' },
+    ],
+  }
+
+  beforeEach(() => {
+    resetMemory()
+    seed('locations', [{ id: MAIN, name: 'Main', type: 'warehouse', active: true, createdAt: 1 }])
+    seed('products', [towels])
+    seed('stockMovements', [mv('m1', { productName: 'Hand towels', unit: 'Carton', qty: 2, docNo: 'RC-1' })])
+    seed('stockLevels', [lvl(MAIN, 2)])
+  })
+
+  test('a price per carton becomes a price per piece at the same rate as the quantities', async () => {
+    // 1 EA is 1/24 of a Carton: two cartons become 48 pieces.
+    await rebaseProductUnit({ productId: 'p1', to: 'EA', mode: 'rate', factor: 1 / 24, actor: ACTOR })
+    const p = product() as { unitType: string; cost: number; costHistory: { price: number; unit: string; cost: number }[] }
+    expect(p.unitType).toBe('EA')
+    expect(qtyFor(`${MAIN}__p1`)).toBe(48)
+    expect(p.cost).toBeCloseTo(49.5833, 3)
+    // The invoice still says ฿1,190 a carton; only what that comes to per piece is restated.
+    expect(p.costHistory[0].price).toBe(1190)
+    expect(p.costHistory[0].unit).toBe('Carton')
+    expect(p.costHistory[0].cost).toBeCloseTo(49.5833, 3)
+  })
+
+  test('a recount has no rate to restate a price with, so the price is left alone', async () => {
+    await rebaseProductUnit({ productId: 'p1', to: 'EA', mode: 'recount', counts: { [MAIN]: 40 }, actor: ACTOR })
+    const p = product() as { unitType: string; cost: number }
+    expect(p.unitType).toBe('EA')
+    expect(p.cost).toBe(1190)
+  })
+
+  test('a product with no cost at all is left without one', async () => {
+    seed('products', [{ ...towels, cost: undefined, costHistory: undefined }])
+    await rebaseProductUnit({ productId: 'p1', to: 'EA', mode: 'rate', factor: 1 / 24, actor: ACTOR })
+    const p = product() as { cost?: number; costHistory?: unknown[] }
+    expect(p.cost).toBeUndefined()
+    expect(p.costHistory).toBeUndefined()
+  })
+})
