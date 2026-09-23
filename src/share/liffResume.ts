@@ -1,3 +1,4 @@
+import { getBrand, type BrandId } from '../brand/brand'
 import { liffId } from './lineLiffProvider'
 
 /**
@@ -17,23 +18,92 @@ import { liffId } from './lineLiffProvider'
  */
 export const RESUME_PARAM = 'send'
 
+/**
+ * Which brand the order belongs to, carried alongside it.
+ *
+ * The brand is picked once per visit and lives in React state, so every trip through LINE
+ * comes back to the brand picker — and the order in `?send=` belongs to one brand, which
+ * the person then has to guess at (owner's recording, 23 Sep 2026). Naming it here means
+ * the resumed page opens the right brand and goes straight to the sheet.
+ */
+export const RESUME_BRAND_PARAM = 'brand'
+
 /** The same page with `?send=<orderId>`, as an absolute URL (none outside a browser). */
 export function resumeUrl(orderId: string): string | undefined {
   if (typeof location === 'undefined') return undefined
   const u = new URL(location.href)
   u.searchParams.set(RESUME_PARAM, orderId)
+  u.searchParams.set(RESUME_BRAND_PARAM, getBrand())
   return u.toString()
 }
 
 /** The LIFF address of the same page — opens it inside the LINE app, already signed in. */
 export function liffUrl(orderId: string): string {
   const path = typeof location === 'undefined' ? '' : location.pathname.replace(/^\//, '')
-  return `https://liff.line.me/${liffId()}/${path}?${RESUME_PARAM}=${encodeURIComponent(orderId)}`
+  const q = `${RESUME_PARAM}=${encodeURIComponent(orderId)}&${RESUME_BRAND_PARAM}=${getBrand()}`
+  return `https://liff.line.me/${liffId()}/${path}?${q}`
 }
 
-/** A page opened from the home screen rather than in a browser tab. */
+/**
+ * The brand a resumed send belongs to, when this page is one — nothing otherwise, so an
+ * ordinary visit still starts at the picker, which is the owner's design.
+ */
+export function brandToResume(): BrandId | null {
+  if (typeof location === 'undefined') return null
+  const p = new URLSearchParams(location.search)
+  if (!p.get(RESUME_PARAM)) return null
+  const b = p.get(RESUME_BRAND_PARAM)
+  return b === 'pizza' || b === 'lelapin' ? b : null
+}
+
+/**
+ * A page inside another app's own browser — LINE's, Facebook's, Instagram's.
+ *
+ * iOS gives such a webview the same `navigator.standalone === true` and the same
+ * `display-mode: standalone` as a home-screen app, so those two cannot tell them apart;
+ * the user agent can, and it is the only thing that can (23 Sep 2026).
+ */
+export function isInAppBrowser(): boolean {
+  const ua = typeof navigator === 'undefined' ? '' : (navigator.userAgent ?? '')
+  return / Line\/|FBAN|FBAV|Instagram/i.test(ua)
+}
+
+/**
+ * A page opened from the home screen rather than in a browser tab.
+ *
+ * Another app's in-app browser looks exactly like this to every API except the user agent,
+ * and calling one a home-screen app is what made "ส่ง LINE" loop: inside LINE the page
+ * handed itself back to LINE, which opened the same page again, forever (owner's recording,
+ * 23 Sep 2026).
+ */
 export function isStandalone(): boolean {
   if (typeof window === 'undefined') return false
+  if (isInAppBrowser()) return false
   const nav = navigator as Navigator & { standalone?: boolean }
   return nav.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches === true
+}
+
+/**
+ * Whether this page has already sent itself to LINE for this order.
+ *
+ * The hand-over is a one-way trip: if the person is back here and still not signed in, it
+ * did not work, and doing it again would only reload the page. Session storage, because the
+ * question is about this visit — a later one starts fresh and may well succeed.
+ */
+const HANDOFF_KEY = 'pmstock:v1:liff-handoff'
+
+export function handedOverToLine(orderId: string): boolean {
+  try {
+    return sessionStorage.getItem(HANDOFF_KEY) === orderId
+  } catch {
+    return false // private mode; one wasted hop is better than refusing to try at all
+  }
+}
+
+export function rememberHandOver(orderId: string): void {
+  try {
+    sessionStorage.setItem(HANDOFF_KEY, orderId)
+  } catch {
+    /* nothing to remember it in */
+  }
 }
