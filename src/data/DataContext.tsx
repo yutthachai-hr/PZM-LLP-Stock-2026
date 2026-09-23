@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
 import { overlayRecent, subscribeRecentWrites } from './recentWrites'
+import { windowStart } from './ledgerWindow'
 import { stockView } from '../lib/inventoryRules/stockView'
 import { useAuth } from '../auth/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
@@ -70,13 +71,27 @@ interface DataState {
 
 const Ctx = createContext<DataState | null>(null)
 
-// How far back the ledger is loaded on start-up. Every movement in the window is a billed
-// read each time the app cold-starts on a device, and the collection only ever grows —
-// without a bound, one page load eventually costs a whole day's free quota. Ninety days
-// was three months of every receipt and issue at three sites on every cold start; thirty
-// is what the dashboard and the everyday screens actually look at, and anything older is
-// one click away on the screens that show history (LedgerWindowNotice).
-const RECENT_DAYS = 30
+/**
+ * How far back the ledger is loaded on start-up.
+ *
+ * Every movement in the window is a billed read on each cold start — and an app opened
+ * from a phone's home screen cold-starts constantly, because Firestore re-reads a listener
+ * it has been disconnected from for more than half an hour. Thirty days was 470-odd
+ * receipts and issues on every one of those opens, most of them for people who had come to
+ * key one delivery and would never look at a figure older than today (23 Sep 2026: the
+ * free quota ran out three days running).
+ *
+ * A week is what the everyday screens actually read — today's panel on the keying screens,
+ * the phone's home page, the dashboard's weekly chart. The screens that print a
+ * thirty-day figure ask for thirty days themselves (`useLedgerWindow`), and the rest of
+ * the history is one click away (LedgerWindowNotice).
+ */
+const RECENT_DAYS = 7
+
+/** What a screen that shows month-on-month figures needs behind it. */
+export const MONTH_DAYS = 30
+
+export { windowStart } from './ledgerWindow'
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -94,9 +109,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [rawLocations, lang],
   )
   const { data: levels, loading: sLoading } = useLive<StockLevel>(COL.stockLevels)
-  const [movementsFrom, setMovementsFrom] = useState(
-    () => Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000,
-  )
+  const [movementsFrom, setMovementsFrom] = useState(() => windowStart(RECENT_DAYS))
   const ensureMovementsFrom = useCallback((date: number) => {
     setMovementsFrom((cur) => (date < cur ? date : cur))
   }, [])
@@ -112,7 +125,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides)
   const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin })
   // Fixed for the session: a moving lower bound would re-subscribe (and re-read) every render.
-  const [notificationsFrom] = useState(() => Date.now() - NOTIFICATION_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+  const [notificationsFrom] = useState(() => windowStart(NOTIFICATION_WINDOW_DAYS))
   const { data: notifications } = useLive<AppNotification>(COL.notifications, {
     enabled: !!user,
     sinceField: 'createdAt',
@@ -181,4 +194,19 @@ export function useData(): DataState {
   const ctx = useContext(Ctx)
   if (!ctx) throw new Error('useData must be used within DataProvider')
   return ctx
+}
+
+/**
+ * Ask for `days` of ledger behind this screen, for as long as it is open.
+ *
+ * The start-up window is a week (RECENT_DAYS), because that is all most people ever look
+ * at and every extra day is a billed read on every cold start. A screen that prints a
+ * month-on-month figure says so here, and the comparison appears once the wider window
+ * arrives — `covers()` in lib/stats hides it until then rather than printing a lie.
+ */
+export function useLedgerWindow(days = MONTH_DAYS): void {
+  const { ensureMovementsFrom } = useData()
+  useEffect(() => {
+    ensureMovementsFrom(windowStart(days))
+  }, [days, ensureMovementsFrom])
 }

@@ -1964,4 +1964,13 @@ export const EN: Record<string, string> = {
   'พิมพ์ข้อความก่อนส่ง': 'Type a message first',
   'ข้อความยาวเกิน {n} ตัวอักษร': 'Longer than {n} characters',
   'ลบได้เฉพาะข้อความของตัวเอง': 'You can only delete your own messages',
+  // ---- how much the app reads (23 Sep 2026) -------------------------------------
+  'การอ่านข้อมูล (โควตา)': 'Reads (free quota)',
+  'แอปอ่านไปกี่รายการแล้ว และคอลเลกชันไหนมากที่สุด': 'How many records the app has read, and where they went',
+  'โหมดในเครื่องไม่ได้อ่านจากฐานข้อมูลบนคลาวด์ จึงไม่มีการนับ': 'Local mode reads nothing from the cloud database, so there is nothing to count',
+  'นับจำนวนรายการที่แอปอ่านตั้งแต่เปิดหน้านี้ครั้งล่าสุด — โควตาฟรีคือ 50,000 รายการต่อวัน รวมทุกคนทุกเครื่อง': 'Records read since this page was last opened — the free plan allows 50,000 a day, across everyone and every device',
+  'รายการ · {min} นาทีที่ผ่านมา · {pct}% ของโควตาวันหนึ่ง': 'records · over {min} min · {pct}% of the daily quota',
+  'ยังไม่มีการอ่านในหน้านี้': 'Nothing read yet in this visit',
+  'ตัวเลขนี้คือจำนวนที่แอปได้รับ ซึ่งมากกว่าหรือเท่ากับที่ถูกคิดเงินจริง (ข้อมูลที่อ่านจากสำเนาในเครื่องไม่ถูกคิด) เปิดแอปใหม่ทุกครั้งคือการอ่านรอบใหม่ — ถ้าตัวเลขต่อการเปิดหนึ่งครั้งสูง ให้ดูว่าคอลเลกชันไหนกินมากที่สุด': 'This counts what the app received, which is at least what was billed (anything served from the offline copy is free). Every fresh open reads again — if one open costs a lot, look at which collection it went on.',
+  'เริ่มนับใหม่': 'Start again',
 }

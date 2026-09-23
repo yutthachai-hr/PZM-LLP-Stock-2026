@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/Confirm'
 import { BackupSection } from '../components/BackupSection'
 import { AutomationStatus } from './settings/AutomationStatus'
+import { ReadUsageSection } from './settings/ReadUsageSection'
 import { NotificationPrefsSection } from './settings/NotificationPrefsSection'
 import { SchedulesSection } from './settings/SchedulesSection'
 import { ThresholdsSection } from './settings/ThresholdsSection'
@@ -74,6 +75,7 @@ type SectionKey =
   | 'units'
   | 'thresholds'
   | 'schedules'
+  | 'readUsage'
   | 'users'
   | 'automation'
   | 'backup'
@@ -143,6 +145,7 @@ export function SettingsPage() {
         items: [
           { key: 'users', label: t('ผู้ใช้งาน'), hint: t('เพิ่มผู้ใช้ กำหนดสิทธิ์ ปิดการเข้าใช้'), icon: 'users', show: isAdmin },
           { key: 'automation', label: t('งานอัตโนมัติ'), hint: t('งานที่ระบบทำเองตามเวลา'), icon: 'clock', show: isManager },
+          { key: 'readUsage', label: t('การอ่านข้อมูล (โควตา)'), hint: t('แอปอ่านไปกี่รายการแล้ว และคอลเลกชันไหนมากที่สุด'), icon: 'cloud', show: isAdmin },
         ],
       },
       {
@@ -184,6 +187,8 @@ export function SettingsPage() {
         return user ? <UsersSection currentUserId={user.id} /> : null
       case 'automation':
         return <AutomationStatus />
+      case 'readUsage':
+        return <ReadUsageSection />
       case 'backup':
         return <BackupSection />
       case 'maintenance':

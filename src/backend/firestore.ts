@@ -15,6 +15,7 @@ import {
 import { getDb } from '../firebase/app'
 import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
+import { noteRead } from '../data/readMeter'
 
 // Firestore implementation. Real-time across all devices, offline persistence enabled.
 // Collection names are brand-scoped via resolveCollection() so brands stay fully isolated.
@@ -42,10 +43,17 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       // A single-field range filter is served by Firestore's automatic index, so this
       // needs no composite index to be deployed alongside it.
       const q = opts?.since ? query(ref, where(opts.since.field, '>=', opts.since.value)) : ref
+      // What the listener delivers is what Firestore bills for, so it is counted where it
+       // arrives (data/readMeter.ts). The first snapshot brings the whole window; after
+       // that only what changed, which is why a resumed listener is cheap and a cold start
+       // is not.
+      let first = true
       const unsub = onSnapshot(
         q,
         (snap) => {
           const docs = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
+          noteRead(c, first ? snap.size : snap.docChanges().length)
+          first = false
           cb(docs)
         },
         (err) => {
@@ -79,19 +87,19 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       from: number,
       to: number,
     ): Promise<T[]> {
+      const c = resolve(collection)
       const snap = await getDocs(
-        query(
-          fbCollection(getDb(), resolve(collection)),
-          where(field, '>=', from),
-          where(field, '<=', to),
-        ),
+        query(fbCollection(getDb(), c), where(field, '>=', from), where(field, '<=', to)),
       )
+      noteRead(c, snap.size)
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
     async getAll<T>(collection: string): Promise<T[]> {
       const db = getDb()
-      const snap = await getDocs(fbCollection(db, resolve(collection)))
+      const c = resolve(collection)
+      const snap = await getDocs(fbCollection(db, c))
+      noteRead(c, snap.size)
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
