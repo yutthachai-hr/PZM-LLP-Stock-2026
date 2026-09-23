@@ -165,12 +165,12 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 ### ส่ง LINE บนมือถือ — กลับมาที่ใบเดิมหลัง LINE Login (22 ก.ย., branch `fix/liff-resume`)
 อาการ: กด "ส่ง LINE" ครั้งแรกบนมือถือ → ไป LINE Login → กลับมาหน้ารายการสั่งซื้อโดยหน้าต่างส่งหายไป ("เด้งกลับมาหน้าเดิม"). แก้ใน `src/share/liffResume.ts`: `redirectUri` ของ `liff.login()` = หน้าเดิม + `?send=<orderId>` (ค่าเดินทางใน URL ไม่ใช่ storage เพราะบน iPhone แอปหน้าจอหลักกับ Safari ไม่แชร์ storage กัน) แล้ว `Orders.tsx` / `RequestReview.tsx` / `PurchaseBatchReview.tsx` อ่านพารามิเตอร์ครั้งเดียว เปิด `SendWizard` ที่ใบนั้น แล้วล้าง URL. **แอปที่ติดตั้งบนหน้าจอหลัก (PWA)** ทำ login round trip ไม่ได้เลย → พาไปเปิดหน้าเดิมในแอป LINE ผ่าน `https://liff.line.me/<liffId>/<path>?send=<id>` (`liffBoot.ts` แปลง `liff.state` กลับเป็นเส้นทาง) ซึ่งใน LINE ล็อกอินอยู่แล้ว — ครั้งแรกต้องเข้าระบบแอปในเบราว์เซอร์ของ LINE หนึ่งครั้ง (storage แยก). `SendWizard` แสดงข้อความบอกล่วงหน้าว่าจะเกิดอะไร (`liffNeedsLogin()`). tests: `tests/share-provider.test.ts` (+3).
 
-### 🚧 จัดหน้าตาใหม่ทั้งแอปตามภาพ mock-up (22–23 ก.ย. — **ทำครบ R0–R9 แล้ว ยังไม่ merge/push; รอเจ้าของสั่ง deploy rules + ขึ้นของจริง**)
+### จัดหน้าตาใหม่ทั้งแอปตามภาพ mock-up (22–23 ก.ย. — **R0–R9 ขึ้นของจริงแล้ว 23 ก.ย. 2569**)
 เจ้าของส่งภาพออกแบบ 10 หน้า (ภาพรวม/สินค้าคงคลัง/เบิก-โอน/ปรับสต๊อก/ปฏิทิน/Stock Card/รายงาน/สั่งซื้อ/ขอสั่งซื้อ/ผู้ขาย) และสั่งให้ทำ **ทั้งหน้าตาและฟีเจอร์ใหม่** ครบทั้ง desktop/tablet/phone
 **แผนงานทั้งหมดอยู่ที่ `docs/superpowers/specs/2026-09-22-full-restyle-design.md`** — 10 รอบ (R0 ชิ้นส่วนกลาง → R7 ทุกหน้า → R8 บาร์โค้ด → R9 กล่องข้อความ), แต่ละรอบ deploy จบในตัว, มีตารางว่าภาพขออะไรกับข้อมูลจริงมีอะไร, มี 5 จุดที่ต้องแก้ firestore.rules, และ §9 บอกวิธีเริ่มงานต่อในแอคเคาท์ใหม่
 การตัดสินใจของเจ้าของ: **ไม่เอาขั้นอนุมัติ**ของปรับสต๊อก/โอนสาขา · เอา**สแกนบาร์โค้ด** + **กล่องข้อความภายใน** · **ไม่เอา**ปุ่มคู่มือการใช้งาน
 
-**ความคืบหน้า (22 ก.ย. ค่ำ)** — ทุกรอบเป็น branch ต่อกันเป็นขั้นบันได (แต่ละ branch แตกจากรอบก่อนหน้า) **ยังไม่ merge เข้า `main` และยังไม่ push** — `feat/restyle-calendar` มีครบ R0–R7; merge ตัวนี้ตัวเดียว = ได้ทุกรอบ ไม่มีรอบไหนแตะ firestore.rules จึง deploy ได้ทันทีเมื่อเจ้าของอนุมัติ (ด่านผ่าน: 657 unit, 158 rules, lint, i18n, build)
+**ขึ้นจริงแล้ว (23 ก.ย. 2569)** — ทำทีละรอบบน branch ที่แตกจากรอบก่อนหน้าเป็นขั้นบันได จนถึง `feat/messages` ที่มีครบ R0–R9 → **deploy `firestore.rules` ขึ้น `pzm-stock-x5` แล้ว merge เข้า `main` แบบ fast-forward และ push (`1ef3c09..805d6a3`) เมื่อ 23 ก.ย. 2569** — 97 ไฟล์, +8802/−2357 บรรทัด (ด่านก่อขึ้นผ่านทั้งหมด: 679 unit, 166 rules, lint, i18n, worker, build)
 - **R0** `feat/frame` — `src/components/frame/*` (PageHero, StatTile/StatRow, FilterBar, ChipRow, StatusChip, SectionCard, WithSidePanel/SummaryList/RecentList/TipCard, RowMenu, ItemCell, FramePage), `components/charts/` (recharts ผ่าน `lazy()` แยก chunk 391 kB), DataTable `selection`+`rowMenu`, Pagination "ไปยังหน้า", token `--color-tile-*`; หน้าไหนห่อด้วย `FramePage` = Layout ไม่วาดแผ่นขาว (ใช้ `:has([data-frame])`)
 - **R1** `feat/restyle-dashboard` — ภาพรวมตามภาพ 01 + `lib/stats/periodCompare.ts` (เทียบเมื่อวาน/30 วัน, **ไม่แสดงลูกศรถ้า ledger window ไม่ครอบคลุม**); ตารางสต๊อกเต็ม+ตัวเลือกคลังย้ายออกจากหน้าแรก (อยู่ที่สินค้าคงคลัง); มือถือเพิ่มสินค้าใกล้หมด 5 + เมนูด่วน
 - **R2** `feat/restyle-products` — แยก `pages/products/*`; การ์ดตัวเลข = ตัวกรองสถานะ; ชิปหมวด 8 อันดับ; ตาราง/กริด; เลือกหลายแถว → ซ่อน/ตั้งขั้นต่ำ/ส่งออก Excel (tablet+); ไอคอนหมวดแทนรูป (`lib/categoryIcon.ts`)
@@ -182,16 +182,16 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 - **R8** `feat/barcode` — **แก้ rules #1** (`validProduct` + `barcode` ≤64); `@zxing/browser` เป็นตัวสำรองเมื่อเบราว์เซอร์ไม่มี `BarcodeDetector` (โหลดเมื่อใช้); สแกนแล้วขึ้นบรรทัดทันทีในหน้ารับเข้า/เบิก-โอน/ปรับสต๊อก, บาร์โค้ดเข้าไปอยู่ในช่องค้นหาทุกที่, ⋮ ในหน้าสินค้ามี "สแกนเพื่อผูกบาร์โค้ด", และมีหน้านำเข้าบาร์โค้ดจาก Excel (แสดงแผนก่อนเขียนทุกครั้ง) — **กันบาร์โค้ดซ้ำในโค้ด** เพราะ rules query ไม่ได้
 - **R9** `feat/messages` — **แก้ rules #4 #5** (collection `messages` + `lelapin__messages`, และ `users` self-update รับ `messagesReadAt`); กระดิ่งข้อความในแถบบน ไม่มี listener (อ่านเป็นช่วงวันผ่าน rangeCache, รีเฟรชทุก 5 นาทีเฉพาะตอนเปิดแผง); แก้ข้อความไม่ได้, ปักหมุดได้เฉพาะหัวหน้า, **ลบของคนอื่นได้เฉพาะแอดมิน**, **เก็บ 90 วัน** (Worker ลบให้ในรอบรายวัน) ตามที่เจ้าของเลือก; backup เป็น format 8
 
-**ค้างอยู่ตอนนี้ (ต้องให้เจ้าของสั่ง)**
-1. `npx firebase deploy --only firestore:rules --project pzm-stock-x5` — **ต้องทำก่อน push โค้ด** เพราะ R5/R8/R9 เขียนฟิลด์/คอลเลกชันใหม่ (ถ้า token หมดอายุ เจ้าของรัน `npx firebase login --reauth` เอง)
-2. merge `feat/messages` (มีครบทุกอย่าง R0–R9 ต่อกันเป็นขั้นบันได) เข้า `main` แล้ว push = Cloudflare build ขึ้นของจริง
-3. หลังขึ้นจริง: เจ้าของกดปุ่ม "ออกรหัสผู้ขาย" หนึ่งครั้งต่อแบรนด์ (R5) และกรอกบาร์โค้ดสินค้าผ่าน Excel/สแกน (R8)
+**ที่เจ้าของต้องทำเองหลังขึ้นจริงแล้ว**
+1. ปิดแท็บแอปทุกแท็บแล้วเปิดใหม่ — เป็น PWA กดรีเฟรชเฉย ๆ ยังได้ service worker ตัวเก่า
+2. กดปุ่ม "ออกรหัสผู้ขาย" หนึ่งครั้งต่อแบรนด์ (R5) — กดซ้ำได้ เลขไม่ซ้ำ
+3. เริ่มกรอกบาร์โค้ดสินค้าผ่าน Excel หรือหน้าสแกน (R8)
 
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
-npm test              # 469 unit tests
-npm run test:rules    # 138 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
+npm test              # 679 unit tests
+npm run test:rules    # 166 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
 npm run build          # tsc -b + typecheck functions/ (Cloudflare) + vite build
 npm run lint            # 0 errors
 npm run i18n:check      # ครบทุกข้อความ
