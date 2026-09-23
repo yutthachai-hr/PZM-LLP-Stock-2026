@@ -187,6 +187,12 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 2. กดปุ่ม "ออกรหัสผู้ขาย" หนึ่งครั้งต่อแบรนด์ (R5) — กดซ้ำได้ เลขไม่ซ้ำ
 3. เริ่มกรอกบาร์โค้ดสินค้าผ่าน Excel หรือหน้าสแกน (R8)
 
+### ส่ง LINE วนลูปในเบราว์เซอร์ของ LINE — แก้แล้ว (23 ก.ย., branch `fix/line-send-loop`)
+อาการ (คลิปจากเจ้าของ): กด "ส่ง LINE" แล้วแอปรีโหลดกลับมาหน้าเลือกแบรนด์ซ้ำ ๆ ไม่เคยขึ้นหน้าต่างเลือกแชท
+สาเหตุ: WKWebView ที่อยู่ในแอปอื่นบน iOS รายงาน `navigator.standalone === true` และ `display-mode: standalone` เหมือนแอปหน้าจอโฮมทุกอย่าง → `isStandalone()` ใน `src/share/liffResume.ts` ตอบ true **ในเบราว์เซอร์ของ LINE เอง** → `share()` ส่งหน้าตัวเองไป `liff.line.me` ซึ่งก็เปิดหน้าเดิมซ้ำ ไม่มีตัวกันว่าเคยส่งไปแล้ว (ยืนยันจากคลิป: ข้อความใต้ปุ่มตอนอยู่ใน LINE เป็นเวอร์ชัน "จะเปิดในแอป LINE ให้" แปลว่า isStandalone()=true และ isInClient()=false)
+แก้: `isInAppBrowser()` (ดู UA ` Line/`/FBAN/FBAV/Instagram) → `isStandalone()` ตอบ false ในนั้น · `share()` ไม่ส่งต่อถ้า `isInClient()` · จำไว้ใน sessionStorage ว่าส่งต่อไปแล้วหนึ่งครั้ง กดครั้งที่สองจะไป LINE Login แทน · **พา brand ไปกับ URL ด้วย** (`?send=<id>&brand=<brand>`) เพราะ brand อยู่ใน React state ล้วน กลับมาทีไรก็เจอหน้าเลือกแบรนด์ทุกที (`brandToResume()` + effect ใน `App.tsx`)
+tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
