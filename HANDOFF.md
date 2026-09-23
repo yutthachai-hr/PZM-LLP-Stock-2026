@@ -193,6 +193,15 @@ npx firebase deploy --only firestore:rules --project pzm-stock-x5
 แก้: `isInAppBrowser()` (ดู UA ` Line/`/FBAN/FBAV/Instagram) → `isStandalone()` ตอบ false ในนั้น · `share()` ไม่ส่งต่อถ้า `isInClient()` · จำไว้ใน sessionStorage ว่าส่งต่อไปแล้วหนึ่งครั้ง กดครั้งที่สองจะไป LINE Login แทน · **พา brand ไปกับ URL ด้วย** (`?send=<id>&brand=<brand>`) เพราะ brand อยู่ใน React state ล้วน กลับมาทีไรก็เจอหน้าเลือกแบรนด์ทุกที (`brandToResume()` + effect ใน `App.tsx`)
 tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 
+### โควตาอ่านเต็มรอบที่ 3 (23 ก.ย.) — ลดค่าเปิดแอป + มีมาตรวัดแล้ว (branch `fix/read-quota`)
+63k/50k วันเดียว และ 21 ก.ย. พุ่ง 89k · **สาเหตุไม่ใช่เครื่องมือตัวใดตัวหนึ่ง แต่คือ "ค่าเปิดแอปหนึ่งครั้ง × จำนวนครั้งที่เปิด"**
+- เปิดแอปครั้งหนึ่ง = subscribe ทั้ง working set (products ~323 + stockLevels + movements + …) และ Firestore **คิดเงินใหม่ทั้งหน้าต่างทุกครั้งที่ listener ขาดการเชื่อมต่อเกินครึ่งชั่วโมง** ซึ่งคือทุกครั้งที่เปิดแอปจากหน้าจอโฮมบนมือถือ — ledger 30 วัน ≈ 470 รายการต่อการเปิดหนึ่งครั้ง
+- `RECENT_DAYS` 30 → **7 วัน**; หน้าที่โชว์ตัวเลขเทียบเดือน (Dashboard, สินค้าคงคลัง, รายงาน→ภาพรวม) เรียก `useLedgerWindow()` ขอ 30 วันเอง (`covers()` ซ่อนตัวเลขเทียบไว้จนกว่าข้อมูลจะมา) ประวัติเก่ากว่านั้นกดโหลดได้ที่ `LedgerWindowNotice` เหมือนเดิม
+- **ขอบหน้าต่างยึดเที่ยงคืน** (`src/data/ledgerWindow.ts` `windowStart()`) — เดิมเป็น `Date.now() - N วัน` ซึ่งเป็น query คนละอันทุกครั้งที่โหลด Firestore จึง resume ไม่ได้เลย
+- **`npm run dev` เคยชี้ไปโปรเจกต์จริง** (ดูคอมเมนต์ใน `src/firebase/config.ts`) → ทุก hot reload = อ่านใหม่ทั้งชุด **ตอนนี้ `npm run dev` = เดโม**, ของจริงต้องพิมพ์ `npm run dev:live` เอง และลบ launch entry `pizza-stock-dist` ที่ preview ของจริงออก
+- **มาตรวัดใหม่**: ตั้งค่า → "การอ่านข้อมูล (โควตา)" (แอดมิน) นับรายการที่อ่านแยกตามคอลเลกชันตั้งแต่เปิดหน้า + ปุ่มเริ่มนับใหม่ (`src/data/readMeter.ts`, นับใน `src/backend/firestore.ts`) — ครั้งหน้าไม่ต้องเดาอีก **ขอเลขจากหน้านี้ก่อนตัดสินใจตัดอะไรต่อ**
+- ยังไม่ได้ตัด: `products` (323) และ `stockLevels` ที่เป็นก้อนใหญ่สุดของการเปิดแต่ละครั้ง — ต้องรู้ก่อนว่ามีกี่รายการและกี่รายการเป็น 0/ปิดใช้ ถึงจะตัดได้อย่างปลอดภัย
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
