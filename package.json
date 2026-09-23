@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode demo",
+    "dev:live": "vite",
     "demo": "vite --mode demo --port 5175 --strictPort",
     "build": "tsc -b && tsc -p functions/tsconfig.json && tsc -p worker/tsconfig.json && vite build",
     "worker:dev": "npx wrangler dev -c worker/wrangler.toml --test-scheduled",
@@ -14,7 +15,9 @@
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
     "ux-lab": "node --experimental-strip-types scripts/ux-lab/cli.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project pzm-rules-test \"vitest run --config vitest.rules.config.ts\"",
-    "preview": "vite preview",
+    "build:demo": "vite build --mode demo --outDir dist-demo",
+    "preview": "vite preview --outDir dist-demo",
+    "preview:live": "vite preview",
     "test": "vitest run",
     "icons": "node scripts/make-icons.mjs"
   },

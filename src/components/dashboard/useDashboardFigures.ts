@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
-import { useData } from '../../data/DataContext'
+import { useData, useLedgerWindow } from '../../data/DataContext'
 import { orderCache } from '../../data/orderCache'
 import { requestCache } from '../../data/requestCache'
 import { bkkDayEnd, bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
@@ -27,6 +27,8 @@ const VALUE_LOOKBACK_DAYS = 30
 export function useDashboardFigures(now: number) {
   const { user } = useAuth()
   const { products, locations, qtyAt, minFor, tracksProduct, movements, movementsFrom } = useData()
+  // This screen prints "vs the month before", so it asks for a month of ledger behind it.
+  useLedgerWindow(VALUE_LOOKBACK_DAYS)
   const [requests, setRequests] = useState<PurchaseRequest[] | null>(null)
   const [orders, setOrders] = useState<PurchaseOrder[] | null>(null)
 

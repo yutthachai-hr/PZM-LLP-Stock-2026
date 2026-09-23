@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useData } from '../../data/DataContext'
+import { useData, useLedgerWindow } from '../../data/DataContext'
 import { useT, type TFn } from '../../i18n/I18nContext'
 import { useSuppliers } from '../../services/suppliers'
 import { AreaTrendChart, BarsChart, CATEGORY_COLORS, DonutChart, HBarList } from '../../components/charts'
@@ -30,6 +30,8 @@ const DEFAULT_DAYS = 14
 export function ReportsOverview() {
   const t = useT()
   const { movements, movementsFrom, products, locations, qtyAt, minFor, tracksProduct } = useData()
+  // Every figure here is compared with the period before it.
+  useLedgerWindow()
   const suppliers = useSuppliers()
   const today = bkkDayStart(Date.now())
   const [fromStr, setFromStr] = useState(msToDateInput(today - (DEFAULT_DAYS - 1) * DAY_MS))
