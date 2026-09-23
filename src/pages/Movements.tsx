@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { useData } from '../data/DataContext'
+import { useData, useLedgerWindow, QUARTER_DAYS } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -32,6 +32,9 @@ import { errText } from '../i18n/AppError'
 export function MovementsPage() {
   const t = useT()
   const { movements, locations, products, productById, ensureMovementsFrom } = useData()
+  // This screen IS the history: a month of it, whatever the app loads on start-up. Older
+  // than that is one click away (LedgerWindowNotice).
+  useLedgerWindow(QUARTER_DAYS)
   const { user } = useAuth()
   const toast = useToast() // i18n-key
   const confirm = useConfirm()

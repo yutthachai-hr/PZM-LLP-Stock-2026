@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useLive } from './useLive'
 import { overlayRecent, subscribeRecentWrites } from './recentWrites'
 import { windowStart } from './ledgerWindow'
+import { MONTH_DAYS } from './windowDays'
 import { stockView } from '../lib/inventoryRules/stockView'
 import { useAuth } from '../auth/AuthContext'
 import { useI18n } from '../i18n/I18nContext'
@@ -88,8 +89,7 @@ const Ctx = createContext<DataState | null>(null)
  */
 const RECENT_DAYS = 7
 
-/** What a screen that shows month-on-month figures needs behind it. */
-export const MONTH_DAYS = 30
+export { MONTH_DAYS, QUARTER_DAYS } from './windowDays'
 
 export { windowStart } from './ledgerWindow'
 

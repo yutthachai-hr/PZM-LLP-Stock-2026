@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useData } from '../data/DataContext'
+import { useData, useLedgerWindow, QUARTER_DAYS } from '../data/DataContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useT } from '../i18n/I18nContext'
@@ -36,6 +36,8 @@ export function StockCardPage() {
   const t = useT()
   const { id = '' } = useParams()
   const { productById, locations, qtyAt, minFor, movements, loading } = useData()
+  // A stock card with a week on it is not a stock card.
+  useLedgerWindow(QUARTER_DAYS)
   const { brand } = useBrand()
   const product = productById(id)
 

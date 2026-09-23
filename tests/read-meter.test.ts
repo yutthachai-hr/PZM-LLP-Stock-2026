@@ -64,3 +64,19 @@ describe('the ledger window', () => {
     expect(windowStart(7, new Date(2026, 8, 24, 1, 0, 0).getTime())).toBeGreaterThan(windowStart(7, morning))
   })
 })
+
+// 23 Sep 2026: cutting the start-up window to a week also emptied the history screen of
+// everything older, and the owner went looking for August and found nothing. The screens
+// that ARE the history ask for a quarter; the ones people key on still start at a week.
+describe('how far back each kind of screen asks for', () => {
+  test('a quarter reaches back further than a month, and a month further than the start-up week', async () => {
+    const { windowStart } = await import('../src/data/ledgerWindow')
+    const { MONTH_DAYS, QUARTER_DAYS } = await import('../src/data/windowDays')
+    const now = new Date(2026, 8, 23, 9, 0, 0).getTime()
+    const august = new Date(2026, 7, 1, 0, 0, 0).getTime()
+    expect(QUARTER_DAYS).toBeGreaterThan(MONTH_DAYS)
+    // The owner's August rows are inside a quarter and outside a month.
+    expect(windowStart(QUARTER_DAYS, now)).toBeLessThan(august)
+    expect(windowStart(MONTH_DAYS, now)).toBeGreaterThan(august)
+  })
+})
