@@ -189,6 +189,36 @@
       "runs": [
         "2026-09-23-SC-007-manager-desktop"
       ]
+    },
+    {
+      "id": "UX-0013",
+      "title": "หน้ารายงานไม่บอกว่าช่วงวันที่เริ่มต้นคือช่วงอะไร ไม่มีปุ่มช่วงสำเร็จรูป และเทียบเดือนต่อเดือนให้ไม่ได้",
+      "file": "issues/UX-0013-reports-period-is-unlabelled.md",
+      "role": "manager",
+      "route": "/reports",
+      "category": "UX_FRICTION",
+      "severity": "major",
+      "risk": "LOW",
+      "state": "REPRODUCED",
+      "frequency": 1,
+      "runs": [
+        "2026-09-23-SC-008-manager-desktop"
+      ]
+    },
+    {
+      "id": "UX-0014",
+      "title": "กล่องข้อมูลเชิงลึกซ่อนบรรทัดของตัวเองเงียบ ๆ เมื่อช่วงนั้นไม่มีข้อมูล แทนที่จะบอกว่าไม่มี",
+      "file": "issues/UX-0014-insights-card-vanishes-instead-of-saying-empty.md",
+      "role": "manager",
+      "route": "/reports",
+      "category": "UX_FRICTION",
+      "severity": "minor",
+      "risk": "LOW",
+      "state": "REPRODUCED",
+      "frequency": 1,
+      "runs": [
+        "2026-09-23-SC-008-manager-desktop"
+      ]
     }
   ]
 }
