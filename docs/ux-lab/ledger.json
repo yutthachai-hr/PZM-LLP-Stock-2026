@@ -12,9 +12,25 @@
       "severity": "blocker",
       "risk": "MEDIUM",
       "state": "REPRODUCED",
+      "frequency": 2,
+      "runs": [
+        "2026-09-23-SC-001-staff-branch-desktop",
+        "2026-09-23-SC-001-staff-branch-desktop-rerun"
+      ]
+    },
+    {
+      "id": "UX-0002",
+      "title": "ผลค้นหามีของชื่อเดียวกันสี่แถว ไม่มีอะไรบอกว่าเจ้าไหนคือเจ้าประจำ",
+      "file": "issues/UX-0002-regular-supplier-not-marked.md",
+      "role": "staff",
+      "route": "/requests",
+      "category": "UX_FRICTION",
+      "severity": "major",
+      "risk": "MEDIUM",
+      "state": "REPRODUCED",
       "frequency": 1,
       "runs": [
-        "2026-09-23-SC-001-staff-branch-desktop"
+        "2026-09-23-SC-001-staff-branch-desktop-rerun"
       ]
     }
   ]
