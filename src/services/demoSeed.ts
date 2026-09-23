@@ -2,9 +2,10 @@ import { backend } from '../backend'
 import { BRANDS, getBrand, setActiveBrand, type BrandId } from '../brand/brand'
 import { isDemoMode } from '../firebase/config'
 import { AppError } from '../i18n/AppError'
-import { COL, type AppUser } from '../types'
+import { COL, type AppUser, type Product } from '../types'
 import { DEMO_ADMIN, DEMO_PASSWORD, DEMO_USERS } from './demoUsers'
 import { seedInitialData } from './seed'
+import { applySupplierProposal, buildSupplierProposal } from './supplierImport'
 
 /**
  * Put a demo build into a known state: one admin, both brands set up, catalogs loaded.
@@ -26,6 +27,7 @@ const LOCAL_PREFIX = 'pmstock:v1:'
 export interface DemoSeedResult {
   products: number
   locations: number
+  suppliers: number
 }
 
 /**
@@ -69,7 +71,7 @@ export async function resetDemoData(): Promise<DemoSeedResult> {
   for (const k of doomed) localStorage.removeItem(k)
 
   const was = getBrand()
-  const result: DemoSeedResult = { products: 0, locations: 0 }
+  const result: DemoSeedResult = { products: 0, locations: 0, suppliers: 0 }
   try {
     for (const brand of BRANDS) {
       // seedInitialData reads the brand from module state rather than taking one, so the
@@ -79,6 +81,7 @@ export async function resetDemoData(): Promise<DemoSeedResult> {
       result.products += seeded.products
       result.locations += seeded.locations
       await renameToThai(brand.id)
+      result.suppliers += await seedSuppliers()
     }
   } finally {
     setActiveBrand(was)
@@ -102,6 +105,22 @@ export async function resetDemoData(): Promise<DemoSeedResult> {
   }
 
   return result
+}
+
+/**
+ * Give the demo the supplier list the live system has.
+ *
+ * Without this a demo has products and no one to buy them from, so every purchasing screen
+ * dead-ends at an empty "ผู้ขาย" dropdown — which is how the real system would look on its
+ * first day and nothing like how it looks now. The names come from the catalogue itself, the
+ * same way the live list was built: "ROCKET SALAD (ACK)" says who sells it.
+ */
+async function seedSuppliers(): Promise<number> {
+  const products = await backend.getAll<Product>(COL.products)
+  const proposal = buildSupplierProposal(products)
+  if (proposal.suppliers.length === 0) return 0
+  const { suppliers } = await applySupplierProposal(proposal.suppliers)
+  return suppliers
 }
 
 async function renameToThai(brand: BrandId): Promise<void> {
