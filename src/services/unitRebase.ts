@@ -32,6 +32,23 @@ import { makeDocNo, rebuildProductLevels, setStockCount } from './stock'
 
 export type RebaseMode = 'rate' | 'recount'
 
+/** Costs are kept to four decimals, as the cost service does — a sachet really is ฿0.993. */
+function roundCost(n: number): number {
+  return Math.round(n * 10000) / 10000
+}
+
+/**
+ * How a price per old unit becomes a price per new one.
+ *
+ * Quantities are divided by the rate, so the price of one unit is multiplied by it: two
+ * cartons become forty-eight pieces, and ฿1,190 a carton becomes ฿49.58 a piece. A recount
+ * has no rate at all — the old unit and the new one are not convertible, which is the whole
+ * reason for that mode — so the price is left for the owner to state afresh.
+ */
+function factorFor(mode: RebaseMode, factor?: number): number {
+  return mode === 'rate' && factor ? factor : 1
+}
+
 export interface RebaseSite {
   locationId: string
   locationName: string
@@ -246,11 +263,28 @@ export async function rebaseProductUnit(params: {
     }
   }
 
-  // ---- 3. the product itself ----
+  // ---- 3. the product itself, its rates and what it costs ----
+  //
+  // The cost is held per one of the product's own unit, so changing that unit changes what
+  // the number means: ฿1,190 a carton left alone became ฿1,190 a piece, and the stock was
+  // valued at twenty-four times what it is worth (owner, 23 Sep 2026 — "หน่วยเพี้ยน"). The
+  // price as keyed never changes: the invoice said what it said. What is recomputed is what
+  // that price comes to in the new unit.
+  const nextProduct: Product = { ...product, unitType: to, unitConversions: preview.conversions }
+  const history = (product.costHistory ?? []).map((h) => {
+    const f = sameUnit(h.unit, to) ? 1 : resolveFactor(nextProduct, h.unit)
+    return f !== null && f > 0
+      ? { ...h, factor: f, cost: roundCost(h.price / f) }
+      : // No rate for that unit under the new base — the price cannot be restated, so the
+        // figure it produced is carried across at the same rate as the quantities.
+        { ...h, cost: roundCost(h.cost * factorFor(mode, factor)) }
+  })
   await db.update(COL.products, productId, {
     unitType: to,
     unit: unitNameFor(to),
     unitConversions: preview.conversions.length ? preview.conversions : DELETE_FIELD,
+    ...(product.cost !== undefined ? { cost: roundCost(product.cost * factorFor(mode, factor)) } : {}),
+    ...(history.length ? { costHistory: history } : {}),
     updatedAt: now,
   })
 
