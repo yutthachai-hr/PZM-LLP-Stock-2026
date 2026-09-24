@@ -68,6 +68,14 @@ function formOf(a: Announcement): Form {
 }
 
 export function AnnouncementPage() {
+  // Both routes render this component at the same place in the tree, so React would keep
+  // one announcement's state when the URL moves to another (or to /new). Keyed on the URL,
+  // each document gets a fresh screen.
+  const { company, id } = useParams()
+  return <AnnouncementLoader key={`${company ?? ''}/${id ?? 'new'}`} />
+}
+
+function AnnouncementLoader() {
   const t = useT()
   const { company: companyParam, id } = useParams()
   const [params, setParams] = useSearchParams()
