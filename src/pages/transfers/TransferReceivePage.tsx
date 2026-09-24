@@ -277,11 +277,12 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
       </div>
 
       <FormActions>
-        <div className="mr-auto self-center text-sm text-ink-soft">
+        <div className="mr-auto self-center text-xs text-ink-soft sm:text-sm">
           {t('ตรวจแล้ว {n}/{total}', { n: lines.length - unchecked.length, total: lines.length })}
           {diffs.length > 0 && <span className="ml-2 text-warn">· {t('มีผลต่าง {n} รายการ', { n: diffs.length })}</span>}
         </div>
-        <Button variant="outline" onClick={() => navigate(`/transfers/${transfer.id}`)} disabled={busy}>
+        {/* On a phone the top bar's back arrow does this; the bar keeps room for the count. */}
+        <Button variant="outline" className="max-sm:hidden" onClick={() => navigate(`/transfers/${transfer.id}`)} disabled={busy}>
           {t('ย้อนกลับ')}
         </Button>
         <Button onClick={() => void submit()} disabled={busy || !allowed}>
