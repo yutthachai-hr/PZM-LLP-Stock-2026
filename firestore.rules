@@ -81,12 +81,12 @@ service cloud.firestore {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
         'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
-        'purchaseRequests', 'messages',
+        'purchaseRequests', 'messages', 'announcements',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
         'lelapin__stockEvents', 'lelapin__purchaseOrders',
         'lelapin__purchaseBatches', 'lelapin__productAliases',
-        'lelapin__purchaseRequests', 'lelapin__messages'
+        'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements'
       ];
     }
 
@@ -94,10 +94,10 @@ service cloud.firestore {
     function adminWritable(name) {
       return name in [
         'products', 'productImages', 'locations', 'productMinOverrides',
-        'suppliers', 'supplierItems',
+        'suppliers', 'supplierItems', 'companyProfile',
         'lelapin__products', 'lelapin__productImages', 'lelapin__locations',
         'lelapin__productMinOverrides',
-        'lelapin__suppliers', 'lelapin__supplierItems'
+        'lelapin__suppliers', 'lelapin__supplierItems', 'lelapin__companyProfile'
       ];
     }
 
@@ -691,6 +691,76 @@ service cloud.firestore {
         && (d.status != 'poCreated' || ('orders' in d && d.orders.size() > 0));
     }
 
+    /**
+     * A company announcement (24 Sep 2026). Written by a หัวหน้า or admin, numbered when it
+     * is published, and kept: after that its words, number and files are what was sent,
+     * and only the send log and the status move. Lists and maps (the target, the snapshot,
+     * the files, the sends, the history) are bounded, not walked.
+     */
+    function validAnnouncement(d) {
+      return announcementFrozen(d) && announcementLive(d)
+        && d.keys().hasAll([
+          'id', 'status', 'company', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'publisherId', 'publisherName', 'sends', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'status', 'company', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'publisherId', 'publisherName', 'publishedAt', 'publishedBy', 'snapshot', 'files', 'sends',
+          'cancelReason', 'cancelledBy', 'cancelledAt', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function announcementFrozen(d) {
+      return d.company in ['pizza', 'lelapin']
+        && text(d.publisherId, 200) && text(d.publisherName, 200)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt);
+    }
+
+    function announcementLive(d) {
+      return d.status in ['draft', 'ready', 'published', 'partiallySent', 'sent', 'cancelled']
+        && epochMs(d.announcementDate)
+        && text(d.subject, 200) && d.subject.size() > 0
+        && text(d.body, 3000)
+        && d.format in ['text', 'a5']
+        && d.target is map
+        && d.sends is list && d.sends.size() <= 200
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 300
+        && (!('docNo' in d) || text(d.docNo, 60))
+        && (!('publishedAt' in d) || epochMs(d.publishedAt))
+        && (!('publishedBy' in d) || text(d.publishedBy, 200))
+        && (!('snapshot' in d) || d.snapshot is map)
+        && (!('files' in d) || d.files is map)
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
+        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && epochMs(d.updatedAt)
+        // Past ready, a status means a number and a snapshot of what was said.
+        && (d.status in ['draft', 'ready', 'cancelled'] || ('docNo' in d && 'snapshot' in d))
+        && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d));
+    }
+
+    /** The company as its documents present it: one document per brand, `main`. */
+    function validCompanyProfile(docId, d) {
+      return docId == 'main'
+        && d.keys().hasAll(['id', 'docPrefix', 'announcementCode'])
+        && d.keys().hasOnly([
+          'id', 'docPrefix', 'announcementCode', 'displayName', 'nameEn',
+          'logoDataUrl', 'logoVersion', 'updatedBy', 'updatedAt'
+        ])
+        && d.docPrefix is string && d.docPrefix.matches('^[A-Z0-9]{1,10}$')
+        && d.announcementCode is string && d.announcementCode.matches('^[A-Z0-9]{1,10}$')
+        && (!('displayName' in d) || text(d.displayName, 200))
+        && (!('nameEn' in d) || text(d.nameEn, 200))
+        // A data URL, as product photos are; under Firestore's 1 MiB per document.
+        && (!('logoDataUrl' in d) || (d.logoDataUrl is string && d.logoDataUrl.size() <= 900000))
+        && (!('logoVersion' in d) || nonneg(d.logoVersion, 1000000))
+        && (!('updatedBy' in d) || d.updatedBy == request.auth.uid)
+        && (!('updatedAt' in d) || epochMs(d.updatedAt));
+    }
+
     /** A workbook spelling somebody confirmed as one product. */
     function validAlias(d) {
       return d.keys().hasAll(['id', 'key', 'productId', 'sourceName', 'createdBy', 'createdByName', 'createdAt'])
@@ -718,6 +788,8 @@ service cloud.firestore {
         : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
         : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d))
         : k == 'messages' ? (fresh ? validMessage(d) : messageShape(d))
+        : k == 'announcements' ? (fresh ? validAnnouncement(d) : announcementLive(d))
+        : k == 'companyProfile' ? validCompanyProfile(docId, d)
         : k == 'counters' ? validCounter(d)
         : k == 'products' ? validProduct(d)
         : k == 'locations' ? validLocation(d)
@@ -760,6 +832,13 @@ service cloud.firestore {
           && request.resource.data.status in ['draft', 'needsReview', 'ready']
         : k == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
+        // An announcement is written by a หัวหน้า or admin, in their own name, as a draft —
+        // never born numbered.
+        : k == 'announcements'
+        ? manager() && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.publisherId == request.auth.uid
+          && request.resource.data.status == 'draft'
+          && !('docNo' in request.resource.data)
         // A request is filed by whoever is asking, as a draft.
         : k == 'purchaseRequests'
         ? request.resource.data.createdBy == request.auth.uid
@@ -790,6 +869,7 @@ service cloud.firestore {
         ? request.resource.data.createdBy == request.auth.uid
         : k == 'stockMovements' ? movementEdit()
         : k == 'messages' ? messageEdit()
+        : k == 'announcements' ? announcementEdit()
         : k == 'stockEvents' ? eventEdit()
         : k == 'counters' ? request.resource.data.value > resource.data.value
         : true;
@@ -901,6 +981,44 @@ service cloud.firestore {
         // reopening a decision: admin only
         || (to == 'pendingApproval' && from in ['approved', 'rejected'] && roleIsAdmin())
       );
+    }
+
+    /**
+     * What may change on an announcement, and who may change it: a หัวหน้า or admin.
+     *
+     * Before it is numbered the words may change freely. The number is issued only by
+     * publishing a ready announcement, and from then on the number, the words and the
+     * snapshot are frozen; the files are written once; the send log and the history only
+     * grow. Publishing and cancelling are signed by the caller.
+     */
+    function announcementEdit() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return roleIsManager()
+        && editedKeys().hasOnly([
+          'status', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'docNo', 'publishedAt', 'publishedBy', 'snapshot', 'files', 'sends',
+          'cancelReason', 'cancelledBy', 'cancelledAt', 'history', 'updatedAt'
+        ])
+        && d.history.size() >= old.history.size()
+        && d.sends.size() >= old.sends.size()
+        && (d.status == old.status || announcementMove(old.status, d.status))
+        && (('docNo' in old)
+            ? (d.docNo == old.docNo && d.subject == old.subject && d.body == old.body
+               && d.announcementDate == old.announcementDate && d.format == old.format
+               && d.snapshot == old.snapshot && d.publishedBy == old.publishedBy)
+            : (!('docNo' in d) || (old.status == 'ready' && d.status == 'published'
+                                   && d.publishedBy == request.auth.uid)))
+        && (!('files' in old) || d.files == old.files)
+        && (!('cancelledBy' in d) || d.cancelledBy == request.auth.uid
+            || d.cancelledBy == old.get('cancelledBy', ''));
+    }
+
+    function announcementMove(from, to) {
+      return (from == 'draft' && to in ['ready', 'cancelled'])
+        || (from == 'ready' && to in ['draft', 'published', 'cancelled'])
+        || (from == 'published' && to in ['sent', 'partiallySent', 'cancelled'])
+        || (from == 'partiallySent' && to == 'sent');
     }
 
     function movementEdit() {
@@ -1203,8 +1321,10 @@ service cloud.firestore {
         && validShape(collection, docId, request.resource.data, false);
 
       allow delete: if active() && staffDeletable(collection);
+      // An announcement is never deleted, only cancelled — the send log is the record of
+      // what the company told its suppliers.
       allow delete: if admin() && brandData(collection) && !ledger(collection)
-        && !receivedOrder(collection);
+        && !receivedOrder(collection) && kind(collection) != 'announcements';
     }
   }
 }

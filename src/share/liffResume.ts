@@ -18,6 +18,11 @@ import { liffId } from './lineLiffProvider'
  */
 export const RESUME_PARAM = 'send'
 
+/** The same, for a company announcement (24 Sep 2026): its page reopens the send on it. */
+export const ANNOUNCE_PARAM = 'announce'
+
+export type ResumeParam = typeof RESUME_PARAM | typeof ANNOUNCE_PARAM
+
 /**
  * Which brand the order belongs to, carried alongside it.
  *
@@ -29,18 +34,18 @@ export const RESUME_PARAM = 'send'
 export const RESUME_BRAND_PARAM = 'brand'
 
 /** The same page with `?send=<orderId>`, as an absolute URL (none outside a browser). */
-export function resumeUrl(orderId: string): string | undefined {
+export function resumeUrl(orderId: string, param: ResumeParam = RESUME_PARAM): string | undefined {
   if (typeof location === 'undefined') return undefined
   const u = new URL(location.href)
-  u.searchParams.set(RESUME_PARAM, orderId)
+  u.searchParams.set(param, orderId)
   u.searchParams.set(RESUME_BRAND_PARAM, getBrand())
   return u.toString()
 }
 
 /** The LIFF address of the same page — opens it inside the LINE app, already signed in. */
-export function liffUrl(orderId: string): string {
+export function liffUrl(orderId: string, param: ResumeParam = RESUME_PARAM): string {
   const path = typeof location === 'undefined' ? '' : location.pathname.replace(/^\//, '')
-  const q = `${RESUME_PARAM}=${encodeURIComponent(orderId)}&${RESUME_BRAND_PARAM}=${getBrand()}`
+  const q = `${param}=${encodeURIComponent(orderId)}&${RESUME_BRAND_PARAM}=${getBrand()}`
   return `https://liff.line.me/${liffId()}/${path}?${q}`
 }
 
@@ -51,7 +56,7 @@ export function liffUrl(orderId: string): string {
 export function brandToResume(): BrandId | null {
   if (typeof location === 'undefined') return null
   const p = new URLSearchParams(location.search)
-  if (!p.get(RESUME_PARAM)) return null
+  if (!p.get(RESUME_PARAM) && !p.get(ANNOUNCE_PARAM)) return null
   const b = p.get(RESUME_BRAND_PARAM)
   return b === 'pizza' || b === 'lelapin' ? b : null
 }

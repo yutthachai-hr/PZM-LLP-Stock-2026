@@ -1000,6 +1000,8 @@ export const COL = {
   purchaseBatches: 'purchaseBatches',
   purchaseRequests: 'purchaseRequests',
   productAliases: 'productAliases',
+  announcements: 'announcements',
+  companyProfile: 'companyProfile',
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const
@@ -1026,6 +1028,129 @@ export const MESSAGE_MAX = 1000
 
 /** How long messages are kept (owner, 22 Sep 2026). The cron Worker removes older ones. */
 export const MESSAGE_DAYS = 90
+
+// ---------- Company announcements (24 Sep 2026) ----------
+
+/**
+ * Which company a record belongs to — the same values as brand/brand.ts's BrandId. Spelled
+ * out here rather than imported because this file is also compiled into the cron Worker,
+ * which has no browser, and brand.ts reads localStorage.
+ */
+type BrandId = 'pizza' | 'lelapin'
+
+/**
+ * The company as its documents present it, one per brand (`companyProfile/main`).
+ *
+ * The die-cut logo lives here, not in the code: a template that reads it from data is a
+ * template the owner can re-skin by uploading a file. `docPrefix` starts a document
+ * number ("PZM-ANN-2569-0001") and defaults to the brand's workbook key.
+ */
+export interface CompanyProfile {
+  id: string
+  docPrefix: string
+  announcementCode: string
+  /** The name printed on documents; the brand's name when unset. */
+  displayName?: string
+  nameEn?: string
+  /** PNG (transparency kept) or JPEG as a data URL, shrunk in the browser. */
+  logoDataUrl?: string
+  /** Bumped whenever the logo changes, so a published announcement records which one it used. */
+  logoVersion?: number
+  updatedBy?: string
+  updatedAt?: number
+}
+
+export type AnnouncementStatus = 'draft' | 'ready' | 'published' | 'partiallySent' | 'sent' | 'cancelled'
+export type AnnouncementFormat = 'text' | 'a5'
+/**
+ * How an announcement reaches LINE. `personal` is the person's own LINE through LIFF's
+ * share picker — they choose the groups in LINE's own screen, so the app never learns
+ * which. `auto` (a LINE Official Account pushing to registered groups) is designed in
+ * docs/PLAN-announcements.md and not built: the owner has no OA yet (24 Sep 2026).
+ */
+export type AnnouncementSendMode = 'personal' | 'auto'
+export type AnnouncementSendOutcome = 'sent' | 'shareOpened' | 'failed'
+
+export interface AnnouncementTarget {
+  mode: AnnouncementSendMode
+  /** Whose suppliers this is meant for: one company's, or both. */
+  companyScope: BrandId[]
+}
+
+/** What went out: frozen when the number is issued, never edited afterwards. */
+export interface AnnouncementSnapshot {
+  subject: string
+  body: string
+  text: string
+  companyName: string
+  logoVersion: number
+  layoutVersion: number
+}
+
+export interface AnnouncementFiles {
+  pdfUrl: string
+  imageUrl: string
+  previewUrl: string
+  pdfBytes: number
+  createdAt: number
+}
+
+export interface AnnouncementSend {
+  at: number
+  by: string
+  byName: string
+  mode: AnnouncementSendMode
+  outcome: AnnouncementSendOutcome
+  /**
+   * Who says so: LINE itself (`liff` resolved success), or the person, after the phone's
+   * share sheet — which reports only that it opened (`confirmed`).
+   */
+  via: 'liff' | 'shareSheet' | 'confirmed' | 'oa'
+  /** Only an Official Account knows which group it sent to. */
+  groupId?: string
+  groupName?: string
+  error?: string
+}
+
+export interface AnnouncementHistoryEntry {
+  at: number
+  by: string
+  byName: string
+  action: string
+  detail?: string
+}
+
+export interface Announcement {
+  id: string
+  /** Issued when published, never for a draft. */
+  docNo?: string
+  status: AnnouncementStatus
+  company: BrandId
+  announcementDate: number
+  subject: string
+  body: string
+  format: AnnouncementFormat
+  target: AnnouncementTarget
+  /** Whoever wrote it, from their profile — not typed. */
+  publisherId: string
+  publisherName: string
+  publishedAt?: number
+  publishedBy?: string
+  snapshot?: AnnouncementSnapshot
+  files?: AnnouncementFiles
+  sends: AnnouncementSend[]
+  cancelReason?: string
+  cancelledBy?: string
+  cancelledAt?: number
+  history: AnnouncementHistoryEntry[]
+  createdBy: string
+  createdByName: string
+  createdAt: number
+  updatedAt: number
+}
+
+export const ANNOUNCEMENT_SUBJECT_MAX = 200
+export const ANNOUNCEMENT_BODY_MAX = 3000
 
 // Labels are translation keys — screens render them through t(). i18n-key
 export const ADJUST_REASONS = [

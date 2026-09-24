@@ -22,7 +22,7 @@ describe('navigation', () => {
 
   test('the "more" page lists what the tab bar and the sheet do not', () => {
     const more = moreItemsFor('staff').map((n) => n.to)
-    expect(more).toEqual(['/calendar', '/reports', '/requests', '/orders', '/suppliers', '/settings'])
+    expect(more).toEqual(['/calendar', '/reports', '/requests', '/orders', '/suppliers', '/announcements', '/settings'])
   })
 
   test('pages reached from "more" light the more tab; keying pages light nothing', () => {

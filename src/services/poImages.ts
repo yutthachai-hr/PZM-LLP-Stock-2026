@@ -59,10 +59,10 @@ async function authHeader(): Promise<Record<string, string>> {
   return { authorization: `Bearer ${await user.getIdToken()}` }
 }
 
-async function put(path: string, blob: Blob, headers: Record<string, string>): Promise<string> {
+async function put(path: string, blob: Blob, headers: Record<string, string>, type = 'image/jpeg'): Promise<string> {
   const res = await fetch(`${host()}${path}`, {
     method: 'POST',
-    headers: { ...headers, 'content-type': 'image/jpeg' },
+    headers: { ...headers, 'content-type': type },
     body: blob,
   })
   if (!res.ok) {
@@ -98,3 +98,23 @@ export async function uploadPoImage(params: {
 
 /** How long the host keeps a picture. Long enough to resend on Monday what was made Friday. */
 export const TTL_MS = 7 * 86_400_000
+
+/**
+ * An announcement's A5 files, kept by the same function under the same sign-in, but with no
+ * expiry — the company keeps what it announced (functions/_poImage.ts, DOC_KINDS).
+ */
+export async function uploadAnnouncementFiles(params: {
+  id: string
+  pdf: Blob
+  image: Blob
+  preview: Blob
+}): Promise<{ pdfUrl: string; imageUrl: string; previewUrl: string; pdfBytes: number }> {
+  const headers = await authHeader()
+  const tag = encodeURIComponent(params.id)
+  const [pdfUrl, imageUrl, previewUrl] = await Promise.all([
+    put(`?kind=ann-pdf&po=${tag}`, params.pdf, headers, 'application/pdf'),
+    put(`?kind=ann-image&po=${tag}`, params.image, headers),
+    put(`?kind=ann-preview&po=${tag}`, params.preview, headers),
+  ])
+  return { pdfUrl, imageUrl, previewUrl, pdfBytes: params.pdf.size }
+}

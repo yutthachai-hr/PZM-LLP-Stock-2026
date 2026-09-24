@@ -15,6 +15,9 @@ import { resolveCollection, type BrandId } from '../../src/brand/brand'
 type Docs = Map<string, Record<string, unknown>>
 
 let store = new Map<string, Docs>()
+// How many times each document has been written, so a transaction can tell that something
+// it read changed before it committed — and run again, as Firestore does.
+let versions = new Map<string, number>()
 let failWrite: ((collection: string, id: string) => boolean) | null = null
 let seq = 0
 
@@ -67,8 +70,15 @@ function applyPatch_(
 }
 
 /** Empty the database and clear any injected failure. */
+const vkey = (c: string, id: string) => `${c}|${id}`
+function bump(c: string, id: string): void {
+  const k = vkey(c, id)
+  versions.set(k, (versions.get(k) ?? 0) + 1)
+}
+
 export function resetMemory(): void {
   store = new Map()
+  versions = new Map()
   failWrite = null
   seq = 0
 }
@@ -89,7 +99,10 @@ export function seed(physicalCollection: string, docs: Record<string, unknown>[]
     m = new Map()
     store.set(physicalCollection, m)
   }
-  for (const d of docs) m.set(d.id as string, clone(d))
+  for (const d of docs) {
+    m.set(d.id as string, clone(d))
+    bump(physicalCollection, d.id as string)
+  }
 }
 
 function guard(collection: string, id: string, brand?: BrandId): void {
@@ -141,31 +154,50 @@ export function createMemoryBackend(brand?: BrandId): Backend {
     const id = `gen-${++seq}`
     guard_(collection, id)
     col_(collection).set(id, { ...clone(data), id })
+    bump(resolve(collection), id)
     return id
   },
 
   async set(collection: string, id: string, data: Record<string, unknown>): Promise<void> {
     guard_(collection, id)
     col_(collection).set(id, { ...clone(data), id })
+    bump(resolve(collection), id)
   },
 
   async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
     guard_(collection, id)
     const m = col_(collection)
     m.set(id, { ...applyPatch_(m.get(id) ?? { id }, patch), id })
+    bump(resolve(collection), id)
   },
 
   async remove(collection: string, id: string): Promise<void> {
     guard_(collection, id)
     col_(collection).delete(id)
+    bump(resolve(collection), id)
   },
 
   async transaction<R>(fn: (tx: TxContext) => Promise<R>): Promise<R> {
+    // Optimistic, like Firestore: if anything the attempt read was written by someone else
+    // before it committed, the attempt is thrown away and run again. Without this, two
+    // "concurrent" transactions in a test both read counter 0 and both commit 1.
+    for (let attempt = 0; ; attempt++) {
+      const out = await attemptTx(fn)
+      if (out.ok) return out.result
+      if (attempt >= 20) throw new Error('transaction kept conflicting')
+    }
+  },
+  }
+
+  async function attemptTx<R>(fn: (tx: TxContext) => Promise<R>): Promise<{ ok: true; result: R } | { ok: false }> {
     // collection name (as resolved AT WRITE TIME) -> id -> value, or null for a delete
     const writes: [string, string, Record<string, unknown> | null][] = []
+    const seen = new Map<string, number>()
 
     const tx: TxContext = {
       async get<T>(c: string, id: string): Promise<T | null> {
+        const k = vkey(resolve(c), id)
+        if (!seen.has(k)) seen.set(k, versions.get(k) ?? 0)
         return (clone(col_(c).get(id)) as T) ?? null
       },
       set(c, id, data) {
@@ -184,6 +216,8 @@ export function createMemoryBackend(brand?: BrandId): Backend {
 
     const result = await fn(tx)
 
+    for (const [k, v] of seen) if ((versions.get(k) ?? 0) !== v) return { ok: false }
+
     // Commit as one unit: check every write first, so an injected failure leaves nothing.
     for (const [c, id] of writes) {
       if (failWrite?.(c, id)) throw new Error(`injected write failure: ${c}/${id}`)
@@ -196,9 +230,9 @@ export function createMemoryBackend(brand?: BrandId): Backend {
       }
       if (value === null) m.delete(id)
       else m.set(id, value)
+      bump(c, id)
     }
-    return result
-  },
+    return { ok: true, result }
   }
 }
 

@@ -1,5 +1,5 @@
 import type { HostedImage } from '../services/poImages'
-import type { PurchaseOrder, PurchaseShareStatus } from '../types'
+import type { PurchaseShareStatus } from '../types'
 
 /**
  * How an order sheet reaches a supplier.
@@ -19,13 +19,25 @@ import type { PurchaseOrder, PurchaseShareStatus } from '../types'
  */
 export type ShareOutcome = 'sent' | 'shareOpened' | 'cancelled'
 
+/**
+ * What is being sent, so the send can be picked back up after LINE Login takes the person
+ * away: an order resumes through `?send=<id>`, an announcement through `?announce=<id>`
+ * (share/liffResume.ts).
+ */
+export interface ShareSubject {
+  kind: 'order' | 'announcement'
+  id: string
+}
+
 export interface SharePayload {
-  order: PurchaseOrder
-  page: { n: number; of: number }
-  /** The picture, as a file, for providers that take one. */
-  file: File
+  subject: ShareSubject
+  /**
+   * The picture, as a file, for providers that take one. Absent for a text-only message
+   * (an announcement in TEXT form), which is the caption alone.
+   */
+  file?: File
   /** The picture on a public address, for providers that take a URL. */
-  hosted?: HostedImage
+  hosted?: Pick<HostedImage, 'url' | 'previewUrl'>
   /**
    * The line of text that goes with the picture — "ใบสั่งซื้อ PO-00003 — Pizza Mania".
    * A phone's share sheet sends it as the message title; the LINE picker sends it as a

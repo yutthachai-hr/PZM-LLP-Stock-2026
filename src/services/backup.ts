@@ -1,6 +1,6 @@
 import { backend } from '../backend'
 import type { Backend } from '../backend/types'
-import { COL, type PurchaseOrder, type StockMovement, type StockLevel } from '../types'
+import { COL, type Announcement, type PurchaseOrder, type StockMovement, type StockLevel } from '../types'
 import { brandDef, getBrand, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { balancesFromLedger, movementsChangedSince, parseLevelId } from './stock'
@@ -44,8 +44,10 @@ import { orderCounterFloors } from './purchaseOrders'
  *  - 7: no new collection — movements may now carry `entryQty` (20 Sep 2026 unit rule) and
  *    order lines `baseQty`; both pass through untouched and the restore rebuilds balances
  *    from the ledger as before. A version-6 file still restores.
+ *  - 9: company announcements (announcements) and the company profile (companyProfile:
+ *    logo and document prefix), 24 Sep 2026. A version-8 file still restores.
  */
-const FORMAT_VERSION = 8
+const FORMAT_VERSION = 9
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,
@@ -65,6 +67,8 @@ const COLLECTIONS = [
   COL.minOverrides,
   COL.suppliers,
   COL.supplierItems,
+  // Version 9: the logo and document prefix announcements are printed with.
+  COL.companyProfile,
   // Version 4: the spellings people confirmed for the order workbook.
   COL.productAliases,
   COL.events,
@@ -83,6 +87,8 @@ const COLLECTIONS = [
   // Version 8: the message board (22 Sep 2026). Notes people left each other; they say
   // nothing about stock, but losing them in a restore would still lose what was said.
   COL.messages,
+  // Version 9: what the company announced to its suppliers, and when it was sent.
+  COL.announcements,
 ] as const
 
 /** Rebuilt from the ledger on restore, so they are stored for reference only. */
@@ -103,6 +109,7 @@ const OVERWRITABLE: readonly string[] = [
   COL.inventorySchedules,
   COL.notes,
   COL.movementImages,
+  COL.companyProfile,
 ]
 
 /**
@@ -112,7 +119,13 @@ const OVERWRITABLE: readonly string[] = [
  * the receipt it became and the rules will not let it be deleted, so a file's older copy —
  * still saying "ordered" — must not win over the database's "received".
  */
-const APPEND_ONLY: readonly string[] = [COL.movements, COL.purchaseOrders, COL.purchaseBatches, COL.purchaseRequests]
+const APPEND_ONLY: readonly string[] = [
+  COL.movements,
+  COL.purchaseOrders,
+  COL.purchaseBatches,
+  COL.purchaseRequests,
+  COL.announcements,
+]
 
 /**
  * Backed up for the record, never written back.
@@ -176,6 +189,19 @@ function ledgerStamp(movements: StockMovement[]): string {
     if (t > latest) latest = t
   }
   return `${movements.length}:${latest}`
+}
+
+/** The announcement counters a restore must put back: the highest number per year. */
+export function announcementCounterFloors(rows: Pick<Announcement, 'docNo'>[]): Map<string, number> {
+  const max = new Map<string, number>()
+  for (const a of rows) {
+    const m = /-(\d{4})-(\d+)$/.exec(a.docNo ?? '')
+    if (!m) continue
+    const counter = `announcement__${m[1]}`
+    const seq = Number(m[2])
+    if (seq > (max.get(counter) ?? 0)) max.set(counter, seq)
+  }
+  return max
 }
 
 /** Highest sequence number each counter must be at, read back out of the document numbers. */
@@ -558,6 +584,9 @@ async function rebuildDerived(db: Backend): Promise<number> {
   // ordering screen applies when it finds no counter at all.
   const orders = await db.getAll<PurchaseOrder>(COL.purchaseOrders)
   for (const [counter, seq] of orderCounterFloors(orders)) counters.set(counter, seq)
+  // Each year's announcement counter, from the numbers issued (PZM-ANN-2569-0007 → 7).
+  const announcements = await db.getAll<Announcement>(COL.announcements)
+  for (const [counter, seq] of announcementCounterFloors(announcements)) counters.set(counter, seq)
 
   for (const [counter, seq] of counters) {
     const current = await db.getOne<{ value: number }>(COL.counters, counter)

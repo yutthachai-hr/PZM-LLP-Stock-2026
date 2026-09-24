@@ -50,6 +50,7 @@ import {
   saveFirebaseConfig,
 } from '../firebase/config'
 import type { LocationType, StockLocation, Role } from '../types'
+import { CompanyProfileSection } from './settings/CompanyProfileSection'
 import { DataTable } from '../components/DataTable'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
@@ -82,6 +83,7 @@ type SectionKey =
   | 'maintenance'
   | 'unitMigration'
   | 'rebaseUnit'
+  | 'company'
 
 interface MenuItem {
   key: SectionKey
@@ -143,6 +145,7 @@ export function SettingsPage() {
       {
         title: t('ผู้ใช้และระบบ'),
         items: [
+          { key: 'company', label: t('ข้อมูลบริษัท'), hint: t('โลโก้และตัวย่อเลขเอกสารที่ใช้ในประกาศบริษัท'), icon: 'building', show: isAdmin },
           { key: 'users', label: t('ผู้ใช้งาน'), hint: t('เพิ่มผู้ใช้ กำหนดสิทธิ์ ปิดการเข้าใช้'), icon: 'users', show: isAdmin },
           { key: 'automation', label: t('งานอัตโนมัติ'), hint: t('งานที่ระบบทำเองตามเวลา'), icon: 'clock', show: isManager },
           { key: 'readUsage', label: t('การอ่านข้อมูล (โควตา)'), hint: t('แอปอ่านไปกี่รายการแล้ว และคอลเลกชันไหนมากที่สุด'), icon: 'cloud', show: isAdmin },
@@ -197,6 +200,8 @@ export function SettingsPage() {
         return actor && <UnitMigrationSection actor={actor} />
       case 'rebaseUnit':
         return actor && <RebaseUnitSection actor={actor} />
+      case 'company':
+        return <CompanyProfileSection />
     }
   }
 
