@@ -155,7 +155,7 @@ export function Input(
   )
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
   const { className = '', ...rest } = props
   return <textarea className={`${inputBase} ${className}`} {...rest} />
 }

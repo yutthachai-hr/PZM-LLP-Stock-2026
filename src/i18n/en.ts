@@ -275,8 +275,6 @@ export const EN: Record<string, string> = {
     'Use the supplier’s real document number — e.g. Del Casaro (Thailand) Ltd. · Bocconcini 4.5 kg · invoice IV2616876',
   'เช่น เดล ตาซาโร (ประเทศไทย) จำกัด / เลขบิล IV2616876':
     'e.g. Del Casaro (Thailand) Ltd. / invoice IV2616876',
-  'กรุณากรอกเลขบิล/เอกสารส่งของจาก Supplier':
-    'Please enter the supplier’s delivery document number',
   'บันทึกรับเข้า ({n} รายการ)': 'Save receipt ({n} items)',
   'รับสินค้าเข้าเรียบร้อย (เลขที่ {docNo})': 'Stock received (doc no. {docNo})',
 
@@ -1973,6 +1971,7 @@ export const EN: Record<string, string> = {
   'ยังไม่มีการอ่านในหน้านี้': 'Nothing read yet in this visit',
   'ตัวเลขนี้คือจำนวนที่แอปได้รับ ซึ่งมากกว่าหรือเท่ากับที่ถูกคิดเงินจริง (ข้อมูลที่อ่านจากสำเนาในเครื่องไม่ถูกคิด) เปิดแอปใหม่ทุกครั้งคือการอ่านรอบใหม่ — ถ้าตัวเลขต่อการเปิดหนึ่งครั้งสูง ให้ดูว่าคอลเลกชันไหนกินมากที่สุด': 'This counts what the app received, which is at least what was billed (anything served from the offline copy is free). Every fresh open reads again — if one open costs a lot, look at which collection it went on.',
   'เริ่มนับใหม่': 'Start again',
+
   // ---- company announcements (24 Sep 2026) ----------------------------------
   'ประกาศ': 'Announcement',
   '(ออกเลขเมื่อเผยแพร่)': '(numbered when published)',
@@ -2303,4 +2302,19 @@ export const EN: Record<string, string> = {
   'ยอดที่ยังค้างระหว่างขนส่งของ "{name}" เหลือ {qty} {unit}': 'Only {qty} {unit} of "{name}" is still in transit',
   'ไม่มีสิทธิ์รายงานในนามสาขานี้': 'You cannot report for this branch',
   'รายการส่งผิดสาขานี้ได้รับการจัดการไปแล้ว': 'This has already been decided',
+
+  // ---- several bills in one receiving (24 Sep 2026) -------------------------------
+  'ลบบิล': 'Remove bill',
+  'ลบบิล {n} พร้อม {count} รายการในบิลนี้? (ยังไม่ได้บันทึก จึงไม่กระทบสต๊อก)': 'Remove bill {n} and its {count} lines? (Not saved yet, so no stock changes)',
+  'บิล {n}': 'Bill {n}',
+  'ลบบิล {n}': 'Remove bill {n}',
+  'รับเข้าแล้ว {n} บิล: {docs}': 'Received {n} bills: {docs}',
+  '(บันทึกแล้ว {n} บิล: {docs})': '({n} bills already saved: {docs})',
+  'บิล {n} บันทึกไม่สำเร็จ:': 'Bill {n} could not be saved:',
+  'บิล {n}: กรุณากรอกเลขบิล/เอกสารส่งของจาก Supplier': 'Bill {n}: enter the supplier\'s bill / delivery note number',
+  'บิล {n}: ยังไม่มีรายการสินค้า': 'Bill {n}: no products on it yet',
+  'บิล {n}: จำนวนต้องมากกว่า 0': 'Bill {n}: quantities must be more than 0',
+  'หลายเจ้าในวันเดียว: กด "เพิ่มบิล" แยกบิลละกล่อง บันทึกครั้งเดียวได้ทุกบิล': 'Several suppliers in a day: press "Add bill" for a card per bill, then save them all at once',
+  'เพิ่มบิล': 'Add bill',
+  'บันทึกรับเข้า {bills} บิล ({n} รายการ)': 'Receive {bills} bills ({n} lines)',
 }
