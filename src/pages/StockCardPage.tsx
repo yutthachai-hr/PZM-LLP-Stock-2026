@@ -23,6 +23,7 @@ import { stockCard, type StockCardRow } from '../lib/ledger'
 import { balanceSeries } from '../lib/stats/balanceSeries'
 import type { MovementType, StockMovement } from '../types'
 import { STATE_LOOK, stockState } from './products/productStatus'
+import { movementNote } from '../lib/receiptLabel'
 
 /**
  * ประวัติ/Stock Card for one product (owner's mock-up 06, spec §2.7): what it is and where it
@@ -143,7 +144,7 @@ export function StockCardPage() {
         ),
       },
       { key: 'by', header: t('ผู้บันทึก'), className: 'text-ink-soft', cell: (r) => r.movement.byUserName },
-      { key: 'note', header: t('หมายเหตุ'), className: 'text-xs text-ink-soft', cell: (r) => r.movement.note ?? '' },
+      { key: 'note', header: t('หมายเหตุ'), className: 'text-xs text-ink-soft', cell: (r) => movementNote(r.movement, t) },
     ],
     [t],
   )
@@ -171,7 +172,7 @@ export function StockCardPage() {
     [t('คงเหลือ')]: r.balance ?? '',
     [t('สาขา')]: [siteName(r.movement.fromLocationId), siteName(r.movement.toLocationId)].filter(Boolean).join(' → '),
     [t('ผู้บันทึก')]: r.movement.byUserName,
-    [t('หมายเหตุ')]: r.movement.note ?? '',
+    [t('หมายเหตุ')]: movementNote(r.movement, t),
   }))
   const fileBase = `stock-card-${product.sku}`
 

@@ -213,6 +213,7 @@ service cloud.firestore {
         && d.keys().hasOnly([
           'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'entryUnit', 'entryQty', 'qty',
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
+          'supplierId', 'supplierName', 'invoiceNo', 'docDate', 'poId', 'poDocNo',
           'date', 'byUserId', 'byUserName', 'createdAt',
           'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
         ])
@@ -232,6 +233,15 @@ service cloud.firestore {
         && (!('note' in d) || text(d.note, 2000))
         && (!('reason' in d) || text(d.reason, 60))
         && (!('hasPhoto' in d) || d.hasPhoto is bool)
+        // A receipt's paperwork as fields (24 Sep 2026) — who it came from, the number on
+        // their document and its date, the order it checks in. Written once with the row:
+        // movementEdit does not list them, so no correction can rewrite whose bill it was.
+        && (!('supplierId' in d) || text(d.supplierId, 200))
+        && (!('supplierName' in d) || text(d.supplierName, 200))
+        && (!('invoiceNo' in d) || text(d.invoiceNo, 100))
+        && (!('docDate' in d) || epochMs(d.docDate))
+        && (!('poId' in d) || text(d.poId, 200))
+        && (!('poDocNo' in d) || text(d.poDocNo, 40))
         && (!('voided' in d) || d.voided is bool)
         && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
         && (!('toLocationId' in d) || text(d.toLocationId, 200))
@@ -527,7 +537,7 @@ service cloud.firestore {
      * service and, where it matters, by the movement the receipt produces.
      */
     function validPurchaseOrder(d) {
-      return orderFrozen(d) && orderLive(d) && d.keys().hasAll([
+      return orderFrozen(d) && orderLive(d, d.keys()) && d.keys().hasAll([
           'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
           'orderedAt', 'lines', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ])
@@ -535,6 +545,7 @@ service cloud.firestore {
           'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
           'orderedAt', 'expectedAt', 'lines', 'invoiceNo', 'receivedAt', 'receivedBy', 'receivedByName',
           'movementDocNo', 'eventId', 'note',
+          'receipts', 'closedShortReason', 'closedShortBy', 'closedShortByName', 'closedShortAt',
           'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
@@ -559,42 +570,58 @@ service cloud.firestore {
      * validShape: a received order that came through a request and went out by LINE
      * carries every optional field, and checking all of them again went over the
      * expression budget).
+     *
+     * `e` is the set of fields this write puts there: every key on create, and on update
+     * only those added or changed (orderWritten). An optional field the write leaves alone
+     * was checked when it was written, so it is not checked again — a partly received order
+     * carrying every field was ~20 expressions from the 1,000 wall (24 Sep 2026). The
+     * fields every order must have, and the rules across fields, are checked every time.
      */
-    function orderLive(d) {
+    function orderLive(d, e) {
       return d.status in ['draft', 'ordered', 'received', 'cancelled']
         && epochMs(d.orderedAt) && epochMs(d.updatedAt)
         // When the supplier is to deliver — the day the order asked for, or the lead time
         // counted from the order. The calendar's receiving entries hang off it.
-        && (!('expectedAt' in d) || epochMs(d.expectedAt))
+        && (!('expectedAt' in e) || epochMs(d.expectedAt))
         && d.lines is list && d.lines.size() > 0 && d.lines.size() <= 200
-        && (!('invoiceNo' in d) || text(d.invoiceNo, 100))
-        && (!('note' in d) || text(d.note, 2000))
-        && (!('movementDocNo' in d) || text(d.movementDocNo, 40))
-        && (!('receivedAt' in d) || epochMs(d.receivedAt))
-        && (!('receivedBy' in d) || text(d.receivedBy, 200))
-        && (!('receivedByName' in d) || text(d.receivedByName, 200))
+        && (!('invoiceNo' in e) || text(d.invoiceNo, 100))
+        && (!('note' in e) || text(d.note, 2000))
+        && (!('movementDocNo' in e) || text(d.movementDocNo, 40))
+        && (!('receivedAt' in e) || epochMs(d.receivedAt))
+        && (!('receivedBy' in e) || text(d.receivedBy, 200))
+        && (!('receivedByName' in e) || text(d.receivedByName, 200))
         // From an imported list or a request: a draft until approved, and the approval is signed.
-        && (!('approvedBy' in d) || text(d.approvedBy, 200))
-        && (!('approvedByName' in d) || text(d.approvedByName, 200))
-        && (!('approvedAt' in d) || epochMs(d.approvedAt))
+        && (!('approvedBy' in e) || text(d.approvedBy, 200))
+        && (!('approvedByName' in e) || text(d.approvedByName, 200))
+        && (!('approvedAt' in e) || epochMs(d.approvedAt))
         // Where the sheet has got to on its way to the supplier. `sent` is what LINE
         // reported, not what the supplier has read — see the type's comment.
-        && (!('shareStatus' in d) || d.shareStatus in ['shareOpened', 'sent', 'skipped', 'failed'])
-        && (!('shareOpenedAt' in d) || epochMs(d.shareOpenedAt))
-        && (!('sentAt' in d) || epochMs(d.sentAt))
-        && (!('sentBy' in d) || text(d.sentBy, 200))
-        && (!('sentByName' in d) || text(d.sentByName, 200))
-        && (!('imageVersion' in d) || nonneg(d.imageVersion, 1000000))
+        && (!('shareStatus' in e) || d.shareStatus in ['shareOpened', 'sent', 'skipped', 'failed'])
+        && (!('shareOpenedAt' in e) || epochMs(d.shareOpenedAt))
+        && (!('sentAt' in e) || epochMs(d.sentAt))
+        && (!('sentBy' in e) || text(d.sentBy, 200))
+        && (!('sentByName' in e) || text(d.sentByName, 200))
+        && (!('imageVersion' in e) || nonneg(d.imageVersion, 1000000))
         // A cancelled order stays on the books, signed and with its reason — the number
         // is never reused and the record is never removed (owner's rule, 18 Sep 2026).
-        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
-        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
-        && (!('cancelledByName' in d) || text(d.cancelledByName, 200))
-        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && (!('cancelReason' in e) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in e) || text(d.cancelledBy, 200))
+        && (!('cancelledByName' in e) || text(d.cancelledByName, 200))
+        && (!('cancelledAt' in e) || epochMs(d.cancelledAt))
+        // Each delivery checked in against the order (24 Sep 2026: a short delivery keeps it
+        // open). Rules cannot read inside a list's maps; the size is the guarantee here, and
+        // orderEdit makes sure the list only ever grows.
+        && (!('receipts' in e) || (d.receipts is list && d.receipts.size() <= 50))
+        && (!('closedShortReason' in e) || text(d.closedShortReason, 2000))
+        && (!('closedShortBy' in e) || text(d.closedShortBy, 200))
+        && (!('closedShortByName' in e) || text(d.closedShortByName, 200))
+        && (!('closedShortAt' in e) || epochMs(d.closedShortAt))
         && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d))
+        // Once any delivery is on the books the order is closed, never cancelled.
+        && (d.status != 'cancelled' || d.get('receipts', []).size() == 0)
         // A placed order changed after the fact is a revision: numbered, signed, explained.
-        && (!('revision' in d) || nonneg(d.revision, 1000))
-        && (!('revisions' in d) || (d.revisions is list && d.revisions.size() <= 50))
+        && (!('revision' in e) || nonneg(d.revision, 1000))
+        && (!('revisions' in e) || (d.revisions is list && d.revisions.size() <= 50))
         // An order that reached the books names the paper it came with. Without this the
         // invoice number is a habit the form could be talked out of.
         && (d.status != 'received' || ('invoiceNo' in d && 'movementDocNo' in d));
@@ -716,7 +743,7 @@ service cloud.firestore {
         k == 'stockMovements' ? movementCore(d)
         : k == 'stockLevels' ? validLevel(d)
         : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
-        : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d))
+        : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d, orderWritten()))
         : k == 'messages' ? (fresh ? validMessage(d) : messageShape(d))
         : k == 'counters' ? validCounter(d)
         : k == 'products' ? validProduct(d)
@@ -738,6 +765,12 @@ service cloud.firestore {
 
     function editedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // The fields an update puts on the document: added or changed, not removed.
+    function orderWritten() {
+      let dd = request.resource.data.diff(resource.data);
+      return dd.addedKeys().union(dd.changedKeys());
     }
 
     // A new movement is filed under whoever is filing it, and is not born already voided
@@ -804,7 +837,10 @@ service cloud.firestore {
      * actually turned up; both are the same edit and both are listed here.
      */
     function orderEdit() {
-      return editedKeys().hasOnly([
+      // Bound once: each call re-diffs the whole order, and the widest orders (200 lines,
+      // 50 receipts) cannot afford that eight times over.
+      let e = editedKeys();
+      return e.hasOnly([
           'status', 'lines', 'invoiceNo', 'note', 'docNo', 'expectedAt',
           'receivedAt', 'receivedBy', 'receivedByName', 'movementDocNo', 'updatedAt',
           // Approving a draft resets the order date and signs it; sending records where
@@ -812,16 +848,24 @@ service cloud.firestore {
           'orderedAt', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
-          'revision', 'revisions'
+          'revision', 'revisions',
+          'receipts', 'closedShortReason', 'closedShortBy', 'closedShortByName', 'closedShortAt'
         ])
-        // The lines of a placed order move only as a revision (or when the delivery is
-        // checked in), never quietly; a draft is still being written. Revisions only grow.
-        && (!editedKeys().hasAny(['lines', 'expectedAt']) || resource.data.status == 'draft'
-            || 'revisions' in editedKeys() || request.resource.data.status == 'received')
-        && (!('revisions' in editedKeys()) || !('revisions' in resource.data)
+        // The lines of a placed order move only as a revision or when a delivery is checked
+        // in, never quietly; a draft is still being written. A delivery either closes the
+        // order or — since 24 Sep 2026 — appends exactly one entry to its receipts.
+        && (!e.hasAny(['lines', 'expectedAt']) || resource.data.status == 'draft'
+            || 'revisions' in e || request.resource.data.status == 'received'
+            || 'receipts' in e)
+        // Deliveries are added one at a time, and one that happened is never taken off.
+        && (!('receipts' in e)
+            || request.resource.data.receipts.size() == resource.data.get('receipts', []).size() + 1)
+        // Closing the rest of an order is signed by whoever did it.
+        && (!('closedShortBy' in e) || request.resource.data.closedShortBy == request.auth.uid)
+        && (!('revisions' in e) || !('revisions' in resource.data)
             || request.resource.data.revisions.size() > resource.data.revisions.size())
         // The order date only moves when a draft is placed.
-        && (!editedKeys().hasAny(['orderedAt']) || resource.data.status == 'draft')
+        && (!('orderedAt' in e) || resource.data.status == 'draft')
         // Cancelling is signed by the caller, and a cancelled order is closed for good —
         // only an admin putting numbers right may still touch it.
         && (!('cancelledBy' in request.resource.data) || request.resource.data.cancelledBy == request.auth.uid)

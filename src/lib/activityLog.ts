@@ -1,5 +1,6 @@
 import type { MovementEditField, PurchaseOrder, PurchaseRequest, StockEvent, StockMovement } from '../types'
 import { describeQty } from './inventoryRules/uom'
+import { movementNote } from './receiptLabel'
 
 /**
  * Everything that happened in the system, as one list nobody can edit.
@@ -81,7 +82,7 @@ export function buildActivityLog(input: ActivityInput): ActivityEntry[] {
       docNo: m.docNo,
       action: t('บันทึกรายการ'),
       subject,
-      detail: [m.reason ? t('เหตุผล: {r}', { r: m.reason }) : '', m.note ?? '', t('วันที่เอกสาร {d}', { d: input.formatDate(m.date) })]
+      detail: [m.reason ? t('เหตุผล: {r}', { r: m.reason }) : '', movementNote(m, t), t('วันที่เอกสาร {d}', { d: input.formatDate(m.date) })]
         .filter(Boolean)
         .join(' · '),
       by: m.byUserName,

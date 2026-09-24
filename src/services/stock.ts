@@ -318,17 +318,62 @@ async function requireMasterData(
 }
 
 /** Receive goods into a location (usually the main warehouse). Adds stock. */
+/**
+ * A receipt's paperwork, kept as fields (owner, 24 Sep 2026) instead of one free-text note:
+ * who it came from, the number printed on their document and its date, and the order it
+ * checks in. Every field is optional so a receipt keyed the old way still files.
+ */
+export interface ReceiptDoc {
+  supplierId?: string
+  supplierName?: string
+  invoiceNo?: string
+  docDate?: number
+  poId?: string
+  poDocNo?: string
+}
+
+/** Only the fields that carry something — Firestore stores no empty strings for us. */
+function docFields(doc: ReceiptDoc | undefined): Partial<StockMovement> {
+  if (!doc) return {}
+  const out: Partial<StockMovement> = {}
+  const text = (v: string | undefined) => (v && v.trim() ? v.trim() : undefined)
+  const supplierId = text(doc.supplierId)
+  const supplierName = text(doc.supplierName)
+  const invoiceNo = text(doc.invoiceNo)
+  const poId = text(doc.poId)
+  const poDocNo = text(doc.poDocNo)
+  if (supplierId) out.supplierId = supplierId
+  if (supplierName) out.supplierName = supplierName
+  if (invoiceNo) out.invoiceNo = invoiceNo
+  if (doc.docDate !== undefined) {
+    requireEpochMs(doc.docDate)
+    out.docDate = doc.docDate
+  }
+  if (poId) out.poId = poId
+  if (poDocNo) out.poDocNo = poDocNo
+  return out
+}
+
 export async function receiveStock(params: {
   lines: MovementLine[]
   toLocationId: string
   date: number
   actor: Actor
   note?: string
+  /** The receipt's paperwork, stamped on every row it files. */
+  doc?: ReceiptDoc
+  /**
+   * A photo of the supplier's document, in the same commit as the stock — the rule
+   * `consumeStock` learnt the hard way: a photo written afterwards can fail with the
+   * stock already moved, and saving again moves it twice.
+   */
+  photoDataUrl?: string
 }): Promise<string> {
-  const { toLocationId, date, actor, note } = params
+  const { toLocationId, date, actor, note, photoDataUrl } = params
   const lines = mergeLines(params.lines)
   requireEpochMs(date)
   requireId(toLocationId, 'toLocationId')
+  const paperwork = docFields(params.doc)
   const db = scoped()
 
   return filing(db, async (tx, file) => {
@@ -347,6 +392,9 @@ export async function receiveStock(params: {
     const docNo = makeDocNo('receive', seq)
     tx.set(COL.counters, 'receive', { value: seq })
     const now = Date.now()
+    if (photoDataUrl) {
+      tx.set(COL.movementImages, docNo, { dataUrl: photoDataUrl })
+    }
     lines.forEach((l, i) => {
       const cur = levels[i]?.qty ?? 0
       tx.set(
@@ -363,7 +411,9 @@ export async function receiveStock(params: {
         ...keyedFields(l),
         qty: l.qty,
         toLocationId,
-        note: l.note ?? note,
+        ...(l.note ?? note ? { note: l.note ?? note } : {}),
+        ...paperwork,
+        ...(photoDataUrl ? { hasPhoto: true } : {}),
         date,
         byUserId: actor.id,
         byUserName: actor.name,

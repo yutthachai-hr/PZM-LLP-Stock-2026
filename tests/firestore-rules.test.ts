@@ -724,6 +724,17 @@ describe('the ledger is append-only', () => {
     await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: many }))
   })
 
+  test("a receipt's paperwork is kept as its own typed fields (24 Sep 2026)", async () => {
+    const paper = { supplierId: 'sup1', supplierName: 'SIAMFOOD', invoiceNo: 'IV-1001', docDate: ts(), poId: 'po1', poDocNo: 'PO-00005' }
+    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m4'), movement('m4', STAFF, paper)))
+    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m5'), movement('m5', STAFF, { ...paper, docDate: 'yesterday' })))
+    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m6'), movement('m6', STAFF, { invoiceNo: 'x'.repeat(101) })))
+    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m7'), movement('m7', STAFF, { billNo: 'IV-1' })))
+    // Written once with the row: a correction cannot change whose bill it was.
+    const entry = { by: STAFF, byName: STAFF, at: ts(), changed: ['invoiceNo'] }
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m4'), { invoiceNo: 'IV-2', edits: [entry] }))
+  })
+
   test('nobody may delete a movement — not even an admin', async () => {
     await assertFails(deleteDoc(doc(as(STAFF), 'stockMovements/m1')))
     await assertFails(deleteDoc(doc(as(ADMIN), 'stockMovements/m1')))
@@ -1008,6 +1019,12 @@ describe('orders placed with suppliers', () => {
     await assertFails(setDoc(at(STAFF), order({ lines: [] })))
     await assertFails(setDoc(at(STAFF), order({ status: 'sent' })))
     await assertFails(setDoc(at(STAFF), order({ orderedAt: 'today' })))
+    // An update is checked on the fields it writes (orderWritten), so a bad value is still refused.
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertFails(updateDoc(at(STAFF), { shareStatus: 'bogus', updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { invoiceNo: 42, updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { receipts: 'RC-1', updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(STAFF), { shareStatus: 'sent', updatedAt: ts() }))
   })
 
   test('received means there is an invoice number and a stock receipt behind it', async () => {
@@ -1098,6 +1115,37 @@ describe('orders placed with suppliers', () => {
     )
     await assertFails(deleteDoc(at(STAFF, 'po2')))
     await assertFails(deleteDoc(at(ADMIN, 'po2')))
+  })
+
+  test('a short delivery keeps the order open, one appended receipt at a time (24 Sep 2026)', async () => {
+    await assertSucceeds(setDoc(at(STAFF), order()))
+    const receipt = (n: number) => ({ docNo: 'RC-0000' + n, date: ts(), invoiceNo: 'IV-' + n, byId: STAFF, byName: 'Staff', lines: [{ productId: 'p1', qty: 1 }] })
+    const partLines = [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3, receivedQty: 1 }]
+    const arrival = (n: number) => ({ invoiceNo: 'IV-' + n, movementDocNo: 'RC-0000' + n, receivedBy: STAFF, receivedByName: 'Staff', receivedAt: ts(), updatedAt: ts() })
+    // Moving the lines of a placed order with no receipt behind it is still refused.
+    await assertFails(updateDoc(at(STAFF), { lines: partLines, ...arrival(1) }))
+    // The first delivery: one receipt, the order stays ordered.
+    await assertSucceeds(updateDoc(at(STAFF), { lines: partLines, receipts: [receipt(1)], ...arrival(1) }))
+    // Two at once, or dropping one that happened, is refused.
+    const twoLines = [{ ...partLines[0], receivedQty: 2 }]
+    await assertFails(updateDoc(at(STAFF), { lines: twoLines, receipts: [receipt(1), receipt(2), receipt(3)], ...arrival(3) }))
+    await assertFails(updateDoc(at(STAFF), { lines: twoLines, receipts: [], ...arrival(2) }))
+    await assertSucceeds(updateDoc(at(STAFF), { lines: twoLines, receipts: [receipt(1), receipt(2)], ...arrival(2) }))
+    // Once goods are on the books the order cannot be cancelled — only closed short.
+    await assertFails(updateDoc(at(STAFF), { status: 'cancelled', cancelReason: 'x', cancelledBy: STAFF, cancelledByName: 'Staff', cancelledAt: ts(), updatedAt: ts() }))
+    // Closing the rest is signed by whoever does it.
+    const close = (uid: string) => ({ status: 'received', closedShortReason: 'supplier has no more', closedShortBy: uid, closedShortByName: 'x', closedShortAt: ts(), updatedAt: ts() })
+    await assertFails(updateDoc(at(STAFF), close(ADMIN)))
+    await assertSucceeds(updateDoc(at(STAFF), close(STAFF)))
+    // A closed order stays received.
+    await assertFails(updateDoc(at(STAFF), { status: 'ordered', updatedAt: ts() }))
+  })
+
+  test('the receipts list is a list and cannot grow without bound', async () => {
+    await assertFails(setDoc(at(STAFF), order({ receipts: 'RC-1' })))
+    const many = Array.from({ length: 51 }, (_, i) => ({ docNo: 'RC-' + i, date: ts(), invoiceNo: 'x', byId: STAFF, byName: 'S', lines: [] }))
+    await assertFails(setDoc(at(STAFF), order({ receipts: many })))
+    await assertFails(setDoc(at(STAFF), order({ closedShortAt: 'today' })))
   })
 
   test('someone waiting for approval sees no orders at all', async () => {

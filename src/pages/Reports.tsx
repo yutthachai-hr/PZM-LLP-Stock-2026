@@ -18,6 +18,7 @@ import { DataTable, type Column } from '../components/DataTable'
 import type { MovementType, StockMovement } from '../types'
 import { useT, type TFn } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
+import { movementNote } from '../lib/receiptLabel'
 
 interface MovementRow {
   m: StockMovement
@@ -240,7 +241,7 @@ export function ReportsPage() {
         [t("ผู้ทำ")]: m.byUserName,
         // A note is free text, except for the constants the services write ("ตั้งยอดคงเหลือ") —
         // t() translates those and passes anything it does not recognise through unchanged.
-        [t("หมายเหตุ / เลขบิล")]: m.note ? t(m.note) : '',
+        [t("หมายเหตุ / เลขบิล")]: movementNote(m, t),
         // Every account that has changed this row, not just the last one.
         [t("ผู้แก้ไข")]: editorsOf(m).join(', '),
         [t("จำนวนครั้งที่แก้ไข")]: m.edits?.length ?? 0,
@@ -290,7 +291,7 @@ export function ReportsPage() {
         outQty ? fmtQty(outQty) : '',
         balanceUnit(m),
         ...(showBalance ? [fmtQty(balance ?? 0)] : []),
-        m.note ?? '',
+        movementNote(m, t),
         m.byUserName,
         editorsOf(m).join(', '),
       ])
@@ -416,7 +417,7 @@ export function ReportsPage() {
         key: 'note',
         header: t('หมายเหตุ / เลขบิล'),
         className: 'text-xs text-ink-soft',
-        cell: ({ m }) => m.note ?? '',
+        cell: ({ m }) => movementNote(m, t),
       },
       {
         key: 'by',

@@ -12,6 +12,7 @@ import { SiteChip } from '../SiteChip'
 import { Badge, Button, Card } from '../ui'
 import { EditMovementModal } from './EditMovementModal'
 import { TYPE_COLOR, TYPE_LABEL } from './labels'
+import { movementNote } from '../../lib/receiptLabel'
 
 /**
  * What has been keyed on this screen for the day being keyed — beside the form, so the
@@ -119,7 +120,7 @@ export function TodayTransactions({
                   <SiteChip locationId={m.toLocationId} />
                   <span className="doc-no">{m.docNo}</span>
                   {m.reason && <span>· {t(ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason)}</span>}
-                  {m.note && <span className="truncate">· {m.note}</span>}
+                  {movementNote(m, t) && <span className="truncate">· {movementNote(m, t)}</span>}
                   {/* Whose row it is — not needed when the panel is already "mine". */}
                   {!byUserId && <span>· {m.byUserName}</span>}
                   {m.updatedByName && <span className="text-warn">· {t('แก้ไข:')} {m.updatedByName}</span>}

@@ -113,6 +113,49 @@ test('staff can receive the widest purchase order, and an admin can renumber it'
   }
 })
 
+test('staff can check in one more delivery on the widest partly received order (24 Sep 2026)', async () => {
+  // A PO delivered in many goes: forty receipts of every line, paperwork on each, and the
+  // order still open. The next delivery appends one; the one after that closes it short.
+  const lines = Array.from({ length: 200 }, (_, i) => ({ productId: 'p' + i, productName: 'X', sku: 'S', unit: 'KG', entryUnit: 'Carton', orderedQty: 50, receivedQty: 40, baseQty: 100, note: 'n' }))
+  const receipt = (n: number) => ({ docNo: 'RC-' + n, date: ts(), invoiceNo: 'IV-' + n, byId: STAFF, byName: 'AA', lines: lines.map((l) => ({ productId: l.productId, qty: 1, note: 'short' })) })
+  const po = {
+    id: 'po1', docNo: 'PO-00001', supplierId: 's1', supplierName: 'S', status: 'ordered', locationId: 'loc',
+    orderedAt: ts(), expectedAt: ts(), lines, note: 'n', eventId: 'e1', batchId: 'b1', requestId: 'r1', approvedBy: STAFF, approvedByName: 'AA', approvedAt: ts(),
+    shareStatus: 'sent', shareOpenedAt: ts(), sentAt: ts(), sentBy: STAFF, sentByName: 'AA', imageVersion: 3,
+    revision: 2, revisions: Array.from({ length: 49 }, (_, i) => ({ rev: i, at: ts(), by: STAFF, byName: 'AA', reason: 'r', changes: [] })),
+    invoiceNo: 'IV-40', movementDocNo: 'RC-40', receivedAt: ts(), receivedBy: STAFF, receivedByName: 'AA',
+    receipts: Array.from({ length: 40 }, (_, i) => receipt(i + 1)),
+    createdBy: STAFF, createdByName: 'AA', createdAt: ts(), updatedAt: ts(),
+  }
+  for (const brand of ['purchaseOrders', 'lelapin__purchaseOrders']) {
+    await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), `${brand}/po1`), po))
+    await replace(STAFF, `${brand}/po1`, (cur) => ({
+      ...cur, lines: (cur.lines as typeof lines).map((l) => ({ ...l, receivedQty: 41 })),
+      receipts: [...(cur.receipts as unknown[]), receipt(41)], invoiceNo: 'IV-41', movementDocNo: 'RC-41',
+      receivedAt: ts(), receivedBy: STAFF, receivedByName: 'AA', updatedAt: ts(),
+    }))
+    await replace(STAFF, `${brand}/po1`, (cur) => ({
+      ...cur, lines: (cur.lines as typeof lines).map((l) => ({ ...l, receivedQty: 42 })),
+      receipts: [...(cur.receipts as unknown[]), receipt(42)], invoiceNo: 'IV-42', movementDocNo: 'RC-42',
+      receivedAt: ts(), receivedBy: STAFF, receivedByName: 'AA', status: 'received',
+      closedShortReason: 'r'.repeat(2000), closedShortBy: STAFF, closedShortByName: 'AA', closedShortAt: ts(), updatedAt: ts(),
+    }))
+  }
+})
+
+test('staff can file the widest receipt row with all its paperwork', async () => {
+  const db = env.authenticatedContext(STAFF).firestore()
+  const row = (i: number) => ({
+    id: 'm' + i, docNo: 'RC-00001', type: 'receive', productId: 'p' + i, productName: 'X'.repeat(300), unit: 'KG', entryUnit: 'Carton', entryQty: 2, qty: 48,
+    toLocationId: 'loc', note: 'n'.repeat(2000), hasPhoto: true,
+    supplierId: 's'.repeat(200), supplierName: 'S'.repeat(200), invoiceNo: 'I'.repeat(100), docDate: ts(), poId: 'p'.repeat(200), poDocNo: 'PO-00001',
+    date: ts(), byUserId: STAFF, byUserName: 'AA', createdAt: ts(),
+  })
+  await assertSucceeds(runTransaction(db, async (tx) => {
+    for (let i = 0; i < 40; i++) tx.set(doc(db, 'stockMovements/m' + i), row(i))
+  }))
+})
+
 test('staff can finish the widest task and a manager can move it', async () => {
   const uids = Array.from({ length: 50 }, (_, i) => (i === 0 ? STAFF : 'uid-' + i))
   const task = {

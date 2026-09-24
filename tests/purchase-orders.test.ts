@@ -32,6 +32,9 @@ const {
   needsResend,
   overdueOrders,
   receivePurchaseOrder,
+  closeOrderRemainder,
+  listOpenOrders,
+  outstandingQty,
   repairReceivedDates,
   summariseBySupplier,
 } = await import('../src/services/purchaseOrders')
@@ -297,20 +300,51 @@ describe('checking the delivery in', () => {
     expect(orders()[0].status).toBe('ordered')
   })
 
-  test('the invoice number is what the stock receipt is filed under', async () => {
+  test('the receipt carries its paperwork as fields, not squeezed into the note', async () => {
+    // Owner, 24 Sep 2026: supplier, bill number and note used to share one free-text note.
     const id = await placeOrder()
+    const docDate = new Date(2026, 8, 23, 0, 0).getTime()
     const { docNo } = await receivePurchaseOrder({
       orderId: id,
-      invoiceNo: 'IV-9001',
+      invoiceNo: ' IV-9001 ',
+      docDate,
+      note: 'driver was late',
       lines: [
         { productId: 'p1', receivedQty: 0, checked: true },
         { productId: 'p2', receivedQty: 0, checked: true },
       ],
       actor: ACTOR,
     })
-    expect(movements()[0].note).toBe('IV-9001')
+    for (const m of movements()) {
+      expect(m).toMatchObject({
+        docNo,
+        invoiceNo: 'IV-9001',
+        supplierId: SUPPLIER.id,
+        supplierName: SUPPLIER.name,
+        docDate,
+        poId: id,
+        poDocNo: 'PO-00001',
+        note: 'driver was late',
+      })
+    }
     expect(orders()[0].movementDocNo).toBe(docNo)
     expect(orders()[0].invoiceNo).toBe('IV-9001')
+  })
+
+  test('a photo of the bill is filed with the stock, in the same receipt', async () => {
+    const id = await placeOrder()
+    const { docNo } = await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-1',
+      photoDataUrl: 'data:image/jpeg;base64,AAAA',
+      lines: [
+        { productId: 'p1', receivedQty: 0, checked: true },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+    })
+    expect(raw('movementImages').find((d) => d.id === docNo)).toMatchObject({ dataUrl: 'data:image/jpeg;base64,AAAA' })
+    expect(movements().every((m) => m.hasPhoto === true)).toBe(true)
   })
 
   test('a short delivery needs a reason, or it is refused', async () => {
@@ -666,4 +700,139 @@ test('one product keyed twice in the same unit is one line with the sum', async 
   ])
   const [o] = orders()
   expect(o.lines.map((l) => [l.productId, l.orderedQty])).toEqual([['p1', 30], ['p2', 5]])
+})
+
+
+// Owner, 24 Sep 2026: a short delivery keeps the order open for the rest — "เปิด PO ค้างไว้
+// รอส่วนที่เหลือ (รับได้หลายรอบ)". Every delivery is its own stock receipt; the order adds
+// them up, and closes when nothing is owed or when the owner says the rest is not coming.
+describe('an order delivered in more than one go', () => {
+  const tick = { productId: 'p2', receivedQty: 0, checked: true }
+
+  test('a short delivery files what came and leaves the order open for the rest', async () => {
+    const id = await placeOrder()
+    const r = await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-1',
+      lines: [{ productId: 'p1', receivedQty: 6, checked: false, note: 'rest tomorrow' }, tick],
+      actor: ACTOR,
+    })
+    expect(r.status).toBe('ordered')
+    expect(r.outstandingLines).toBe(1)
+    const o = orders()[0]
+    expect(o.status).toBe('ordered')
+    expect(o.lines.map((l) => l.receivedQty)).toEqual([6, 5])
+    expect(outstandingQty(o.lines[0])).toBe(4)
+    expect(o.receipts).toHaveLength(1)
+    expect(balance('p1')).toBe(6)
+  })
+
+  test('the next delivery is measured against what is still owed, and closes the order', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-1', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 6, checked: false, note: 'rest tomorrow' }, tick],
+    })
+    // Ticking p1 now means "the 4 still owed"; p2 is complete and may be left out.
+    const r = await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-2', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 0, checked: true }],
+    })
+    expect(r.status).toBe('received')
+    const o = orders()[0]
+    expect(o.status).toBe('received')
+    expect(o.lines[0].receivedQty).toBe(10)
+    expect(o.receipts!.map((x) => x.invoiceNo)).toEqual(['IV-1', 'IV-2'])
+    expect(o.invoiceNo).toBe('IV-2')
+    expect(o.movementDocNo).toBe(r.docNo)
+    expect(balance('p1')).toBe(10)
+    // Two deliveries, two stock receipts — never one merged after the fact.
+    expect(new Set(movements().map((m) => m.docNo)).size).toBe(2)
+  })
+
+  test('a line still owed cannot be skipped on the next delivery', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-1', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 6, checked: false, note: 'rest tomorrow' }, tick],
+    })
+    await expect(
+      receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-2', actor: ACTOR, lines: [tick] }),
+    ).rejects.toThrow()
+  })
+
+  test('more than was owed needs a reason, like any mismatch', async () => {
+    const id = await placeOrder()
+    const over = [{ productId: 'p1', receivedQty: 12, checked: false }, tick]
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-1', actor: ACTOR, lines: over })).rejects.toThrow()
+    const r = await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-1', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 12, checked: false, note: 'supplier sent 2 extra' }, tick],
+    })
+    expect(r.status).toBe('received')
+    expect(balance('p1')).toBe(12)
+  })
+
+  test('the owner can say the rest is not coming, with the delivery or on its own', async () => {
+    const id = await placeOrder()
+    const r = await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-1', actor: ACTOR,
+      closeRemainder: { reason: 'supplier out of stock' },
+      lines: [{ productId: 'p1', receivedQty: 6, checked: false, note: 'only 6' }, tick],
+    })
+    expect(r.status).toBe('received')
+    expect(orders()[0]).toMatchObject({ status: 'received', closedShortReason: 'supplier out of stock', closedShortBy: ACTOR.id })
+
+    const id2 = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id2, invoiceNo: 'IV-2', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 6, checked: false, note: 'rest tomorrow' }, tick],
+    })
+    await expect(closeOrderRemainder({ orderId: id2, reason: '  ', actor: ACTOR })).rejects.toThrow()
+    const closed = await closeOrderRemainder({ orderId: id2, reason: 'never came', actor: ACTOR })
+    expect(closed.status).toBe('received')
+    expect(closed.closedShortReason).toBe('never came')
+  })
+
+  test('an order nothing has arrived for is cancelled, not closed', async () => {
+    const id = await placeOrder()
+    await expect(closeOrderRemainder({ orderId: id, reason: 'x', actor: ACTOR })).rejects.toThrow()
+  })
+
+  test('once part of it is on the books, the order cannot be cancelled', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-1', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 6, checked: false, note: 'rest tomorrow' }, tick],
+    })
+    await expect(cancelPurchaseOrder({ id, reason: 'x', actor: ACTOR })).rejects.toThrow()
+    expect(orders()[0].status).toBe('ordered')
+  })
+
+  test('the receiving list offers only orders with something still owed', async () => {
+    const full = await placeOrder()
+    const part = await placeOrder()
+    await placeOrder()
+    const both = [{ productId: 'p1', receivedQty: 0, checked: true }, tick]
+    await receivePurchaseOrder({ orderId: full, invoiceNo: 'A', actor: ACTOR, lines: both })
+    await receivePurchaseOrder({
+      orderId: part, invoiceNo: 'B', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 3, checked: false, note: 'rest later' }, tick],
+    })
+    const open = await listOpenOrders()
+    expect(open.map((o) => o.id)).not.toContain(full)
+    expect(open.map((o) => o.id)).toContain(part)
+    expect(open).toHaveLength(2)
+  })
+
+  test('a line ordered in another unit converts on every delivery at the rate it was placed at', async () => {
+    const id = await placeOrder([{ productId: 'p1', qty: 3, entryUnit: 'Pack' }]) // 3 Pack = 6 KG
+    await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-1', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 1, checked: false, note: 'rest later' }],
+    })
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-2', actor: ACTOR, lines: [{ productId: 'p1', receivedQty: 0, checked: true }] })
+    expect(balance('p1')).toBe(6)
+    expect(movements().map((m) => [m.entryQty, m.qty])).toEqual([[1, 2], [2, 4]])
+  })
 })

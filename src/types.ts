@@ -182,7 +182,22 @@ export interface StockMovement {
   toLocationId?: string // receive/issue-in/adjust-in
   note?: string
   reason?: string // for adjust: lost | broken | expired | damage | found | count
-  hasPhoto?: boolean // for consume: a proof photo is attached (stored in movementImages/{docNo})
+  hasPhoto?: boolean // a proof photo is attached (stored in movementImages/{docNo}) — consume, and receipts since 24 Sep 2026
+  /**
+   * A receipt's paperwork, one field each (owner, 24 Sep 2026: supplier, bill number and
+   * note used to share one free-text `note`, which could be searched by nobody and checked
+   * for duplicates by nothing). Stamped on every row of the receipt. Rows filed before then
+   * have only `note`, and every screen falls back to it — see lib/receiptLabel.ts.
+   */
+  supplierId?: string
+  supplierName?: string
+  /** The supplier's bill / delivery-note / tax-invoice number, as printed on it. */
+  invoiceNo?: string
+  /** The date printed on that document, ms epoch of the day — not the day it was keyed. */
+  docDate?: number
+  /** The purchase order this receipt checks in, when it came from one. */
+  poId?: string
+  poDocNo?: string
   date: number // business date (editable), ms epoch of the day
   byUserId: string
   byUserName: string
@@ -338,6 +353,18 @@ export type StockEventPriority = 'normal' | 'high' | 'critical'
  */
 export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received' | 'cancelled'
 
+/** One delivery checked in against an order: the stock receipt it became, and what came. */
+export interface PoReceipt {
+  docNo: string
+  /** The delivery's date — the one the stock receipt is filed under. */
+  date: number
+  invoiceNo: string
+  byId: string
+  byName: string
+  /** What arrived on this delivery, in the order line's own unit (as `orderedQty`). */
+  lines: { productId: string; qty: number; note?: string }[]
+}
+
 /** One product on an order, as ordered and as it actually turned up. */
 export interface PurchaseOrderLine {
   productId: string
@@ -363,7 +390,8 @@ export interface PurchaseOrderLine {
    * What actually arrived, filled in during the receiving check.
    *
    * Absent until somebody checks the delivery in. Equal to orderedQty on a line that was
-   * simply ticked as correct.
+   * simply ticked as correct. Since 24 Sep 2026 it is the running total across every
+   * delivery (`PurchaseOrder.receipts`): an order received once reads exactly as before.
    */
   receivedQty?: number
   /** Ticked to say the delivery matched the order, without retyping the number. */
@@ -434,6 +462,22 @@ export interface PurchaseOrder {
   receivedByName?: string
   /** The stock receipt this became, so the two can be read against each other. */
   movementDocNo?: string
+  /**
+   * Every delivery checked in against this order, oldest first (owner, 24 Sep 2026: a short
+   * delivery keeps the order open for the rest). `invoiceNo`, `movementDocNo` and
+   * `receivedAt` above are the latest of them, so everything written before partial
+   * receipts existed still reads an order the same way. Absent on orders received once
+   * under the old rule — those are one receipt, described by the fields above.
+   */
+  receipts?: PoReceipt[]
+  /**
+   * The rest of the order closed without arriving: why, and by whom. Set when the owner
+   * decides a shortfall is final, which is what turns a partly received order `received`.
+   */
+  closedShortReason?: string
+  closedShortBy?: string
+  closedShortByName?: string
+  closedShortAt?: number
   /**
    * Why it was called off, and by whom. A cancelled order keeps its number and stays in
    * the list — an order that vanished is exactly what an audit cannot follow.
