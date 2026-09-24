@@ -234,10 +234,16 @@ export function TransfersPage() {
         title={t('ขนส่ง/โอนสาขา')}
         subtitle={t('จัดการระบบขนส่งสินค้าระหว่างสาขา ตรวจรับสินค้า และบันทึกผลต่าง')}
         actions={
-          <Button onClick={() => navigate('/transfers/new')}>
-            <Icon name="plus" size={18} />
-            {t('สร้างคำขอโอนสินค้า')}
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => navigate('/transfers/today')}>
+              <Icon name="receive" size={18} />
+              {t('ของเข้าวันนี้')}
+            </Button>
+            <Button onClick={() => navigate('/transfers/new')}>
+              <Icon name="plus" size={18} />
+              {t('สร้างคำขอโอนสินค้า')}
+            </Button>
+          </>
         }
       />
 

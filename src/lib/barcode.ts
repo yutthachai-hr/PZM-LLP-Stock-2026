@@ -20,3 +20,21 @@ export function findByBarcode(products: readonly Product[], code: string): Produ
 export function searchFields(p: Product): (string | undefined)[] {
   return [p.name, p.sku, p.barcode]
 }
+
+/**
+ * What Enter in a product search box means.
+ *
+ * A barcode scanner in keyboard mode ("keyboard wedge") types the code and presses Enter,
+ * so the box sees exactly what a person typing a code would. The barcode is tried first and
+ * exactly, then the product code exactly, and only then the best loose match — otherwise a
+ * scanned number that happens to appear inside another product's name would add that one.
+ */
+export function pickOnEnter(products: readonly Product[], query: string, matches: readonly Product[]): Product | undefined {
+  const q = query.trim().toLowerCase()
+  if (!q) return undefined
+  return (
+    findByBarcode(products, q) ??
+    products.find((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === q) ??
+    matches[0]
+  )
+}

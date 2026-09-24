@@ -18,7 +18,9 @@ export const NAV: NavItem[] = [
   { to: '/products', label: 'สินค้าคงคลัง', icon: 'package' }, // i18n-key
   { to: '/receive', label: 'รับสินค้าเข้า', icon: 'receive' }, // i18n-key
   { to: '/issue', label: 'เบิก/โอนสาขา', icon: 'truck' }, // i18n-key
-  { to: '/transfers', label: 'ขนส่ง/โอนสาขา', icon: 'swap' }, // i18n-key
+  // Today's page first: titleFor() takes the first entry whose path starts the URL.
+  { to: '/transfers/today', label: 'ของเข้าวันนี้', icon: 'receive' }, // i18n-key
+  { to: '/transfers', label: 'ระบบส่งสินค้า', icon: 'truck' }, // i18n-key
   { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust' }, // i18n-key
   { to: '/calendar', label: 'ปฏิทินคลัง', icon: 'calendar' }, // i18n-key
   { to: '/movements', label: 'ประวัติ/Stock Card', icon: 'history' }, // i18n-key

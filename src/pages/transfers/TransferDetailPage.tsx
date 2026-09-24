@@ -53,7 +53,7 @@ export function TransferDetailPage() {
   const editable =
     !transfer ||
     (user &&
-      transfer.status === 'draft' &&
+      (transfer.status === 'draft' || transfer.status === 'returned') &&
       canEditItems(transfer, { id: user.id, role: user.role as Role }))
 
   const onChange = (next: Transfer) => {

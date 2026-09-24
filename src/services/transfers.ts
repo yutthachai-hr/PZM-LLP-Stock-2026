@@ -255,6 +255,27 @@ export async function listActiveTransfers(locationId?: string): Promise<Transfer
     .sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+/**
+ * A photo of a difference (damaged box, the scale reading), kept where movement proof
+ * photos already are — `movementImages`, base64, one per line — so it needs no new storage.
+ */
+export async function saveDiscrepancyPhoto(docNo: string, itemIdx: number, dataUrl: string): Promise<string> {
+  const id = `${docNo}-L${itemIdx}`
+  await scoped().set(COL.movementImages, id, { dataUrl })
+  return id
+}
+
+export async function getDiscrepancyPhoto(photoId: string): Promise<string | null> {
+  return (await scoped().getOne<{ dataUrl: string }>(COL.movementImages, photoId))?.dataUrl ?? null
+}
+
+/** Everything not finished: submitted requests plus everything on the road. */
+export async function listOpenTransfers(): Promise<Transfer[]> {
+  const db = scoped()
+  const rows = (await Promise.all((['pendingApproval', ...ACTIVE] as TransferStatus[]).map((s) => db.getBy<Transfer>(COL.transfers, 'status', s)))).flat()
+  return rows.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
 /** The ledger rows a document produced — its own and its legs'. */
 export async function transferMovements(ids: string[]): Promise<StockMovement[]> {
   const db = scoped()

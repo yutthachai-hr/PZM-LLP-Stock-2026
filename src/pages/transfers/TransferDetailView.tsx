@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -6,388 +6,352 @@ import { useToast } from '../../components/Toast'
 import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
 import { SiteChip } from '../../components/SiteChip'
-import {
-  Button,
-  Field,
-  Input,
-  Modal,
-  Select,
-  Textarea,
-} from '../../components/ui'
-import {
-  FramePage,
-  PageHero,
-  SectionCard,
-  StatusChip,
-  WithSidePanel,
-} from '../../components/frame'
-import { useT } from '../../i18n/I18nContext'
+import { LineBuilder, type Line } from '../../components/LineBuilder'
+import { AlertBanner, Badge, Button, Field, Modal, Select, Textarea } from '../../components/ui'
+import { FramePage, PageHero, SectionCard, WithSidePanel } from '../../components/frame'
+import { useT, type TFn } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { fmtQty, formatThaiDateShort, formatThaiDateTime } from '../../lib/format'
 import {
+  DISCREPANCY_REASON_KEYS,
+  DISCREPANCY_RESOLUTION_KEYS,
+  TRANSFER_STATUS_KEYS,
   canApprove,
   canReceive,
+  canUserAccessBranch,
   isManager,
-  TRANSFER_STATUS_KEYS,
   transferBadgeColor,
 } from '../../lib/transferStatus'
 import {
   cancelTransfer,
-  confirmReceive,
-  reportMisroute,
+  expectedQty,
+  getTransfer,
+  listOpenTransfers,
+  reopenTransfer,
   resolveDiscrepancy,
   resolveMisroute,
   reviewTransfer,
-  type ReceivedLineInput,
+  submitDiscrepancyForApproval,
+  transferMovements,
 } from '../../services/transfers'
-import type {
-  DiscrepancyKind,
-  DiscrepancyReason,
-  DiscrepancyResolutionCode,
-  Role,
-  Transfer,
-  TransferItem,
+import { ReasonModal } from '../requests/ReasonModal'
+import {
+  OVER_RESOLUTIONS,
+  SHORT_RESOLUTIONS,
+  TRANSIT_LOCATION_ID,
+  type DiscrepancyResolutionCode,
+  type StockMovement,
+  type Transfer,
+  type TransferHistoryEntry,
+  type TransferItem,
 } from '../../types'
 
-interface TransferDetailViewProps {
+interface Props {
   initial: Transfer
   onChange: (t: Transfer) => void
 }
 
-export function TransferDetailView({
-  initial,
-  onChange,
-}: TransferDetailViewProps) {
+/**
+ * One transfer, for everyone who touches it: the manager reviewing and approving it, the
+ * destination receiving it (on its own page — /transfers/:id/receive), the manager settling
+ * what did not match, and anyone reading back what happened. The timeline joins the
+ * document, its forward/return legs and every ledger row they made, so "where did these
+ * cans go" is answered on one screen.
+ */
+export function TransferDetailView({ initial, onChange }: Props) {
   const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { locations } = useData()
-
+  const { locationById, qtyAt, products, productById } = useData()
   const [transfer, setTransfer] = useState<Transfer>(initial)
   const [busy, setBusy] = useState(false)
+  const [reason, setReason] = useState<null | 'return' | 'reject' | 'cancel' | 'reopen'>(null)
+  const [resolving, setResolving] = useState<TransferItem | null>(null)
+  const [deciding, setDeciding] = useState<{ item: TransferItem; misrouteId: string } | null>(null)
+  const [legs, setLegs] = useState<Transfer[]>([])
+  const [rows, setRows] = useState<StockMovement[]>([])
 
-  // Modals state
-  const [showReceive, setShowReceive] = useState(false)
-  const [resolvingItem, setResolvingItem] = useState<TransferItem | null>(null)
-  const [resolvingMisroute, setResolvingMisroute] = useState<{
-    item: TransferItem
-    misrouteId: string
-  } | null>(null)
-  const [showCancel, setShowCancel] = useState(false)
-
-  const actor = useMemo(
-    () => ({
-      id: user!.id,
-      name: user!.name,
-      role: user!.role as Role,
-      siteIds: user!.siteIds,
-    }),
-    [user],
-  )
-
-  const locationMap = useMemo(
-    () => new Map(locations.map((l) => [l.id, l])),
-    [locations],
-  )
-  const locName = (id: string) => locationMap.get(id)?.name ?? id
-
+  const actor = useMemo(() => ({ id: user!.id, name: user!.name, role: user!.role, siteIds: user!.siteIds }), [user])
   const manager = isManager(actor.role)
-  const userCanApprove = canApprove(transfer, actor)
-  const userCanReceive = canReceive(transfer, actor)
+  const siteName = (id: string) => (id === TRANSIT_LOCATION_ID ? t('ระหว่างขนส่ง') : locationById(id)?.name ?? id)
 
-  const color = transferBadgeColor(transfer.status)
+  // The legs and the ledger rows are read when the page opens and after each step.
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      const kids = (await Promise.all((transfer.childIds ?? []).map((id) => getTransfer(id)))).filter((x): x is Transfer => !!x)
+      const mv = await transferMovements([transfer.id, ...kids.map((k) => k.id)])
+      if (live) {
+        setLegs(kids)
+        setRows(mv)
+      }
+    })().catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [transfer])
 
-  async function handleApprove() {
+  function update(next: Transfer) {
+    setTransfer(next)
+    onChange(next)
+  }
+
+  async function run(fn: () => Promise<Transfer | void>, done?: string) {
+    setBusy(true)
+    try {
+      const next = await fn()
+      if (next) update(next)
+      if (done) toast.success(done)
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ---- the manager's review: the dispatch column, edited in place ----
+  const reviewing = transfer.status === 'pendingApproval' && canApprove(transfer, actor)
+  const [review, setReview] = useState<TransferItem[]>(initial.items)
+  const [removing, setRemoving] = useState<{ productId: string; next: Line[] } | null>(null)
+  const reviewLines: Line[] = review
+    .filter((i) => !i.removed)
+    .map((i) => ({
+      productId: i.productId,
+      productName: i.productName,
+      unit: i.unit,
+      qty: i.dispatchQty,
+      ...(i.dispatchEntryUnit ? { entryUnit: i.dispatchEntryUnit, entryQty: i.dispatchEntryQty } : {}),
+    }))
+  const reviewChanged = JSON.stringify(review) !== JSON.stringify(transfer.items)
+
+  function onReviewLines(next: Line[]) {
+    const gone = reviewLines.find((l) => !next.some((n) => n.productId === l.productId))
+    if (gone) {
+      setRemoving({ productId: gone.productId, next })
+      return
+    }
+    applyLines(next)
+  }
+
+  function applyLines(next: Line[], removed?: { productId: string; reason: string }) {
+    setReview((cur) => {
+      const byId = new Map(next.map((l) => [l.productId, l]))
+      const kept = cur.map((i) => {
+        if (removed && i.productId === removed.productId) {
+          return { ...i, removed: { by: actor.id, byName: actor.name, at: Date.now(), reason: removed.reason } }
+        }
+        const l = byId.get(i.productId)
+        if (!l || i.removed) return i
+        return { ...i, dispatchQty: l.qty, dispatchEntryUnit: l.entryUnit, dispatchEntryQty: l.entryUnit ? l.entryQty : undefined }
+      })
+      const added = next
+        .filter((l) => !cur.some((i) => i.productId === l.productId && !i.removed))
+        .map((l, n) => ({
+          idx: Math.max(-1, ...cur.map((i) => i.idx)) + 1 + n,
+          productId: l.productId,
+          productName: l.productName,
+          sku: productById(l.productId)?.sku ?? '',
+          unit: l.unit,
+          requestedQty: null,
+          dispatchQty: l.qty,
+          ...(l.entryUnit ? { dispatchEntryUnit: l.entryUnit, dispatchEntryQty: l.entryQty } : {}),
+        }))
+      return [...kept, ...added]
+    })
+  }
+
+  async function approve() {
     const ok = await confirm({
       title: t('อนุมัติการขนส่งสินค้า'),
-      message: t(
-        'การอนุมัตินี้จะตัดสต๊อกออกจากคลังต้นทาง ({from}) ไปยังคลังระหว่างขนส่ง (Transit)',
-        { from: locName(transfer.fromLocationId) },
-      ),
+      message: t('การอนุมัตินี้จะตัดสต๊อกออกจากคลังต้นทาง ({from}) ไปยังคลังระหว่างขนส่ง (Transit)', { from: siteName(transfer.fromLocationId) }),
       confirmText: t('ยืนยันอนุมัติและตัดสต๊อก'),
     })
     if (!ok) return
-
-    setBusy(true)
-    try {
-      const updated = await reviewTransfer({
-        transferId: transfer.id,
-        expectedRevision: transfer.revision,
-        actor,
-        action: 'approve',
-      })
-      setTransfer(updated)
-      onChange(updated)
-      toast.success(t('อนุมัติการขนส่งเรียบร้อย ({docNo})', { docNo: updated.docNo }))
-    } catch (e) {
-      toast.error(errText(e, t))
-    } finally {
-      setBusy(false)
-    }
+    await run(
+      () => reviewTransfer({ transferId: transfer.id, expectedRevision: transfer.revision, actor, action: 'approve', items: reviewChanged ? review : undefined }),
+      t('อนุมัติการขนส่งเรียบร้อย ({docNo})', { docNo: transfer.docNo }),
+    )
   }
 
-  async function handleCancel(reason: string) {
-    setBusy(true)
-    try {
-      const updated = await cancelTransfer(transfer.id, actor, reason)
-      setTransfer(updated)
-      onChange(updated)
-      setShowCancel(false)
-      toast.success(t('ยกเลิกเอกสารเรียบร้อย'))
-    } catch (e) {
-      toast.error(errText(e, t))
-    } finally {
-      setBusy(false)
-    }
+  async function withReason(kind: NonNullable<typeof reason>, why: string) {
+    setReason(null)
+    if (kind === 'cancel') return run(() => cancelTransfer(transfer.id, actor, why), t('ยกเลิกเอกสารเรียบร้อย'))
+    if (kind === 'reopen') return run(() => reopenTransfer(transfer.id, actor, why))
+    return run(() => reviewTransfer({ transferId: transfer.id, expectedRevision: transfer.revision, actor, action: kind, note: why }))
   }
+
+  const receiver = canReceive(transfer, actor)
+  const atDestination = canUserAccessBranch(actor, transfer.toLocationId)
+  const open = (i: TransferItem) => !!i.discrepancy && !i.discrepancy.resolution
+  const cancellable = ['draft', 'returned', 'pendingApproval'].includes(transfer.status) && (manager || transfer.requestedBy === actor.id)
 
   return (
     <FramePage>
       <PageHero
-        icon="swap"
+        icon="truck"
         tone="brand"
         title={transfer.docNo}
         subtitle={
-          <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
-            <span>{t('สร้างเมื่อ {date}', { date: formatThaiDateTime(transfer.createdAt) })}</span>
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <Badge color={badge(transferBadgeColor(transfer.status))}>{t(TRANSFER_STATUS_KEYS[transfer.status])}</Badge>
+            {transfer.legKind && <Badge color="slate">{t(LEG_KEYS[transfer.legKind])}</Badge>}
             {transfer.parentId && (
-              <span>
-                · {t('สืบทอดจาก')}{' '}
-                <Link
-                  to={`/transfers/${transfer.parentId}`}
-                  className="font-medium text-brand underline"
-                >
-                  {t('เอกสารหลัก')}
-                </Link>
-              </span>
+              <Link to={`/transfers/${transfer.parentId}`} className="text-brand underline">
+                {t('เอกสารหลัก')}
+              </Link>
             )}
-          </div>
+          </span>
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            {transfer.status === 'pendingApproval' && (
-              <>
-                {userCanApprove && (
-                  <Button onClick={handleApprove} disabled={busy}>
-                    <Icon name="check" size={16} />
-                    {t('อนุมัติและตัดสต๊อกขนส่ง')}
-                  </Button>
-                )}
-                {manager && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowCancel(true)}
-                    disabled={busy}
-                  >
-                    <Icon name="x" size={16} />
-                    {t('ยกเลิกคำขอ')}
-                  </Button>
-                )}
-              </>
-            )}
-
-            {(transfer.status === 'inTransit' || transfer.status === 'receiving') && (
-              <Button
-                onClick={() => setShowReceive(true)}
-                disabled={busy || !userCanReceive}
-              >
+            <Button variant="outline" onClick={() => navigate('/transfers')}>
+              <Icon name="chevronLeft" size={16} />
+              {t('รายการขนส่ง')}
+            </Button>
+            {receiver && (
+              <Button onClick={() => navigate(`/transfers/${transfer.id}/receive`)}>
                 <Icon name="receive" size={16} />
                 {t('ตรวจรับสินค้า')}
               </Button>
             )}
-
-            {transfer.status === 'draft' && (
-              <Button onClick={() => navigate(`/transfers/${transfer.id}`)}>
-                <Icon name="pencil" size={16} />
-                {t('แก้ไข')}
+            {transfer.status === 'discrepancy' && atDestination && (
+              <Button disabled={busy} onClick={() => run(() => submitDiscrepancyForApproval(transfer.id, actor), t('ส่งให้หัวหน้าพิจารณาแล้ว'))}>
+                <Icon name="arrowRight" size={16} />
+                {t('ส่งให้หัวหน้าพิจารณา')}
+              </Button>
+            )}
+            {transfer.status === 'rejected' && actor.role === 'admin' && (
+              <Button variant="outline" onClick={() => setReason('reopen')}>
+                {t('เปิดคำขอใหม่')}
+              </Button>
+            )}
+            {cancellable && (
+              <Button variant="ghost" onClick={() => setReason('cancel')} disabled={busy}>
+                {t('ยกเลิกคำขอ')}
               </Button>
             )}
           </div>
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <StatusChip tone={color}>
-          {t(TRANSFER_STATUS_KEYS[transfer.status])}
-        </StatusChip>
-        {transfer.legKind && (
-          <StatusChip tone="slate">
-            {transfer.legKind === 'return'
-              ? t('สายส่งกลับ')
-              : transfer.legKind === 'forward'
-                ? t('สายส่งต่อ')
-                : t('สายเก็บไว้')}
-          </StatusChip>
-        )}
-      </div>
+      {transfer.status === 'returned' && transfer.returnReason && <AlertBanner tone="warn">{t('หัวหน้าส่งกลับให้แก้ไข')}: {transfer.returnReason}</AlertBanner>}
+      {transfer.status === 'rejected' && transfer.rejectReason && <AlertBanner tone="danger">{t('ไม่อนุมัติ')}: {transfer.rejectReason}</AlertBanner>}
+      {transfer.status === 'cancelled' && transfer.cancelReason && <AlertBanner tone="danger">{t('ยกเลิกแล้ว')}: {transfer.cancelReason}</AlertBanner>}
 
       <WithSidePanel
         side={
           <>
             <SectionCard icon="note" title={t('ข้อมูลเส้นทางและเอกสาร')}>
-              <div className="space-y-3 text-xs md:text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-ink-soft">{t('ต้นทาง:')} </span>
+              <dl className="space-y-2 text-sm">
+                <Row label={t('ต้นทาง:')}>
                   <SiteChip locationId={transfer.fromLocationId} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-ink-soft">{t('ปลายทาง:')} </span>
+                </Row>
+                <Row label={t('ปลายทาง:')}>
                   <SiteChip locationId={transfer.toLocationId} />
-                </div>
-                <div>
-                  <span className="text-ink-soft">{t('วันที่ขนส่ง:')} </span>
-                  <span className="font-medium">
-                    {formatThaiDateShort(transfer.dispatchDate)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-ink-soft">{t('ผู้ขอโอน:')} </span>
-                  <span className="font-medium">{transfer.requestedByName}</span>
-                </div>
-                {transfer.approvedByName && (
-                  <div>
-                    <span className="text-ink-soft">{t('ผู้อนุมัติ:')} </span>
-                    <span className="font-medium">{transfer.approvedByName}</span>
-                    <span className="ml-1 text-2xs text-ink-faint">
-                      ({formatThaiDateTime(transfer.approvedAt!)})
-                    </span>
-                  </div>
-                )}
-                {transfer.receivedByName && (
-                  <div>
-                    <span className="text-ink-soft">{t('ผู้ตรวจรับ:')} </span>
-                    <span className="font-medium">{transfer.receivedByName}</span>
-                    <span className="ml-1 text-2xs text-ink-faint">
-                      ({formatThaiDateTime(transfer.receivedAt!)})
-                    </span>
-                  </div>
-                )}
-                {transfer.dispatchMovementDocNo && (
-                  <div>
-                    <span className="text-ink-soft">{t('ใบตัดสต๊อกต้นทาง:')} </span>
-                    <span className="font-mono font-medium text-brand">
-                      {transfer.dispatchMovementDocNo}
-                    </span>
-                  </div>
-                )}
-                {transfer.receiveMovementDocNo && (
-                  <div>
-                    <span className="text-ink-soft">{t('ใบรับเข้าปลายทาง:')} </span>
-                    <span className="font-mono font-medium text-emerald-600">
-                      {transfer.receiveMovementDocNo}
-                    </span>
-                  </div>
-                )}
-                {transfer.note && (
-                  <div className="rounded-lg bg-sunken p-2.5 text-xs text-ink-soft">
-                    <span className="font-medium text-ink">{t('หมายเหตุ:')} </span>
-                    {transfer.note}
-                  </div>
-                )}
-              </div>
+                </Row>
+                <Row label={t('วันที่ขนส่ง:')}>{formatThaiDateShort(transfer.dispatchDate)}</Row>
+                <Row label={t('ผู้ขอโอน:')}>{transfer.requestedByName}</Row>
+                {transfer.approvedByName && <Row label={t('ผู้อนุมัติ:')}>{transfer.approvedByName}</Row>}
+                {transfer.receivedByName && <Row label={t('ผู้ตรวจรับ:')}>{transfer.receivedByName}</Row>}
+                {transfer.note && <Row label={t('หมายเหตุ:')}>{transfer.note}</Row>}
+              </dl>
             </SectionCard>
 
-            {/* Audit History Timeline */}
-            <SectionCard icon="history" title={t('ประวัติการดำเนินงาน')}>
-              <div className="space-y-3">
-                {transfer.history.map((h, i) => (
-                  <div key={i} className="relative border-l-2 border-line pl-3 text-xs">
-                    <div className="font-medium text-ink">{h.byName}</div>
-                    <div className="text-ink-soft">{h.action}</div>
-                    {h.note && <div className="text-2xs text-ink-faint">{h.note}</div>}
-                    <div className="text-3xs text-ink-faint">
-                      {formatThaiDateTime(h.at)}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {legs.length > 0 && (
+              <SectionCard icon="swap" title={t('สายส่งต่อ / ส่งกลับ')}>
+                <ul className="space-y-2 text-sm">
+                  {legs.map((l) => (
+                    <li key={l.id} className="flex flex-wrap items-center gap-2">
+                      <Link to={`/transfers/${l.id}`} className="doc-no font-medium text-brand underline">
+                        {l.docNo}
+                      </Link>
+                      <span className="text-ink-soft">
+                        {siteName(l.fromLocationId)} → {siteName(l.toLocationId)}
+                      </span>
+                      <Badge color={badge(transferBadgeColor(l.status))}>{t(TRANSFER_STATUS_KEYS[l.status])}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+            )}
+
+            <SectionCard icon="history" title={t('ไทม์ไลน์')}>
+              <Timeline transfer={transfer} legs={legs} rows={rows} siteName={siteName} t={t} />
             </SectionCard>
           </>
         }
       >
-        {/* Items Table */}
-        <SectionCard
-          icon="package"
-          title={t('รายการสินค้า')}
-          count={t('({n} รายการ)', { n: transfer.items.length })}
-        >
+        {reviewing ? (
+          <SectionCard icon="pencil" title={t('ตรวจและแก้ไขจำนวนส่ง')}>
+            <p className="mb-3 text-sm text-ink-soft">{t('แก้จำนวนหรือหน่วยที่จะส่ง เพิ่มหรือเอารายการออกได้ — จำนวนที่พนักงานขอยังเก็บไว้ในเอกสาร')}</p>
+            <LineBuilder
+              products={products}
+              lines={reviewLines}
+              onChange={onReviewLines}
+              availableAt={(pid) => qtyAt(transfer.fromLocationId, pid)}
+              direction="out"
+            />
+            <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+              <Button variant="outline" disabled={busy} onClick={() => setReason('return')}>
+                {t('ส่งกลับให้แก้ไข')}
+              </Button>
+              <Button variant="danger" disabled={busy} onClick={() => setReason('reject')}>
+                {t('ไม่อนุมัติ')}
+              </Button>
+              <Button disabled={busy || reviewLines.length === 0} onClick={() => void approve()}>
+                <Icon name="check" size={16} />
+                {t('อนุมัติและตัดสต๊อกขนส่ง')}
+              </Button>
+            </div>
+          </SectionCard>
+        ) : null}
+
+        <SectionCard icon="package" title={t('รายการสินค้า')} count={t('({n} รายการ)', { n: transfer.items.filter((i) => !i.removed).length })}>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs md:text-sm">
-              <thead className="border-b border-line bg-sunken/60 text-ink-soft">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-line text-xs text-ink-soft">
                 <tr>
-                  <th className="py-2.5 pl-3 pr-2">#</th>
-                  <th className="py-2.5 px-2">{t('สินค้า')}</th>
-                  <th className="py-2.5 px-2 text-right">{t('ขอโอน')}</th>
-                  <th className="py-2.5 px-2 text-right">{t('ส่งออก')}</th>
-                  <th className="py-2.5 px-2 text-right">{t('รับจริง')}</th>
-                  <th className="py-2.5 px-2">{t('หน่วย')}</th>
-                  <th className="py-2.5 px-2">{t('สถานะรายการ')}</th>
-                  <th className="py-2.5 pr-3 pl-2 text-right">{t('จัดการ')}</th>
+                  <th className="py-2 pr-2">{t('สินค้า')}</th>
+                  <th className="px-2 py-2 text-right">{t('ขอโอน')}</th>
+                  <th className="px-2 py-2 text-right">{t('ส่งออก')}</th>
+                  <th className="px-2 py-2 text-right">{t('รับจริง')}</th>
+                  <th className="px-2 py-2 text-right">{t('ผลต่าง')}</th>
+                  <th className="px-2 py-2 text-right">{t('ค้างระหว่างทาง')}</th>
+                  <th className="py-2 pl-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {transfer.items.map((item, idx) => {
-                  const hasDiscrepancy = Boolean(item.discrepancy)
-                  const discResolved = Boolean(item.discrepancy?.resolution)
-                  const hasMisroute = Boolean(item.misroutes && item.misroutes.length > 0)
-
+                {transfer.items.map((i) => {
+                  const variance = i.receivedQty !== undefined ? i.receivedQty - expectedQty(i) : null
                   return (
-                    <tr key={idx} className="hover:bg-sunken/30">
-                      <td className="py-3 pl-3 pr-2 font-mono text-ink-soft">
-                        {idx + 1}
+                    <tr key={i.idx} className={i.removed ? 'text-ink-faint line-through' : ''}>
+                      <td className="py-2 pr-2">
+                        <div className="font-medium">{i.productName}</div>
+                        <div className="text-xs text-ink-faint">
+                          {i.sku} · {i.unit}
+                          {i.requestedQty === null && ` · ${t('หัวหน้าเพิ่ม')}`}
+                          {i.removed && ` · ${t('เอาออก')}: ${i.removed.reason}`}
+                        </div>
                       </td>
-                      <td className="py-3 px-2">
-                        <div className="font-medium text-ink">{item.productName}</div>
-                        {item.sku && (
-                          <div className="text-2xs font-mono text-ink-faint">{item.sku}</div>
-                        )}
+                      <td className="num px-2 py-2 text-right">{i.requestedQty === null ? '—' : qty(i.requestedQty, i.requestedEntryQty, i.requestedEntryUnit)}</td>
+                      <td className="num px-2 py-2 text-right">
+                        {qty(i.dispatchQty, i.dispatchEntryQty, i.dispatchEntryUnit)}
+                        {i.correctedDispatchQty !== undefined && <div className="text-xs text-warn">{t('แก้เป็น')} {fmtQty(i.correctedDispatchQty)}</div>}
                       </td>
-                      <td className="py-3 px-2 text-right font-medium text-ink">
-                        {item.requestedQty != null ? fmtQty(item.requestedQty) : '—'}
+                      <td className="num px-2 py-2 text-right">
+                        {i.receivedQty === undefined ? '—' : fmtQty(i.receivedQty)}
+                        {i.correctedReceivedQty !== undefined && <div className="text-xs text-warn">{t('แก้เป็น')} {fmtQty(i.correctedReceivedQty)}</div>}
                       </td>
-                      <td className="py-3 px-2 text-right font-medium text-ink">
-                        {item.dispatchQty !== undefined ? fmtQty(item.dispatchQty) : '—'}
+                      <td className={`num px-2 py-2 text-right ${variance ? (variance < 0 ? 'text-out' : 'text-warn') : ''}`}>
+                        {variance === null ? '—' : variance > 0 ? `+${fmtQty(variance)}` : fmtQty(variance)}
                       </td>
-                      <td className="py-3 px-2 text-right font-medium text-ink">
-                        {item.receivedQty !== undefined ? fmtQty(item.receivedQty) : '—'}
-                      </td>
-                      <td className="py-3 px-2 text-ink-soft">{item.unit}</td>
-                      <td className="py-3 px-2">
-                        {hasDiscrepancy ? (
-                          <div className="space-y-0.5">
-                            <StatusChip tone={discResolved ? 'green' : 'red'} size="sm">
-                              {discResolved ? t('แก้ไขผลต่างแล้ว') : t('มีผลต่าง')}
-                            </StatusChip>
-                            <div className="text-2xs text-ink-soft">
-                              {item.discrepancy?.kind} ({fmtQty(item.discrepancy?.qty ?? 0)})
-                            </div>
-                          </div>
-                        ) : hasMisroute ? (
-                          <StatusChip tone="amber" size="sm">
-                            {t('ส่งผิดสาขา')}
-                          </StatusChip>
-                        ) : item.receivedQty !== undefined ? (
-                          <StatusChip tone="green" size="sm">
-                            {t('ครบถ้วน')}
-                          </StatusChip>
-                        ) : (
-                          <StatusChip tone="slate" size="sm">
-                            {transfer.status === 'pendingApproval'
-                              ? t('รออนุมัติ')
-                              : t('ระหว่างขนส่ง')}
-                          </StatusChip>
-                        )}
-                      </td>
-                      <td className="py-3 pr-3 pl-2 text-right">
-                        {manager && hasDiscrepancy && !discResolved && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setResolvingItem(item)}
-                          >
-                            {t('ปรับยอด')}
+                      <td className="num px-2 py-2 text-right">{i.inTransitQty ? fmtQty(i.inTransitQty) : '—'}</td>
+                      <td className="py-2 pl-2 text-right">
+                        {manager && open(i) && ['discrepancy', 'pendingDiscrepancyApproval'].includes(transfer.status) && (
+                          <Button size="sm" onClick={() => setResolving(i)}>
+                            {t('จัดการผลต่าง')}
                           </Button>
                         )}
                       </td>
@@ -399,513 +363,282 @@ export function TransferDetailView({
           </div>
         </SectionCard>
 
-        {/* Discrepancies breakdown section */}
         {transfer.items.some((i) => i.discrepancy) && (
           <SectionCard icon="alertCircle" title={t('รายการผลต่าง / ปัญหาการรับสินค้า')}>
-            <div className="space-y-3">
+            <ul className="space-y-3">
               {transfer.items
                 .filter((i) => i.discrepancy)
-                .map((item, idx) => {
-                  const d = item.discrepancy!
+                .map((i) => {
+                  const d = i.discrepancy!
                   return (
-                    <div
-                      key={idx}
-                      className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-ink">{item.productName}</span>
-                          <StatusChip tone={d.resolution ? 'green' : 'red'} size="sm">
-                            {d.kind} ({fmtQty(d.qty)} {item.unit})
-                          </StatusChip>
-                        </div>
-                        <div className="text-xs text-ink-soft">
-                          <span>{t('สาเหตุ:')} {d.reason}</span>
-                          {d.note && <span className="ml-2">({d.note})</span>}
-                        </div>
-                        {d.resolution && (
-                          <div className="text-xs text-emerald-700">
-                            {t('วิธีแก้ไข:')} {d.resolution.code} {t('โดย')}{' '}
-                            {d.resolution.byName}
-                          </div>
-                        )}
+                    <li key={i.idx} className="rounded-xl border border-line p-3 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">{i.productName}</span>
+                        <Badge color={d.resolution ? 'green' : 'red'}>
+                          {d.kind === 'short' ? t('ขาด') : t('เกิน')} {fmtQty(d.qty)} {i.unit}
+                        </Badge>
+                        <span className="text-ink-soft">{t(DISCREPANCY_REASON_KEYS[d.reason])}</span>
                       </div>
-
-                      {manager && !d.resolution && (
-                        <Button
-                          size="sm"
-                          onClick={() => setResolvingItem(item)}
-                        >
-                          <Icon name="check" size={14} />
-                          {t('จัดการผลต่าง')}
-                        </Button>
+                      {d.note && <div className="mt-1 text-ink-soft">{d.note}</div>}
+                      <div className="mt-1 text-xs text-ink-faint">
+                        {t('รายงานโดย')} {d.reportedByName} · {formatThaiDateTime(d.reportedAt)}
+                      </div>
+                      {d.resolution && (
+                        <div className="mt-2 rounded-lg bg-sunken p-2 text-xs">
+                          {t(DISCREPANCY_RESOLUTION_KEYS[d.resolution.code])} · {d.resolution.byName} · {formatThaiDateTime(d.resolution.at)}
+                          {d.resolution.movementDocNo && <span className="doc-no"> · {d.resolution.movementDocNo}</span>}
+                          {d.resolution.note && <div className="text-ink-soft">{d.resolution.note}</div>}
+                        </div>
                       )}
-                    </div>
+                    </li>
                   )
                 })}
-            </div>
+            </ul>
           </SectionCard>
         )}
 
-        {/* Misroute reports section */}
-        {transfer.items.some((i) => i.misroutes && i.misroutes.length > 0) && (
+        {transfer.items.some((i) => (i.misroutes ?? []).length > 0) && (
           <SectionCard icon="swap" title={t('รายงานสินค้าส่งผิดสาขา')}>
-            <div className="space-y-3">
-              {transfer.items.map((item) =>
-                (item.misroutes ?? []).map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-ink">{item.productName}</span>
-                        <StatusChip tone={m.resolution ? 'green' : 'amber'} size="sm">
-                          {t('ของอยู่ที่:')} {locName(m.actualCustodyLocationId)} ({fmtQty(m.qty)} {item.unit})
-                        </StatusChip>
-                      </div>
-                      <div className="text-xs text-ink-soft">
-                        {t('รายงานโดย')} {m.reportedByName}
-                        {m.note && <span className="ml-1">· {m.note}</span>}
-                      </div>
-                      {m.resolution && (
-                        <div className="text-xs text-emerald-700">
-                          {t('การจัดการ:')} {m.resolution.action} ({t('โดย')} {m.resolution.byName})
-                        </div>
-                      )}
+            <ul className="space-y-3">
+              {transfer.items.flatMap((i) =>
+                (i.misroutes ?? []).map((m) => (
+                  <li key={m.id} className="rounded-xl border border-line p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{i.productName}</span>
+                      <Badge color={m.resolution ? 'green' : 'amber'}>
+                        {fmtQty(m.qty)} {i.unit} {t('อยู่ที่')} {siteName(m.actualCustodyLocationId)}
+                      </Badge>
+                      <span className="text-ink-soft">
+                        ({t('ควรไป')} {siteName(m.originalDestinationId)})
+                      </span>
                     </div>
-
-                    {manager && !m.resolution && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          setResolvingMisroute({ item, misrouteId: m.id })
-                        }
-                      >
-                        {t('จัดการส่งผิดสาขา')}
-                      </Button>
+                    <div className="mt-1 text-xs text-ink-faint">
+                      {t('รายงานโดย')} {m.reportedByName} · {formatThaiDateTime(m.reportedAt)}
+                      {m.note && ` · ${m.note}`}
+                    </div>
+                    {m.resolution ? (
+                      <div className="mt-2 rounded-lg bg-sunken p-2 text-xs">
+                        {t(MISROUTE_KEYS[m.resolution.action])} · {m.resolution.byName} · {formatThaiDateTime(m.resolution.at)}
+                        {m.resolution.movementDocNo && <span className="doc-no"> · {m.resolution.movementDocNo}</span>}
+                      </div>
+                    ) : (
+                      manager && (
+                        <div className="mt-2">
+                          <Button size="sm" onClick={() => setDeciding({ item: i, misrouteId: m.id })}>
+                            {t('จัดการส่งผิดสาขา')}
+                          </Button>
+                        </div>
+                      )
                     )}
-                  </div>
+                  </li>
                 )),
               )}
-            </div>
+            </ul>
           </SectionCard>
         )}
       </WithSidePanel>
 
-      {/* Modal: Receiving */}
-      {showReceive && (
-        <ReceivingModal
-          transfer={transfer}
-          actor={actor}
-          locations={locations}
-          onClose={() => setShowReceive(false)}
-          onSuccess={(updated) => {
-            setTransfer(updated)
-            onChange(updated)
-            setShowReceive(false)
+      {reason && (
+        <ReasonModal
+          title={t(REASON_TITLES[reason])}
+          confirmText={t(REASON_TITLES[reason])}
+          danger={reason === 'reject' || reason === 'cancel'}
+          onClose={() => setReason(null)}
+          onConfirm={(why) => withReason(reason, why)}
+        />
+      )}
+      {removing && (
+        <ReasonModal
+          title={t('เอารายการออก')}
+          message={t('ระบุเหตุผลที่เอารายการนี้ออก — รายการยังเก็บไว้ในเอกสาร')}
+          confirmText={t('เอาออก')}
+          onClose={() => setRemoving(null)}
+          onConfirm={(why) => {
+            applyLines(removing.next, { productId: removing.productId, reason: why })
+            setRemoving(null)
           }}
         />
       )}
-
-      {/* Modal: Discrepancy Resolution */}
-      {resolvingItem && (
-        <DiscrepancyModal
+      {resolving && (
+        <ResolveDiscrepancy
           transfer={transfer}
-          item={resolvingItem}
-          actor={actor}
-          onClose={() => setResolvingItem(null)}
-          onSuccess={(updated) => {
-            setTransfer(updated)
-            onChange(updated)
-            setResolvingItem(null)
+          item={resolving}
+          onClose={() => setResolving(null)}
+          onDone={(next) => {
+            update(next)
+            setResolving(null)
           }}
         />
       )}
-
-      {/* Modal: Misroute Resolution */}
-      {resolvingMisroute && (
-        <MisrouteModal
+      {deciding && (
+        <DecideMisroute
           transfer={transfer}
-          item={resolvingMisroute.item}
-          misrouteId={resolvingMisroute.misrouteId}
-          actor={actor}
-          onClose={() => setResolvingMisroute(null)}
-          onSuccess={(updated) => {
-            setTransfer(updated)
-            onChange(updated)
-            setResolvingMisroute(null)
+          item={deciding.item}
+          misrouteId={deciding.misrouteId}
+          siteName={siteName}
+          onClose={() => setDeciding(null)}
+          onDone={(next) => {
+            update(next)
+            setDeciding(null)
           }}
-        />
-      )}
-
-      {/* Modal: Cancel */}
-      {showCancel && (
-        <CancelModal
-          onClose={() => setShowCancel(false)}
-          onSubmit={handleCancel}
-          busy={busy}
         />
       )}
     </FramePage>
   )
 }
 
-// ---------------------------------------------------------------- ReceivingModal
-function ReceivingModal({
-  transfer,
-  actor,
-  locations,
-  onClose,
-  onSuccess,
-}: {
-  transfer: Transfer
-  actor: { id: string; name: string; role: Role; siteIds?: string[] }
-  locations: { id: string; name: string; active?: boolean }[]
-  onClose: () => void
-  onSuccess: (updated: Transfer) => void
-}) {
-  const t = useT()
-  const toast = useToast()
-  const [busy, setBusy] = useState(false)
+const LEG_KEYS = {
+  forward: 'สายส่งต่อ', // i18n-key
+  return: 'สายส่งกลับ', // i18n-key
+  replacement: 'ส่งทดแทน', // i18n-key
+} as const
 
-  // Map of received quantities for each item idx
-  const [receivedMap, setReceivedMap] = useState<Record<number, number>>(() => {
-    const init: Record<number, number> = {}
-    for (const item of transfer.items) {
-      init[item.idx] = item.dispatchQty ?? item.requestedQty ?? 0
-    }
-    return init
-  })
+const MISROUTE_KEYS = {
+  redirect: 'ให้สาขาที่ได้รับเก็บไว้ (รับเข้าสต๊อก)', // i18n-key
+  forward: 'ส่งต่อไปปลายทางเดิม', // i18n-key
+  return: 'ส่งกลับต้นทาง', // i18n-key
+} as const
 
-  // Discrepancy reasons / notes for items where received != dispatched
-  const [discrepancies, setDiscrepancies] = useState<
-    Record<
-      number,
-      { kind: DiscrepancyKind; reason: DiscrepancyReason; note: string }
-    >
-  >({})
+const REASON_TITLES = {
+  return: 'ส่งกลับให้แก้ไข', // i18n-key
+  reject: 'ไม่อนุมัติ', // i18n-key
+  cancel: 'ยกเลิกคำขอ', // i18n-key
+  reopen: 'เปิดคำขอใหม่', // i18n-key
+} as const
 
-  // Optional misroute reporting
-  const [misroutes, setMisroutes] = useState<
-    Array<{
-      itemIdx: number
-      actualCustodyLocationId: string
-      qty: number
-      note: string
-    }>
-  >([])
+const HISTORY_KEYS: Record<string, string> = {
+  created: 'สร้างคำขอ', // i18n-key
+  itemAdded: 'เพิ่มรายการ', // i18n-key
+  itemRemoved: 'เอารายการออก', // i18n-key
+  qtyChanged: 'แก้จำนวน', // i18n-key
+  unitChanged: 'เปลี่ยนหน่วย', // i18n-key
+  submitted: 'ส่งขออนุมัติ', // i18n-key
+  approved: 'อนุมัติ', // i18n-key
+  movedToTransit: 'ตัดสต๊อกเข้าระหว่างขนส่ง', // i18n-key
+  return: 'ส่งกลับให้แก้ไข', // i18n-key
+  reject: 'ไม่อนุมัติ', // i18n-key
+  reopened: 'เปิดคำขอใหม่', // i18n-key
+  receivingOpened: 'สาขาเปิดตรวจรับ', // i18n-key
+  received: 'ยืนยันรับสินค้า', // i18n-key
+  discrepancyCreated: 'พบผลต่าง', // i18n-key
+  discrepancyExplained: 'ระบุเหตุผลผลต่าง', // i18n-key
+  discrepancySubmitted: 'ส่งให้หัวหน้าพิจารณา', // i18n-key
+  discrepancyResolved: 'หัวหน้าจัดการผลต่าง', // i18n-key
+  misrouteReported: 'รายงานพบสินค้าส่งผิดสาขา', // i18n-key
+  redirected: 'เปลี่ยนปลายทางเป็นสาขาที่ได้รับ', // i18n-key
+  forwarded: 'ส่งต่อไปปลายทางเดิม', // i18n-key
+  returnedToSource: 'ส่งกลับต้นทาง', // i18n-key
+  legCreated: 'สร้างสายส่ง', // i18n-key
+  legClosed: 'สายส่งรับครบ', // i18n-key
+  cancelled: 'ยกเลิก', // i18n-key
+}
 
-  function handleQtyChange(idx: number, qty: number) {
-    setReceivedMap((prev) => ({ ...prev, [idx]: qty }))
-    const item = transfer.items.find((i) => i.idx === idx)
-    const expected = item?.dispatchQty ?? item?.requestedQty ?? 0
+function badge(c: string): 'slate' | 'red' | 'green' | 'amber' | 'blue' {
+  return c === 'purple' ? 'blue' : (c as 'slate' | 'red' | 'green' | 'amber' | 'blue')
+}
 
-    if (qty < expected) {
-      setDiscrepancies((prev) => ({
-        ...prev,
-        [idx]: prev[idx] ?? {
-          kind: 'short',
-          reason: 'SHORT',
-          note: '',
-        },
-      }))
-    } else if (qty > expected) {
-      setDiscrepancies((prev) => ({
-        ...prev,
-        [idx]: prev[idx] ?? {
-          kind: 'over',
-          reason: 'OVER',
-          note: '',
-        },
-      }))
-    } else {
-      setDiscrepancies((prev) => {
-        const next = { ...prev }
-        delete next[idx]
-        return next
-      })
-    }
-  }
+function qty(base: number | null | undefined, entryQty?: number, entryUnit?: string) {
+  if (base === null || base === undefined) return '—'
+  return entryUnit && entryQty !== undefined ? `${fmtQty(entryQty)} ${entryUnit} (${fmtQty(base)})` : fmtQty(base)
+}
 
-  async function handleSubmit() {
-    setBusy(true)
-    try {
-      const receivedLines: ReceivedLineInput[] = transfer.items.map((item) => {
-        const receivedQty = receivedMap[item.idx] ?? item.dispatchQty
-        const expected = item.dispatchQty
-        const disc = discrepancies[item.idx]
-
-        let discrepancyData = undefined
-        if (disc && receivedQty !== expected) {
-          discrepancyData = {
-            kind: disc.kind,
-            reason: disc.reason,
-            qty: Math.abs(expected - receivedQty),
-            note: disc.note.trim() || undefined,
-          }
-        }
-
-        return {
-          idx: item.idx,
-          receivedQty,
-          discrepancy: discrepancyData,
-        }
-      })
-
-      const updated = await confirmReceive({
-        transferId: transfer.id,
-        actor,
-        receivedLines,
-      })
-
-      for (const m of misroutes) {
-        await reportMisroute({
-          transferId: transfer.id,
-          itemIdx: m.itemIdx,
-          actualCustodyLocationId: m.actualCustodyLocationId,
-          qty: m.qty,
-          actor,
-          note: m.note.trim() || undefined,
-        })
-      }
-
-      toast.success(t('ตรวจรับสินค้าเรียบร้อย'))
-      onSuccess(updated)
-    } catch (e) {
-      toast.error(errText(e, t))
-    } finally {
-      setBusy(false)
-    }
-  }
-
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Modal open onClose={onClose} title={t('ตรวจรับสินค้า ({docNo})', { docNo: transfer.docNo })} wide>
-      <div className="space-y-4 p-4 text-xs md:text-sm">
-        <p className="text-ink-soft">
-          {t('ระบุจำนวนที่นับรับเข้าจริง หากสินค้าขาด เกิน หรือเสียหาย กรุณาระบุเหตุผล')}
-        </p>
-
-        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full text-left">
-            <thead className="border-b border-line bg-sunken/60 text-ink-soft">
-              <tr>
-                <th className="py-2.5 pl-3 pr-2">#</th>
-                <th className="py-2.5 px-2">{t('สินค้า')}</th>
-                <th className="py-2.5 px-2 text-right">{t('ส่งมา')}</th>
-                <th className="py-2.5 px-2 text-right w-32">{t('รับจริง')}</th>
-                <th className="py-2.5 pr-3 pl-2">{t('หน่วย')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {transfer.items.map((item, i) => {
-                const expected = item.dispatchQty ?? item.requestedQty ?? 0
-                const actual = receivedMap[item.idx] ?? expected
-                const hasDiff = actual !== expected
-                const disc = discrepancies[item.idx]
-
-                return (
-                  <tr key={i} className={hasDiff ? 'bg-amber-500/5' : ''}>
-                    <td className="py-3 pl-3 pr-2 font-mono text-ink-soft">{i + 1}</td>
-                    <td className="py-3 px-2">
-                      <div className="font-medium text-ink">{item.productName}</div>
-                      {hasDiff && disc && (
-                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <Select
-                            value={disc.reason}
-                            onChange={(e) =>
-                              setDiscrepancies((prev) => ({
-                                ...prev,
-                                [item.idx]: {
-                                  ...prev[item.idx],
-                                  reason: e.target.value as DiscrepancyReason,
-                                },
-                              }))
-                            }
-                          >
-                            <option value="SHORT">{t('ของขาด (ส่งมาไม่ครบ)')}</option>
-                            <option value="OVER">{t('ของเกิน (ส่งมาเกิน)')}</option>
-                            <option value="DAMAGED">{t('สินค้าชำรุด/เสียหาย')}</option>
-                            <option value="WEIGHT_VARIANCE">{t('น้ำหนักต่างจากป้าย')}</option>
-                            <option value="WRONG_ITEM">{t('ส่งสินค้าผิดรายการ')}</option>
-                            <option value="WRONG_BRANCH">{t('ส่งผิดสาขา')}</option>
-                            <option value="COUNTING_ERROR">{t('นับจำนวนผิดพลาด')}</option>
-                            <option value="OTHER">{t('อื่นๆ')}</option>
-                          </Select>
-                          <Input
-                            placeholder={t('ระบุรายละเอียดเหตุผล')}
-                            value={disc.note}
-                            onChange={(e) =>
-                              setDiscrepancies((prev) => ({
-                                ...prev,
-                                [item.idx]: {
-                                  ...prev[item.idx],
-                                  note: e.target.value,
-                                },
-                              }))
-                            }
-                          />
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3 px-2 text-right font-medium text-ink">
-                      {fmtQty(expected)}
-                    </td>
-                    <td className="py-3 px-2 text-right">
-                      <Input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={actual}
-                        onChange={(e) =>
-                          handleQtyChange(item.idx, parseFloat(e.target.value) || 0)
-                        }
-                        className="text-right font-mono"
-                      />
-                    </td>
-                    <td className="py-3 pr-3 pl-2 text-ink-soft">{item.unit}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Misroute Button */}
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setMisroutes((prev) => [
-                ...prev,
-                {
-                  itemIdx: transfer.items[0]?.idx ?? 0,
-                  actualCustodyLocationId: locations[0]?.id ?? '',
-                  qty: 1,
-                  note: '',
-                },
-              ])
-            }
-          >
-            <Icon name="plus" size={14} />
-            {t('รายงานสินค้าส่งผิดสาขา')}
-          </Button>
-
-          {misroutes.length > 0 && (
-            <div className="mt-3 space-y-2 rounded-xl border border-line bg-sunken/40 p-3">
-              <div className="font-semibold text-ink">{t('รายการส่งผิดสาขา')}</div>
-              {misroutes.map((m, mIdx) => (
-                <div key={mIdx} className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-                  <Select
-                    value={m.itemIdx}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10)
-                      setMisroutes((prev) =>
-                        prev.map((x, idx) => (idx === mIdx ? { ...x, itemIdx: val } : x)),
-                      )
-                    }}
-                  >
-                    {transfer.items.map((it) => (
-                      <option key={it.idx} value={it.idx}>
-                        {it.productName}
-                      </option>
-                    ))}
-                  </Select>
-                  <Select
-                    value={m.actualCustodyLocationId}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setMisroutes((prev) =>
-                        prev.map((x, idx) =>
-                          idx === mIdx ? { ...x, actualCustodyLocationId: val } : x,
-                        ),
-                      )
-                    }}
-                  >
-                    {locations.map((loc) => (
-                      <option key={loc.id} value={loc.id}>
-                        {loc.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    type="number"
-                    value={m.qty}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0
-                      setMisroutes((prev) =>
-                        prev.map((x, idx) => (idx === mIdx ? { ...x, qty: val } : x)),
-                      )
-                    }}
-                    placeholder={t('จำนวน')}
-                  />
-                  <Input
-                    value={m.note}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setMisroutes((prev) =>
-                        prev.map((x, idx) => (idx === mIdx ? { ...x, note: val } : x)),
-                      )
-                    }}
-                    placeholder={t('หมายเหตุ')}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2 border-t border-line">
-          <Button variant="outline" onClick={onClose} disabled={busy}>
-            {t('ยกเลิก')}
-          </Button>
-          <Button onClick={handleSubmit} disabled={busy}>
-            <Icon name="check" size={16} />
-            {busy ? t('กำลังบันทึก...') : t('ยืนยันการรับสินค้า')}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+    <div className="flex flex-wrap items-center gap-2">
+      <dt className="text-ink-soft">{label}</dt>
+      <dd className="font-medium">{children}</dd>
+    </div>
   )
 }
 
-// ---------------------------------------------------------------- DiscrepancyModal
-function DiscrepancyModal({
+/** The document's history, its legs' history and the ledger rows, in time order. */
+function Timeline({
   transfer,
-  item,
-  actor,
-  onClose,
-  onSuccess,
+  legs,
+  rows,
+  siteName,
+  t,
 }: {
   transfer: Transfer
-  item: TransferItem
-  actor: { id: string; name: string; role: Role; siteIds?: string[] }
-  onClose: () => void
-  onSuccess: (updated: Transfer) => void
+  legs: Transfer[]
+  rows: StockMovement[]
+  siteName: (id: string) => string
+  t: TFn
 }) {
+  type Event = { at: number; key: string; title: string; who?: string; detail?: string; doc?: string }
+  const fromHistory = (d: Transfer) => (h: TransferHistoryEntry, n: number): Event => ({
+    at: h.at,
+    key: `${d.id}-${n}`,
+    title: HISTORY_KEYS[h.action] ? t(HISTORY_KEYS[h.action]) : h.action,
+    who: h.byName,
+    detail: [h.note, h.oldQty !== undefined || h.newQty !== undefined ? `${h.oldQty ?? '—'} → ${h.newQty ?? '—'}` : '', h.reason].filter(Boolean).join(' · '),
+    doc: d.id === transfer.id ? undefined : d.docNo,
+  })
+  const events: Event[] = [
+    ...transfer.history.map(fromHistory(transfer)),
+    ...legs.flatMap((l) => l.history.map(fromHistory(l))),
+    ...rows.map((m) => ({
+      at: m.createdAt,
+      key: m.id,
+      title: `${m.docNo} · ${m.productName} ${fmtQty(m.qty)} ${m.unit}`,
+      detail: m.type === 'adjust' ? `${siteName(m.fromLocationId ?? m.toLocationId ?? '')} (${m.reason})` : `${siteName(m.fromLocationId ?? '')} → ${siteName(m.toLocationId ?? '')}`,
+      who: m.byUserName,
+    })),
+  ].sort((a, b) => a.at - b.at)
+  return (
+    <ol className="space-y-3">
+      {events.map((e) => (
+        <li key={e.key} className="border-l-2 border-line pl-3 text-xs">
+          <div className="font-medium text-ink">
+            {e.title}
+            {e.doc && <span className="doc-no ml-1 text-ink-faint">({e.doc})</span>}
+          </div>
+          {e.detail && <div className="text-ink-soft">{e.detail}</div>}
+          <div className="text-ink-faint">
+            {e.who} · {formatThaiDateTime(e.at)}
+          </div>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+/** The manager's decision on one line's difference — only the resolutions that fit it. */
+function ResolveDiscrepancy({ transfer, item, onClose, onDone }: { transfer: Transfer; item: TransferItem; onClose: () => void; onDone: (t: Transfer) => void }) {
   const t = useT()
   const toast = useToast()
-  const [busy, setBusy] = useState(false)
-  const [code, setCode] = useState<DiscrepancyResolutionCode>('NOT_ACTUALLY_LOADED')
+  const { user } = useAuth()
+  const { locations } = useData()
+  const d = item.discrepancy!
+  const codes = d.kind === 'short' ? SHORT_RESOLUTIONS : OVER_RESOLUTIONS
+  const [code, setCode] = useState<DiscrepancyResolutionCode>(codes[0])
   const [note, setNote] = useState('')
+  const [custody, setCustody] = useState('')
+  const [related, setRelated] = useState('')
+  const [others, setOthers] = useState<Transfer[]>([])
+  const [busy, setBusy] = useState(false)
 
-  async function handleResolve() {
+  useEffect(() => {
+    if (code !== 'BELONGS_TO_OTHER_TRANSFER') return
+    listOpenTransfers()
+      .then((rows) => setOthers(rows.filter((r) => r.id !== transfer.id && r.status !== 'pendingApproval' && r.items.some((i) => i.productId === item.productId && (i.inTransitQty ?? 0) > 0))))
+      .catch(() => {})
+  }, [code, transfer.id, item.productId])
+
+  async function save() {
+    if (!user) return
     setBusy(true)
     try {
-      const updated = await resolveDiscrepancy({
+      const next = await resolveDiscrepancy({
         transferId: transfer.id,
         itemIdx: item.idx,
-        resolution: {
-          code,
-          qty: item.discrepancy?.qty ?? 0,
-          note: note.trim() || undefined,
-        },
-        actor,
+        resolution: { code, qty: d.qty, note: note.trim() || undefined },
+        custodyLocationId: code === 'WRONG_BRANCH' ? custody : undefined,
+        relatedTransferId: code === 'BELONGS_TO_OTHER_TRANSFER' ? related : undefined,
+        actor: { id: user.id, name: user.name, role: user.role, siteIds: user.siteIds },
       })
       toast.success(t('บันทึกการปรับยอดผลต่างเรียบร้อย'))
-      onSuccess(updated)
+      onDone(next)
     } catch (e) {
       toast.error(errText(e, t))
     } finally {
@@ -913,65 +646,57 @@ function DiscrepancyModal({
     }
   }
 
+  const ready = (code !== 'WRONG_BRANCH' || !!custody) && (code !== 'BELONGS_TO_OTHER_TRANSFER' || !!related)
   return (
     <Modal open onClose={onClose} title={t('จัดการผลต่าง: {product}', { product: item.productName })}>
-      <div className="space-y-4 p-4 text-xs md:text-sm">
-        <div className="rounded-lg bg-sunken p-3 space-y-1">
-          <div className="text-ink-soft">
-            {t('ส่งออก:')} {fmtQty(item.dispatchQty ?? item.requestedQty ?? 0)} {item.unit} · {t('รับจริง:')}{' '}
-            {fmtQty(item.receivedQty ?? 0)} {item.unit}
-          </div>
-          <div className="font-semibold text-rose-600">
-            {t('ผลต่าง:')} {item.discrepancy?.kind} ({fmtQty(item.discrepancy?.qty ?? 0)} {item.unit})
-          </div>
-          {item.discrepancy?.note && (
-            <div className="text-ink-soft">{t('เหตุผลที่รายงาน:')} {item.discrepancy.note}</div>
-          )}
+      <div className="space-y-4">
+        <div className="rounded-lg bg-sunken p-3 text-sm">
+          {d.kind === 'short' ? t('ขาด') : t('เกิน')} <b>{fmtQty(d.qty)} {item.unit}</b> · {t(DISCREPANCY_REASON_KEYS[d.reason])}
+          {d.note && <div className="text-ink-soft">{d.note}</div>}
         </div>
-
         <Field label={t('วิธีจัดการและปรับยอดสต๊อก')} required>
-          <Select
-            value={code}
-            onChange={(e) => setCode(e.target.value as DiscrepancyResolutionCode)}
-          >
-            <option value="NOT_ACTUALLY_LOADED">
-              {t('ไม่ได้ขนขึ้นรถจริง (คืนสต๊อกต้นทาง)')}
-            </option>
-            <option value="LOST_IN_TRANSIT">
-              {t('ของหายระหว่างทาง (ตัดยอดสูญหาย)')}
-            </option>
-            <option value="DAMAGED_IN_TRANSIT">
-              {t('เสียหายระหว่างทาง (ตัดยอดชำรุด)')}
-            </option>
-            <option value="WEIGHING_ERROR">
-              {t('ชั่งน้ำหนักคลาดเคลื่อน (ปรับยอดรับจริง)')}
-            </option>
-            <option value="OVER_DISPATCHED">
-              {t('คลังส่งเกินจริง (หักคลังหลักเข้าสาขา)')}
-            </option>
-            <option value="COUNTING_ERROR">
-              {t('นับผิดเอง (ปรับยอดรับจริง)')}
-            </option>
-            <option value="APPROVED_ADJUSTMENT">
-              {t('อนุมัติรับเข้าสต๊อก (รับเข้าสาขา)')}
-            </option>
+          <Select value={code} onChange={(e) => setCode(e.target.value as DiscrepancyResolutionCode)}>
+            {codes.map((c) => (
+              <option key={c} value={c}>
+                {t(DISCREPANCY_RESOLUTION_KEYS[c])}
+              </option>
+            ))}
           </Select>
         </Field>
-
+        {code === 'WRONG_BRANCH' && (
+          <Field label={t('สาขาที่ได้รับสินค้าไปจริง')} required>
+            <Select value={custody} onChange={(e) => setCustody(e.target.value)}>
+              <option value="">{t('— เลือก —')}</option>
+              {locations
+                .filter((l) => l.id !== transfer.toLocationId && l.active !== false)
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        )}
+        {code === 'BELONGS_TO_OTHER_TRANSFER' && (
+          <Field label={t('เป็นของเอกสารใบไหน')} required hint={t('เฉพาะใบที่ยังมีสินค้านี้ค้างระหว่างขนส่ง')}>
+            <Select value={related} onChange={(e) => setRelated(e.target.value)}>
+              <option value="">{t('— เลือก —')}</option>
+              {others.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.docNo}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field label={t('หมายเหตุการจัดการ')}>
-          <Textarea
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={t('ระบุบันทึกเพิ่มเติม')}
-          />
+          <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('ระบุบันทึกเพิ่มเติม')} />
         </Field>
-
-        <div className="flex justify-end gap-2 pt-2 border-t border-line">
+        <div className="flex justify-end gap-2 border-t border-line pt-3">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             {t('ยกเลิก')}
           </Button>
-          <Button onClick={handleResolve} disabled={busy}>
+          <Button onClick={save} disabled={busy || !ready}>
             <Icon name="check" size={16} />
             {busy ? t('กำลังบันทึก...') : t('ยืนยันการปรับยอด')}
           </Button>
@@ -981,29 +706,33 @@ function DiscrepancyModal({
   )
 }
 
-// ---------------------------------------------------------------- MisrouteModal
-function MisrouteModal({
+/** Redirect, forward or return goods found at the wrong branch. */
+function DecideMisroute({
   transfer,
   item,
   misrouteId,
-  actor,
+  siteName,
   onClose,
-  onSuccess,
+  onDone,
 }: {
   transfer: Transfer
   item: TransferItem
   misrouteId: string
-  actor: { id: string; name: string; role: Role; siteIds?: string[] }
+  siteName: (id: string) => string
   onClose: () => void
-  onSuccess: (updated: Transfer) => void
+  onDone: (t: Transfer) => void
 }) {
   const t = useT()
   const toast = useToast()
-  const [busy, setBusy] = useState(false)
+  const { user } = useAuth()
+  const m = item.misroutes!.find((x) => x.id === misrouteId)!
   const [action, setAction] = useState<'redirect' | 'forward' | 'return'>('forward')
+  const [replacement, setReplacement] = useState(false)
   const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  async function handleResolve() {
+  async function save() {
+    if (!user) return
     setBusy(true)
     try {
       const res = await resolveMisroute({
@@ -1012,10 +741,11 @@ function MisrouteModal({
         misrouteId,
         action,
         note: note.trim() || undefined,
-        actor,
+        createReplacement: action === 'redirect' && replacement,
+        actor: { id: user.id, name: user.name, role: user.role, siteIds: user.siteIds },
       })
       toast.success(t('จัดการส่งผิดสาขาเรียบร้อย'))
-      onSuccess(res.transfer)
+      onDone(res.transfer)
     } catch (e) {
       toast.error(errText(e, t))
     } finally {
@@ -1023,77 +753,42 @@ function MisrouteModal({
     }
   }
 
+  const options: { key: typeof action; label: string; hint: string }[] = [
+    { key: 'forward', label: t(MISROUTE_KEYS.forward), hint: t('สร้างสายส่ง {from} → {to} ไม่ตัดสต๊อกต้นทางซ้ำ', { from: siteName(m.actualCustodyLocationId), to: siteName(m.originalDestinationId) }) },
+    { key: 'return', label: t(MISROUTE_KEYS.return), hint: t('สร้างสายส่ง {from} → {to} ไม่ตัดสต๊อกต้นทางซ้ำ', { from: siteName(m.actualCustodyLocationId), to: siteName(transfer.fromLocationId) }) },
+    { key: 'redirect', label: t(MISROUTE_KEYS.redirect), hint: t('รับ {qty} {unit} เข้าสต๊อก {site} ทันที', { qty: fmtQty(m.qty), unit: item.unit, site: siteName(m.actualCustodyLocationId) }) },
+  ]
   return (
     <Modal open onClose={onClose} title={t('จัดการส่งผิดสาขา: {product}', { product: item.productName })}>
-      <div className="space-y-4 p-4 text-xs md:text-sm">
-        <Field label={t('การจัดการการขนส่ง')}>
-          <Select
-            value={action}
-            onChange={(e) => setAction(e.target.value as 'redirect' | 'forward' | 'return')}
-          >
-            <option value="forward">{t('ส่งต่อไปยังสาขาปลายทางจริง (สร้างสายส่งต่อ)')}</option>
-            <option value="return">{t('ส่งกลับไปยังคลังต้นทาง (สร้างสายส่งกลับ)')}</option>
-            <option value="redirect">{t('ให้สาขาที่ได้รับสินค้าเก็บไว้ใช้งาน (รับเข้าสต๊อก)')}</option>
-          </Select>
-        </Field>
-
+      <div className="space-y-3">
+        <p className="text-sm text-ink-soft">
+          {fmtQty(m.qty)} {item.unit} {t('อยู่ที่')} {siteName(m.actualCustodyLocationId)} ({t('ควรไป')} {siteName(m.originalDestinationId)})
+        </p>
+        {options.map((o) => (
+          <label key={o.key} className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${action === o.key ? 'border-brand bg-brand-soft' : 'border-line'}`}>
+            <input type="radio" name="misroute" className="mt-1" checked={action === o.key} onChange={() => setAction(o.key)} />
+            <span>
+              <span className="block font-medium">{o.label}</span>
+              <span className="block text-xs text-ink-soft">{o.hint}</span>
+            </span>
+          </label>
+        ))}
+        {action === 'redirect' && (
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input type="checkbox" className="h-5 w-5" checked={replacement} onChange={(e) => setReplacement(e.target.checked)} />
+            {t('สร้างร่างคำขอส่งทดแทนให้ {site}', { site: siteName(m.originalDestinationId) })}
+          </label>
+        )}
         <Field label={t('หมายเหตุ')}>
-          <Textarea
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={t('ระบุบันทึกเพิ่มเติม')}
-          />
+          <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('ระบุบันทึกเพิ่มเติม')} />
         </Field>
-
-        <div className="flex justify-end gap-2 pt-2 border-t border-line">
+        <div className="flex justify-end gap-2 border-t border-line pt-3">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             {t('ยกเลิก')}
           </Button>
-          <Button onClick={handleResolve} disabled={busy}>
+          <Button onClick={save} disabled={busy}>
             <Icon name="check" size={16} />
             {busy ? t('กำลังบันทึก...') : t('ยืนยัน')}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ---------------------------------------------------------------- CancelModal
-function CancelModal({
-  onClose,
-  onSubmit,
-  busy,
-}: {
-  onClose: () => void
-  onSubmit: (reason: string) => void
-  busy: boolean
-}) {
-  const t = useT()
-  const [reason, setReason] = useState('')
-
-  return (
-    <Modal open onClose={onClose} title={t('ยกเลิกคำขอโอนสินค้า')}>
-      <div className="space-y-4 p-4 text-xs md:text-sm">
-        <Field label={t('เหตุผลในการยกเลิก')} required>
-          <Textarea
-            rows={3}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={t('ระบุเหตุผลในการยกเลิกเอกสารนี้')}
-          />
-        </Field>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} disabled={busy}>
-            {t('ย้อนกลับ')}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => onSubmit(reason)}
-            disabled={busy || !reason.trim()}
-          >
-            {t('ยืนยันการยกเลิก')}
           </Button>
         </div>
       </div>
