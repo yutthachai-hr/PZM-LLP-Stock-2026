@@ -93,7 +93,15 @@ export function ReceivePage() {
 
   // Half-keyed receipts survive leaving the screen (lib/useDraft.ts), whichever version of
   // this screen saved them (receive/receipt.ts). The photo never does.
-  const { restored, clear: clearDraft } = useDraft('receive', d, (saved) => setD(restoreReceipt(saved)), draftIsEmpty)
+  // A link to one order (?po=) outranks a draft of another: the draft can be restored after
+  // the link was read (StrictMode re-runs effects; the brand or the person can resolve
+  // late), so the link is held here and laid over whatever comes back.
+  const linkRef = useRef<string | null>(null)
+  const withLink = useCallback((r: ReceiptDraft): ReceiptDraft => {
+    const id = linkRef.current
+    return id ? { ...r, mode: 'po', poId: id, entries: r.poId === id ? r.entries : {} } : r
+  }, [])
+  const { restored, clear: clearDraft } = useDraft('receive', d, (saved) => setD(withLink(restoreReceipt(saved))), draftIsEmpty)
 
   // Orders waiting for goods: asked for when the screen opens and after each receipt —
   // one read per open order, no listener.
@@ -110,19 +118,18 @@ export function ReceivePage() {
 
   // /receive?po=<id> — from the Orders page or the calendar: that order, ready to check in.
   const linked = params.get('po')
-  const linkRef = useRef<string | null>(null)
   useEffect(() => {
     if (!linked || linkRef.current === linked) return
     linkRef.current = linked
     setDone(null)
-    setD((cur) => ({ ...cur, mode: 'po', poId: linked, entries: cur.poId === linked ? cur.entries : {} }))
+    setD(withLink)
     // Placed after the list was read (the screen was already open): read it again. On
     // arrival the list is still loading, and that read already includes it.
     if (orders && !orders.some((o) => o.id === linked)) loadOrders()
     const next = new URLSearchParams(params)
     next.delete('po')
     setParams(next, { replace: true })
-  }, [linked, params, setParams, loadOrders, orders])
+  }, [linked, params, setParams, loadOrders, orders, withLink])
 
   useEffect(() => {
     if (!d.toLocationId && defaultWh) patch({ toLocationId: defaultWh.id })
@@ -257,6 +264,7 @@ export function ReceivePage() {
         setDone({ docNo, facts, exceptions: 0 })
       }
       // Filed: the form empties at once, so pressing anything again cannot file it twice.
+      linkRef.current = null
       setReviewing(false)
       setTried(false)
       setPhoto(null)
@@ -288,6 +296,7 @@ export function ReceivePage() {
 
   function setMode(mode: Mode) {
     if (mode === d.mode) return
+    linkRef.current = null
     setDone(null)
     setTried(false)
     setDup(null)
@@ -304,6 +313,7 @@ export function ReceivePage() {
   }
 
   function discardDraft() {
+    linkRef.current = null
     setD({ ...emptyDraft(), toLocationId: d.toLocationId, dateStr: msToDateInput(todayMs()) })
     setPhoto(null)
     clearDraft()
@@ -367,10 +377,14 @@ export function ReceivePage() {
                 selected={order}
                 missing={orderMissing}
                 onPick={(o) => {
+                  linkRef.current = null
                   setTried(false)
                   patch({ poId: o.id, entries: {} })
                 }}
-                onClear={() => patch({ poId: '', entries: {} })}
+                onClear={() => {
+                  linkRef.current = null
+                  patch({ poId: '', entries: {} })
+                }}
                 focusSearch={focusPicker}
               />
               {order && (
