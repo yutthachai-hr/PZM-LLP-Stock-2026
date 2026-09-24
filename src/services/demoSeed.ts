@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { ensureTransitLocation } from './transfers'
 import { BRANDS, getBrand, setActiveBrand, type BrandId } from '../brand/brand'
 import { isDemoMode } from '../firebase/config'
 import { AppError } from '../i18n/AppError'
@@ -82,6 +83,8 @@ export async function resetDemoData(): Promise<DemoSeedResult> {
       result.locations += seeded.locations
       await renameToThai(brand.id)
       result.suppliers += await seedSuppliers()
+      // Logistics switched on, so a showing can approve a transfer without a trip to Settings.
+      await ensureTransitLocation(brand.id)
     }
   } finally {
     setActiveBrand(was)

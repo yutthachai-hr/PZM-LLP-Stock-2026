@@ -49,7 +49,9 @@ import {
   parseConfigInput,
   saveFirebaseConfig,
 } from '../firebase/config'
-import type { LocationType, StockLocation, Role } from '../types'
+import type { AppUser, LocationType, StockLocation, Role } from '../types'
+import { CompanyProfileSection } from './settings/CompanyProfileSection'
+import { LogisticsSection } from './settings/LogisticsSection'
 import { DataTable } from '../components/DataTable'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
@@ -82,6 +84,8 @@ type SectionKey =
   | 'maintenance'
   | 'unitMigration'
   | 'rebaseUnit'
+  | 'company'
+  | 'logistics'
 
 interface MenuItem {
   key: SectionKey
@@ -137,12 +141,14 @@ export function SettingsPage() {
           { key: 'locations', label: t('คลัง / สาขา'), hint: t('เพิ่ม แก้ชื่อ หรือปิดใช้คลังและสาขา'), icon: 'building', show: isAdmin },
           { key: 'units', label: t('หน่วยที่เลือกได้ตอนกรอก'), hint: t('Lot, Pack, Carton ที่ให้เลือกตอนคีย์จำนวน'), icon: 'package', show: isAdmin },
           { key: 'thresholds', label: t('เกณฑ์แจ้งเตือนคลัง'), hint: t('เมื่อไรถือว่าใกล้หมดหรือค้างนาน'), icon: 'warning', show: isAdmin },
+          { key: 'logistics', label: t('ระบบส่งสินค้า'), hint: t('เปิดใช้คลังระหว่างขนส่งของแต่ละบริษัท'), icon: 'truck', show: isAdmin },
           { key: 'schedules', label: t('ตารางนับสต๊อก'), hint: t('รอบนับสต๊อกที่ขึ้นในปฏิทิน'), icon: 'calendar', show: isAdmin },
         ],
       },
       {
         title: t('ผู้ใช้และระบบ'),
         items: [
+          { key: 'company', label: t('ข้อมูลบริษัท'), hint: t('โลโก้และตัวย่อเลขเอกสารที่ใช้ในประกาศบริษัท'), icon: 'building', show: isAdmin },
           { key: 'users', label: t('ผู้ใช้งาน'), hint: t('เพิ่มผู้ใช้ กำหนดสิทธิ์ ปิดการเข้าใช้'), icon: 'users', show: isAdmin },
           { key: 'automation', label: t('งานอัตโนมัติ'), hint: t('งานที่ระบบทำเองตามเวลา'), icon: 'clock', show: isManager },
           { key: 'readUsage', label: t('การอ่านข้อมูล (โควตา)'), hint: t('แอปอ่านไปกี่รายการแล้ว และคอลเลกชันไหนมากที่สุด'), icon: 'cloud', show: isAdmin },
@@ -197,6 +203,10 @@ export function SettingsPage() {
         return actor && <UnitMigrationSection actor={actor} />
       case 'rebaseUnit':
         return actor && <RebaseUnitSection actor={actor} />
+      case 'company':
+        return <CompanyProfileSection />
+      case 'logistics':
+        return <LogisticsSection />
     }
   }
 
@@ -783,7 +793,8 @@ function LocationEditor({
 // ---------------- Users ----------------
 function UsersSection({ currentUserId }: { currentUserId: string }) {
   const t = useT()
-  const { users } = useData()
+  const { users, locations } = useData()
+  const [sitesFor, setSitesFor] = useState<string | null>(null)
   // Removed accounts, so a mistaken removal is undoable. Nothing lets them back in on
   // their own — an admin has to lift it here first.
   const [revoked, setRevoked] = useState<RevokedUser[]>([])
@@ -808,6 +819,21 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
   async function setRole(id: string, role: Role) {
     try {
       await updateUserProfile(id, { role })
+    } catch (e) {
+      toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
+    }
+  }
+  /**
+   * Which sites someone works at (24 Sep 2026): what they may send from and receive at in
+   * ระบบส่งสินค้า. None = every site (owner's rule). Users are shared by both companies, so
+   * the other company's sites are kept as they are.
+   */
+  async function setSites(u: AppUser, chosen: string[]) {
+    const here = new Set(locations.map((l) => l.id))
+    const kept = (u.siteIds ?? []).filter((id) => !here.has(id))
+    try {
+      await updateUserProfile(u.id, { siteIds: [...kept, ...chosen] })
+      setSitesFor(null)
     } catch (e) {
       toast.error(t("บันทึกไม่สำเร็จ:") + ' ' + errText(e, t))
     }
@@ -863,7 +889,16 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
                 )}
               </div>
               <div className="text-xs text-ink-faint">{u.email}</div>
+              <div className="text-xs text-ink-soft">
+                {t('สาขา')}:{' '}
+                {(u.siteIds ?? []).filter((id) => locations.some((l) => l.id === id)).length === 0
+                  ? t('ทุกสาขา')
+                  : locations.filter((l) => u.siteIds?.includes(l.id)).map((l) => l.name).join(', ')}
+              </div>
             </div>
+            <button onClick={() => setSitesFor(sitesFor === u.id ? null : u.id)} className={`${rowAction} text-ink-soft hover:bg-sunken`}>
+              {t('กำหนดสาขา')}
+            </button>
             <Select
               value={u.role}
               onChange={(e) => setRole(u.id, e.target.value as Role)}
@@ -898,6 +933,7 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
                 {t("ลบ")}
               </button>
             )}
+            {sitesFor === u.id && <SitesPicker user={u} locations={locations} onSave={(ids) => setSites(u, ids)} onCancel={() => setSitesFor(null)} />}
           </div>
         ))}
       </div>
@@ -932,6 +968,50 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
         />
       )}
     </Card>
+  )
+}
+
+/** Tick the sites someone works at; none ticked = every site. */
+function SitesPicker({
+  user,
+  locations,
+  onSave,
+  onCancel,
+}: {
+  user: AppUser
+  locations: StockLocation[]
+  onSave: (ids: string[]) => void
+  onCancel: () => void
+}) {
+  const t = useT()
+  const [chosen, setChosen] = useState<string[]>(() => locations.filter((l) => user.siteIds?.includes(l.id)).map((l) => l.id))
+  return (
+    <div className="w-full rounded-lg bg-sunken p-3">
+      <p className="mb-2 text-xs text-ink-soft">{t('ไม่ติ๊กเลย = ทำรายการได้ทุกสาขา')}</p>
+      <div className="flex flex-wrap gap-3">
+        {locations
+          .filter((l) => l.active !== false)
+          .map((l) => (
+            <label key={l.id} className="inline-flex min-h-11 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-5 w-5"
+                checked={chosen.includes(l.id)}
+                onChange={(e) => setChosen(e.target.checked ? [...chosen, l.id] : chosen.filter((x) => x !== l.id))}
+              />
+              {l.name}
+            </label>
+          ))}
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          {t('ยกเลิก')}
+        </Button>
+        <Button size="sm" onClick={() => onSave(chosen)}>
+          {t('บันทึก')}
+        </Button>
+      </div>
+    </div>
   )
 }
 

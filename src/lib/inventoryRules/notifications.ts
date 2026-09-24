@@ -11,6 +11,7 @@ import type {
   Role,
   StockEvent,
   Supplier,
+  Transfer,
 } from '../../types'
 import type { Insights } from './insights'
 import { deliveryState, daysLate, cutoffInstants } from './purchasing'
@@ -57,6 +58,9 @@ export const CATEGORY: Record<NotificationKind, NotificationCategory> = {
   poArriving: 'purchasing',
   poDelayed: 'purchasing',
   cutoffToday: 'supplier',
+  transferSubmitted: 'inventory',
+  transferArriving: 'inventory',
+  transferIssue: 'inventory',
   lowStock: 'inventory',
   outOfStock: 'inventory',
   stockoutSoon: 'inventory',
@@ -316,6 +320,67 @@ export function adjustmentDraft(
     link: `/movements?product=${m.productId}${locationId ? `&location=${locationId}` : ''}`,
     locationId,
     productId: m.productId,
+  }
+}
+
+export function transferSubmittedDraft(
+  t: Transfer,
+  locationName: (id: string | undefined) => string,
+): NotificationDraft {
+  return {
+    id: `transferSubmitted__${t.id}__${t.submittedAt ?? t.createdAt}`,
+    kind: 'transferSubmitted',
+    priority: 'medium',
+    to: { roles: MANAGERS },
+    params: {
+      docNo: t.docNo,
+      by: t.requestedByName,
+      from: locationName(t.fromLocationId),
+      to: locationName(t.toLocationId),
+      n: t.items.filter((i) => !i.removed).length,
+    },
+    link: `/logistics/${t.id}`,
+    locationId: t.fromLocationId,
+  }
+}
+
+export function transferArrivingDraft(
+  t: Transfer,
+  locationName: (id: string | undefined) => string,
+): NotificationDraft {
+  return {
+    id: `transferArriving__${t.id}__${t.approvedAt ?? Date.now()}`,
+    kind: 'transferArriving',
+    priority: 'high',
+    to: { all: true },
+    params: {
+      docNo: t.docNo,
+      from: locationName(t.fromLocationId),
+      to: locationName(t.toLocationId),
+      n: t.items.filter((i) => !i.removed).length,
+    },
+    link: `/logistics/${t.id}`,
+    locationId: t.toLocationId,
+  }
+}
+
+export function transferIssueDraft(
+  t: Transfer,
+  locationName: (id: string | undefined) => string,
+  reportedBy: string,
+): NotificationDraft {
+  return {
+    id: `transferIssue__${t.id}__${Date.now()}`,
+    kind: 'transferIssue',
+    priority: 'high',
+    to: { roles: MANAGERS },
+    params: {
+      docNo: t.docNo,
+      by: reportedBy,
+      to: locationName(t.toLocationId),
+    },
+    link: `/logistics/${t.id}`,
+    locationId: t.toLocationId,
   }
 }
 

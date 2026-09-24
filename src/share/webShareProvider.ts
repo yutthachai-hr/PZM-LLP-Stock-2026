@@ -20,6 +20,21 @@ export const webShareProvider: PurchaseShareProvider = {
 
   async share(payload: SharePayload): Promise<ShareOutcome> {
     const { file } = payload
+    if (!file) {
+      // Text alone (an announcement in TEXT form): the share sheet takes text too; where
+      // there is none, the clipboard is the hand-over and the person pastes it into LINE.
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ text: payload.caption })
+          return 'shareOpened'
+        } catch (e) {
+          if ((e as { name?: string }).name === 'AbortError') return 'cancelled'
+          throw e
+        }
+      }
+      await navigator.clipboard.writeText(payload.caption)
+      return 'shareOpened'
+    }
     if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: payload.caption, text: payload.caption })

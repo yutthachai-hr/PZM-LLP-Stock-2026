@@ -16,6 +16,8 @@ export interface AppUser {
   localPassword?: string
   /** When this person last opened the message board — the unread badge counts from here. */
   messagesReadAt?: number
+  /** Assigned locations/sites. Empty or undefined = can access all branches/sites. */
+  siteIds?: string[]
   createdAt: number
 }
 
@@ -112,7 +114,9 @@ export interface ProductImage {
   dataUrl: string // compressed base64 JPEG
 }
 
-export type LocationType = 'warehouse' | 'branch'
+export type LocationType = 'warehouse' | 'branch' | 'transit'
+
+export const TRANSIT_LOCATION_ID = 'transit'
 
 export interface StockLocation {
   id: string
@@ -215,6 +219,8 @@ export interface StockMovement {
    */
   edits?: MovementEdit[]
   voided?: boolean
+  /** When this movement came from a branch transfer (transfers/{id}). */
+  transferId?: string
 }
 
 /** One entry in a movement's edit history. */
@@ -710,6 +716,9 @@ export type NotificationKind =
   | 'poArriving' // goods due today
   | 'poDelayed' // goods late
   | 'cutoffToday' // a supplier's order cut-off is today
+  | 'transferSubmitted' // a branch transfer waiting for approval
+  | 'transferArriving' // stock in transit arriving today
+  | 'transferIssue' // transfer discrepancy or misroute reported
   | 'lowStock'
   | 'outOfStock'
   | 'stockoutSoon' // at the current rate of use, gone before the next delivery could land
@@ -1023,6 +1032,199 @@ export interface PurchaseRequest {
   updatedAt: number
 }
 
+// ---------------------------------------------------------------- transfers ----
+
+export type TransferStatus =
+  | 'draft'
+  | 'pendingApproval'
+  | 'returned'
+  | 'rejected'
+  | 'inTransit'
+  | 'receiving'
+  | 'completed'
+  | 'discrepancy'
+  | 'pendingDiscrepancyApproval'
+  | 'resolved'
+  | 'cancelled'
+
+export type TransferLegKind = 'forward' | 'return' | 'replacement'
+
+export type DiscrepancyKind = 'short' | 'over'
+
+export type DiscrepancyReason =
+  | 'SHORT'
+  | 'OVER'
+  | 'WEIGHT_VARIANCE'
+  | 'DAMAGED'
+  | 'WRONG_ITEM'
+  | 'WRONG_BRANCH'
+  | 'COUNTING_ERROR'
+  | 'OTHER'
+
+export type DiscrepancyResolutionCode =
+  | 'NOT_ACTUALLY_LOADED' // short: transit -> source
+  | 'TRANSIT_LOSS'        // short: adjust out from transit (reason: lost)
+  | 'DAMAGED'             // short: adjust out from transit (reason: damage)
+  | 'WEIGHING_ERROR'      // short: correct received qty, transit -> dest for the rest
+  | 'WRONG_BRANCH'        // short: handled via misroute flow
+  | 'DISPATCH_WRONG'      // over: set correctedDispatchQty, source -> transit -> dest
+  | 'COUNT_ERROR'         // over: no movement, correct received qty
+  | 'APPROVED_ADJUSTMENT' // over: adjust in at dest (reason: found)
+  | 'BELONGS_TO_OTHER_TRANSFER' // over: link to another transfer misroute
+
+/** Which resolutions answer a shortage and which an overage — never the other kind. */
+export const SHORT_RESOLUTIONS: readonly DiscrepancyResolutionCode[] = [
+  'NOT_ACTUALLY_LOADED',
+  'TRANSIT_LOSS',
+  'DAMAGED',
+  'WEIGHING_ERROR',
+  'WRONG_BRANCH',
+]
+export const OVER_RESOLUTIONS: readonly DiscrepancyResolutionCode[] = [
+  'DISPATCH_WRONG',
+  'COUNT_ERROR',
+  'APPROVED_ADJUSTMENT',
+  'BELONGS_TO_OTHER_TRANSFER',
+]
+
+export interface TransferDiscrepancyResolution {
+  code: DiscrepancyResolutionCode
+  qty: number
+  by: string
+  byName: string
+  at: number
+  note?: string
+  movementDocNo?: string
+  childId?: string
+  /** WRONG_BRANCH: the misroute record the shortage became. */
+  misrouteId?: string
+  /** BELONGS_TO_OTHER_TRANSFER: the document the extra goods belonged to. */
+  relatedTransferId?: string
+}
+
+export interface TransferDiscrepancy {
+  kind: DiscrepancyKind
+  qty: number
+  reason: DiscrepancyReason
+  note?: string
+  photoId?: string
+  reportedBy: string
+  reportedByName: string
+  reportedAt: number
+  resolution?: TransferDiscrepancyResolution
+}
+
+export interface TransferMisroute {
+  id: string
+  actualCustodyLocationId: string
+  originalDestinationId: string
+  qty: number
+  reportedBy: string
+  reportedByName: string
+  reportedAt: number
+  note?: string
+  resolution?: {
+    action: 'redirect' | 'forward' | 'return'
+    by: string
+    byName: string
+    at: number
+    note?: string
+    /** The forward/return leg that now carries the goods. */
+    childTransferId?: string
+    /** A redirect's make-good for the original destination, created as a draft. */
+    replacementTransferId?: string
+    movementDocNo?: string
+  }
+}
+
+export interface TransferItem {
+  idx: number
+  productId: string
+  productName: string
+  sku: string
+  unit: string
+  requestedEntryUnit?: string
+  requestedEntryQty?: number
+  requestedQty: number | null
+  dispatchEntryUnit?: string
+  dispatchEntryQty?: number
+  dispatchQty: number
+  receivedEntryUnit?: string
+  receivedEntryQty?: number
+  receivedQty?: number
+  /**
+   * What the manager ruled was really received (a weighing or counting error). The
+   * receiver's own `receivedQty` is kept beside it, never overwritten.
+   */
+  correctedReceivedQty?: number
+  correctedDispatchQty?: number
+  /**
+   * How much of this line is still sitting in the transit location on this document's
+   * account, in the product's own unit. Set at approval; every movement out of transit for
+   * this line, and every hand-over to a forward/return leg, takes from it. The sum over all
+   * open documents is what the transit balance should be — the tests hold it to that.
+   */
+  inTransitQty?: number
+  stockAtSubmit?: number
+  stockAtApprove?: number
+  removed?: {
+    by: string
+    byName: string
+    at: number
+    reason: string
+  }
+  discrepancy?: TransferDiscrepancy
+  misroutes?: TransferMisroute[]
+}
+
+export interface TransferHistoryEntry {
+  at: number
+  by: string
+  byName: string
+  action: string
+  note?: string
+  fromStatus?: TransferStatus
+  toStatus?: TransferStatus
+  oldQty?: number
+  newQty?: number
+  reason?: string
+  diff?: Record<string, unknown>
+}
+
+export interface Transfer {
+  id: string
+  docNo: string
+  status: TransferStatus
+  revision: number
+  fromLocationId: string
+  toLocationId: string
+  dispatchDate: number
+  note?: string
+  parentId?: string
+  legKind?: TransferLegKind
+  childIds?: string[]
+  requestedBy: string
+  requestedByName: string
+  submittedAt?: number
+  approvedBy?: string
+  approvedByName?: string
+  approvedAt?: number
+  receivedBy?: string
+  receivedByName?: string
+  receivedAt?: number
+  dispatchMovementDocNo?: string
+  receiveMovementDocNo?: string
+  returnReason?: string
+  rejectReason?: string
+  cancelReason?: string
+  cancelledBy?: string
+  cancelledAt?: number
+  items: TransferItem[]
+  history: TransferHistoryEntry[]
+  createdAt: number
+  updatedAt: number
+}
+
 export const COL = {
   users: 'users',
   messages: 'messages',
@@ -1043,7 +1245,10 @@ export const COL = {
   purchaseOrders: 'purchaseOrders',
   purchaseBatches: 'purchaseBatches',
   purchaseRequests: 'purchaseRequests',
+  transfers: 'transfers',
   productAliases: 'productAliases',
+  announcements: 'announcements',
+  companyProfile: 'companyProfile',
   meta: 'meta',
   revokedUsers: 'revokedUsers',
 } as const
@@ -1070,6 +1275,129 @@ export const MESSAGE_MAX = 1000
 
 /** How long messages are kept (owner, 22 Sep 2026). The cron Worker removes older ones. */
 export const MESSAGE_DAYS = 90
+
+// ---------- Company announcements (24 Sep 2026) ----------
+
+/**
+ * Which company a record belongs to — the same values as brand/brand.ts's BrandId. Spelled
+ * out here rather than imported because this file is also compiled into the cron Worker,
+ * which has no browser, and brand.ts reads localStorage.
+ */
+type BrandId = 'pizza' | 'lelapin'
+
+/**
+ * The company as its documents present it, one per brand (`companyProfile/main`).
+ *
+ * The die-cut logo lives here, not in the code: a template that reads it from data is a
+ * template the owner can re-skin by uploading a file. `docPrefix` starts a document
+ * number ("PZM-ANN-2569-0001") and defaults to the brand's workbook key.
+ */
+export interface CompanyProfile {
+  id: string
+  docPrefix: string
+  announcementCode: string
+  /** The name printed on documents; the brand's name when unset. */
+  displayName?: string
+  nameEn?: string
+  /** PNG (transparency kept) or JPEG as a data URL, shrunk in the browser. */
+  logoDataUrl?: string
+  /** Bumped whenever the logo changes, so a published announcement records which one it used. */
+  logoVersion?: number
+  updatedBy?: string
+  updatedAt?: number
+}
+
+export type AnnouncementStatus = 'draft' | 'ready' | 'published' | 'partiallySent' | 'sent' | 'cancelled'
+export type AnnouncementFormat = 'text' | 'a5'
+/**
+ * How an announcement reaches LINE. `personal` is the person's own LINE through LIFF's
+ * share picker — they choose the groups in LINE's own screen, so the app never learns
+ * which. `auto` (a LINE Official Account pushing to registered groups) is designed in
+ * docs/PLAN-announcements.md and not built: the owner has no OA yet (24 Sep 2026).
+ */
+export type AnnouncementSendMode = 'personal' | 'auto'
+export type AnnouncementSendOutcome = 'sent' | 'shareOpened' | 'failed'
+
+export interface AnnouncementTarget {
+  mode: AnnouncementSendMode
+  /** Whose suppliers this is meant for: one company's, or both. */
+  companyScope: BrandId[]
+}
+
+/** What went out: frozen when the number is issued, never edited afterwards. */
+export interface AnnouncementSnapshot {
+  subject: string
+  body: string
+  text: string
+  companyName: string
+  logoVersion: number
+  layoutVersion: number
+}
+
+export interface AnnouncementFiles {
+  pdfUrl: string
+  imageUrl: string
+  previewUrl: string
+  pdfBytes: number
+  createdAt: number
+}
+
+export interface AnnouncementSend {
+  at: number
+  by: string
+  byName: string
+  mode: AnnouncementSendMode
+  outcome: AnnouncementSendOutcome
+  /**
+   * Who says so: LINE itself (`liff` resolved success), or the person, after the phone's
+   * share sheet — which reports only that it opened (`confirmed`).
+   */
+  via: 'liff' | 'shareSheet' | 'confirmed' | 'oa'
+  /** Only an Official Account knows which group it sent to. */
+  groupId?: string
+  groupName?: string
+  error?: string
+}
+
+export interface AnnouncementHistoryEntry {
+  at: number
+  by: string
+  byName: string
+  action: string
+  detail?: string
+}
+
+export interface Announcement {
+  id: string
+  /** Issued when published, never for a draft. */
+  docNo?: string
+  status: AnnouncementStatus
+  company: BrandId
+  announcementDate: number
+  subject: string
+  body: string
+  format: AnnouncementFormat
+  target: AnnouncementTarget
+  /** Whoever wrote it, from their profile — not typed. */
+  publisherId: string
+  publisherName: string
+  publishedAt?: number
+  publishedBy?: string
+  snapshot?: AnnouncementSnapshot
+  files?: AnnouncementFiles
+  sends: AnnouncementSend[]
+  cancelReason?: string
+  cancelledBy?: string
+  cancelledAt?: number
+  history: AnnouncementHistoryEntry[]
+  createdBy: string
+  createdByName: string
+  createdAt: number
+  updatedAt: number
+}
+
+export const ANNOUNCEMENT_SUBJECT_MAX = 200
+export const ANNOUNCEMENT_BODY_MAX = 3000
 
 // Labels are translation keys — screens render them through t(). i18n-key
 export const ADJUST_REASONS = [

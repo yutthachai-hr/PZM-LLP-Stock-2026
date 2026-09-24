@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { SiteSelect } from '../components/SiteChip'
-import { useData, useLedgerWindow } from '../data/DataContext'
+import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -64,8 +64,7 @@ export function ProductsPage() {
   const t = useT()
   const navigate = useNavigate()
   const { products, locations, qtyAt, qtyByUnit, minFor, tracksProduct, levels, movements, movementsFrom, loading } = useData()
-  // The stock-value figure is "against a month ago", so a month of ledger is asked for.
-  useLedgerWindow()
+  // ponytail: 7-day lookback fits inside RECENT_DAYS without widening global subscription.
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast()
@@ -158,7 +157,7 @@ export function ProductsPage() {
   const valueBefore = useMemo(() => {
     const costs = new Map(products.map((p) => [p.id, p.cost ?? 0]))
     const scope = locId ? new Set([locId]) : undefined
-    return valueAsOf(value, movements, Date.now() - 30 * DAY_MS, movementsFrom, (id) => costs.get(id) ?? 0, scope)
+    return valueAsOf(value, movements, Date.now() - 7 * DAY_MS, movementsFrom, (id) => costs.get(id) ?? 0, scope)
   }, [value, products, movements, movementsFrom, locId])
 
   const filtered = useMemo(() => {

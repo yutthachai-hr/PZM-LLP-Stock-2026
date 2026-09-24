@@ -1,5 +1,5 @@
 import { AppError } from '../i18n/AppError'
-import { handedOverToLine, isStandalone, liffUrl, rememberHandOver, resumeUrl } from './liffResume'
+import { ANNOUNCE_PARAM, RESUME_PARAM, handedOverToLine, isStandalone, liffUrl, rememberHandOver, resumeUrl } from './liffResume'
 import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './PurchaseShareProvider'
 
 /**
@@ -105,6 +105,8 @@ export const lineLiffProvider: PurchaseShareProvider = {
 
   async share(payload: SharePayload): Promise<ShareOutcome> {
     const sdk = await liff()
+    const { id } = payload.subject
+    const param = payload.subject.kind === 'announcement' ? ANNOUNCE_PARAM : RESUME_PARAM
     if (!sdk.isLoggedIn()) {
       // A home-screen app cannot finish a login round trip (the browser it comes back in
       // is not the app), so the same page is opened inside LINE, where LIFF is signed in
@@ -115,30 +117,35 @@ export const lineLiffProvider: PurchaseShareProvider = {
       // was already on, so every tap reloaded and nothing was ever sent (owner's recording,
       // 23 Sep 2026). Inside LINE, and on the way back from a hand-over that did not take,
       // LINE Login is the way forward: it works in any webview that keeps cookies.
-      if (!sdk.isInClient() && isStandalone() && !handedOverToLine(payload.order.id)) {
-        rememberHandOver(payload.order.id)
-        location.href = liffUrl(payload.order.id)
+      if (!sdk.isInClient() && isStandalone() && !handedOverToLine(id)) {
+        rememberHandOver(id)
+        location.href = liffUrl(id, param)
         return 'cancelled'
       }
       // Off to LINE Login and back to this very page with ?send=<order>, which reopens the
       // wizard on that order (share/liffResume.ts) — the tap is not lost across the trip.
-      sdk.login({ redirectUri: resumeUrl(payload.order.id) })
+      sdk.login({ redirectUri: resumeUrl(id, param) })
       return 'cancelled'
     }
     if (!sdk.isApiAvailable('shareTargetPicker')) {
       throw new AppError('LINE รุ่นนี้หรือการตั้งค่า LIFF ยังไม่รองรับการเลือกผู้รับ')
     }
-    if (!payload.hosted) throw new AppError('ยังไม่มีรูปสำหรับส่ง')
+    if (payload.file && !payload.hosted) throw new AppError('ยังไม่มีรูปสำหรับส่ง')
     // The caption first, then the picture — what the supplier sees is the same as when
     // the sheet is shared from a phone, where the share sheet carries the title itself.
+    // A text-only announcement is the caption alone.
     const result = await sdk.shareTargetPicker(
       [
         { type: 'text', text: payload.caption },
-        {
-          type: 'image',
-          originalContentUrl: payload.hosted.url,
-          previewImageUrl: payload.hosted.previewUrl,
-        },
+        ...(payload.hosted
+          ? [
+              {
+                type: 'image' as const,
+                originalContentUrl: payload.hosted.url,
+                previewImageUrl: payload.hosted.previewUrl,
+              },
+            ]
+          : []),
       ],
       { isMultiple: true },
     )

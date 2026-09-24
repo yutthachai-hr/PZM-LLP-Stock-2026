@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { useData, useLedgerWindow, QUARTER_DAYS } from '../data/DataContext'
+import { useData } from '../data/DataContext'
+import { windowStart } from '../data/ledgerWindow'
+import { movementCache } from '../data/movementCache'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -18,7 +20,7 @@ import {
 } from '../components/ui'
 import { FramePage, PageHero } from '../components/frame'
 import { DataTable, type Column } from '../components/DataTable'
-import { voidMovement, getMovementImage } from '../services/stock'
+import { voidMovement, getMovementImage, readProductLedger } from '../services/stock'
 import { EditMovementModal } from '../components/movements/EditMovementModal'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
@@ -32,10 +34,9 @@ import { movementNote } from '../lib/receiptLabel'
 
 export function MovementsPage() {
   const t = useT()
-  const { movements, locations, products, productById, ensureMovementsFrom } = useData()
-  // This screen IS the history: a month of it, whatever the app loads on start-up. Older
-  // than that is one click away (LedgerWindowNotice).
-  useLedgerWindow(QUARTER_DAYS)
+  const { movements: liveMovements, locations, products, productById, movementsFrom } = useData()
+  const [history, setHistory] = useState<StockMovement[]>([])
+  const [historyFrom, setHistoryFrom] = useState<number | null>(null)
   const { user } = useAuth()
   const toast = useToast() // i18n-key
   const confirm = useConfirm()
@@ -65,13 +66,58 @@ export function MovementsPage() {
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
 
-  // Picking a date before the loaded window would silently show nothing, so widen it.
-  // Clearing the date does NOT widen: that is the default state, and loading the whole
-  // ledger on every visit is the cost this window exists to avoid. The banner below
-  // says what is loaded and offers to fetch the rest.
+  // Single-product history is read on demand without widening the global listener.
   useEffect(() => {
-    if (fromStr) ensureMovementsFrom(dateInputToMs(fromStr))
-  }, [fromStr, ensureMovementsFrom])
+    let alive = true
+    if (productId) {
+      readProductLedger(productId)
+        .then((rows) => alive && setHistory(rows))
+        .catch(() => {})
+    } else {
+      setHistory([])
+      setHistoryFrom(null)
+    }
+    return () => {
+      alive = false
+    }
+  }, [productId])
+
+  // Custom date ranges reaching beyond the live window are fetched on demand.
+  useEffect(() => {
+    if (productId || !fromStr) return
+    const from = dateInputToMs(fromStr)
+    const currentWindow = historyFrom ?? movementsFrom
+    if (from >= currentWindow) return
+    let alive = true
+    const to = toStr ? dateInputToMs(toStr) + 86400000 : Date.now()
+    movementCache
+      .fetchRange(from, to)
+      .then((rows) => {
+        if (!alive) return
+        setHistory(rows)
+        setHistoryFrom(from)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [productId, fromStr, toStr, historyFrom, movementsFrom])
+
+  const loadHistory = useCallback(async (days = 0) => {
+    const from = days === 0 ? 0 : windowStart(days)
+    const rows = await movementCache.fetchRange(from, Date.now())
+    setHistory(rows)
+    setHistoryFrom(from)
+  }, [])
+
+  // ponytail: merges on-demand history with recent live window; add streaming pagination if history grows beyond thousands.
+  const movements = useMemo(() => {
+    if (history.length === 0) return liveMovements
+    const map = new Map<string, StockMovement>()
+    for (const m of history) map.set(m.id, m)
+    for (const m of liveMovements) map.set(m.id, m)
+    return [...map.values()]
+  }, [history, liveMovements])
   const [editing, setEditing] = useState<StockMovement | null>(null)
   const [photoDoc, setPhotoDoc] = useState<string | null>(null)
 
@@ -343,7 +389,10 @@ export function MovementsPage() {
         )}
       </Card>
 
-      <LedgerWindowNotice />
+      <LedgerWindowNotice
+        from={historyFrom ?? movementsFrom}
+        onLoadOlder={() => loadHistory(0)}
+      />
 
       {docFilter && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand/20 bg-brand-soft px-4 py-2.5 text-sm text-brand">

@@ -94,6 +94,7 @@ const paths = {
   grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
   list: 'M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13',
   message: 'M7.9 20A9 9 0 1 0 4 16.1L2 22z',
+  megaphone: 'm3 11 18-5v12L3 14v-3zM11.6 16.8a3 3 0 1 1-5.8-1.6',
   xCircle: 'M15 9l-6 6M9 9l6 6',
   rotateCcw: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5',
   trendUp: 'M16 7h6v6M22 7l-8.5 8.5-5-5L2 17',

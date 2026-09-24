@@ -22,11 +22,12 @@ describe('navigation', () => {
 
   test('the "more" page lists what the tab bar and the sheet do not', () => {
     const more = moreItemsFor('staff').map((n) => n.to)
-    expect(more).toEqual(['/calendar', '/reports', '/requests', '/orders', '/suppliers', '/settings'])
+    expect(more).toEqual(['/transfers/today', '/transfers', '/calendar', '/reports', '/requests', '/orders', '/suppliers', '/announcements', '/settings'])
   })
 
   test('pages reached from "more" light the more tab; keying pages light nothing', () => {
     expect(isMoreRoute('/orders')).toBe(true)
+    expect(isMoreRoute('/transfers')).toBe(true)
     expect(isMoreRoute('/settings/users')).toBe(true)
     expect(isMoreRoute('/more')).toBe(true)
     expect(isMoreRoute('/')).toBe(false)

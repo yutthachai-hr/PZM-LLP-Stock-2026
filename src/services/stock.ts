@@ -211,12 +211,13 @@ function scoped(): Backend {
  * reaches the ledger unnoted. The sink is reset on every attempt: Firestore re-runs the
  * callback on contention, and rows from an attempt that never committed must not show.
  */
-async function filing<R>(
-  db: Backend,
+export async function filing<R>(
+  db: Backend | undefined,
   run: (tx: TxContext, file: (mv: Omit<StockMovement, 'id'>) => void) => Promise<R>,
 ): Promise<R> {
+  const targetDb = db ?? scoped()
   let sink: StockMovement[] = []
-  const result = await db.transaction(async (tx) => {
+  const result = await targetDb.transaction(async (tx) => {
     sink = []
     return run(tx, (mv) => {
       const id = genId()
@@ -425,79 +426,110 @@ export async function receiveStock(params: {
   })
 }
 
-/** Issue / transfer goods from one location to another (main -> branch). Moves stock. */
-export async function issueStock(params: {
+export interface PlanIssueParams {
   lines: MovementLine[]
   fromLocationId: string
   toLocationId: string
   date: number
   actor: Actor
   note?: string
-}): Promise<string> {
-  const { fromLocationId, toLocationId, date, actor, note } = params
+  transferId?: string
+}
+
+export interface PlannedIssue {
+  docNo: string
+  lines: MovementLine[]
+  commit: () => string
+}
+
+/**
+ * Plan an issue (branch transfer) inside a transaction.
+ * Reads master data, counters, and stock levels; validates quantities; returns a commit writer.
+ * Used by issueStock and orchestrated transfer approval/receipt.
+ */
+export async function planIssue(
+  tx: TxContext,
+  params: PlanIssueParams,
+  file: (mv: Omit<StockMovement, 'id'>) => void,
+): Promise<PlannedIssue> {
+  const { fromLocationId, toLocationId, date, actor, note, transferId } = params
   if (fromLocationId === toLocationId) throw new AppError('ต้นทางและปลายทางต้องต่างกัน')
   const lines = mergeLines(params.lines)
   requireEpochMs(date)
   requireId(fromLocationId, 'fromLocationId')
   requireId(toLocationId, 'toLocationId')
-  const db = scoped()
 
+  // ---- reads ----
+  await requireMasterData(
+    tx,
+    lines.map((l) => l.productId),
+    [fromLocationId, toLocationId],
+  )
+  const counter = await tx.get<{ value: number }>(COL.counters, 'issue')
+  const seq = (counter?.value ?? 0) + 1
+  const fromLevels = await Promise.all(
+    lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
+  )
+  const toLevels = await Promise.all(
+    lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
+  )
+  // validate availability — one line per product, so this is the whole demand for it
+  lines.forEach((l, i) => {
+    const avail = fromLevels[i]?.qty ?? 0
+    if (l.qty > avail) throw shortMessage(l, avail)
+  })
+
+  // ---- writes ----
+  const docNo = makeDocNo('issue', seq)
+  return {
+    docNo,
+    lines,
+    commit: () => {
+      tx.set(COL.counters, 'issue', { value: seq })
+      const now = Date.now()
+      lines.forEach((l, i) => {
+        const fromCur = fromLevels[i]?.qty ?? 0
+        const toCur = toLevels[i]?.qty ?? 0
+        tx.set(
+          COL.stockLevels,
+          levelRef(fromLocationId, l).id,
+          levelDoc(fromLocationId, l.productId, fromCur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
+        )
+        tx.set(
+          COL.stockLevels,
+          levelRef(toLocationId, l).id,
+          levelDoc(toLocationId, l.productId, toCur + l.qty, actor, now, levelRef(toLocationId, l).unit),
+        )
+        const mv: Omit<StockMovement, 'id'> = {
+          docNo,
+          type: 'issue',
+          productId: l.productId,
+          productName: l.productName,
+          unit: l.unit,
+          ...keyedFields(l),
+          qty: l.qty,
+          fromLocationId,
+          toLocationId,
+          note: l.note ?? note,
+          ...(transferId ? { transferId } : {}),
+          date,
+          byUserId: actor.id,
+          byUserName: actor.name,
+          createdAt: now,
+        }
+        file(mv)
+      })
+      return docNo
+    },
+  }
+}
+
+/** Issue / transfer goods from one location to another (main -> branch). Moves stock. */
+export async function issueStock(params: PlanIssueParams): Promise<string> {
+  const db = scoped()
   return filing(db, async (tx, file) => {
-    // ---- reads ----
-    await requireMasterData(
-      tx,
-      lines.map((l) => l.productId),
-      [fromLocationId, toLocationId],
-    )
-    const counter = await tx.get<{ value: number }>(COL.counters, 'issue')
-    const seq = (counter?.value ?? 0) + 1
-    const fromLevels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
-    )
-    const toLevels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
-    )
-    // validate availability — one line per product, so this is the whole demand for it
-    lines.forEach((l, i) => {
-      const avail = fromLevels[i]?.qty ?? 0
-      if (l.qty > avail) throw shortMessage(l, avail)
-    })
-    // ---- writes ----
-    const docNo = makeDocNo('issue', seq)
-    tx.set(COL.counters, 'issue', { value: seq })
-    const now = Date.now()
-    lines.forEach((l, i) => {
-      const fromCur = fromLevels[i]?.qty ?? 0
-      const toCur = toLevels[i]?.qty ?? 0
-      tx.set(
-        COL.stockLevels,
-        levelRef(fromLocationId, l).id,
-        levelDoc(fromLocationId, l.productId, fromCur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
-      )
-      tx.set(
-        COL.stockLevels,
-        levelRef(toLocationId, l).id,
-        levelDoc(toLocationId, l.productId, toCur + l.qty, actor, now, levelRef(toLocationId, l).unit),
-      )
-      const mv: Omit<StockMovement, 'id'> = {
-        docNo,
-        type: 'issue',
-        productId: l.productId,
-        productName: l.productName,
-        unit: l.unit,
-        ...keyedFields(l),
-        qty: l.qty,
-        fromLocationId,
-        toLocationId,
-        note: l.note ?? note,
-        date,
-        byUserId: actor.id,
-        byUserName: actor.name,
-        createdAt: now,
-      }
-      file(mv)
-    })
-    return docNo
+    const planned = await planIssue(tx, params, file)
+    return planned.commit()
   })
 }
 
@@ -597,6 +629,11 @@ export async function readProductLedger(productId: string, opts: { force?: boole
   return rows
 }
 
+/** Fetch movements in a date range on demand; nothing is subscribed. */
+export async function listMovementsInRange(from: number, to: number): Promise<StockMovement[]> {
+  return (await scoped().getRange<StockMovement>(COL.movements, 'date', from, to)) ?? []
+}
+
 /** Fetch the proof photo attached to a movement document (by docNo). */
 export async function getMovementImage(docNo: string): Promise<string | null> {
   const img = await scoped().getOne<{ dataUrl: string }>(COL.movementImages, docNo)
@@ -692,14 +729,26 @@ export interface AdjustLine extends MovementLine {
  * The same product twice is refused rather than netted, because "2 out for damage, 1 in
  * found" is two statements about the shelf that a single net line would lose.
  */
-export async function adjustStockLines(params: {
+export interface PlanAdjustParams {
   lines: AdjustLine[]
   locationId: string
   date: number
   actor: Actor
   note?: string
-}): Promise<string> {
-  const { locationId, actor, note } = params
+  transferId?: string
+}
+
+export interface PlannedAdjust {
+  docNo: string
+  commit: () => string
+}
+
+export async function planAdjust(
+  tx: TxContext,
+  params: PlanAdjustParams,
+  file: (mv: Omit<StockMovement, 'id'>) => void,
+): Promise<PlannedAdjust> {
+  const { locationId, actor, note, transferId } = params
   if (params.lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
   const reasons = ADJUST_REASONS.map((r) => r.value) as readonly string[]
   const seen = new Set<string>()
@@ -717,52 +766,64 @@ export async function adjustStockLines(params: {
   })
   const date = requireEpochMs(params.date)
   requireId(locationId, 'locationId')
-  const db = scoped()
 
+  // ---- reads ----
+  await requireMasterData(
+    tx,
+    lines.map((x) => x.line.productId),
+    [locationId],
+  )
+  const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
+  const seq = (counter?.value ?? 0) + 1
+  const levels = await Promise.all(
+    lines.map((x) => tx.get<StockLevel>(COL.stockLevels, levelRef(locationId, x.line).id)),
+  )
+  const next = lines.map((x, i) => {
+    const cur = levels[i]?.qty ?? 0
+    const value = roundQty(cur + (x.direction === 'in' ? x.line.qty : -x.line.qty))
+    if (value < 0) throw shortMessage(x.line, cur)
+    return value
+  })
+
+  // ---- writes ----
+  const docNo = makeDocNo('adjust', seq)
+  return {
+    docNo,
+    commit: () => {
+      tx.set(COL.counters, 'adjust', { value: seq })
+      const now = Date.now()
+      lines.forEach(({ line, direction, reason }, i) => {
+        const ref = levelRef(locationId, line)
+        tx.set(COL.stockLevels, ref.id, levelDoc(locationId, line.productId, next[i], actor, now, ref.unit))
+        const mv: Omit<StockMovement, 'id'> = {
+          docNo,
+          type: 'adjust',
+          productId: line.productId,
+          productName: line.productName,
+          unit: line.unit,
+          ...keyedFields(line),
+          qty: line.qty,
+          ...(direction === 'in' ? { toLocationId: locationId } : { fromLocationId: locationId }),
+          reason,
+          note: line.note ?? note,
+          ...(transferId ? { transferId } : {}),
+          date,
+          byUserId: actor.id,
+          byUserName: actor.name,
+          createdAt: now,
+        }
+        file(mv)
+      })
+      return docNo
+    },
+  }
+}
+
+export async function adjustStockLines(params: PlanAdjustParams): Promise<string> {
+  const db = scoped()
   return filing(db, async (tx, file) => {
-    // ---- reads ----
-    await requireMasterData(
-      tx,
-      lines.map((x) => x.line.productId),
-      [locationId],
-    )
-    const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
-    const seq = (counter?.value ?? 0) + 1
-    const levels = await Promise.all(
-      lines.map((x) => tx.get<StockLevel>(COL.stockLevels, levelRef(locationId, x.line).id)),
-    )
-    const next = lines.map((x, i) => {
-      const cur = levels[i]?.qty ?? 0
-      const value = roundQty(cur + (x.direction === 'in' ? x.line.qty : -x.line.qty))
-      if (value < 0) throw shortMessage(x.line, cur)
-      return value
-    })
-    // ---- writes ----
-    const docNo = makeDocNo('adjust', seq)
-    tx.set(COL.counters, 'adjust', { value: seq })
-    const now = Date.now()
-    lines.forEach(({ line, direction, reason }, i) => {
-      const ref = levelRef(locationId, line)
-      tx.set(COL.stockLevels, ref.id, levelDoc(locationId, line.productId, next[i], actor, now, ref.unit))
-      const mv: Omit<StockMovement, 'id'> = {
-        docNo,
-        type: 'adjust',
-        productId: line.productId,
-        productName: line.productName,
-        unit: line.unit,
-        ...keyedFields(line),
-        qty: line.qty,
-        ...(direction === 'in' ? { toLocationId: locationId } : { fromLocationId: locationId }),
-        reason,
-        note: line.note ?? note,
-        date,
-        byUserId: actor.id,
-        byUserName: actor.name,
-        createdAt: now,
-      }
-      file(mv)
-    })
-    return docNo
+    const planned = await planAdjust(tx, params, file)
+    return planned.commit()
   })
 }
 
@@ -879,6 +940,8 @@ export async function editMovement(params: {
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) throw new AppError('รายการนี้ถูกยกเลิกแล้ว')
+    // A transfer's rows are explained by the transfer; they are corrected through it.
+    if (mv.transferId) throw new AppError('รายการนี้มาจากเอกสารส่งสินค้า — แก้ไขผ่านเอกสารนั้น')
     if ((mv.edits?.length ?? 0) >= MAX_EDITS) {
       throw new AppError('รายการนี้ถูกแก้ไขหลายครั้งเกินไป — กรุณายกเลิกแล้วบันทึกใหม่')
     }
@@ -1166,6 +1229,7 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) return
+    if (mv.transferId) throw new AppError('รายการนี้มาจากเอกสารส่งสินค้า — แก้ไขผ่านเอกสารนั้น')
 
     const fromLevel = mv.fromLocationId
       ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.fromLocationId, mv).id)

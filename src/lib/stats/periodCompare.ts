@@ -31,6 +31,9 @@ export function netEffect(m: StockMovement, scope?: ReadonlySet<string>): number
 
 /** A transfer is an issue that lands somewhere; an issue with no destination is stock used. */
 export function isTransfer(m: StockMovement): boolean {
+  if (m.transferId) {
+    return m.type === 'issue' && m.fromLocationId === 'transit'
+  }
   return m.type === 'issue' && !!m.fromLocationId && !!m.toLocationId
 }
 

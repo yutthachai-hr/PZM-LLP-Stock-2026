@@ -31,6 +31,12 @@ import { PurchaseRequestsPage } from './pages/requests/PurchaseRequests'
 import { RequestPage } from './pages/requests/RequestPage'
 import { CalendarPage } from './pages/calendar/CalendarPage'
 import { SettingsPage } from './pages/Settings'
+import { AnnouncementsPage } from './pages/announcements/AnnouncementsPage'
+import { AnnouncementPage } from './pages/announcements/AnnouncementPage'
+import { TransfersPage } from './pages/transfers/TransfersPage'
+import { TransferDetailPage } from './pages/transfers/TransferDetailPage'
+import { TransferReceivePage } from './pages/transfers/TransferReceivePage'
+import { TransfersTodayPage } from './pages/transfers/TransfersTodayPage'
 import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
 
@@ -85,6 +91,11 @@ function Gate() {
           <Route path="/products/:id/card" element={<StockCardPage />} />
           <Route path="/receive" element={<ReceivePage />} />
           <Route path="/issue" element={<IssuePage />} />
+          <Route path="/transfers" element={<TransfersPage />} />
+          <Route path="/transfers/today" element={<TransfersTodayPage />} />
+          <Route path="/transfers/new" element={<TransferDetailPage />} />
+          <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
+          <Route path="/transfers/:id" element={<TransferDetailPage />} />
           <Route path="/adjust" element={<AdjustPage />} />
           <Route path="/movements" element={<MovementsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
@@ -97,6 +108,9 @@ function Gate() {
           <Route path="/purchase/import" element={<PurchaseImportPage />} />
           <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/announcements" element={<AnnouncementsPage />} />
+          <Route path="/announcements/new" element={<AnnouncementPage />} />
+          <Route path="/announcements/:company/:id" element={<AnnouncementPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/:section" element={<SettingsPage />} />
           <Route path="/more" element={<MorePage />} />

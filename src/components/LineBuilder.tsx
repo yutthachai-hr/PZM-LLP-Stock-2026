@@ -11,7 +11,7 @@ import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
-import { findByBarcode, searchFields } from '../lib/barcode'
+import { findByBarcode, pickOnEnter, searchFields } from '../lib/barcode'
 import { BarcodeScanner } from './BarcodeScanner'
 import { describeQty, type QtyEntry } from '../lib/uom'
 
@@ -110,7 +110,10 @@ export function LineBuilder({
       setSheetFor(p)
       return
     }
-    onChange([...lines, { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }])
+    // Scanned again: the line is already there (the list hides chosen products, a scan does not).
+    if (!lines.some((l) => l.productId === p.id)) {
+      onChange([...lines, { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }])
+    }
     setSearch('')
     // Straight on to the next line: the cursor stays in the search box after every add.
     setTimeout(() => searchBox.current?.focus(), 0)
@@ -168,13 +171,17 @@ export function LineBuilder({
         <Input
           ref={searchBox}
           className="pl-10"
-          placeholder={t("ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)")}
+          placeholder={t("ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && matches[0]) {
+            // A scanner in keyboard mode types the code and presses Enter: an exact barcode
+            // (or product code) is what it meant, before any loose match.
+            if (e.key !== 'Enter') return
+            const hit = pickOnEnter(products, search, matches)
+            if (hit) {
               e.preventDefault()
-              addProduct(matches[0])
+              addProduct(hit)
             }
           }}
           autoComplete="off"

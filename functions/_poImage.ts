@@ -6,6 +6,8 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
  *
  *   POST /api/po-image?kind=original|preview&po=<tag>   (see api/po-image.ts)
  *   GET  /po/<token>.jpg                                 (see po/[token].ts)
+ *   POST /api/po-image?kind=ann-pdf|ann-image|ann-preview&po=<tag>   announcement files
+ *   GET  /a/<token>.pdf|.jpg                             (see a/[token].ts)
  *
  * The app POSTs to /api/po-image (src/services/poImages.ts) and hands LINE the GET URL.
  *
@@ -24,6 +26,21 @@ export interface Env {
 
 export const MAX_BYTES = 1_500_000
 export const TTL_SECONDS = 7 * 86_400
+
+/**
+ * Company announcements (24 Sep 2026) share the namespace but not the rules above: an
+ * announcement is a record the company keeps — "what did we send the suppliers, and when"
+ * — so its files have no expiry, and an A5 PDF may be larger than an order picture.
+ * Served from /a/<token>.<ext> (see a/[token].ts) with the type stored beside it.
+ * Announcements are rare (a few a month), so the KV free plan's 1,000 writes a day and
+ * 1 GB are not in question.
+ */
+export const DOC_MAX_BYTES = 5_000_000
+export const DOC_KINDS: Record<string, { type: string; ext: string }> = {
+  'ann-pdf': { type: 'application/pdf', ext: 'pdf' },
+  'ann-image': { type: 'image/jpeg', ext: 'jpg' },
+  'ann-preview': { type: 'image/jpeg', ext: 'jpg' },
+}
 
 /** The Firebase project whose users may upload. Pinned, not read from the token. */
 export const PROJECT_ID = 'pzm-stock-x5'

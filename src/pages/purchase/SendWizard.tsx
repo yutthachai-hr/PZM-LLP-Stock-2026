@@ -121,8 +121,7 @@ export function SendWizard({
       if (current.shareStatus !== 'shareOpened') await record(current, 'shareOpened')
       setBusy('share')
       const outcome = await provider.share({
-        order: current,
-        page,
+        subject: { kind: 'order', id: current.id },
         file,
         hosted,
         caption: t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + (page.of > 1 ? ` (${page.n}/${page.of})` : ''),

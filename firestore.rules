@@ -81,12 +81,12 @@ service cloud.firestore {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
         'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
-        'purchaseRequests', 'messages',
+        'purchaseRequests', 'messages', 'announcements', 'transfers',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
         'lelapin__stockEvents', 'lelapin__purchaseOrders',
         'lelapin__purchaseBatches', 'lelapin__productAliases',
-        'lelapin__purchaseRequests', 'lelapin__messages'
+        'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements', 'lelapin__transfers'
       ];
     }
 
@@ -94,10 +94,10 @@ service cloud.firestore {
     function adminWritable(name) {
       return name in [
         'products', 'productImages', 'locations', 'productMinOverrides',
-        'suppliers', 'supplierItems',
+        'suppliers', 'supplierItems', 'companyProfile',
         'lelapin__products', 'lelapin__productImages', 'lelapin__locations',
         'lelapin__productMinOverrides',
-        'lelapin__suppliers', 'lelapin__supplierItems'
+        'lelapin__suppliers', 'lelapin__supplierItems', 'lelapin__companyProfile'
       ];
     }
 
@@ -215,7 +215,7 @@ service cloud.firestore {
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'supplierId', 'supplierName', 'invoiceNo', 'docDate', 'poId', 'poDocNo',
           'date', 'byUserId', 'byUserName', 'createdAt',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'transferId'
         ])
         && d.type in ['receive', 'issue', 'adjust', 'consume']
         && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
@@ -243,6 +243,7 @@ service cloud.firestore {
         && (!('poId' in d) || text(d.poId, 200))
         && (!('poDocNo' in d) || text(d.poDocNo, 40))
         && (!('voided' in d) || d.voided is bool)
+        && (!('transferId' in d) || text(d.transferId, 200))
         && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
         && (!('toLocationId' in d) || text(d.toLocationId, 200))
         && (!('updatedBy' in d) || text(d.updatedBy, 200))
@@ -718,6 +719,149 @@ service cloud.firestore {
         && (d.status != 'poCreated' || ('orders' in d && d.orders.size() > 0));
     }
 
+    /**
+     * A company announcement (24 Sep 2026). Written by a หัวหน้า or admin, numbered when it
+     * is published, and kept: after that its words, number and files are what was sent,
+     * and only the send log and the status move. Lists and maps (the target, the snapshot,
+     * the files, the sends, the history) are bounded, not walked.
+     */
+    function validAnnouncement(d) {
+      return announcementFrozen(d) && announcementLive(d)
+        && d.keys().hasAll([
+          'id', 'status', 'company', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'publisherId', 'publisherName', 'sends', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'status', 'company', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'publisherId', 'publisherName', 'publishedAt', 'publishedBy', 'snapshot', 'files', 'sends',
+          'cancelReason', 'cancelledBy', 'cancelledAt', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function announcementFrozen(d) {
+      return d.company in ['pizza', 'lelapin']
+        && text(d.publisherId, 200) && text(d.publisherName, 200)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt);
+    }
+
+    function announcementLive(d) {
+      return d.status in ['draft', 'ready', 'published', 'partiallySent', 'sent', 'cancelled']
+        && epochMs(d.announcementDate)
+        && text(d.subject, 200) && d.subject.size() > 0
+        && text(d.body, 3000)
+        && d.format in ['text', 'a5']
+        && d.target is map
+        && d.sends is list && d.sends.size() <= 200
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 300
+        && (!('docNo' in d) || text(d.docNo, 60))
+        && (!('publishedAt' in d) || epochMs(d.publishedAt))
+        && (!('publishedBy' in d) || text(d.publishedBy, 200))
+        && (!('snapshot' in d) || d.snapshot is map)
+        && (!('files' in d) || d.files is map)
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
+        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && epochMs(d.updatedAt)
+        // Past ready, a status means a number and a snapshot of what was said.
+        && (d.status in ['draft', 'ready', 'cancelled'] || ('docNo' in d && 'snapshot' in d))
+        && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d));
+    }
+
+    /**
+     * A transfer between the company's own sites (24 Sep 2026). Lines, history and legs are
+     * lists the rules bound but cannot walk; the service works out every quantity, and the
+     * stock it moves is validated movement by movement like any other.
+     */
+    function validTransfer(d) {
+      return transferFrozen(d) && transferLive(d) && d.keys().hasAll([
+          'id', 'docNo', 'status', 'revision', 'fromLocationId', 'toLocationId',
+          'dispatchDate', 'items', 'requestedBy', 'requestedByName', 'history',
+          'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly(transferKeys());
+    }
+
+    function transferKeys() {
+      return [
+        'id', 'docNo', 'status', 'revision', 'fromLocationId', 'toLocationId',
+        'dispatchDate', 'note', 'legKind', 'parentId', 'childIds',
+        'dispatchMovementDocNo', 'receiveMovementDocNo', 'items',
+        'requestedBy', 'requestedByName', 'submittedAt',
+        'returnReason', 'rejectReason',
+        'approvedBy', 'approvedByName', 'approvedAt',
+        'receivedBy', 'receivedByName', 'receivedAt',
+        'cancelReason', 'cancelledBy', 'cancelledAt',
+        'history', 'createdAt', 'updatedAt'
+      ];
+    }
+
+    function transferFrozen(d) {
+      return text(d.docNo, 40)
+        && text(d.requestedBy, 200) && text(d.requestedByName, 200)
+        && epochMs(d.createdAt)
+        && d.fromLocationId != d.toLocationId
+        && (!('legKind' in d) || d.legKind in ['forward', 'return', 'replacement'])
+        && (!('parentId' in d) || text(d.parentId, 200));
+    }
+
+    function validTransferEdit(d) {
+      return transferLive(d);
+    }
+
+    function transferLive(d) {
+      return text(d.fromLocationId, 200) && text(d.toLocationId, 200)
+        && d.status in ['draft', 'pendingApproval', 'returned', 'rejected', 'inTransit', 'receiving',
+                        'discrepancy', 'pendingDiscrepancyApproval', 'resolved', 'completed', 'cancelled']
+        && d.revision is int && d.revision >= 1 && d.revision <= 1000
+        && epochMs(d.dispatchDate)
+        // A draft is created empty and filled in; everything past draft has lines.
+        && d.items is list && d.items.size() <= 200 && (d.status in ['draft', 'cancelled'] || d.items.size() > 0)
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 500
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('childIds' in d) || (d.childIds is list && d.childIds.size() <= 50))
+        && (!('submittedAt' in d) || epochMs(d.submittedAt))
+        && (!('returnReason' in d) || text(d.returnReason, 2000))
+        && (!('rejectReason' in d) || text(d.rejectReason, 2000))
+        && (!('dispatchMovementDocNo' in d) || text(d.dispatchMovementDocNo, 40))
+        && (!('receiveMovementDocNo' in d) || text(d.receiveMovementDocNo, 40))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('approvedByName' in d) || text(d.approvedByName, 200))
+        && (!('approvedAt' in d) || epochMs(d.approvedAt))
+        && (!('receivedBy' in d) || text(d.receivedBy, 200))
+        && (!('receivedByName' in d) || text(d.receivedByName, 200))
+        && (!('receivedAt' in d) || epochMs(d.receivedAt))
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
+        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && epochMs(d.updatedAt)
+        // What a status means is pinned to who signed it.
+        && (!(d.status in ['inTransit', 'receiving', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved', 'completed'])
+            || 'approvedBy' in d)
+        && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d));
+    }
+
+    /** The company as its documents present it: one document per brand, `main`. */
+    function validCompanyProfile(docId, d) {
+      return docId == 'main'
+        && d.keys().hasAll(['id', 'docPrefix', 'announcementCode'])
+        && d.keys().hasOnly([
+          'id', 'docPrefix', 'announcementCode', 'displayName', 'nameEn',
+          'logoDataUrl', 'logoVersion', 'updatedBy', 'updatedAt'
+        ])
+        && d.docPrefix is string && d.docPrefix.matches('^[A-Z0-9]{1,10}$')
+        && d.announcementCode is string && d.announcementCode.matches('^[A-Z0-9]{1,10}$')
+        && (!('displayName' in d) || text(d.displayName, 200))
+        && (!('nameEn' in d) || text(d.nameEn, 200))
+        // A data URL, as product photos are; under Firestore's 1 MiB per document.
+        && (!('logoDataUrl' in d) || (d.logoDataUrl is string && d.logoDataUrl.size() <= 900000))
+        && (!('logoVersion' in d) || nonneg(d.logoVersion, 1000000))
+        && (!('updatedBy' in d) || d.updatedBy == request.auth.uid)
+        && (!('updatedAt' in d) || epochMs(d.updatedAt));
+    }
+
     /** A workbook spelling somebody confirmed as one product. */
     function validAlias(d) {
       return d.keys().hasAll(['id', 'key', 'productId', 'sourceName', 'createdBy', 'createdByName', 'createdAt'])
@@ -742,9 +886,12 @@ service cloud.firestore {
       return d.id == docId && (
         k == 'stockMovements' ? movementCore(d)
         : k == 'stockLevels' ? validLevel(d)
+        : k == 'transfers' ? (fresh ? validTransfer(d) : validTransferEdit(d))
         : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
         : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d, orderWritten()))
         : k == 'messages' ? (fresh ? validMessage(d) : messageShape(d))
+        : k == 'announcements' ? (fresh ? validAnnouncement(d) : announcementLive(d))
+        : k == 'companyProfile' ? validCompanyProfile(docId, d)
         : k == 'counters' ? validCounter(d)
         : k == 'products' ? validProduct(d)
         : k == 'locations' ? validLocation(d)
@@ -793,6 +940,21 @@ service cloud.firestore {
           && request.resource.data.status in ['draft', 'needsReview', 'ready']
         : k == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
+        // An announcement is written by a หัวหน้า or admin, in their own name, as a draft —
+        // never born numbered.
+        : k == 'announcements'
+        ? manager() && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.publisherId == request.auth.uid
+          && request.resource.data.status == 'draft'
+          && !('docNo' in request.resource.data)
+        // A transfer is filed by whoever is asking, as an empty draft. The one exception is
+        // a leg a manager creates when settling goods found at the wrong branch: it names its
+        // parent and starts in transit, because the goods already are.
+        : k == 'transfers'
+        ? request.resource.data.requestedBy == request.auth.uid
+          && (request.resource.data.status == 'draft'
+              || (request.resource.data.status == 'inTransit' && 'parentId' in request.resource.data
+                  && request.resource.data.approvedBy == request.auth.uid && roleIsManager()))
         // A request is filed by whoever is asking, as a draft.
         : k == 'purchaseRequests'
         ? request.resource.data.createdBy == request.auth.uid
@@ -802,6 +964,10 @@ service cloud.firestore {
           request.resource.data.byUserId == request.auth.uid
           && !('voided' in request.resource.data)
           && !('updatedBy' in request.resource.data)
+          // Moving stock between two sites in one step is a manager's (owner, 24 Sep 2026);
+          // staff move it through a transfer, whose rows name it.
+          && (request.resource.data.type != 'issue' || !('toLocationId' in request.resource.data)
+              || 'transferId' in request.resource.data || roleIsManager())
         );
     }
 
@@ -817,12 +983,14 @@ service cloud.firestore {
       let k = kind(name);
       return k == 'purchaseOrders' ? orderEdit()
         : k == 'purchaseBatches' ? batchEdit()
+        : k == 'transfers' ? transferEdit()
         : k == 'purchaseRequests' ? requestEdit()
         // Confirming a spelling again replaces the whole alias, signed by whoever did it.
         : k == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
         : k == 'stockMovements' ? movementEdit()
         : k == 'messages' ? messageEdit()
+        : k == 'announcements' ? announcementEdit()
         : k == 'stockEvents' ? eventEdit()
         : k == 'counters' ? request.resource.data.value > resource.data.value
         : true;
@@ -947,8 +1115,109 @@ service cloud.firestore {
       );
     }
 
-    function movementEdit() {
+    /**
+     * What may change on an announcement, and who may change it: a หัวหน้า or admin.
+     *
+     * Before it is numbered the words may change freely. The number is issued only by
+     * publishing a ready announcement, and from then on the number, the words and the
+     * snapshot are frozen; the files are written once; the send log and the history only
+     * grow. Publishing and cancelling are signed by the caller.
+     */
+    function announcementEdit() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return roleIsManager()
+        && editedKeys().hasOnly([
+          'status', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'docNo', 'publishedAt', 'publishedBy', 'snapshot', 'files', 'sends',
+          'cancelReason', 'cancelledBy', 'cancelledAt', 'history', 'updatedAt'
+        ])
+        && d.history.size() >= old.history.size()
+        && d.sends.size() >= old.sends.size()
+        && (d.status == old.status || announcementMove(old.status, d.status))
+        && (('docNo' in old)
+            ? (d.docNo == old.docNo && d.subject == old.subject && d.body == old.body
+               && d.announcementDate == old.announcementDate && d.format == old.format
+               && d.snapshot == old.snapshot && d.publishedBy == old.publishedBy)
+            : (!('docNo' in d) || (old.status == 'ready' && d.status == 'published'
+                                   && d.publishedBy == request.auth.uid)))
+        && (!('files' in old) || d.files == old.files)
+        && (!('cancelledBy' in d) || d.cancelledBy == request.auth.uid
+            || d.cancelledBy == old.get('cancelledBy', ''));
+    }
+
+    function announcementMove(from, to) {
+      return (from == 'draft' && to in ['ready', 'cancelled'])
+        || (from == 'ready' && to in ['draft', 'published', 'cancelled'])
+        || (from == 'published' && to in ['sent', 'partiallySent', 'cancelled'])
+        || (from == 'partiallySent' && to == 'sent');
+    }
+
+    /**
+     * What may change on a transfer, and who may move it on.
+     *
+     * Its number, who asked, where it is from and where it goes are what the transfer IS;
+     * the route may be set only while it is still a draft. The history only grows. The
+     * words that move stock — approve — are a manager's, signed in their own name; receipt
+     * belongs to the people of the destination (or anyone with no sites assigned, the
+     * owner's rule); settling a problem is a manager's again.
+     */
+    function transferEdit() {
+      let d = request.resource.data;
+      let old = resource.data;
       return editedKeys().hasOnly([
+          'status', 'revision', 'fromLocationId', 'toLocationId', 'dispatchDate', 'note', 'items', 'childIds',
+          'submittedAt', 'returnReason', 'rejectReason',
+          'dispatchMovementDocNo', 'receiveMovementDocNo',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'receivedBy', 'receivedByName', 'receivedAt',
+          'cancelReason', 'cancelledBy', 'cancelledAt',
+          'history', 'updatedAt'
+        ])
+        && d.history.size() >= old.history.size()
+        && (!editedKeys().hasAny(['fromLocationId', 'toLocationId']) || old.status in ['draft', 'returned'])
+        && (d.status == old.status || transferMove(old, d))
+        && (!('approvedBy' in d) || d.approvedBy == old.get('approvedBy', '') || d.approvedBy == request.auth.uid)
+        && (!('receivedBy' in d) || d.receivedBy == old.get('receivedBy', '') || d.receivedBy == request.auth.uid)
+        && (!('cancelledBy' in d) || d.cancelledBy == old.get('cancelledBy', '') || d.cancelledBy == request.auth.uid);
+    }
+
+    /** Someone who works at `loc` — or a manager, or anyone with no sites assigned. */
+    function atSite(loc) {
+      return roleIsManager() || profile().get('siteIds', []).size() == 0 || loc in profile().siteIds;
+    }
+
+    function transferMove(old, d) {
+      let from = old.status;
+      let to = d.status;
+      return (
+        // submit / resubmit: the requester or a manager; an admin reopens a rejection
+        (to == 'pendingApproval' && from in ['draft', 'returned']
+          && (old.requestedBy == request.auth.uid || roleIsManager()))
+        || (to == 'pendingApproval' && from == 'rejected' && roleIsAdmin())
+        // the manager's three words
+        || (to in ['returned', 'rejected', 'inTransit'] && from == 'pendingApproval' && roleIsManager())
+        // withdrawing before any stock moved
+        || (to == 'cancelled' && from in ['draft', 'returned', 'pendingApproval']
+          && (old.requestedBy == request.auth.uid || roleIsManager()))
+        // receipt, by the destination
+        || (to in ['receiving', 'completed', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved']
+          && from in ['inTransit', 'receiving'] && atSite(old.toLocationId))
+        // a problem goes to the manager — the receiver sends it, or the branch that found
+        // the goods reports them
+        || (to == 'pendingDiscrepancyApproval' && from == 'discrepancy')
+        // settling it is the manager's
+        || (to in ['resolved', 'completed', 'pendingDiscrepancyApproval']
+          && from in ['discrepancy', 'pendingDiscrepancyApproval', 'resolved'] && roleIsManager())
+        // the last leg arriving closes its parent, whoever received the leg
+        || (to == 'completed' && from == 'resolved')
+      );
+    }
+
+    function movementEdit() {
+      // A transfer's rows are corrected through the transfer (a resolution), never in place:
+      // the document's quantities are what explain them.
+      return !('transferId' in resource.data) && editedKeys().hasOnly([
           'qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
           'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
         ])
@@ -1184,7 +1453,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return validNotification(docId, d) && d.source == 'client' && d.createdBy == request.auth.uid
         && d.readBy.size() == 0 && d.active == true
-        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste']);
+        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste', 'transferArriving', 'transferIssue', 'transferSubmitted', 'transferDiscrepancy']);
     }
 
     function notificationUpdate(docId) {
@@ -1247,8 +1516,10 @@ service cloud.firestore {
         && validShape(collection, docId, request.resource.data, false);
 
       allow delete: if active() && staffDeletable(collection);
+      // An announcement is never deleted, only cancelled — the send log is the record of
+      // what the company told its suppliers.
       allow delete: if admin() && brandData(collection) && !ledger(collection)
-        && !receivedOrder(collection);
+        && !receivedOrder(collection) && kind(collection) != 'announcements';
     }
   }
 }

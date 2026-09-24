@@ -99,7 +99,7 @@ export async function createUser(input: NewUserInput): Promise<string> {
 
 export async function updateUserProfile(
   id: string,
-  patch: Partial<Pick<AppUser, 'name' | 'role' | 'active'>>,
+  patch: Partial<Pick<AppUser, 'name' | 'role' | 'active' | 'siteIds'>>,
 ): Promise<void> {
   await backend.update(COL.users, id, patch as Record<string, unknown>)
 }

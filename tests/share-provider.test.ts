@@ -21,28 +21,14 @@ vi.stubEnv('VITE_LIFF_ID', '1234567890-abcdefgh')
 
 const { lineLiffProvider } = await import('../src/share/lineLiffProvider')
 const { statusFor } = await import('../src/share/PurchaseShareProvider')
-const { RESUME_PARAM, resumeUrl, liffUrl, isStandalone, brandToResume } = await import('../src/share/liffResume')
+const { ANNOUNCE_PARAM, RESUME_PARAM, resumeUrl, liffUrl, isStandalone, brandToResume } = await import('../src/share/liffResume')
 const { setActiveBrand } = await import('../src/brand/brand')
 import type { SharePayload } from '../src/share/PurchaseShareProvider'
 
 const payload = (): SharePayload => ({
-  order: {
-    id: 'o1',
-    docNo: 'PO-00001',
-    supplierId: 's',
-    supplierName: 'THAINAMTHIP',
-    status: 'ordered',
-    locationId: 'l',
-    orderedAt: 0,
-    lines: [],
-    createdBy: 'u',
-    createdByName: 'U',
-    createdAt: 0,
-    updatedAt: 0,
-  },
-  page: { n: 1, of: 1 },
+  subject: { kind: 'order', id: 'o1' },
   file: new File([new Uint8Array([1, 2, 3])], 'PO-00001.jpg', { type: 'image/jpeg' }),
-  hosted: { url: 'https://x/po/a.jpg', previewUrl: 'https://x/po/b.jpg', version: 1, expiresAt: 1 },
+  hosted: { url: 'https://x/po/a.jpg', previewUrl: 'https://x/po/b.jpg' },
   caption: 'ใบสั่งซื้อ PO-00001 — Pizza Mania',
 })
 
@@ -216,5 +202,46 @@ describe('the LINE (LIFF) provider', () => {
   test('needs the picture hosted first', async () => {
     await expect(lineLiffProvider.share({ ...payload(), hosted: undefined })).rejects.toThrow()
     expect(lineLiffProvider.needsHosting).toBe(true)
+  })
+})
+
+// Company announcements (24 Sep 2026) go through the same picker: a TEXT one is the text
+// alone, an A5 one the caption (with the PDF link) and then the picture.
+describe('an announcement through the LINE picker', () => {
+  const text = (): SharePayload => ({
+    subject: { kind: 'announcement', id: 'a1' },
+    caption: '📢 ประกาศ — Pizza Mania\nเลขที่ PZM-ANN-2569-0001',
+  })
+
+  test('a TEXT announcement is one text message, and needs nothing hosted', async () => {
+    expect(await lineLiffProvider.share(text())).toBe('sent')
+    expect(sdk.shareTargetPicker).toHaveBeenCalledWith(
+      [{ type: 'text', text: '📢 ประกาศ — Pizza Mania\nเลขที่ PZM-ANN-2569-0001' }],
+      { isMultiple: true },
+    )
+  })
+
+  test('an A5 announcement is the caption, then the picture', async () => {
+    await lineLiffProvider.share({
+      ...text(),
+      file: new File([new Uint8Array([1])], 'PZM-ANN-2569-0001.jpg', { type: 'image/jpeg' }),
+      hosted: { url: 'https://x/a/i.jpg', previewUrl: 'https://x/a/p.jpg' },
+    })
+    const [messages] = sdk.shareTargetPicker.mock.calls[0] as unknown as [unknown[]]
+    expect(messages).toEqual([
+      { type: 'text', text: '📢 ประกาศ — Pizza Mania\nเลขที่ PZM-ANN-2569-0001' },
+      { type: 'image', originalContentUrl: 'https://x/a/i.jpg', previewImageUrl: 'https://x/a/p.jpg' },
+    ])
+  })
+
+  test('coming back from LINE Login reopens the announcement, not an order', async () => {
+    vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/announcements/a1', pathname: '/announcements/a1', hostname: 'pzmstock.pages.dev' })
+    sdk.isLoggedIn.mockReturnValue(false)
+    await lineLiffProvider.share(text())
+    const { redirectUri } = sdk.login.mock.calls[0][0] as { redirectUri: string }
+    expect(redirectUri).toBe(`https://pzmstock.pages.dev/announcements/a1?${ANNOUNCE_PARAM}=a1&brand=pizza`)
+    vi.stubGlobal('location', { search: `?${ANNOUNCE_PARAM}=a1&brand=lelapin` })
+    expect(brandToResume()).toBe('lelapin')
+    vi.unstubAllGlobals()
   })
 })

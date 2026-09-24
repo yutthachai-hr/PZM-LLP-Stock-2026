@@ -29,6 +29,9 @@ export function shortages(input: {
     if (product.active === false) continue
     for (const location of input.locations) {
       if (location.active === false) continue
+      // Goods on the road are nobody's shelf: a transit balance falling is a delivery
+      // arriving, not a shortage. The Worker reads every location, so this is where it stops.
+      if (location.type === 'transit') continue
       if (!input.tracksProduct(location.id, product.id)) continue
       const min = input.minFor(product, location.id)
       if (min <= 0) continue
