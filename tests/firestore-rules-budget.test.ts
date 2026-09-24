@@ -138,3 +138,39 @@ test('staff can finish the widest task and a manager can move it', async () => {
   }
 })
 
+
+// Transfers (24 Sep 2026): the widest document is a received one with every optional field,
+// and the dearest step is a receipt by a branch staff member (the site check reads the
+// profile) or a manager's resolution.
+test('staff at the destination can receive the widest transfer, and a manager can settle it', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'users', STAFF), { name: 'Staff', role: 'staff', active: true, siteIds: ['a', 'b', 'c', 'sarasin'] })
+  })
+  const item = (idx: number) => ({
+    idx, productId: 'p' + idx, productName: 'X' + idx, sku: 'S' + idx, unit: 'KG',
+    requestedQty: 10, requestedEntryQty: 1, requestedEntryUnit: 'Carton', dispatchQty: 10, dispatchEntryQty: 1, dispatchEntryUnit: 'Carton',
+    stockAtSubmit: 50, stockAtApprove: 50, inTransitQty: 10,
+    misroutes: [{ id: 'm' + idx, qty: 1, actualCustodyLocationId: 'onnut', originalDestinationId: 'sarasin', reportedBy: STAFF, reportedByName: 'S', reportedAt: ts() }],
+  })
+  const base = {
+    id: 't1', docNo: 'TR-00001', status: 'inTransit', revision: 3, fromLocationId: 'main', toLocationId: 'sarasin',
+    dispatchDate: ts(), note: 'n'.repeat(500), parentId: 'p0', legKind: 'forward', childIds: ['c1', 'c2'],
+    dispatchMovementDocNo: 'IS-00001', requestedBy: MANAGER, requestedByName: 'M', submittedAt: ts(),
+    returnReason: 'r', rejectReason: 'r',
+    approvedBy: MANAGER, approvedByName: 'M', approvedAt: ts(),
+    items: Array.from({ length: 200 }, (_, i) => item(i)),
+    history: Array.from({ length: 499 }, () => ({ at: ts(), by: MANAGER, byName: 'M', action: 'qtyChanged', oldQty: 1, newQty: 2 })),
+    createdAt: ts(), updatedAt: ts(),
+  }
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'transfers/t1'), base)
+  })
+  await replace(STAFF, 'transfers/t1', (cur) => ({
+    ...cur, status: 'discrepancy', receivedBy: STAFF, receivedByName: 'S', receivedAt: ts(), receiveMovementDocNo: 'IS-00002',
+    history: [...(cur.history as unknown[]), { at: ts(), by: STAFF, byName: 'S', action: 'received' }], updatedAt: ts(),
+  }))
+  await replace(MANAGER, 'transfers/t1', (cur) => ({
+    ...cur, status: 'resolved',
+    history: [...(cur.history as unknown[]).slice(-499), { at: ts(), by: MANAGER, byName: 'M', action: 'discrepancyResolved' }], updatedAt: ts(),
+  }))
+})

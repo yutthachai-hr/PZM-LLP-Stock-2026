@@ -7,19 +7,20 @@ import type {
 } from '../types'
 
 /**
- * The single source of truth for branch transfer lifecycle and permissions.
+ * The single source of truth for a transfer's lifecycle and who may act on it. The rules'
+ * transferMove() states the same table for anyone writing to the database directly.
  *
- *   draft ──submit──▶ pendingApproval ──approve──▶ inTransit ──open──▶ receiving
- *     ▲                     │ return                  │                  │
- *     │                     ▼                         │                  │
- *     └── returned ◀────────┘                         ▼                  ▼
- *                                                discrepancy ◀───────────┤
- *                                                     │                  ▼
- *                                                     ▼              completed
- *                                          pendingDiscrepancyApproval
- *                                                     │ approve
- *                                                     ▼
- *                                                  resolved ──legs closed──▶ completed
+ *   draft ──submit──▶ pendingApproval ──approve (source → transit)──▶ inTransit
+ *     ▲                 │ return      │ reject                          │ open
+ *     └── returned ◀────┘             ▼                                 ▼
+ *                                  rejected ──admin reopen──▶ …      receiving
+ *                                                                       │ confirm
+ *            ┌──────────────── everything matched ──────────────────────┤
+ *            ▼                                                          ▼
+ *        completed ◀── legs closed ── resolved ◀── manager ── discrepancy / pendingDiscrepancyApproval
+ *
+ * Wrong-branch goods and damage are facts on a line (misroutes, a discrepancy's reason),
+ * not statuses of their own; forward/return legs are child documents that start in transit.
  */
 
 const TRANSITIONS: Record<TransferStatus, readonly TransferStatus[]> = {
@@ -27,11 +28,11 @@ const TRANSITIONS: Record<TransferStatus, readonly TransferStatus[]> = {
   pendingApproval: ['returned', 'rejected', 'inTransit', 'cancelled'],
   returned: ['pendingApproval', 'cancelled'],
   rejected: ['pendingApproval'], // admin reopen
-  inTransit: ['receiving', 'completed', 'discrepancy'],
-  receiving: ['completed', 'discrepancy'],
-  discrepancy: ['pendingDiscrepancyApproval'],
-  pendingDiscrepancyApproval: ['resolved'],
-  resolved: ['completed'],
+  inTransit: ['receiving', 'completed', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved'],
+  receiving: ['completed', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved'],
+  discrepancy: ['pendingDiscrepancyApproval', 'resolved', 'completed'],
+  pendingDiscrepancyApproval: ['resolved', 'completed'],
+  resolved: ['completed', 'pendingDiscrepancyApproval'],
   completed: [],
   cancelled: [],
 }

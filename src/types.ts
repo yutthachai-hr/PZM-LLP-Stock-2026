@@ -1028,6 +1028,21 @@ export type DiscrepancyResolutionCode =
   | 'APPROVED_ADJUSTMENT' // over: adjust in at dest (reason: found)
   | 'BELONGS_TO_OTHER_TRANSFER' // over: link to another transfer misroute
 
+/** Which resolutions answer a shortage and which an overage — never the other kind. */
+export const SHORT_RESOLUTIONS: readonly DiscrepancyResolutionCode[] = [
+  'NOT_ACTUALLY_LOADED',
+  'TRANSIT_LOSS',
+  'DAMAGED',
+  'WEIGHING_ERROR',
+  'WRONG_BRANCH',
+]
+export const OVER_RESOLUTIONS: readonly DiscrepancyResolutionCode[] = [
+  'DISPATCH_WRONG',
+  'COUNT_ERROR',
+  'APPROVED_ADJUSTMENT',
+  'BELONGS_TO_OTHER_TRANSFER',
+]
+
 export interface TransferDiscrepancyResolution {
   code: DiscrepancyResolutionCode
   qty: number
@@ -1037,6 +1052,10 @@ export interface TransferDiscrepancyResolution {
   note?: string
   movementDocNo?: string
   childId?: string
+  /** WRONG_BRANCH: the misroute record the shortage became. */
+  misrouteId?: string
+  /** BELONGS_TO_OTHER_TRANSFER: the document the extra goods belonged to. */
+  relatedTransferId?: string
 }
 
 export interface TransferDiscrepancy {
@@ -1066,7 +1085,11 @@ export interface TransferMisroute {
     byName: string
     at: number
     note?: string
+    /** The forward/return leg that now carries the goods. */
     childTransferId?: string
+    /** A redirect's make-good for the original destination, created as a draft. */
+    replacementTransferId?: string
+    movementDocNo?: string
   }
 }
 
@@ -1085,7 +1108,19 @@ export interface TransferItem {
   receivedEntryUnit?: string
   receivedEntryQty?: number
   receivedQty?: number
+  /**
+   * What the manager ruled was really received (a weighing or counting error). The
+   * receiver's own `receivedQty` is kept beside it, never overwritten.
+   */
+  correctedReceivedQty?: number
   correctedDispatchQty?: number
+  /**
+   * How much of this line is still sitting in the transit location on this document's
+   * account, in the product's own unit. Set at approval; every movement out of transit for
+   * this line, and every hand-over to a forward/return leg, takes from it. The sum over all
+   * open documents is what the transit balance should be — the tests hold it to that.
+   */
+  inTransitQty?: number
   stockAtSubmit?: number
   stockAtApprove?: number
   removed?: {
@@ -1135,6 +1170,11 @@ export interface Transfer {
   receivedAt?: number
   dispatchMovementDocNo?: string
   receiveMovementDocNo?: string
+  returnReason?: string
+  rejectReason?: string
+  cancelReason?: string
+  cancelledBy?: string
+  cancelledAt?: number
   items: TransferItem[]
   history: TransferHistoryEntry[]
   createdAt: number

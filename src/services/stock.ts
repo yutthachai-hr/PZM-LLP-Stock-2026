@@ -890,6 +890,8 @@ export async function editMovement(params: {
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) throw new AppError('รายการนี้ถูกยกเลิกแล้ว')
+    // A transfer's rows are explained by the transfer; they are corrected through it.
+    if (mv.transferId) throw new AppError('รายการนี้มาจากเอกสารส่งสินค้า — แก้ไขผ่านเอกสารนั้น')
     if ((mv.edits?.length ?? 0) >= MAX_EDITS) {
       throw new AppError('รายการนี้ถูกแก้ไขหลายครั้งเกินไป — กรุณายกเลิกแล้วบันทึกใหม่')
     }
@@ -1177,6 +1179,7 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
     const mv = await tx.get<StockMovement>(COL.movements, movementId)
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) return
+    if (mv.transferId) throw new AppError('รายการนี้มาจากเอกสารส่งสินค้า — แก้ไขผ่านเอกสารนั้น')
 
     const fromLevel = mv.fromLocationId
       ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.fromLocationId, mv).id)
