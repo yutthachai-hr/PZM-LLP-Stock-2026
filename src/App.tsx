@@ -33,6 +33,8 @@ import { CalendarPage } from './pages/calendar/CalendarPage'
 import { SettingsPage } from './pages/Settings'
 import { AnnouncementsPage } from './pages/announcements/AnnouncementsPage'
 import { AnnouncementPage } from './pages/announcements/AnnouncementPage'
+import { TransfersPage } from './pages/transfers/TransfersPage'
+import { TransferDetailPage } from './pages/transfers/TransferDetailPage'
 import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
 
@@ -87,6 +89,9 @@ function Gate() {
           <Route path="/products/:id/card" element={<StockCardPage />} />
           <Route path="/receive" element={<ReceivePage />} />
           <Route path="/issue" element={<IssuePage />} />
+          <Route path="/transfers" element={<TransfersPage />} />
+          <Route path="/transfers/new" element={<TransferDetailPage />} />
+          <Route path="/transfers/:id" element={<TransferDetailPage />} />
           <Route path="/adjust" element={<AdjustPage />} />
           <Route path="/movements" element={<MovementsPage />} />
           <Route path="/reports" element={<ReportsPage />} />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { SiteSelect } from '../components/SiteChip'
 import { Icon, type IconName } from '../components/Icon'
 import { useData } from '../data/DataContext'
@@ -10,6 +11,7 @@ import { LineBuilder, type Line } from '../components/LineBuilder'
 import { KeyingSide } from '../components/keying/KeyingSide'
 import { SubmitBar } from '../components/keying/SubmitBar'
 import { issueStock, consumeStock } from '../services/stock'
+import { isManager } from '../lib/transferStatus'
 import { compressImage } from '../lib/image'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
@@ -26,7 +28,9 @@ type Mode = 'transfer' | 'consume'
  */
 export function IssuePage() {
   const t = useT()
-  const [mode, setMode] = useState<Mode>('transfer')
+  const { user } = useAuth()
+  const manager = isManager(user?.role)
+  const [mode, setMode] = useState<Mode>(manager ? 'transfer' : 'consume')
 
   return (
     <FramePage>
@@ -36,17 +40,41 @@ export function IssuePage() {
         title={t('เบิก/โอนสาขา')}
         subtitle={t('โอนสินค้าระหว่างคลังและสาขา หรือเบิกใช้เพื่อตัดสต๊อกหน้าร้าน')}
       />
-      {mode === 'transfer' ? <TransferForm mode={mode} setMode={setMode} /> : <ConsumeForm mode={mode} setMode={setMode} />}
+      {mode === 'transfer' ? (
+        <TransferForm mode={mode} setMode={setMode} isMgr={manager} />
+      ) : (
+        <ConsumeForm mode={mode} setMode={setMode} isMgr={manager} />
+      )}
     </FramePage>
   )
 }
 
 /** The two big mode cards that replace the old segmented switch. */
-function ModeCards({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+function ModeCards({
+  mode,
+  setMode,
+  isMgr,
+}: {
+  mode: Mode
+  setMode: (m: Mode) => void
+  isMgr: boolean
+}) {
   const t = useT()
   const cards: { key: Mode; icon: IconName; title: string; hint: string }[] = [
-    { key: 'transfer', icon: 'swap', title: t('โอนไปสาขา (เก็บสต๊อก)'), hint: t('โอนสินค้าจากคลังไปยังสาขา') },
-    { key: 'consume', icon: 'report', title: t('เบิกใช้ / ตัดออก (หน้าร้าน)'), hint: t('เบิกสินค้าเพื่อตัดสต๊อก ใช้ในหน้าร้าน') },
+    {
+      key: 'transfer',
+      icon: 'swap',
+      title: t('โอนไปสาขา (เก็บสต๊อก)'),
+      hint: isMgr
+        ? t('โอนสินค้าจากคลังไปยังสาขา')
+        : t('โอนด่วน (เฉพาะหัวหน้า) — พนักงานใช้ระบบขนส่ง'),
+    },
+    {
+      key: 'consume',
+      icon: 'report',
+      title: t('เบิกใช้ / ตัดออก (หน้าร้าน)'),
+      hint: t('เบิกสินค้าเพื่อตัดสต๊อก ใช้ในหน้าร้าน'),
+    },
   ]
   return (
     <div role="radiogroup" aria-label={t('ประเภทการเบิก')} className={`${frameCard} grid grid-cols-2 gap-2 p-2`}>
@@ -84,8 +112,17 @@ const transferTips = (t: (s: string) => string) => (
 )
 
 // ------------------------------------------------------------------ Transfer
-function TransferForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+function TransferForm({
+  mode,
+  setMode,
+  isMgr,
+}: {
+  mode: Mode
+  setMode: (m: Mode) => void
+  isMgr: boolean
+}) {
   const t = useT()
+  const navigate = useNavigate()
   const { products, locations, qtyAt } = useData()
   const { user } = useAuth()
   const toast = useToast()
@@ -165,11 +202,41 @@ function TransferForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => voi
   }
 
   const day = dateInputToMs(dateStr)
+
+  if (!isMgr) {
+    return (
+      <WithSidePanel
+        side={<KeyingSide kind="transfer" day={day} title={t('สรุปการโอนวันนี้')} todayTitle={t('เบิก/โอนที่ทำวันนี้')} tips={transferTips(t)} />}
+      >
+        <ModeCards mode={mode} setMode={setMode} isMgr={isMgr} />
+        <SectionCard icon="truck" title={t('โอนสินค้าระหว่างสาขา')}>
+          <div className="space-y-4 py-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+              <Icon name="truck" size={32} />
+            </div>
+            <div className="mx-auto max-w-md space-y-1.5 px-4">
+              <h3 className="text-base font-semibold text-ink">{t('การโอนตรงทันทีสงวนไว้สำหรับหัวหน้า/ผู้ดูแลระบบ')}</h3>
+              <p className="text-sm text-ink-soft">
+                {t('สำหรับเจ้าหน้าที่ กรุณาสร้างคำขอโอนสินค้าผ่านระบบขนส่ง เพื่อให้หัวหน้าอนุมัติและสาขาปลายทางตรวจรับ')}
+              </p>
+            </div>
+            <div className="pt-2">
+              <Button onClick={() => navigate('/transfers/new')} className="min-w-48">
+                <Icon name="plus" size={18} />
+                {t('สร้างคำขอโอนสินค้า (Logistics)')}
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
+      </WithSidePanel>
+    )
+  }
+
   return (
     <WithSidePanel
       side={<KeyingSide kind="transfer" day={day} title={t('สรุปการโอนวันนี้')} todayTitle={t('เบิก/โอนที่ทำวันนี้')} tips={transferTips(t)} />}
     >
-      <ModeCards mode={mode} setMode={setMode} />
+      <ModeCards mode={mode} setMode={setMode} isMgr={isMgr} />
       {restored && <DraftNotice onDiscard={discardDraft} />}
 
       <SectionCard icon="note" title={t('ข้อมูลการโอนสินค้า')}>
@@ -220,7 +287,15 @@ function TransferForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => voi
 }
 
 // ------------------------------------------------------------------ Consume
-function ConsumeForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+function ConsumeForm({
+  mode,
+  setMode,
+  isMgr,
+}: {
+  mode: Mode
+  setMode: (m: Mode) => void
+  isMgr: boolean
+}) {
   const t = useT()
   const { products, locations, qtyAt } = useData()
   const { user } = useAuth()
@@ -321,7 +396,7 @@ function ConsumeForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void
         />
       }
     >
-      <ModeCards mode={mode} setMode={setMode} />
+      <ModeCards mode={mode} setMode={setMode} isMgr={isMgr} />
       {restored && <DraftNotice onDiscard={discardDraft} />}
 
       <SectionCard icon="note" title={t('ข้อมูลการเบิกใช้')}>

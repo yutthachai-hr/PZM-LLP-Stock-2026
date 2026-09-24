@@ -671,7 +671,7 @@ describe('staff', () => {
 describe('the ledger is append-only', () => {
   test('staff and admins may add and amend movements', async () => {
     const trail = (uid: string, n: number) =>
-      Array.from({ length: n }, (_, i) => ({ by: uid, byName: uid, at: ts(), changed: ['qty'] }))
+      Array.from({ length: n }, (_, _i) => ({ by: uid, byName: uid, at: ts(), changed: ['qty'] }))
     await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m3'), movement('m3')))
     await assertSucceeds(
       updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: trail(STAFF, 1) }),

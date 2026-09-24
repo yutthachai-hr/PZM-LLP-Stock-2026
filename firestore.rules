@@ -81,12 +81,12 @@ service cloud.firestore {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
         'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
-        'purchaseRequests', 'messages', 'announcements',
+        'purchaseRequests', 'messages', 'announcements', 'transfers',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
         'lelapin__stockEvents', 'lelapin__purchaseOrders',
         'lelapin__purchaseBatches', 'lelapin__productAliases',
-        'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements'
+        'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements', 'lelapin__transfers'
       ];
     }
 
@@ -214,7 +214,7 @@ service cloud.firestore {
           'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'entryUnit', 'entryQty', 'qty',
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'date', 'byUserId', 'byUserName', 'createdAt',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'transferId'
         ])
         && d.type in ['receive', 'issue', 'adjust', 'consume']
         && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
@@ -233,6 +233,7 @@ service cloud.firestore {
         && (!('reason' in d) || text(d.reason, 60))
         && (!('hasPhoto' in d) || d.hasPhoto is bool)
         && (!('voided' in d) || d.voided is bool)
+        && (!('transferId' in d) || text(d.transferId, 200))
         && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
         && (!('toLocationId' in d) || text(d.toLocationId, 200))
         && (!('updatedBy' in d) || text(d.updatedBy, 200))
@@ -742,6 +743,62 @@ service cloud.firestore {
         && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d));
     }
 
+    /**
+     * Inter-branch stock transfer / logistics document (24 Sep 2026).
+     */
+    function validTransfer(d) {
+      return transferFrozen(d) && transferLive(d) && d.keys().hasAll([
+          'id', 'docNo', 'status', 'revision', 'fromLocationId', 'toLocationId',
+          'dispatchDate', 'items', 'requestedBy', 'requestedByName', 'history',
+          'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'status', 'revision', 'fromLocationId', 'toLocationId',
+          'dispatchDate', 'note', 'legKind', 'parentId', 'childIds',
+          'dispatchMovementDocNo', 'receiveMovementDocNo', 'items',
+          'requestedBy', 'requestedByName',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'receivedBy', 'receivedByName', 'receivedAt',
+          'cancelReason', 'cancelledBy', 'cancelledAt',
+          'history', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function transferFrozen(d) {
+      return text(d.docNo, 40)
+        && text(d.requestedBy, 200) && text(d.requestedByName, 200)
+        && epochMs(d.createdAt);
+    }
+
+    function validTransferEdit(d) {
+      return transferLive(d);
+    }
+
+    function transferLive(d) {
+      return text(d.fromLocationId, 200) && text(d.toLocationId, 200)
+        && d.status in ['draft', 'pendingApproval', 'inTransit', 'receiving', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved', 'completed', 'cancelled']
+        && d.revision is int && d.revision >= 1 && d.revision <= 1000
+        && epochMs(d.dispatchDate)
+        && d.items is list && d.items.size() > 0 && d.items.size() <= 200
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 500
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('legKind' in d) || d.legKind in ['return', 'forward', 'keep'])
+        && (!('parentId' in d) || text(d.parentId, 200))
+        && (!('childIds' in d) || (d.childIds is list && d.childIds.size() <= 50))
+        && (!('dispatchMovementDocNo' in d) || text(d.dispatchMovementDocNo, 40))
+        && (!('receiveMovementDocNo' in d) || text(d.receiveMovementDocNo, 40))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('approvedByName' in d) || text(d.approvedByName, 200))
+        && (!('approvedAt' in d) || epochMs(d.approvedAt))
+        && (!('receivedBy' in d) || text(d.receivedBy, 200))
+        && (!('receivedByName' in d) || text(d.receivedByName, 200))
+        && (!('receivedAt' in d) || epochMs(d.receivedAt))
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
+        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && epochMs(d.updatedAt);
+    }
+
     /** The company as its documents present it: one document per brand, `main`. */
     function validCompanyProfile(docId, d) {
       return docId == 'main'
@@ -785,6 +842,7 @@ service cloud.firestore {
       return d.id == docId && (
         k == 'stockMovements' ? movementCore(d)
         : k == 'stockLevels' ? validLevel(d)
+        : k == 'transfers' ? (fresh ? validTransfer(d) : validTransferEdit(d))
         : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
         : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d))
         : k == 'messages' ? (fresh ? validMessage(d) : messageShape(d))
@@ -839,6 +897,11 @@ service cloud.firestore {
           && request.resource.data.publisherId == request.auth.uid
           && request.resource.data.status == 'draft'
           && !('docNo' in request.resource.data)
+        // A transfer is created by whoever is requesting, or inTransit if child leg by manager.
+        : k == 'transfers'
+        ? request.resource.data.requestedBy == request.auth.uid
+          && (request.resource.data.status in ['draft', 'pendingApproval']
+              || (request.resource.data.status == 'inTransit' && roleIsManager()))
         // A request is filed by whoever is asking, as a draft.
         : k == 'purchaseRequests'
         ? request.resource.data.createdBy == request.auth.uid
@@ -863,6 +926,7 @@ service cloud.firestore {
       let k = kind(name);
       return k == 'purchaseOrders' ? orderEdit()
         : k == 'purchaseBatches' ? batchEdit()
+        : k == 'transfers' ? transferEdit()
         : k == 'purchaseRequests' ? requestEdit()
         // Confirming a spelling again replaces the whole alias, signed by whoever did it.
         : k == 'productAliases'
@@ -1019,6 +1083,39 @@ service cloud.firestore {
         || (from == 'ready' && to in ['draft', 'published', 'cancelled'])
         || (from == 'published' && to in ['sent', 'partiallySent', 'cancelled'])
         || (from == 'partiallySent' && to == 'sent');
+    }
+
+    function transferEdit() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return editedKeys().hasOnly([
+          'status', 'revision', 'dispatchDate', 'note', 'items', 'childIds',
+          'dispatchMovementDocNo', 'receiveMovementDocNo',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'receivedBy', 'receivedByName', 'receivedAt',
+          'cancelReason', 'cancelledBy', 'cancelledAt',
+          'history', 'updatedAt'
+        ])
+        && d.history.size() >= old.history.size()
+        && (d.status == old.status || transferMove(old.status, d.status))
+        && (!('approvedBy' in d)
+            || d.approvedBy == old.get('approvedBy', '')
+            || d.approvedBy == request.auth.uid)
+        && (!('receivedBy' in d)
+            || d.receivedBy == old.get('receivedBy', '')
+            || d.receivedBy == request.auth.uid);
+    }
+
+    function transferMove(from, to) {
+      return (
+        (to == 'pendingApproval' && from == 'draft')
+        || (to == 'inTransit' && from == 'pendingApproval' && roleIsManager())
+        || (to == 'cancelled' && from in ['draft', 'pendingApproval'])
+        || (to in ['receiving', 'completed', 'discrepancy'] && from == 'inTransit')
+        || (to in ['completed', 'discrepancy'] && from == 'receiving')
+        || (to == 'pendingDiscrepancyApproval' && from == 'discrepancy')
+        || (to in ['resolved', 'completed'] && from in ['discrepancy', 'pendingDiscrepancyApproval'] && roleIsManager())
+      );
     }
 
     function movementEdit() {
@@ -1258,7 +1355,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return validNotification(docId, d) && d.source == 'client' && d.createdBy == request.auth.uid
         && d.readBy.size() == 0 && d.active == true
-        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste']);
+        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste', 'transferArriving', 'transferIssue', 'transferSubmitted', 'transferDiscrepancy']);
     }
 
     function notificationUpdate(docId) {
