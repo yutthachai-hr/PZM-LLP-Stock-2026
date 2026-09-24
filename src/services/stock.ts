@@ -547,6 +547,11 @@ export async function readProductLedger(productId: string, opts: { force?: boole
   return rows
 }
 
+/** Fetch movements in a date range on demand; nothing is subscribed. */
+export async function listMovementsInRange(from: number, to: number): Promise<StockMovement[]> {
+  return (await scoped().getRange<StockMovement>(COL.movements, 'date', from, to)) ?? []
+}
+
 /** Fetch the proof photo attached to a movement document (by docNo). */
 export async function getMovementImage(docNo: string): Promise<string | null> {
   const img = await scoped().getOne<{ dataUrl: string }>(COL.movementImages, docNo)

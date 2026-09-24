@@ -1653,7 +1653,7 @@ export const EN: Record<string, string> = {
   'ยังไม่มีรายการที่หมด': 'Nothing out of stock',
   'โอนสาขาวันนี้': 'Transfers today',
   'มูลค่าสินค้าคงคลัง': 'Inventory value',
-  'จาก 30 วันก่อน': 'vs 30 days ago',
+  'จาก 7 วันก่อน': 'vs 7 days ago',
   // ---- R2 products (22 Sep 2026) ----
   '{pct}% ของทั้งหมด': '{pct}% of all',
   'จำนวนสินค้าทั้งหมด': 'All products',
