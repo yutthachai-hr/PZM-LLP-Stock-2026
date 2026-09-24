@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
 import { brandDef } from '../../brand/brand'
@@ -39,7 +39,7 @@ export function NavRail() {
         </button>
         <nav className="flex-1 overflow-y-auto py-1" aria-label={t('เมนูหลัก')}>
           {navFor(user?.role).map((item) => (
-            <NavLink
+            <Link
               key={item.to}
               to={item.to}
               aria-current={navMatches(pathname, item.to) ? 'page' : undefined}
@@ -52,7 +52,7 @@ export function NavRail() {
               {item.to === '/calendar' && todayCount > 0 && (
                 <span className="num absolute right-1 top-1 rounded-full bg-brand px-1 text-[10px] font-bold leading-4 text-white">{todayCount}</span>
               )}
-            </NavLink>
+            </Link>
           ))}
         </nav>
       </aside>

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useAutomation } from '../data/useAutomation'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -127,7 +127,7 @@ function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
   const { pathname } = useLocation()
   const on = navMatches(pathname, item.to)
   return (
-    <NavLink
+    <Link
       to={item.to}
       aria-current={on ? 'page' : undefined}
       className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-[15px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
@@ -141,7 +141,7 @@ function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
           {badge}
         </span>
       )}
-    </NavLink>
+    </Link>
   )
 }
 

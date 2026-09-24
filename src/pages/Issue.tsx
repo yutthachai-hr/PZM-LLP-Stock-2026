@@ -35,7 +35,7 @@ export function IssuePage() {
   return (
     <FramePage>
       <PageHero
-        icon="truck"
+        icon="send"
         tone="out"
         title={t('เบิก/โอนสาขา')}
         subtitle={t('โอนสินค้าระหว่างคลังและสาขา หรือเบิกใช้เพื่อตัดสต๊อกหน้าร้าน')}

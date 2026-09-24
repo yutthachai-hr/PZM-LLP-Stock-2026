@@ -25,3 +25,16 @@ describe('navMatches', () => {
     expect(lit('/requests/new')).toEqual(['/requests'])
   })
 })
+
+describe('menu icons', () => {
+  test('no two menu entries share a picture (owner, 25 Sep 2026)', () => {
+    const icons = NAV.map((n) => n.icon)
+    expect(new Set(icons).size).toBe(icons.length)
+  })
+
+  test('the delivery list page has its new name', () => {
+    expect(NAV.find((n) => n.to === '/transfers/today')).toMatchObject({ label: 'ใบรายการส่งสินค้า', icon: 'clipboardCheck' })
+    expect(NAV.find((n) => n.to === '/issue')?.icon).toBe('send')
+    expect(NAV.find((n) => n.to === '/orders')?.icon).toBe('cart')
+  })
+})

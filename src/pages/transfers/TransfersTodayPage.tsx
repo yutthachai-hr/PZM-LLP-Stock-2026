@@ -17,7 +17,7 @@ import { listOpenTransfers, listTransfersInRange, reportableQty, reportMisroute 
 import type { Transfer } from '../../types'
 
 /**
- * รายการส่งของวันนี้ — what is coming to the branches this person works at, what they are
+ * The delivery list (ใบรายการส่งสินค้า) — what is coming to the branches this person works at, what they are
  * checking, what has a problem, and what they received today.
  *
  * Read once when opened: every open document by status, plus the last few days for "received
@@ -71,9 +71,9 @@ export function TransfersTodayPage() {
   return (
     <FramePage>
       <PageHero
-        icon="truck"
+        icon="clipboardCheck"
         tone="in"
-        title={t('รายการส่งของวันนี้')}
+        title={t('ใบรายการส่งสินค้า')}
         subtitle={
           scoped ? (
             <span className="inline-flex flex-wrap gap-1">

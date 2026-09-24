@@ -236,8 +236,8 @@ export function TransfersPage() {
         actions={
           <>
             <Button variant="outline" onClick={() => navigate('/transfers/today')}>
-              <Icon name="receive" size={18} />
-              {t('ของเข้าวันนี้')}
+              <Icon name="clipboardCheck" size={18} />
+              {t('ใบรายการส่งสินค้า')}
             </Button>
             <Button onClick={() => navigate('/transfers/new')}>
               <Icon name="plus" size={18} />

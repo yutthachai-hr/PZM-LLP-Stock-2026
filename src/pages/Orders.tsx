@@ -395,7 +395,7 @@ export function OrdersPage() {
   return (
     <FramePage>
       <PageHero
-        icon="truck"
+        icon="cart"
         title={t('สั่งซื้อ')}
         subtitle={t('สั่งของกับผู้ขาย ตรวจรับ แล้วเข้าคลังในขั้นตอนเดียว')}
         actions={

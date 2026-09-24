@@ -2275,7 +2275,6 @@ export const EN: Record<string, string> = {
   'ยังไม่มีการทำรายการโอนสินค้า': 'No transfers recorded yet',
   // ---- logistics, second pass (24 Sep 2026) ----------------------------------
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)': 'Search to add a line (name / code / barcode)',
-  'ของเข้าวันนี้': "Today's deliveries",
   'ระบบส่งสินค้า': 'Logistics',
   'เปิดใช้ระบบส่งสินค้าแล้ว': 'Logistics switched on',
   'สร้างคลัง "ระหว่างขนส่ง" ของแต่ละบริษัท ก่อนอนุมัติการโอนครั้งแรก': 'Create each company\'s "in transit" location before the first transfer is approved',
@@ -2346,7 +2345,6 @@ export const EN: Record<string, string> = {
   'มีผลต่าง {n} รายการ': '{n} with a difference',
   'ยืนยันรับและส่งผลต่างให้หัวหน้า': 'Confirm and send differences to the manager',
   'สแกนบาร์โค้ดสินค้า': 'Scan a product barcode',
-  'รายการส่งของวันนี้': "Today's deliveries",
   'พบสินค้าส่งผิดสาขา': 'Goods for another branch',
   'บันทึกแล้ว — สินค้ายังไม่เข้าสต๊อกสาขานี้จนกว่าหัวหน้าจะตัดสิน': "Saved — the goods are not this branch's stock until the manager decides",
   'ของยังนับเป็น "ระหว่างขนส่ง" ไม่เพิ่มเข้าสต๊อกขายของสาขานี้ หัวหน้าจะเลือกให้เก็บไว้ ส่งต่อ หรือส่งกลับ': 'The goods stay "in transit" and are not added to this branch\'s stock. The manager decides: keep, forward or return.',
@@ -2385,4 +2383,5 @@ export const EN: Record<string, string> = {
   'รับแล้ว {got} · ค้างส่ง {left} {unit}': 'Received {got} · {left} {unit} still to come',
   'รับของเข้าคลัง (รอบที่ {n})': 'Received into stock (delivery {n})',
   'รับรอบที่ {n}': 'Delivery {n}',
+  'ใบรายการส่งสินค้า': 'Delivery list',
 }
