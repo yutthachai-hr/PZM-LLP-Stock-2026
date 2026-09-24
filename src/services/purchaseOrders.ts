@@ -432,6 +432,8 @@ export async function amendPurchaseOrder(params: {
   const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, params.id)
   if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
   if (order.status !== 'ordered') throw new AppError('แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ')
+  // Its lines carry what has arrived so far; rebuilding them would lose it.
+  if (order.receipts?.length) throw new AppError('แก้ไขไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — รับส่วนที่เหลือ หรือปิดยอดค้าง')
 
   const lines = buildLines(params.lines, params.products)
   const note = params.note?.trim() || undefined

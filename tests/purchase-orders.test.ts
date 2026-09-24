@@ -809,6 +809,18 @@ describe('an order delivered in more than one go', () => {
     expect(orders()[0].status).toBe('ordered')
   })
 
+  test('once part of it is on the books, the order cannot be revised — that would lose what arrived', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id, invoiceNo: 'IV-1', actor: ACTOR,
+      lines: [{ productId: 'p1', receivedQty: 6, checked: false, note: 'rest tomorrow' }, tick],
+    })
+    await expect(
+      amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 12 }], reason: 'more', products, actor: ACTOR }),
+    ).rejects.toThrow()
+    expect(orders()[0].lines[0].receivedQty).toBe(6)
+  })
+
   test('the receiving list offers only orders with something still owed', async () => {
     const full = await placeOrder()
     const part = await placeOrder()

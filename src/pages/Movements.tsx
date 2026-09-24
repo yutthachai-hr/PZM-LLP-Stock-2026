@@ -28,6 +28,7 @@ import { breakdown, describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
+import { movementNote } from '../lib/receiptLabel'
 
 export function MovementsPage() {
   const t = useT()
@@ -49,6 +50,8 @@ export function MovementsPage() {
   const [params, setParams] = useSearchParams()
   const productId = params.get('product') ?? ''
   const locationId = params.get('location') ?? ''
+  // ?doc=RC-00012 — one document's rows, from the receiving screen's "ดูใบรับ".
+  const docFilter = params.get('doc') ?? ''
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(params)
@@ -111,10 +114,10 @@ export function MovementsPage() {
 
   const filtered = useMemo(
     () =>
-      [...rows.map((r) => r.movement), ...voidedRows].sort(
-        (a, b) => b.date - a.date || b.createdAt - a.createdAt,
-      ),
-    [rows, voidedRows],
+      [...rows.map((r) => r.movement), ...voidedRows]
+        .filter((m) => !docFilter || m.docNo === docFilter)
+        .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt),
+    [rows, voidedRows, docFilter],
   )
 
   async function doVoid(m: StockMovement) {
@@ -162,6 +165,7 @@ export function MovementsPage() {
                 {t(ADJUST_REASONS.find((r) => r.value === m.reason)?.label ?? m.reason)}
               </div>
             )}
+            {movementNote(m, t) && <div className="max-w-xs truncate text-xs text-ink-faint">{movementNote(m, t)}</div>}
           </>
         ),
       },
@@ -340,6 +344,16 @@ export function MovementsPage() {
       </Card>
 
       <LedgerWindowNotice />
+
+      {docFilter && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand/20 bg-brand-soft px-4 py-2.5 text-sm text-brand">
+          <Icon name="fileSheet" size={17} />
+          <span className="font-medium">{t('แสดงเฉพาะเอกสาร {docNo}', { docNo: docFilter })}</span>
+          <button type="button" onClick={() => setParam('doc', '')} className="ml-auto cursor-pointer rounded-lg px-2 py-1 font-medium hover:underline">
+            {t('แสดงทั้งหมด')}
+          </button>
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <DataTable

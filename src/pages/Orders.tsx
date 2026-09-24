@@ -34,16 +34,17 @@ import {
   CHASE_AFTER_DAYS,
   amendPurchaseOrder,
   cancelPurchaseOrder,
+  closeOrderRemainder,
   createPurchaseOrder,
   daysWaiting,
   expectedDeliveryAt,
   listOrdersInRange,
   needsResend,
   overdueOrders,
-  receivePurchaseOrder,
   summariseBySupplier,
 } from '../services/purchaseOrders'
 import { useSuppliers } from '../services/suppliers'
+import { partialLabel } from './receive/receipt'
 import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
 import { PoSheet, SheetLangToggle } from '../components/PoSheet'
@@ -99,7 +100,8 @@ export function OrdersPage() {
   // Set from the late-deliveries banner: the open tab narrowed to the orders it counted.
   const [lateOnly, setLateOnly] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [receiving, setReceiving] = useState<PurchaseOrder | null>(null)
+  // Closing what is left of a partly delivered order: the rest is not coming.
+  const [closing, setClosing] = useState<PurchaseOrder | null>(null)
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null)
   const [cancelling, setCancelling] = useState<PurchaseOrder | null>(null)
   const [amending, setAmending] = useState<PurchaseOrder | null>(null)
@@ -133,7 +135,8 @@ export function OrdersPage() {
     void load()
   }, [load])
 
-  // Opened from the calendar: ?po=<id> shows the sheet, ?receive=<id> opens the check-in.
+  // Opened from the calendar: ?po=<id> shows the sheet, ?receive=<id> goes to the receiving
+  // screen with that order picked (24 Sep 2026 — the check-in modal is retired).
   // Back from LINE Login (or opened inside LINE): ?send=<id> reopens the send wizard on
   // that order (share/liffResume.ts). Consumed once the list is here, and cleared so a
   // refresh does not reopen it.
@@ -143,10 +146,14 @@ export function OrdersPage() {
     const receive = params.get('receive')
     const send = params.get(RESUME_PARAM)
     if (!po && !receive && !send) return
-    const hit = orders.find((o) => o.id === (po ?? receive ?? send))
-    if (hit) (po ? setViewing : receive ? setReceiving : setSending)(hit)
+    if (receive && !po) {
+      navigate(`/receive?po=${encodeURIComponent(receive)}`, { replace: true })
+      return
+    }
+    const hit = orders.find((o) => o.id === (po ?? send))
+    if (hit) (po ? setViewing : setSending)(hit)
     setParams({}, { replace: true })
-  }, [loading, orders, params, setParams])
+  }, [loading, orders, params, setParams, navigate])
 
   const leadTimeOf = useCallback(
     (supplierId: string) => suppliers.find((x) => x.id === supplierId)?.leadTimeDays,
@@ -190,6 +197,18 @@ export function OrdersPage() {
   }, [orders])
   const toSend = useMemo(() => orders.filter((o) => selected.has(o.id) && o.status === 'ordered'), [orders, selected])
   const filtersOn = !!(search.trim() || supplierFilter || stateFilter || lateOnly)
+
+  async function closeShort(order: PurchaseOrder, reason: string) {
+    if (!user) return
+    try {
+      const next = await closeOrderRemainder({ orderId: order.id, reason, actor: { id: user.id, name: user.name } })
+      setOrders((cur) => cur.map((o) => (o.id === order.id ? next : o)))
+      setClosing(null)
+      toast.success(t('ปิดยอดค้างของ {docNo} แล้ว', { docNo: order.docNo }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
 
   async function cancel(order: PurchaseOrder, reason: string) {
     if (!user) return
@@ -284,9 +303,10 @@ export function OrdersPage() {
     return {
       onOpen: () => setViewing(o),
       onSend: () => setSending(o),
-      onReceive: () => setReceiving(o),
+      onReceive: () => navigate(`/receive?po=${encodeURIComponent(o.id)}`),
       onAmend: () => setAmending(o),
       onCancel: () => setCancelling(o),
+      onCloseShort: () => setClosing(o),
     }
   }
 
@@ -558,14 +578,6 @@ export function OrdersPage() {
           onDone={() => void load()}
         />
       )}
-      {receiving && user && (
-        <ReceiveModal
-          order={receiving}
-          actor={{ id: user.id, name: user.name }}
-          onClose={() => setReceiving(null)}
-          onDone={() => void load()}
-        />
-      )}
       {viewing && (
         <OrderSheet
           order={viewing}
@@ -600,6 +612,15 @@ export function OrdersPage() {
           actor={{ id: user.id, name: user.name }}
           onClose={() => setAmending(null)}
           onDone={(next) => setOrders((cur) => cur.map((o) => (o.id === next.id ? next : o)))}
+        />
+      )}
+      {closing && (
+        <ReasonModal
+          title={t('ปิดยอดค้าง {docNo}', { docNo: closing.docNo })}
+          message={t('ของที่รับแล้วยังอยู่ในสต๊อกตามเดิม ส่วนที่ยังไม่มาจะไม่ค้างรับอีก และใบสั่งซื้อย้ายไป "รับของแล้ว" พร้อมเหตุผล')}
+          confirmText={t('ปิดยอดค้าง')}
+          onClose={() => setClosing(null)}
+          onConfirm={(reason) => closeShort(closing, reason)}
         />
       )}
       {cancelling && (
@@ -660,7 +681,11 @@ function OrderStatus({ order, late }: { order: PurchaseOrder; late: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {done ? (
-        <Badge color="green">{t('รับของแล้ว')}</Badge>
+        order.closedShortAt ? (
+          <Badge color="amber">{t('ปิดยอดค้าง — รับไม่ครบ')}</Badge>
+        ) : (
+          <Badge color="green">{t('รับของแล้ว')}</Badge>
+        )
       ) : draft ? (
         <Badge color="slate">{t('ร่าง — รออนุมัติ')}</Badge>
       ) : (
@@ -671,6 +696,7 @@ function OrderStatus({ order, late }: { order: PurchaseOrder; late: boolean }) {
       ) : (
         order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>
       )}
+      {!done && partialLabel(order, t) && <Badge color="amber">{partialLabel(order, t)}</Badge>}
       {late && <Badge color="red">{t('รอมา {days} วัน', { days: daysWaiting(order) })}</Badge>}
     </div>
   )
@@ -726,6 +752,7 @@ function OrderActions({
   onReceive,
   onAmend,
   onCancel,
+  onCloseShort,
   onSend,
 }: {
   order: PurchaseOrder
@@ -735,10 +762,14 @@ function OrderActions({
   onReceive: () => void
   onAmend: () => void
   onCancel: () => void
+  onCloseShort: () => void
   onSend: () => void
 }) {
   const t = useT()
   const live = order.status === 'ordered'
+  // Part-delivered: its lines carry what arrived, so it is no longer edited or cancelled —
+  // the rest is received, or closed short (owner, 24 Sep 2026).
+  const partial = live && !!order.receipts?.length
   const size = compact ? 'sm' : 'md'
   // In a table row narrower than a wide monitor the three quiet actions give up their words
   // and keep their icons (named on hover and to a screen reader), so the row fits without
@@ -750,7 +781,7 @@ function OrderActions({
         <Icon name="eye" size={16} />
         <span className={label}>{t('ดูใบสั่ง')}</span>
       </Button>
-      {live && (
+      {live && !partial && (
         <Button variant="outline" size={size} onClick={onAmend} title={t('แก้ไข')} aria-label={t('แก้ไข')}>
           <Icon name="pencil" size={15} />
           <span className={label}>{t('แก้ไข')}</span>
@@ -765,10 +796,18 @@ function OrderActions({
       {live && (
         <Button size={size} onClick={onReceive}>
           <Icon name="truck" size={16} />
-          {t('ตรวจรับของ')}
+          {partial ? t('รับส่วนที่เหลือ') : t('ตรวจรับของ')}
         </Button>
       )}
-      {(order.status === 'ordered' || order.status === 'draft') && (
+      {partial && (
+        <button
+          onClick={onCloseShort}
+          className="min-h-10 cursor-pointer whitespace-nowrap rounded-lg px-2 text-sm font-medium text-warn hover:bg-warn-soft"
+        >
+          {t('ปิดยอดค้าง')}
+        </button>
+      )}
+      {(order.status === 'draft' || (order.status === 'ordered' && !partial)) && (
         <button
           onClick={onCancel}
           className="min-h-10 cursor-pointer whitespace-nowrap rounded-lg px-2 text-sm font-medium text-danger hover:bg-danger-soft"
@@ -1152,166 +1191,6 @@ function NewOrderModal({
           </Button>
           <Button onClick={() => void save()} disabled={busy || chosen.length === 0 || !locationId}>
             {busy ? t('กำลังบันทึก...') : t('สั่งของ ({count} รายการ)', { count: chosen.length })}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-/**
- * Check a delivery in, line by line.
- *
- * Every line has to be answered: ticked as correct, or given the quantity that actually
- * arrived and a reason why it differs. The invoice number is required before any of it can
- * reach the books — the same thing the receiving screen asks for when a delivery is keyed by
- * hand, and for the same reason.
- */
-function ReceiveModal({
-  order,
-  actor,
-  onClose,
-  onDone,
-}: {
-  order: PurchaseOrder
-  actor: { id: string; name: string }
-  onClose: () => void
-  onDone: () => void
-}) {
-  const t = useT()
-  const toast = useToast()
-  const [invoiceNo, setInvoiceNo] = useState('')
-  const [dateStr, setDateStr] = useState(msToDateInput(Date.now()))
-  const [state, setState] = useState<Record<string, { checked: boolean; qty: number; note: string }>>(
-    () =>
-      Object.fromEntries(
-        order.lines.map((l) => [l.productId, { checked: true, qty: l.orderedQty, note: '' }]),
-      ),
-  )
-  const [busy, setBusy] = useState(false)
-
-  function set(productId: string, patch: Partial<{ checked: boolean; qty: number; note: string }>) {
-    setState((cur) => ({ ...cur, [productId]: { ...cur[productId], ...patch } }))
-  }
-
-  const needsReason = order.lines.filter((l) => {
-    const s = state[l.productId]
-    return !s.checked && s.qty !== l.orderedQty && !s.note.trim()
-  })
-
-  async function save() {
-    setBusy(true)
-    try {
-      const result = await receivePurchaseOrder({
-        orderId: order.id,
-        invoiceNo,
-        date: dateInputToMs(dateStr),
-        lines: order.lines.map((l) => ({
-          productId: l.productId,
-          receivedQty: state[l.productId].qty,
-          checked: state[l.productId].checked,
-          note: state[l.productId].note,
-        })),
-        actor,
-      })
-      toast.success(
-        t('รับของเข้าคลังแล้ว (เลขที่ {docNo}) {count} รายการ', {
-          docNo: result.docNo,
-          count: result.receivedLines,
-        }),
-      )
-      onDone()
-      onClose()
-    } catch (e) {
-      toast.error(errText(e, t))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title={t('ตรวจรับของ {docNo}', { docNo: order.docNo })} wide>
-      <div className="space-y-4">
-        <div className="rounded-lg bg-sunken px-3 py-2 text-sm">
-          <span className="font-medium text-ink">{order.supplierName}</span>
-          <span className="text-ink-soft"> · {formatThaiDate(order.orderedAt)}</span>
-        </div>
-
-        <div className="max-h-80 space-y-2 overflow-auto">
-          {order.lines.map((l) => {
-            const s = state[l.productId]
-            const differs = !s.checked && s.qty !== l.orderedQty
-            return (
-              <div key={l.productId} className="rounded-lg border border-line p-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-sm text-ink">{l.productName}</span>
-                  <span className="text-xs text-ink-soft">
-                    {t('สั่ง')} {fmtQty(l.orderedQty)} {shownUnit(l)}
-                  </span>
-                  {/* One tap for the common case: it arrived exactly as ordered. */}
-                  <button
-                    onClick={() => set(l.productId, { checked: !s.checked, qty: l.orderedQty })}
-                    className={`inline-flex min-h-9 cursor-pointer items-center gap-1 rounded-lg px-3 text-sm font-medium transition-colors duration-150 ${
-                      s.checked
-                        ? 'bg-in-soft text-in'
-                        : 'border border-line-strong text-ink-soft hover:bg-sunken'
-                    }`}
-                  >
-                    <Icon name="check" size={15} />
-                    {t('ถูกต้อง')}
-                  </button>
-                </div>
-                {!s.checked && (
-                  <div className="mt-2 grid gap-2 sm:grid-cols-[8rem_1fr]">
-                    <Input
-                      type="number"
-                      step="any"
-                      min={0}
-                      className="text-right"
-                      value={s.qty}
-                      onChange={(e) => set(l.productId, { qty: Number(e.target.value) })}
-                    />
-                    <Input
-                      value={s.note}
-                      onChange={(e) => set(l.productId, { note: e.target.value })}
-                      placeholder={t('เหตุผลที่จำนวนไม่ตรง (บังคับ)')}
-                      className={differs && !s.note.trim() ? 'border-danger bg-danger-soft' : ''}
-                    />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t('เลขที่บิล / ใบส่งของ')} required>
-            <Input
-              value={invoiceNo}
-              onChange={(e) => setInvoiceNo(e.target.value)}
-              placeholder={t('เช่น IV2616876')}
-            />
-          </Field>
-          <Field label={t('วันที่รับ')}>
-            <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
-          </Field>
-        </div>
-
-        {needsReason.length > 0 && (
-          <p className="text-xs text-danger">
-            {t('ยังไม่ได้ระบุเหตุผล {count} รายการ', { count: needsReason.length })}
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            {t('ยกเลิก')}
-          </Button>
-          <Button
-            onClick={() => void save()}
-            disabled={busy || !invoiceNo.trim() || needsReason.length > 0}
-          >
-            {busy ? t('กำลังบันทึก...') : t('ยืนยันรับเข้าคลัง')}
           </Button>
         </div>
       </div>
