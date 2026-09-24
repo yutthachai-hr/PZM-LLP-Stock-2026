@@ -345,8 +345,8 @@ describe('what arrived after the backup was written', () => {
     seed('productAliases', [{ id: 'alias-1', key: 'X', productId: 'p1', sourceName: 'X ', createdBy: 'u', createdByName: 'U', createdAt: 1 }])
     seed('purchaseBatches', [{ id: 'pb1', batchNo: 'PB-20260914-001', locationId: MAIN, sourceFileName: 'f', fileHash: 'h', sheetName: 's', blockLabel: 'x', status: 'ready', rows: [], groups: [], history: [], createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 }])
     const b = await buildBackup('Owner')
-    // Version 9 since announcements and the company profile joined the file (24 Sep 2026).
-    expect(b.version).toBe(9)
+    // Version 10 since transfers (logistics) joined the file.
+    expect(b.version).toBe(10)
     expect(b.data.productAliases).toHaveLength(1)
     expect(b.data.purchaseBatches).toHaveLength(1)
 
@@ -434,5 +434,25 @@ describe('announcements and the company profile (24 Sep 2026)', () => {
     // Numbers are never issued twice after a restore.
     expect(counters.get('announcement__2569')).toBe(7)
     expect(counters.get('announcement__2570')).toBe(1)
+  })
+})
+
+describe('branch transfers (logistics)', () => {
+  const tr = (id: string, docNo: string) => ({
+    id, docNo, status: 'inTransit', revision: 1, fromLocationId: 'main', toLocationId: 'b1',
+    dispatchDate: 1, requestedBy: 'u', requestedByName: 'U', items: [], history: [], createdAt: 1, updatedAt: 1,
+  })
+
+  test('travel with the file, and the transfer counter comes back at the highest number issued', async () => {
+    seed('transfers', [tr('t1', 'TR-00004'), tr('t2', 'TR-00012')])
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    expect(file.data.transfers).toHaveLength(2)
+
+    resetMemory()
+    seedMasterData()
+    await restoreBackup(file, RESTORE_MODES.repair)
+    expect(raw('transfers')).toHaveLength(2)
+    const counters = new Map(raw('counters').map((c) => [c.id as string, c.value as number]))
+    expect(counters.get('transfer')).toBe(12)
   })
 })

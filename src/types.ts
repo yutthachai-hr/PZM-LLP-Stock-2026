@@ -16,6 +16,8 @@ export interface AppUser {
   localPassword?: string
   /** When this person last opened the message board — the unread badge counts from here. */
   messagesReadAt?: number
+  /** Assigned locations/sites. Empty or undefined = can access all branches/sites. */
+  siteIds?: string[]
   createdAt: number
 }
 
@@ -112,7 +114,9 @@ export interface ProductImage {
   dataUrl: string // compressed base64 JPEG
 }
 
-export type LocationType = 'warehouse' | 'branch'
+export type LocationType = 'warehouse' | 'branch' | 'transit'
+
+export const TRANSIT_LOCATION_ID = 'transit'
 
 export interface StockLocation {
   id: string
@@ -200,6 +204,8 @@ export interface StockMovement {
    */
   edits?: MovementEdit[]
   voided?: boolean
+  /** When this movement came from a branch transfer (transfers/{id}). */
+  transferId?: string
 }
 
 /** One entry in a movement's edit history. */
@@ -666,6 +672,9 @@ export type NotificationKind =
   | 'poArriving' // goods due today
   | 'poDelayed' // goods late
   | 'cutoffToday' // a supplier's order cut-off is today
+  | 'transferSubmitted' // a branch transfer waiting for approval
+  | 'transferArriving' // stock in transit arriving today
+  | 'transferIssue' // transfer discrepancy or misroute reported
   | 'lowStock'
   | 'outOfStock'
   | 'stockoutSoon' // at the current rate of use, gone before the next delivery could land
@@ -979,6 +988,159 @@ export interface PurchaseRequest {
   updatedAt: number
 }
 
+// ---------------------------------------------------------------- transfers ----
+
+export type TransferStatus =
+  | 'draft'
+  | 'pendingApproval'
+  | 'returned'
+  | 'rejected'
+  | 'inTransit'
+  | 'receiving'
+  | 'completed'
+  | 'discrepancy'
+  | 'pendingDiscrepancyApproval'
+  | 'resolved'
+  | 'cancelled'
+
+export type TransferLegKind = 'forward' | 'return' | 'replacement'
+
+export type DiscrepancyKind = 'short' | 'over'
+
+export type DiscrepancyReason =
+  | 'SHORT'
+  | 'OVER'
+  | 'WEIGHT_VARIANCE'
+  | 'DAMAGED'
+  | 'WRONG_ITEM'
+  | 'WRONG_BRANCH'
+  | 'COUNTING_ERROR'
+  | 'OTHER'
+
+export type DiscrepancyResolutionCode =
+  | 'NOT_ACTUALLY_LOADED' // short: transit -> source
+  | 'TRANSIT_LOSS'        // short: adjust out from transit (reason: lost)
+  | 'DAMAGED'             // short: adjust out from transit (reason: damage)
+  | 'WEIGHING_ERROR'      // short: correct received qty, transit -> dest for the rest
+  | 'WRONG_BRANCH'        // short: handled via misroute flow
+  | 'DISPATCH_WRONG'      // over: set correctedDispatchQty, source -> transit -> dest
+  | 'COUNT_ERROR'         // over: no movement, correct received qty
+  | 'APPROVED_ADJUSTMENT' // over: adjust in at dest (reason: found)
+  | 'BELONGS_TO_OTHER_TRANSFER' // over: link to another transfer misroute
+
+export interface TransferDiscrepancyResolution {
+  code: DiscrepancyResolutionCode
+  qty: number
+  by: string
+  byName: string
+  at: number
+  note?: string
+  movementDocNo?: string
+  childId?: string
+}
+
+export interface TransferDiscrepancy {
+  kind: DiscrepancyKind
+  qty: number
+  reason: DiscrepancyReason
+  note?: string
+  photoId?: string
+  reportedBy: string
+  reportedByName: string
+  reportedAt: number
+  resolution?: TransferDiscrepancyResolution
+}
+
+export interface TransferMisroute {
+  id: string
+  actualCustodyLocationId: string
+  originalDestinationId: string
+  qty: number
+  reportedBy: string
+  reportedByName: string
+  reportedAt: number
+  note?: string
+  resolution?: {
+    action: 'redirect' | 'forward' | 'return'
+    by: string
+    byName: string
+    at: number
+    note?: string
+    childTransferId?: string
+  }
+}
+
+export interface TransferItem {
+  idx: number
+  productId: string
+  productName: string
+  sku: string
+  unit: string
+  requestedEntryUnit?: string
+  requestedEntryQty?: number
+  requestedQty: number | null
+  dispatchEntryUnit?: string
+  dispatchEntryQty?: number
+  dispatchQty: number
+  receivedEntryUnit?: string
+  receivedEntryQty?: number
+  receivedQty?: number
+  correctedDispatchQty?: number
+  stockAtSubmit?: number
+  stockAtApprove?: number
+  removed?: {
+    by: string
+    byName: string
+    at: number
+    reason: string
+  }
+  discrepancy?: TransferDiscrepancy
+  misroutes?: TransferMisroute[]
+}
+
+export interface TransferHistoryEntry {
+  at: number
+  by: string
+  byName: string
+  action: string
+  note?: string
+  fromStatus?: TransferStatus
+  toStatus?: TransferStatus
+  oldQty?: number
+  newQty?: number
+  reason?: string
+  diff?: Record<string, unknown>
+}
+
+export interface Transfer {
+  id: string
+  docNo: string
+  status: TransferStatus
+  revision: number
+  fromLocationId: string
+  toLocationId: string
+  dispatchDate: number
+  note?: string
+  parentId?: string
+  legKind?: TransferLegKind
+  childIds?: string[]
+  requestedBy: string
+  requestedByName: string
+  submittedAt?: number
+  approvedBy?: string
+  approvedByName?: string
+  approvedAt?: number
+  receivedBy?: string
+  receivedByName?: string
+  receivedAt?: number
+  dispatchMovementDocNo?: string
+  receiveMovementDocNo?: string
+  items: TransferItem[]
+  history: TransferHistoryEntry[]
+  createdAt: number
+  updatedAt: number
+}
+
 export const COL = {
   users: 'users',
   messages: 'messages',
@@ -999,6 +1161,7 @@ export const COL = {
   purchaseOrders: 'purchaseOrders',
   purchaseBatches: 'purchaseBatches',
   purchaseRequests: 'purchaseRequests',
+  transfers: 'transfers',
   productAliases: 'productAliases',
   announcements: 'announcements',
   companyProfile: 'companyProfile',

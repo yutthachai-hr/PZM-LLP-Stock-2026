@@ -1,10 +1,11 @@
 import { backend } from '../backend'
 import type { Backend } from '../backend/types'
-import { COL, type Announcement, type PurchaseOrder, type StockMovement, type StockLevel } from '../types'
+import { COL, type Announcement, type PurchaseOrder, type StockMovement, type StockLevel, type Transfer } from '../types'
 import { brandDef, getBrand, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { balancesFromLedger, movementsChangedSince, parseLevelId } from './stock'
 import { orderCounterFloors } from './purchaseOrders'
+import { transferCounterFloors } from './transfers'
 
 // ---------------------------------------------------------------------------
 // Whole-database backup and restore for one brand.
@@ -47,7 +48,7 @@ import { orderCounterFloors } from './purchaseOrders'
  *  - 9: company announcements (announcements) and the company profile (companyProfile:
  *    logo and document prefix), 24 Sep 2026. A version-8 file still restores.
  */
-const FORMAT_VERSION = 9
+const FORMAT_VERSION = 10
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,
@@ -89,6 +90,8 @@ const COLLECTIONS = [
   COL.messages,
   // Version 9: what the company announced to its suppliers, and when it was sent.
   COL.announcements,
+  // Version 10: branch transfers (logistics).
+  COL.transfers,
 ] as const
 
 /** Rebuilt from the ledger on restore, so they are stored for reference only. */
@@ -587,6 +590,8 @@ async function rebuildDerived(db: Backend): Promise<number> {
   // Each year's announcement counter, from the numbers issued (PZM-ANN-2569-0007 → 7).
   const announcements = await db.getAll<Announcement>(COL.announcements)
   for (const [counter, seq] of announcementCounterFloors(announcements)) counters.set(counter, seq)
+  const transfers = await db.getAll<Transfer>(COL.transfers)
+  for (const [counter, seq] of transferCounterFloors(transfers)) counters.set(counter, seq)
 
   for (const [counter, seq] of counters) {
     const current = await db.getOne<{ value: number }>(COL.counters, counter)

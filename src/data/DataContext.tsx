@@ -15,6 +15,7 @@ import {
   type MinOverride,
   type AppUser,
   type AppNotification,
+  TRANSIT_LOCATION_ID,
 } from '../types'
 import { NOTIFICATION_WINDOW_DAYS } from '../lib/inventoryRules/notifications'
 
@@ -22,6 +23,8 @@ interface DataState {
   products: Product[]
   /** Named for the interface language: the English name when the screen is in English. */
   locations: StockLocation[]
+  /** Virtual in-transit location (if created). */
+  transitLocation?: StockLocation
   /** As stored — the Thai name — for the screen that edits them. */
   rawLocations: StockLocation[]
   levels: StockLevel[]
@@ -102,11 +105,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { data: products, loading: pLoading } = useLive<Product>(COL.products)
   const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations)
   const { lang } = useI18n()
+  const transitLocation = useMemo(
+    () => rawLocations.find((l) => l.type === 'transit' || l.id === TRANSIT_LOCATION_ID),
+    [rawLocations],
+  )
+  const regularLocations = useMemo(
+    () => rawLocations.filter((l) => l.type !== 'transit' && l.id !== TRANSIT_LOCATION_ID),
+    [rawLocations],
+  )
   // Every screen prints `location.name`; swapping it here is what makes "คลังหลัก" read
   // "Main Warehouse" everywhere at once when the interface is in English.
   const locations = useMemo(
-    () => (lang === 'en' ? rawLocations.map((l) => (l.nameEn ? { ...l, name: l.nameEn } : l)) : rawLocations),
-    [rawLocations, lang],
+    () => (lang === 'en' ? regularLocations.map((l) => (l.nameEn ? { ...l, name: l.nameEn } : l)) : regularLocations),
+    [regularLocations, lang],
   )
   const { data: levels, loading: sLoading } = useLive<StockLevel>(COL.stockLevels)
   const [movementsFrom, setMovementsFrom] = useState(() => windowStart(RECENT_DAYS))
@@ -134,7 +145,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<DataState>(() => {
     const productMap = new Map(products.map((p) => [p.id, p]))
-    const locationMap = new Map(locations.map((l) => [l.id, l]))
+    const locationMap = new Map(
+      rawLocations.map((l) => [l.id, lang === 'en' && l.nameEn ? { ...l, name: l.nameEn } : l]),
+    )
     // Every unit a product has a balance in, per location, base unit first. Balances are
     // never added across units — ten Pack and two KG are two numbers a person reconciles.
     const byUnit = new Map<string, { unit: string; qty: number }[]>()
@@ -154,6 +167,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return {
       products,
       locations,
+      transitLocation,
       rawLocations,
       levels,
       movements,
@@ -173,7 +187,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [
     products,
     locations,
+    transitLocation,
     rawLocations,
+    lang,
     levels,
     movements,
     minOverrides,
