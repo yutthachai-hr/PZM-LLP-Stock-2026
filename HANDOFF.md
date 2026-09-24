@@ -207,14 +207,21 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 แก้: ราคาที่คีย์ไว้ (`price`/`unit`) ไม่เปลี่ยน — ใบเสร็จว่าอย่างไรก็อย่างนั้น; สิ่งที่คำนวณใหม่คือ `cost` ต่อหน่วยหลักใหม่ (resolve `price` ต่อหน่วยเดิมกับหน่วยใหม่; ถ้าแปลงไม่ได้ก็คูณด้วยอัตราเดียวกับจำนวน) · โหมด recount ไม่มีอัตราระหว่างสองหน่วยอยู่แล้ว จึงปล่อยให้เจ้าของตั้งราคาใหม่เอง · tests `tests/unit-rebase.test.ts` (+3)
 **ยืนยันแล้วว่าเครื่องคำนวณถูก** สำหรับรูปแบบที่เจ้าของต้องการ (หน่วยหลัก EA + `1 Carton = 24 EA`): รับเข้า 2 Carton = 48 EA, เบิก 2 EA = 2 EA
 
-### รับเข้าหลายบิลในครั้งเดียว (24 ก.ย., branch `feat/multi-bill-receive`)
-หน้ารับสินค้าเข้าเดิมรับได้ทีละบิล (ตรวจ git แล้ว เป็นแบบนี้มาตั้งแต่ commit แรก) — เจ้าของรับของหลายเจ้าต่อวัน จึงเลือกแบบ A "กล่องต่อบิล": การ์ด **ข้อมูลการรับ** (คลัง/วันที่) ใช้ร่วม · การ์ด **บิล N** มีเลขบิล/Supplier + รายการของตัวเอง · ปุ่ม **เพิ่มบิล** เปิดบิลใหม่และโฟกัสช่องเลขบิลให้ · บันทึกครั้งเดียว = **RC- หนึ่งใบต่อหนึ่งบิล** (note = เลขบิล) ผ่าน `receiveStock` เดิม — ข้อมูล/rules/ประวัติไม่เปลี่ยน. ตรวจทุกบิลก่อนเขียน (`src/pages/receive/bills.ts` `planBills`) ข้อความผิดพลาดระบุเลขบิล; บิลที่บันทึกแล้วหายจากหน้าจอทันทีกันบันทึกซ้ำถ้าบิลถัดไปล้ม; ร่างเก่า `{note, lines}` ถูกย้ายเป็นบิลที่ 1 (`restoreBills`). tests `tests/multi-bill-receive.test.ts` (12). spec/plan `docs/superpowers/{specs,plans}/2026-09-24-multi-bill-receive*`
+### รับเข้าแบบเลือกใบสั่งซื้อก่อน (24–25 ก.ย., branch `feat/po-receive`) — **LIVE 25 ก.ย. 2569**
+แทนหน้ารับหลายบิล (24 ก.ย.) ที่เพิ่งขึ้นไป — เจ้าของส่งสเปก "SELECT PO → AUTO LOAD → RECEIVE ALL → EDIT EXCEPTIONS → DOCUMENT → REVIEW → CONFIRM" และตอบ 3 ข้อ: **PO ขาดส่ง = เปิดค้างรับได้หลายรอบ**, **ทีละบิลทุกโหมด**, **ปุ่มตรวจรับของในหน้าสั่งซื้อ → /receive?po=**.
+- **ใช้ engine เดิม ไม่สร้างใหม่**: `receivePurchaseOrder` (วัดกับยอด *ค้างรับ* แทนยอดสั่ง, `receivedQty` สะสม, `receipts[]` ต่อรอบ ≤50, status คง `ordered` จนครบหรือ `closeRemainder`) · `closeOrderRemainder` (ปิดยอดค้างโดยไม่มีของมา, ต้องเคยรับมาก่อน) · ยกเลิก/แก้ไข PO ที่รับไปบางส่วนแล้ว **ถูกปฏิเสธ** (แก้ไขจะทำให้ยอดที่รับหาย) · `receiveStock` รับ `doc` = supplierId/supplierName/invoiceNo/docDate/poId/poDocNo แยกฟิลด์ + รูปเอกสารใน transaction เดียว · เหตุผลที่ไม่ตรงต่อบรรทัดไปอยู่ใน note ของแถวสต๊อกด้วย
+- **ข้อมูลเก่าอ่านได้เหมือนเดิม**: ทุกจุดแสดง note ผ่าน `src/lib/receiptLabel.ts` `movementNote()` (แถวใหม่ = "SUPPLIER · IV · PO · note", แถวเก่า = note เดิม) · ตรวจเลขบิลซ้ำ `src/services/receiptDocs.ts` (ผู้ขายเดียวกัน + เลขเดียวกัน, ตัวพิมพ์เล็ก/ใหญ่ไม่มีผล; บิลก่อน 24/09/2569 ที่อยู่ใน note ตรวจไม่ได้ — หน้าจอบอกไว้ในวิธีใช้)
+- **หน้าจอ** `src/pages/Receive.tsx` + `src/pages/receive/` (PoPicker, PoLines, DocumentCard, ReceiptReview, receipt.ts) · `src/components/ThaiDateField.tsx` (แสดง 24/09/2569 ทับ date picker ของเบราว์เซอร์) · ร่างทุกรุ่นเก่า (`{bills}`, `{note,lines}`) กลับมาได้ — บิลที่เกินหนึ่งรอคิว "รับบิลถัดไป" · ลิงก์ `?po=` ชนะร่างของ PO อื่นเสมอ (StrictMode/brand มาช้า เคยทำให้ร่างทับ)
+- **หน้าสั่งซื้อ**: ป้าย "รับแล้วบางส่วน x/y", ปุ่ม "รับส่วนที่เหลือ" + "ปิดยอดค้าง", `?receive=` (ปฏิทิน) → /receive?po= · **ประวัติ**: `?doc=RC-xxxxx` กรองเอกสารเดียว + แสดงผู้ขาย/บิล/PO ใต้ชื่อสินค้า
+- **Rules** (deploy แล้ว 25 ก.ย.): ฟิลด์ใหม่ของ movement/PO มี type check · PO เพิ่ม `receipts` ได้ทีละ 1 เท่านั้น ห้ามลด · `closedShortBy` ต้องเป็นผู้ทำ · PO ที่มี receipts ห้าม cancelled · **`orderLive(d, e)` ตรวจเฉพาะฟิลด์ที่ write นี้เขียน** (`orderWritten()` = added ∪ changed) + `orderEdit` bind `editedKeys()` ครั้งเดียว — ก่อนแก้ PO กว้างสุดเหลือ headroom ~20 expressions, หลังแก้ ~150 (วัดด้วย pad trick ตาม memory rules-expression-budget)
+- tests: `tests/receive-receipt.test.ts` (12), `tests/receipt-docs.test.ts` (10), `tests/purchase-orders.test.ts` ส่งหลายรอบ (+11), rules + budget (PO 200 บรรทัด 40 receipts → รอบที่ 41 และปิดยอด; ใบรับ 40 แถวพร้อมเอกสารครบ)
+- ไม่ได้ทำ (นอกขอบเขตที่ตกลง): รับบรรทัด PO เป็นหน่วยอื่นที่ไม่ใช่หน่วยที่สั่ง · แก้ฟิลด์เอกสารหลังยืนยัน · เปลี่ยน date input หน้าอื่นเป็น ThaiDateField (ใช้ซ้ำได้ — เสนอเจ้าของได้)
 
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
-npm test              # 679 unit tests
-npm run test:rules    # 166 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
+npm test              # 836 unit tests
+npm run test:rules    # 197 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
 npm run build          # tsc -b + typecheck functions/ (Cloudflare) + vite build
 npm run lint            # 0 errors
 npm run i18n:check      # ครบทุกข้อความ
