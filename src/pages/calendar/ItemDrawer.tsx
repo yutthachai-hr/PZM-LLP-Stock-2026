@@ -31,6 +31,7 @@ import {
 } from './chips'
 import { itemIcon, itemTitle } from './ItemRow'
 import { ReasonModal, RescheduleModal } from './RescheduleModal'
+import { partialLabel } from '../receive/receipt'
 
 /**
  * One item, opened beside the calendar (a sheet from the bottom on a phone).
@@ -232,9 +233,9 @@ export function ItemDrawer({
               {t('ดูใบสั่ง')}
             </Button>
             {has('receive') && (
-              <Button onClick={() => go(`/orders?receive=${item.sourceId}`)}>
+              <Button onClick={() => go(`/receive?po=${encodeURIComponent(item.sourceId)}`)}>
                 <Icon name="receive" size={15} />
-                {t('ตรวจรับของ')}
+                {item.meta.order.receipts?.length ? t('รับส่วนที่เหลือ') : t('ตรวจรับของ')}
               </Button>
             )}
           </div>
@@ -508,10 +509,28 @@ function OrderBody({
       </Row>
       <Row label={t('คลังปลายทาง')}>{locationName(order.locationId) ?? ''}</Row>
       <Row label={t('รายการ')}>{t('{n} รายการ · รวม {qty}', { n: order.lines.length, qty: fmtQty(totalQty) })}</Row>
-      {order.status === 'received' && (
+      {order.status === 'received' && !order.receipts?.length && (
         <>
           <Row label={t('รับของเมื่อ')}>{order.receivedAt ? formatThaiDateTime(order.receivedAt) : ''}</Row>
           {order.invoiceNo && <Row label={t('เลขที่บิล')}>{order.invoiceNo}</Row>}
+        </>
+      )}
+      {/* Delivered in more than one go (24 Sep 2026): each delivery, and what is still owed. */}
+      {!!order.receipts?.length && (
+        <>
+          {order.receipts.map((r, i) => (
+            <Row key={r.docNo} label={t('รับรอบที่ {n}', { n: i + 1 })}>
+              {formatThaiDate(r.date)} · <span className="doc-no">{r.docNo}</span> · {t('บิล {no}', { no: r.invoiceNo })}
+            </Row>
+          ))}
+          {order.status === 'ordered' && partialLabel(order, t) && (
+            <Row label={t('สถานะ')}>{partialLabel(order, t)}</Row>
+          )}
+          {order.closedShortAt && (
+            <Row label={t('ปิดยอดค้าง')}>
+              {order.closedShortReason} <Muted>({order.closedShortByName} · {formatThaiDate(order.closedShortAt)})</Muted>
+            </Row>
+          )}
         </>
       )}
       {order.shareStatus === 'sent' && <Row label={t('LINE')}>{t('ส่งเข้า LINE แล้ว')}</Row>}

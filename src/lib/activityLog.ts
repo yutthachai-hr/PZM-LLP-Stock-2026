@@ -127,7 +127,24 @@ export function buildActivityLog(input: ActivityInput): ActivityEntry[] {
         .join(' · ')
       push({ ...base, key: `po:${o.id}:r${r.rev}`, at: r.at, action: t('แก้ไขใบสั่งซื้อ (Rev.{n})', { n: r.rev }), detail: `${r.reason} — ${detail}`, by: r.byName })
     }
-    if (o.status === 'received' && o.receivedAt) {
+    // Since 24 Sep 2026 an order may arrive in several deliveries: one entry each, with
+    // what came and any line that differed from what was still owed.
+    const nameOf = new Map(o.lines.map((l) => [l.productId, l.productName]))
+    ;(o.receipts ?? []).forEach((r, i) => {
+      const noted = r.lines.filter((x) => x.note).map((x) => `${nameOf.get(x.productId) ?? x.productId}: ${input.fmtQty(x.qty)} (${x.note})`)
+      push({
+        ...base,
+        key: `po:${o.id}:rc${i}`,
+        at: r.date,
+        action: t('รับของเข้าคลัง (รอบที่ {n})', { n: i + 1 }),
+        detail: [t('บิล {no}', { no: r.invoiceNo }), r.docNo, t('{n} รายการ', { n: r.lines.length }), ...noted].join(' · '),
+        by: r.byName,
+      })
+    })
+    if (o.closedShortAt) {
+      push({ ...base, key: `po:${o.id}:cs`, at: o.closedShortAt, action: t('ปิดยอดค้าง'), detail: o.closedShortReason ?? '', by: o.closedShortByName ?? '' })
+    }
+    if (o.status === 'received' && o.receivedAt && !o.receipts?.length) {
       const short = o.lines.filter((l) => (l.receivedQty ?? l.orderedQty) !== l.orderedQty)
       push({
         ...base,

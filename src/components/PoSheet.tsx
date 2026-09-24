@@ -64,6 +64,9 @@ export function PoSheet({
   const t = translatorFor(L)
   const received = order.status === 'received'
   const cancelled = order.status === 'cancelled'
+  // Part delivered and still open (24 Sep 2026): the sheet says what is still to come, so a
+  // resend to the supplier reads as "the rest of this order".
+  const partial = order.status === 'ordered' && !!order.receipts?.length
   const date = (ms: number) => formatDateFor(ms, L)
   return (
     <div id={id} ref={ref} className="rounded-lg border border-line-strong bg-white p-4 text-ink">
@@ -102,6 +105,16 @@ export function PoSheet({
             {order.receivedAt ? ` · ${date(order.receivedAt)}` : ''}
           </span>
         )}
+        {partial && (
+          <span className="rounded border-2 border-warn px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-warn">
+            {t('รับแล้วบางส่วน')}
+          </span>
+        )}
+        {received && order.closedShortAt && (
+          <span className="rounded border-2 border-warn px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-warn">
+            {t('ปิดยอดค้าง')}
+          </span>
+        )}
         {cancelled && (
           <span className="rounded border-2 border-out px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-out">
             {t('ยกเลิกแล้ว')}
@@ -131,6 +144,13 @@ export function PoSheet({
                     <span className={`block text-xs font-semibold ${short ? 'text-out' : 'text-in'}`}>
                       {t('รับจริง')} {fmtQty(got)} {shownUnit(l)}
                       {l.note ? <span className="font-normal text-ink-soft"> · {l.note}</span> : null}
+                    </span>
+                  )}
+                  {partial && (
+                    <span className={`block text-xs font-semibold ${got >= l.orderedQty ? 'text-in' : 'text-warn'}`}>
+                      {got >= l.orderedQty
+                        ? t('ครบแล้ว')
+                        : t('รับแล้ว {got} · ค้างส่ง {left} {unit}', { got: fmtQty(got), left: fmtQty(Math.max(0, l.orderedQty - got)), unit: shownUnit(l) })}
                     </span>
                   )}
                 </td>

@@ -36,6 +36,20 @@ export const NAV: NavItem[] = [
 /** The phone's "more" page — a real route so the tab bar can light it. */
 export const MORE: NavItem = { to: '/more', label: 'เพิ่มเติม', icon: 'menu' } // i18n-key
 
+/**
+ * Whether a menu entry is the page you are on.
+ *
+ * A path lights its entry and everything under it — except where another entry is more
+ * specific: "/transfers/today" is an entry of its own, so it must not light
+ * "ระบบส่งสินค้า" (/transfers) as well (owner saw both lit, 25 Sep 2026), while
+ * "/transfers/<id>" still does.
+ */
+export function navMatches(pathname: string, to: string): boolean {
+  const under = (p: string) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`))
+  if (!under(to)) return false
+  return !NAV.some((n) => n.to !== to && n.to.startsWith(`${to}/`) && under(n.to))
+}
+
 export function navFor(role: Role | undefined): NavItem[] {
   return NAV.filter((n) => !n.adminOnly || role === 'admin')
 }

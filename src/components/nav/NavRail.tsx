@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
 import { brandDef } from '../../brand/brand'
@@ -7,7 +7,7 @@ import { useTodayEventCount } from '../../data/useTodayEventCount'
 import { useT } from '../../i18n/I18nContext'
 import { Icon } from '../Icon'
 import { ActionSheet } from './ActionSheet'
-import { navFor } from './navItems'
+import { navFor, navMatches } from './navItems'
 
 /**
  * The tablet's menu (spec §1, 21 Sep 2026): every page as an icon with a short word under
@@ -18,6 +18,7 @@ import { navFor } from './navItems'
 export function NavRail() {
   const t = useT()
   const { user } = useAuth()
+  const { pathname } = useLocation()
   const { brand } = useBrand()
   const [sheet, setSheet] = useState(false)
   const todayCount = useTodayEventCount(!!user)
@@ -41,12 +42,10 @@ export function NavRail() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `relative mx-1.5 my-0.5 flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-center text-[10px] leading-tight outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
-                  isActive ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft hover:bg-sunken hover:text-ink'
-                }`
-              }
+              aria-current={navMatches(pathname, item.to) ? 'page' : undefined}
+              className={`relative mx-1.5 my-0.5 flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-center text-[10px] leading-tight outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
+                navMatches(pathname, item.to) ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft hover:bg-sunken hover:text-ink'
+              }`}
             >
               <Icon name={item.icon} size={22} />
               <span className="line-clamp-2">{t(item.label)}</span>

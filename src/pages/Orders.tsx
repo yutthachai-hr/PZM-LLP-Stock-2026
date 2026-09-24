@@ -253,7 +253,7 @@ export function OrdersPage() {
                   : t('สั่งแล้ว'),
           [t('กำหนดส่ง')]: o.expectedAt ? formatThaiDate(o.expectedAt) : '',
           [t('แก้ไขครั้งที่')]: o.revision ?? '',
-          [t('จำนวนที่รับ')]: o.status === 'received' ? (l.receivedQty ?? '') : '',
+          [t('จำนวนที่รับ')]: o.status === 'received' || o.receipts?.length ? (l.receivedQty ?? '') : '',
           [t('วันที่รับ')]: o.receivedAt ? formatThaiDate(o.receivedAt) : '',
           [t('เลขที่บิล')]: o.invoiceNo ?? '',
           [t('ผู้สั่ง')]: o.createdByName,

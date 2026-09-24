@@ -11,7 +11,7 @@ import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
-import { navFor, titleFor, type NavItem } from './nav/navItems'
+import { navFor, navMatches, titleFor, type NavItem } from './nav/navItems'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
 
@@ -124,17 +124,15 @@ function Brand({
 
 function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
   const t = useT()
+  const { pathname } = useLocation()
+  const on = navMatches(pathname, item.to)
   return (
     <NavLink
       to={item.to}
-      end={item.to === '/'}
-      className={({ isActive }) =>
-        `flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-[15px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
-          isActive
-            ? 'bg-brand-soft font-semibold text-brand'
-            : 'text-ink-soft hover:bg-sunken hover:text-ink'
-        }`
-      }
+      aria-current={on ? 'page' : undefined}
+      className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-[15px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
+        on ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft hover:bg-sunken hover:text-ink'
+      }`}
     >
       <Icon name={item.icon} />
       <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>

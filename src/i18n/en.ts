@@ -2379,4 +2379,10 @@ export const EN: Record<string, string> = {
   'ไม่มีสิทธิ์รายงานในนามสาขานี้': 'You cannot report for this branch',
   'รายการส่งผิดสาขานี้ได้รับการจัดการไปแล้ว': 'This has already been decided',
 
+  // ---- a PO delivered in several goes, elsewhere in the app (25 Sep 2026) ----------
+  'รับแล้วบางส่วน': 'Partly received',
+  'ครบแล้ว': 'Complete',
+  'รับแล้ว {got} · ค้างส่ง {left} {unit}': 'Received {got} · {left} {unit} still to come',
+  'รับของเข้าคลัง (รอบที่ {n})': 'Received into stock (delivery {n})',
+  'รับรอบที่ {n}': 'Delivery {n}',
 }

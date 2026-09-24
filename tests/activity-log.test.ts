@@ -87,6 +87,33 @@ describe('the activity log', () => {
     expect(log.every((e) => e.docNo === 'PO-00001')).toBe(true)
   })
 
+  test('an order delivered in two goes yields each delivery, then the rest closed short', () => {
+    const o: PurchaseOrder = {
+      id: 'o2', docNo: 'PO-00002', supplierId: 's', supplierName: 'OLIVA', status: 'received', locationId: 'main', orderedAt: D0,
+      lines: [
+        { productId: 'p1', productName: 'Prawn', unit: 'KG', orderedQty: 12, receivedQty: 10 },
+        { productId: 'p2', productName: 'Squid', unit: 'KG', orderedQty: 4, receivedQty: 4 },
+      ],
+      receipts: [
+        { docNo: 'RC-00010', date: D0 + DAY, invoiceNo: 'IV-1', byId: 'u1', byName: 'Nuiy', lines: [{ productId: 'p1', qty: 6, note: 'rest tomorrow' }, { productId: 'p2', qty: 4 }] },
+        { docNo: 'RC-00011', date: D0 + 2 * DAY, invoiceNo: 'IV-2', byId: 'u2', byName: 'Boss', lines: [{ productId: 'p1', qty: 4, note: 'last of it' }] },
+      ],
+      invoiceNo: 'IV-2', movementDocNo: 'RC-00011', receivedAt: D0 + 2 * DAY, receivedBy: 'u2', receivedByName: 'Boss',
+      closedShortReason: 'supplier out', closedShortBy: 'u2', closedShortByName: 'Boss', closedShortAt: D0 + 3 * DAY,
+      createdBy: 'u1', createdByName: 'Nuiy', createdAt: D0, updatedAt: D0,
+    }
+    const log = buildActivityLog({ ...input, movements: [], orders: [o], requests: [], events: [] })
+    expect(log.map((e) => e.action)).toEqual([
+      'ปิดยอดค้าง',
+      'รับของเข้าคลัง (รอบที่ {n}) {"n":2}',
+      'รับของเข้าคลัง (รอบที่ {n}) {"n":1}',
+      'สั่งซื้อ',
+    ])
+    expect(log[0]).toMatchObject({ detail: 'supplier out', by: 'Boss' })
+    expect(log[2].detail).toBe('บิล {no} {"no":"IV-1"} · RC-00010 · {n} รายการ {"n":2} · Prawn: 6 (rest tomorrow)')
+    expect(log[2].by).toBe('Nuiy')
+  })
+
   test('requests and tasks contribute every history entry; the window is respected', () => {
     const r = {
       id: 'r1', docNo: 'PR-00001', locationId: 'br', requestedByName: 'Nuiy', items: [{ idx: 0, productName: 'Prawn' }],
