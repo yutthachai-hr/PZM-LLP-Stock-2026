@@ -30,7 +30,7 @@ function inBase(l: PurchaseOrderLine, qty: number): string | null {
  *
  * Nothing is prefilled — "รับครบตาม PO ทั้งหมด" is one press and says the person looked —
  * and a line that differs asks for its reason right under it. On a phone each line is a
- * card; from md up the same rows line up as a table.
+ * card; from lg up the same rows line up as a table.
  */
 export function PoLines({
   order,
@@ -65,7 +65,7 @@ export function PoLines({
         </Button>
       }
     >
-      <div className="hidden grid-cols-[minmax(0,1fr)_8rem_8rem_5.5rem_7rem] gap-3 border-b border-line pb-2 text-xs font-semibold text-ink-soft md:grid">
+      <div className="hidden grid-cols-[minmax(0,1fr)_8rem_8rem_5.5rem_7rem] gap-3 border-b border-line pb-2 text-xs font-semibold text-ink-soft lg:grid">
         <span>{t('สินค้า')}</span>
         <span className="text-right">{t('สั่ง / ค้างรับ')}</span>
         <span className="text-right">{t('รับครั้งนี้')}</span>
@@ -83,15 +83,15 @@ export function PoLines({
           const base = qty !== null ? inBase(l, qty) : null
           return (
             <li key={l.productId} className={`py-3 ${flag ? '-mx-2 rounded-lg bg-danger-soft/40 px-2' : ''}`}>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_8rem_8rem_5.5rem_7rem]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 lg:grid-cols-[minmax(0,1fr)_8rem_8rem_5.5rem_7rem]">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-ink">{l.productName}</div>
                 </div>
-                <div className="num text-right text-sm text-ink-soft md:order-none">
-                  <span className="md:hidden">{t('ค้างรับ')} </span>
+                <div className="num text-right text-sm text-ink-soft lg:order-none">
+                  <span className="text-xs lg:hidden">{t('สั่ง / ค้างรับ')} </span>
                   {fmtQty(l.orderedQty)} / <span className="font-semibold text-ink">{fmtQty(due)}</span>
                 </div>
-                <div className="flex items-center gap-2 md:block">
+                <div className="flex items-center gap-2 lg:block">
                   <Input
                     type="number"
                     inputMode="decimal"
@@ -102,10 +102,10 @@ export function PoLines({
                     onChange={(ev) => set(l.productId, { qty: ev.target.value === '' ? null : Number(ev.target.value) })}
                     className={`num text-right ${flag && v === 'pending' ? 'border-danger' : ''}`}
                   />
-                  {base && <span className="text-xs text-ink-faint md:mt-1 md:block md:text-right">{base}</span>}
+                  {base && <span className="text-xs text-ink-faint lg:mt-1 lg:block lg:text-right">{base}</span>}
                 </div>
                 <div className="text-sm text-ink-soft">{shownUnit(l)}</div>
-                <div className="col-span-2 md:col-span-1">
+                <div className="col-span-2 lg:col-span-1">
                   <VarianceChip v={v} diff={Math.abs((qty ?? 0) - due)} />
                 </div>
               </div>

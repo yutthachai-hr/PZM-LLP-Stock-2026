@@ -599,9 +599,11 @@ export async function receivePurchaseOrder(params: {
   // the rate it was placed at (baseQty / orderedQty); a line from before that was kept
   // takes the product's rate today, and is refused if there is none — never guessed.
   const stockLines: MovementLine[] = []
-  for (const { line: l, qty } of arrived) {
+  for (const { line: l, qty, note: why } of arrived) {
+    // A line's reason for differing travels with its stock row, so the history says why.
+    const lineNote = why ? { note: why } : {}
     if (!l.entryUnit) {
-      stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, qty })
+      stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, qty, ...lineNote })
       continue
     }
     let factor = l.baseQty !== undefined && l.orderedQty > 0 ? l.baseQty / l.orderedQty : null
@@ -612,7 +614,7 @@ export async function receivePurchaseOrder(params: {
         throw new AppError('ยังไม่ได้กำหนดอัตราแปลง "{unit}" ของ "{name}" — กำหนดที่หน้าสินค้าก่อน', { unit: l.entryUnit, name: l.productName })
       }
     }
-    stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, entryUnit: l.entryUnit, entryQty: qty, qty: toBase(qty, factor) })
+    stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, entryUnit: l.entryUnit, entryQty: qty, qty: toBase(qty, factor), ...lineNote })
   }
 
   const date = params.date ?? Date.now()

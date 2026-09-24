@@ -46,12 +46,14 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
  * and the tips) — what will be filed if the button under it is pressed.
  */
 export function ReceiptPanel({
+  mode,
   facts,
   pending,
   problem,
   busy,
   onReview,
 }: {
+  mode: 'po' | 'manual'
   facts: Omit<ReceiptFacts, 'date' | 'docDate' | 'hasPhoto' | 'note'>
   pending: number
   problem: string | null
@@ -64,10 +66,10 @@ export function ReceiptPanel({
       <SectionCard icon="receive" title={t('ใบรับนี้')}>
         <dl className="divide-y divide-line">
           <Row label={t('ผู้ขาย')}>{facts.supplierName || '—'}</Row>
-          <Row label={t('ใบสั่งซื้อ')}>{facts.poDocNo ?? t('ไม่มี (รับนอกใบสั่งซื้อ)')}</Row>
-          <Row label={t('คลัง')}>{facts.warehouse || '—'}</Row>
+          <Row label={t('ใบสั่งซื้อ')}>{facts.poDocNo ?? (mode === 'po' ? '—' : t('ไม่มี (รับนอกใบสั่งซื้อ)'))}</Row>
+          <Row label={t('คลัง')}>{mode === 'po' && !facts.poDocNo ? '—' : facts.warehouse || '—'}</Row>
           <Row label={t('จำนวนรายการ')}>{facts.items}</Row>
-          {facts.poDocNo !== undefined && (
+          {mode === 'po' && (
             <>
               <Row label={t('ครบ')}>
                 <span className="text-in">{facts.matched}</span>
@@ -87,11 +89,14 @@ export function ReceiptPanel({
           )}
           <Row label={t('เลขที่เอกสาร')}>{facts.invoiceNo || '—'}</Row>
         </dl>
-        <Button variant="success" onClick={onReview} disabled={busy} className="mt-4 hidden w-full xl:flex">
-          <Icon name="checkCircle" size={18} />
-          {t('ตรวจสอบและรับสินค้า')}
-        </Button>
-        {problem && <p className="mt-2 hidden text-xs text-ink-soft xl:block">{problem}</p>}
+        {/* Below xl the panel sits under the form and the page's own bar carries the button. */}
+        <div className="mt-4 hidden xl:block">
+          <Button variant="success" onClick={onReview} disabled={busy} className="w-full">
+            <Icon name="checkCircle" size={18} />
+            {t('ตรวจสอบและรับสินค้า')}
+          </Button>
+          {problem && <p className="mt-2 text-xs text-ink-soft">{problem}</p>}
+        </div>
       </SectionCard>
     </div>
   )

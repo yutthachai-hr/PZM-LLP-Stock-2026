@@ -364,6 +364,8 @@ describe('checking the delivery in', () => {
     await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-1', lines: withReason, actor: ACTOR })
     expect(balance('p1')).toBe(7)
     expect(orders()[0].lines[0].note).toBe('ของขาด 3 ลัง')
+    // The reason travels with the stock row too, so the history says why.
+    expect(movements().find((m) => m.productId === 'p1')?.note).toBe('ของขาด 3 ลัง')
   })
 
   test('the stock that moves is what arrived, not what was ordered', async () => {

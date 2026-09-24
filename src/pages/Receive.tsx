@@ -116,10 +116,13 @@ export function ReceivePage() {
     linkRef.current = linked
     setDone(null)
     setD((cur) => ({ ...cur, mode: 'po', poId: linked, entries: cur.poId === linked ? cur.entries : {} }))
+    // Placed after the list was read (the screen was already open): read it again. On
+    // arrival the list is still loading, and that read already includes it.
+    if (orders && !orders.some((o) => o.id === linked)) loadOrders()
     const next = new URLSearchParams(params)
     next.delete('po')
     setParams(next, { replace: true })
-  }, [linked, params, setParams])
+  }, [linked, params, setParams, loadOrders, orders])
 
   useEffect(() => {
     if (!d.toLocationId && defaultWh) patch({ toLocationId: defaultWh.id })
@@ -346,6 +349,7 @@ export function ReceivePage() {
           sideLabel={t('สรุปใบรับนี้')}
           side={
             <ReceiptPanel
+              mode={d.mode}
               facts={facts}
               pending={summary?.pending ?? 0}
               problem={problem ? problemText(problem) : null}

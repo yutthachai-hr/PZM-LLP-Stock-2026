@@ -1982,7 +1982,6 @@ export const EN: Record<string, string> = {
   'สั่ง / ค้างรับ': 'Ordered / owed',
   'รับครั้งนี้': 'This delivery',
   'ส่วนต่าง': 'Variance',
-  'ค้างรับ': 'Owed',
   'รับครั้งนี้: {name}': 'This delivery: {name}',
   'เหตุผลที่ของมาไม่ครบ (บังคับ)': 'Why it is short (required)',
   'เหตุผลที่ของมาเกิน (บังคับ)': 'Why it is over (required)',
