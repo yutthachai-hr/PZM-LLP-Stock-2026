@@ -252,6 +252,13 @@ export function Modal({
   // selection (the owner: "คลุมข้อความแล้วหลุดกรอบ มันหลุดเลย"). Only a press that both
   // begins and ends on the backdrop closes it.
   const pressedOnOverlay = useRef(false)
+  // The latest onClose, read when Escape is pressed. The focus set-up below must run once
+  // per opening: keyed on onClose, it re-ran whenever a screen passed a fresh function —
+  // which is every render of any screen writing `onClose={() => …}` — and put the caret on
+  // the ✕ after each keystroke in the dialog (owner, 25 Sep 2026: the close-short reason
+  // on the receiving review could only be typed one letter at a time).
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
 
   // A dialog that is only a dialog visually: with no role, screen readers announced it as
   // ordinary page content; with no focus handling, Tab walked out of it into the page
@@ -274,7 +281,7 @@ export function Modal({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        closeRef.current()
         return
       }
       if (e.key !== 'Tab') return
@@ -301,7 +308,7 @@ export function Modal({
       // top of the page.
       returnTo?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
   return (
