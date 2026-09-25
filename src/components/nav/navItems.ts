@@ -20,19 +20,20 @@ export interface NavItem {
 /**
  * The menu's sections (owner, 25 Sep 2026: "มันกระจายเกินไป ดูเยอะเกิน"). The order is
  * his: overview alone, then the stock work, purchasing and delivery, then the calendar,
- * announcements and settings on their own.
+ * announcements and settings on their own. Each section is a bar of its own that folds
+ * open; the stock section took the box picture, its products page became "Goods".
  */
 export type NavGroup = 'inventory' | 'procurement' | 'delivery'
 
-export const NAV_GROUP_LABEL: Record<NavGroup, string> = {
-  inventory: 'งานคลังสินค้า', // i18n-key
-  procurement: 'งานจัดซื้อ', // i18n-key
-  delivery: 'งานจัดส่ง', // i18n-key
+export const NAV_GROUPS: Record<NavGroup, { label: string; icon: IconName }> = {
+  inventory: { label: 'สินค้าคงคลัง', icon: 'package' }, // i18n-key
+  procurement: { label: 'งานจัดซื้อ', icon: 'store' }, // i18n-key
+  delivery: { label: 'งานจัดส่ง', icon: 'mapPin' }, // i18n-key
 }
 
 export const NAV: NavItem[] = [
   { to: '/', label: 'ภาพรวม', icon: 'dashboard' }, // i18n-key
-  { to: '/products', label: 'สินค้าคงคลัง', icon: 'package', group: 'inventory' }, // i18n-key
+  { to: '/products', label: 'ทะเบียนสินค้า', icon: 'boxes', group: 'inventory' }, // i18n-key
   { to: '/receive', label: 'รับสินค้าเข้า', icon: 'receive', group: 'inventory' }, // i18n-key
   { to: '/issue', label: 'เบิก/โอนสาขา', icon: 'send', group: 'inventory' }, // i18n-key
   { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust', group: 'inventory' }, // i18n-key

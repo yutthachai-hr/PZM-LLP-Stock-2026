@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useAutomation } from '../data/useAutomation'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -11,7 +11,8 @@ import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
-import { NAV_GROUP_LABEL, navFor, navMatches, navSections, titleFor, type NavItem } from './nav/navItems'
+import { navFor, titleFor } from './nav/navItems'
+import { SideNav } from './nav/SideNav'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
 
@@ -34,30 +35,7 @@ export function Layout({ children }: { children: ReactNode }) {
           A tablet gets the rail, a phone the tab bar (spec, 21 Sep 2026). */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface xl:flex">
         <Brand mode={mode} def={def} />
-        {/* Sections as two-column tiles, pages of their own as rows (owner picked the tile
-            layout, 25 Sep 2026) — about half the height of one row per page. */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3">
-          {navSections(items).map((s, i) =>
-            s.group ? (
-              <section key={s.group} className="pt-2">
-                <h3 className="px-1.5 pb-1.5 text-[11px] font-semibold tracking-wide text-ink-faint">
-                  {t(NAV_GROUP_LABEL[s.group])}
-                </h3>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {s.items.map((item, j) => (
-                    <NavTile key={item.to} item={item} wide={s.items.length % 2 === 1 && j === s.items.length - 1} />
-                  ))}
-                </div>
-              </section>
-            ) : (
-              <div key={s.items[0].to} className={`space-y-1 ${i > 0 ? 'mt-3 border-t border-line pt-3' : ''}`}>
-                {s.items.map((item) => (
-                  <NavItemLink key={item.to} item={item} badge={item.to === '/calendar' ? todayCount : 0} />
-                ))}
-              </div>
-            ),
-          )}
-        </nav>
+        <SideNav items={items} badges={{ '/calendar': todayCount }} />
         <UserBox
           name={user?.name ?? ''}
           role={user?.role ?? 'staff'}
@@ -134,53 +112,6 @@ function Brand({
         )}
       </div>
     </div>
-  )
-}
-
-function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
-  const t = useT()
-  const { pathname } = useLocation()
-  const on = navMatches(pathname, item.to)
-  return (
-    <Link
-      to={item.to}
-      aria-current={on ? 'page' : undefined}
-      className={`flex min-h-10 items-center gap-3 rounded-xl px-3.5 text-[15px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
-        on ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft hover:bg-sunken hover:text-ink'
-      }`}
-    >
-      <Icon name={item.icon} />
-      <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
-      {badge > 0 && (
-        <span className="num shrink-0 rounded-full bg-brand px-1.5 text-[11px] font-bold leading-5 text-white">
-          {badge}
-        </span>
-      )}
-    </Link>
-  )
-}
-
-/** A menu entry inside a section: icon over a short label; the odd one out spans the row. */
-function NavTile({ item, wide }: { item: NavItem; wide: boolean }) {
-  const t = useT()
-  const { pathname } = useLocation()
-  const on = navMatches(pathname, item.to)
-  return (
-    <Link
-      to={item.to}
-      aria-current={on ? 'page' : undefined}
-      title={t(item.label)}
-      className={`flex items-center rounded-xl px-2 text-center text-[12.5px] leading-snug outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
-        wide ? 'col-span-2 min-h-10 flex-row justify-center gap-2' : 'min-h-[54px] flex-col justify-center gap-0.5 py-1'
-      } ${
-        on
-          ? 'bg-brand-soft font-semibold text-brand ring-1 ring-inset ring-brand/20'
-          : 'bg-sunken/60 font-medium text-ink-soft hover:bg-sunken hover:text-ink'
-      }`}
-    >
-      <Icon name={item.icon} size={19} />
-      <span>{t(item.label)}</span>
-    </Link>
   )
 }
 

@@ -2403,7 +2403,7 @@ export const EN: Record<string, string> = {
   'ข้ามใบนี้': 'Skip this request',
   'ข้ามใบขอสั่งซื้อ': 'Request skipped',
   // ---- menu sections (25 Sep 2026) ----------------------------------------------
-  'งานคลังสินค้า': 'Inventory',
+  'ทะเบียนสินค้า': 'Goods',
   'งานจัดซื้อ': 'Procurement',
   'งานจัดส่ง': 'Delivery',
   'นำเข้าสต๊อกและรายการสินค้าจากไฟล์ Excel': 'Import stock and products from an Excel file',

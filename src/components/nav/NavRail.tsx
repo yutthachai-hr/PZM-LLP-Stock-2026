@@ -7,7 +7,7 @@ import { useTodayEventCount } from '../../data/useTodayEventCount'
 import { useT } from '../../i18n/I18nContext'
 import { Icon } from '../Icon'
 import { ActionSheet } from './ActionSheet'
-import { NAV_GROUP_LABEL, navFor, navMatches, navSections } from './navItems'
+import { NAV_GROUPS, navFor, navMatches, navSections } from './navItems'
 
 /**
  * The tablet's menu (spec §1, 21 Sep 2026): every page as an icon with a short word under
@@ -44,7 +44,7 @@ export function NavRail() {
               {i > 0 && <div className="mx-3 mb-1 mt-2 border-t border-line" />}
               {s.group && (
                 <div className="px-1 pb-0.5 text-center text-[10px] font-semibold leading-tight text-ink-faint">
-                  {t(NAV_GROUP_LABEL[s.group])}
+                  {t(NAV_GROUPS[s.group].label)}
                 </div>
               )}
               {s.items.map((item) => (

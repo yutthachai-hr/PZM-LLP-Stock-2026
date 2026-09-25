@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { Icon } from '../components/Icon'
-import { NAV_GROUP_LABEL, moreItemsFor, navSections } from '../components/nav/navItems'
+import { NAV_GROUPS, moreItemsFor, navSections } from '../components/nav/navItems'
 import { useI18n, useT } from '../i18n/I18nContext'
 
 /**
@@ -33,7 +33,7 @@ export function MorePage() {
       <nav className="space-y-4" aria-label={t('เพิ่มเติม')}>
         {navSections(moreItemsFor(user?.role)).map((s) => (
           <section key={s.group ?? s.items[0].to}>
-            {s.group && <h2 className="mb-1.5 px-1 text-xs font-semibold text-ink-faint">{t(NAV_GROUP_LABEL[s.group])}</h2>}
+            {s.group && <h2 className="mb-1.5 px-1 text-xs font-semibold text-ink-faint">{t(NAV_GROUPS[s.group].label)}</h2>}
             <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
               {s.items.map((n) => (
                 <Link key={n.to} to={n.to} className={row}>
