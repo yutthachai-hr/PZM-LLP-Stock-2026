@@ -4,7 +4,7 @@ import { DAY_MS } from '../lib/inventoryRules/time'
 import type { CalendarItem } from '../lib/inventoryRules/types'
 import { useSuppliers } from '../services/suppliers'
 import { useScheduleConfig } from '../services/schedules'
-import { inventoryInsights } from '../lib/inventoryRules/insights'
+import { inventoryInsights, type Insights } from '../lib/inventoryRules/insights'
 import type { PurchaseOrder, PurchaseRequest, StockEvent } from '../types'
 import { useData } from './DataContext'
 import * as events from './eventCache'
@@ -31,6 +31,12 @@ export interface CalendarFeed {
   /** The records the items were built from, for lookups such as "is this already on order". */
   orders: PurchaseOrder[]
   requests: PurchaseRequest[]
+  /**
+   * The reorder suggestions, stock-outs and big adjustments the items were built from —
+   * for the dashboard's daily suggestions (Phase 1, 25 Sep 2026), so its numbers are the
+   * calendar's own. Undefined until the reads are in.
+   */
+  insights: Insights | undefined
   loading: boolean
   error: unknown
   reload: () => Promise<void>
@@ -137,6 +143,7 @@ export function useCalendarFeed(range: { from: number; to: number }, now: number
     items,
     orders: rows?.orders ?? [],
     requests: rows?.requests ?? [],
+    insights,
     loading: loading && !rows,
     error,
     reload: () => load(true),

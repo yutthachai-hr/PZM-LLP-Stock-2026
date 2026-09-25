@@ -14,6 +14,7 @@ import type { CalendarItem } from '../lib/inventoryRules/types'
 import { isManager } from '../lib/purchaseRequestStatus'
 import { ItemRow } from './calendar/ItemRow'
 import { LowStockCard, QuickMenuCard } from '../components/dashboard/DeskCards'
+import { DailySuggestions } from '../components/dashboard/DailySuggestions'
 
 /**
  * The phone's first screen (spec §2, 21 Sep 2026; simplified 22 Sep after the owner
@@ -99,6 +100,8 @@ export function PhoneHome() {
       )}
 
       {/* The five closest to running out, then the jobs people start from here (spec §2.1). */}
+      {manager && <DailySuggestions />}
+
       {lowItems.length > 0 && <LowStockCard low={lowItems} />}
 
       <QuickMenuCard />

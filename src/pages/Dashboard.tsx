@@ -13,6 +13,8 @@ import {
   WeeklyMovementCard,
 } from '../components/dashboard/DeskCards'
 import { useDashboardFigures } from '../components/dashboard/useDashboardFigures'
+import { DailySuggestions } from '../components/dashboard/DailySuggestions'
+import { isManager } from '../lib/purchaseRequestStatus'
 import { fmtMoney, formatThaiDate } from '../lib/format'
 import { change } from '../lib/stats/periodCompare'
 import { useT } from '../i18n/I18nContext'
@@ -117,6 +119,10 @@ function DeskDashboard() {
           to="/reports"
         />
       </StatRow>
+
+      {/* Phase 1 of the automation plan: every reorder suggestion of the day, draftable in
+          one press. For the people who decide what to buy and send. */}
+      {isManager(user?.role) && <DailySuggestions />}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
         <WeeklyMovementCard weekly={f.weekly} />

@@ -211,56 +211,78 @@ export async function addItem(params: {
   suppliers: readonly Supplier[]
   actor: Actor
 }): Promise<PurchaseRequest> {
-  return mutate(params.id, (pr) => {
-    requireEditable(pr, params.actor)
-    if (liveItems(pr.items).length >= MAX_ITEMS) {
-      throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
-    }
-    // One past the highest idx, not the length: a draft line that was removed leaves a
-    // gap, and reusing its number would make old history entries point at the new line.
-    const idx = pr.items.reduce((m, i) => Math.max(m, i.idx + 1), 0)
-    const item = buildItem(idx, params.line, params.products, params.suppliers)
-    const byManager = pr.status === 'pendingApproval'
-    // The same product from the same supplier in the same unit is one line, not two:
-    // adding it again adds to the quantity. Two lines for one product reached a supplier
-    // as "PARIS HAM 10 KG / PARIS HAM 20 KG" on 21 Sep 2026, keyed twice in the picker.
-    const twin = liveItems(pr.items).find(
-      (x) => x.productId === item.productId && x.supplierId === item.supplierId && sameUnit(x.entryUnit ?? '', item.entryUnit ?? ''),
-    )
-    if (twin) {
-      const field = byManager ? 'approvedQty' : 'requestedQty'
-      const before = twin[field] ?? twin.requestedQty ?? 0
-      const after = roundQty(before + item.requestedQty!)
-      const merged = { ...twin, [field]: after }
-      return {
-        ...pr,
-        items: pr.items.map((x) => (x.idx === twin.idx ? merged : x)),
-        history: [
-          ...pr.history,
-          entry(params.actor, byManager ? 'managerQtyChanged' : 'qtyChanged', {
-            itemIdx: twin.idx,
-            detail: twin.productName,
-            oldValue: describe(twin, before),
-            newValue: describe(merged, after),
-          }),
-        ],
-      }
-    }
-    const stored: PurchaseRequestItem = byManager
-      ? { ...item, requestedQty: null, approvedQty: item.requestedQty!, managerAdded: true }
-      : item
+  return mutate(params.id, (pr) => withLine(pr, params))
+}
+
+/**
+ * Several lines in one write — a draft filled from the dashboard's daily suggestions
+ * (Phase 1, 25 Sep 2026). Each line goes through exactly what addItem does, so the history
+ * reads the same as keying them one by one; one transaction instead of one per line.
+ */
+export async function addItems(params: {
+  id: string
+  lines: readonly LineInput[]
+  products: readonly Product[]
+  suppliers: readonly Supplier[]
+  actor: Actor
+}): Promise<PurchaseRequest> {
+  if (params.lines.length === 0) throw new AppError('ยังไม่มีรายการสินค้า')
+  return mutate(params.id, (pr) => params.lines.reduce((cur, line) => withLine(cur, { ...params, line }), pr))
+}
+
+/** One line added to a request in memory: the rules of addItem, for addItem and addItems. */
+function withLine(
+  pr: PurchaseRequest,
+  params: { line: LineInput; products: readonly Product[]; suppliers: readonly Supplier[]; actor: Actor },
+): PurchaseRequest {
+  requireEditable(pr, params.actor)
+  if (liveItems(pr.items).length >= MAX_ITEMS) {
+    throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
+  }
+  // One past the highest idx, not the length: a draft line that was removed leaves a
+  // gap, and reusing its number would make old history entries point at the new line.
+  const idx = pr.items.reduce((m, i) => Math.max(m, i.idx + 1), 0)
+  const item = buildItem(idx, params.line, params.products, params.suppliers)
+  const byManager = pr.status === 'pendingApproval'
+  // The same product from the same supplier in the same unit is one line, not two:
+  // adding it again adds to the quantity. Two lines for one product reached a supplier
+  // as "PARIS HAM 10 KG / PARIS HAM 20 KG" on 21 Sep 2026, keyed twice in the picker.
+  const twin = liveItems(pr.items).find(
+    (x) => x.productId === item.productId && x.supplierId === item.supplierId && sameUnit(x.entryUnit ?? '', item.entryUnit ?? ''),
+  )
+  if (twin) {
+    const field = byManager ? 'approvedQty' : 'requestedQty'
+    const before = twin[field] ?? twin.requestedQty ?? 0
+    const after = roundQty(before + item.requestedQty!)
+    const merged = { ...twin, [field]: after }
     return {
       ...pr,
-      items: [...pr.items, stored],
+      items: pr.items.map((x) => (x.idx === twin.idx ? merged : x)),
       history: [
         ...pr.history,
-        entry(params.actor, byManager ? 'managerAddedItem' : 'itemAdded', {
-          itemIdx: stored.idx,
-          detail: describe(stored, byManager ? stored.approvedQty : stored.requestedQty),
+        entry(params.actor, byManager ? 'managerQtyChanged' : 'qtyChanged', {
+          itemIdx: twin.idx,
+          detail: twin.productName,
+          oldValue: describe(twin, before),
+          newValue: describe(merged, after),
         }),
       ],
     }
-  })
+  }
+  const stored: PurchaseRequestItem = byManager
+    ? { ...item, requestedQty: null, approvedQty: item.requestedQty!, managerAdded: true }
+    : item
+  return {
+    ...pr,
+    items: [...pr.items, stored],
+    history: [
+      ...pr.history,
+      entry(params.actor, byManager ? 'managerAddedItem' : 'itemAdded', {
+        itemIdx: stored.idx,
+        detail: describe(stored, byManager ? stored.approvedQty : stored.requestedQty),
+      }),
+    ],
+  }
 }
 
 /** The requester's quantity, before submission. Managers use setApprovedQty. */
