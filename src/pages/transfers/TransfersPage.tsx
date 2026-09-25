@@ -2,18 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
-import { Icon, type IconName } from '../../components/Icon'
+import { Icon } from '../../components/Icon'
 import { SiteChip } from '../../components/SiteChip'
 import { Button, EmptyState, SearchInput, Select, Spinner } from '../../components/ui'
 import {
+  ChipRow,
   FilterBar,
   FilterField,
   FramePage,
   PageHero,
-  SectionCard,
-  StatRow,
-  StatTile,
   StatusChip,
+  SummaryList,
   TipCard,
   WithSidePanel,
 } from '../../components/frame'
@@ -143,13 +142,12 @@ export function TransfersPage() {
     })
   }, [rows, filter, originSite, destSite, search, locName])
 
-  type FilterTab = { key: FilterStatus; label: string; n: number; icon: IconName }
-  const filters: FilterTab[] = [
-    { key: 'all', label: t('ทั้งหมด'), n: counts.all, icon: 'swap' },
-    { key: 'pendingApproval', label: t('รออนุมัติ'), n: counts.pendingApproval, icon: 'clock' },
-    { key: 'inTransit', label: t('ระหว่างขนส่ง'), n: counts.inTransit, icon: 'truck' },
-    { key: 'discrepancy', label: t('มีผลต่าง/ปัญหา'), n: counts.discrepancy, icon: 'alertCircle' },
-    { key: 'completed', label: t('เสร็จสิ้น'), n: counts.completed, icon: 'checkCircle' },
+  const filters: { key: FilterStatus; label: string; n: number }[] = [
+    { key: 'all', label: t('ทั้งหมด'), n: counts.all },
+    { key: 'pendingApproval', label: t('รออนุมัติ'), n: counts.pendingApproval },
+    { key: 'inTransit', label: t('ระหว่างขนส่ง'), n: counts.inTransit },
+    { key: 'discrepancy', label: t('มีผลต่าง/ปัญหา'), n: counts.discrepancy },
+    { key: 'completed', label: t('เสร็จสิ้น'), n: counts.completed },
   ]
 
   const columns: Column<Transfer>[] = [
@@ -168,14 +166,14 @@ export function TransfersPage() {
     {
       key: 'route',
       header: t('เส้นทางขนส่ง'),
-      className: 'min-w-[200px]',
+      className: 'min-w-[180px]',
       cell: (r: Transfer) => (
         <div className="flex items-center gap-1.5 text-xs md:text-sm">
           <SiteChip locationId={r.fromLocationId} />
           <Icon name="arrowRight" size={14} className="shrink-0 text-ink-faint" />
           <SiteChip locationId={r.toLocationId} />
           {r.legKind && (
-            <span className="rounded bg-sunken px-1.5 py-0.5 text-2xs text-ink-soft">
+            <span className="rounded bg-sunken px-1.5 py-0.5 text-[11px] text-ink-soft">
               {r.legKind === 'return' ? t('สายส่งกลับ') : r.legKind === 'forward' ? t('สายส่งต่อ') : t('สายเก็บไว้')}
             </span>
           )}
@@ -185,7 +183,7 @@ export function TransfersPage() {
     {
       key: 'items',
       header: t('รายการสินค้า'),
-      className: 'min-w-[220px]',
+      className: 'min-w-[160px]',
       cell: (r: Transfer) => {
         const first = r.items[0]
         const extra = r.items.length - 1
@@ -214,11 +212,13 @@ export function TransfersPage() {
       key: 'requestedBy',
       header: t('ผู้ขอ / ผู้ทำรายการ'),
       card: 'meta',
-      className: 'w-36 text-xs text-ink-soft',
+      // A tablet has room for the route and what is on it; who filed it waits for a wide screen.
+      headerClassName: 'hidden lg:table-cell',
+      className: 'hidden w-36 text-xs text-ink-soft lg:table-cell',
       cell: (r: Transfer) => (
         <div>
           <div>{r.requestedByName}</div>
-          <div className="text-2xs text-ink-faint">{formatThaiDateTime(r.createdAt)}</div>
+          <div className="text-[11px] text-ink-faint">{formatThaiDateTime(r.createdAt)}</div>
         </div>
       ),
     },
@@ -235,11 +235,12 @@ export function TransfersPage() {
         subtitle={t('จัดการระบบขนส่งสินค้าระหว่างสาขา ตรวจรับสินค้า และบันทึกผลต่าง')}
         actions={
           <>
-            <Button variant="outline" onClick={() => navigate('/transfers/today')}>
+            {/* On a phone each takes the full width: side by side their labels broke onto two lines. */}
+            <Button variant="outline" onClick={() => navigate('/transfers/today')} className="w-full sm:w-auto">
               <Icon name="clipboardCheck" size={18} />
               {t('ใบรายการส่งสินค้า')}
             </Button>
-            <Button onClick={() => navigate('/transfers/new')}>
+            <Button onClick={() => navigate('/transfers/new')} className="w-full sm:w-auto">
               <Icon name="plus" size={18} />
               {t('สร้างคำขอโอนสินค้า')}
             </Button>
@@ -250,40 +251,16 @@ export function TransfersPage() {
       <WithSidePanel
         side={
           <>
-            <SectionCard icon="chart" title={t('ภาพรวม 30 วัน')}>
-              <StatRow>
-                <StatTile
-                  icon="clock"
-                  tone="amber"
-                  label={t('รออนุมัติ')}
-                  value={counts.pendingApproval}
-                  hint={t('รอหัวหน้าตรวจทาน')}
-                />
-                <StatTile
-                  icon="truck"
-                  tone="brand"
-                  label={t('ระหว่างขนส่ง')}
-                  value={counts.inTransit}
-                  hint={t('รอสาขาปลายทางตรวจรับ')}
-                />
-              </StatRow>
-              <StatRow>
-                <StatTile
-                  icon="alertCircle"
-                  tone="red"
-                  label={t('มีผลต่าง/ปัญหา')}
-                  value={counts.discrepancy}
-                  hint={t('ของขาด/เกิน/เสียหาย')}
-                />
-                <StatTile
-                  icon="checkCircle"
-                  tone="green"
-                  label={t('เสร็จสิ้น')}
-                  value={counts.completed}
-                  hint={t('ตรวจรับเข้าสต๊อกแล้ว')}
-                />
-              </StatRow>
-            </SectionCard>
+            <SummaryList
+              icon="chart"
+              title={t('ภาพรวม 30 วัน')}
+              rows={[
+                { key: 'pending', icon: 'clock', tone: 'amber', label: t('รออนุมัติ'), value: counts.pendingApproval, strong: counts.pendingApproval > 0 },
+                { key: 'transit', icon: 'truck', tone: 'blue', label: t('ระหว่างขนส่ง'), value: counts.inTransit },
+                { key: 'problem', icon: 'alertCircle', tone: 'red', label: t('มีผลต่าง/ปัญหา'), value: counts.discrepancy, strong: counts.discrepancy > 0 },
+                { key: 'done', icon: 'checkCircle', tone: 'green', label: t('เสร็จสิ้น'), value: counts.completed },
+              ]}
+            />
 
             <TipCard title={t('ระบบขนส่งสินค้า')}>
               <ul className="list-disc space-y-1 pl-4">
@@ -295,44 +272,26 @@ export function TransfersPage() {
           </>
         }
       >
-        {/* Status navigation bar */}
-        <div className="flex flex-wrap gap-1.5 border-b border-line pb-2">
-          {filters.map((f) => {
-            const on = f.key === filter
-            return (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setFilter(f.key)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors md:text-sm ${
-                  on
-                    ? 'bg-brand text-white shadow-sm'
-                    : 'bg-sunken text-ink-soft hover:bg-line/60 hover:text-ink'
-                }`}
-              >
-                <Icon name={f.icon} size={16} />
-                <span>{f.label}</span>
-                <span
-                  className={`rounded-full px-1.5 py-0.2 text-2xs ${
-                    on ? 'bg-white/20 text-white' : 'bg-line text-ink-soft'
-                  }`}
-                >
-                  {f.n}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        {/* Status filter */}
+        <ChipRow<FilterStatus>
+          label={t('สถานะ')}
+          chips={filters.map((f) => ({ key: f.key, label: f.label, count: f.n }))}
+          value={filter}
+          onChange={setFilter}
+        />
 
         {/* Filter & search bar */}
-        <FilterBar>
-          <FilterField label={t('ค้นหา')}>
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder={t('ค้นหาเลขที่, สินค้า, สาขา...')}
-            />
-          </FilterField>
+        {/* The search takes the bar's own full-width row; on a phone the two sites sit under it. */}
+        <FilterBar
+          search={<SearchInput value={search} onChange={setSearch} placeholder={t('ค้นหาเลขที่, สินค้า, สาขา...')} />}
+          onReset={() => {
+            setSearch('')
+            setOriginSite('')
+            setDestSite('')
+            setFilter('all')
+          }}
+          resetDisabled={!search && !originSite && !destSite && filter === 'all'}
+        >
           <FilterField label={t('สาขาต้นทาง')}>
             <Select value={originSite} onChange={(e) => setOriginSite(e.target.value)}>
               <option value="">{t('ทุกสาขา')}</option>

@@ -48,7 +48,7 @@ export function NavRail() {
               }`}
             >
               <Icon name={item.icon} size={22} />
-              <span className="line-clamp-2">{t(item.label)}</span>
+              <span className="line-clamp-3">{t(item.label)}</span>
               {item.to === '/calendar' && todayCount > 0 && (
                 <span className="num absolute right-1 top-1 rounded-full bg-brand px-1 text-[10px] font-bold leading-4 text-white">{todayCount}</span>
               )}
