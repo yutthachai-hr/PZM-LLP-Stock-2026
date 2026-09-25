@@ -46,7 +46,7 @@ import { URGENCIES, type PurchaseRequest, type PurchaseRequestItem, type Purchas
  * request is approved as one, so it is ordered as one (the flow the owner kept, 22 Sep).
  */
 const DAYS = 30
-type Filter = 'all' | 'mine' | 'pendingApproval' | 'returned' | 'approved' | 'rejected' | 'ready' | 'poCreated'
+type Filter = 'all' | 'mine' | 'pendingApproval' | 'returned' | 'approved' | 'rejected' | 'ready' | 'poCreated' | 'skipped'
 type ViewMode = 'docs' | 'lines'
 
 const OPEN: PurchaseRequestStatus[] = ['draft', 'returned', 'pendingApproval', 'approved']
@@ -109,6 +109,7 @@ export function PurchaseRequestsPage() {
       { key: 'ready', label: t('พร้อมสร้าง PO'), n: count(isReadyForOrder), icon: 'check', tone: 'brand' },
       { key: 'poCreated', label: t('สร้างใบสั่งซื้อแล้ว'), n: count((r) => r.status === 'poCreated'), icon: 'checkCircle', tone: 'in' },
       { key: 'rejected', label: t('ไม่อนุมัติ'), n: count((r) => r.status === 'rejected'), icon: 'x', tone: 'plain' },
+      { key: 'skipped', label: t('ข้ามแล้ว'), n: count((r) => r.status === 'skipped'), icon: 'arrowRight', tone: 'plain' },
     ]
     if (user) list.splice(1, 0, { key: 'mine', label: t('ของฉัน'), n: count((r) => r.requestedBy === user.id), icon: 'users', tone: 'plain' })
     return list

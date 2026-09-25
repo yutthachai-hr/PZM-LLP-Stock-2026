@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SiteSelect } from '../../components/SiteChip'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
@@ -7,7 +7,7 @@ import { useToast } from '../../components/Toast'
 import { useConfirm } from '../../components/Confirm'
 import { Icon } from '../../components/Icon'
 import { entryUnitsFor, UnitSelect } from '../../components/QtyInput'
-import { Badge, Button, Card, Field, Input, SectionHeader, Select, Textarea } from '../../components/ui'
+import { Badge, Button, Card, Field, Input, Modal, SectionHeader, Select, Textarea } from '../../components/ui'
 import { PageHero } from '../../components/frame'
 import { useEntryUnits } from '../../services/entryUnits'
 import * as S from '../../services/purchaseRequests'
@@ -15,8 +15,11 @@ import { UrgencySelect } from './Urgency'
 import { useSuppliers } from '../../services/suppliers'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
-import { fmtQty } from '../../lib/format'
-import { liveItems, PR_STATUS_KEYS, prBadgeColor } from '../../lib/purchaseRequestStatus'
+import { fmtQty, formatThaiDateTime } from '../../lib/format'
+import { canSkip, liveItems, PR_STATUS_KEYS, prBadgeColor } from '../../lib/purchaseRequestStatus'
+import { requestCache } from '../../data/requestCache'
+import { bkkDayEnd, bkkDayStart } from '../../lib/inventoryRules/time'
+import { ReasonModal } from './ReasonModal'
 import type { PurchaseRequest, PurchaseRequestItem, RequestUrgency, Role } from '../../types'
 import { ProductPicker, type PickedLine } from './ProductPicker'
 
@@ -56,8 +59,41 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
   )
   const [note, setNote] = useState(initial?.note ?? '')
   const [busy, setBusy] = useState('')
+  // "ข้าม" (owner, 25 Sep 2026): which request is being set aside, from the button on this
+  // one or from the warning about an older draft.
+  const [skipping, setSkipping] = useState<PurchaseRequest | null>(null)
+  // Starting a new request while one of your own is still a draft or sent back — the owner
+  // did exactly that after a phone left PR-00003 behind when the quota ran out.
+  const [waiting, setWaiting] = useState<PurchaseRequest[]>([])
 
   const actor = useMemo(() => (user ? { id: user.id, name: user.name, role: user.role as Role } : null), [user])
+
+  // Asked once, when a new request is opened. The same 30 days the list reads, from the
+  // same cache, so coming from the list costs no reads at all.
+  useEffect(() => {
+    if (initial || !user) return
+    const now = Date.now()
+    requestCache
+      .fetchRange(bkkDayStart(now) - 30 * 86_400_000, bkkDayEnd(now) + 86_400_000)
+      .then((rows) => setWaiting(S.ownOpenDrafts(rows, user.id)))
+      .catch(() => {}) // a courtesy; failing to ask must not stop anyone keying a request
+  }, [initial, user])
+
+  async function skip(target: PurchaseRequest, reason: string) {
+    if (!actor) return
+    await run('skip', async () => {
+      const next = await S.skipRequest({ id: target.id, reason, actor })
+      requestCache.patch(next)
+      setSkipping(null)
+      setWaiting((cur) => cur.filter((r) => r.id !== target.id))
+      toast.success(t('ข้าม {docNo} แล้ว', { docNo: target.docNo }))
+      // Skipping the request on screen: it is read-only now, so the parent shows the review.
+      if (pr && target.id === pr.id) {
+        setPr(next)
+        onChange(next)
+      }
+    })
+  }
   const items = useMemo(() => (pr ? liveItems(pr.items) : []), [pr])
   const inCart = useMemo(() => new Set(items.map((i) => i.productId)), [items])
   const groups = useMemo(() => {
@@ -174,12 +210,62 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
           <div className="flex flex-wrap items-center gap-2">
             {pr && <Badge color={prBadgeColor(pr.status)}>{t(PR_STATUS_KEYS[pr.status])}</Badge>}
             {pr && pr.revision > 1 && <Badge>{t('ครั้งที่ {n}', { n: pr.revision })}</Badge>}
+            {pr && user && canSkip(pr, { id: user.id, role: user.role as Role }) && (
+              <Button variant="outline" onClick={() => setSkipping(pr)} disabled={!!busy}>
+                <Icon name="arrowRight" size={15} />
+                {t('ข้ามใบนี้')}
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => navigate('/requests')}>
               {t('บันทึกร่าง')}
             </Button>
           </div>
         }
       />
+
+      {/* Hidden while its reason box is open, so the two dialogs never stack. */}
+      {!pr && waiting.length > 0 && !skipping && (
+        <Modal open onClose={() => setWaiting([])} title={t('คุณมีรายการขอสั่งซื้อค้างอยู่')} compact>
+          <div className="space-y-3">
+            <p className="text-sm text-ink-soft">{t('ใบเหล่านี้ยังไม่ได้ส่งให้หัวหน้า — เปิดใบเดิมทำต่อ หรือข้ามใบที่ไม่ใช้แล้ว ก่อนสร้างใบใหม่')}</p>
+            <ul className="divide-y divide-line rounded-xl border border-line">
+              {waiting.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="doc-no font-semibold text-ink">{r.docNo}</span>
+                      <Badge color={prBadgeColor(r.status)}>{t(PR_STATUS_KEYS[r.status])}</Badge>
+                    </div>
+                    <div className="text-xs text-ink-faint">
+                      {formatThaiDateTime(r.createdAt)} · {t('{n} รายการ', { n: liveItems(r.items).length })}
+                    </div>
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={() => navigate(`/requests/${r.id}`)}>
+                    {t('เปิดทำต่อ')}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setSkipping(r)}>
+                    {t('ข้าม')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end">
+              <Button onClick={() => setWaiting([])}>{t('สร้างใบใหม่ต่อ')}</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {skipping && (
+        <ReasonModal
+          title={t('ข้าม {docNo}', { docNo: skipping.docNo })}
+          message={t('ใบนี้จะปิดถาวรพร้อมเหตุผลและชื่อผู้ข้าม — เลขที่ยังอยู่ในระบบ แก้ไขหรือลบไม่ได้อีก')}
+          confirmText={t('ข้ามใบนี้')}
+          danger
+          onClose={() => setSkipping(null)}
+          onConfirm={(reason) => skip(skipping, reason)}
+        />
+      )}
 
       {suggestedProduct && !suggestionDone && !inCart.has(suggestedProduct.id) && (
         <Card className="flex flex-wrap items-center gap-3 border-brand/40 bg-brand-soft p-3 text-sm text-ink">

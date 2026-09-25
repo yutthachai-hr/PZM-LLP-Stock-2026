@@ -182,6 +182,16 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
           {t('ไม่อนุมัติโดย {name} — {reason}', { name: pr.rejectedByName ?? '', reason: pr.rejectReason ?? '' })}
         </Card>
       )}
+      {pr.status === 'skipped' && (
+        <Card className="border-line-strong bg-sunken p-3 text-sm text-ink">
+          {t('ข้ามโดย {name} เมื่อ {date} — {reason}', {
+            name: pr.skippedByName ?? '',
+            date: pr.skippedAt ? formatThaiDateTime(pr.skippedAt) : '',
+            reason: pr.skipReason ?? '',
+          })}
+          <span className="mt-0.5 block text-xs text-ink-soft">{t('ใบนี้ปิดถาวร แก้ไขหรือลบไม่ได้')}</span>
+        </Card>
+      )}
       {(pr.status === 'approved' || pr.status === 'poCreated') && (
         <Card className="border-in bg-in-soft p-3 text-sm text-ink">
           {t('อนุมัติโดย {name} เมื่อ {date}', { name: pr.approvedByName ?? '', date: pr.approvedAt ? formatThaiDateTime(pr.approvedAt) : '' })}
@@ -620,7 +630,7 @@ export function historyText(action: string, t: (k: string) => string): string {
     approved: t('อนุมัติ'),
     rejected: t('ไม่อนุมัติ'),
     reopened: t('เปิดตรวจใหม่'),
-    skipped: t('ข้ามรายการ'),
+    skipped: t('ข้ามใบขอสั่งซื้อ'),
     exported: t('ส่งออกไฟล์'),
     convertedToPo: t('สร้างใบสั่งซื้อ'),
   }
