@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useBrand } from '../../brand/BrandContext'
+import { brandDef } from '../../brand/brand'
+import { buildDigest, digestFlex, digestText } from '../../lib/dailyDigest'
+import { shortages } from '../../lib/inventoryRules/lowStock'
+import { pickShareProvider } from '../../share'
+import { DIGEST_PARAM } from '../../share/liffResume'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
 import { useCalendarFeed } from '../../data/useCalendarFeed'
@@ -7,8 +13,8 @@ import { requestCache } from '../../data/requestCache'
 import { transferCache } from '../../data/transferCache'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
-import { fmtQty } from '../../lib/format'
-import { bkkDayEnd, bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
+import { fmtQty, formatThaiDate } from '../../lib/format'
+import { bkkDayEnd, bkkDayKey, bkkDayStart, DAY_MS, isSameBkkDay } from '../../lib/inventoryRules/time'
 import {
   dailySuggestions,
   tickedByDefault,
@@ -93,6 +99,64 @@ export function DailySuggestions() {
   const [open, setOpen] = useState<Record<string, boolean>>({})
 
   const actor = user ? { id: user.id, name: user.name, role: user.role as Role, siteIds: user.siteIds } : null
+  const { brand } = useBrand()
+  const [params, setParams] = useSearchParams()
+
+  /**
+   * The morning digest into a LINE group (Automation Plan Phase 5): LINE Personal through
+   * the LIFF picker, a Flex card whose rows open the page where each job is done. Where LIFF
+   * is not available, the phone's share sheet (or the clipboard) gets the same as text.
+   */
+  async function shareDigest() {
+    if (!suggestions) return
+    const open = (i: (typeof feed.items)[number]) => i.status === 'pending' || i.status === 'inProgress' || i.status === 'waitingApproval' || i.status === 'overdue'
+    const low = shortages({ products: data.products, locations: data.locations, qtyAt: data.qtyAt, minFor: data.minFor, tracksProduct: data.tracksProduct })
+      .sort((a, b) => a.qty / a.min - b.qty / b.min)
+    const lowNames = [...new Set(low.map((s) => s.product.name))]
+    const digest = buildDigest(
+      {
+        brandName: brand ? brandDef(brand).name : '',
+        dateText: formatThaiDate(now),
+        arrivingToday: feed.items.filter((i) => i.kind === 'poExpected' && isSameBkkDay(i.at, now) && open(i)).length,
+        lateOrders: feed.items.filter((i) => i.kind === 'poExpected' && i.status === 'overdue').length,
+        pendingRequests: feed.items.filter((i) => i.kind === 'prPending').length,
+        pendingTransfers: (openTransfers ?? []).filter((x) => x.status === 'pendingApproval').length,
+        transfersOnTheWay: (openTransfers ?? []).filter((x) => x.status === 'inTransit' || x.status === 'receiving').length,
+        lowStock: new Set(low.map((s) => s.product.id)).size,
+        lowNames,
+        suggestedLines: blocks.reduce((n, b) => n + b.lines.filter(tickedByDefault).length, 0),
+      },
+      t,
+    )
+    const origin = window.location.origin
+    setBusy('digest')
+    try {
+      const provider = await pickShareProvider()
+      const outcome = await provider.share({
+        subject: { kind: 'digest', id: bkkDayKey(now) },
+        caption: digestText(digest, origin, t),
+        flex: digestFlex(digest, origin),
+      })
+      if (outcome === 'sent') toast.success(t('ส่งสรุปเข้า LINE แล้ว'))
+      else if (outcome === 'shareOpened') toast.success(provider.id === 'web-share' && typeof navigator.share !== 'function' ? t('คัดลอกสรุปแล้ว — วางในกลุ่ม LINE ได้เลย') : t('เปิดหน้าแชร์แล้ว'))
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  // Back from LINE Login with ?digest=: pick the share up where it was left, once.
+  const resumed = useRef(false)
+  useEffect(() => {
+    if (resumed.current || !suggestions || !params.get(DIGEST_PARAM)) return
+    resumed.current = true
+    const next = new URLSearchParams(params)
+    next.delete(DIGEST_PARAM)
+    setParams(next, { replace: true })
+    void shareDigest()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestions, params])
   const isOn = (k: Key, l: SuggestionLine) => ticked[k] ?? tickedByDefault(l)
   const qtyOf = (k: Key, l: SuggestionLine) => {
     const v = qty[k]
@@ -188,6 +252,12 @@ export function DailySuggestions() {
       icon="lightbulb"
       title={t('ข้อเสนอแนะประจำวัน')}
       count={suggestions ? t('({n} รายการ)', { n: blocks.reduce((n, b) => n + b.lines.length, 0) }) : undefined}
+      actions={
+        <Button variant="outline" onClick={() => void shareDigest()} disabled={!suggestions || !!busy}>
+          <Icon name="share" size={16} />
+          {busy === 'digest' ? t('กำลังเปิด LINE...') : t('แชร์สรุปเข้า LINE')}
+        </Button>
+      }
     >
       <p className="mb-3 text-xs text-ink-soft">
         {t('คำนวณจากยอดคงเหลือ ขั้นต่ำ และอัตราการใช้ — ตัวเลขเดียวกับคำแนะนำในปฏิทินคลัง ยังไม่มีอะไรถูกบันทึกจนกว่าจะกดสร้างร่าง')}
