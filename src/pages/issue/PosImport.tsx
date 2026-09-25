@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -35,7 +35,12 @@ export function PosImportForm({ modeCards }: { modeCards: ReactNode }) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const sites = useMemo(() => locations.filter((l) => l.active !== false && l.type !== 'transit'), [locations])
-  const [locationId, setLocationId] = useState(() => (sites.find((l) => l.type === 'branch') ?? sites[0])?.id ?? '')
+  const defaultSite = sites.find((l) => l.type === 'branch') ?? sites[0]
+  const [locationId, setLocationId] = useState(defaultSite?.id ?? '')
+  // The sites may arrive after the screen opens; take the default once they do.
+  useEffect(() => {
+    if (!locationId && defaultSite) setLocationId(defaultSite.id)
+  }, [locationId, defaultSite])
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [fileName, setFileName] = useState('')
   const [sheets, setSheets] = useState<{ name: string; rows: Row[] }[]>([])

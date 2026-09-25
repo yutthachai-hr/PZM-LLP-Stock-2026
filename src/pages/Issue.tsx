@@ -98,13 +98,13 @@ function ModeCards({
             role="radio"
             aria-checked={on}
             onClick={() => setMode(c.key)}
-            className={`flex min-h-16 cursor-pointer items-center justify-center gap-3 rounded-xl border-2 px-3 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 ${
+            className={`flex min-h-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 px-2 py-2.5 text-center sm:flex-row sm:gap-3 sm:px-3 sm:py-3 sm:text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand/40 ${
               on ? 'border-brand bg-brand-soft text-brand' : 'border-transparent text-ink-soft hover:bg-sunken'
             }`}
           >
-            <Icon name={c.icon} size={26} className="shrink-0" />
+            <Icon name={c.icon} size={24} className="shrink-0" />
             <span className="min-w-0">
-              <span className="block text-sm font-bold md:text-base">{c.title}</span>
+              <span className="block text-xs font-bold leading-snug sm:text-sm md:text-base">{c.title}</span>
               <span className={`hidden text-xs md:block ${on ? 'text-brand/80' : 'text-ink-faint'}`}>{c.hint}</span>
             </span>
           </button>
