@@ -665,10 +665,6 @@ export const EN: Record<string, string> = {
     'Counts are recorded in the catalog unit. Where the units really differ, the number is wrong.',
   ไฟล์: 'Sheet',
   ระบบ: 'System',
-  'มีความเคลื่อนไหวหลังวันที่นับแล้ว': 'Stock has moved since that count',
-  'ยอดนับจะตั้งยอดคงเหลือเป็นตัวเลขนั้น "ทันที" ไม่ว่าลงวันที่อะไร — ถ้าของขยับไปหลังวันนับ การลงย้อนหลังจะลบความเคลื่อนไหวที่เกิดทีหลังออกจากยอด':
-    'A count sets the balance to its figure immediately, whatever date it carries. If stock moved after the count was taken, posting it would erase everything that happened since from the balance.',
-  '— มีรายการเคลื่อนไหว {date}': '— movement on {date}',
   '— นับไว้แล้ว {date}': '— counted {date}',
   'ชีต "{sheet}" ไม่มีหัวตาราง Quantity/Unit — ไม่ใช่ใบสต๊อกคงเหลือ':
     'Sheet “{sheet}” has no Quantity/Unit heading — it is not a stock sheet',
@@ -2402,4 +2398,15 @@ export const EN: Record<string, string> = {
   'ข้ามได้เฉพาะผู้ขอหรือหัวหน้า': 'Only the requester or a manager can skip it',
   'ข้ามใบนี้': 'Skip this request',
   'ข้ามใบขอสั่งซื้อ': 'Request skipped',
+  'กำลังโหลดยอด ณ วันที่เลือก — รอสักครู่': 'Loading the balance for the chosen day — one moment',
+  'ยอด ณ วันที่เลือกเพิ่งเปลี่ยน — ตรวจตัวเลขอีกครั้งแล้วกดบันทึก': 'The balance for the chosen day just changed — check the figures and save again',
+  'ในระบบ ณ สิ้นวัน {date}': 'On record at end of {date}',
+  'ณ สิ้นวัน {date}': 'End of {date}',
+  'นับย้อนหลัง: "จำนวนในระบบ" คือยอด ณ สิ้นวันที่ {date} — ใส่ยอดที่นับได้วันนั้น ระบบลงผลต่างในวันที่ {date} และรายการรับ/เบิก/โอนหลังวันนั้นยังอยู่ครบ': 'Counting a past day: "on record" is the balance at the end of {date}. Enter what was counted that day; the difference is filed on {date} and every receipt, issue and transfer after it stays.',
+  'ยอดนับวันที่ 1 ที่คีย์ทีหลัง: เลือกวันที่สุดท้ายของเดือนก่อน แล้วใส่ยอดที่นับได้ตามปกติ': 'Keying the 1st-of-month count late: pick the last day of the previous month, then enter the counted figures as usual',
+  'มีรายการเคลื่อนไหวหลังวันที่นับ': 'Moved after the count day',
+  'ระบบเทียบยอดนับกับยอดในระบบ ณ สิ้นวันที่นับ แล้วลงผลต่างในวันนั้น — รายการรับ/เบิก/โอนหลังวันนั้นยังอยู่ครบ': 'Each count is compared with the balance at the end of its own day and the difference is filed on that day — receipts, issues and transfers after it stay',
+  'ในระบบ {asOf} → นับได้ {count} {unit}': 'on record {asOf} → counted {count} {unit}',
+  'มียอดนับที่ใหม่กว่าอยู่แล้ว': 'A newer count is already on record',
+  'ไฟล์นี้เคยนำเข้าแล้ว หรือเป็นไฟล์เก่ากว่ายอดนับที่มีในระบบ — ลงย้อนหลังจะทำให้ยอดนับที่ใหม่กว่าไม่ตรง': 'This file was imported before, or is older than a count already on record — filing it behind that count would put the newer count out',
 }

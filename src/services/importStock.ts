@@ -3,7 +3,9 @@ import { getBrand } from '../brand/brand'
 import type { ParsedSheet, SheetColumn } from '../lib/stockSheet'
 import { COL, type Product, type StockLocation, type StockMovement } from '../types'
 import { QTY_MAX, roundQty } from '../lib/validate'
-import { setStockCount } from './stock'
+import { balanceBefore } from '../lib/ledger'
+import { bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
+import { postCountAsOf } from './stock'
 
 // ============================================================================
 // Turns a parsed closing-stock sheet into stock counts, in two steps.
@@ -55,54 +57,67 @@ export interface Posting {
   /** The unit written on the sheet, kept so a disagreement can be shown. */
   sheetUnit: string
   targetQty: number
+  /**
+   * What the books said at the end of the count day, earlier postings in the same plan
+   * included. The import files `targetQty - asOfQty` on `date`. Set by buildImportPlan.
+   */
+  asOfQty: number
   excelRow: number
 }
 
-/** What last happened to a product at a location, and whether it was a count or a move. */
-export interface LastActivity {
+/** The latest count of a product at a location — the one thing a count cannot go behind. */
+export interface LastCount {
   date: number
-  kind: 'count' | 'movement'
 }
 
 /**
- * The most recent thing that happened to each product at each location.
+ * The whole ledger, read once, the way buildBackup() does. This runs monthly, by an admin,
+ * and the alternative is a read per posting.
  *
- * A stock count says "the shelf holds exactly this". Applying one sets the balance to that
- * figure **now**, whatever date is written on it — so a count can only be applied while
- * nothing has moved that item since it was taken. Otherwise the count silently undoes
- * everything that happened in between: importing the August sheet in November sets the
- * balance back to what August found and quietly erases September and October's receipts
- * from it.
- *
- * That is why this looks at every movement and not only at previous counts. Two different
- * refusals come out of it, and the difference matters to whoever is importing:
- *
- *  - a later **count** means the file has already been loaded, or an older file is being
- *    loaded over a newer one — usually nothing to worry about;
- *  - a later **movement** means the sheet is stale relative to the warehouse, which is a
- *    reason to stop and look rather than to shrug.
- *
- * Reads the ledger once, the way buildBackup() does. This runs monthly, by an admin, and
- * the alternative is a read per posting.
+ * Each count is compared with what the books said at the end of ITS day (lib/ledger
+ * `balanceBefore`), and posted as that difference on that day. So receipts, issues and
+ * transfers filed after the count date are no reason to refuse it any more: they stay on
+ * top of the corrected figure. (Until 25 Sep 2026 a count set the balance to its figure
+ * NOW, so any later movement had to block it — which blocked exactly the busiest items.)
  */
-export async function loadLastActivity(): Promise<Map<string, LastActivity>> {
+export async function loadLedger(): Promise<StockMovement[]> {
   const db = backend.forBrand(getBrand())
-  const movements = await db.getAll<StockMovement>(COL.movements)
-  const latest = new Map<string, LastActivity>()
-  const note = (locationId: string, productId: string, m: StockMovement) => {
-    const key = countKey(locationId, productId)
+  return (await db.getAll<StockMovement>(COL.movements)) ?? []
+}
+
+/**
+ * The latest count per product and location. A count on the same day or later means the
+ * file has already been loaded, or an older file is being loaded over a newer one; posting
+ * behind it would move the balance that count already agreed.
+ */
+export function lastCounts(ledger: readonly StockMovement[]): Map<string, LastCount> {
+  const latest = new Map<string, LastCount>()
+  for (const m of ledger) {
+    if (m.voided || m.type !== 'adjust' || m.reason !== 'opening') continue
+    const at = m.toLocationId ?? m.fromLocationId
+    if (!at) continue
+    const key = countKey(at, m.productId)
     const known = latest.get(key)
-    if (known && known.date >= m.date) return
-    const kind = m.type === 'adjust' && m.reason === 'opening' ? 'count' : 'movement'
-    latest.set(key, { date: m.date, kind })
-  }
-  for (const m of movements) {
-    if (m.voided) continue
-    // A transfer touches both ends, and a count at either one is equally stale afterwards.
-    if (m.fromLocationId) note(m.fromLocationId, m.productId, m)
-    if (m.toLocationId) note(m.toLocationId, m.productId, m)
+    if (!known || known.date < m.date) latest.set(key, { date: m.date })
   }
   return latest
+}
+
+/** Every row that touches a product at a location, both ends of a transfer included. */
+function rowsByKey(ledger: readonly StockMovement[]): Map<string, StockMovement[]> {
+  const out = new Map<string, StockMovement[]>()
+  const put = (locationId: string, m: StockMovement) => {
+    const key = countKey(locationId, m.productId)
+    const list = out.get(key)
+    if (list) list.push(m)
+    else out.set(key, [m])
+  }
+  for (const m of ledger) {
+    if (m.voided) continue
+    if (m.fromLocationId) put(m.fromLocationId, m)
+    if (m.toLocationId) put(m.toLocationId, m)
+  }
+  return out
 }
 
 export function countKey(locationId: string, productId: string): string {
@@ -147,16 +162,22 @@ export interface UnitWarning {
 export interface ImportPlan {
   postings: Posting[]
   /**
-   * Counts the ledger has already moved past — something happened to that product at that
-   * location on the same day or later, so applying the count would overwrite a newer
-   * balance with an older figure.
+   * Counts with a count already on the books at that product and location on the same day
+   * or later — the file was loaded before, or an older file is going in over a newer one.
    */
-  superseded: { posting: Posting; by: LastActivity }[]
+  superseded: { posting: Posting; by: LastCount }[]
   /**
-   * Counts the balance already agrees with. Nothing moved, so the ledger records nothing —
-   * separated out so the summary promises the number of movements it will actually write.
+   * Counts the books already agreed with at the end of their day. Nothing moved, so the
+   * ledger records nothing — separated out so the summary promises the number of movements
+   * it will actually write.
    */
   unchanged: Posting[]
+  /**
+   * Postings (a subset of `postings`) whose product moved at that location after the count
+   * day. They are posted as the difference from that day's balance, so what came later
+   * stays — listed so the person importing can see it was taken into account.
+   */
+  movedSince: Posting[]
   skipped: SkippedRow[]
   unitWarnings: UnitWarning[]
   /** Distinct products and locations the postings touch, for the summary. */
@@ -192,14 +213,16 @@ interface Dropped {
  *  - **The unit comes from the catalog, not the sheet.** A count of 3 recorded against the
  *    wrong unit is a different quantity. Where the two disagree, the number is still posted
  *    against the catalog unit and the disagreement is reported.
+ *  - **A count is compared with its own day, never with today.** `ledger` is every movement
+ *    (loadLedger); each posting carries `asOfQty`, the balance at the end of the count day,
+ *    and the import files the difference on that day.
  */
 export function buildImportPlan(
   sheet: ParsedSheet,
   mapping: SheetMapping,
   products: Product[],
   locations: StockLocation[],
-  lastActivity: ReadonlyMap<string, LastActivity> = new Map(),
-  balances?: ReadonlyMap<string, number>,
+  ledger: readonly StockMovement[] = [],
 ): ImportPlan {
   const bySku = new Map<string, Product>()
   for (const p of products) {
@@ -311,6 +334,7 @@ export function buildImportPlan(
           unit: product.unitType,
           sheetUnit,
           targetQty: qty,
+          asOfQty: 0,
           excelRow: row.excelRow,
         })
       }
@@ -319,11 +343,12 @@ export function buildImportPlan(
 
   // Drop the postings a later duplicate invalidated.
   const usable = postings.filter((p) => !Number.isNaN(p.targetQty))
-  const staleAgainst = (p: Posting): LastActivity | null => {
-    const last = lastActivity.get(countKey(p.locationId, p.productId))
+  const counted = lastCounts(ledger)
+  const staleAgainst = (p: Posting): LastCount | null => {
+    const last = counted.get(countKey(p.locationId, p.productId))
     return last && last.date >= p.date ? last : null
   }
-  const superseded: { posting: Posting; by: LastActivity }[] = []
+  const superseded: { posting: Posting; by: LastCount }[] = []
   const toPost: Posting[] = []
   for (const p of usable) {
     const by = staleAgainst(p)
@@ -356,33 +381,39 @@ export function buildImportPlan(
     (a, b) => a.posting.date - b.posting.date || a.posting.excelRow - b.posting.excelRow,
   )
 
-  // Walk the plan against the balances it will actually meet, in the order it will meet
-  // them, and set aside the counts that will find nothing to change. setStockCount writes
-  // no movement for those, so counting them as work would make the summary promise more
-  // than the import delivers — and "615 to write" followed by "540 written" reads as a
-  // failure rather than as two counts agreeing.
+  // Walk the plan in the order it will be filed and give every count the balance it will
+  // meet at the end of its own day: the ledger up to then, plus the differences this plan
+  // files earlier at the same place. Counts that find nothing to change are set aside —
+  // no movement is written for those, so counting them as work would make the summary
+  // promise more than the import delivers ("615 to write" followed by "540 written" reads
+  // as a failure rather than as two counts agreeing).
+  const rows = rowsByKey(ledger)
+  const planned = new Map<string, { date: number; delta: number }[]>()
   const unchanged: Posting[] = []
+  const movedSince: Posting[] = []
   const kept: Posting[] = []
-  if (balances) {
-    const simulated = new Map(balances)
-    for (const p of toPost) {
-      const key = countKey(p.locationId, p.productId)
-      const now = simulated.get(key) ?? 0
-      if (roundQty(now) === p.targetQty) {
-        unchanged.push(p)
-        continue
-      }
-      simulated.set(key, p.targetQty)
-      kept.push(p)
+  for (const p of toPost) {
+    const key = countKey(p.locationId, p.productId)
+    const end = bkkDayStart(p.date) + DAY_MS
+    const scope = { productId: p.productId, locationId: p.locationId }
+    const here = rows.get(key) ?? []
+    const earlier = (planned.get(key) ?? []).reduce((s, x) => (x.date < end ? s + x.delta : s), 0)
+    const asOfQty = roundQty(balanceBefore(here, scope, end) + earlier)
+    if (asOfQty === p.targetQty) {
+      unchanged.push({ ...p, asOfQty })
+      continue
     }
-  } else {
-    kept.push(...toPost)
+    const posting = { ...p, asOfQty }
+    planned.set(key, [...(planned.get(key) ?? []), { date: p.date, delta: roundQty(p.targetQty - asOfQty) }])
+    if (here.some((m) => m.date >= end)) movedSince.push(posting)
+    kept.push(posting)
   }
 
   return {
     postings: kept,
     superseded,
     unchanged,
+    movedSince,
     skipped,
     unitWarnings: [...unitWarnings.values()],
     productCount: new Set(kept.map((p) => p.productId)).size,
@@ -401,13 +432,15 @@ export interface ImportResult {
 /**
  * Run a plan.
  *
- * Sequential rather than batched, because each count is a read-then-write of the same
- * balance: two postings for one product racing each other would both read the old value.
- * setStockCount is a transaction per posting, which is also what makes a second run of the
- * same file a no-op — every balance already matches, so nothing is written.
+ * Sequential and in date order, one transaction per posting, each filing the difference the
+ * plan worked out on the count's own date. A second run of the same FILE is a no-op because
+ * the plan is rebuilt from the ledger and finds the counts already there (`superseded`);
+ * the same PLAN object must not be applied twice.
  *
  * A posting that fails does not stop the rest. The ones that went in are real counts and
- * are worth keeping; the failures come back named, so they can be looked at.
+ * are worth keeping; the failures come back named, so they can be looked at. A later count
+ * of the same item was planned on top of the failed one's difference, so that difference
+ * is taken back out of its starting figure.
  */
 export async function applyImportPlan(
   plan: ImportPlan,
@@ -416,16 +449,21 @@ export async function applyImportPlan(
   onProgress?: (done: number, total: number) => void,
 ): Promise<ImportResult> {
   const result: ImportResult = { posted: 0, unchanged: 0, failed: [] }
+  const missed = new Map<string, { date: number; delta: number }[]>()
   const total = plan.postings.length
   for (let i = 0; i < total; i++) {
     const p = plan.postings[i]
+    const key = countKey(p.locationId, p.productId)
+    const end = bkkDayStart(p.date) + DAY_MS
+    const notFiled = (missed.get(key) ?? []).reduce((s, x) => (x.date < end ? s + x.delta : s), 0)
     try {
-      const wrote = await setStockCount({
+      const wrote = await postCountAsOf({
         productId: p.productId,
         productName: p.productName,
         unit: p.unit,
         locationId: p.locationId,
-        targetQty: p.targetQty,
+        countedQty: p.targetQty,
+        asOfQty: roundQty(p.asOfQty - notFiled),
         actor,
         note,
         date: p.date,
@@ -434,6 +472,7 @@ export async function applyImportPlan(
       else result.unchanged++
     } catch (e) {
       result.failed.push({ posting: p, error: e })
+      missed.set(key, [...(missed.get(key) ?? []), { date: p.date, delta: roundQty(p.targetQty - p.asOfQty) }])
     }
     onProgress?.(i + 1, total)
   }
