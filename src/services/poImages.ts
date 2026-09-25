@@ -47,7 +47,8 @@ export function imageHostAvailable(): boolean {
   return true
 }
 
-async function authHeader(): Promise<Record<string, string>> {
+/** The sign-in header this site's own functions accept (also used by services/billOcr). */
+export async function authHeader(): Promise<Record<string, string>> {
   if (BACKEND_MODE === 'local') {
     const key = (import.meta.env.VITE_PO_IMAGE_DEMO_KEY ?? '').trim()
     if (!key) throw new AppError('เครื่องนี้ยังไม่ได้ตั้งค่าที่เก็บรูปสำหรับส่ง LINE')

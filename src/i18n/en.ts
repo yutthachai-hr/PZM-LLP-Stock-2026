@@ -2517,4 +2517,15 @@ export const EN: Record<string, string> = {
   'ส่วนผสมเกิน {n} รายการ': 'More than {n} ingredients',
   '"{name}" อยู่ในสูตรนี้มากกว่า 1 บรรทัด': '"{name}" is in this recipe more than once',
   'ปริมาณของ "{name}" ต้องมากกว่า 0': 'The amount of "{name}" must be more than 0',
+  // ---- automation plan phase 4: bill reading (25 Sep 2026) --------------------
+  'AI กำลังอ่านบิล...': 'AI is reading the bill...',
+  'อ่านบิลด้วย AI': 'Read the bill with AI',
+  'AI อ่านบิลแล้ว — ใส่ให้ {n} รายการ ตรวจก่อนยืนยันทุกครั้ง': 'AI read the bill — {n} lines filled in. Always check before confirming',
+  'AI อ่านได้แต่ยังไม่ได้ใส่ให้ {n} รายการ — คีย์เอง': 'AI read {n} lines it could not fill in — key them yourself',
+  'ไม่พบสินค้าที่ชื่อตรงกัน': 'no product with that name',
+  'ไม่อยู่ในใบสั่งซื้อนี้': 'not on this order',
+  'หน่วยในบิลไม่ตรงกับหน่วยที่สั่ง/หน่วยสินค้า': 'the bill\'s unit is not the ordered/product unit',
+  'มีในรายการแล้ว': 'already on the list',
+  'ยังไม่ได้เปิดใช้ AI อ่านบิล — ผู้ดูแลต้องตั้งค่า GEMINI_API_KEY ใน Cloudflare ก่อน': 'Bill reading is not switched on — an admin must set GEMINI_API_KEY in Cloudflare first',
+  'AI อ่านบิลไม่สำเร็จ ({status}) — ลองถ่ายใหม่ให้ชัดขึ้น หรือคีย์เอง': 'AI could not read the bill ({status}) — take a clearer photo, or key it in',
 }

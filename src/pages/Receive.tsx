@@ -15,6 +15,10 @@ import { listOpenOrders, receivePurchaseOrder } from '../services/purchaseOrders
 import { findDuplicateDocument, type DuplicateDoc } from '../services/receiptDocs'
 import { useSuppliers } from '../services/suppliers'
 import { compressImage } from '../lib/image'
+import { matchOcrLines } from '../lib/billOcr'
+import { buildMatchIndex } from '../lib/productMatch'
+import { billReaderAvailable, readBillPhoto } from '../services/billOcr'
+import { ocrFill, type OcrFill } from './receive/ocrApply'
 import { shownUnit } from '../lib/ledger'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
@@ -268,6 +272,7 @@ export function ReceivePage() {
       setReviewing(false)
       setTried(false)
       setPhoto(null)
+      setOcr(null)
       setD((cur) => ({ ...emptyDraft(), mode: cur.mode, toLocationId: cur.toLocationId, dateStr: cur.dateStr, queue: cur.queue }))
       if (d.queue.length === 0) clearDraft()
       window.scrollTo({ top: 0 })
@@ -303,6 +308,25 @@ export function ReceivePage() {
     patch({ mode })
   }
 
+  // A bill read by AI (Automation Plan Phase 4): it only fills the form; the person checks.
+  const [reading, setReading] = useState(false)
+  const [ocr, setOcr] = useState<OcrFill | null>(null)
+  async function readBill() {
+    if (!photo) return
+    setReading(true)
+    try {
+      const bill = await readBillPhoto(photo)
+      const filled = ocrFill(bill, matchOcrLines(bill, buildMatchIndex(products, [])), { draft: d, order, suppliers })
+      patch(filled.patch)
+      setOcr(filled)
+      toast.success(t('AI อ่านบิลแล้ว — ใส่ให้ {n} รายการ ตรวจก่อนยืนยันทุกครั้ง', { n: filled.filled }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setReading(false)
+    }
+  }
+
   async function pickPhoto(file: File | null) {
     if (!file) return setPhoto(null)
     try {
@@ -316,6 +340,7 @@ export function ReceivePage() {
     linkRef.current = null
     setD({ ...emptyDraft(), toLocationId: d.toLocationId, dateStr: msToDateInput(todayMs()) })
     setPhoto(null)
+    setOcr(null)
     clearDraft()
   }
 
@@ -438,7 +463,29 @@ export function ReceivePage() {
               onNote={(v) => patch({ note: v })}
               duplicate={duplicate}
               invalid={{ supplier: tried && problem === 'noSupplier', invoice: tried && problem === 'noInvoice' }}
+              onReadBill={billReaderAvailable() ? () => void readBill() : undefined}
+              reading={reading}
             />
+          )}
+
+          {ocr && ocr.skipped.length > 0 && (
+            <div className="rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-ink">
+              <div className="font-semibold">{t('AI อ่านได้แต่ยังไม่ได้ใส่ให้ {n} รายการ — คีย์เอง', { n: ocr.skipped.length })}</div>
+              <ul className="mt-1 list-disc pl-5 text-xs text-ink-soft">
+                {ocr.skipped.map((s, i) => (
+                  <li key={`${s.name}-${i}`}>
+                    {s.name} —{' '}
+                    {s.why === 'noProduct'
+                      ? t('ไม่พบสินค้าที่ชื่อตรงกัน')
+                      : s.why === 'notOnOrder'
+                        ? t('ไม่อยู่ในใบสั่งซื้อนี้')
+                        : s.why === 'unit'
+                          ? t('หน่วยในบิลไม่ตรงกับหน่วยที่สั่ง/หน่วยสินค้า')
+                          : t('มีในรายการแล้ว')}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {/* Below the wide layout the side panel sits under the form, so the button lives here. */}
