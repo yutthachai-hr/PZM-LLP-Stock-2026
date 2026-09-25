@@ -68,21 +68,23 @@ export function ReceiptPanel({
           <Row label={t('ผู้ขาย')}>{facts.supplierName || '—'}</Row>
           <Row label={t('ใบสั่งซื้อ')}>{facts.poDocNo ?? (mode === 'po' ? '—' : t('ไม่มี (รับนอกใบสั่งซื้อ)'))}</Row>
           <Row label={t('คลัง')}>{mode === 'po' && !facts.poDocNo ? '—' : facts.warehouse || '—'}</Row>
-          <Row label={t('จำนวนรายการ')}>{facts.items}</Row>
+          <Row label={t('จำนวนรายการ')}>{t('{n} รายการ', { n: facts.items })}</Row>
+          {/* Counts of LINES, said as such: a line's own figure (over by 0.5 KG) sits on the
+              line, and a bare "over 1" here read as a different quantity (owner, 25 Sep 2026). */}
           {mode === 'po' && (
             <>
-              <Row label={t('ครบ')}>
-                <span className="text-in">{facts.matched}</span>
+              <Row label={t('ครบตามใบสั่ง')}>
+                <span className="text-in">{t('{n} รายการ', { n: facts.matched })}</span>
               </Row>
-              <Row label={t('ขาด')}>
-                <span className={facts.short ? 'text-warn' : ''}>{facts.short}</span>
+              <Row label={t('ขาดส่ง')}>
+                <span className={facts.short ? 'text-warn' : ''}>{t('{n} รายการ', { n: facts.short })}</span>
               </Row>
-              <Row label={t('เกิน')}>
-                <span className={facts.over ? 'text-tile-blue' : ''}>{facts.over}</span>
+              <Row label={t('ส่งเกิน')}>
+                <span className={facts.over ? 'text-tile-blue' : ''}>{t('{n} รายการ', { n: facts.over })}</span>
               </Row>
               {pending > 0 && (
                 <Row label={t('ยังไม่ใส่จำนวน')}>
-                  <span className="text-danger">{pending}</span>
+                  <span className="text-danger">{t('{n} รายการ', { n: pending })}</span>
                 </Row>
               )}
             </>
@@ -165,15 +167,15 @@ export function ReviewModal({
           <Row label={t('เลขที่เอกสาร')}>{facts.invoiceNo}</Row>
           <Row label={t('วันที่ในเอกสาร')}>{formatThaiDate(facts.docDate)}</Row>
           <Row label={t('รูปเอกสาร')}>{facts.hasPhoto ? t('แนบแล้ว') : t('ไม่มี')}</Row>
-          <Row label={t('จำนวนรายการ')}>{facts.items}</Row>
+          <Row label={t('จำนวนรายการ')}>{t('{n} รายการ', { n: facts.items })}</Row>
           {facts.note && <Row label={t('หมายเหตุ')}>{facts.note}</Row>}
         </dl>
 
         {facts.poDocNo !== undefined && (
           <div className="flex flex-wrap gap-2">
-            <StatusChip tone="green">{t('ครบ {n}', { n: facts.matched })}</StatusChip>
-            <StatusChip tone="amber">{t('ขาด {n}', { n: facts.short })}</StatusChip>
-            <StatusChip tone="blue" icon="alertCircle">{t('เกิน {n}', { n: facts.over })}</StatusChip>
+            <StatusChip tone="green">{t('ครบ {n} รายการ', { n: facts.matched })}</StatusChip>
+            <StatusChip tone="amber">{t('ขาดส่ง {n} รายการ', { n: facts.short })}</StatusChip>
+            <StatusChip tone="blue" icon="alertCircle">{t('ส่งเกิน {n} รายการ', { n: facts.over })}</StatusChip>
           </div>
         )}
 
