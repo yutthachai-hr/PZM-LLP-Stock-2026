@@ -1401,6 +1401,33 @@ describe('purchase requests', () => {
     }))
   })
 
+  test('a draft or returned request is set aside by its requester or a manager, signed, then frozen (25 Sep 2026)', async () => {
+    const skip = (uid: string) => ({ status: 'skipped', skipReason: 'stuck when the quota ran out', skippedBy: uid, skippedByName: 'x', skippedAt: ts(), history: grow(), updatedAt: ts() })
+    await assertSucceeds(setDoc(at(STAFF), pr()))
+    // Someone else's draft, or signed in another name, or without a reason: refused.
+    await assertFails(updateDoc(at(OUTSIDER), skip(OUTSIDER)))
+    await assertFails(updateDoc(at(STAFF), skip(MANAGER)))
+    await assertFails(updateDoc(at(STAFF), { status: 'skipped', skippedBy: STAFF, skippedByName: 'x', skippedAt: ts(), history: grow(), updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { ...skip(STAFF), skippedAt: 'today' }))
+    await assertSucceeds(updateDoc(at(STAFF), skip(STAFF)))
+    // Final: no edit, no way back, no delete — admins included.
+    await assertFails(updateDoc(at(STAFF), { note: 'x', updatedAt: ts() }))
+    await assertFails(updateDoc(at(ADMIN), { status: 'draft', history: grow(), updatedAt: ts() }))
+    await assertFails(updateDoc(at(ADMIN), { note: 'x', updatedAt: ts() }))
+    await assertFails(deleteDoc(at(ADMIN)))
+  })
+
+  test('a manager may skip a returned request; nobody skips one under review or decided', async () => {
+    const skip = (uid: string) => ({ status: 'skipped', skipReason: 'not needed', skippedBy: uid, skippedByName: 'x', skippedAt: ts(), history: grow(), updatedAt: ts() })
+    await assertSucceeds(setDoc(at(STAFF), pr({ status: 'draft' })))
+    await assertSucceeds(updateDoc(at(STAFF), { status: 'pendingApproval', history: grow(), updatedAt: ts() }))
+    await assertFails(updateDoc(at(MANAGER), skip(MANAGER)))
+    await assertSucceeds(updateDoc(at(MANAGER), { status: 'returned', returnReason: 'fix', history: grow(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(MANAGER), skip(MANAGER)))
+    // A request cannot be filed already skipped.
+    await assertFails(setDoc(at(STAFF, 'pr9'), pr({ id: 'pr9', ...skip(STAFF) })))
+  })
+
   test('staff cannot delete a request; an admin can', async () => {
     await assertSucceeds(setDoc(at(STAFF), pr()))
     await assertFails(deleteDoc(at(STAFF)))

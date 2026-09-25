@@ -3,7 +3,7 @@ import { resolveFactor } from '../lib/uom'
 import type { TxContext } from '../backend/types'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
-import { canEditItems, canTransition, isManager, liveItems } from '../lib/purchaseRequestStatus'
+import { canEditItems, canSkip, canTransition, isManager, liveItems } from '../lib/purchaseRequestStatus'
 import { sameUnit } from '../lib/units'
 import { requireQty, roundQty } from '../lib/validate'
 import { createPurchaseOrder } from './purchaseOrders'
@@ -606,6 +606,40 @@ export async function approveRequest(params: {
       history: [...pr.history, entry(params.actor, 'approved', note ? { newValue: note } : {})],
     }
   })
+}
+
+/**
+ * Set a request aside before review: a draft nobody will finish, or a returned request
+ * that will not be sent again. Final, with a reason and the name of whoever did it — the
+ * number stays on the books, so the gap in the sequence is explained rather than a mystery
+ * (owner, 25 Sep 2026). The requester or a หัวหน้า/admin; the rules say the same.
+ */
+export async function skipRequest(params: { id: string; reason: string; actor: Actor }): Promise<PurchaseRequest> {
+  const reason = params.reason.trim()
+  if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ข้ามรายการนี้')
+  return mutate(params.id, (pr) => {
+    if (!canTransition(pr.status, 'skipped')) throw new AppError('ข้ามได้เฉพาะรายการที่เป็นร่างหรือถูกส่งกลับให้แก้ไข')
+    if (!canSkip(pr, params.actor)) throw new AppError('ข้ามได้เฉพาะผู้ขอหรือหัวหน้า')
+    return {
+      ...pr,
+      status: 'skipped',
+      skipReason: reason,
+      skippedBy: params.actor.id,
+      skippedByName: params.actor.name,
+      skippedAt: Date.now(),
+      history: [...pr.history, entry(params.actor, 'skipped', { oldValue: pr.status, newValue: reason })],
+    }
+  })
+}
+
+/**
+ * This person's requests still waiting on them — drafts and returned ones — newest first.
+ * What "สร้างรายการขอสั่งซื้อ" warns about before a second request is started.
+ */
+export function ownOpenDrafts(rows: readonly PurchaseRequest[], userId: string): PurchaseRequest[] {
+  return rows
+    .filter((r) => r.requestedBy === userId && (r.status === 'draft' || r.status === 'returned'))
+    .sort((a, b) => b.createdAt - a.createdAt)
 }
 
 /** Admin only: an approved or rejected request goes back under review, on the record. */

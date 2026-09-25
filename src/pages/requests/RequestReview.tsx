@@ -620,6 +620,7 @@ export function historyText(action: string, t: (k: string) => string): string {
     approved: t('อนุมัติ'),
     rejected: t('ไม่อนุมัติ'),
     reopened: t('เปิดตรวจใหม่'),
+    skipped: t('ข้ามรายการ'),
     exported: t('ส่งออกไฟล์'),
     convertedToPo: t('สร้างใบสั่งซื้อ'),
   }

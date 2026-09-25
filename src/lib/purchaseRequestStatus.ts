@@ -11,15 +11,18 @@ import type { PurchaseRequest, PurchaseRequestStatus, Role } from '../types'
  *     └──── returned ◀──────┘ reject ──▶ rejected      ▼
  *              │ resubmit                         pendingApproval
  *              └──────────▶ pendingApproval
+ *
+ *   draft / returned ──skip (with a reason)──▶ skipped   (final: never edited or deleted)
  */
 
 const TRANSITIONS: Record<PurchaseRequestStatus, readonly PurchaseRequestStatus[]> = {
-  draft: ['pendingApproval'],
+  draft: ['pendingApproval', 'skipped'],
   pendingApproval: ['returned', 'approved', 'rejected'],
-  returned: ['pendingApproval'],
+  returned: ['pendingApproval', 'skipped'],
   approved: ['poCreated', 'pendingApproval'],
   rejected: ['pendingApproval'],
   poCreated: [],
+  skipped: [],
 }
 
 export function canTransition(from: PurchaseRequestStatus, to: PurchaseRequestStatus): boolean {
@@ -55,6 +58,14 @@ export function canEditItems(
   }
 }
 
+/**
+ * Whether this person may set this request aside ("ข้าม") — the owner's choice, 25 Sep 2026:
+ * the one who asked, or a หัวหน้า/admin, while it has not reached review (draft or returned).
+ */
+export function canSkip(pr: Pick<PurchaseRequest, 'status' | 'requestedBy'>, user: { id: string; role: Role }): boolean {
+  return (pr.status === 'draft' || pr.status === 'returned') && (pr.requestedBy === user.id || isManager(user.role))
+}
+
 /** Whether the requester-side buttons (save draft / submit) apply. */
 export function isRequesterEditable(status: PurchaseRequestStatus): boolean {
   return status === 'draft' || status === 'returned'
@@ -82,6 +93,7 @@ export const PR_STATUS_KEYS: Record<PurchaseRequestStatus, string> = {
   approved: 'อนุมัติแล้ว', // i18n-key
   rejected: 'ไม่อนุมัติ', // i18n-key
   poCreated: 'สร้างใบสั่งซื้อแล้ว', // i18n-key
+  skipped: 'ข้ามแล้ว', // i18n-key
 }
 
 export function prBadgeColor(status: PurchaseRequestStatus): 'slate' | 'red' | 'green' | 'amber' | 'blue' {

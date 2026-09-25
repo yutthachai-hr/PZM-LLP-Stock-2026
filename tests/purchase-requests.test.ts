@@ -385,3 +385,52 @@ describe('urgency (owner, 22 Sep 2026)', () => {
     await expect(S.setItemUrgency({ id: sent.id, idx: sent.items[0].idx, urgency: 'soon' as never, actor: MANAGER })).rejects.toThrow()
   })
 })
+
+describe('setting a request aside (owner, 25 Sep 2026)', () => {
+  test('a draft nobody will finish is skipped with a reason, signed, and final', async () => {
+    const pr = await S.createRequest({ locationId: MAIN, actor: STAFF })
+    await expect(S.skipRequest({ id: pr.id, reason: '  ', actor: STAFF })).rejects.toThrow()
+    const skipped = await S.skipRequest({ id: pr.id, reason: 'ระบบค้างตอนโควตาเต็ม — ทำใบใหม่แทน', actor: STAFF })
+    expect(skipped).toMatchObject({ status: 'skipped', skipReason: 'ระบบค้างตอนโควตาเต็ม — ทำใบใหม่แทน', skippedBy: STAFF.id, skippedByName: 'AA' })
+    expect(skipped.history.at(-1)).toMatchObject({ action: 'skipped', oldValue: 'draft', by: STAFF.id })
+    // Final: not skipped twice, not submitted, not edited.
+    await expect(S.skipRequest({ id: pr.id, reason: 'again', actor: STAFF })).rejects.toThrow()
+    await expect(S.submitRequest({ id: pr.id, ctx: { ...ctx, qtyAt: () => 0 }, actor: STAFF })).rejects.toThrow()
+    await expect(S.setRequestHeader({ id: pr.id, note: 'x', actor: STAFF })).rejects.toThrow()
+    expect(requests()).toHaveLength(1) // still on the books
+  })
+
+  test('only the requester or a หัวหน้า/admin may skip, and only before review', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
+    await expect(S.skipRequest({ id: pr.id, reason: 'x', actor: OTHER_STAFF })).rejects.toThrow()
+    await S.submitRequest({ id: pr.id, ctx: { ...ctx, qtyAt: () => 0 }, actor: STAFF })
+    // Under review it is the manager's to return or reject, not to skip.
+    await expect(S.skipRequest({ id: pr.id, reason: 'x', actor: MANAGER })).rejects.toThrow()
+    await S.returnRequest({ id: pr.id, reason: 'fix', actor: MANAGER })
+    const skipped = await S.skipRequest({ id: pr.id, reason: 'no longer needed', actor: MANAGER })
+    expect(skipped).toMatchObject({ status: 'skipped', skippedBy: MANAGER.id })
+  })
+
+  test('the new-request warning lists only this person\'s drafts and returned requests, newest first', () => {
+    const base = { requestedBy: STAFF.id, createdAt: 1 } as PurchaseRequest
+    const rows = [
+      { ...base, id: 'a', status: 'draft', createdAt: 1 },
+      { ...base, id: 'b', status: 'returned', createdAt: 3 },
+      { ...base, id: 'c', status: 'pendingApproval', createdAt: 4 },
+      { ...base, id: 'd', status: 'skipped', createdAt: 5 },
+      { ...base, id: 'e', status: 'draft', requestedBy: OTHER_STAFF.id, createdAt: 6 },
+    ] as PurchaseRequest[]
+    expect(S.ownOpenDrafts(rows, STAFF.id).map((r) => r.id)).toEqual(['b', 'a'])
+  })
+
+  test('the status machine: skipped only from draft or returned, and nowhere from there', () => {
+    expect(canTransition('draft', 'skipped')).toBe(true)
+    expect(canTransition('returned', 'skipped')).toBe(true)
+    expect(canTransition('pendingApproval', 'skipped')).toBe(false)
+    expect(canTransition('approved', 'skipped')).toBe(false)
+    expect(canTransition('skipped', 'draft')).toBe(false)
+    expect(canTransition('skipped', 'pendingApproval')).toBe(false)
+    expect(canEditItems({ status: 'skipped', requestedBy: STAFF.id }, STAFF)).toBe(false)
+    expect(canEditItems({ status: 'skipped', requestedBy: STAFF.id }, ADMIN)).toBe(false)
+  })
+})

@@ -673,6 +673,7 @@ service cloud.firestore {
           'returnReason', 'rejectReason', 'approvalNote',
           'approvedBy', 'approvedByName', 'approvedAt',
           'rejectedBy', 'rejectedByName', 'rejectedAt',
+          'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
           'orders', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ]);
     }
@@ -696,7 +697,7 @@ service cloud.firestore {
 
     function requestLive(d) {
       return text(d.locationId, 200)
-        && d.status in ['draft', 'pendingApproval', 'returned', 'approved', 'rejected', 'poCreated']
+        && d.status in ['draft', 'pendingApproval', 'returned', 'approved', 'rejected', 'poCreated', 'skipped']
         && d.revision is int && d.revision >= 1 && d.revision <= 1000
         && d.items is list && d.items.size() <= 200
         && d.history is list && d.history.size() > 0 && d.history.size() <= 500
@@ -712,11 +713,17 @@ service cloud.firestore {
         && (!('rejectedBy' in d) || text(d.rejectedBy, 200))
         && (!('rejectedByName' in d) || text(d.rejectedByName, 200))
         && (!('rejectedAt' in d) || epochMs(d.rejectedAt))
+        // Set aside before review, with a reason (25 Sep 2026).
+        && (!('skipReason' in d) || text(d.skipReason, 2000))
+        && (!('skippedBy' in d) || text(d.skippedBy, 200))
+        && (!('skippedByName' in d) || text(d.skippedByName, 200))
+        && (!('skippedAt' in d) || epochMs(d.skippedAt))
         && epochMs(d.updatedAt)
         // What a status means is pinned to who signed it.
         && (d.status != 'approved' || 'approvedBy' in d)
         && (d.status != 'rejected' || 'rejectedBy' in d)
-        && (d.status != 'poCreated' || ('orders' in d && d.orders.size() > 0));
+        && (d.status != 'poCreated' || ('orders' in d && d.orders.size() > 0))
+        && (d.status != 'skipped' || ('skippedBy' in d && 'skipReason' in d));
     }
 
     /**
@@ -1087,8 +1094,11 @@ service cloud.firestore {
           'returnReason', 'rejectReason', 'approvalNote',
           'approvedBy', 'approvedByName', 'approvedAt',
           'rejectedBy', 'rejectedByName', 'rejectedAt',
+          'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
           'orders', 'history', 'updatedAt'
         ])
+        // A skipped request is final: nobody edits it, admins included (owner, 25 Sep 2026).
+        && resource.data.status != 'skipped'
         && request.resource.data.history.size() >= resource.data.history.size()
         && (request.resource.data.status == resource.data.status || requestMove())
         && (!('approvedBy' in request.resource.data)
@@ -1112,6 +1122,10 @@ service cloud.firestore {
         || (to == 'poCreated' && from == 'approved')
         // reopening a decision: admin only
         || (to == 'pendingApproval' && from in ['approved', 'rejected'] && roleIsAdmin())
+        // setting it aside before review: the requester or a manager, in their own name
+        || (to == 'skipped' && from in ['draft', 'returned']
+          && (resource.data.requestedBy == request.auth.uid || roleIsManager())
+          && request.resource.data.skippedBy == request.auth.uid)
       );
     }
 
@@ -1519,7 +1533,9 @@ service cloud.firestore {
       // An announcement is never deleted, only cancelled — the send log is the record of
       // what the company told its suppliers.
       allow delete: if admin() && brandData(collection) && !ledger(collection)
-        && !receivedOrder(collection) && kind(collection) != 'announcements';
+        && !receivedOrder(collection) && kind(collection) != 'announcements'
+        // A skipped request stays, with why — the gap in the PR numbers is explained.
+        && !(kind(collection) == 'purchaseRequests' && resource.data.status == 'skipped');
     }
   }
 }

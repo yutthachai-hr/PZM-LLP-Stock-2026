@@ -926,6 +926,12 @@ export type PurchaseRequestStatus =
   | 'approved'
   | 'rejected'
   | 'poCreated'
+  /**
+   * Set aside by the requester or a หัวหน้า before review, with a reason (owner, 25 Sep
+   * 2026: a draft left behind when the phone hit the quota, and a new request keyed
+   * instead). Final: the number stays on the books, and nobody edits or deletes it.
+   */
+  | 'skipped'
 
 /** How the supplier on a line was arrived at — the manager sees `custom` flagged. */
 export type SupplierChoice = 'primary' | 'alternate' | 'custom'
@@ -1023,6 +1029,11 @@ export interface PurchaseRequest {
   rejectedBy?: string
   rejectedByName?: string
   rejectedAt?: number
+  /** Why it was set aside, and by whom — present exactly when status is 'skipped'. */
+  skipReason?: string
+  skippedBy?: string
+  skippedByName?: string
+  skippedAt?: number
   /** The orders it became, one per supplier. Written once; a request converts once. */
   orders?: { supplierId: string; supplierName: string; poId: string; docNo: string }[]
   history: PurchaseRequestHistoryEntry[]
