@@ -19,11 +19,11 @@ import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
 import { fmtQty, formatThaiDateShort } from '../lib/format'
 import { parseStockWorkbook, type ParsedSheet } from '../lib/stockSheet'
+import type { StockMovement } from '../types'
 import {
   applyImportPlan,
   buildImportPlan,
-  loadLastActivity,
-  type LastActivity,
+  loadLedger,
   type ImportPlan,
   type ImportResult,
   type SheetMapping,
@@ -48,7 +48,7 @@ export function ImportPage() {
   const confirm = useConfirm()
   const { user } = useAuth()
   const { brand } = useBrand()
-  const { products, locations, levels } = useData()
+  const { products, locations } = useData()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [fileName, setFileName] = useState('')
@@ -59,10 +59,11 @@ export function ImportPage() {
   const [included, setIncluded] = useState<Record<string, boolean>>({})
   /** Location per column heading. One heading means the same place on every date. */
   const [byHeader, setByHeader] = useState<Record<string, string>>({})
-  const [lastActivity, setLastActivity] = useState<ReadonlyMap<string, LastActivity>>(new Map())
+  // Null until read: a plan built on an empty ledger would compare every count with zero.
+  const [ledger, setLedger] = useState<StockMovement[] | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
-  const [open, setOpen] = useState<SkipReason | 'units' | 'already' | null>(null)
+  const [open, setOpen] = useState<SkipReason | 'units' | 'already' | 'moved' | null>(null)
 
   const isAdmin = user?.role === 'admin'
   const activeLocations = useMemo(
@@ -90,8 +91,9 @@ export function ImportPage() {
       const def = brand ? brandDef(brand) : null
       const guess =
         parsed.sheets.find((s) => sheetMatchesBrand(s.name, def?.sheetKey)) ?? parsed.sheets[0]
+      setLedger(null)
       selectSheet(guess)
-      setLastActivity(await loadLastActivity())
+      setLedger(await loadLedger())
     } catch (err) {
       toast.error(errText(err, t))
     }
@@ -118,7 +120,7 @@ export function ImportPage() {
     setDates({})
     setIncluded({})
     setByHeader({})
-    setLastActivity(new Map())
+    setLedger(null)
     setResult(null)
     setProgress(null)
     setOpen(null)
@@ -146,20 +148,13 @@ export function ImportPage() {
     }
   }, [sheet, dates, included, byHeader])
 
-  // Absence means a balance of zero: a product that has never moved at a location has no
-  // stockLevels document at all.
-  const balances = useMemo(
-    () => new Map(levels.map((l) => [`${l.locationId}|${l.productId}`, l.qty])),
-    [levels],
-  )
-
   const plan: ImportPlan | null = useMemo(() => {
     if (!sheet || !mapping) return null
-    return buildImportPlan(sheet, mapping, products, activeLocations, lastActivity, balances)
-  }, [sheet, mapping, products, activeLocations, lastActivity, balances])
+    return buildImportPlan(sheet, mapping, products, activeLocations, ledger ?? [])
+  }, [sheet, mapping, products, activeLocations, ledger])
 
   const mappedAny = headers.some((h) => byHeader[h])
-  const canImport = !!plan && plan.postings.length > 0 && !progress
+  const canImport = !!plan && !!ledger && plan.postings.length > 0 && !progress
 
   async function run() {
     if (!plan || !user) return
@@ -181,7 +176,10 @@ export function ImportPage() {
         (done, total) => setProgress({ done, total }),
       )
       setResult(res)
-      setLastActivity(await loadLastActivity())
+      // The plan just applied must not be applied again: nothing is importable until the
+      // ledger is read back and the counts show up as already there.
+      setLedger(null)
+      setLedger(await loadLedger())
       if (res.failed.length === 0) {
         toast.success(t('นำเข้าสำเร็จ {n} รายการ', { n: res.posted }))
       } else {
@@ -445,13 +443,35 @@ export function ImportPage() {
               </Disclosure>
             )}
 
+            {plan.movedSince.length > 0 && (
+              <Disclosure
+                open={open === 'moved'}
+                onToggle={() => setOpen(open === 'moved' ? null : 'moved')}
+                tone="plain"
+                title={`${t('มีรายการเคลื่อนไหวหลังวันที่นับ')} — ${plan.movedSince.length}`}
+                hint={t('ระบบเทียบยอดนับกับยอดในระบบ ณ สิ้นวันที่นับ แล้วลงผลต่างในวันนั้น — รายการรับ/เบิก/โอนหลังวันนั้นยังอยู่ครบ')}
+              >
+                <ul className="space-y-1">
+                  {plan.movedSince.slice(0, 100).map((p) => (
+                    <li key={`${p.date}-${p.locationId}-${p.productId}`} className="text-xs">
+                      <span className="text-ink-faint">{formatThaiDateShort(p.date)}</span>{' '}
+                      <span className="font-medium text-ink">{p.sku}</span>{' '}
+                      <span className="text-ink-soft">
+                        {p.locationName} · {t('ในระบบ {asOf} → นับได้ {count} {unit}', { asOf: fmtQty(p.asOfQty), count: fmtQty(p.targetQty), unit: p.unit })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
+            )}
+
             {plan.superseded.length > 0 && (
               <Disclosure
                 open={open === 'already'}
                 onToggle={() => setOpen(open === 'already' ? null : 'already')}
-                tone={plan.superseded.some((s) => s.by.kind === 'movement') ? 'warn' : 'plain'}
-                title={`${t('มีความเคลื่อนไหวหลังวันที่นับแล้ว')} — ${plan.superseded.length}`}
-                hint={t('ยอดนับจะตั้งยอดคงเหลือเป็นตัวเลขนั้น "ทันที" ไม่ว่าลงวันที่อะไร — ถ้าของขยับไปหลังวันนับ การลงย้อนหลังจะลบความเคลื่อนไหวที่เกิดทีหลังออกจากยอด')}
+                tone="plain"
+                title={`${t('มียอดนับที่ใหม่กว่าอยู่แล้ว')} — ${plan.superseded.length}`}
+                hint={t('ไฟล์นี้เคยนำเข้าแล้ว หรือเป็นไฟล์เก่ากว่ายอดนับที่มีในระบบ — ลงย้อนหลังจะทำให้ยอดนับที่ใหม่กว่าไม่ตรง')}
               >
                 <ul className="space-y-1">
                   {plan.superseded.slice(0, 100).map(({ posting: p, by }) => (
@@ -461,13 +481,7 @@ export function ImportPage() {
                       <span className="text-ink-soft">
                         {p.locationName} · {fmtQty(p.targetQty)} {p.unit}
                       </span>{' '}
-                      <span className={by.kind === 'movement' ? 'text-warn' : 'text-ink-faint'}>
-                        {by.kind === 'movement'
-                          ? t('— มีรายการเคลื่อนไหว {date}', {
-                              date: formatThaiDateShort(by.date),
-                            })
-                          : t('— นับไว้แล้ว {date}', { date: formatThaiDateShort(by.date) })}
-                      </span>
+                      <span className="text-ink-faint">{t('— นับไว้แล้ว {date}', { date: formatThaiDateShort(by.date) })}</span>
                     </li>
                   ))}
                 </ul>

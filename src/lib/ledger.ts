@@ -77,6 +77,53 @@ export function openingBalance(
   return roundQty(sum)
 }
 
+/**
+ * Whether a row moved the product's own balance at `locationId` — the one row a count
+ * sets. A legacy row keyed in another unit without a rate moved its own `#Unit` row.
+ */
+function onProductRow(m: StockMovement, scope: Required<LedgerScope>): boolean {
+  return inScope(m, scope) && !isLegacyUnitRow(m)
+}
+
+/**
+ * What the product's own balance at one location was just before `before` — the figure a
+ * count taken then is compared with. Forward from the whole ledger, for a caller that
+ * holds it (the Excel import reads it anyway).
+ */
+export function balanceBefore(
+  all: StockMovement[],
+  scope: Required<LedgerScope>,
+  before: number,
+): number {
+  let sum = 0
+  for (const m of all) {
+    if (m.date < before && onProductRow(m, scope)) sum += effectAt(m, scope.locationId)
+  }
+  return roundQty(sum)
+}
+
+/**
+ * The same figure worked backward: the balance now, less everything filed from `after`
+ * on. `later` must hold every row dated `after` or later for that product and location;
+ * earlier rows in it are ignored.
+ *
+ * This is how a count keyed weeks after the shelf was walked stays honest. Compared with
+ * the balance now, it would undo every receipt and issue since; compared with this, it
+ * corrects only what the shelf held that day, and what happened afterwards stays on top.
+ */
+export function balanceAtDayEnd(
+  now: number,
+  later: StockMovement[],
+  scope: Required<LedgerScope>,
+  after: number,
+): number {
+  let since = 0
+  for (const m of later) {
+    if (m.date >= after && onProductRow(m, scope)) since += effectAt(m, scope.locationId)
+  }
+  return roundQty(now - since)
+}
+
 export interface StockCardRow {
   movement: StockMovement
   /** quantity into this location (0 if this row takes stock out) */

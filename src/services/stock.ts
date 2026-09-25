@@ -847,8 +847,51 @@ export async function setStockCount(params: {
   note?: string
   date?: number
 }): Promise<boolean> {
-  const { productId, productName, unit, locationId, actor, note } = params
   const targetQty = requireCountQty(params.targetQty)
+  return fileCount(params, (cur) => roundQty(targetQty - cur))
+}
+
+/**
+ * File a count keyed after the day it was taken, as the difference it found.
+ *
+ * `countedQty` is what was on the shelf at the end of `date`; `asOfQty` is what the books
+ * said then (lib/ledger `balanceBefore` / `balanceAtDayEnd`). Their difference is posted
+ * on that date and everything filed since stays where it is — `setStockCount` would set
+ * the balance to the old figure NOW and quietly erase it.
+ *
+ * Refused, like any adjustment, if taking the difference off today's balance goes below
+ * zero: the count and the later issues cannot both be right.
+ */
+export async function postCountAsOf(params: {
+  productId: string
+  productName: string
+  unit: string
+  locationId: string
+  countedQty: number
+  asOfQty: number
+  actor: Actor
+  note?: string
+  date: number
+}): Promise<boolean> {
+  const delta = roundQty(requireCountQty(params.countedQty) - params.asOfQty)
+  if (!Number.isFinite(delta)) throw new AppError('ค่าไม่ถูกต้อง: {value}', { value: String(params.asOfQty) })
+  return fileCount(params, () => delta)
+}
+
+/** The write both counts share: one `opening` adjustment on the product's own row. */
+async function fileCount(
+  params: {
+    productId: string
+    productName: string
+    unit: string
+    locationId: string
+    actor: Actor
+    note?: string
+    date?: number
+  },
+  deltaFrom: (current: number) => number,
+): Promise<boolean> {
+  const { productId, productName, unit, locationId, actor, note } = params
   requireId(productId, 'productId')
   requireId(locationId, 'locationId')
   const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
@@ -861,8 +904,10 @@ export async function setStockCount(params: {
     const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
     const cur = level?.qty ?? 0
-    const delta = roundQty(targetQty - cur)
+    const delta = deltaFrom(cur)
     if (delta === 0) return false
+    const next = roundQty(cur + delta)
+    if (next < 0) throw shortMessage({ productId, productName, unit, qty: Math.abs(delta) }, cur)
 
     const seq = (counter?.value ?? 0) + 1
     const now = Date.now()
@@ -870,7 +915,7 @@ export async function setStockCount(params: {
     tx.set(
       COL.stockLevels,
       levelId(locationId, productId),
-      levelDoc(locationId, productId, targetQty, actor, now),
+      levelDoc(locationId, productId, next, actor, now),
     )
     const mv: Omit<StockMovement, 'id'> = {
       docNo: makeDocNo('adjust', seq),
