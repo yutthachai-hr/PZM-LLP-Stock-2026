@@ -220,6 +220,15 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 ### ข้ามใบขอสั่งซื้อ (PR) + เตือนร่างค้าง (25 ก.ย., branch `feat/pr-skip`) — **LIVE 25 ก.ย. 2569**
 เคส PR-00003 ร่างค้างตอนมือถือติดโควตา แล้วไปสร้างใบใหม่. สถานะใหม่ `skipped` (สุดทาง): จาก `draft`/`returned` เท่านั้น, เจ้าของใบหรือหัวหน้า/แอดมิน, ต้องมีเหตุผล (`skipReason/skippedBy/skippedByName/skippedAt`). **แก้ไม่ได้ ลบไม่ได้ แม้แอดมิน** — rules: `requestEdit` ปฏิเสธทุก update ของใบที่ `skipped`, `requestMove` อนุญาต → skipped เฉพาะผู้ขอ/manager ที่ลงชื่อตัวเอง, `allow delete` ของแอดมินยกเว้น PR ที่ skipped. เปิด `/requests/new` แล้วมีร่าง/ใบส่งกลับของตัวเอง → กล่องเตือน (เปิดทำต่อ / ข้าม / สร้างใหม่ต่อ) อ่านจาก `requestCache` 30 วันเดียวกับหน้ารายการ. ใบที่ข้ามไม่นับเป็น "กำลังสั่ง" ใน `openPurchaseFor` อีก → คำแนะนำสั่งซื้อกลับมา. tests: `tests/purchase-requests.test.ts` (+4), rules (+2). เจ้าของกดข้าม PR-00003 เองในระบบจริง
 
+### ข้อเสนอแนะประจำวัน — Master Automation Plan Phase 1 (25 ก.ย., branch `feat/daily-suggestions`) — **DEMO เท่านั้น ยังไม่ขึ้น production**
+เจ้าของสั่ง: *"ยังไม่ต้อง push โชว์ใน demo ก่อน"* และ *"ระบบเดิม…ให้คงเดิมไว้ก่อนแล้วดึงระบบใหม่ขึ้นมาให้เปรียบเทียบ อย่าเปลี่ยนเองโดยไม่ถาม"* → คำแนะนำรายสินค้าในปฏิทิน/ปุ่ม "ขอสั่งซื้อ"/เลื่อนเตือน/กระดิ่ง **ไม่ได้แตะเลย**. การ์ดใหม่บนหน้าแรก (หัวหน้า/แอดมิน ทั้งคอมและมือถือ) `src/components/dashboard/DailySuggestions.tsx` ใช้ `feed.insights.reorders` ตัวเดียวกับปฏิทิน (`useCalendarFeed` คืน `insights` เพิ่ม) → `src/lib/inventoryRules/suggestions.ts` `dailySuggestions()`:
+- คลังหลัก: เส้นเดียวกับปฏิทิน จัดตามผู้ขาย → ปุ่ม "สร้างร่างใบขอสั่งซื้อ" = `createRequest` + `addItems` (ใหม่: หลายบรรทัดใน transaction เดียว กติกาเดียวกับ addItem) → เปิด PR ต่อตามขั้นตอนเดิม
+- สาขา: คิดใหม่ด้วย `recommend()` แต่ lead = `TRANSFER_LEAD_DAYS` 1 วัน (ค่าคงที่ ไม่ใช่ setting เพราะจะต้องแก้ rules) ไม่เกินของที่คลังมี แบ่งทีละสาขา และหักของที่ใบโอนร่าง/รออนุมัติจองไว้แล้ว → "สร้างร่างใบขอโอน" = `createDraft` + `saveItems` ของ Logistics (ไม่ได้แก้ไฟล์ Logistics)
+- บรรทัดที่มีใบค้างอยู่ขึ้น "มีใบค้าง PR/TR-…" ไม่ติ๊ก ไม่ร่างซ้ำ. ไม่เขียนอะไรจนกว่าจะกดปุ่ม. อ่านจาก cache ของปฏิทิน/กระดิ่ง + ใบโอนเปิดอยู่ครั้งเดียวต่อการเปิดหน้า
+- ข้อจำกัดที่รู้: คลังหลักยังไม่เผื่อของที่กำลังจะโอนไปสาขา (ถ้าโอนเยอะ คลังจะต่ำกว่าขั้นต่ำแล้วค่อยแนะนำวันถัดไป)
+- **กับดัก:** `origin/demo` มี commit นี้แต่ `main` ไม่มี → `git push origin HEAD:demo` จาก main จะถูกปฏิเสธ (non-fast-forward) — ห้าม force; เมื่อเจ้าของอนุมัติให้ merge `feat/daily-suggestions` เข้า main แล้ว push ทั้งสอง. ถ้าต้อง push demo ก่อนนั้น ให้ merge main เข้า demo แทน
+- tests `tests/daily-suggestions.test.ts` (9). Phase 2–5 ยังเป็นโครงในแผน รอเริ่มทีละ Phase
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
