@@ -2407,4 +2407,9 @@ export const EN: Record<string, string> = {
   'งานจัดซื้อ': 'Procurement',
   'งานจัดส่ง': 'Delivery',
   'นำเข้าสต๊อกและรายการสินค้าจากไฟล์ Excel': 'Import stock and products from an Excel file',
+  // ---- product photo viewer (26 Sep 2026) ----------------------------------------
+  'ดูรูปขยาย': 'View the photo larger',
+  'รูปสินค้า': 'Product photo',
+  'คงเหลือรวม {qty}': 'On hand in total: {qty}',
+  'แตะที่ใดก็ได้เพื่อปิด': 'Tap anywhere to close',
 }

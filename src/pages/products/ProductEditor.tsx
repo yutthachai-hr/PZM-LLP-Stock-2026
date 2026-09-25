@@ -16,6 +16,7 @@ import {
   blurOnWheel,
 } from '../../components/ui'
 import { invalidateThumb } from '../../components/ProductThumb'
+import { loadProductImage } from '../../services/productImageCache'
 import { BarcodeScanner } from '../../components/BarcodeScanner'
 import { ConversionRows } from '../../components/ConversionRows'
 import {
@@ -24,7 +25,6 @@ import {
   deleteProduct,
   setProductImage,
   removeProductImage,
-  getProductImage,
   type ProductInput,
 } from '../../services/products'
 import { changeProductUnit, setStockCount } from '../../services/stock'
@@ -127,7 +127,8 @@ export function ProductEditor({
   useEffect(() => {
     let on = true
     if (product?.hasImage) {
-      getProductImage(product.id).then((u) => {
+      // Through the device's copy: opening the editor should not cost a read the list already paid.
+      loadProductImage(brand, product.id, product.updatedAt).then((u) => {
         if (!on) return
         setExistingImg(u)
         setImageLoaded(true)
@@ -138,7 +139,7 @@ export function ProductEditor({
     return () => {
       on = false
     }
-  }, [product])
+  }, [product, brand])
 
   async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

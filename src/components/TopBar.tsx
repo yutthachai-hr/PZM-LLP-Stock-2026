@@ -167,7 +167,7 @@ export function TopBar({ title }: { title: string }) {
                     i === active ? 'bg-brand-soft' : ''
                   }`}
                 >
-                  <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
+                  <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} zoom={false} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-ink">{p.name}</span>
                     <span className="doc-no block truncate text-xs text-ink-faint">{p.sku}</span>
