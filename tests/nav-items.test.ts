@@ -1,10 +1,12 @@
 // Who sees which menu entries, and which tab lights up where (spec §1, 21 Sep 2026).
 import { describe, expect, test } from 'vitest'
-import { actionsFor, isMoreRoute, moreItemsFor, navFor, TAB_ITEMS, titleFor } from '../src/components/nav/navItems'
+import { actionsFor, isMoreRoute, moreItemsFor, navFor, navSections, TAB_ITEMS, titleFor } from '../src/components/nav/navItems'
 
 describe('navigation', () => {
-  test('Excel import is for admins only, everywhere', () => {
-    expect(navFor('admin').some((n) => n.to === '/import')).toBe(true)
+  test('Excel import lives in settings, not in any menu (owner, 25 Sep 2026)', () => {
+    expect(navFor('admin').some((n) => n.to === '/import')).toBe(false)
+    expect(moreItemsFor('admin').some((n) => n.to === '/import')).toBe(false)
+    expect(titleFor('/import')).toBe('นำเข้า Excel')
     expect(navFor('manager').some((n) => n.to === '/import')).toBe(false)
     expect(navFor('staff').some((n) => n.to === '/import')).toBe(false)
     expect(moreItemsFor('staff').some((n) => n.to === '/import')).toBe(false)
@@ -22,7 +24,18 @@ describe('navigation', () => {
 
   test('the "more" page lists what the tab bar and the sheet do not', () => {
     const more = moreItemsFor('staff').map((n) => n.to)
-    expect(more).toEqual(['/transfers/today', '/transfers', '/calendar', '/reports', '/requests', '/orders', '/suppliers', '/announcements', '/settings'])
+    expect(more).toEqual(['/reports', '/requests', '/orders', '/suppliers', '/transfers', '/transfers/today', '/calendar', '/announcements', '/settings'])
+  })
+
+  test('the menu reads in the sections and order the owner gave (25 Sep 2026)', () => {
+    const sections = navSections(navFor('admin')).map((s) => [s.group ?? '-', s.items.map((n) => n.to)])
+    expect(sections).toEqual([
+      ['-', ['/']],
+      ['inventory', ['/products', '/receive', '/issue', '/adjust', '/movements', '/reports']],
+      ['procurement', ['/requests', '/orders', '/suppliers']],
+      ['delivery', ['/transfers', '/transfers/today']],
+      ['-', ['/calendar', '/announcements', '/settings']],
+    ])
   })
 
   test('pages reached from "more" light the more tab; keying pages light nothing', () => {
@@ -39,6 +52,8 @@ describe('navigation', () => {
 
   test('the top bar title is the section label, also on sub-pages', () => {
     expect(titleFor('/requests/abc')).toBe('รายการขอสั่งซื้อ')
+    expect(titleFor('/transfers/today')).toBe('ใบรายการส่งสินค้า')
+    expect(titleFor('/transfers/abc')).toBe('ระบบส่งสินค้า')
     expect(titleFor('/more')).toBe('เพิ่มเติม')
     expect(titleFor('/nowhere')).toBe('')
   })

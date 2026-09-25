@@ -2402,4 +2402,9 @@ export const EN: Record<string, string> = {
   'ข้ามได้เฉพาะผู้ขอหรือหัวหน้า': 'Only the requester or a manager can skip it',
   'ข้ามใบนี้': 'Skip this request',
   'ข้ามใบขอสั่งซื้อ': 'Request skipped',
+  // ---- menu sections (25 Sep 2026) ----------------------------------------------
+  'งานคลังสินค้า': 'Inventory',
+  'งานจัดซื้อ': 'Procurement',
+  'งานจัดส่ง': 'Delivery',
+  'นำเข้าสต๊อกและรายการสินค้าจากไฟล์ Excel': 'Import stock and products from an Excel file',
 }

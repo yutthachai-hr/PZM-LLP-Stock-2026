@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { Icon } from '../components/Icon'
-import { moreItemsFor } from '../components/nav/navItems'
+import { NAV_GROUP_LABEL, moreItemsFor, navSections } from '../components/nav/navItems'
 import { useI18n, useT } from '../i18n/I18nContext'
 
 /**
@@ -29,13 +29,21 @@ export function MorePage() {
           </div>
         </div>
       </div>
-      <nav className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface" aria-label={t('เพิ่มเติม')}>
-        {moreItemsFor(user?.role).map((n) => (
-          <Link key={n.to} to={n.to} className={row}>
-            <Icon name={n.icon} size={20} className="text-ink-soft" />
-            <span className="flex-1">{t(n.label)}</span>
-            <Icon name="chevronRight" size={16} className="text-ink-faint" />
-          </Link>
+      {/* The same sections as the desktop menu, each its own card. */}
+      <nav className="space-y-4" aria-label={t('เพิ่มเติม')}>
+        {navSections(moreItemsFor(user?.role)).map((s) => (
+          <section key={s.group ?? s.items[0].to}>
+            {s.group && <h2 className="mb-1.5 px-1 text-xs font-semibold text-ink-faint">{t(NAV_GROUP_LABEL[s.group])}</h2>}
+            <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+              {s.items.map((n) => (
+                <Link key={n.to} to={n.to} className={row}>
+                  <Icon name={n.icon} size={20} className="text-ink-soft" />
+                  <span className="flex-1">{t(n.label)}</span>
+                  <Icon name="chevronRight" size={16} className="text-ink-faint" />
+                </Link>
+              ))}
+            </div>
+          </section>
         ))}
       </nav>
       <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
@@ -7,7 +7,7 @@ import { useTodayEventCount } from '../../data/useTodayEventCount'
 import { useT } from '../../i18n/I18nContext'
 import { Icon } from '../Icon'
 import { ActionSheet } from './ActionSheet'
-import { navFor, navMatches } from './navItems'
+import { NAV_GROUP_LABEL, navFor, navMatches, navSections } from './navItems'
 
 /**
  * The tablet's menu (spec §1, 21 Sep 2026): every page as an icon with a short word under
@@ -38,7 +38,16 @@ export function NavRail() {
           <Icon name="plus" size={26} />
         </button>
         <nav className="flex-1 overflow-y-auto py-1" aria-label={t('เมนูหลัก')}>
-          {navFor(user?.role).map((item) => (
+          {navSections(navFor(user?.role)).map((s, i) => (
+            <Fragment key={s.group ?? s.items[0].to}>
+              {/* Where a section starts or ends: a rule, and the section's name when it has one. */}
+              {i > 0 && <div className="mx-3 mb-1 mt-2 border-t border-line" />}
+              {s.group && (
+                <div className="px-1 pb-0.5 text-center text-[10px] font-semibold leading-tight text-ink-faint">
+                  {t(NAV_GROUP_LABEL[s.group])}
+                </div>
+              )}
+              {s.items.map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -53,6 +62,8 @@ export function NavRail() {
                 <span className="num absolute right-1 top-1 rounded-full bg-brand px-1 text-[10px] font-bold leading-4 text-white">{todayCount}</span>
               )}
             </Link>
+              ))}
+            </Fragment>
           ))}
         </nav>
       </aside>

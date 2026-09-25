@@ -88,7 +88,9 @@ type SectionKey =
   | 'logistics'
 
 interface MenuItem {
-  key: SectionKey
+  key: SectionKey | 'import'
+  /** A page of its own rather than a topic here — Excel import (moved from the menu, 25 Sep 2026). */
+  to?: string
   label: string
   hint: string
   icon: IconName
@@ -157,6 +159,7 @@ export function SettingsPage() {
       {
         title: t('ข้อมูล'),
         items: [
+          { key: 'import', to: '/import', label: t('นำเข้า Excel'), hint: t('นำเข้าสต๊อกและรายการสินค้าจากไฟล์ Excel'), icon: 'upload', show: isAdmin },
           { key: 'backup', label: t('สำรอง / กู้คืนข้อมูล'), hint: t('ดาวน์โหลดไฟล์สำรอง หรือกู้คืนจากไฟล์'), icon: 'download', show: isAdmin },
           { key: 'maintenance', label: t('ดูแลข้อมูล'), hint: t('ตรวจยอดคงเหลือให้ตรงกับประวัติ'), icon: 'refresh', show: isAdmin },
           { key: 'unitMigration', label: t('แปลงยอดแยกหน่วยเป็นหน่วยหลัก'), hint: t('รวมยอดที่เคยเก็บแยกหน่วย'), icon: 'adjust', show: isAdmin },
@@ -169,7 +172,8 @@ export function SettingsPage() {
       .filter((g) => g.items.length > 0)
   }, [t, isAdmin, isManager])
 
-  const keys = groups.flatMap((g) => g.items.map((i) => i.key))
+  const keys = groups.flatMap((g) => g.items.filter((i) => !i.to).map((i) => i.key))
+  const go = (it: MenuItem) => navigate(it.to ?? `/settings/${it.key}`)
   const chosen = keys.includes(section as SectionKey) ? (section as SectionKey) : null
   const open: SectionKey | null = chosen
   const openItem = groups.flatMap((g) => g.items).find((i) => i.key === open)
@@ -220,7 +224,7 @@ export function SettingsPage() {
             {g.items.map((it) => {
               return (
                 <li key={it.key} className="border-b border-line/70 last:border-0">
-                  <button onClick={() => navigate(`/settings/${it.key}`)} className={actionRow}>
+                  <button onClick={() => go(it)} className={actionRow}>
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-ink-soft">
                       <Icon name={it.icon} size={19} />
                     </span>
@@ -329,7 +333,7 @@ export function SettingsPage() {
               {g.items.map((it) => (
                 <button
                   key={it.key}
-                  onClick={() => navigate(`/settings/${it.key}`)}
+                  onClick={() => go(it)}
                   className="group flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-4 text-left outline-none transition-[border-color,box-shadow] duration-150 hover:border-brand/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand/40"
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
@@ -408,7 +412,7 @@ export function SettingsPage() {
                   return (
                     <li key={it.key}>
                       <button
-                        onClick={() => navigate(`/settings/${it.key}`)}
+                        onClick={() => go(it)}
                         aria-current={active ? 'page' : undefined}
                         className={`flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
                           active
