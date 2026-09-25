@@ -237,6 +237,15 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 - **P5 สรุปเข้า LINE:** ปุ่ม "แชร์สรุปเข้า LINE" บนการ์ดข้อเสนอแนะ → `lib/dailyDigest.ts` (Flex bubble แถวละลิงก์ https + ข้อความสำรอง) ส่งผ่าน LIFF shareTargetPicker (`SharePayload.flex` ใหม่) ถ้าไม่มี LIFF ใช้ share sheet/คลิปบอร์ด · กลับจาก LINE Login ด้วย `?digest=` แล้วแชร์ต่อ (`DIGEST_PARAM`)
 - tests ใหม่: transfer-qr (3), daily-digest (3), pos-import (6), recipes (4), bill-ocr (3), ocr-fill (5), rules recipes (3). รวม unit 882 / rules 202
 
+### นับ ณ วันที่ — ยอดนับที่คีย์ทีหลัง (25 ก.ย., branch `feat/count-as-of`) — **อยู่บน DEMO เท่านั้น**
+ปัญหาจริง: ยอดนับเช้า 1/9/2569 ยังไม่ได้คีย์ แต่รายการรับ/เบิกเดือน ก.ย. เข้าไปแล้ว — ทุกทางที่ "ตั้งยอดตามที่นับ" เดิมคำนวณ `นับได้ − ยอดตอนนี้` วันที่ที่เลือกแค่ใช้ลงแถว จึงลบรายการหลังวันนับทิ้ง (Import กันไว้ด้วยการปฏิเสธสินค้าที่ขยับหลังวันนับ ซึ่งคือตัวที่ขยับบ่อยสุด)
+- `lib/ledger.ts`: `balanceBefore(all, {productId, locationId}, before)` (เดินหน้าจาก ledger ทั้งหมด) และ `balanceAtDayEnd(now, later, scope, after)` (ถอยหลังจากยอดตอนนี้ ลบทุกแถวที่ลงวันที่ ≥ after) — ไม่นับแถว void และแถว legacy แยกหน่วย (อยู่คนละยอด)
+- **ปรับสต๊อก**: เลือกวันที่ในอดีต → คอลัมน์ "ในระบบ ณ สิ้นวัน dd/mm/yy" = ยอดสิ้นวันนั้น (อ่าน movement ตั้งแต่วันถัดไปผ่าน `movementCache` ครั้งเดียวต่อวันที่ แล้ววาง live rows ทับ) → "จำนวนที่นับได้" เทียบกับยอดนั้น, ลงผลต่างในวันที่เลือก; ตอนกดบันทึกอ่านซ้ำแบบ force ถ้ายอดเปลี่ยนจะหยุดให้ตรวจใหม่; แถวแดง (ติดลบ) เทียบกับยอดตอนนี้
+- **นำเข้า Excel**: `loadLedger()` + `lastCounts()` แทน `loadLastActivity()`; ปฏิเสธเฉพาะเมื่อมี **ยอดนับ** (adjust reason `opening`) วันเดียวกันหรือใหม่กว่า; รายการที่ขยับหลังวันนับถูกลงเป็นผลต่างจาก `asOfQty` (ขึ้นในกล่อง "มีรายการเคลื่อนไหวหลังวันที่นับ"); `applyImportPlan` ใช้ `postCountAsOf` และถ้ายอดนับเดือนก่อนของสินค้าเดียวกันล้มเหลว เดือนถัดไปจะไม่คำนวณบนผลต่างที่ไม่ได้ลง; ปุ่มนำเข้าปิดจนกว่า ledger จะโหลดเสร็จ (และปิดทันทีหลังนำเข้า กันกดซ้ำแผนเดิม)
+- `services/stock.ts`: `postCountAsOf({countedQty, asOfQty, date,…})` ใช้ `fileCount` ร่วมกับ `setStockCount`; ปฏิเสธถ้าผลต่างทำให้ยอดตอนนี้ติดลบ ไม่ต้องแก้ rules (เป็น adjust ปกติ)
+- tests: `tests/count-as-of.test.ts` (6), `tests/import-stock.test.ts` (ปรับ 3 + เพิ่ม 3 — พฤติกรรมเปลี่ยนโดยตั้งใจ); เดินใน demo แล้ว: ส.ค. 120 → ก.ย. +200 +30 −150, นับ 31/8 = 110 → ADJ −10 ลง 31/8, ยอด 190, Stock Card ยกมา ก.ย. = 110
+- ขึ้นของจริง: merge `feat/count-as-of` เข้า main เมื่อเจ้าของสั่ง (ไม่ต้อง deploy rules)
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```

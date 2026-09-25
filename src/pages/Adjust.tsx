@@ -3,7 +3,7 @@ import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Field, Input, Select, blurOnWheel } from '../components/ui'
+import { AlertBanner, Button, Field, Input, Select, blurOnWheel } from '../components/ui'
 import { ChipRow, FramePage, PageHero, SectionCard, StatRow, StatTile, WithSidePanel } from '../components/frame'
 import { Icon } from '../components/Icon'
 import { ProductThumb } from '../components/ProductThumb'
@@ -17,10 +17,12 @@ import { significance } from '../lib/inventoryRules/adjustments'
 import { adjustmentDraft } from '../lib/inventoryRules/notifications'
 import { bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
 import { change } from '../lib/stats/periodCompare'
-import { dateInputToMs, fmtMoney, fmtQty, msToDateInput, todayMs } from '../lib/format'
+import { dateInputToMs, fmtMoney, fmtQty, formatThaiDateShort, msToDateInput, todayMs } from '../lib/format'
 import { roundQty } from '../lib/validate'
+import { balanceAtDayEnd } from '../lib/ledger'
+import { movementCache } from '../data/movementCache'
 import { describeQty } from '../lib/uom'
-import { ADJUST_REASONS, type Product } from '../types'
+import { ADJUST_REASONS, type Product, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
@@ -32,6 +34,12 @@ import { DraftNotice } from '../components/DraftNotice'
 
 /** Enough of the list that the item wanted is on it; the box scrolls. */
 const MAX_MATCHES = 40
+
+/**
+ * The far end of "everything filed after the counted day" — day-aligned, so the range
+ * cache sees the same key all day, and far enough to catch a row dated ahead.
+ */
+const horizon = () => bkkDayStart(Date.now()) + 400 * DAY_MS
 
 /**
  * One product on the adjustment document.
@@ -112,7 +120,48 @@ export function AdjustPage() {
   }, [locationId, active])
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
-  const system = (productId: string) => (locationId ? qtyAt(locationId, productId) : 0)
+
+  // ---- counting as of a past day ----
+  // A count keyed after the day it was taken is compared with what the books said at the
+  // end of THAT day, not with the balance now — otherwise every receipt and issue filed
+  // since would be undone by it (the owner's 1 Sep 2569 count, keyed on 25 Sep). The
+  // balance then is today's less everything dated after that day; those rows are read once
+  // per date and the live listener's rows are laid over them.
+  const dayStart = bkkDayStart(dateInputToMs(dateStr))
+  const backdated = dayStart < bkkDayStart(Date.now())
+  const after = dayStart + DAY_MS
+  const [later, setLater] = useState<{ after: number; rows: StockMovement[] } | null>(null)
+  const laterReady = !backdated || later?.after === after
+  useEffect(() => {
+    if (!backdated) return
+    let live = true
+    movementCache
+      .fetchRange(after, horizon())
+      .then((rows) => {
+        if (live) setLater({ after, rows })
+      })
+      .catch((e) => {
+        if (live) toast.error(errText(e, t))
+      })
+    return () => {
+      live = false
+    }
+  }, [backdated, after, toast, t])
+  const laterRows = useMemo(() => {
+    if (!backdated || later?.after !== after) return []
+    const byId = new Map(later.rows.map((m) => [m.id, m]))
+    for (const m of movements) byId.set(m.id, m)
+    return [...byId.values()]
+  }, [backdated, later, after, movements])
+  const asOf = (productId: string, rows: StockMovement[]) =>
+    balanceAtDayEnd(qtyAt(locationId, productId), rows, { productId, locationId }, after)
+
+  /** The figure a count is compared with: the balance at the end of the chosen day. */
+  const system = (productId: string) => {
+    if (!locationId) return 0
+    if (!backdated) return qtyAt(locationId, productId)
+    return laterReady ? asOf(productId, laterRows) : 0
+  }
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -176,6 +225,28 @@ export function AdjustPage() {
     if (rows.length === 0) return toast.error(t('เพิ่มรายการสินค้าก่อน'))
     if (bad) return toast.error(t('จำนวนที่นับได้ของ "{name}" ติดลบไม่ได้', { name: bad.productName }))
     if (toFile.length === 0) return toast.error(t('ยังไม่มีบรรทัดที่ยอดเปลี่ยน — ใส่จำนวนที่นับได้หรือจำนวนที่ปรับ'))
+    if (!laterReady) return toast.error(t('กำลังโหลดยอด ณ วันที่เลือก — รอสักครู่'))
+    if (backdated) {
+      // Another device may have filed or corrected a row since the figures were read. A
+      // count is only as good as the balance it is compared with, so read them again and
+      // stop if a row being counted would now show a different figure.
+      setBusy(true)
+      try {
+        const fresh = await movementCache.fetchRange(after, horizon(), { force: true })
+        const byId = new Map(fresh.map((m) => [m.id, m]))
+        for (const m of movements) byId.set(m.id, m)
+        const rowsNow = [...byId.values()]
+        const moved = toFile.some((r) => r.mode === 'count' && asOf(r.productId, rowsNow) !== system(r.productId))
+        if (moved) {
+          setLater({ after, rows: fresh })
+          return toast.error(t('ยอด ณ วันที่เลือกเพิ่งเปลี่ยน — ตรวจตัวเลขอีกครั้งแล้วกดบันทึก'))
+        }
+      } catch (e) {
+        return toast.error(t('บันทึกไม่สำเร็จ:') + ' ' + errText(e, t))
+      } finally {
+        setBusy(false)
+      }
+    }
     const lines: AdjustLine[] = toFile.map((r) => {
       const d = deltaOf(r, system(r.productId))
       return {
@@ -268,6 +339,7 @@ export function AdjustPage() {
             tips={
               <ul className="list-disc space-y-1 pl-4">
                 <li>{t('นับของจริงแล้วใส่ "จำนวนที่นับได้" — ระบบคำนวณปรับเพิ่ม/ลดให้')}</li>
+                <li>{t('ยอดนับวันที่ 1 ที่คีย์ทีหลัง: เลือกวันที่สุดท้ายของเดือนก่อน แล้วใส่ยอดที่นับได้ตามปกติ')}</li>
                 <li>{t('ของเสียทีละไม่กี่ชิ้น ใส่ในช่อง "ปรับเพิ่ม/ลด" ได้ตรง ๆ เช่น −2')}</li>
                 <li>{t('บันทึกแล้วมีผลทันที ทุกบรรทัดอยู่ใต้เลขที่ใบเดียวกัน')}</li>
               </ul>
@@ -293,6 +365,12 @@ export function AdjustPage() {
             </Field>
           </div>
         </SectionCard>
+
+        {backdated && (
+          <AlertBanner tone="info" icon="calendar">
+            {t('นับย้อนหลัง: "จำนวนในระบบ" คือยอด ณ สิ้นวันที่ {date} — ใส่ยอดที่นับได้วันนั้น ระบบลงผลต่างในวันที่ {date} และรายการรับ/เบิก/โอนหลังวันนั้นยังอยู่ครบ', { date: formatThaiDateShort(dayStart) })}
+          </AlertBanner>
+        )}
 
         <SectionCard
           icon="package"
@@ -368,7 +446,8 @@ export function AdjustPage() {
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-ink">{r.productName}</div>
                           <div className="text-xs text-ink-soft">
-                            {t('ในระบบ')} <span className="num">{fmtQty(system(r.productId))}</span> {r.unit} ·{' '}
+                            {backdated ? t('ณ สิ้นวัน {date}', { date: formatThaiDateShort(dayStart) }) : t('ในระบบ')}{' '}
+                            <span className="num">{laterReady ? fmtQty(system(r.productId)) : '…'}</span> {r.unit} ·{' '}
                             {t(ADJUST_REASONS.find((x) => x.value === r.reason)?.label ?? r.reason)}
                           </div>
                         </div>
@@ -405,7 +484,9 @@ export function AdjustPage() {
                   <thead className="bg-sunken text-left text-[13px] text-ink-soft">
                     <tr>
                       <th className="px-3 py-2.5 font-semibold">{t('สินค้า')}</th>
-                      <th className="w-20 px-2 py-2.5 text-right font-semibold">{t('จำนวนในระบบ')}</th>
+                      <th className="w-24 px-2 py-2.5 text-right font-semibold">
+                        {backdated ? t('ในระบบ ณ สิ้นวัน {date}', { date: formatThaiDateShort(dayStart) }) : t('จำนวนในระบบ')}
+                      </th>
                       <th className="w-24 px-2 py-2.5 font-semibold">{t('จำนวนที่นับได้')}</th>
                       <th className="w-24 px-2 py-2.5 font-semibold">{t('ปรับเพิ่ม/ลด')}</th>
                       <th className="w-36 px-2 py-2.5 font-semibold">{t('เหตุผลในการปรับ')}</th>
@@ -423,7 +504,8 @@ export function AdjustPage() {
                       const deltaText = r.value === null ? '' : r.mode === 'delta' ? String(r.value) : String(d)
                       const v = valueOf(r)
                       const p = productById.get(r.productId)
-                      const negative = r.value !== null && sys + d < 0
+                      // What the shelf will hold once filed — today's balance, not the day's.
+                      const negative = r.value !== null && (locationId ? qtyAt(locationId, r.productId) : 0) + d < 0
                       return (
                         <tr key={r.productId} className={negative ? 'bg-danger-soft/40' : ''}>
                           <td className="px-3 py-2">
@@ -436,7 +518,7 @@ export function AdjustPage() {
                             </div>
                           </td>
                           <td className="num px-2 py-2 text-right text-ink-soft">
-                            {fmtQty(sys)} <span className="text-xs">{r.unit}</span>
+                            {laterReady ? fmtQty(sys) : '…'} <span className="text-xs">{r.unit}</span>
                           </td>
                           <td className="px-2 py-2">
                             <Input
@@ -522,7 +604,7 @@ export function AdjustPage() {
             <Icon name="trash" size={16} />
             {t('ยกเลิกรายการ')}
           </Button>
-          <Button onClick={submit} disabled={busy || toFile.length === 0 || !!bad} className="w-full sm:w-auto sm:min-w-64">
+          <Button onClick={submit} disabled={busy || toFile.length === 0 || !!bad || !laterReady} className="w-full sm:w-auto sm:min-w-64">
             <Icon name="check" size={18} />
             {busy ? t('กำลังบันทึก...') : t('บันทึกการปรับสต๊อก ({n} รายการ)', { n: toFile.length })}
           </Button>
