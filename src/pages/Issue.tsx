@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { PosImportForm } from './issue/PosImport'
 import { SiteSelect } from '../components/SiteChip'
 import { Icon, type IconName } from '../components/Icon'
 import { useData } from '../data/DataContext'
@@ -19,7 +20,7 @@ import { errText } from '../i18n/AppError'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
 
-type Mode = 'transfer' | 'consume'
+type Mode = 'transfer' | 'consume' | 'pos'
 
 /**
  * เบิก/โอนสาขา in the 22 Sep frame (owner's mock-up 03, spec §2.4). Filing is immediate —
@@ -30,7 +31,9 @@ export function IssuePage() {
   const t = useT()
   const { user } = useAuth()
   const manager = isManager(user?.role)
-  const [mode, setMode] = useState<Mode>(manager ? 'transfer' : 'consume')
+  // /issue?mode=pos opens the POS-sales import directly (the recipes screen links here).
+  const [params] = useSearchParams()
+  const [mode, setMode] = useState<Mode>(params.get('mode') === 'pos' ? 'pos' : manager ? 'transfer' : 'consume')
 
   return (
     <FramePage>
@@ -42,6 +45,8 @@ export function IssuePage() {
       />
       {mode === 'transfer' ? (
         <TransferForm mode={mode} setMode={setMode} isMgr={manager} />
+      ) : mode === 'pos' ? (
+        <PosImportForm modeCards={<ModeCards mode={mode} setMode={setMode} isMgr={manager} />} />
       ) : (
         <ConsumeForm mode={mode} setMode={setMode} isMgr={manager} />
       )}
@@ -75,9 +80,15 @@ function ModeCards({
       title: t('เบิกใช้ / ตัดออก (หน้าร้าน)'),
       hint: t('เบิกสินค้าเพื่อตัดสต๊อก ใช้ในหน้าร้าน'),
     },
+    {
+      key: 'pos',
+      icon: 'upload',
+      title: t('ตัดตามยอดขาย POS'),
+      hint: t('นำเข้าไฟล์ยอดขาย ตัดวัตถุดิบตามสูตร'),
+    },
   ]
   return (
-    <div role="radiogroup" aria-label={t('ประเภทการเบิก')} className={`${frameCard} grid grid-cols-2 gap-2 p-2`}>
+    <div role="radiogroup" aria-label={t('ประเภทการเบิก')} className={`${frameCard} grid grid-cols-3 gap-2 p-2`}>
       {cards.map((c) => {
         const on = c.key === mode
         return (

@@ -37,6 +37,7 @@ import { TransfersPage } from './pages/transfers/TransfersPage'
 import { TransferDetailPage } from './pages/transfers/TransferDetailPage'
 import { TransferReceivePage } from './pages/transfers/TransferReceivePage'
 import { TransfersTodayPage } from './pages/transfers/TransfersTodayPage'
+import { RecipesPage } from './pages/recipes/RecipesPage'
 import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
 
@@ -91,6 +92,7 @@ function Gate() {
           <Route path="/products/:id/card" element={<StockCardPage />} />
           <Route path="/receive" element={<ReceivePage />} />
           <Route path="/issue" element={<IssuePage />} />
+          <Route path="/recipes" element={<RecipesPage />} />
           <Route path="/transfers" element={<TransfersPage />} />
           <Route path="/transfers/today" element={<TransfersTodayPage />} />
           <Route path="/transfers/new" element={<TransferDetailPage />} />

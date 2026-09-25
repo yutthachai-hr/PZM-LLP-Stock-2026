@@ -1236,6 +1236,36 @@ export interface Transfer {
   updatedAt: number
 }
 
+// ---------- Recipes (Automation Plan Phase 3, 25 Sep 2026) ----------
+
+/** One ingredient of a menu item, per ONE sold, in the product's own unit. */
+export interface RecipeLine {
+  productId: string
+  productName: string
+  unit: string
+  qty: number
+}
+
+/**
+ * What one sale of a POS menu item takes from stock. `code` is the POS menu code
+ * (Margherita = 45); `aliases` are other spellings a POS export may use for the same item.
+ * The day's sales, imported on the Issue screen, become one consume document from these.
+ */
+export interface Recipe {
+  id: string
+  code: string
+  name: string
+  aliases?: string[]
+  lines: RecipeLine[]
+  active: boolean
+  createdBy: string
+  createdByName: string
+  createdAt: number
+  updatedAt: number
+  updatedBy?: string
+  updatedByName?: string
+}
+
 export const COL = {
   users: 'users',
   messages: 'messages',
@@ -1259,6 +1289,7 @@ export const COL = {
   transfers: 'transfers',
   productAliases: 'productAliases',
   announcements: 'announcements',
+  recipes: 'recipes',
   companyProfile: 'companyProfile',
   meta: 'meta',
   revokedUsers: 'revokedUsers',

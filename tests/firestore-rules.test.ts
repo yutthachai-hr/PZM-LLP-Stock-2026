@@ -1436,6 +1436,42 @@ describe('purchase requests', () => {
   })
 })
 
+describe('recipes (Automation Plan Phase 3, 25 Sep 2026)', () => {
+  const recipe = (over: Record<string, unknown> = {}) => ({
+    id: 'r1', code: '45', name: 'Margherita', active: true,
+    lines: [{ productId: 'p1', productName: 'MOZZARELLA', unit: 'KG', qty: 0.12 }],
+    createdBy: MANAGER, createdByName: 'Manager', createdAt: ts(), updatedAt: ts(),
+    ...over,
+  })
+  const at = (uid: string, id = 'r1') => doc(as(uid), 'recipes', id)
+
+  test('a หัวหน้า or admin writes one in their own name; staff and outsiders cannot', async () => {
+    await assertFails(setDoc(at(STAFF), recipe({ createdBy: STAFF })))
+    await assertFails(setDoc(at(MANAGER), recipe({ createdBy: ADMIN })))
+    await assertSucceeds(setDoc(at(MANAGER), recipe()))
+    await assertSucceeds(getDoc(at(STAFF)))
+    await assertFails(getDoc(doc(anon(), 'recipes/r1')))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__recipes', 'r9'), recipe({ id: 'r9', createdBy: ADMIN })))
+  })
+
+  test('the shape is pinned: a code, a name, a bounded list of lines', async () => {
+    await assertFails(setDoc(at(MANAGER, 'r2'), recipe({ id: 'r2', code: '' })))
+    await assertFails(setDoc(at(MANAGER, 'r3'), recipe({ id: 'r3', lines: 'x' })))
+    await assertFails(setDoc(at(MANAGER, 'r4'), recipe({ id: 'r4', extra: 1 })))
+    await assertFails(setDoc(at(MANAGER, 'r5'), recipe({ id: 'r5', lines: Array.from({ length: 61 }, () => ({})) })))
+  })
+
+  test('edits are signed and keep who made it; nobody deletes one', async () => {
+    await assertSucceeds(setDoc(at(MANAGER), recipe()))
+    await assertFails(updateDoc(at(STAFF), { name: 'x', updatedBy: STAFF, updatedAt: ts() }))
+    await assertFails(updateDoc(at(ADMIN), { name: 'x', updatedBy: MANAGER, updatedAt: ts() }))
+    await assertFails(updateDoc(at(ADMIN), { createdBy: ADMIN, updatedBy: ADMIN, updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(ADMIN), { name: 'Margherita 12"', active: false, updatedBy: ADMIN, updatedByName: 'Admin', updatedAt: ts() }))
+    await assertFails(deleteDoc(at(ADMIN)))
+    await assertFails(deleteDoc(at(MANAGER)))
+  })
+})
+
 describe('collections outside the model', () => {
   test('an invented collection is denied even for an admin', async () => {
     await assertFails(setDoc(doc(as(ADMIN), 'evil/x'), { a: 1 }))

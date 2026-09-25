@@ -81,12 +81,13 @@ service cloud.firestore {
       return name in [
         'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
         'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
-        'purchaseRequests', 'messages', 'announcements', 'transfers',
+        'purchaseRequests', 'messages', 'announcements', 'transfers', 'recipes',
         'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
         'lelapin__movementImages', 'lelapin__notes',
         'lelapin__stockEvents', 'lelapin__purchaseOrders',
         'lelapin__purchaseBatches', 'lelapin__productAliases',
-        'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements', 'lelapin__transfers'
+        'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements', 'lelapin__transfers',
+        'lelapin__recipes'
       ];
     }
 
@@ -898,6 +899,7 @@ service cloud.firestore {
         : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d, orderWritten()))
         : k == 'messages' ? (fresh ? validMessage(d) : messageShape(d))
         : k == 'announcements' ? (fresh ? validAnnouncement(d) : announcementLive(d))
+        : k == 'recipes' ? validRecipe(d)
         : k == 'companyProfile' ? validCompanyProfile(docId, d)
         : k == 'counters' ? validCounter(d)
         : k == 'products' ? validProduct(d)
@@ -932,7 +934,9 @@ service cloud.firestore {
     // colleague's name and the ledger's "who" column means nothing.
     function createdHonestly(name) {
       let k = kind(name);
-      return k == 'stockEvents'
+      return k == 'recipes'
+        ? manager() && request.resource.data.createdBy == request.auth.uid
+        : k == 'stockEvents'
         ? manager() && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.status == 'upcoming'
         // An order is filed by whoever placed it. Ordering is everyday work, so staff may do
@@ -998,6 +1002,7 @@ service cloud.firestore {
         : k == 'stockMovements' ? movementEdit()
         : k == 'messages' ? messageEdit()
         : k == 'announcements' ? announcementEdit()
+        : k == 'recipes' ? recipeEdit()
         : k == 'stockEvents' ? eventEdit()
         : k == 'counters' ? request.resource.data.value > resource.data.value
         : true;
@@ -1088,6 +1093,34 @@ service cloud.firestore {
      * only be spoken by a manager, in their own name, and a manager may not un-say them:
      * leaving approved or rejected takes an admin.
      */
+    /**
+     * A recipe (Automation Plan Phase 3, 25 Sep 2026): a POS menu code and what one sale of
+     * it takes from stock. The lines are a list the rules cannot walk; the size is bounded
+     * and the service builds each line from the catalogue.
+     */
+    function validRecipe(d) {
+      return d.keys().hasAll(['id', 'code', 'name', 'lines', 'active', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly([
+          'id', 'code', 'name', 'aliases', 'lines', 'active',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'
+        ])
+        && text(d.code, 40) && d.code.size() > 0 && text(d.name, 200) && d.name.size() > 0
+        && d.lines is list && d.lines.size() <= 60
+        && (!('aliases' in d) || (d.aliases is list && d.aliases.size() <= 10))
+        && d.active is bool
+        && text(d.createdBy, 200) && text(d.createdByName, 200) && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && (!('updatedBy' in d) || text(d.updatedBy, 200))
+        && (!('updatedByName' in d) || text(d.updatedByName, 200));
+    }
+
+    /** A หัวหน้า or admin changes a recipe, in their own name; who made it stays. */
+    function recipeEdit() {
+      return roleIsManager()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.get('updatedBy', request.auth.uid) == request.auth.uid;
+    }
+
     function requestEdit() {
       return editedKeys().hasOnly([
           'status', 'revision', 'locationId', 'note', 'items', 'submittedAt',
@@ -1534,6 +1567,8 @@ service cloud.firestore {
       // what the company told its suppliers.
       allow delete: if admin() && brandData(collection) && !ledger(collection)
         && !receivedOrder(collection) && kind(collection) != 'announcements'
+        // A recipe is switched off, not deleted: past POS imports name it.
+        && kind(collection) != 'recipes'
         // A skipped request stays, with why — the gap in the PR numbers is explained.
         && !(kind(collection) == 'purchaseRequests' && resource.data.status == 'skipped');
     }
