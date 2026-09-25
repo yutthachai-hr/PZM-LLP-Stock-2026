@@ -3,26 +3,15 @@ import { useT } from '../i18n/I18nContext'
 import { sameUnit, type UnitConversion } from '../lib/units'
 import { isCountUnit, resolveFactor, type QtyEntry } from '../lib/uom'
 import { blurOnWheel } from './ui'
+import { entryOf, round3, showsValue, type EntryUnit } from '../lib/qtyEntry'
 import { DefineConversionModal } from './DefineConversionModal'
 
 // Quantity input with the unit beside it. What is handed to the parent is a QtyEntry: the
 // number as keyed, the unit it was keyed in, and the same quantity in the product's own
 // unit — which is what every balance is kept in (owner's rule, 20 Sep 2026; lib/uom.ts).
 
-export interface EntryUnit {
-  /** Stable identity, and the <select> value. */
-  key: string
-  label: string
-  /**
-   * How many of the product's own unit one of these is. Null when nobody has stated it
-   * for this product yet: the unit is offered, and choosing it asks for the rate.
-   */
-  factor: number | null
-  /** The unit stamped on the row as `entryUnit`; the product's own unit for the base choice. */
-  records: string
-  /** True when the label is a translation key rather than stored data. */
-  translate?: boolean
-}
+// The arithmetic lives in lib/qtyEntry.ts so it can be tested without a browser.
+export { entryOf, type EntryUnit }
 
 /**
  * Smaller units a base unit divides into by a rate true for every product in the world:
@@ -73,18 +62,6 @@ export function entryUnitsFor(
     out.push({ key: `plain:${label}`, label, factor: resolveFactor(product, label), records: label })
   }
   return out
-}
-
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000
-}
-
-/** The entry for a typed number in a unit, converted for the product. */
-export function entryOf(text: string, unit: EntryUnit, factor: number): QtyEntry {
-  const n = Number(text)
-  const entryQty = Number.isFinite(n) && n > 0 ? round3(n) : 0
-  const base = unit.key === 'base'
-  return { qty: round3(entryQty * factor), entryQty, ...(base ? {} : { entryUnit: unit.records }), factor }
 }
 
 export function QtyInput({ // i18n-key
@@ -145,8 +122,7 @@ export function QtyInput({ // i18n-key
   // Re-sync the text when the base value changes for a reason other than typing
   // (e.g. parent reset to 0, or the unit toggle changed the display scale).
   useEffect(() => {
-    const shownNow = Number(text) * factor
-    if (Math.abs(shownNow - value) > 1e-9) {
+    if (!showsValue(text, factor, value)) {
       setText(value ? String(round3(value / factor)) : '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
