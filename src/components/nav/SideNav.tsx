@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useBrand } from '../../brand/BrandContext'
 import { useT } from '../../i18n/I18nContext'
 import { Icon } from '../Icon'
+import { FoldIcon } from './FoldIcon'
 import { NAV_GROUPS, navMatches, navSections, type NavGroup, type NavItem } from './navItems'
 
 /**
  * The desktop sidebar's menu (owner, 25 Sep 2026). Each section is a bar the size of a page
- * of its own, with its own picture, that folds open onto its pages as two-column tiles.
+ * of its own, in the same light type, with its own picture, that folds open onto its pages
+ * as two-column tiles; the brand's pizza slice or baguette stands in for the chevron.
  * The page you are on stays lit; anything under the pointer takes the brand tint too.
  *
  * Which sections are folded is remembered on this device. The section holding the page you
@@ -15,6 +18,7 @@ import { NAV_GROUPS, navMatches, navSections, type NavGroup, type NavItem } from
 export function SideNav({ items, badges }: { items: NavItem[]; badges: Partial<Record<string, number>> }) {
   const t = useT()
   const { pathname } = useLocation()
+  const { brand } = useBrand()
   const [closed, setClosed] = useState<NavGroup[]>(readClosed)
   const here = items.find((n) => navMatches(pathname, n.to))?.group
 
@@ -56,11 +60,11 @@ export function SideNav({ items, badges }: { items: NavItem[]; badges: Partial<R
               onClick={() => toggle(group)}
               aria-expanded={open}
               aria-controls={panel}
-              className={`${rowBase} w-full cursor-pointer font-semibold ${holdsHere ? 'bg-brand-soft/60 text-brand' : `text-ink ${hover}`}`}
+              className={`${rowBase} w-full cursor-pointer font-medium ${holdsHere ? 'bg-brand-soft/60 text-brand' : `text-ink-soft ${hover}`}`}
             >
               <Icon name={NAV_GROUPS[group].icon} />
               <span className="min-w-0 flex-1 truncate text-left">{t(NAV_GROUPS[group].label)}</span>
-              <Icon name="chevronDown" size={16} className={`shrink-0 text-ink-faint transition-transform duration-200 ${open ? '' : '-rotate-90'}`} />
+              <FoldIcon brand={brand} open={open} />
             </button>
             {/* Grid rows 0fr → 1fr animates to the content's own height; inert keeps a folded
                 section's links out of the tab order. */}
