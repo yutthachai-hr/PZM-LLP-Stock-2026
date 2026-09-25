@@ -217,6 +217,9 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 - tests: `tests/receive-receipt.test.ts` (12), `tests/receipt-docs.test.ts` (10), `tests/purchase-orders.test.ts` ส่งหลายรอบ (+11), rules + budget (PO 200 บรรทัด 40 receipts → รอบที่ 41 และปิดยอด; ใบรับ 40 แถวพร้อมเอกสารครบ)
 - ไม่ได้ทำ (นอกขอบเขตที่ตกลง): รับบรรทัด PO เป็นหน่วยอื่นที่ไม่ใช่หน่วยที่สั่ง · แก้ฟิลด์เอกสารหลังยืนยัน · เปลี่ยน date input หน้าอื่นเป็น ThaiDateField (ใช้ซ้ำได้ — เสนอเจ้าของได้)
 
+### ข้ามใบขอสั่งซื้อ (PR) + เตือนร่างค้าง (25 ก.ย., branch `feat/pr-skip`) — **LIVE 25 ก.ย. 2569**
+เคส PR-00003 ร่างค้างตอนมือถือติดโควตา แล้วไปสร้างใบใหม่. สถานะใหม่ `skipped` (สุดทาง): จาก `draft`/`returned` เท่านั้น, เจ้าของใบหรือหัวหน้า/แอดมิน, ต้องมีเหตุผล (`skipReason/skippedBy/skippedByName/skippedAt`). **แก้ไม่ได้ ลบไม่ได้ แม้แอดมิน** — rules: `requestEdit` ปฏิเสธทุก update ของใบที่ `skipped`, `requestMove` อนุญาต → skipped เฉพาะผู้ขอ/manager ที่ลงชื่อตัวเอง, `allow delete` ของแอดมินยกเว้น PR ที่ skipped. เปิด `/requests/new` แล้วมีร่าง/ใบส่งกลับของตัวเอง → กล่องเตือน (เปิดทำต่อ / ข้าม / สร้างใหม่ต่อ) อ่านจาก `requestCache` 30 วันเดียวกับหน้ารายการ. ใบที่ข้ามไม่นับเป็น "กำลังสั่ง" ใน `openPurchaseFor` อีก → คำแนะนำสั่งซื้อกลับมา. tests: `tests/purchase-requests.test.ts` (+4), rules (+2). เจ้าของกดข้าม PR-00003 เองในระบบจริง
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
