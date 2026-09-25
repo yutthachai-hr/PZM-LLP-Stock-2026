@@ -35,6 +35,7 @@ import {
   transferMovements,
 } from '../../services/transfers'
 import { ReasonModal } from '../requests/ReasonModal'
+import { TransferQr } from '../../components/TransferQr'
 import {
   OVER_RESOLUTIONS,
   SHORT_RESOLUTIONS,
@@ -68,6 +69,8 @@ export function TransferDetailView({ initial, onChange }: Props) {
   const [transfer, setTransfer] = useState<Transfer>(initial)
   const [busy, setBusy] = useState(false)
   const [reason, setReason] = useState<null | 'return' | 'reject' | 'cancel' | 'reopen'>(null)
+  // The Master QR for the box (Automation Plan Phase 2, 25 Sep 2026).
+  const [showQr, setShowQr] = useState(false)
   const [resolving, setResolving] = useState<TransferItem | null>(null)
   const [deciding, setDeciding] = useState<{ item: TransferItem; misrouteId: string } | null>(null)
   const [legs, setLegs] = useState<Transfer[]>([])
@@ -210,6 +213,12 @@ export function TransferDetailView({ initial, onChange }: Props) {
               <Icon name="chevronLeft" size={16} />
               {t('รายการขนส่ง')}
             </Button>
+            {(transfer.status === 'inTransit' || transfer.status === 'receiving') && (
+              <Button variant="outline" onClick={() => setShowQr(true)}>
+                <Icon name="barcode" size={16} />
+                {t('QR ใบโอน')}
+              </Button>
+            )}
             {receiver && (
               <Button onClick={() => navigate(`/transfers/${transfer.id}/receive`)}>
                 <Icon name="receive" size={16} />
@@ -235,6 +244,10 @@ export function TransferDetailView({ initial, onChange }: Props) {
           </div>
         }
       />
+
+      {showQr && (
+        <TransferQr transfer={transfer} fromName={siteName(transfer.fromLocationId)} toName={siteName(transfer.toLocationId)} onClose={() => setShowQr(false)} />
+      )}
 
       {transfer.status === 'returned' && transfer.returnReason && <AlertBanner tone="warn">{t('หัวหน้าส่งกลับให้แก้ไข')}: {transfer.returnReason}</AlertBanner>}
       {transfer.status === 'rejected' && transfer.rejectReason && <AlertBanner tone="danger">{t('ไม่อนุมัติ')}: {transfer.rejectReason}</AlertBanner>}
