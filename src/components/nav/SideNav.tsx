@@ -38,7 +38,7 @@ export function SideNav({ items, badges }: { items: NavItem[]; badges: Partial<R
   const toggle = (g: NavGroup) => setClosed((c) => (c.includes(g) ? c.filter((x) => x !== g) : [...c, g]))
 
   return (
-    <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3" aria-label={t('เมนูหลัก')}>
+    <nav className="space-y-1 px-3 py-3" aria-label={t('เมนูหลัก')}>
       {navSections(items).map((s, i) => {
         if (!s.group) {
           return (

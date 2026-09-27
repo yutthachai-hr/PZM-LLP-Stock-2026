@@ -13,6 +13,7 @@ import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
 import { navFor, titleFor } from './nav/navItems'
+import { SideLive } from './nav/SideLive'
 import { SideNav } from './nav/SideNav'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
@@ -36,7 +37,12 @@ export function Layout({ children }: { children: ReactNode }) {
           A tablet gets the rail, a phone the tab bar (spec, 21 Sep 2026). */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface xl:flex">
         <Brand mode={mode} def={def} />
-        <SideNav items={items} badges={{ '/calendar': todayCount }} />
+        {/* The menu and the live panels scroll as one: with room to spare the panels sit at
+            the foot, and on a short screen they follow the menu instead of squeezing it. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <SideNav items={items} badges={{ '/calendar': todayCount }} />
+          <SideLive todayCount={todayCount} />
+        </div>
         <UserBox
           name={user?.name ?? ''}
           role={user?.role ?? 'staff'}

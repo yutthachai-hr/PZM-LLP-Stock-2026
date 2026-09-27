@@ -2414,4 +2414,22 @@ export const EN: Record<string, string> = {
   'แตะที่ใดก็ได้เพื่อปิด': 'Tap anywhere to close',
   // ---- brand logo (27 Sep 2026) ---------------------------------------------------
   'เปิดเว็บไซต์ {name}': 'Open the {name} website',
+  // ---- sidebar live panels (27 Sep 2026) --------------------------------------------
+  'ความเคลื่อนไหวล่าสุด': 'Latest activity',
+  'ยังไม่มีความเคลื่อนไหว': 'Nothing has moved yet',
+  'เวลาและอากาศ': 'Time and weather',
+  'กรุงเทพ': 'Bangkok',
+  'เบิก': 'issued',
+  'โอน': 'transferred',
+  'ตัดใช้': 'used up',
+  'แจ่มใส': 'Clear',
+  'มีเมฆบางส่วน': 'Partly cloudy',
+  'เมฆมาก': 'Cloudy',
+  'หมอก': 'Fog',
+  'ฝนตก': 'Rain',
+  'พายุฝนฟ้าคะนอง': 'Thunderstorm',
+  'เมื่อสักครู่': 'just now',
+  '{n} นาที': '{n} min',
+  '{n} ชม.': '{n} h',
+  'อัปเดตสด': 'Live updates',
 }
