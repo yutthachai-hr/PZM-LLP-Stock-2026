@@ -3,7 +3,8 @@ import { useAutomation } from '../data/useAutomation'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
-import { brandDef } from '../brand/brand'
+import { brandDef, type BrandDef } from '../brand/brand'
+import { BrandLogo } from './BrandLogo'
 import { useT } from '../i18n/I18nContext'
 import { Icon } from './Icon'
 import { isDemoMode } from '../firebase/config'
@@ -76,7 +77,7 @@ function Brand({
   def,
 }: {
   mode: 'cloud' | 'local'
-  def: { name: string; emoji: string } | null
+  def: BrandDef | null
 }) {
   const t = useT()
   return (
@@ -89,9 +90,8 @@ function Brand({
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-1 bg-brand-vivid"
       />
-      {/* The brand mark stays an emoji: it is the company's identity, at display size,
-          and the owner chose 🍕 and 🥖 themselves. */}
-      <span className="text-2xl leading-none">{def?.emoji ?? '📦'}</span>
+      {/* The brand's own logo, round, linking to its website (owner, 27 Sep 2026). */}
+      <BrandLogo def={def} size={40} />
       <div className="min-w-0">
         <div className="truncate font-bold leading-tight text-brand">
           {def?.name ?? 'Stock'}

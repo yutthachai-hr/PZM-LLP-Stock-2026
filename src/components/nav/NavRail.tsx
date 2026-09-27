@@ -5,6 +5,7 @@ import { useBrand } from '../../brand/BrandContext'
 import { brandDef } from '../../brand/brand'
 import { useTodayEventCount } from '../../data/useTodayEventCount'
 import { useT } from '../../i18n/I18nContext'
+import { BrandLogo } from '../BrandLogo'
 import { Icon } from '../Icon'
 import { ActionSheet } from './ActionSheet'
 import { NAV_GROUPS, navFor, navMatches, navSections } from './navItems'
@@ -26,8 +27,8 @@ export function NavRail() {
   return (
     <>
       <aside className="sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-stretch border-r border-line bg-surface md:flex xl:hidden">
-        <div className="flex h-14 shrink-0 items-center justify-center border-b border-line text-2xl" title={def?.name ?? ''}>
-          {def?.emoji ?? '📦'}
+        <div className="flex h-14 shrink-0 items-center justify-center border-b border-line">
+          <BrandLogo def={def} size={36} />
         </div>
         <button
           type="button"

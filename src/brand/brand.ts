@@ -16,6 +16,10 @@ export interface BrandDef {
   id: BrandId
   name: string
   emoji: string
+  /** The brand's round logo (public/brand), shown at the top of the menu (27 Sep 2026). */
+  logo: string
+  /** The brand's own website; the logo links to it. */
+  website: string
   /** placeholder shown for products that have no photo yet */
   productIcon: string
   /**
@@ -60,6 +64,8 @@ export const BRANDS: BrandDef[] = [
     id: 'pizza',
     name: 'Pizza Mania',
     emoji: '🍕',
+    logo: '/brand/pizza-mania.png',
+    website: 'https://www.pizzamania.com/',
     productIcon: '🍕',
     accent: '#b91c1c',
     accentSoft: '#fef2f2',
@@ -75,6 +81,8 @@ export const BRANDS: BrandDef[] = [
     id: 'lelapin',
     name: 'Le Lapin Sandwich Delivery',
     emoji: '🥪',
+    logo: '/brand/lelapin.png',
+    website: 'https://www.lelapinbangkok.com/',
     productIcon: '🥖',
     // The orange from the brand artwork, deepened until white text on it is legible.
     accent: '#c2410c',

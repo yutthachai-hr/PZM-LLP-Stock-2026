@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
+import { BrandLogo } from '../components/BrandLogo'
 import { Icon } from '../components/Icon'
 import { NAV_GROUPS, moreItemsFor, navSections } from '../components/nav/navItems'
 import { useI18n, useT } from '../i18n/I18nContext'
@@ -21,7 +22,7 @@ export function MorePage() {
   return (
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4">
-        <span className="text-3xl">{def?.emoji ?? '📦'}</span>
+        <BrandLogo def={def} size={48} />
         <div className="min-w-0">
           <div className="truncate font-bold text-brand">{def?.name ?? ''}</div>
           <div className="text-xs text-ink-faint">

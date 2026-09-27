@@ -2412,4 +2412,6 @@ export const EN: Record<string, string> = {
   'รูปสินค้า': 'Product photo',
   'คงเหลือรวม {qty}': 'On hand in total: {qty}',
   'แตะที่ใดก็ได้เพื่อปิด': 'Tap anywhere to close',
+  // ---- brand logo (27 Sep 2026) ---------------------------------------------------
+  'เปิดเว็บไซต์ {name}': 'Open the {name} website',
 }
