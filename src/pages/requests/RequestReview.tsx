@@ -220,9 +220,11 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
         <>
           {groups.map((g) => (
             <Card key={g.supplierName} className="overflow-hidden p-0">
-              <div className="flex items-center justify-between border-b border-line bg-sunken px-4 py-2">
-                <span className="font-semibold text-ink">{g.supplierName}</span>
-                <span className="text-xs text-ink-soft">{t('{count} รายการ', { count: g.items.length })}</span>
+              {/* The supplier's bar in the brand's colour, as on the request itself (27 Sep 2026). */}
+              <div className="flex items-center gap-2 border-b border-brand/20 bg-brand-soft px-4 py-2 text-brand">
+                <Icon name="store" size={16} className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate font-semibold">{g.supplierName}</span>
+                <span className="shrink-0 text-xs font-medium text-brand/80">{t('{count} รายการ', { count: g.items.length })}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className={`w-full table-fixed text-sm ${reviewing ? 'min-w-[1080px]' : 'min-w-[720px]'}`}>
@@ -252,7 +254,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                   </thead>
                   <tbody>
                     {g.items.map((item) => (
-                      <tr key={item.idx} className="border-t border-line align-top">
+                      <tr key={item.idx} className="border-t border-line align-top transition-[background-color,box-shadow] duration-150 hover:bg-brand-soft/80 hover:shadow-[inset_3px_0_0_var(--color-brand)]">
                         <td className="px-4 py-2">
                           <div className="break-words text-ink">{item.productName}</div>
                           <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
