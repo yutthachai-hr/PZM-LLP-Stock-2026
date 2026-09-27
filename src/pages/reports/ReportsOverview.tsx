@@ -288,7 +288,7 @@ export function ReportsOverview() {
               </thead>
               <tbody className="divide-y divide-line">
                 {r.branchRows.map((b) => (
-                  <tr key={b.location.id}>
+                  <tr key={b.location.id} className="row-hover">
                     <td className="px-3 py-2.5 font-medium text-ink">{b.location.name}</td>
                     <td className="num px-3 py-2.5 text-right">{fmtQty(b.received)}</td>
                     <td className="num px-3 py-2.5 text-right">{fmtQty(b.used)}</td>

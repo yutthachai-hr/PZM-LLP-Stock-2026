@@ -88,7 +88,7 @@ export function LowStockCard({ low }: { low: StockShortage[] }) {
             </thead>
             <tbody className="divide-y divide-line">
               {top.map((s) => (
-                <tr key={`${s.location.id}-${s.product.id}`}>
+                <tr key={`${s.location.id}-${s.product.id}`} className="row-hover">
                   <td className="px-3 py-2.5">
                     <Link to={`/products/${encodeURIComponent(s.product.id)}/card`} className="block hover:underline">
                       <ItemCell
@@ -134,7 +134,7 @@ export function BranchOverviewCard({ branches }: { branches: BranchRow[] }) {
           </thead>
           <tbody className="divide-y divide-line">
             {branches.map((b) => (
-              <tr key={b.location.id}>
+              <tr key={b.location.id} className="row-hover">
                 <td className="px-3 py-2.5">
                   <span className="flex items-center gap-2 whitespace-nowrap font-medium text-ink">
                     <Icon name="store" size={17} className="text-ink-faint" />
@@ -251,7 +251,7 @@ export function RecentActivityCard({
           {items.map((a) => (
             <li key={a.key} className="relative pl-5">
               <span className={`absolute left-0 top-4 h-[11px] w-[11px] rounded-full ring-2 ring-surface ${toneIcon[a.tone].split(' ')[0]}`} />
-              <Link to={a.to} className="flex items-center gap-3 rounded-lg px-1 py-1.5 hover:bg-sunken">
+              <Link to={a.to} className="flex items-center gap-3 rounded-lg px-1 py-1.5 row-hover">
                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneIcon[a.tone]}`}>
                   <Icon name={a.icon} size={17} />
                 </span>

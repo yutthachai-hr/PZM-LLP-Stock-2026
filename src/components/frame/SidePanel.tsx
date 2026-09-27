@@ -118,7 +118,7 @@ export function RecentList({
             return (
               <li key={it.key}>
                 {it.to ? (
-                  <Link to={it.to} className={`-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-sunken ${focusRing}`}>
+                  <Link to={it.to} className={`-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 row-hover ${focusRing}`}>
                     {body}
                   </Link>
                 ) : (

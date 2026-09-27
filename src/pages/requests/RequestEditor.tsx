@@ -359,7 +359,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                       const p = products.find((x) => x.id === item.productId)
                       const units = p ? entryUnitsFor(p.unitType, plainUnits, p.unitConversions) : []
                       return (
-                        <li key={item.idx} className="px-3 py-2 transition-[background-color,box-shadow] duration-150 hover:bg-brand-soft/80 hover:shadow-[inset_3px_0_0_var(--color-brand)]">
+                        <li key={item.idx} className="px-3 py-2 row-hover">
                           <div className="flex items-start gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="text-sm text-ink">{item.productName}</div>

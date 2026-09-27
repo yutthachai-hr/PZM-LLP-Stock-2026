@@ -53,7 +53,7 @@ export function NavRail() {
               to={item.to}
               aria-current={navMatches(pathname, item.to) ? 'page' : undefined}
               className={`relative mx-1.5 my-0.5 flex min-h-[56px] flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-center text-[10px] leading-tight outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
-                navMatches(pathname, item.to) ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft hover:bg-sunken hover:text-ink'
+                navMatches(pathname, item.to) ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft hover:bg-brand-soft/60 hover:text-brand'
               }`}
             >
               <Icon name={item.icon} size={22} />

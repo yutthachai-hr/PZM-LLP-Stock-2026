@@ -254,7 +254,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                   </thead>
                   <tbody>
                     {g.items.map((item) => (
-                      <tr key={item.idx} className="border-t border-line align-top transition-[background-color,box-shadow] duration-150 hover:bg-brand-soft/80 hover:shadow-[inset_3px_0_0_var(--color-brand)]">
+                      <tr key={item.idx} className="border-t border-line align-top row-hover">
                         <td className="px-4 py-2">
                           <div className="break-words text-ink">{item.productName}</div>
                           <div className="flex flex-wrap gap-2 text-xs text-ink-faint">

@@ -291,7 +291,7 @@ function ScheduleEditor({ schedule, onClose }: { schedule: InventorySchedule | n
         <fieldset>
           <legend className="mb-1.5 block text-sm font-medium text-ink">{t('ผู้รับผิดชอบ')}</legend>
           <div className="max-h-48 divide-y divide-line overflow-auto rounded-lg border border-line-strong">
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm font-medium text-ink hover:bg-sunken">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm font-medium text-ink row-hover">
               <input
                 type="checkbox"
                 checked={assignedToAll}
@@ -304,7 +304,7 @@ function ScheduleEditor({ schedule, onClose }: { schedule: InventorySchedule | n
               {t('ทุกคน')}
             </label>
             {active.map((u) => (
-              <label key={u.id} className={`flex min-h-11 items-center gap-3 px-3 text-sm ${assignedToAll ? 'text-ink-faint' : 'cursor-pointer text-ink hover:bg-sunken'}`}>
+              <label key={u.id} className={`flex min-h-11 items-center gap-3 px-3 text-sm ${assignedToAll ? 'text-ink-faint' : 'cursor-pointer text-ink row-hover'}`}>
                 <input
                   type="checkbox"
                   checked={assignedToAll || assignedTo.includes(u.id)}

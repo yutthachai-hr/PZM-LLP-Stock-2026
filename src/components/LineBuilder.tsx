@@ -206,7 +206,7 @@ export function LineBuilder({
                 key={p.id}
                 type="button"
                 onClick={() => addProduct(p)}
-                className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm outline-none transition-colors duration-150 hover:bg-sunken focus-visible:bg-sunken"
+                className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm outline-none row-hover focus-visible:bg-brand-soft"
               >
                 <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} zoom={false} />
                 <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
@@ -305,7 +305,7 @@ export function LineBuilder({
                 const over = avail !== undefined && l.qty > avail
                 const product = products.find((p) => p.id === l.productId)
                 return (
-                  <tr key={l.productId} className={over ? 'bg-danger-soft/40' : ''}>
+                  <tr key={l.productId} className={`row-hover ${over ? 'bg-danger-soft/40' : ''}`}>
                     <td className="num whitespace-nowrap px-3 py-2 text-center text-ink-soft">
                       {/* Direction, restated on every line. */}
                       <span aria-hidden="true" className={`mr-1 font-bold ${signColor}`}>{sign}</span>

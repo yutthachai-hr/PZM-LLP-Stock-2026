@@ -172,7 +172,7 @@ export function EventEditor({
         <fieldset>
           <legend className="mb-1.5 block text-sm font-medium text-ink">{t('ผู้รับผิดชอบ')}</legend>
           <div className="max-h-48 divide-y divide-line overflow-auto rounded-lg border border-line-strong">
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm font-medium text-ink hover:bg-sunken">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm font-medium text-ink row-hover">
               <input
                 type="checkbox"
                 checked={assignedToAll}
@@ -185,7 +185,7 @@ export function EventEditor({
               {t('ทุกคน')}
             </label>
             {kept.length > 0 && (
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm text-ink hover:bg-sunken">
+              <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 text-sm text-ink row-hover">
                 <input
                   type="checkbox"
                   checked={!assignedToAll}
@@ -200,7 +200,7 @@ export function EventEditor({
                 <label
                   key={u.id}
                   className={`flex min-h-11 items-center gap-3 px-3 text-sm ${
-                    assignedToAll ? 'cursor-default text-ink-faint' : 'cursor-pointer text-ink hover:bg-sunken'
+                    assignedToAll ? 'cursor-default text-ink-faint' : 'cursor-pointer text-ink row-hover'
                   }`}
                 >
                   <input

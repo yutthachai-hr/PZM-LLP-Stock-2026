@@ -117,7 +117,7 @@ export function PurchaseBatchesPage() {
                 key={b.id}
                 type="button"
                 onClick={() => navigate(`/purchase/${b.id}`)}
-                className="flex w-full flex-wrap items-center gap-3 p-3 text-left hover:bg-sunken"
+                className="flex w-full flex-wrap items-center gap-3 p-3 text-left row-hover"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

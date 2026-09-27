@@ -220,7 +220,7 @@ export function ResolveRowModal({
                     <button
                       type="button"
                       onClick={() => pickProduct(p.id)}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunken"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm row-hover"
                     >
                       <span className="flex-1 text-ink">{p.name}</span>
                       <span className="doc-no text-xs text-ink-faint">{p.sku}</span>

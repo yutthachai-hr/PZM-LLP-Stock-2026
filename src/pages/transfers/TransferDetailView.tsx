@@ -326,7 +326,7 @@ export function TransferDetailView({ initial, onChange }: Props) {
                 {transfer.items.map((i) => {
                   const variance = i.receivedQty !== undefined ? i.receivedQty - expectedQty(i) : null
                   return (
-                    <tr key={i.idx} className={i.removed ? 'text-ink-faint line-through' : ''}>
+                    <tr key={i.idx} className={`row-hover ${i.removed ? 'text-ink-faint line-through' : ''}`}>
                       <td className="py-2 pr-2">
                         <div className="font-medium">{i.productName}</div>
                         <div className="text-xs text-ink-faint">

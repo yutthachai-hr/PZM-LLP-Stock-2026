@@ -269,7 +269,7 @@ function UserMenu() {
   if (!user) return null
   const role = user.role === 'admin' ? t('ผู้ดูแลระบบ') : user.role === 'manager' ? t('หัวหน้า') : t('พนักงาน')
   const item =
-    'flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm text-ink-soft outline-none hover:bg-sunken hover:text-ink focus-visible:ring-2 focus-visible:ring-brand/40'
+    'flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm text-ink-soft outline-none row-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-brand/40'
 
   return (
     <div ref={box} className="relative">

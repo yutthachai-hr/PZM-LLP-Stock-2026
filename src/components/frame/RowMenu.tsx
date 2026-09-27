@@ -121,7 +121,7 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label?: string
                   setOpen(false)
                   it.onSelect()
                 }}
-                className={`flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-40 ${focusRing} ${
+                className={`flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm row-hover disabled:cursor-not-allowed disabled:opacity-40 ${focusRing} ${
                   it.danger ? 'text-danger' : 'text-ink-soft hover:text-ink'
                 }`}
               >

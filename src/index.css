@@ -236,3 +236,32 @@ input[type='number'] {
     font-size: 17px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Row hover (owner, 27 Sep 2026: "ทำแบบนี้ไปเลย ทั้งระบบ").
+
+   A row under the pointer — a table row, a search result, a menu entry, a list
+   item — takes the brand's soft tint and a bar down its left edge, the way the
+   menu lights up. Brand tokens, so Pizza Mania's is red and Le Lapin's orange.
+   Pointer devices only: on a phone a tap would leave the tint stuck on.
+
+   A utility, not a component class, so it outranks a row's own background
+   (a shortfall row's bg-danger-soft). A table row paints the bar on its first
+   cell, since a <tr>'s own box-shadow is not reliably painted.
+--------------------------------------------------------------------------- */
+@utility row-hover {
+  transition-property: background-color, box-shadow;
+  transition-duration: 150ms;
+
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      background-color: color-mix(in srgb, var(--color-brand-soft) 80%, transparent);
+    }
+    &:not(tr):hover:not(:disabled) {
+      box-shadow: inset 3px 0 0 var(--color-brand);
+    }
+    &:is(tr):hover > :first-child {
+      box-shadow: inset 3px 0 0 var(--color-brand);
+    }
+  }
+}

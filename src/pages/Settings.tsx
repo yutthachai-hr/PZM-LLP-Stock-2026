@@ -417,7 +417,7 @@ export function SettingsPage() {
                         className={`flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
                           active
                             ? 'bg-brand-soft font-semibold text-brand ring-1 ring-inset ring-brand/20'
-                            : 'text-ink-soft hover:bg-sunken hover:text-ink'
+                            : 'text-ink-soft hover:bg-brand-soft/60 hover:text-brand'
                         }`}
                       >
                         <Icon name={it.icon} size={17} />
@@ -454,7 +454,7 @@ const tileAction =
   'flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface p-4 text-left outline-none transition-[border-color,box-shadow] duration-150 hover:border-line-strong hover:shadow-md focus-visible:ring-2 focus-visible:ring-brand/40'
 
 const actionRow =
-  'flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-150 hover:bg-line/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40'
+  'flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left outline-none row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40'
 
 
 // ---------------- Entry units ----------------
