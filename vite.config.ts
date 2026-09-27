@@ -22,8 +22,9 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Inventory Pzm',
-        short_name: 'Inventory Pzm',
+        name: 'The Inventory OS',
+        // The home-screen label: phones cut anything much past twelve characters.
+        short_name: 'Inventory OS',
         description: 'ระบบบริหารสต๊อก Pizza Mania และ Le Lapin',
         // Slate, matching index.html. It used to be Pizza Mania red, which tinted an
         // installed window in one of the two brands' colours whichever set of books was

@@ -48,7 +48,7 @@ describe('the page', () => {
     expect(pdf.type).toBe('application/pdf')
     expect(calls[0]).toEqual(['new', { orientation: 'portrait', unit: 'mm', format: 'a5' }])
     expect(calls).toContainEqual(['image', 'JPEG', 0, 0, 148, 210])
-    expect(calls).toContainEqual(['props', { title: 'PZM-ANN-2569-0001', author: 'Pizza Mania', creator: 'Inventory Pzm' }])
+    expect(calls).toContainEqual(['props', { title: 'PZM-ANN-2569-0001', author: 'Pizza Mania', creator: 'The Inventory OS' }])
   })
 
   test('the real jsPDF produces an A5 PDF from a picture', async () => {

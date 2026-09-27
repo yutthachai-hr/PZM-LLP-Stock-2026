@@ -71,7 +71,7 @@ export function LoginPage() {
             height={56}
             className="mx-auto rounded-xl"
           />
-          <h1 className="mt-2 text-xl font-bold text-brand">Inventory Pzm</h1>
+          <h1 className="mt-2 text-xl font-bold text-brand">The Inventory OS</h1>
           <p className="text-sm text-ink-soft">
             {!bootstrap
               ? t("เข้าสู่ระบบบริหารสต๊อก")

@@ -97,7 +97,7 @@ function Brand({
           {def?.name ?? 'Stock'}
         </div>
         {/* The company whose books are open, above the name of the system they are in. */}
-        <div className="text-xs text-ink-faint">Inventory Pzm</div>
+        <div className="text-xs text-ink-faint">The Inventory OS</div>
       </div>
       <div className="ml-auto">
         {/* A demo build is in local mode too, but the local badge reads as a network
