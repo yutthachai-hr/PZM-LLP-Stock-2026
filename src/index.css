@@ -1,7 +1,26 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   Typeface: LINE Seed Sans TH (SIL OFL 1.1, see public/fonts/OFL.txt)
+   Typeface: DB Heavent Rounded (owner, 27 Sep 2026)
+
+   The company's own copy of DB Design's face (Prinya Rojarayanont; commercial,
+   "All rights reserved" — the owner chose it and answers for its licence).
+   Rounded, at three weights: 400, 500 (font-medium) and 700 (font-bold;
+   font-semibold resolves to it). Subset to Latin, Thai, punctuation, currency,
+   arrows and the few symbols the screens use (fontTools, --layout-features='*'
+   so Thai mark placement survives): about 32 KB a weight.
+
+   Its letters are short for their size — x-height 0.355 em against LINE Seed's
+   0.505 — so size-adjust scales the whole face by 140% and every text-* size in
+   the app keeps its visual height without touching a single class. Its vertical
+   metrics are balanced (space above the capitals ≈ below the baseline), so text
+   still sits centred in buttons and pills.
+
+   LINE Seed Sans TH stays declared as the next face in the stack: a glyph DB
+   Heavent does not have (a box-drawing character, ⌘) falls back to it, and the
+   browser only downloads it if that ever happens.
+
+   Previously: LINE Seed Sans TH (SIL OFL 1.1, see public/fonts/OFL.txt)
 
    The app used to name 'Sarabun' in font-family without ever loading it, so
    every device picked something different out of its own fallback list — Windows
@@ -13,6 +32,31 @@
    only, 29 KB each, and the Thai release already carries Latin, Thai digits, ฿
    and real typographic punctuation (… “ ” — ), so nothing falls back mid-sentence.
 --------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'DB Heavent Rounded';
+  src: url('/fonts/DBHeaventRounded-Rg.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 140%;
+}
+@font-face {
+  font-family: 'DB Heavent Rounded';
+  src: url('/fonts/DBHeaventRounded-Md.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 140%;
+}
+@font-face {
+  font-family: 'DB Heavent Rounded';
+  src: url('/fonts/DBHeaventRounded-Bd.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 140%;
+}
 
 @font-face {
   font-family: 'LINE Seed Sans TH';
@@ -42,7 +86,7 @@
 @theme {
   /* The phone tab bar; the page and the save bar leave this much room above the bottom. */
   --tabbar-h: 4.5rem;
-  --font-sans: 'LINE Seed Sans TH', 'Noto Sans Thai', 'Leelawadee UI', system-ui,
+  --font-sans: 'DB Heavent Rounded', 'LINE Seed Sans TH', 'Noto Sans Thai', 'Leelawadee UI', system-ui,
     -apple-system, sans-serif;
 
   /* Surfaces and text. Industrial slate: quiet, so the numbers carry the page. */
