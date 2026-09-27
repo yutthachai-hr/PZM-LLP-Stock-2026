@@ -184,6 +184,11 @@ input[type='number'] {
   }
 }
 
+/* The print copy of the order sheet (lib/printSheet) never shows on screen. */
+#print-root {
+  display: none;
+}
+
 @media print {
   .no-print {
     display: none !important;
@@ -196,9 +201,7 @@ input[type='number'] {
    * photographed into a chat, not a report. The browser's own print dialog does the PDF, so
    * nothing here costs a library in the bundle.
    *
-   * Everything but the sheet is hidden by lifting it out of the page flow rather than by
-   * hiding its ancestors: the modal it lives in is positioned, and hiding a positioned
-   * parent takes the child with it.
+   * Printed from a copy outside the dialog it is shown in — see the rule below.
    */
   @page {
     size: A5;
@@ -206,30 +209,20 @@ input[type='number'] {
   }
 
   /*
-   * Hidden by visibility rather than display: the sheet sits inside a positioned modal, and
-   * `display: none` on an ancestor takes the sheet with it whatever the sheet asks for.
-   * Visibility is the one property a descendant can win back.
-   *
-   * The reveal below is written with the same `body:has(#order-sheet)` prefix on purpose.
-   * `:has()` carries the specificity of its argument, so the hiding rule weighs (0,1,1) —
-   * more than a bare `#order-sheet` at (0,1,0) — and the sheet stayed hidden along with
-   * everything else: the owner pressed print and got a blank A5 with a header. The prefix
-   * lifts the reveal to (0,2,1), which wins outright rather than by source order.
+   * Only the copy lib/printSheet puts straight under <body> is printed; everything else
+   * leaves the flow. It used to be the sheet inside its dialog with the rest hidden by
+   * visibility — hidden content still takes its room, and the dialog is position: fixed,
+   * which Chrome repeats on every page: eight identical A5 pages (owner, 27 Sep 2026).
    */
-  body:has(#order-sheet) * {
-    visibility: hidden;
+  body:has(> #print-root) > *:not(#print-root) {
+    display: none !important;
   }
 
-  body:has(#order-sheet) #order-sheet,
-  body:has(#order-sheet) #order-sheet * {
-    visibility: visible;
+  body:has(> #print-root) > #print-root {
+    display: block;
   }
 
-  #order-sheet {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+  #print-root > * {
     border: 0;
     padding: 0;
     box-shadow: none;

@@ -60,6 +60,7 @@ import { useI18n, useT, type Lang } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import type { PoRevisionChange, PoRevisionEntry, Product, PurchaseOrder, Supplier } from '../types'
 import { looseMatch } from '../lib/search'
+import { printElement } from '../lib/printSheet'
 
 /**
  * Orders out, and goods in.
@@ -1281,7 +1282,7 @@ function OrderSheet({
           <Button variant="secondary" onClick={onClose}>
             {t('ปิด')}
           </Button>
-          <Button variant="secondary" onClick={() => window.print()}>
+          <Button variant="secondary" onClick={() => sheet.current && printElement(sheet.current)}>
             <Icon name="download" size={16} />
             {t('พิมพ์ / บันทึก PDF (A5)')}
           </Button>
