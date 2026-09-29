@@ -4,7 +4,7 @@
 //   npm test
 
 import { describe, expect, test } from 'vitest'
-import { countIn, guessHeader, importColumns, importRows, rateOf } from '../src/lib/countImport'
+import { answeredQty, countIn, guessHeader, importColumns, importRows, rateOf } from '../src/lib/countImport'
 import type { ParsedSheet } from '../src/lib/stockSheet'
 
 // Columns: 3 = SKV qty, 4 = SKV unit, 5 = SRS qty, 6 = SRS unit
@@ -106,5 +106,25 @@ describe('headers and rates', () => {
     expect(rateOf({ value: 0, mode: 'perFile' })).toBeNull()
     expect(countIn(3, 12)).toBe(36)
     expect(countIn(8, 1 / 3)).toBe(2.667)
+  })
+})
+
+describe('answeredQty', () => {
+  // The owner typed his count into the rate box: 2 KG became 4, 13 KG of Parma 169 EA.
+  test('a count typed as a count is taken as it is, whatever the file says', () => {
+    expect(answeredQty(2, { how: 'count', count: 2 })).toBe(2)
+    expect(answeredQty(13, { how: 'count', count: 2 })).toBe(2)
+    expect(answeredQty(13, { how: 'count', count: 0 })).toBe(0)
+  })
+
+  test('an empty or negative count is not an answer yet', () => {
+    expect(answeredQty(2, { how: 'count', count: Number.NaN })).toBeNull()
+    expect(answeredQty(2, { how: 'count', count: -1 })).toBeNull()
+  })
+
+  test('a rate multiplies the file figure', () => {
+    expect(answeredQty(3, { how: 'rate', value: 12, mode: 'perFile' })).toBe(36)
+    expect(answeredQty(8, { how: 'rate', value: 4, mode: 'filePerOne' })).toBe(2)
+    expect(answeredQty(8, { how: 'rate', value: 0, mode: 'perFile' })).toBeNull()
   })
 })
