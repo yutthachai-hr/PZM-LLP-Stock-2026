@@ -24,14 +24,14 @@ describe('navigation', () => {
 
   test('the "more" page lists what the tab bar and the sheet do not', () => {
     const more = moreItemsFor('staff').map((n) => n.to)
-    expect(more).toEqual(['/reports', '/requests', '/orders', '/suppliers', '/transfers', '/transfers/today', '/calendar', '/announcements', '/settings'])
+    expect(more).toEqual(['/counts', '/reports', '/requests', '/orders', '/suppliers', '/transfers', '/transfers/today', '/calendar', '/announcements', '/settings'])
   })
 
   test('the menu reads in the sections and order the owner gave (25 Sep 2026)', () => {
     const sections = navSections(navFor('admin')).map((s) => [s.group ?? '-', s.items.map((n) => n.to)])
     expect(sections).toEqual([
       ['-', ['/']],
-      ['inventory', ['/products', '/receive', '/issue', '/adjust', '/movements', '/reports']],
+      ['inventory', ['/products', '/receive', '/issue', '/adjust', '/counts', '/movements', '/reports']],
       ['procurement', ['/requests', '/orders', '/suppliers']],
       ['delivery', ['/transfers', '/transfers/today']],
       ['-', ['/calendar', '/announcements', '/settings']],

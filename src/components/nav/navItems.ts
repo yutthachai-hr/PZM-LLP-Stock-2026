@@ -37,6 +37,7 @@ export const NAV: NavItem[] = [
   { to: '/receive', label: 'รับสินค้าเข้า', icon: 'receive', group: 'inventory' }, // i18n-key
   { to: '/issue', label: 'เบิก/โอนสาขา', icon: 'send', group: 'inventory' }, // i18n-key
   { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust', group: 'inventory' }, // i18n-key
+  { to: '/counts', label: 'นับสต๊อกประจำเดือน', icon: 'clipboardList', group: 'inventory' }, // i18n-key
   { to: '/movements', label: 'ประวัติ/Stock Card', icon: 'history', group: 'inventory' }, // i18n-key
   { to: '/reports', label: 'รายงาน', icon: 'report', group: 'inventory' }, // i18n-key
   { to: '/requests', label: 'รายการขอสั่งซื้อ', icon: 'note', group: 'procurement' }, // i18n-key
