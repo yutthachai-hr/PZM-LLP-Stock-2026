@@ -136,8 +136,14 @@ export async function postMonthlyCount(params: {
   results: Record<string, MonthlyCountResult>
   actor: Actor
   note: string
+  /**
+   * `count` for a monthly count; `opening` when this count starts the system's books —
+   * the first month, whose difference is the trial period's mistakes and not stock lost,
+   * so it must not read as shrinkage in the reports (owner, 29 Sep 2026).
+   */
+  reason?: 'count' | 'opening'
 }): Promise<string[]> {
-  const { id, parts, results, actor, note } = params
+  const { id, parts, results, actor, note, reason = 'count' } = params
   const db = scoped()
   const docNos: string[] = []
   const finish = parts.length === 0 ? [[] as CountAdjustment[]] : parts
@@ -165,7 +171,7 @@ export async function postMonthlyCount(params: {
               unit: a.unit,
               qty: Math.abs(a.diff),
               direction: a.diff > 0 ? ('in' as const) : ('out' as const),
-              reason: 'count',
+              reason,
             })),
           },
           file,
