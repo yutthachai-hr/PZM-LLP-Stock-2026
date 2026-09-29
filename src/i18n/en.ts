@@ -2624,7 +2624,6 @@ export const EN: Record<string, string> = {
   '(ไม่ระบุหน่วย)': '(no unit)',
   'แถว {n}': 'row {n}',
   'ขนาดบรรจุ {size}': 'pack {size}',
-  'เป็น {unit} อยู่แล้ว': 'Already in {unit}',
   '{file} ต่อ 1 {unit}:': '{file} per 1 {unit}:',
   'อัตราแปลงของ "{name}"': 'Rate for "{name}"',
   'จำไว้ที่สินค้า': 'Keep on the product',
@@ -2646,7 +2645,6 @@ export const EN: Record<string, string> = {
   'ต้องตัดสินใจ {n} (เหลือ {left})': 'To decide {n} ({left} left)',
   'ตั้งเป็นคำถาม {n}': 'Raised as questions {n}',
   'รายการที่ต้องตัดสินใจ': 'Rows to decide',
-  'ใส่อัตรา': 'Give a rate',
   'ถามไว้ก่อน': 'Ask later',
   'ไม่นำเข้า': 'Leave out',
   'การตัดสินใจ': 'Decision',
@@ -2684,4 +2682,12 @@ export const EN: Record<string, string> = {
   'ของที่ครัวหรือสาขาทำเอง (WIP: แป้ง ซอส น้ำสลัด คุกกี้) ใช้ "รับจากครัว (ผลิตเอง)" — ไม่ต้องมีผู้ขายหรือเลขบิล': 'Things the kitchen or a branch makes (WIP: dough, sauces, dressings, cookies) use "From the kitchen (made in-house)" — no supplier or bill number needed',
   'รับจากครัว (ผลิตเอง)': 'From the kitchen (made in-house)',
   'สินค้า WIP ที่ครัวหรือสาขาทำ — ไม่มีบิล': 'WIP made by the kitchen or a branch — no bill',
+  // ---- count import: the count first, a rate second (30 Sep 2026) ----
+  'นับได้กี่ {unit}': 'Counted how many {unit}',
+  'ใช้อัตราแปลงจาก {file}': 'Convert from {file} with a rate',
+  'วิธีใส่ยอด': 'How to enter the count',
+  'ยอดนับ': 'Count',
+  'ยอดนับของ "{name}" เป็น {unit}': 'Count of "{name}" in {unit}',
+  'ใช้ {qty} ตามไฟล์ (ไฟล์นับเป็น {unit} อยู่แล้ว)': 'Use the file\'s {qty} (already counted in {unit})',
+  'ใส่ยอดนับ': 'Enter the count',
 }

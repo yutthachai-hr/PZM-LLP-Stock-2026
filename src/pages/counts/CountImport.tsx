@@ -5,7 +5,7 @@ import { useToast } from '../../components/Toast'
 import { AlertBanner, Button, Field, Modal, Select } from '../../components/ui'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
-import { countIn, guessHeader, importColumns, importRows, rateOf, type ImportRow } from '../../lib/countImport'
+import { answeredQty, guessHeader, importColumns, importRows, type ImportRow } from '../../lib/countImport'
 import { fmtQty } from '../../lib/format'
 import { resolveFactor } from '../../lib/inventoryRules/uom'
 import { monthOf } from '../../lib/monthlyCount'
@@ -16,7 +16,15 @@ import { addConversion } from '../../services/products'
 import type { MonthlyCountQuestion, Product } from '../../types'
 
 type Mode = 'perFile' | 'filePerOne'
+/**
+ * The answer for a line in another unit: the count itself in the product's own unit (the
+ * default), or a rate from the file's unit. The owner typed his count into what used to be
+ * the only box, a rate, twice on 30 Sep 2026 — so the count is what is asked first.
+ */
 interface Rate {
+  how: 'count' | 'rate'
+  /** The count in the product's own unit, as typed. */
+  count: string
   value: string
   mode: Mode
   remember: boolean
@@ -134,20 +142,25 @@ export function CountImport({
 
   const initial = (r: ImportRow): Decision | undefined =>
     r.status === 'unit'
-      ? { kind: 'rate', value: r.knownRate !== undefined ? String(r.knownRate) : '', mode: 'perFile', remember: r.knownRate === undefined && !!r.fileUnit }
+      ? r.knownRate !== undefined
+        ? { kind: 'rate', how: 'rate', count: '', value: String(r.knownRate), mode: 'perFile', remember: false }
+        : { kind: 'rate', how: 'count', count: '', value: '', mode: 'perFile', remember: !!r.fileUnit }
       : undefined
   const decisionOf = (r: ImportRow) => decisions[key(r)] ?? initial(r)
   const decide = (r: ImportRow, d: Decision) => setDecisions((all) => ({ ...all, [key(r)]: d }))
 
-  /** The product a line lands on, and the rate from its file unit to that product's own unit. */
-  function landing(r: ImportRow): { product: Product; rate: number } | null {
+  /** The product a line lands on, and its count in that product's own unit. */
+  function landing(r: ImportRow): { product: Product; qty: number } | null {
     const d = decisionOf(r)
     if (!d || d.kind === 'question' || d.kind === 'exclude') return null
     const product = byId.get(d.kind === 'map' ? d.productId : r.productId!)
     if (!product) return null
-    if (d.kind === 'map' && r.fileUnit && sameUnit(r.fileUnit, product.unitType)) return { product, rate: 1 }
-    const rate = rateOf({ value: Number(d.value), mode: d.mode })
-    return rate === null ? null : { product, rate }
+    if (d.kind === 'map' && r.fileUnit && sameUnit(r.fileUnit, product.unitType)) return { product, qty: r.qty }
+    const qty =
+      d.how === 'count'
+        ? answeredQty(r.qty, { how: 'count', count: d.count.trim() === '' ? Number.NaN : Number(d.count) })
+        : answeredQty(r.qty, { how: 'rate', value: Number(d.value), mode: d.mode })
+    return qty === null ? null : { product, qty }
   }
   const decided = (r: ImportRow) => {
     const d = decisionOf(r)
@@ -155,7 +168,7 @@ export function CountImport({
   }
   const openRows = asking.filter((r) => !decided(r))
   const undecidedDups = dups.filter((r) => !dupPick[r.productId ?? ''])
-  const landed = asking.map((r) => [r, landing(r)] as const).filter((x): x is readonly [ImportRow, { product: Product; rate: number }] => x[1] !== null)
+  const landed = asking.map((r) => [r, landing(r)] as const).filter((x): x is readonly [ImportRow, { product: Product; qty: number }] => x[1] !== null)
   const goingIds = new Set([...ready.map((r) => r.productId!), ...landed.map(([, l]) => l.product.id)])
   const questionsCount = asking.filter((r) => decisionOf(r)?.kind === 'question').length
   const replacing = [...goingIds].filter((id) => existing[id] !== undefined).length
@@ -166,7 +179,7 @@ export function CountImport({
       // Rates kept on products first, so a refusal stops before the sheet is filled.
       for (const [r, l] of landed) {
         const d = decisionOf(r)
-        if (!d || (d.kind !== 'rate' && d.kind !== 'map') || !d.remember || !r.fileUnit) continue
+        if (!d || (d.kind !== 'rate' && d.kind !== 'map') || d.how !== 'rate' || !d.remember || !r.fileUnit) continue
         if (sameUnit(r.fileUnit, l.product.unitType) || resolveFactor(l.product, r.fileUnit) !== null) continue
         const v = Number(d.value)
         await addConversion(l.product, r.fileUnit, d.mode === 'perFile' ? v : 1, d.mode === 'perFile' ? {} : { per: v })
@@ -176,7 +189,7 @@ export function CountImport({
       const counts: Record<string, number> = {}
       const add = (id: string, qty: number) => (counts[id] = Math.round(((counts[id] ?? 0) + qty) * 1000) / 1000)
       for (const r of ready) add(r.productId!, r.qty)
-      for (const [r, l] of landed) add(l.product.id, countIn(r.qty, l.rate))
+      for (const [, l] of landed) add(l.product.id, l.qty)
       const questions: Record<string, ImportedQuestion> = {}
       for (const r of asking) {
         const d = decisionOf(r)
@@ -208,44 +221,96 @@ export function CountImport({
   const statusLabel = (r: ImportRow) =>
     r.status === 'unit' ? t('หน่วยไม่ตรง') : r.status === 'unknown' ? t('รหัสไม่มีในระบบ') : t('ไม่มีรหัส')
 
+  /** A line placed on a product: a rate that product already knows is offered; otherwise the count is asked. */
+  function mapTo(r: ImportRow, d: Extract<Decision, { kind: 'map' }>, p: Product): Decision {
+    const known = r.fileUnit ? resolveFactor(p, r.fileUnit) : null
+    return { ...d, productId: p.id, ...(known !== null ? { how: 'rate' as const, value: String(known), mode: 'perFile' as const } : { how: 'count' as const, value: '' }) }
+  }
+
   // A plain render function, not a component: a component declared in here would be a new
   // type every render, and React would remount its inputs under the cursor.
   function rateInputs(r: ImportRow, d: Extract<Decision, { kind: 'rate' | 'map' }>, product: Product) {
     const l = landing(r)
     const known = r.fileUnit ? resolveFactor(product, r.fileUnit) : null
+    const unit = product.unitType
+    const ways: { how: Rate['how']; label: string }[] = [
+      { how: 'count', label: t('นับได้กี่ {unit}', { unit }) },
+      ...(r.fileUnit ? [{ how: 'rate' as const, label: t('ใช้อัตราแปลงจาก {file}', { file: r.fileUnit }) }] : []),
+    ]
     return (
-      <div className="flex flex-wrap items-center gap-2">
-        {!r.fileUnit ? (
-          <button type="button" className="rounded-lg border border-line px-2 py-1.5 text-xs hover:bg-sunken" onClick={() => decide(r, { ...d, value: '1', mode: 'perFile' })}>
-            {t('เป็น {unit} อยู่แล้ว', { unit: product.unitType })}
-          </button>
-        ) : (
-          <Select value={d.mode} onChange={(e) => decide(r, { ...d, mode: e.target.value as Mode })} className="!min-h-10 !w-auto">
-            <option value="perFile">{t('1 {file} =', { file: r.fileUnit })}</option>
-            <option value="filePerOne">{t('{file} ต่อ 1 {unit}:', { file: r.fileUnit, unit: product.unitType })}</option>
-          </Select>
+      <div className="space-y-2 rounded-lg bg-sunken/60 p-2">
+        {ways.length > 1 && (
+          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('วิธีใส่ยอด')}>
+            {ways.map((w) => (
+              <button
+                key={w.how}
+                type="button"
+                role="radio"
+                aria-checked={d.how === w.how}
+                onClick={() => decide(r, { ...d, how: w.how })}
+                className={`rounded-lg border px-2.5 py-1 text-xs ${d.how === w.how ? 'border-brand bg-surface font-semibold text-brand' : 'border-line text-ink-soft hover:bg-surface'}`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
         )}
-        <input
-          type="number"
-          min={0}
-          step="any"
-          inputMode="decimal"
-          value={d.value}
-          aria-label={t('อัตราแปลงของ "{name}"', { name: product.name })}
-          onChange={(e) => decide(r, { ...d, value: e.target.value })}
-          className={input}
-        />
-        <span className="text-xs text-ink-soft">{d.mode === 'perFile' ? product.unitType : r.fileUnit}</span>
-        <span className="num min-w-24 text-right text-xs font-semibold text-ink">{l ? `= ${fmtQty(countIn(r.qty, l.rate))} ${product.unitType}` : ''}</span>
-        {r.fileUnit && known === null && (
-          <label className="flex items-center gap-1 text-xs text-ink-soft">
-            <input type="checkbox" checked={d.remember} onChange={(e) => decide(r, { ...d, remember: e.target.checked })} />
-            {t('จำไว้ที่สินค้า')}
-          </label>
+        {d.how === 'count' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-ink-soft">{t('ยอดนับ')}</span>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              value={d.count}
+              aria-label={t('ยอดนับของ "{name}" เป็น {unit}', { name: product.name, unit })}
+              onChange={(e) => decide(r, { ...d, count: e.target.value })}
+              className={input}
+            />
+            <span className="text-xs font-semibold text-ink">{unit}</span>
+            {!r.fileUnit && (
+              <button type="button" className="rounded-lg border border-line px-2 py-1.5 text-xs hover:bg-surface" onClick={() => decide(r, { ...d, count: String(r.qty) })}>
+                {t('ใช้ {qty} ตามไฟล์ (ไฟล์นับเป็น {unit} อยู่แล้ว)', { qty: fmtQty(r.qty), unit })}
+              </button>
+            )}
+            <span className="text-xs text-ink-faint">
+              {t('ในไฟล์')} {fmtQty(r.qty)} {r.fileUnit || t('(ไม่ระบุหน่วย)')}
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={d.mode} onChange={(e) => decide(r, { ...d, mode: e.target.value as Mode })} className="!min-h-10 !w-auto">
+              <option value="perFile">{t('1 {file} =', { file: r.fileUnit })}</option>
+              <option value="filePerOne">{t('{file} ต่อ 1 {unit}:', { file: r.fileUnit, unit })}</option>
+            </Select>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              value={d.value}
+              aria-label={t('อัตราแปลงของ "{name}"', { name: product.name })}
+              onChange={(e) => decide(r, { ...d, value: e.target.value })}
+              className={input}
+            />
+            <span className="text-xs text-ink-soft">{d.mode === 'perFile' ? unit : r.fileUnit}</span>
+            {/* The arithmetic spelt out, so a rate typed as a count is plain to see. */}
+            <span className="num text-xs font-semibold text-ink">
+              {l ? `${fmtQty(r.qty)} ${r.fileUnit} → ${fmtQty(l.qty)} ${unit}` : ''}
+            </span>
+            {known === null && (
+              <label className="flex items-center gap-1 text-xs text-ink-soft">
+                <input type="checkbox" checked={d.remember} onChange={(e) => decide(r, { ...d, remember: e.target.checked })} />
+                {t('จำไว้ที่สินค้า')}
+              </label>
+            )}
+          </div>
         )}
       </div>
     )
   }
+
 
   return (
     <Modal open={open} onClose={() => !busy && onClose()} title={t('นำเข้ายอดนับจาก Excel')} wide>
@@ -306,7 +371,7 @@ export function CountImport({
                     const choices: { k: Decision['kind']; label: string }[] =
                       r.status === 'unit'
                         ? [
-                            { k: 'rate', label: t('ใส่อัตรา') },
+                            { k: 'rate', label: t('ใส่ยอดนับ') },
                             { k: 'question', label: t('ถามไว้ก่อน') },
                             { k: 'exclude', label: t('ไม่นำเข้า') },
                           ]
@@ -323,7 +388,7 @@ export function CountImport({
                           : k === 'exclude'
                             ? { kind: 'exclude' }
                             : k === 'map'
-                              ? { kind: 'map', productId: d?.kind === 'map' ? d.productId : '', value: '', mode: 'perFile', remember: true }
+                              ? { kind: 'map', productId: d?.kind === 'map' ? d.productId : '', how: 'count', count: '', value: '', mode: 'perFile', remember: true }
                               : (initial(r) as Decision),
                       )
                     return (
@@ -363,7 +428,7 @@ export function CountImport({
                                 defaultValue={mapped ? `${mapped.sku} · ${mapped.name}` : ''}
                                 onChange={(e) => {
                                   const p = bySkuLabel.get(e.target.value)
-                                  if (p) decide(r, { ...d, productId: p.id, value: resolveFactor(p, r.fileUnit || p.unitType)?.toString() ?? '' })
+                                  if (p) decide(r, mapTo(r, d, p))
                                 }}
                                 className="min-h-10 min-w-0 flex-1 rounded-lg border border-line-strong px-3 outline-none focus-visible:border-brand"
                               />
@@ -371,7 +436,7 @@ export function CountImport({
                                 <button
                                   key={p.id}
                                   type="button"
-                                  onClick={() => decide(r, { ...d, productId: p.id, value: resolveFactor(p, r.fileUnit || p.unitType)?.toString() ?? '' })}
+                                  onClick={() => decide(r, mapTo(r, d, p))}
                                   className={`rounded-lg border px-2 py-1 text-xs ${d.productId === p.id ? 'border-brand bg-brand-soft text-brand' : 'border-line hover:bg-sunken'}`}
                                 >
                                   {t('ใช่ {name}?', { name: p.name })}

@@ -131,3 +131,20 @@ export function rateOf(answer: { value: number; mode: 'perFile' | 'filePerOne' }
 export function countIn(qty: number, rate: number): number {
   return round3(qty * rate)
 }
+
+/**
+ * How a line whose unit differs was answered. Most often it is simply the count, in the
+ * product's own unit — "13 KG in the file, that is 2 EA" — and a rate is the other way in,
+ * for a unit worth remembering. The count came first after the owner typed his count into
+ * the rate box, twice (30 Sep 2026: 2 KG turned into 4, and 13 KG of Parma into 169 EA).
+ */
+export type CountAnswer =
+  | { how: 'count'; count: number }
+  | { how: 'rate'; value: number; mode: 'perFile' | 'filePerOne' }
+
+/** The count a line lands with, in the product's own unit; null while the answer is incomplete. */
+export function answeredQty(fileQty: number, answer: CountAnswer): number | null {
+  if (answer.how === 'count') return Number.isFinite(answer.count) && answer.count >= 0 ? round3(answer.count) : null
+  const rate = rateOf(answer)
+  return rate === null ? null : countIn(fileQty, rate)
+}
