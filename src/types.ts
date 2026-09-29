@@ -1468,6 +1468,27 @@ export interface MonthlyCountLine {
   at: number
 }
 
+/**
+ * A row of an imported file somebody could not place yet — no code, a code the catalogue
+ * does not have, a unit nobody could vouch for — kept on the sheet with what it is thought
+ * to be (owner, 29 Sep 2026: "ห้ามข้าม ต้องเอามาให้ชั้นตัดสินใจทั้งหมด"). A sheet with an
+ * open question cannot be confirmed.
+ */
+export interface MonthlyCountQuestion {
+  /** Where it came from: sheet, column and counting date, as written in the file. */
+  source: string
+  excelRow: number
+  code: string
+  name: string
+  packSize: string
+  qty: number
+  fileUnit: string
+  note: string
+  by: string
+  byName: string
+  at: number
+}
+
 /** The comparison as it stood when the count was confirmed. */
 export interface MonthlyCountResult {
   systemQty: number
@@ -1487,6 +1508,8 @@ export interface MonthlyCount {
   status: MonthlyCountStatus
   /** productId → the count. A product not in here was not counted and is not adjusted. */
   lines: Record<string, MonthlyCountLine>
+  /** Imported rows awaiting a decision, keyed by source and row. Must be empty to confirm. */
+  questions?: Record<string, MonthlyCountQuestion>
   results?: Record<string, MonthlyCountResult>
   /** Products already adjusted while the difference is filed in parts. */
   postedIds?: string[]

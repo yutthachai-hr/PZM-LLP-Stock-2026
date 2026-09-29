@@ -21,7 +21,8 @@ import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
 import type { MonthlyCount, MonthlyCountResult, StockMovement } from '../../types'
-import { CountImport } from './CountImport'
+import { CountImport, type ImportedQuestion } from './CountImport'
+import { QuestionsCard } from './QuestionsCard'
 import { MonthLabel, StatusBadge } from './labels'
 
 type Edits = Record<string, number | null>
@@ -174,6 +175,21 @@ export function MonthlyCountSheet() {
     },
     [sheet],
   )
+
+  const openQuestions = Object.keys(sheet?.questions ?? {}).length
+
+  /** Questions are notes, not counts: they go to the sheet straight away, for everyone. */
+  async function saveQuestions(questions: Record<string, ImportedQuestion | null>) {
+    if (!user) return
+    setBusy(true)
+    try {
+      setSheet(await saveCountLines({ id, changes: {}, questions, actor: { id: user.id, name: user.name } }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function save() {
     if (!user || !pending) return
@@ -422,6 +438,19 @@ export function MonthlyCountSheet() {
         </StatRow>
       )}
 
+      {Object.keys(sheet.questions ?? {}).length > 0 && (
+        <QuestionsCard
+          questions={sheet.questions ?? {}}
+          products={products}
+          editable={counting}
+          busy={busy}
+          onAnswer={async (key, answer) => {
+            if (answer) setCount(answer.productId, answer.qty)
+            await saveQuestions({ [key]: null })
+          }}
+        />
+      )}
+
       <SectionCard icon="package" title={t('รายการนับ')} count={shown.length} flush>
         <div className="flex flex-wrap items-center gap-3 px-4 pb-3 pt-1 md:px-5">
           <ChipRow
@@ -449,11 +478,11 @@ export function MonthlyCountSheet() {
       {isManager && sheet.status !== 'posted' && (
         <div className="grid gap-2 md:hidden">
           {counting && (
-            <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted}>
+            <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
               {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
             </Button>
           )}
-          <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !summary?.counted}>
+          <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
             <Icon name="checkCircle" size={16} />
             {t('ยืนยันและปรับสต๊อก')}
           </Button>
@@ -470,17 +499,20 @@ export function MonthlyCountSheet() {
           {isManager && sheet.status !== 'posted' && (
             <span className="hidden gap-2 md:flex">
               {counting && (
-                <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted}>
+                <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
                   {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
                 </Button>
               )}
-              <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !summary?.counted}>
+              <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
                 <Icon name="checkCircle" size={16} />
                 {t('ยืนยันและปรับสต๊อก')}
               </Button>
             </span>
           )}
         </SubmitBar>
+      )}
+      {openQuestions > 0 && counting && (
+        <p className="text-xs text-warn">{t('ยังมีคำถามจากไฟล์ {n} รายการ — ตอบให้ครบก่อนยืนยันใบนับ', { n: openQuestions })}</p>
       )}
       {isManager && !monthOver && sheet.status !== 'posted' && (
         <p className="text-xs text-ink-faint">{t('ยืนยันได้ตั้งแต่วันสุดท้ายของเดือน ({date})', { date: dayLabel })}</p>
@@ -529,8 +561,9 @@ export function MonthlyCountSheet() {
           month={sheet.month}
           products={products}
           existing={Object.fromEntries(Object.entries(lines).map(([pid, l]) => [pid, l.qty]))}
-          onApply={(counts) => {
+          onApply={async ({ counts, questions }) => {
             for (const [pid, qty] of Object.entries(counts)) setCount(pid, qty)
+            if (Object.keys(questions).length) await saveQuestions(questions)
           }}
         />
       )}

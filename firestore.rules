@@ -1480,13 +1480,14 @@ service cloud.firestore {
     function validMonthlyCount(docId, d) {
       return d.keys().hasAll(['id', 'locationId', 'month', 'countDate', 'status', 'lines',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
-        && d.keys().hasOnly(['id', 'locationId', 'month', 'countDate', 'status', 'lines',
+        && d.keys().hasOnly(['id', 'locationId', 'month', 'countDate', 'status', 'lines', 'questions',
           'results', 'postedIds', 'adjDocNos', 'note', 'createdBy', 'createdByName', 'createdAt',
           'updatedAt', 'updatedBy', 'updatedByName', 'confirmedBy', 'confirmedByName', 'confirmedAt'])
         && d.id == docId && docId == d.locationId + '__' + d.month
         && text(d.locationId, 200) && d.month.matches('^[0-9]{4}-[0-9]{2}$') && epochMs(d.countDate)
         && d.status in ['counting', 'recorded', 'posting', 'posted']
         && d.lines is map && d.lines.size() <= 3000
+        && (!('questions' in d) || (d.questions is map && d.questions.size() <= 3000))
         && (!('results' in d) || (d.results is map && d.results.size() <= 3000))
         && (!('postedIds' in d) || (d.postedIds is list && d.postedIds.size() <= 3000))
         && (!('adjDocNos' in d) || (d.adjDocNos is list && d.adjDocNos.size() <= 50))
@@ -1499,7 +1500,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return validMonthlyCount(docId, d) && d.status == 'counting' && d.lines.size() == 0
         && d.createdBy == request.auth.uid
-        && !('results' in d) && !('postedIds' in d) && !('adjDocNos' in d) && !('confirmedBy' in d);
+        && !('questions' in d) && !('results' in d) && !('postedIds' in d) && !('adjDocNos' in d) && !('confirmedBy' in d);
     }
 
     function monthlyCountUpdate(docId) {
@@ -1510,11 +1511,13 @@ service cloud.firestore {
         && !e.hasAny(['id', 'locationId', 'month', 'countDate', 'createdBy', 'createdByName', 'createdAt'])
         && (
           (o.status == 'counting' && d.status == 'counting'
-            && e.hasOnly(['lines', 'updatedAt', 'updatedBy', 'updatedByName'])
+            && e.hasOnly(['lines', 'questions', 'updatedAt', 'updatedBy', 'updatedByName'])
             && d.updatedBy == request.auth.uid)
           || (o.status in ['counting', 'recorded', 'posting'] && d.status in ['recorded', 'posting', 'posted']
             && !(o.status != 'counting' && d.status == 'recorded')
-            && !e.hasAny(['lines'])
+            && !e.hasAny(['lines', 'questions'])
+            // Every row of an imported file decided first (owner, 29 Sep 2026).
+            && (!('questions' in d) || d.questions.size() == 0)
             && roleIsManager() && d.confirmedBy == request.auth.uid && epochMs(d.confirmedAt))
         );
     }

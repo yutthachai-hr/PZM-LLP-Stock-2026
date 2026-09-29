@@ -7,28 +7,37 @@ import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { countIn, guessHeader, importColumns, importRows, rateOf, type ImportRow } from '../../lib/countImport'
 import { fmtQty } from '../../lib/format'
+import { resolveFactor } from '../../lib/inventoryRules/uom'
 import { monthOf } from '../../lib/monthlyCount'
+import { buildMatchIndex, matchProduct } from '../../lib/productMatch'
 import { parseStockWorkbook, type ParsedSheet } from '../../lib/stockSheet'
+import { sameUnit } from '../../lib/units'
 import { addConversion } from '../../services/products'
-import type { Product } from '../../types'
+import type { MonthlyCountQuestion, Product } from '../../types'
 
 type Mode = 'perFile' | 'filePerOne'
-interface Answer {
+interface Rate {
   value: string
   mode: Mode
   remember: boolean
-  skip: boolean
 }
+type Decision =
+  | ({ kind: 'rate' } & Rate)
+  | ({ kind: 'map'; productId: string } & Rate)
+  | { kind: 'question'; note: string }
+  | { kind: 'exclude' }
+
+export type ImportedQuestion = Omit<MonthlyCountQuestion, 'by' | 'byName' | 'at'>
 
 /**
  * Fill a monthly count sheet from the company's closing-stock workbook (owner, 29 Sep 2026).
  *
- * One column of the file — one location on one counting date — goes into this sheet's
- * figures as counts to check, never as stock moved; they land in the sheet's draft and are
- * saved with its own button. Every line counted in a unit that is not the product's own is
- * asked about before anything goes in (the owner's rule), and the answer can be kept on the
- * product so next month's file does not ask again. Unknown codes and rows without a code
- * are shown and left out; a product counted twice in the column waits for a choice.
+ * One column of the file — one location on one counting date — goes into the sheet's
+ * figures as counts to check, never as stock moved. The owner's rule: nothing in the file
+ * is passed over. A line in the product's own unit goes in as it is; every other line waits
+ * for a decision — a rate, the product it really is, a question kept on the sheet for later
+ * ("what is this?"), or an explicit "leave it out". A sheet with an open question cannot be
+ * confirmed. A rate can be kept on the product so next month's file does not ask again.
  */
 export function CountImport({
   open,
@@ -46,7 +55,7 @@ export function CountImport({
   products: Product[]
   /** Figures already on the sheet or in its draft, to say what an import would replace. */
   existing: Record<string, number>
-  onApply: (counts: Record<string, number>) => void
+  onApply: (result: { counts: Record<string, number>; questions: Record<string, ImportedQuestion> }) => Promise<void> | void
 }) {
   const t = useT()
   const toast = useToast()
@@ -55,13 +64,16 @@ export function CountImport({
   const [fileName, setFileName] = useState('')
   const [sheetName, setSheetName] = useState('')
   const [colKey, setColKey] = useState('')
-  const [answers, setAnswers] = useState<Record<string, Answer>>({})
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({})
   const [dupPick, setDupPick] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
 
   const sheet = sheets.find((s) => s.name === sheetName) ?? null
   const columns = useMemo(() => (sheet ? importColumns(sheet) : []), [sheet])
+  const active = useMemo(() => products.filter((p) => p.active !== false), [products])
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
+  const bySkuLabel = useMemo(() => new Map(active.map((p) => [`${p.sku} · ${p.name}`, p])), [active])
+  const index = useMemo(() => buildMatchIndex(products, []), [products])
 
   async function pickFile(file: File | null) {
     if (!file) return
@@ -73,7 +85,6 @@ export function CountImport({
       const key = brand ? brandDef(brand).sheetKey : ''
       const s = parsed.find((x) => x.name.trim().toUpperCase() === key) ?? parsed[0]
       setSheetName(s.name)
-      // The counting date that closes this sheet's month, at the heading that names this location.
       const cols = importColumns(s)
       const inMonth = cols.filter((c) => {
         const d = s.snapshots[c.snapshot].date
@@ -83,7 +94,7 @@ export function CountImport({
       const header = guessHeader([...new Set(pool.map((c) => c.header))], locationName)
       const guess = pool.filter((c) => !header || c.header === header).pop() ?? pool[pool.length - 1]
       setColKey(guess ? `${guess.snapshot}:${guess.column}` : '')
-      setAnswers({})
+      setDecisions({})
       setDupPick({})
     } catch (e) {
       toast.error(errText(e, t))
@@ -91,6 +102,8 @@ export function CountImport({
   }
 
   const at = colKey ? { snapshot: Number(colKey.split(':')[0]), column: Number(colKey.split(':')[1]) } : null
+  const column = at ? columns.find((c) => c.snapshot === at.snapshot && c.column === at.column) : undefined
+  const source = sheet && column ? `${sheet.name} · ${column.header} · ${column.label}` : ''
   const rows = useMemo(() => (sheet && at ? importRows(sheet, at, products) : []), [sheet, colKey, products]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A duplicate, once a line is chosen, is judged like any other line.
@@ -107,57 +120,82 @@ export function CountImport({
             ? { excelRow: lines[0].excelRow, qty: lines.reduce((s, l) => s + l.qty, 0), fileUnit: lines[0].fileUnit }
             : lines.find((l) => String(l.excelRow) === pick)
         if (!chosen || !p) return []
-        const same = !!chosen.fileUnit && chosen.fileUnit.trim().toLowerCase() === p.unitType.trim().toLowerCase()
-        return [{ ...r, ...chosen, status: same ? ('ready' as const) : ('unit' as const) }]
+        const same = !!chosen.fileUnit && sameUnit(chosen.fileUnit, p.unitType)
+        const known = !same && chosen.fileUnit ? resolveFactor(p, chosen.fileUnit) : null
+        return [{ ...r, ...chosen, status: same ? ('ready' as const) : ('unit' as const), ...(known !== null ? { knownRate: known } : {}) }]
       }),
     [rows, dupPick, byId],
   )
 
   const ready = resolved.filter((r) => r.status === 'ready')
-  const unit = resolved.filter((r) => r.status === 'unit')
+  const asking = resolved.filter((r) => r.status === 'unit' || r.status === 'unknown' || r.status === 'nosku')
   const dups = rows.filter((r) => r.status === 'duplicate')
-  const unknown = rows.filter((r) => r.status === 'unknown')
-  const nosku = rows.filter((r) => r.status === 'nosku')
+  const key = (r: ImportRow) => String(r.excelRow)
 
-  const answerFor = (r: ImportRow): Answer =>
-    answers[r.productId!] ?? {
-      value: r.knownRate !== undefined ? String(r.knownRate) : '',
-      mode: 'perFile',
-      remember: r.knownRate === undefined && !!r.fileUnit,
-      skip: false,
-    }
-  const setAnswer = (r: ImportRow, patch: Partial<Answer>) =>
-    setAnswers((a) => ({ ...a, [r.productId!]: { ...answerFor(r), ...patch } }))
-  const rateFor = (r: ImportRow) => {
-    const a = answerFor(r)
-    return a.skip ? null : rateOf({ value: Number(a.value), mode: a.mode })
+  const initial = (r: ImportRow): Decision | undefined =>
+    r.status === 'unit'
+      ? { kind: 'rate', value: r.knownRate !== undefined ? String(r.knownRate) : '', mode: 'perFile', remember: r.knownRate === undefined && !!r.fileUnit }
+      : undefined
+  const decisionOf = (r: ImportRow) => decisions[key(r)] ?? initial(r)
+  const decide = (r: ImportRow, d: Decision) => setDecisions((all) => ({ ...all, [key(r)]: d }))
+
+  /** The product a line lands on, and the rate from its file unit to that product's own unit. */
+  function landing(r: ImportRow): { product: Product; rate: number } | null {
+    const d = decisionOf(r)
+    if (!d || d.kind === 'question' || d.kind === 'exclude') return null
+    const product = byId.get(d.kind === 'map' ? d.productId : r.productId!)
+    if (!product) return null
+    if (d.kind === 'map' && r.fileUnit && sameUnit(r.fileUnit, product.unitType)) return { product, rate: 1 }
+    const rate = rateOf({ value: Number(d.value), mode: d.mode })
+    return rate === null ? null : { product, rate }
   }
-  const open_ = unit.filter((r) => !answerFor(r).skip && rateFor(r) === null)
-  const undecided = dups.filter((r) => !dupPick[r.productId ?? ''])
-  const going = [...ready, ...unit.filter((r) => rateFor(r) !== null)]
-  const replacing = going.filter((r) => existing[r.productId!] !== undefined).length
+  const decided = (r: ImportRow) => {
+    const d = decisionOf(r)
+    return !!d && (d.kind === 'question' || d.kind === 'exclude' || landing(r) !== null)
+  }
+  const openRows = asking.filter((r) => !decided(r))
+  const undecidedDups = dups.filter((r) => !dupPick[r.productId ?? ''])
+  const landed = asking.map((r) => [r, landing(r)] as const).filter((x): x is readonly [ImportRow, { product: Product; rate: number }] => x[1] !== null)
+  const goingIds = new Set([...ready.map((r) => r.productId!), ...landed.map(([, l]) => l.product.id)])
+  const questionsCount = asking.filter((r) => decisionOf(r)?.kind === 'question').length
+  const replacing = [...goingIds].filter((id) => existing[id] !== undefined).length
 
   async function apply() {
     setBusy(true)
     try {
-      // Rates kept on the product first, so a refusal stops before the sheet is filled.
-      for (const r of unit) {
-        const a = answerFor(r)
-        const rate = rateFor(r)
-        if (rate === null || !a.remember || !r.fileUnit || r.knownRate !== undefined) continue
-        const p = byId.get(r.productId!)
-        if (!p) continue
-        const v = Number(a.value)
-        await addConversion(p, r.fileUnit, a.mode === 'perFile' ? v : 1, a.mode === 'perFile' ? {} : { per: v })
+      // Rates kept on products first, so a refusal stops before the sheet is filled.
+      for (const [r, l] of landed) {
+        const d = decisionOf(r)
+        if (!d || (d.kind !== 'rate' && d.kind !== 'map') || !d.remember || !r.fileUnit) continue
+        if (sameUnit(r.fileUnit, l.product.unitType) || resolveFactor(l.product, r.fileUnit) !== null) continue
+        const v = Number(d.value)
+        await addConversion(l.product, r.fileUnit, d.mode === 'perFile' ? v : 1, d.mode === 'perFile' ? {} : { per: v })
       }
+      // Two lines of the file landing on one product (a code-less row placed on a product that
+      // also had its own line) are two piles counted: they add up.
       const counts: Record<string, number> = {}
-      for (const r of ready) counts[r.productId!] = r.qty
-      for (const r of unit) {
-        const rate = rateFor(r)
-        if (rate !== null) counts[r.productId!] = countIn(r.qty, rate)
+      const add = (id: string, qty: number) => (counts[id] = Math.round(((counts[id] ?? 0) + qty) * 1000) / 1000)
+      for (const r of ready) add(r.productId!, r.qty)
+      for (const [r, l] of landed) add(l.product.id, countIn(r.qty, l.rate))
+      const questions: Record<string, ImportedQuestion> = {}
+      for (const r of asking) {
+        const d = decisionOf(r)
+        if (d?.kind !== 'question') continue
+        questions[`${sheet?.name ?? ''}|${column?.header ?? ''}|${column?.label ?? ''}|${r.excelRow}`] = {
+          source,
+          excelRow: r.excelRow,
+          code: r.code,
+          name: r.name,
+          packSize: r.packSize,
+          qty: r.qty,
+          fileUnit: r.fileUnit,
+          note: d.note.trim(),
+        }
       }
-      onApply(counts)
-      toast.success(t('เติมยอดนับ {n} รายการลงใบนับแล้ว — ตรวจแล้วกดบันทึกยอดนับ', { n: Object.keys(counts).length }))
+      await onApply({ counts, questions })
+      toast.success(
+        t('เติมยอดนับ {n} รายการลงใบนับ และตั้งคำถาม {q} รายการ — ตรวจแล้วกดบันทึกยอดนับ', { n: Object.keys(counts).length, q: Object.keys(questions).length }),
+      )
       onClose()
     } catch (e) {
       toast.error(errText(e, t))
@@ -167,12 +205,53 @@ export function CountImport({
   }
 
   const input = 'num min-h-10 w-24 rounded-lg border border-line-strong px-2 text-right outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/25'
+  const statusLabel = (r: ImportRow) =>
+    r.status === 'unit' ? t('หน่วยไม่ตรง') : r.status === 'unknown' ? t('รหัสไม่มีในระบบ') : t('ไม่มีรหัส')
+
+  // A plain render function, not a component: a component declared in here would be a new
+  // type every render, and React would remount its inputs under the cursor.
+  function rateInputs(r: ImportRow, d: Extract<Decision, { kind: 'rate' | 'map' }>, product: Product) {
+    const l = landing(r)
+    const known = r.fileUnit ? resolveFactor(product, r.fileUnit) : null
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {!r.fileUnit ? (
+          <button type="button" className="rounded-lg border border-line px-2 py-1.5 text-xs hover:bg-sunken" onClick={() => decide(r, { ...d, value: '1', mode: 'perFile' })}>
+            {t('เป็น {unit} อยู่แล้ว', { unit: product.unitType })}
+          </button>
+        ) : (
+          <Select value={d.mode} onChange={(e) => decide(r, { ...d, mode: e.target.value as Mode })} className="!min-h-10 !w-auto">
+            <option value="perFile">{t('1 {file} =', { file: r.fileUnit })}</option>
+            <option value="filePerOne">{t('{file} ต่อ 1 {unit}:', { file: r.fileUnit, unit: product.unitType })}</option>
+          </Select>
+        )}
+        <input
+          type="number"
+          min={0}
+          step="any"
+          inputMode="decimal"
+          value={d.value}
+          aria-label={t('อัตราแปลงของ "{name}"', { name: product.name })}
+          onChange={(e) => decide(r, { ...d, value: e.target.value })}
+          className={input}
+        />
+        <span className="text-xs text-ink-soft">{d.mode === 'perFile' ? product.unitType : r.fileUnit}</span>
+        <span className="num min-w-24 text-right text-xs font-semibold text-ink">{l ? `= ${fmtQty(countIn(r.qty, l.rate))} ${product.unitType}` : ''}</span>
+        {r.fileUnit && known === null && (
+          <label className="flex items-center gap-1 text-xs text-ink-soft">
+            <input type="checkbox" checked={d.remember} onChange={(e) => decide(r, { ...d, remember: e.target.checked })} />
+            {t('จำไว้ที่สินค้า')}
+          </label>
+        )}
+      </div>
+    )
+  }
 
   return (
     <Modal open={open} onClose={() => !busy && onClose()} title={t('นำเข้ายอดนับจาก Excel')} wide>
       <div className="space-y-4 text-sm">
         <AlertBanner tone="info" icon="info">
-          {t('ยอดจากไฟล์จะเติมลงใบนับนี้เท่านั้น ยังไม่ปรับสต๊อก — รายการที่หน่วยไม่ตรงกับระบบต้องยืนยันอัตราทีละรายการก่อน')}
+          {t('ยอดจากไฟล์เติมลงใบนับนี้เท่านั้น ยังไม่ปรับสต๊อก — ทุกแถวในไฟล์ต้องมีคำตอบ: หน่วยไม่ตรงใส่อัตรา, ไม่มีรหัสหรือรหัสไม่มีในระบบให้จับคู่สินค้า, ถ้ายังไม่แน่ใจตั้งเป็นคำถามไว้ก่อน (ยืนยันใบนับไม่ได้จนกว่าจะตอบ)')}
         </AlertBanner>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -209,75 +288,121 @@ export function CountImport({
             <div className="flex flex-wrap gap-2 text-xs">
               <span className="rounded-full bg-in-soft px-3 py-1 text-in">{t('หน่วยตรง {n}', { n: ready.length })}</span>
               <span className="rounded-full bg-warn-soft px-3 py-1 text-warn">
-                {t('ต้องยืนยันหน่วย {n} (เหลือ {left})', { n: unit.length, left: open_.length })}
+                {t('ต้องตัดสินใจ {n} (เหลือ {left})', { n: asking.length + dups.length, left: openRows.length + undecidedDups.length })}
               </span>
-              {dups.length > 0 && <span className="rounded-full bg-warn-soft px-3 py-1 text-warn">{t('ซ้ำ {n}', { n: dups.length })}</span>}
-              <span className="rounded-full bg-sunken px-3 py-1 text-ink-soft">{t('ไม่พบรหัสในระบบ {n}', { n: unknown.length })}</span>
-              <span className="rounded-full bg-sunken px-3 py-1 text-ink-soft">{t('ไม่มีรหัส {n}', { n: nosku.length })}</span>
+              {questionsCount > 0 && <span className="rounded-full bg-sunken px-3 py-1 text-ink-soft">{t('ตั้งเป็นคำถาม {n}', { n: questionsCount })}</span>}
             </div>
 
-            {unit.length > 0 && (
+            {asking.length > 0 && (
               <section>
-                <h3 className="mb-2 font-semibold text-ink">{t('ยืนยันอัตราแปลงหน่วย')}</h3>
-                <div className="max-h-[45vh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
-                  {unit.map((r) => {
-                    const a = answerFor(r)
-                    const rate = rateFor(r)
-                    const p = byId.get(r.productId!)
-                    const fileU = r.fileUnit || t('(ไม่ระบุหน่วย)')
+                <h3 className="mb-2 font-semibold text-ink">{t('รายการที่ต้องตัดสินใจ')}</h3>
+                <div className="max-h-[48vh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                  {asking.map((r) => {
+                    const d = decisionOf(r)
+                    const own = r.productId ? byId.get(r.productId) : undefined
+                    const mapped = d?.kind === 'map' ? byId.get(d.productId) : undefined
+                    const hint = r.status !== 'unit' ? matchProduct(r.name, index) : null
+                    const suggestions = hint ? (hint.product ? [hint.product] : hint.candidates.map((c) => c.product)).slice(0, 3) : []
+                    const choices: { k: Decision['kind']; label: string }[] =
+                      r.status === 'unit'
+                        ? [
+                            { k: 'rate', label: t('ใส่อัตรา') },
+                            { k: 'question', label: t('ถามไว้ก่อน') },
+                            { k: 'exclude', label: t('ไม่นำเข้า') },
+                          ]
+                        : [
+                            { k: 'map', label: t('จับคู่สินค้า') },
+                            { k: 'question', label: t('ถามไว้ก่อน') },
+                            { k: 'exclude', label: t('ไม่นำเข้า') },
+                          ]
+                    const pickKind = (k: Decision['kind']) =>
+                      decide(
+                        r,
+                        k === 'question'
+                          ? { kind: 'question', note: d?.kind === 'question' ? d.note : '' }
+                          : k === 'exclude'
+                            ? { kind: 'exclude' }
+                            : k === 'map'
+                              ? { kind: 'map', productId: d?.kind === 'map' ? d.productId : '', value: '', mode: 'perFile', remember: true }
+                              : (initial(r) as Decision),
+                      )
                     return (
-                      <div key={r.productId} className={`grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center ${a.skip ? 'opacity-50' : ''}`}>
-                        <div className="min-w-0">
-                          <div className="font-medium text-ink">{p?.name ?? r.name}</div>
-                          <div className="text-xs text-ink-faint">
-                            {r.code} · {t('แถว {n}', { n: r.excelRow })}
+                      <div key={key(r)} className={`space-y-2 px-3 py-3 ${decided(r) ? '' : 'bg-warn-soft/40'}`}>
+                        <div className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="font-medium text-ink">{own?.name ?? r.name}</span>
+                          <span className="rounded bg-sunken px-1.5 text-[11px] text-ink-soft">{statusLabel(r)}</span>
+                          <span className="text-xs text-ink-faint">
+                            {r.code || '—'} · {t('แถว {n}', { n: r.excelRow })}
                             {r.packSize && ` · ${t('ขนาดบรรจุ {size}', { size: r.packSize })}`} · {t('ในไฟล์')}{' '}
                             <b className="text-ink">
-                              {fmtQty(r.qty)} {fileU}
+                              {fmtQty(r.qty)} {r.fileUnit || t('(ไม่ระบุหน่วย)')}
                             </b>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {!r.fileUnit ? (
-                            <button type="button" className="rounded-lg border border-line px-2 py-1.5 text-xs hover:bg-sunken" onClick={() => setAnswer(r, { value: '1', mode: 'perFile', skip: false })}>
-                              {t('เป็น {unit} อยู่แล้ว', { unit: r.unitType ?? '' })}
-                            </button>
-                          ) : (
-                            <Select value={a.mode} onChange={(e) => setAnswer(r, { mode: e.target.value as Mode })} className="!min-h-10 !w-auto" disabled={a.skip}>
-                              <option value="perFile">{t('1 {file} =', { file: r.fileUnit })}</option>
-                              <option value="filePerOne">{t('{file} ต่อ 1 {unit}:', { file: r.fileUnit, unit: r.unitType ?? '' })}</option>
-                            </Select>
-                          )}
-                          <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            inputMode="decimal"
-                            value={a.value}
-                            disabled={a.skip}
-                            aria-label={t('อัตราแปลงของ "{name}"', { name: p?.name ?? r.name })}
-                            onChange={(e) => setAnswer(r, { value: e.target.value })}
-                            className={input}
-                          />
-                          <span className="text-xs text-ink-soft">{a.mode === 'perFile' ? r.unitType : r.fileUnit}</span>
-                          <span className="num min-w-24 text-right text-xs font-semibold text-ink">
-                            {rate === null ? '' : `= ${fmtQty(countIn(r.qty, rate))} ${r.unitType}`}
                           </span>
-                          {r.fileUnit && r.knownRate === undefined && (
-                            <label className="flex items-center gap-1 text-xs text-ink-soft">
-                              <input type="checkbox" checked={a.remember} disabled={a.skip} onChange={(e) => setAnswer(r, { remember: e.target.checked })} />
-                              {t('จำไว้ที่สินค้า')}
-                            </label>
-                          )}
-                          <label className="flex items-center gap-1 text-xs text-ink-soft">
-                            <input type="checkbox" checked={a.skip} onChange={(e) => setAnswer(r, { skip: e.target.checked })} />
-                            {t('ข้าม')}
-                          </label>
                         </div>
+                        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('การตัดสินใจ')}>
+                          {choices.map((c) => (
+                            <button
+                              key={c.k}
+                              type="button"
+                              role="radio"
+                              aria-checked={d?.kind === c.k}
+                              onClick={() => pickKind(c.k)}
+                              className={`rounded-full border px-3 py-1 text-xs ${d?.kind === c.k ? 'border-brand bg-brand-soft font-semibold text-brand' : 'border-line text-ink-soft hover:bg-sunken'}`}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                        {d?.kind === 'rate' && own && rateInputs(r, d, own)}
+                        {d?.kind === 'map' && (
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                list="count-import-products"
+                                placeholder={t('พิมพ์ค้นหารหัสหรือชื่อสินค้า')}
+                                defaultValue={mapped ? `${mapped.sku} · ${mapped.name}` : ''}
+                                onChange={(e) => {
+                                  const p = bySkuLabel.get(e.target.value)
+                                  if (p) decide(r, { ...d, productId: p.id, value: resolveFactor(p, r.fileUnit || p.unitType)?.toString() ?? '' })
+                                }}
+                                className="min-h-10 min-w-0 flex-1 rounded-lg border border-line-strong px-3 outline-none focus-visible:border-brand"
+                              />
+                              {suggestions.map((p) => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => decide(r, { ...d, productId: p.id, value: resolveFactor(p, r.fileUnit || p.unitType)?.toString() ?? '' })}
+                                  className={`rounded-lg border px-2 py-1 text-xs ${d.productId === p.id ? 'border-brand bg-brand-soft text-brand' : 'border-line hover:bg-sunken'}`}
+                                >
+                                  {t('ใช่ {name}?', { name: p.name })}
+                                </button>
+                              ))}
+                            </div>
+                            {mapped && (
+                              <div className="text-xs text-ink-soft">
+                                {t('จับคู่กับ')} <b className="text-ink">{mapped.sku} · {mapped.name}</b> ({mapped.unitType})
+                              </div>
+                            )}
+                            {mapped && !(r.fileUnit && sameUnit(r.fileUnit, mapped.unitType)) && rateInputs(r, d, mapped)}
+                          </div>
+                        )}
+                        {d?.kind === 'question' && (
+                          <input
+                            value={d.note}
+                            onChange={(e) => decide(r, { kind: 'question', note: e.target.value })}
+                            placeholder={t('คืออะไร / ต้องถามใคร (ไม่บังคับ)')}
+                            className="min-h-10 w-full rounded-lg border border-line-strong px-3 outline-none focus-visible:border-brand"
+                          />
+                        )}
                       </div>
                     )
                   })}
                 </div>
+                <datalist id="count-import-products">
+                  {active.map((p) => (
+                    <option key={p.id} value={`${p.sku} · ${p.name}`} />
+                  ))}
+                </datalist>
               </section>
             )}
 
@@ -287,7 +412,7 @@ export function CountImport({
                 <div className="divide-y divide-line rounded-xl border border-line">
                   {dups.map((r) => {
                     const lines = r.alsoRows ?? []
-                    const sameUnits = lines.every((l) => l.fileUnit.trim().toLowerCase() === lines[0].fileUnit.trim().toLowerCase())
+                    const sameUnits = lines.every((l) => sameUnit(l.fileUnit, lines[0].fileUnit))
                     return (
                       <div key={r.productId} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
                         <span className="min-w-0 flex-1 font-medium text-ink">
@@ -296,7 +421,7 @@ export function CountImport({
                             ({lines.map((l) => `${t('แถว {n}', { n: l.excelRow })}: ${fmtQty(l.qty)} ${l.fileUnit}`).join(' · ')})
                           </span>
                         </span>
-                        <Select value={dupPick[r.productId!] ?? ''} onChange={(e) => setDupPick((d) => ({ ...d, [r.productId!]: e.target.value }))} className="!w-auto">
+                        <Select value={dupPick[r.productId!] ?? ''} onChange={(e) => setDupPick((x) => ({ ...x, [r.productId!]: e.target.value }))} className="!w-auto">
                           <option value="">{t('— เลือก —')}</option>
                           {sameUnits && <option value="sum">{t('รวมกัน')}</option>}
                           {lines.map((l) => (
@@ -304,7 +429,7 @@ export function CountImport({
                               {t('ใช้แถว {n}', { n: l.excelRow })}
                             </option>
                           ))}
-                          <option value="skip">{t('ข้าม')}</option>
+                          <option value="skip">{t('ไม่นำเข้า')}</option>
                         </Select>
                       </div>
                     )
@@ -313,13 +438,13 @@ export function CountImport({
               </section>
             )}
 
-            {(unknown.length > 0 || nosku.length > 0) && (
+            {ready.length > 0 && (
               <details className="rounded-xl border border-line px-3 py-2">
-                <summary className="cursor-pointer text-ink-soft">{t('ไม่นำเข้า {n} แถว (ไม่พบรหัสในระบบ / ไม่มีรหัส)', { n: unknown.length + nosku.length })}</summary>
+                <summary className="cursor-pointer text-ink-soft">{t('หน่วยตรงกับระบบ {n} รายการ — เติมให้ตามไฟล์', { n: ready.length })}</summary>
                 <ul className="mt-2 space-y-1 text-xs text-ink-soft">
-                  {[...unknown, ...nosku].map((r) => (
-                    <li key={r.excelRow}>
-                      {t('แถว {n}', { n: r.excelRow })} · {r.code || '—'} · {r.name} · {fmtQty(r.qty)} {r.fileUnit}
+                  {ready.map((r) => (
+                    <li key={key(r)}>
+                      {t('แถว {n}', { n: r.excelRow })} · {r.code} · {byId.get(r.productId!)?.name ?? r.name} · {fmtQty(r.qty)} {r.fileUnit}
                     </li>
                   ))}
                 </ul>
@@ -334,12 +459,12 @@ export function CountImport({
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t('ยกเลิก')}
           </Button>
-          <Button onClick={() => void apply()} disabled={busy || !rows.length || open_.length > 0 || undecided.length > 0 || going.length === 0}>
-            {busy ? t('กำลังบันทึก...') : t('เติมลงใบนับ ({n} รายการ)', { n: going.length })}
+          <Button onClick={() => void apply()} disabled={busy || !rows.length || openRows.length > 0 || undecidedDups.length > 0}>
+            {busy ? t('กำลังบันทึก...') : t('เติมลงใบนับ ({n} รายการ)', { n: goingIds.size })}
           </Button>
         </div>
-        {(open_.length > 0 || undecided.length > 0) && rows.length > 0 && (
-          <p className="text-right text-xs text-ink-faint">{t('ยืนยันอัตราหรือกดข้ามให้ครบทุกรายการก่อน')}</p>
+        {(openRows.length > 0 || undecidedDups.length > 0) && rows.length > 0 && (
+          <p className="text-right text-xs text-ink-faint">{t('ตัดสินใจให้ครบทุกแถวก่อน (เหลือ {n})', { n: openRows.length + undecidedDups.length })}</p>
         )}
       </div>
     </Modal>

@@ -2,7 +2,7 @@ import { backend } from '../backend'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { countDayOf, monthlyCountId } from '../lib/monthlyCount'
-import { COL, type MonthlyCount, type MonthlyCountLine, type MonthlyCountResult } from '../types'
+import { COL, type MonthlyCount, type MonthlyCountLine, type MonthlyCountQuestion, type MonthlyCountResult } from '../types'
 import { filing, planAdjust } from './stock'
 
 /**
@@ -65,6 +65,8 @@ export async function openMonthlyCount(params: { locationId: string; month: stri
 export async function saveCountLines(params: {
   id: string
   changes: Record<string, { qty: number; entryUnit?: string; entryQty?: number } | null>
+  /** Imported rows awaiting a decision: added, or answered (null). */
+  questions?: Record<string, Omit<MonthlyCountQuestion, 'by' | 'byName' | 'at'> | null>
   actor: Actor
 }): Promise<MonthlyCount> {
   const { id, changes, actor } = params
@@ -88,8 +90,13 @@ export async function saveCountLines(params: {
         at: now,
       }
     }
-    tx.update(COL.monthlyCounts, id, { lines, updatedAt: now, updatedBy: actor.id, updatedByName: actor.name })
-    return { ...sheet, lines, updatedAt: now, updatedBy: actor.id, updatedByName: actor.name }
+    const questions: Record<string, MonthlyCountQuestion> = { ...(sheet.questions ?? {}) }
+    for (const [key, q] of Object.entries(params.questions ?? {})) {
+      if (q === null) delete questions[key]
+      else questions[key] = { ...q, by: actor.id, byName: actor.name, at: now }
+    }
+    tx.update(COL.monthlyCounts, id, { lines, questions, updatedAt: now, updatedBy: actor.id, updatedByName: actor.name })
+    return { ...sheet, lines, questions, updatedAt: now, updatedBy: actor.id, updatedByName: actor.name }
   })
 }
 
@@ -104,6 +111,7 @@ export async function recordMonthlyCount(params: {
     const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
     if (!sheet) throw new AppError('ไม่พบใบนับนี้')
     if (sheet.status !== 'counting') throw new AppError('ใบนับนี้ยืนยันแล้ว')
+    if (Object.keys(sheet.questions ?? {}).length) throw new AppError('ยังมีคำถามจากไฟล์ที่ยังไม่ได้ตอบ — ตอบให้ครบก่อนยืนยัน')
     const now = Date.now()
     tx.update(COL.monthlyCounts, id, {
       status: 'recorded',
@@ -154,6 +162,7 @@ export async function postMonthlyCount(params: {
       const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
       if (!sheet) throw new AppError('ไม่พบใบนับนี้')
       if (sheet.status === 'posted') throw new AppError('ใบนับนี้ปรับสต๊อกไปแล้ว')
+      if (Object.keys(sheet.questions ?? {}).length) throw new AppError('ยังมีคำถามจากไฟล์ที่ยังไม่ได้ตอบ — ตอบให้ครบก่อนยืนยัน')
       const done = new Set(sheet.postedIds ?? [])
       const todo = part.filter((a) => !done.has(a.productId))
       let filed: string | null = null

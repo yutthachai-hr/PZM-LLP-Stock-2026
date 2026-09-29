@@ -125,6 +125,31 @@ describe('confirming', () => {
   })
 })
 
+describe('questions from an imported file', () => {
+  const q = { r12: { source: 'PZM · SRS.', excelRow: 12, code: '', name: 'Pizza sauce (WIP)', packSize: '', qty: 3, fileUnit: 'KG', note: 'what is this?', by: STAFF, byName: 'x', at: Date.now() } }
+
+  test('anyone counting may add or answer one', async () => {
+    await seed()
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'monthlyCounts', ID), { questions: q, updatedAt: Date.now(), updatedBy: STAFF, updatedByName: 'x' }))
+    await assertSucceeds(updateDoc(doc(as(STAFF), 'monthlyCounts', ID), { questions: {}, updatedAt: Date.now(), updatedBy: STAFF, updatedByName: 'x' }))
+  })
+
+  test('a sheet with an open question cannot be confirmed', async () => {
+    await seed({ questions: q })
+    await assertFails(
+      updateDoc(doc(as(MANAGER), 'monthlyCounts', ID), { status: 'recorded', results, confirmedBy: MANAGER, confirmedByName: 'x', confirmedAt: Date.now(), updatedAt: Date.now() }),
+    )
+    await seed({ questions: {} })
+    await assertSucceeds(
+      updateDoc(doc(as(MANAGER), 'monthlyCounts', ID), { status: 'recorded', results, confirmedBy: MANAGER, confirmedByName: 'x', confirmedAt: Date.now(), updatedAt: Date.now() }),
+    )
+  })
+
+  test('a sheet cannot be started with questions already in it', async () => {
+    await assertFails(setDoc(doc(as(STAFF), 'monthlyCounts', ID), sheet(STAFF, { questions: q })))
+  })
+})
+
 describe('deleting', () => {
   test('an admin may delete a sheet that did not touch the books; never a posted one', async () => {
     await seed()
