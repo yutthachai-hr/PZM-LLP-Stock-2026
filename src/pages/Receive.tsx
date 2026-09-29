@@ -4,7 +4,8 @@ import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { Button, Field, Input, Modal } from '../components/ui'
+import { AlertBanner, Button, Field, Input, Modal } from '../components/ui'
+import { WIP_CATEGORY } from '../seed/wip'
 import { FramePage, PageHero, SectionCard, WithSidePanel, frameCard } from '../components/frame'
 import { SubmitBar } from '../components/keying/SubmitBar'
 import { LineBuilder } from '../components/LineBuilder'
@@ -33,6 +34,8 @@ import { ReceiptDone, ReceiptPanel, ReviewModal, type Exception, type ReceiptFac
 import {
   draftIsEmpty,
   emptyDraft,
+  KITCHEN_SUPPLIER,
+  kitchenProblem,
   manualProblem,
   nextQueued,
   outstanding,
@@ -78,6 +81,8 @@ export function ReceivePage() {
   const toast = useToast()
 
   const warehouses = useMemo(() => locations.filter((l) => l.active !== false), [locations])
+  // What the kitchen makes (seed/wip.ts): the only thing a kitchen receipt can hold.
+  const wipProducts = useMemo(() => products.filter((p) => p.category === WIP_CATEGORY && p.active !== false), [products])
   const defaultWh = warehouses.find((l) => l.type === 'warehouse') ?? warehouses[0]
 
   const [d, setD] = useState<ReceiptDraft>(() => ({ ...emptyDraft(), dateStr: msToDateInput(todayMs()) }))
@@ -143,15 +148,20 @@ export function ReceivePage() {
   const orderMissing = d.mode === 'po' && !!d.poId && orders !== null && !order
   const summary = order ? summarise(order, d.entries) : null
 
-  const supplierName = order ? order.supplierName : d.supplierName.trim()
-  const supplierId = order ? order.supplierId : d.supplierId && d.supplierId !== OTHER_SUPPLIER ? d.supplierId : ''
+  const kitchen = d.mode === 'kitchen'
+  const supplierName = order ? order.supplierName : kitchen ? KITCHEN_SUPPLIER : d.supplierName.trim()
+  const supplierId = order ? order.supplierId : !kitchen && d.supplierId && d.supplierId !== OTHER_SUPPLIER ? d.supplierId : ''
   const toLocationId = order ? order.locationId : d.toLocationId
   const warehouseName = locations.find((l) => l.id === toLocationId)?.name ?? ''
   const date = dateInputToMs(d.dateStr)
   const docDate = dateInputToMs(d.docDateStr || d.dateStr)
 
   const problem: ReceiptProblem | null =
-    d.mode === 'po' ? poProblem(order, d.entries, d.invoiceNo) : manualProblem(d.lines, supplierName, d.invoiceNo)
+    d.mode === 'po'
+      ? poProblem(order, d.entries, d.invoiceNo)
+      : kitchen
+        ? kitchenProblem(d.lines)
+        : manualProblem(d.lines, supplierName, d.invoiceNo)
 
   function problemText(p: ReceiptProblem): string {
     switch (p) {
@@ -224,7 +234,7 @@ export function ReceivePage() {
       return toast.error(problemText(problem))
     }
     if (!toLocationId) return toast.error(t('เลือกคลังปลายทาง'))
-    await checkDuplicate()
+    if (!kitchen) await checkDuplicate()
     setCloseShort(false)
     setCloseReason('')
     setReviewing(true)
@@ -262,7 +272,8 @@ export function ReceivePage() {
           date,
           actor,
           note: d.note.trim() || undefined,
-          doc: { supplierId: supplierId || undefined, supplierName, invoiceNo: d.invoiceNo, docDate },
+          // A kitchen receipt has no bill: its rows say who made it and nothing else.
+          doc: kitchen ? { supplierName } : { supplierId: supplierId || undefined, supplierName, invoiceNo: d.invoiceNo, docDate },
           photoDataUrl: photo ?? undefined,
         })
         setDone({ docNo, facts, exceptions: 0 })
@@ -423,17 +434,27 @@ export function ReceivePage() {
             <>
               <SectionCard icon="receive" title={t('ข้อมูลการรับ')}>
                 <div className="grid grid-cols-2 gap-3 md:gap-4">
-                  <Field label={t('คลังปลายทาง')} required>
+                  <Field label={kitchen ? t('รับเข้าที่ (ครัว/สาขาที่ผลิต)') : t('คลังปลายทาง')} required>
                     <SiteSelect value={d.toLocationId} onChange={(v) => patch({ toLocationId: v })} locations={warehouses} />
                   </Field>
                   <Field label={t('วันที่รับ')} required>
                     <ThaiDateField value={d.dateStr} onChange={(v) => patch({ dateStr: v })} ariaLabel={t('วันที่รับ')} />
                   </Field>
+                  {kitchen && (
+                    <Field label={t('หมายเหตุ')} className="col-span-2">
+                      <Input value={d.note} onChange={(e) => patch({ note: e.target.value })} placeholder={t('เช่น รอบผลิตเช้า / ผู้ผลิต')} />
+                    </Field>
+                  )}
                 </div>
               </SectionCard>
+              {kitchen && wipProducts.length === 0 && (
+                <AlertBanner tone="warn" icon="warning">
+                  {t('ยังไม่มีสินค้า WIP ในระบบ — แอดมินเพิ่มได้ที่หน้าสินค้า → "เพิ่มสินค้า WIP"')}
+                </AlertBanner>
+              )}
               <SectionCard icon="package" title={t('รายการสินค้า')} count={d.lines.length ? t('({n} รายการ)', { n: d.lines.length }) : undefined}>
                 <LineBuilder
-                  products={products}
+                  products={kitchen ? wipProducts : products}
                   lines={d.lines}
                   onChange={(lines) => patch({ lines })}
                   direction="in"
@@ -502,6 +523,7 @@ export function ReceivePage() {
 
       {reviewing && (
         <ReviewModal
+          kitchen={kitchen}
           facts={facts}
           exceptions={exceptions}
           duplicate={duplicate}
@@ -522,6 +544,7 @@ export function ReceivePage() {
             <li>{t('เลือกใบสั่งซื้อ → กด "รับครบตาม PO ทั้งหมด" → แก้เฉพาะรายการที่มาไม่ตรง')}</li>
             <li>{t('ของมาไม่ครบ: ใส่จำนวนที่มาจริงพร้อมเหตุผล ใบสั่งซื้อจะเปิดค้างไว้รอส่วนที่เหลือ')}</li>
             <li>{t('ของที่ไม่มีใบสั่งซื้อ ใช้ "รับนอกใบสั่งซื้อ" แล้วคีย์ทีละสินค้า')}</li>
+            <li>{t('ของที่ครัวหรือสาขาทำเอง (WIP: แป้ง ซอส น้ำสลัด คุกกี้) ใช้ "รับจากครัว (ผลิตเอง)" — ไม่ต้องมีผู้ขายหรือเลขบิล')}</li>
             <li>{t('หลายบิลในวันเดียว: รับทีละบิล แล้วกด "รับบิลถัดไป"')}</li>
             <li>{t('ระบบเตือนเมื่อเลขเอกสารซ้ำกับบิลเดิมของผู้ขายรายเดียวกัน (บิลที่คีย์ก่อน 24/09/2569 เก็บไว้ในหมายเหตุ ระบบตรวจซ้ำไม่ได้)')}</li>
             <li>{t('คีย์เป็นหน่วยที่อยู่บนบิลได้เลย ระบบแปลงเป็นหน่วยหลักให้')}</li>
@@ -556,9 +579,10 @@ function ModeCards({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
   const cards: { key: Mode; icon: IconName; title: string; hint: string }[] = [
     { key: 'po', icon: 'fileSheet', title: t('จากใบสั่งซื้อ'), hint: t('เลือก PO แล้วรับตามรายการที่สั่ง') },
     { key: 'manual', icon: 'package', title: t('รับนอกใบสั่งซื้อ'), hint: t('ของที่ไม่มี PO — คีย์ทีละสินค้า') },
+    { key: 'kitchen', icon: 'store', title: t('รับจากครัว (ผลิตเอง)'), hint: t('สินค้า WIP ที่ครัวหรือสาขาทำ — ไม่มีบิล') },
   ]
   return (
-    <div role="radiogroup" aria-label={t('ประเภทการรับ')} className={`${frameCard} grid grid-cols-2 gap-2 p-2`}>
+    <div role="radiogroup" aria-label={t('ประเภทการรับ')} className={`${frameCard} grid grid-cols-1 gap-2 p-2 sm:grid-cols-3`}>
       {cards.map((c) => {
         const on = c.key === mode
         return (
