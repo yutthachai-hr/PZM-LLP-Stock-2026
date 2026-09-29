@@ -11,7 +11,14 @@ import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
  * because a short delivery keeps the order open for the rest.
  */
 
-export type Mode = 'po' | 'manual'
+/**
+ * From a purchase order, without one, or from the kitchen: work-in-process the business
+ * made itself (owner, 29 Sep 2026) — no supplier's bill, so no supplier or bill number.
+ */
+export type Mode = 'po' | 'manual' | 'kitchen'
+
+/** Who "supplied" a kitchen receipt, as it is written on its rows. */
+export const KITCHEN_SUPPLIER = 'ครัว (ผลิตเอง)' // i18n-key
 
 /** What was keyed against one order line on this delivery. `qty` null = not keyed yet. */
 export interface PoLineEntry {
@@ -113,6 +120,13 @@ export function poProblem(
   return null
 }
 
+/** A kitchen receipt: lines, each with a quantity. There is no bill to name. */
+export function kitchenProblem(lines: readonly Line[]): ReceiptProblem | null {
+  if (lines.length === 0) return 'noLines'
+  if (lines.some((l) => !(l.qty > 0))) return 'badQty'
+  return null
+}
+
 export function manualProblem(lines: readonly Line[], supplierName: string, invoiceNo: string): ReceiptProblem | null {
   if (lines.length === 0) return 'noLines'
   if (lines.some((l) => !(l.qty > 0))) return 'badQty'
@@ -202,7 +216,7 @@ export function restoreReceipt(saved: unknown): ReceiptDraft {
     const [first, ...rest] = billsOf(d.bills)
     return first ? { ...fromBill(base, first), queue: rest } : base
   }
-  if (d.mode === 'po' || d.mode === 'manual') {
+  if (d.mode === 'po' || d.mode === 'manual' || d.mode === 'kitchen') {
     const entries: Record<string, PoLineEntry> = {}
     if (d.entries && typeof d.entries === 'object') {
       for (const [k, v] of Object.entries(d.entries as Record<string, unknown>)) {

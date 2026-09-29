@@ -53,7 +53,7 @@ export function ReceiptPanel({
   busy,
   onReview,
 }: {
-  mode: 'po' | 'manual'
+  mode: 'po' | 'manual' | 'kitchen'
   facts: Omit<ReceiptFacts, 'date' | 'docDate' | 'hasPhoto' | 'note'>
   pending: number
   problem: string | null
@@ -66,7 +66,9 @@ export function ReceiptPanel({
       <SectionCard icon="receive" title={t('ใบรับนี้')}>
         <dl className="divide-y divide-line">
           <Row label={t('ผู้ขาย')}>{facts.supplierName || '—'}</Row>
-          <Row label={t('ใบสั่งซื้อ')}>{facts.poDocNo ?? (mode === 'po' ? '—' : t('ไม่มี (รับนอกใบสั่งซื้อ)'))}</Row>
+          <Row label={t('ใบสั่งซื้อ')}>
+            {facts.poDocNo ?? (mode === 'po' ? '—' : mode === 'kitchen' ? t('ไม่มี (ผลิตเอง)') : t('ไม่มี (รับนอกใบสั่งซื้อ)'))}
+          </Row>
           <Row label={t('คลัง')}>{mode === 'po' && !facts.poDocNo ? '—' : facts.warehouse || '—'}</Row>
           <Row label={t('จำนวนรายการ')}>{t('{n} รายการ', { n: facts.items })}</Row>
           {/* Counts of LINES, said as such: a line's own figure (over by 0.5 KG) sits on the
@@ -89,7 +91,7 @@ export function ReceiptPanel({
               )}
             </>
           )}
-          <Row label={t('เลขที่เอกสาร')}>{facts.invoiceNo || '—'}</Row>
+          {mode !== 'kitchen' && <Row label={t('เลขที่เอกสาร')}>{facts.invoiceNo || '—'}</Row>}
         </dl>
         {/* Below xl the panel sits under the form and the page's own bar carries the button. */}
         <div className="mt-4 hidden xl:block">
@@ -112,6 +114,7 @@ export function ReceiptPanel({
  * (the order stays open, the default) or not (the order closes, with a reason).
  */
 export function ReviewModal({
+  kitchen = false,
   facts,
   exceptions,
   duplicate,
@@ -124,6 +127,8 @@ export function ReviewModal({
   onBack,
   onConfirm,
 }: {
+  /** Made in-house: there is no bill, so no bill number, bill date or bill photo to show. */
+  kitchen?: boolean
   facts: ReceiptFacts
   exceptions: Exception[]
   duplicate: DuplicateDoc | null
@@ -161,12 +166,16 @@ export function ReviewModal({
       <div className="space-y-4">
         <dl className="grid gap-x-6 rounded-xl bg-sunken px-4 py-2 sm:grid-cols-2">
           <Row label={t('ผู้ขาย')}>{facts.supplierName}</Row>
-          <Row label={t('ใบสั่งซื้อ')}>{facts.poDocNo ?? t('ไม่มี (รับนอกใบสั่งซื้อ)')}</Row>
+          <Row label={t('ใบสั่งซื้อ')}>{facts.poDocNo ?? (kitchen ? t('ไม่มี (ผลิตเอง)') : t('ไม่มี (รับนอกใบสั่งซื้อ)'))}</Row>
           <Row label={t('คลัง')}>{facts.warehouse}</Row>
           <Row label={t('วันที่รับ')}>{formatThaiDate(facts.date)}</Row>
-          <Row label={t('เลขที่เอกสาร')}>{facts.invoiceNo}</Row>
-          <Row label={t('วันที่ในเอกสาร')}>{formatThaiDate(facts.docDate)}</Row>
-          <Row label={t('รูปเอกสาร')}>{facts.hasPhoto ? t('แนบแล้ว') : t('ไม่มี')}</Row>
+          {!kitchen && (
+            <>
+              <Row label={t('เลขที่เอกสาร')}>{facts.invoiceNo}</Row>
+              <Row label={t('วันที่ในเอกสาร')}>{formatThaiDate(facts.docDate)}</Row>
+              <Row label={t('รูปเอกสาร')}>{facts.hasPhoto ? t('แนบแล้ว') : t('ไม่มี')}</Row>
+            </>
+          )}
           <Row label={t('จำนวนรายการ')}>{t('{n} รายการ', { n: facts.items })}</Row>
           {facts.note && <Row label={t('หมายเหตุ')}>{facts.note}</Row>}
         </dl>

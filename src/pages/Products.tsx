@@ -13,6 +13,7 @@ import { ChipRow, FilterBar, FilterField, FramePage, PageHero, SectionCard, type
 import { DataTable } from '../components/DataTable'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { BarcodeImportModal } from './products/BarcodeImportModal'
+import { WipCatalogModal } from './products/WipCatalogModal'
 import { updateProduct } from '../services/products'
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
 import { exportExcel } from '../lib/export'
@@ -81,6 +82,7 @@ export function ProductsPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [editing, setEditing] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
+  const [addingWip, setAddingWip] = useState(false)
   const [seeding, setSeeding] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [settingMin, setSettingMin] = useState(false)
@@ -338,6 +340,10 @@ export function ProductsPage() {
                 <Icon name="upload" size={16} />
                 {t('นำเข้า Excel (เพิ่ม/อัปเดต)')}
               </Link>
+              <Button variant="secondary" onClick={() => setAddingWip(true)} className="hidden md:inline-flex">
+                <Icon name="package" size={16} />
+                {t('เพิ่มสินค้า WIP')}
+              </Button>
               <Button onClick={() => setCreating(true)}>
                 <Icon name="plus" size={16} />
                 {t('เพิ่มสินค้าใหม่')}
@@ -492,6 +498,8 @@ export function ProductsPage() {
           </Button>
         </div>
       )}
+
+      {addingWip && <WipCatalogModal products={products} onClose={() => setAddingWip(false)} />}
 
       {importingBarcodes && (
         <BarcodeImportModal products={products} onClose={() => setImportingBarcodes(false)} onDone={() => undefined} />
