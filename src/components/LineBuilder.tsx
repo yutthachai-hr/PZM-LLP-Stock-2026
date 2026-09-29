@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useViewport } from '../lib/viewport'
-import { upsertLine } from '../lib/lines'
+import { lineOf, upsertLine } from '../lib/lines'
+import { unitUsage, usualUnit } from '../lib/usualUnit'
+import { useData } from '../data/DataContext'
 import { QtySheet } from './QtySheet'
 import type { Product } from '../types'
 import { ProductThumb } from './ProductThumb'
@@ -13,7 +15,7 @@ import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
 import { findByBarcode, pickOnEnter, searchFields } from '../lib/barcode'
 import { BarcodeScanner } from './BarcodeScanner'
-import { describeQty, type QtyEntry } from '../lib/uom'
+import { describeQty, entryFor, type QtyEntry } from '../lib/uom'
 
 export interface Line {
   productId: string
@@ -85,6 +87,11 @@ export function LineBuilder({
   // that product, adding or editing its line. Tablets and desktops keep the inline rows.
   const phone = useViewport() === 'phone'
   const [sheetFor, setSheetFor] = useState<Product | null>(null)
+  // How each product is usually keyed, and how often it is used at all, from the movements
+  // already in memory (owner, 29 Sep 2026) — a new line starts in its usual unit, and among
+  // equally good matches the product people use most is listed first. No read.
+  const { movements } = useData()
+  const usage = useMemo(() => unitUsage(movements), [movements])
 
   useEffect(() => {
     if (focusOn > 0) searchBox.current?.focus()
@@ -100,9 +107,13 @@ export function LineBuilder({
       .filter((p) => p.active !== false)
       .filter((p) => phone || !chosen.has(p.id))
       .filter((p) => looseMatch(searchFields(p), q))
-      .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
+      .sort(
+        (a, b) =>
+          looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q) ||
+          (usage.lines.get(b.id) ?? 0) - (usage.lines.get(a.id) ?? 0),
+      )
       .slice(0, MAX_MATCHES)
-  }, [search, products, lines, phone])
+  }, [search, products, lines, phone, usage])
 
   function addProduct(p: Product) {
     if (phone) {
@@ -111,12 +122,23 @@ export function LineBuilder({
       return
     }
     // Scanned again: the line is already there (the list hides chosen products, a scan does not).
-    if (!lines.some((l) => l.productId === p.id)) {
-      onChange([...lines, { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }])
-    }
+    if (!lines.some((l) => l.productId === p.id)) onChange([...lines, firstLine(p)])
     setSearch('')
     // Straight on to the next line: the cursor stays in the search box after every add.
     setTimeout(() => searchBox.current?.focus(), 0)
+  }
+
+  /** One of the product's usual unit, or of its own unit when nothing else stands out. */
+  function firstLine(p: Product): Line {
+    const unit = usualUnit(p, usage, direction)
+    if (unit) {
+      try {
+        return lineOf(p, entryFor(p, 1, unit))
+      } catch {
+        // The rate went missing since it was last used: fall back to the product's own unit.
+      }
+    }
+    return { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }
   }
 
   /** A scan is a decision, not a suggestion: the line goes on as soon as it reads. */
@@ -206,9 +228,9 @@ export function LineBuilder({
                 key={p.id}
                 type="button"
                 onClick={() => addProduct(p)}
-                className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm outline-none transition-colors duration-150 hover:bg-sunken focus-visible:bg-sunken"
+                className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm outline-none row-hover focus-visible:bg-brand-soft"
               >
-                <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
+                <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} zoom={false} />
                 <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
                 <span className="doc-no shrink-0 text-xs text-ink-faint">{p.sku}</span>
                 {availableAt && (
@@ -305,7 +327,7 @@ export function LineBuilder({
                 const over = avail !== undefined && l.qty > avail
                 const product = products.find((p) => p.id === l.productId)
                 return (
-                  <tr key={l.productId} className={over ? 'bg-danger-soft/40' : ''}>
+                  <tr key={l.productId} className={`row-hover ${over ? 'bg-danger-soft/40' : ''}`}>
                     <td className="num whitespace-nowrap px-3 py-2 text-center text-ink-soft">
                       {/* Direction, restated on every line. */}
                       <span aria-hidden="true" className={`mr-1 font-bold ${signColor}`}>{sign}</span>
@@ -330,6 +352,7 @@ export function LineBuilder({
                         plainUnits={plainUnits}
                         conversions={product?.unitConversions}
                         value={l.qty}
+                        entryUnit={l.entryUnit}
                         onChange={(e) => setQty(l.productId, e)}
                         product={product}
                         invalid={over}
@@ -373,6 +396,7 @@ export function LineBuilder({
         open={!!sheetFor}
         product={sheetFor}
         initial={sheetFor ? lines.find((l) => l.productId === sheetFor.id) : undefined}
+        defaultUnit={sheetFor ? usualUnit(sheetFor, usage, direction) : undefined}
         available={sheetFor && availableAt ? availableAt(sheetFor.id) : undefined}
         direction={direction}
         submitLabel={sheetFor && lines.some((l) => l.productId === sheetFor.id) ? t('บันทึก') : t('เพิ่มรายการ')}

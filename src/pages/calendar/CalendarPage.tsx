@@ -487,7 +487,7 @@ export function CalendarPage() {
                 <ul className="divide-y divide-line">
                   {upcoming.map((i) => (
                     <li key={i.id}>
-                      <button type="button" onClick={() => setSelectedId(i.id)} className="flex w-full items-center gap-3 py-2.5 text-left hover:bg-sunken">
+                      <button type="button" onClick={() => setSelectedId(i.id)} className="flex w-full items-center gap-3 py-2.5 text-left row-hover">
                         <span className="w-16 shrink-0 text-xs font-semibold text-brand">
                           {isSameBkkDay(i.at, now) ? t('วันนี้') : isSameBkkDay(i.at, now + DAY_MS) ? t('พรุ่งนี้') : formatThaiDateShort(i.at)}
                         </span>

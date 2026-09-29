@@ -345,8 +345,9 @@ describe('what arrived after the backup was written', () => {
     seed('productAliases', [{ id: 'alias-1', key: 'X', productId: 'p1', sourceName: 'X ', createdBy: 'u', createdByName: 'U', createdAt: 1 }])
     seed('purchaseBatches', [{ id: 'pb1', batchNo: 'PB-20260914-001', locationId: MAIN, sourceFileName: 'f', fileHash: 'h', sheetName: 's', blockLabel: 'x', status: 'ready', rows: [], groups: [], history: [], createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 }])
     const b = await buildBackup('Owner')
-    // Version 10 since transfers (logistics) joined the file.
-    expect(b.version).toBe(10)
+    // Version 11 since monthly count sheets joined the file.
+    expect(b.version).toBe(11)
+    expect(b.data.monthlyCounts).toEqual([])
     expect(b.data.productAliases).toHaveLength(1)
     expect(b.data.purchaseBatches).toHaveLength(1)
 

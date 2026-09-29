@@ -67,7 +67,7 @@ export function NotificationPrefsSection() {
             </thead>
             <tbody className="divide-y divide-line">
               {CATEGORIES.map((c) => (
-                <tr key={c}>
+                <tr key={c} className="row-hover">
                   <td className="py-2 pr-3 text-ink">{t(CATEGORY_LABEL[c])}</td>
                   <td className="px-2 py-2 text-center">
                     <input type="checkbox" checked disabled aria-label={t('วิกฤต — แสดงเสมอ')} className="h-4 w-4 accent-brand" />

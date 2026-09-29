@@ -153,7 +153,7 @@ export function RebaseUnitSection({ actor }: { actor: { id: string; name: string
           {matches.length > 0 && (
             <div className="absolute z-10 mt-1 w-full rounded-lg border border-line bg-surface shadow-lg">
               {matches.map((p) => (
-                <button key={p.id} type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-sunken" onClick={() => pick(p)}>
+                <button key={p.id} type="button" className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm row-hover" onClick={() => pick(p)}>
                   <span className="truncate">
                     <span className="text-ink-faint">{p.sku}</span> {p.name}
                   </span>
@@ -231,7 +231,7 @@ export function RebaseUnitSection({ actor }: { actor: { id: string; name: string
                   {preview.sites.map((s) => {
                     const need = mode === 'recount' || !s.whole
                     return (
-                      <tr key={s.locationId} className="border-t border-line">
+                      <tr key={s.locationId} className="border-t border-line row-hover">
                         <td className="py-2 pr-3"><SiteChip locationId={s.locationId} /></td>
                         <td className="num py-2 pr-3 text-right">{fmtQty(s.oldQty)} {preview.from}</td>
                         <td className="num py-2 pr-3 text-right">

@@ -52,7 +52,7 @@ export function ItemRow({ item, onPick, compact }: { item: CalendarItem; onPick:
     <button
       type="button"
       onClick={() => onPick(item)}
-      className={`flex w-full items-start gap-3 px-3 text-left hover:bg-sunken ${compact ? 'py-2' : 'py-2.5'}`}
+      className={`flex w-full items-start gap-3 px-3 text-left row-hover ${compact ? 'py-2' : 'py-2.5'}`}
     >
       <span className="num w-12 shrink-0 pt-0.5 text-xs font-semibold text-ink-soft">
         {item.allDay ? t('ทั้งวัน') : timeOf(item.at)}

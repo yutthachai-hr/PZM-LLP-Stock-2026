@@ -125,7 +125,7 @@ export function BarcodeImportModal({ products, onClose, onDone }: { products: Pr
                   </thead>
                   <tbody className="divide-y divide-line">
                     {plan.changes.slice(0, 200).map((c) => (
-                      <tr key={c.product.id}>
+                      <tr key={c.product.id} className="row-hover">
                         <td className="px-3 py-1.5">
                           <span className="block truncate text-ink">{c.product.name}</span>
                           <span className="doc-no text-xs text-ink-faint">{c.product.sku}</span>

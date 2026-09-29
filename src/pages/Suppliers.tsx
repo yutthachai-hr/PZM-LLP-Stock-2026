@@ -627,7 +627,7 @@ function ImportFromCatalogue({ onClose, onDone }: { onClose: () => void; onDone:
               {proposal.suppliers.map((s) => {
                 const off = skipped.has(s.name)
                 return (
-                  <tr key={s.name} className={off ? 'opacity-40' : ''}>
+                  <tr key={s.name} className={`row-hover ${off ? 'opacity-40' : ''}`}>
                     <td className="p-2">
                       <span className="font-medium text-ink">{s.name}</span>
                       {s.merged && (

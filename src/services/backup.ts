@@ -47,8 +47,9 @@ import { transferCounterFloors } from './transfers'
  *    from the ledger as before. A version-6 file still restores.
  *  - 9: company announcements (announcements) and the company profile (companyProfile:
  *    logo and document prefix), 24 Sep 2026. A version-8 file still restores.
+ *  - 11: monthly count sheets (monthlyCounts), 29 Sep 2026. A version-10 file still restores.
  */
-const FORMAT_VERSION = 10
+const FORMAT_VERSION = 11
 
 /**
  * Collections written to the file, in the order a restore replays them: master data first,
@@ -92,6 +93,8 @@ const COLLECTIONS = [
   COL.announcements,
   // Version 10: branch transfers (logistics).
   COL.transfers,
+  // Version 11: monthly count sheets — what was counted, and what the manager did with it.
+  COL.monthlyCounts,
 ] as const
 
 /** Rebuilt from the ledger on restore, so they are stored for reference only. */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useT } from '../i18n/I18nContext'
 import { sameUnit, type UnitConversion } from '../lib/units'
 import { isCountUnit, resolveFactor, type QtyEntry } from '../lib/uom'
@@ -69,6 +69,7 @@ export function QtyInput({ // i18n-key
   plainUnits,
   conversions,
   value,
+  entryUnit,
   onChange,
   product,
   onRateDefined,
@@ -82,6 +83,11 @@ export function QtyInput({ // i18n-key
   conversions?: readonly UnitConversion[]
   /** The current quantity in the product's own unit. */
   value: number
+  /**
+   * The unit the line was keyed in, to open showing it — a line started in the product's
+   * usual unit (lib/usualUnit), or a draft brought back. Read once, when the box mounts.
+   */
+  entryUnit?: string
   /** The quantity as keyed, the unit, and the same in the product's own unit. */
   onChange: (entry: QtyEntry) => void
   /**
@@ -99,17 +105,34 @@ export function QtyInput({ // i18n-key
     () => entryUnitsFor(unitType, plainUnits, conversions),
     [unitType, plainUnits, conversions],
   )
-  const [unitKey, setUnitKey] = useState('base')
+  const keyedAs = (list: readonly EntryUnit[]) =>
+    list.find((u) => !!entryUnit && u.factor !== null && u.records.toLowerCase() === entryUnit.toLowerCase())?.key
+  const [unitKey, setUnitKey] = useState(() => keyedAs(units) ?? 'base')
+  // A draft can come back before the product's rates have loaded, when its unit is not in
+  // the list yet: take it up once it is — unless someone has already picked a unit here.
+  const picked = useRef(false)
+  useEffect(() => {
+    if (picked.current || unitKey !== 'base') return
+    const key = keyedAs(units)
+    if (key) setUnitKey(key)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [units])
   const unit = units.find((u) => u.key === unitKey) ?? units[0]
   const factor = unit.factor ?? 1
-  const [text, setText] = useState(value ? String(value) : '')
+  const [text, setText] = useState(value ? String(round3(value / factor)) : '')
   const [asking, setAsking] = useState<EntryUnit | null>(null)
 
   // Choosing grams for a KG product sets the multiplier to 0.001. The Adjust page reuses
   // this same component when the product changes, so switching products left the previous
   // product's multiplier in place: typing 10 recorded 0.01. The multiplier belongs to the
   // unit, so it resets when the unit — or the product behind it — does.
+  // Only on an actual change of product: on mount it would throw away the unit the line
+  // was keyed in (entryUnit).
+  const shownType = useRef(unitType)
   useEffect(() => {
+    if (shownType.current === unitType) return
+    shownType.current = unitType
+    picked.current = false
     setUnitKey('base')
   }, [unitType])
 
@@ -138,6 +161,7 @@ export function QtyInput({ // i18n-key
       if (product) setAsking(next)
       return
     }
+    picked.current = true
     setUnitKey(next.key)
     commit(text, next, next.factor)
   }

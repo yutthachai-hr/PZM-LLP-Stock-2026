@@ -345,14 +345,21 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
           ) : (
             <div className="space-y-3">
               {groups.map((g) => (
-                <div key={g.supplierId} className="rounded-lg border border-line">
-                  <div className="border-b border-line bg-sunken px-3 py-1.5 text-sm font-semibold text-ink">{g.name}</div>
+                // Each supplier's lines under a bar in the brand's colour, so one supplier
+                // does not run into the next (owner, 27 Sep 2026); the line under the
+                // pointer takes the light tint the menu uses.
+                <div key={g.supplierId} className="overflow-hidden rounded-lg border border-brand/20">
+                  <div className="flex items-center gap-2 border-b border-brand/20 bg-brand-soft px-3 py-2 text-sm font-semibold text-brand">
+                    <Icon name="store" size={16} className="shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{g.name}</span>
+                    <span className="shrink-0 text-xs font-medium text-brand/80">{t('{count} รายการ', { count: g.items.length })}</span>
+                  </div>
                   <ul className="divide-y divide-line">
                     {g.items.map((item) => {
                       const p = products.find((x) => x.id === item.productId)
                       const units = p ? entryUnitsFor(p.unitType, plainUnits, p.unitConversions) : []
                       return (
-                        <li key={item.idx} className="px-3 py-2">
+                        <li key={item.idx} className="px-3 py-2 row-hover">
                           <div className="flex items-start gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="text-sm text-ink">{item.productName}</div>

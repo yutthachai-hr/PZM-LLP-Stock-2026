@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 import { useAutomation } from '../data/useAutomation'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
-import { brandDef } from '../brand/brand'
+import { brandDef, type BrandDef } from '../brand/brand'
+import { BrandLogo } from './BrandLogo'
 import { useT } from '../i18n/I18nContext'
 import { Icon } from './Icon'
 import { isDemoMode } from '../firebase/config'
@@ -11,7 +12,9 @@ import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
-import { navFor, navMatches, titleFor, type NavItem } from './nav/navItems'
+import { navFor, titleFor } from './nav/navItems'
+import { SideLive } from './nav/SideLive'
+import { SideNav } from './nav/SideNav'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
 
@@ -34,15 +37,12 @@ export function Layout({ children }: { children: ReactNode }) {
           A tablet gets the rail, a phone the tab bar (spec, 21 Sep 2026). */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface xl:flex">
         <Brand mode={mode} def={def} />
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {items.map((item) => (
-            <NavItemLink
-              key={item.to}
-              item={item}
-              badge={item.to === '/calendar' ? todayCount : 0}
-            />
-          ))}
-        </nav>
+        {/* The menu and the live panels scroll as one: with room to spare the panels sit at
+            the foot, and on a short screen they follow the menu instead of squeezing it. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <SideNav items={items} badges={{ '/calendar': todayCount }} />
+          <SideLive todayCount={todayCount} />
+        </div>
         <UserBox
           name={user?.name ?? ''}
           role={user?.role ?? 'staff'}
@@ -83,7 +83,7 @@ function Brand({
   def,
 }: {
   mode: 'cloud' | 'local'
-  def: { name: string; emoji: string } | null
+  def: BrandDef | null
 }) {
   const t = useT()
   return (
@@ -96,15 +96,14 @@ function Brand({
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-1 bg-brand-vivid"
       />
-      {/* The brand mark stays an emoji: it is the company's identity, at display size,
-          and the owner chose 🍕 and 🥖 themselves. */}
-      <span className="text-2xl leading-none">{def?.emoji ?? '📦'}</span>
+      {/* The brand's own logo, round, linking to its website (owner, 27 Sep 2026). */}
+      <BrandLogo def={def} size={40} />
       <div className="min-w-0">
         <div className="truncate font-bold leading-tight text-brand">
           {def?.name ?? 'Stock'}
         </div>
         {/* The company whose books are open, above the name of the system they are in. */}
-        <div className="text-xs text-ink-faint">Inventory Pzm</div>
+        <div className="text-xs text-ink-faint">The Inventory OS</div>
       </div>
       <div className="ml-auto">
         {/* A demo build is in local mode too, but the local badge reads as a network
@@ -119,29 +118,6 @@ function Brand({
         )}
       </div>
     </div>
-  )
-}
-
-function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
-  const t = useT()
-  const { pathname } = useLocation()
-  const on = navMatches(pathname, item.to)
-  return (
-    <Link
-      to={item.to}
-      aria-current={on ? 'page' : undefined}
-      className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-[15px] font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand/40 ${
-        on ? 'bg-brand-soft font-semibold text-brand' : 'text-ink-soft hover:bg-sunken hover:text-ink'
-      }`}
-    >
-      <Icon name={item.icon} />
-      <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
-      {badge > 0 && (
-        <span className="num shrink-0 rounded-full bg-brand px-1.5 text-[11px] font-bold leading-5 text-white">
-          {badge}
-        </span>
-      )}
-    </Link>
   )
 }
 

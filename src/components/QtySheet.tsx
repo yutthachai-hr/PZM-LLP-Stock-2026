@@ -18,6 +18,7 @@ export function QtySheet({
   open,
   product,
   initial,
+  defaultUnit,
   available,
   direction,
   submitLabel,
@@ -30,6 +31,8 @@ export function QtySheet({
   product: { id: string; name: string; sku: string; unitType: string; hasImage: boolean; unitConversions?: UnitConversion[] } | null
   /** The line being edited, when there is one. */
   initial?: { qty: number; entryQty?: number; entryUnit?: string }
+  /** A new line's unit: the one this product is usually keyed in (lib/usualUnit). */
+  defaultUnit?: string
   /** On hand at the source site; issuing more than this is refused here, as the ledger would. */
   available?: number
   direction: 'in' | 'out'
@@ -54,10 +57,10 @@ export function QtySheet({
   // Start from the line being edited, or empty; focus the number so the keyboard is up.
   useEffect(() => {
     if (!open) return
-    setEntryUnit(initial?.entryUnit ?? '')
+    setEntryUnit(initial?.entryUnit ?? defaultUnit ?? '')
     setText(initial ? String(initial.entryQty ?? initial.qty) : '')
     setTimeout(() => box.current?.focus(), 50)
-  }, [open, initial])
+  }, [open, initial, defaultUnit])
 
   if (!product) return null
   const unit = units.find((u) => u.records.toLowerCase() === (entryUnit || product.unitType).toLowerCase()) ?? units[0]

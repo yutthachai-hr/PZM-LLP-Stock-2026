@@ -4,7 +4,7 @@
 //   npm test
 
 import { describe, expect, test } from 'vitest'
-import { NAV, navMatches } from '../src/components/nav/navItems'
+import { NAV, NAV_GROUPS, navMatches } from '../src/components/nav/navItems'
 
 const lit = (path: string) => NAV.filter((n) => navMatches(path, n.to)).map((n) => n.to)
 
@@ -36,5 +36,12 @@ describe('menu icons', () => {
     expect(NAV.find((n) => n.to === '/transfers/today')).toMatchObject({ label: 'ใบรายการส่งสินค้า', icon: 'clipboardCheck' })
     expect(NAV.find((n) => n.to === '/issue')?.icon).toBe('send')
     expect(NAV.find((n) => n.to === '/orders')?.icon).toBe('cart')
+  })
+
+  test('section bars have pictures of their own; the stock page is "Goods" (owner, 25 Sep 2026)', () => {
+    const icons = [...NAV.map((n) => n.icon), ...Object.values(NAV_GROUPS).map((g) => g.icon)]
+    expect(new Set(icons).size).toBe(icons.length)
+    expect(NAV_GROUPS).toMatchObject({ inventory: { icon: 'package' }, procurement: { icon: 'store' }, delivery: { icon: 'mapPin' } })
+    expect(NAV.find((n) => n.to === '/products')).toMatchObject({ label: 'ทะเบียนสินค้า', icon: 'boxes' })
   })
 })

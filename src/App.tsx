@@ -19,6 +19,8 @@ import { StockCardPage } from './pages/StockCardPage'
 import { ReceivePage } from './pages/Receive'
 import { IssuePage } from './pages/Issue'
 import { AdjustPage } from './pages/Adjust'
+import { MonthlyCountsPage } from './pages/counts/MonthlyCountsPage'
+import { MonthlyCountSheet } from './pages/counts/MonthlyCountSheet'
 import { MovementsPage } from './pages/Movements'
 import { ReportsPage } from './pages/Reports'
 import { ImportPage } from './pages/Import'
@@ -99,6 +101,8 @@ function Gate() {
           <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
           <Route path="/transfers/:id" element={<TransferDetailPage />} />
           <Route path="/adjust" element={<AdjustPage />} />
+          <Route path="/counts" element={<MonthlyCountsPage />} />
+          <Route path="/counts/:id" element={<MonthlyCountSheet />} />
           <Route path="/movements" element={<MovementsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/import" element={<ImportPage />} />

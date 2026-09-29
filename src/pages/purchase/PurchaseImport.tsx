@@ -320,7 +320,7 @@ export function PurchaseImportPage() {
                   {rows.map((r) => {
                     const state = rowState(r)
                     return (
-                      <tr key={r.idx} className="border-b border-line align-top">
+                      <tr key={r.idx} className="border-b border-line align-top row-hover">
                         <td className="num py-1.5 pr-2 text-ink-faint">{r.excelRow}</td>
                         <td className="py-1.5 pr-2 text-ink">{r.rawName}</td>
                         <td className="num whitespace-nowrap py-1.5 pr-2 text-right">

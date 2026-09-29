@@ -128,7 +128,7 @@ export function NotificationBell() {
                 <li key={n.id}>
                   <button
                     onClick={() => void openOne(n)}
-                    className={`flex w-full cursor-pointer items-start gap-3 px-5 py-3 text-left hover:bg-sunken ${fresh ? '' : 'opacity-70'}`}
+                    className={`flex w-full cursor-pointer items-start gap-3 px-5 py-3 text-left row-hover ${fresh ? '' : 'opacity-70'}`}
                   >
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${fresh ? TONE[n.priority] : 'bg-line-strong'}`} aria-hidden />
                     <span className="min-w-0 flex-1">

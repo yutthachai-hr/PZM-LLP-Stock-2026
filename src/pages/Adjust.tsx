@@ -413,9 +413,9 @@ export function AdjustPage() {
                       key={p.id}
                       type="button"
                       onClick={() => add(p)}
-                      className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm hover:bg-sunken"
+                      className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm row-hover"
                     >
-                      <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} />
+                      <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} zoom={false} />
                       <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
                       <span className="doc-no shrink-0 text-xs text-ink-faint">{p.sku}</span>
                       <span className="num shrink-0 text-xs text-ink-soft">
@@ -507,7 +507,7 @@ export function AdjustPage() {
                       // What the shelf will hold once filed — today's balance, not the day's.
                       const negative = r.value !== null && (locationId ? qtyAt(locationId, r.productId) : 0) + d < 0
                       return (
-                        <tr key={r.productId} className={negative ? 'bg-danger-soft/40' : ''}>
+                        <tr key={r.productId} className={`row-hover ${negative ? 'bg-danger-soft/40' : ''}`}>
                           <td className="px-3 py-2">
                             <div className="flex min-w-0 items-center gap-2.5">
                               {p && <ProductThumb productId={p.id} hasImage={p.hasImage} size={36} />}

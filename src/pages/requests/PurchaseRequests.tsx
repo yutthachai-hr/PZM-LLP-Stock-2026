@@ -333,7 +333,7 @@ export function PurchaseRequestsPage() {
                 const suppliers = new Set(live.map((i) => i.supplierId)).size
                 const urgent = live.filter((i) => (i.urgency ?? 'normal') !== 'normal').length
                 return (
-                  <button key={r.id} type="button" onClick={() => navigate(`/requests/${r.id}`)} className="flex w-full flex-wrap items-center gap-3 p-4 text-left hover:bg-sunken">
+                  <button key={r.id} type="button" onClick={() => navigate(`/requests/${r.id}`)} className="flex w-full flex-wrap items-center gap-3 p-4 text-left row-hover">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="doc-no font-semibold text-ink">{r.docNo}</span>

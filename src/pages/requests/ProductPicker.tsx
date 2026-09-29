@@ -222,7 +222,7 @@ function ByProduct({
                       type="button"
                       onClick={() => pick(p)}
                       onMouseEnter={() => setCursor(i)}
-                      className={`flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left ${i === cursor ? 'bg-brand-soft' : 'hover:bg-sunken'}`}
+                      className={`flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left ${i === cursor ? 'bg-brand-soft' : 'row-hover'}`}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-ink">{p.name}</div>

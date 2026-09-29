@@ -1287,6 +1287,8 @@ export const COL = {
   purchaseBatches: 'purchaseBatches',
   purchaseRequests: 'purchaseRequests',
   transfers: 'transfers',
+  /** Monthly stock-count sheets: counted first, confirmed later (29 Sep 2026). */
+  monthlyCounts: 'monthlyCounts',
   productAliases: 'productAliases',
   announcements: 'announcements',
   recipes: 'recipes',
@@ -1442,6 +1444,65 @@ export const ANNOUNCEMENT_SUBJECT_MAX = 200
 export const ANNOUNCEMENT_BODY_MAX = 3000
 
 // Labels are translation keys — screens render them through t(). i18n-key
+// ---------------------------------------------------------------- monthly count ----
+
+/**
+ * One location's stock count for one month (owner, 29 Sep 2026): the figures are keyed and
+ * checked first — nothing moves — and only when a manager confirms does the difference from
+ * the books at the end of the month's last day go on as one adjustment. Or it is kept as a
+ * record without adjusting anything, while the books are still being trusted.
+ *
+ * `counting` → `recorded` (kept, stock untouched) or `posting` → `posted` (adjusted). A
+ * large difference list is filed in parts; `posting` holds the parts done so a retry
+ * carries on instead of filing twice.
+ */
+export type MonthlyCountStatus = 'counting' | 'recorded' | 'posting' | 'posted'
+
+/** What one product was counted at, in its own unit — as keyed when in another. */
+export interface MonthlyCountLine {
+  qty: number
+  entryUnit?: string
+  entryQty?: number
+  by: string
+  byName: string
+  at: number
+}
+
+/** The comparison as it stood when the count was confirmed. */
+export interface MonthlyCountResult {
+  systemQty: number
+  countedQty: number
+  diff: number
+  value: number
+}
+
+export interface MonthlyCount {
+  /** `${locationId}__${month}` — one sheet per location per month. */
+  id: string
+  locationId: string
+  /** 'YYYY-MM'. */
+  month: string
+  /** The business date of the month's last day: where a difference is filed. */
+  countDate: number
+  status: MonthlyCountStatus
+  /** productId → the count. A product not in here was not counted and is not adjusted. */
+  lines: Record<string, MonthlyCountLine>
+  results?: Record<string, MonthlyCountResult>
+  /** Products already adjusted while the difference is filed in parts. */
+  postedIds?: string[]
+  adjDocNos?: string[]
+  note?: string
+  createdBy: string
+  createdByName: string
+  createdAt: number
+  updatedAt: number
+  updatedBy?: string
+  updatedByName?: string
+  confirmedBy?: string
+  confirmedByName?: string
+  confirmedAt?: number
+}
+
 export const ADJUST_REASONS = [
   { value: 'lost', label: 'ของหาย' }, // i18n-key
   { value: 'broken', label: 'แตก/ชำรุด' }, // i18n-key

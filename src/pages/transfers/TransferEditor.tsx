@@ -218,7 +218,7 @@ export function TransferEditor({ initial, onChange }: TransferEditorProps) {
                 </thead>
                 <tbody className="divide-y divide-line">
                   {figures.map(({ line, f }) => (
-                    <tr key={line.productId}>
+                    <tr key={line.productId} className="row-hover">
                       <td className="py-2 pr-2">{line.productName}</td>
                       <td className="num px-2 py-2 text-right">
                         {fmtQty(f.onHand)} <span className="text-xs text-ink-soft">{line.unit}</span>

@@ -246,6 +246,17 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 - tests: `tests/count-as-of.test.ts` (6), `tests/import-stock.test.ts` (ปรับ 3 + เพิ่ม 3 — พฤติกรรมเปลี่ยนโดยตั้งใจ); เดินใน demo แล้ว: ส.ค. 120 → ก.ย. +200 +30 −150, นับ 31/8 = 110 → ADJ −10 ลง 31/8, ยอด 190, Stock Card ยกมา ก.ย. = 110
 - ขึ้นของจริง: merge `feat/count-as-of` เข้า main เมื่อเจ้าของสั่ง (ไม่ต้อง deploy rules)
 
+### นับสต๊อกประจำเดือน — นับก่อน ตรวจผลต่าง หัวหน้ายืนยัน (29 ก.ย., branch `feat/monthly-count`) — **DEMO เท่านั้น**
+เจ้าของ: *"อยากให้เป็นหน้าที่รับไว้ก่อน ยังไม่นำไป + หรือลบ … พอเช็คจนสิ้นสุดแล้ว กดยืนยันแล้ว ค่อยไปตั้งปรับ"* (ข้อมูลเดือน 8 ยังไม่ 100%) และ *"อย่าลืมการทำเป็น Draft"* — branch นี้แตกจาก main และ cherry-pick "นับ ณ วันที่" (dd80fa9) มาด้วย
+- collection ใหม่ `monthlyCounts` (+ `lelapin__monthlyCounts`) id = `${locationId}__${YYYY-MM}` หนึ่งใบต่อคลังต่อเดือน · สถานะ `counting` → `recorded` (เก็บไว้ดู สต๊อกไม่ขยับ) หรือ `posting` → `posted` (ปรับแล้ว สุดทาง) · `lines` = map productId → {qty (หน่วยหลัก), by, byName, at} · `results` = ผลเทียบตอนยืนยัน · `postedIds`/`adjDocNos` สำหรับลงเป็นชุด
+- **rules (ยังไม่ deploy)**: match block ของตัวเอง (ไม่อยู่ใน brandData) — ทุกคน active สร้างใบว่างได้ที่ id ถูกต้อง, แก้ `lines` ได้เฉพาะตอน counting และต้องลงชื่อ updatedBy ตัวเอง; ยืนยัน (recorded/posting/posted) เฉพาะหัวหน้า/แอดมิน ลงชื่อ confirmedBy ตัวเอง, ห้ามแตะ lines หลังยืนยัน; posted แก้ไม่ได้; แอดมินลบได้เฉพาะ counting/recorded · lines เช็คแค่ขนาด (≤3000) ไม่กินงบ 1,000 expressions
+- `lib/monthlyCount.ts` (pure, tests 9): เดือนตามเวลากรุงเทพ, `countDayOf` = วันสุดท้ายของเดือน, `countRows` (ไม่นับ ≠ 0: แถวที่ไม่ได้นับไม่ถูกปรับ), ต่างมาก = ≥10% หรือ ≥฿500, `postingPlan` แบ่งชุดละ 200 บรรทัด (2 writes/บรรทัด ใต้เพดาน 500 ของ transaction)
+- `services/monthlyCounts.ts`: open (transaction), `saveCountLines` (merge ใน transaction — หลายคนนับใบเดียวไม่ทับกัน), record, `postMonthlyCount` (แต่ละชุด = 1 transaction: planAdjust เหตุผล `count` ลงวันสิ้นเดือน + บันทึกชุดที่ลงแล้วบนใบ → ลงซ้ำไม่ได้ ทำต่อได้ถ้าค้าง)
+- หน้า `/counts` (เมนู งานคลังสินค้า → นับสต๊อกประจำเดือน) และ `/counts/:id`: คีย์แล้วเก็บในเครื่องทันที (`useDraft` key `monthly-count:<id>`) + เตือนก่อนปิดหน้า, กด "บันทึกยอดนับ" ค่อยขึ้นฐานข้อมูล · ยอดระบบ ณ สิ้นเดือน = `balanceAtDayEnd` (อ่าน movement หลังวันนั้นครั้งเดียว) อ่านใหม่ก่อนยืนยัน · ผลต่างเดือนก่อนจากใบเดือนก่อน (1 read) · ยืนยันได้ตั้งแต่วันสุดท้ายของเดือน · Excel · มือถือเป็นการ์ด ปุ่มหัวหน้าอยู่ใต้รายการ
+- backup FORMAT_VERSION 11 (มี monthlyCounts; ไฟล์ v10 ยัง restore ได้)
+- ทดสอบบน demo ด้วยตัวอย่างของเจ้าของ: ส.ค. สิ้นวัน 31/8 = 120, ก.ย. +200 +30 −150 (ตอนนี้ 200), นับได้ 110 → ADJ −10 ลง 31/8, 200 → 190, รายการ ก.ย. อยู่ครบ; ร่างรอดการ reload
+- **ก่อนขึ้น production**: ขออนุญาตเจ้าของ → deploy rules ก่อน (`npx firebase deploy --only firestore:rules --project pzm-stock-x5`) แล้วค่อย push main — ถ้า push ก่อน rules การสร้างใบนับจะถูกปฏิเสธ
+
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```

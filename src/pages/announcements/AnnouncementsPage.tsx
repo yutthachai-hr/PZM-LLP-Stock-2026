@@ -117,7 +117,7 @@ export function AnnouncementsPage() {
             <Link
               key={a.id}
               to={`/announcements/${a.company}/${a.id}`}
-              className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-sunken"
+              className="flex min-h-16 items-center gap-3 px-4 py-3 row-hover"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
                 <Icon name={a.format === 'a5' ? 'fileSheet' : 'message'} size={19} />

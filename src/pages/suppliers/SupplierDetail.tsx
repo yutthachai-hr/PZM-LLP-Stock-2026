@@ -152,7 +152,7 @@ export function SupplierDetail({
             <ul className="divide-y divide-line">
               {orders.slice(0, 8).map((o) => (
                 <li key={o.id}>
-                  <Link to={`/orders?po=${encodeURIComponent(o.id)}`} className="flex items-center gap-3 py-2.5 hover:bg-sunken">
+                  <Link to={`/orders?po=${encodeURIComponent(o.id)}`} className="flex items-center gap-3 py-2.5 row-hover">
                     <span className="min-w-0 flex-1">
                       <span className="doc-no block text-sm font-semibold text-ink">{o.docNo}</span>
                       <span className="block text-xs text-ink-faint">{formatThaiDate(o.orderedAt)}</span>

@@ -178,7 +178,7 @@ export function DataTable<T>({
             {rows.map((row) => (
               <tr
                 key={rowKey(row)}
-                className={`transition-colors duration-100 hover:bg-sunken/70 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`}
+                className={`row-hover ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {selection && (

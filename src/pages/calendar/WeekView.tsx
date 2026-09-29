@@ -41,7 +41,7 @@ export function WeekView({
               <button
                 type="button"
                 onClick={() => onPickDay(day)}
-                className="flex w-full items-center justify-between border-b border-line px-3 py-2.5 text-left hover:bg-sunken/60"
+                className="flex w-full items-center justify-between border-b border-line px-3 py-2.5 text-left row-hover"
               >
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{t(DAY_NAMES[new Date(day).getDay()])}</span>
                 <span className={`num inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-sm font-semibold ${today ? 'bg-brand text-white' : 'text-ink'}`}>

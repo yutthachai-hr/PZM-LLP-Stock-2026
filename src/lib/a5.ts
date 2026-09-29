@@ -47,7 +47,7 @@ export async function a5PdfFromJpeg(
 ): Promise<Blob> {
   const PDF = Ctor ?? ((await import('jspdf')).jsPDF as unknown as PdfCtor)
   const doc = new PDF({ orientation: 'portrait', unit: 'mm', format: 'a5' })
-  doc.setProperties({ title: meta.title, author: meta.author, creator: 'Inventory Pzm' })
+  doc.setProperties({ title: meta.title, author: meta.author, creator: 'The Inventory OS' })
   const bytes = new Uint8Array(await jpeg.arrayBuffer())
   doc.addImage(bytes, 'JPEG', 0, 0, A5_MM.width, A5_MM.height)
   return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' })
