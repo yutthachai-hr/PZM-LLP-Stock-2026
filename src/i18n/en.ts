@@ -2621,7 +2621,6 @@ export const EN: Record<string, string> = {
   'นำเข้ายอดนับจาก Excel': 'Import counts from Excel',
   'ยอดจากไฟล์จะเติมลงใบนับนี้เท่านั้น ยังไม่ปรับสต๊อก — รายการที่หน่วยไม่ตรงกับระบบต้องยืนยันอัตราทีละรายการก่อน': 'Figures from the file only fill this count sheet; stock is not adjusted. Every line in a unit that is not the product\'s own needs its rate confirmed first',
   'ไฟล์ปิดสต๊อก (.xlsx)': 'Closing-stock file (.xlsx)',
-  'ชีต': 'Sheet',
   'คอลัมน์ของ "{name}"': 'Column for "{name}"',
   'หน่วยตรง {n}': 'Same unit {n}',
   'ต้องยืนยันหน่วย {n} (เหลือ {left})': 'Unit to confirm {n} ({left} left)',
