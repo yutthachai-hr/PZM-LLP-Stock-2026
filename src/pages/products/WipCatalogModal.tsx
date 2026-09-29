@@ -6,6 +6,7 @@ import { AlertBanner, Button, Modal } from '../../components/ui'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { missingWip, WIP_CATEGORY, WIP_ITEMS } from '../../seed/wip'
+import { nextWipCode } from '../../lib/wipCode'
 import { createProduct } from '../../services/products'
 import type { Product } from '../../types'
 
@@ -14,7 +15,16 @@ import type { Product } from '../../types'
  * seed/wip.ts, shown in full for an admin to check first — codes, names, units, the tray a
  * dough ball comes on — and added only on the press, skipping any code already there.
  */
-export function WipCatalogModal({ products, onClose }: { products: Product[]; onClose: () => void }) {
+export function WipCatalogModal({
+  products,
+  onClose,
+  onNew,
+}: {
+  products: Product[]
+  onClose: () => void
+  /** Start a WIP item that is not on the list; it takes the next code by itself. */
+  onNew: () => void
+}) {
   const t = useT()
   const toast = useToast()
   const { brand } = useBrand()
@@ -72,7 +82,7 @@ export function WipCatalogModal({ products, onClose }: { products: Product[]; on
             <tbody>
               {items.map((i) => (
                 <tr key={i.sku} className="row-hover border-t border-line">
-                  <td className="px-3 py-2 font-mono text-xs">{i.sku}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{i.sku}</td>
                   <td className="px-3 py-2 text-ink">{i.name}</td>
                   <td className="px-3 py-2">
                     {i.unitType}
@@ -91,6 +101,11 @@ export function WipCatalogModal({ products, onClose }: { products: Product[]; on
           </table>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {key && (
+            <Button variant="ghost" onClick={onNew} disabled={busy} className="mr-auto">
+              {t('WIP ตัวใหม่ (รหัสถัดไป {code})', { code: nextWipCode([...products, ...items], key) })}
+            </Button>
+          )}
           {busy && <span className="text-xs text-ink-soft">{t('กำลังเพิ่ม {n}/{total}', { n: done, total: missing.size })}</span>}
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t('ยกเลิก')}

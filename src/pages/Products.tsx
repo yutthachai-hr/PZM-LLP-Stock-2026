@@ -14,6 +14,7 @@ import { DataTable } from '../components/DataTable'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { BarcodeImportModal } from './products/BarcodeImportModal'
 import { WipCatalogModal } from './products/WipCatalogModal'
+import { WIP_CATEGORY } from '../lib/wipCode'
 import { updateProduct } from '../services/products'
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
 import { exportExcel } from '../lib/export'
@@ -83,6 +84,8 @@ export function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
   const [addingWip, setAddingWip] = useState(false)
+  /** The category a new product starts in: WIP when it was started from the WIP list. */
+  const [newCategory, setNewCategory] = useState('')
   const [seeding, setSeeding] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [settingMin, setSettingMin] = useState(false)
@@ -499,7 +502,17 @@ export function ProductsPage() {
         </div>
       )}
 
-      {addingWip && <WipCatalogModal products={products} onClose={() => setAddingWip(false)} />}
+      {addingWip && (
+        <WipCatalogModal
+          products={products}
+          onClose={() => setAddingWip(false)}
+          onNew={() => {
+            setAddingWip(false)
+            setNewCategory(WIP_CATEGORY)
+            setCreating(true)
+          }}
+        />
+      )}
 
       {importingBarcodes && (
         <BarcodeImportModal products={products} onClose={() => setImportingBarcodes(false)} onDone={() => undefined} />
@@ -546,9 +559,11 @@ export function ProductsPage() {
           product={editing}
           categories={categories}
           canEdit={isAdmin}
+          initialCategory={newCategory || undefined}
           onClose={() => {
             setCreating(false)
             setEditing(null)
+            setNewCategory('')
           }}
         />
       )}
