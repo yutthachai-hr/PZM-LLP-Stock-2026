@@ -21,6 +21,7 @@ import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
 import type { MonthlyCount, MonthlyCountResult, StockMovement } from '../../types'
+import { CountImport } from './CountImport'
 import { MonthLabel, StatusBadge } from './labels'
 
 type Edits = Record<string, number | null>
@@ -50,6 +51,8 @@ export function MonthlyCountSheet() {
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState<'record' | 'post' | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [asOpening, setAsOpening] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -226,7 +229,16 @@ export function MonthlyCountSheet() {
             diff: r.diff ?? 0,
           })),
         )
-        const docs = await postMonthlyCount({ id, parts, results, actor, note: t('นับสต๊อกประจำเดือน {month}', { month: sheet.month }) })
+        const docs = await postMonthlyCount({
+          id,
+          parts,
+          results,
+          actor,
+          reason: asOpening ? 'opening' : 'count',
+          note: asOpening
+            ? t('ตั้งยอดเริ่มต้นระบบจากยอดนับ {month}', { month: sheet.month })
+            : t('นับสต๊อกประจำเดือน {month}', { month: sheet.month }),
+        })
         toast.success(docs.length ? t('ปรับสต๊อกแล้ว: {docs}', { docs: docs.join(', ') }) : t('ยืนยันแล้ว — ไม่มีรายการที่ต้องปรับ'))
       }
       setAsking(null)
@@ -359,7 +371,13 @@ export function MonthlyCountSheet() {
           </>
         }
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {counting && (
+              <Button variant="secondary" onClick={() => setImporting(true)}>
+                <Icon name="upload" size={16} />
+                {t('นำเข้าจาก Excel')}
+              </Button>
+            )}
             <Link to="/counts" className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-ink-soft hover:bg-sunken">
               <Icon name="chevronLeft" size={16} />
               {t('ใบนับทั้งหมด')}
@@ -471,9 +489,20 @@ export function MonthlyCountSheet() {
       <Modal open={asking !== null} onClose={() => !busy && setAsking(null)} title={asking === 'post' ? t('ยืนยันและปรับสต๊อก') : t('บันทึกผลนับไว้ดู (ไม่ปรับ)')} compact>
         <div className="space-y-3 text-sm text-ink">
           {asking === 'post' ? (
-            <p>
-              {t('ระบบจะปรับ {n} รายการที่มีผลต่าง เป็นใบปรับสต๊อกลงวันที่ {date} เหตุผล "ปรับตามการนับ" — รายการรับ/เบิก/โอนหลังวันนั้นอยู่ครบ รายการที่ยังไม่นับจะไม่ถูกปรับ', { n: toPost, date: dayLabel })}
-            </p>
+            <>
+              <p>
+                {t('ระบบจะปรับ {n} รายการที่มีผลต่าง เป็นใบปรับสต๊อกลงวันที่ {date} เหตุผล "ปรับตามการนับ" — รายการรับ/เบิก/โอนหลังวันนั้นอยู่ครบ รายการที่ยังไม่นับจะไม่ถูกปรับ', { n: toPost, date: dayLabel })}
+              </p>
+              <label className="flex items-start gap-2 rounded-lg border border-line bg-sunken px-3 py-2">
+                <input type="checkbox" className="mt-1" checked={asOpening} onChange={(e) => setAsOpening(e.target.checked)} />
+                <span>
+                  <b>{t('ตั้งยอดเริ่มต้นระบบ')}</b>
+                  <span className="block text-xs text-ink-soft">
+                    {t('ใช้ครั้งแรกที่เริ่มใช้ระบบจริง — ลงเหตุผลเป็น "ตั้งยอด/ยอดยกมา" แทน "ปรับตามการนับ" ผลต่างจากช่วงทดลองระบบจะไม่ถูกนับเป็นของหาย/ของเสียในรายงาน')}
+                  </span>
+                </span>
+              </label>
+            </>
           ) : (
             <p>{t('เก็บผลนับไว้เป็นประวัติ สต๊อกไม่ถูกปรับ และแก้ยอดนับในใบนี้ไม่ได้อีก — กดยืนยันและปรับสต๊อกทีหลังได้')}</p>
           )}
@@ -492,6 +521,19 @@ export function MonthlyCountSheet() {
           </div>
         </div>
       </Modal>
+      {importing && (
+        <CountImport
+          open
+          onClose={() => setImporting(false)}
+          locationName={locationById(sheet.locationId)?.name ?? ''}
+          month={sheet.month}
+          products={products}
+          existing={Object.fromEntries(Object.entries(lines).map(([pid, l]) => [pid, l.qty]))}
+          onApply={(counts) => {
+            for (const [pid, qty] of Object.entries(counts)) setCount(pid, qty)
+          }}
+        />
+      )}
     </FramePage>
   )
 }
