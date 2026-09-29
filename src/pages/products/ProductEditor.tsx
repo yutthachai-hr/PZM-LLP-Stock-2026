@@ -36,6 +36,8 @@ import type { CostEntry, Product } from '../../types'
 import { CostBlock, type PriceDraft } from '../../components/CostBlock'
 import { setProductCost } from '../../services/productCost'
 import { useT } from '../../i18n/I18nContext'
+import { isWipCategory, nextWipCode, type WipBrand } from '../../lib/wipCode'
+import { WIP_ITEMS } from '../../seed/wip'
 import { errText } from '../../i18n/AppError'
 
 
@@ -43,17 +45,20 @@ export function ProductEditor({
   product,
   categories,
   canEdit,
+  initialCategory,
   onClose,
 }: {
   product: Product | null
   categories: string[]
   canEdit: boolean
+  /** The category a new product starts in (WIP, when started from the WIP list). */
+  initialCategory?: string
   onClose: () => void
 }) {
   const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
-  const { locations, qtyAt } = useData()
+  const { locations, qtyAt, products } = useData()
   const { user } = useAuth()
   const { brand } = useBrand()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -62,7 +67,7 @@ export function ProductEditor({
     sku: product?.sku ?? '',
     barcode: product?.barcode ?? '',
     name: product?.name ?? '',
-    category: product?.category ?? '',
+    category: product?.category ?? initialCategory ?? '',
     unit: product?.unit ?? t("หน่วย"),
     unitType: product?.unitType ?? 'EA',
     minStock: product?.minStock ?? 0,
@@ -193,7 +198,7 @@ export function ProductEditor({
       } else {
         const { cost: _cost, ...input } = form
         void _cost
-        id = await createProduct(input)
+        id = await createProduct(autoCode ? { ...input, sku: autoCode } : input)
         setCreatedId(id)
         // A price keyed on a new product rides along with the creation.
         if (priceDraft && user) {
@@ -256,6 +261,14 @@ export function ProductEditor({
 
   const preview = removeImg ? null : (newImg ?? existingImg)
 
+  // A new WIP item takes the next code in its brand's series by itself (owner, 30 Sep 2026)
+  // — nobody has to look up where the numbering has got to. Worked out from the catalogue as
+  // it stands, so it is current at the moment of saving too. The numbers on the reviewed list
+  // (seed/wip.ts) are held for it even before it is added, so a new item never takes one.
+  const wipBrand = brand ? (brandDef(brand).sheetKey as WipBrand) : null
+  const autoCode =
+    !product && !createdId && wipBrand && isWipCategory(form.category) ? nextWipCode([...products, ...WIP_ITEMS[wipBrand]], wipBrand) : null
+
   return (
     <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -308,11 +321,11 @@ export function ProductEditor({
             disabled={!canEdit}
           />
         </Field>
-        <Field label={t("SKU / รหัส")}>
+        <Field label={t("SKU / รหัส")} hint={autoCode ? t('สินค้า WIP — รหัสรันต่อให้อัตโนมัติ') : undefined}>
           <Input
-            value={form.sku}
+            value={autoCode ?? form.sku}
             onChange={(e) => setForm({ ...form, sku: e.target.value })}
-            disabled={!canEdit}
+            disabled={!canEdit || !!autoCode}
           />
         </Field>
         {/* The number on the box (owner, 22 Sep 2026). The SKU stays the identity; this is

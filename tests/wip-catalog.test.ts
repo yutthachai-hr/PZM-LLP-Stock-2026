@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from 'vitest'
 import { missingWip, WIP_ITEMS } from '../src/seed/wip'
+import { wipCode } from '../src/lib/wipCode'
 import { LLP_PRODUCTS, PZM_PRODUCTS } from '../src/seed/catalog.generated'
 
 // The workbook importer's own test for an item code (lib/stockSheet).
@@ -17,9 +18,16 @@ describe('WIP catalogue', () => {
     expect(new Set(all.map((i) => i.sku)).size).toBe(all.length)
   })
 
-  test('each brand in its own numbering: PZM WIP-01-…, LLP WIP-LL-01-…', () => {
-    expect(WIP_ITEMS.PZM.every((i) => /^WIP-01-\d{2}-\d{3}$/.test(i.sku))).toBe(true)
-    expect(WIP_ITEMS.LLP.every((i) => /^WIP-LL-01-\d{2}-\d{3}$/.test(i.sku))).toBe(true)
+  // "รันตามลำดับ" (owner, 30 Sep 2026): one running number per brand, no gaps, in file order.
+  test('each brand numbered 1, 2, 3 … in its own series', () => {
+    expect(WIP_ITEMS.PZM.map((i) => i.sku)).toEqual(WIP_ITEMS.PZM.map((_, n) => wipCode(n + 1, 'PZM')))
+    expect(WIP_ITEMS.LLP.map((i) => i.sku)).toEqual(WIP_ITEMS.LLP.map((_, n) => wipCode(n + 1, 'LLP')))
+  })
+
+  test('PZM 1–20 keep the numbers the workbook gives them, cookies follow', () => {
+    expect(WIP_ITEMS.PZM.find((i) => i.sku === 'WIP-007')?.name).toBe('House Italian')
+    expect(WIP_ITEMS.PZM.find((i) => i.sku === 'WIP-018')?.name).toBe('Pizza Sauce truffes')
+    expect(WIP_ITEMS.PZM.find((i) => i.sku === 'WIP-021')?.name).toBe('THE YUMMY')
   })
 
   test('no code collides with the company catalogue', () => {
@@ -28,12 +36,12 @@ describe('WIP catalogue', () => {
   })
 
   test('a dough ball knows its tray', () => {
-    expect(WIP_ITEMS.PZM.find((i) => i.sku === 'WIP-01-01-001')?.unitConversions).toEqual([{ label: 'ถาด', size: 12 }])
+    expect(WIP_ITEMS.PZM.find((i) => i.sku === 'WIP-001')?.unitConversions).toEqual([{ label: 'ถาด', size: 12 }])
   })
 
   test('only what a catalogue lacks is offered, matched by code', () => {
-    const left = missingWip(WIP_ITEMS.LLP, [{ sku: 'wip-ll-01-05-001' }])
-    expect(left.map((i) => i.sku)).not.toContain('WIP-LL-01-05-001')
+    const left = missingWip(WIP_ITEMS.LLP, [{ sku: 'wip-ll-001' }])
+    expect(left.map((i) => i.sku)).not.toContain('WIP-LL-001')
     expect(left).toHaveLength(WIP_ITEMS.LLP.length - 1)
   })
 })

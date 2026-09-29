@@ -2565,4 +2565,7 @@ export const EN: Record<string, string> = {
   'ยอดนับของ "{name}" เป็น {unit}': 'Count of "{name}" in {unit}',
   'ใช้ {qty} ตามไฟล์ (ไฟล์นับเป็น {unit} อยู่แล้ว)': 'Use the file\'s {qty} (already counted in {unit})',
   'ใส่ยอดนับ': 'Enter the count',
+  // ---- WIP codes run by themselves (30 Sep 2026) ----
+  'สินค้า WIP — รหัสรันต่อให้อัตโนมัติ': 'WIP item — the code runs on by itself',
+  'WIP ตัวใหม่ (รหัสถัดไป {code})': 'New WIP item (next code {code})',
 }
