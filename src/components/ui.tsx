@@ -211,6 +211,7 @@ export function Modal({
   sheet,
   compact,
   footer,
+  keepOnOverlay,
 }: {
   open: boolean
   onClose: () => void
@@ -242,6 +243,12 @@ export function Modal({
    * and up it is the side drawer. Implies `side`.
    */
   sheet?: boolean
+  /**
+   * A click on the backdrop leaves the dialog open. For a dialog holding a long piece of
+   * work, where a stray click past its edge must not throw it away (owner, 30 Sep 2026: the
+   * count import closed three times under him, answers and all). ✕ and Escape still close.
+   */
+  keepOnOverlay?: boolean
 }) {
   const t = useT()
   const panel = useRef<HTMLDivElement>(null)
@@ -326,7 +333,7 @@ export function Modal({
         pressedOnOverlay.current = e.target === e.currentTarget
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && pressedOnOverlay.current) onClose()
+        if (!keepOnOverlay && e.target === e.currentTarget && pressedOnOverlay.current) onClose()
         pressedOnOverlay.current = false
       }}
     >
