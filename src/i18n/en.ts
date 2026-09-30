@@ -2568,4 +2568,7 @@ export const EN: Record<string, string> = {
   // ---- WIP codes run by themselves (30 Sep 2026) ----
   'สินค้า WIP — รหัสรันต่อให้อัตโนมัติ': 'WIP item — the code runs on by itself',
   'WIP ตัวใหม่ (รหัสถัดไป {code})': 'New WIP item (next code {code})',
+  // ---- count import keeps a draft (30 Sep 2026) ----
+  'ทำต่อจากร่างที่ค้างไว้ในเครื่องนี้ — คำตอบเดิมอยู่ครบ': 'Carrying on from the draft kept on this device — every answer is still here',
+  'ล้างร่าง เริ่มใหม่': 'Clear the draft and start again',
 }

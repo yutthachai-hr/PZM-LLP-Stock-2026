@@ -556,6 +556,7 @@ export function MonthlyCountSheet() {
       {importing && (
         <CountImport
           open
+          draftKey={id}
           onClose={() => setImporting(false)}
           locationName={locationById(sheet.locationId)?.name ?? ''}
           month={sheet.month}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useDraft } from '../../lib/useDraft'
 import { useBrand } from '../../brand/BrandContext'
 import { brandDef } from '../../brand/brand'
 import { useToast } from '../../components/Toast'
@@ -49,6 +50,7 @@ export type ImportedQuestion = Omit<MonthlyCountQuestion, 'by' | 'byName' | 'at'
  */
 export function CountImport({
   open,
+  draftKey,
   onClose,
   locationName,
   month,
@@ -57,6 +59,8 @@ export function CountImport({
   onApply,
 }: {
   open: boolean
+  /** The count sheet this import fills: its answers are kept on this device under it. */
+  draftKey: string
   onClose: () => void
   locationName: string
   month: string
@@ -75,6 +79,37 @@ export function CountImport({
   const [decisions, setDecisions] = useState<Record<string, Decision>>({})
   const [dupPick, setDupPick] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+
+  // Everything answered so far, kept on this device as it is typed (owner, 30 Sep 2026: "ทำไม
+  // ไม่มี Draft" — the dialog closed three times under him and took every answer with it). The
+  // file itself is kept as read, so coming back needs no file picked again.
+  const { restored, clear: clearDraft } = useDraft(
+    `count-import:${draftKey}`,
+    { fileName, sheets, sheetName, colKey, decisions, dupPick },
+    (d) => {
+      if (!Array.isArray(d.sheets) || d.sheets.length === 0) return
+      setSheets(d.sheets)
+      setFileName(d.fileName ?? '')
+      setSheetName(d.sheetName ?? '')
+      setColKey(d.colKey ?? '')
+      setDecisions(d.decisions && typeof d.decisions === 'object' ? d.decisions : {})
+      setDupPick(d.dupPick && typeof d.dupPick === 'object' ? d.dupPick : {})
+    },
+    (d) => !Array.isArray(d.sheets) || d.sheets.length === 0,
+  )
+
+  function startOver() {
+    clearDraft()
+    setSheets([])
+    setFileName('')
+    setSheetName('')
+    setColKey('')
+    setDecisions({})
+    setDupPick({})
+  }
+  // Answers belong to one column of one sheet: a count typed for SKV.23 is not SRS.'s.
+  /** Which duplicate line is meant — per column, like every other answer. */
+  const dupKey = (productId: string | undefined) => `${sheetName}|${colKey}|${productId ?? ''}`
 
   const sheet = sheets.find((s) => s.name === sheetName) ?? null
   const columns = useMemo(() => (sheet ? importColumns(sheet) : []), [sheet])
@@ -119,7 +154,7 @@ export function CountImport({
     () =>
       rows.flatMap((r) => {
         if (r.status !== 'duplicate') return [r]
-        const pick = dupPick[r.productId ?? '']
+        const pick = dupPick[dupKey(r.productId)]
         if (!pick || pick === 'skip') return []
         const lines = r.alsoRows ?? []
         const p = byId.get(r.productId ?? '')
@@ -132,13 +167,13 @@ export function CountImport({
         const known = !same && chosen.fileUnit ? resolveFactor(p, chosen.fileUnit) : null
         return [{ ...r, ...chosen, status: same ? ('ready' as const) : ('unit' as const), ...(known !== null ? { knownRate: known } : {}) }]
       }),
-    [rows, dupPick, byId],
+    [rows, dupPick, byId, sheetName, colKey], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const ready = resolved.filter((r) => r.status === 'ready')
   const asking = resolved.filter((r) => r.status === 'unit' || r.status === 'unknown' || r.status === 'nosku')
   const dups = rows.filter((r) => r.status === 'duplicate')
-  const key = (r: ImportRow) => String(r.excelRow)
+  const key = (r: ImportRow) => `${sheetName}|${colKey}|${r.excelRow}`
 
   const initial = (r: ImportRow): Decision | undefined =>
     r.status === 'unit'
@@ -167,7 +202,7 @@ export function CountImport({
     return !!d && (d.kind === 'question' || d.kind === 'exclude' || landing(r) !== null)
   }
   const openRows = asking.filter((r) => !decided(r))
-  const undecidedDups = dups.filter((r) => !dupPick[r.productId ?? ''])
+  const undecidedDups = dups.filter((r) => !dupPick[dupKey(r.productId)])
   const landed = asking.map((r) => [r, landing(r)] as const).filter((x): x is readonly [ImportRow, { product: Product; qty: number }] => x[1] !== null)
   const goingIds = new Set([...ready.map((r) => r.productId!), ...landed.map(([, l]) => l.product.id)])
   const questionsCount = asking.filter((r) => decisionOf(r)?.kind === 'question').length
@@ -206,6 +241,7 @@ export function CountImport({
         }
       }
       await onApply({ counts, questions })
+      clearDraft()
       toast.success(
         t('เติมยอดนับ {n} รายการลงใบนับ และตั้งคำถาม {q} รายการ — ตรวจแล้วกดบันทึกยอดนับ', { n: Object.keys(counts).length, q: Object.keys(questions).length }),
       )
@@ -313,7 +349,7 @@ export function CountImport({
 
 
   return (
-    <Modal open={open} onClose={() => !busy && onClose()} title={t('นำเข้ายอดนับจาก Excel')} wide>
+    <Modal open={open} onClose={() => !busy && onClose()} title={t('นำเข้ายอดนับจาก Excel')} wide keepOnOverlay>
       <div className="space-y-4 text-sm">
         <AlertBanner tone="info" icon="info">
           {t('ยอดจากไฟล์เติมลงใบนับนี้เท่านั้น ยังไม่ปรับสต๊อก — ทุกแถวในไฟล์ต้องมีคำตอบ: หน่วยไม่ตรงใส่อัตรา, ไม่มีรหัสหรือรหัสไม่มีในระบบให้จับคู่สินค้า, ถ้ายังไม่แน่ใจตั้งเป็นคำถามไว้ก่อน (ยืนยันใบนับไม่ได้จนกว่าจะตอบ)')}
@@ -347,6 +383,16 @@ export function CountImport({
           )}
         </div>
         {fileName && <p className="text-xs text-ink-faint">{fileName}</p>}
+        {restored && sheets.length > 0 && (
+          <AlertBanner tone="info" icon="info">
+            <span className="flex flex-wrap items-center gap-2">
+              {t('ทำต่อจากร่างที่ค้างไว้ในเครื่องนี้ — คำตอบเดิมอยู่ครบ')}
+              <button type="button" onClick={startOver} className="rounded-lg border border-line px-2 py-1 text-xs hover:bg-sunken">
+                {t('ล้างร่าง เริ่มใหม่')}
+              </button>
+            </span>
+          </AlertBanner>
+        )}
 
         {rows.length > 0 && (
           <>
@@ -486,7 +532,7 @@ export function CountImport({
                             ({lines.map((l) => `${t('แถว {n}', { n: l.excelRow })}: ${fmtQty(l.qty)} ${l.fileUnit}`).join(' · ')})
                           </span>
                         </span>
-                        <Select value={dupPick[r.productId!] ?? ''} onChange={(e) => setDupPick((x) => ({ ...x, [r.productId!]: e.target.value }))} className="!w-auto">
+                        <Select value={dupPick[dupKey(r.productId)] ?? ''} onChange={(e) => setDupPick((x) => ({ ...x, [dupKey(r.productId)]: e.target.value }))} className="!w-auto">
                           <option value="">{t('— เลือก —')}</option>
                           {sameUnits && <option value="sum">{t('รวมกัน')}</option>}
                           {lines.map((l) => (
