@@ -256,11 +256,11 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
-npm test              # 836 unit tests
-npm run test:rules    # 197 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
-npm run build          # tsc -b + typecheck functions/ (Cloudflare) + vite build
-npm run lint            # 0 errors
-npm run i18n:check      # ครบทุกข้อความ
+npm test              # 950 unit tests
+npm run test:rules    # 214 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
+npm run build         # tsc -b + typecheck functions/ (Cloudflare) + vite build
+npm run lint          # 0 errors
+npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 ```
 
 ---
