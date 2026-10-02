@@ -110,6 +110,7 @@ export function SupplierDetail({
             <Row icon="building" label={t('ที่อยู่')} value={supplier.address} />
             <Row icon="fileSheet" label={t('เลขผู้เสียภาษี')} value={supplier.taxId} />
             <Row icon="cart" label={t('เงื่อนไขชำระเงิน')} value={supplier.paymentTerms} />
+            <Row icon="message" label={t('กลุ่ม LINE')} value={supplier.lineGroup} />
             <Row icon="clock" label={t('ระยะเวลาส่ง')} value={supplier.leadTimeDays === undefined ? '' : t('{n} วัน', { n: supplier.leadTimeDays })} />
             <Row icon="pin" label={t('หมายเหตุ')} value={supplier.note} />
             <div className="border-t border-line pt-2.5">
