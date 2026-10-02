@@ -298,6 +298,11 @@ export interface Supplier {
   paymentTerms?: string
   /** The supplier's own grouping — vegetables, packaging. Free text, not the product category. */
   category?: string
+  /**
+   * The LINE group their orders are sent to, by its name as it shows in LINE (owner, 2 Oct
+   * 2026: "จำชื่อกลุ่มไม่ได้"). Shown when sending; LINE's own picker still does the sending.
+   */
+  lineGroup?: string
   /** Links to papers kept elsewhere (Drive, Dropbox). Nothing is uploaded: Spark has no Storage. */
   links?: SupplierLink[]
   /** Where this supplier's deliveries usually land. The automatic order offers it first. */

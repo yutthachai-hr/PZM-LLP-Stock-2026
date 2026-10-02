@@ -722,6 +722,7 @@ function SupplierEditor({
     taxId: supplier?.taxId ?? '',
     paymentTerms: supplier?.paymentTerms ?? '',
     category: supplier?.category ?? '',
+    lineGroup: supplier?.lineGroup ?? '',
     links: supplier?.links ?? [],
   })
   const [busy, setBusy] = useState(false)
@@ -805,6 +806,9 @@ function SupplierEditor({
         </div>
         <Field label={t('เงื่อนไขชำระเงิน')} hint={t('เช่น เงินสด, เครดิต 30 วัน')}>
           <Input value={form.paymentTerms ?? ''} onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })} />
+        </Field>
+        <Field label={t('กลุ่ม LINE')} hint={t('ชื่อกลุ่ม LINE ที่ส่งใบสั่งซื้อให้ผู้ขายนี้ — ขึ้นตอนกดส่ง จะได้ไม่ต้องจำ')}>
+          <Input value={form.lineGroup ?? ''} onChange={(e) => setForm({ ...form, lineGroup: e.target.value })} maxLength={100} placeholder={t('เช่น PZM x ZAKANA สั่งของ')} />
         </Field>
         <LinksEditor links={form.links ?? []} onChange={(links) => setForm({ ...form, links })} />
         <Field label={t('รับคืนของ')}>

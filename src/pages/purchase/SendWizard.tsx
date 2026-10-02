@@ -5,6 +5,7 @@ import { brandDef } from '../../brand/brand'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
+import { useSuppliers } from '../../services/suppliers'
 import { PoSheet, SheetLangToggle } from '../../components/PoSheet'
 import { Badge, Button, Modal } from '../../components/ui'
 import { useI18n, useT, type Lang } from '../../i18n/I18nContext'
@@ -51,6 +52,9 @@ export function SendWizard({
   const { brand } = useBrand()
   const { locationById } = useData()
   const company = brand ? brandDef(brand).name : ''
+  // Which LINE group each supplier's orders go to (owner, 2 Oct 2026). The list is read once
+  // per session and held, so this costs nothing per send.
+  const suppliers = useSuppliers()
 
   // Once an order has been sent (or skipped) in THIS wizard it is done; `resend` only
   // decides whether one that was already sent before the wizard opened is offered again.
@@ -187,6 +191,17 @@ export function SendWizard({
           {pages.length > 1 && <Badge color="amber">{t('รูปที่ {n} จาก {of}', { n: page.n, of: page.of })}</Badge>}
           {current.shareStatus === 'failed' && <Badge color="red">{t('ครั้งก่อนส่งไม่สำเร็จ')}</Badge>}
         </div>
+        {(() => {
+          const group = suppliers.find((s) => s.id === current.supplierId)?.lineGroup
+          return group ? (
+            <div className="flex items-center gap-2 rounded-lg bg-in-soft px-3 py-2 text-sm font-semibold text-in">
+              <Icon name="message" size={16} />
+              {t('ส่งเข้ากลุ่ม LINE: {name}', { name: group })}
+            </div>
+          ) : (
+            <p className="text-xs text-ink-faint">{t('ยังไม่ได้ระบุกลุ่ม LINE ของผู้ขายนี้ — ใส่ได้ที่หน้าผู้ขาย')}</p>
+          )
+        })()}
         <SheetLangToggle value={sheetLang} onChange={setSheetLang} />
         <PoSheet
           order={current}
