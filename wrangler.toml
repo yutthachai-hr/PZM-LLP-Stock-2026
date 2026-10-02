@@ -12,3 +12,7 @@ compatibility_flags = ["nodejs_compat"]
 [[kv_namespaces]]
 binding = "PO_IMAGES"
 id = "227ca0f947374f5d9ddf9752b7ea506c"
+
+# Bill OCR fallback when Gemini's free quota is used up (functions/api/ocr-bill.ts).
+[ai]
+binding = "AI"

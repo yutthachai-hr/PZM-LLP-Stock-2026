@@ -17,10 +17,13 @@ interface OcrEnv extends Env {
   GEMINI_API_KEY?: string
   /** Optional override of the model, e.g. when Google retires the default. */
   GEMINI_MODEL?: string
+  /** Workers AI binding (wrangler.toml [ai]) — fallback when Gemini's free quota runs out (429). */
+  AI?: Ai
 }
 
 const MAX_IMAGE_CHARS = 4_000_000
 const DEFAULT_MODEL = 'gemini-2.5-flash'
+const FALLBACK_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct'
 
 const PROMPT = [
   'You read a supplier delivery note or invoice from a Thai restaurant supplier.',
@@ -58,11 +61,30 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
       generationConfig: { responseMimeType: 'application/json', temperature: 0 },
     }),
   })
+  if (res.status === 429 && env.AI) return reply(await fallback(env.AI, image))
   if (!res.ok) return json(502, { error: 'model', status: res.status })
   const out = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-  const text = out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  return reply(out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '')
+}
+
+/** Gemini's free tier is out for the day/minute — ask Workers AI (10k neurons/day free) instead. */
+async function fallback(ai: Ai, image: string): Promise<unknown> {
   try {
-    return json(200, JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, '')))
+    const out = (await ai.run(FALLBACK_MODEL as Parameters<Ai['run']>[0], {
+      messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, { type: 'image_url', image_url: { url: image } }] }],
+      max_tokens: 2048,
+      temperature: 0,
+    } as never)) as { response?: unknown }
+    return out.response ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function reply(answer: unknown): Response {
+  if (answer && typeof answer === 'object') return json(200, answer)
+  try {
+    return json(200, JSON.parse(String(answer).replace(/^[\s\S]*?(?=\{)|(?<=\})[^}]*$/g, '')))
   } catch {
     return json(502, { error: 'unreadable' })
   }
