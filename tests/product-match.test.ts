@@ -142,6 +142,17 @@ describe('what counts as an answer', () => {
     expect(m.candidates.map((c) => c.product.name)).not.toContain('GAS 48 KG (BRANCH 3)')
   })
 
+  // Owner, 2 Oct 2026: it was in the catalogue and still came up as unknown.
+  test('a unit word between the numbers is the same product', () => {
+    const m = matchProduct('MOZZARELLA WHOLE MILK 2.72 kg*8', index())
+    expect(m).toMatchObject({ kind: 'exact', product: byName('MOZZARELLA WHOLE MILK 2.72*8 (FOODGALLERY)') })
+  })
+
+  test('dropping the unit word never makes two sizes one', () => {
+    expect(matchProduct('TOMATO SAUCE 4.05 KG ', index()).kind).toBe('none')
+    expect(matchProduct('FRENCH FRIES  3/8 2.26KG', index()).kind).toBe('none')
+  })
+
   test('a Thai name the catalogue has never seen has nothing to offer', () => {
     const m = matchProduct('กุ้งขาว', index())
     expect(m.kind).toBe('none')
@@ -175,6 +186,28 @@ describe('an alias is remembered', () => {
     }
     const m = matchProduct('blue cheese 3 kg', buildMatchIndex(CATALOGUE, [alias]))
     expect(m).toMatchObject({ kind: 'alias', product: topfood })
+  })
+
+  // Owner's workbook, 2 Oct 2026: TGM's bacon confirmed, Betagro's bacon then took it too.
+  test('a spelling confirmed for one supplier does not settle the same name from another supplier', () => {
+    const bacon = byName('SMOKED BACON SLICED 1 KG (TGM)')
+    const alias: ProductAlias = {
+      id: 'a3',
+      key: normaliseName('SMOKED BACON(TGM)'),
+      productId: bacon.id,
+      sourceName: 'SMOKED BACON(TGM)',
+      createdBy: 'u1',
+      createdByName: 'AA',
+      createdAt: 0,
+    }
+    const idx = buildMatchIndex(CATALOGUE, [alias])
+    expect(matchProduct('SMOKED BACON (TGM)', idx)).toMatchObject({ kind: 'alias', product: bacon })
+    const other = matchProduct('SMOKED BACON(เบทาโก)', idx)
+    expect(other.kind).toBe('none')
+    expect(other.product).toBeUndefined()
+    expect(other.candidates[0].product).toBe(bacon)
+    // No bracket at all is the same spelling as before.
+    expect(matchProduct('SMOKED BACON', idx)).toMatchObject({ kind: 'alias', product: bacon })
   })
 
   test('a Thai spelling reaches its product through an alias only', () => {
