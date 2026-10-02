@@ -1,5 +1,5 @@
 import { AppError } from '../i18n/AppError'
-import { ANNOUNCE_PARAM, RESUME_PARAM, handedOverToLine, isStandalone, liffUrl, rememberHandOver, resumeUrl } from './liffResume'
+import { ANNOUNCE_PARAM, DIGEST_PARAM, RESUME_PARAM, handedOverToLine, isStandalone, liffUrl, rememberHandOver, resumeUrl } from './liffResume'
 import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './PurchaseShareProvider'
 
 /**
@@ -106,7 +106,8 @@ export const lineLiffProvider: PurchaseShareProvider = {
   async share(payload: SharePayload): Promise<ShareOutcome> {
     const sdk = await liff()
     const { id } = payload.subject
-    const param = payload.subject.kind === 'announcement' ? ANNOUNCE_PARAM : RESUME_PARAM
+    const param =
+      payload.subject.kind === 'announcement' ? ANNOUNCE_PARAM : payload.subject.kind === 'digest' ? DIGEST_PARAM : RESUME_PARAM
     if (!sdk.isLoggedIn()) {
       // A home-screen app cannot finish a login round trip (the browser it comes back in
       // is not the app), so the same page is opened inside LINE, where LIFF is signed in
@@ -131,6 +132,11 @@ export const lineLiffProvider: PurchaseShareProvider = {
       throw new AppError('LINE รุ่นนี้หรือการตั้งค่า LIFF ยังไม่รองรับการเลือกผู้รับ')
     }
     if (payload.file && !payload.hosted) throw new AppError('ยังไม่มีรูปสำหรับส่ง')
+    // A card (the daily digest) goes on its own: its rows are the links.
+    if (payload.flex) {
+      const sent = await sdk.shareTargetPicker([{ type: 'flex', altText: payload.flex.altText, contents: payload.flex.contents as never }], { isMultiple: true })
+      return sent && sent.status === 'success' ? 'sent' : 'cancelled'
+    }
     // The caption first, then the picture — what the supplier sees is the same as when
     // the sheet is shared from a phone, where the share sheet carries the title itself.
     // A text-only announcement is the caption alone.

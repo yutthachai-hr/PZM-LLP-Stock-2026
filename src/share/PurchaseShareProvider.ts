@@ -25,7 +25,8 @@ export type ShareOutcome = 'sent' | 'shareOpened' | 'cancelled'
  * (share/liffResume.ts).
  */
 export interface ShareSubject {
-  kind: 'order' | 'announcement'
+  /** 'digest' — the dashboard's daily summary (Automation Plan Phase 5, 25 Sep 2026). */
+  kind: 'order' | 'announcement' | 'digest'
   id: string
 }
 
@@ -45,6 +46,11 @@ export interface SharePayload {
    * (owner, 21 Sep 2026: the tablet and the computer were sending a bare picture).
    */
   caption: string
+  /**
+   * A LINE Flex card to send instead of the caption, for the LIFF picker (the digest). The
+   * share sheet and the clipboard, which cannot carry one, send `caption` as before.
+   */
+  flex?: { altText: string; contents: Record<string, unknown> }
 }
 
 export interface PurchaseShareProvider {

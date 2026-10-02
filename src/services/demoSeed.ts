@@ -85,6 +85,8 @@ export async function resetDemoData(): Promise<DemoSeedResult> {
       result.suppliers += await seedSuppliers()
       // Logistics switched on, so a showing can approve a transfer without a trip to Settings.
       await ensureTransitLocation(brand.id)
+      // A few recipes, so the POS-sales import can be shown end to end (Phase 3).
+      if (brand.id === 'pizza') await seedDemoRecipes()
     }
   } finally {
     setActiveBrand(was)
@@ -124,6 +126,37 @@ async function seedSuppliers(): Promise<number> {
   if (proposal.suppliers.length === 0) return 0
   const { suppliers } = await applySupplierProposal(proposal.suppliers)
   return suppliers
+}
+
+/**
+ * Three sample recipes for the demo only, from whatever the catalogue has that looks like
+ * the ingredient — so a showing can drop a sales file and see stock used. The quantities
+ * are illustrative; the live system starts with none.
+ */
+async function seedDemoRecipes(): Promise<void> {
+  const products = await backend.getAll<Product>(COL.products)
+  const find = (re: RegExp) => products.find((p) => p.active !== false && re.test(p.name))
+  const per = (p: Product) => (/^(KG|Kilogram|L|Litre)$/i.test(p.unitType) ? 0.12 : /^(G|g|Gram)$/.test(p.unitType) ? 120 : 1)
+  const line = (p: Product | undefined, qty?: number) =>
+    p ? [{ productId: p.id, productName: p.name, unit: p.unitType, qty: qty ?? per(p) }] : []
+  const cheese = find(/MOZZARELLA/i)
+  const tomato = find(/TOMATO/i)
+  const now = Date.now()
+  const recipes = [
+    { code: '45', name: 'Margherita', lines: [...line(cheese), ...line(tomato)] },
+    { code: '48', name: 'Pepperoni', lines: [...line(cheese), ...line(tomato), ...line(find(/PEPPERONI/i))] },
+    { code: '25', name: 'Hawaiian', lines: [...line(cheese), ...line(find(/HAM/i)), ...line(find(/PINEAPPLE/i))] },
+  ]
+  for (const [i, r] of recipes.entries()) {
+    await backend.set(COL.recipes, `demo-recipe-${i}`, {
+      ...r,
+      active: true,
+      createdBy: 'demo',
+      createdByName: 'Demo',
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
 }
 
 async function renameToThai(brand: BrandId): Promise<void> {

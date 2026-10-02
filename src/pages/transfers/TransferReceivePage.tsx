@@ -124,7 +124,19 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
   const diffs = lines.filter((i) => roundQty(counts[i.idx].qty - expectedQty(i)) !== 0)
   const unchecked = lines.filter((i) => !counts[i.idx].checked)
 
-  async function submit() {
+  /**
+   * "รับครบตามใบส่ง" (Automation Plan Phase 2): everything arrived as sent — every line at its
+   * sent quantity, ticked, and filed in the same press. A line that differs is still keyed
+   * one by one below.
+   */
+  async function receiveAllAsSent() {
+    const all = Object.fromEntries(lines.map((i) => [i.idx, { ...counts[i.idx], qty: expectedQty(i), checked: true }]))
+    setCounts(all)
+    await submit(all)
+  }
+
+  async function submit(use: Record<number, Count> = counts) {
+    const unchecked = lines.filter((i) => !use[i.idx].checked)
     if (unchecked.length > 0) {
       const ok = await confirm({
         title: t('ยืนยันรับสินค้า'),
@@ -137,7 +149,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     try {
       const receivedLines: ReceivedLineInput[] = []
       for (const i of lines) {
-        const c = counts[i.idx]
+        const c = use[i.idx]
         const diff = roundQty(c.qty - expectedQty(i)) !== 0
         const photoId = diff && c.photo ? await saveDiscrepancyPhoto(transfer.docNo, i.idx, c.photo) : undefined
         receivedLines.push({
@@ -171,6 +183,19 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
       />
 
       {!allowed && <AlertBanner tone="danger">{t('ไม่มีสิทธิ์ตรวจรับสินค้าที่สาขานี้')}</AlertBanner>}
+
+      {allowed && diffs.length === 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-in/30 bg-in-soft px-4 py-3">
+          <div className="min-w-0 flex-1 text-sm text-ink">
+            <div className="font-semibold">{t('ของมาครบตามใบส่งทุกรายการ?')}</div>
+            <div className="text-xs text-ink-soft">{t('กดครั้งเดียว รับเข้าสาขาตามจำนวนที่ส่งมาทั้ง {n} รายการ — ถ้ามีรายการไม่ตรง ให้แก้จำนวนด้านล่างแทน', { n: lines.length })}</div>
+          </div>
+          <Button variant="success" onClick={() => void receiveAllAsSent()} disabled={busy} className="w-full sm:w-auto">
+            <Icon name="checkCircle" size={18} />
+            {t('รับครบตามใบส่ง')}
+          </Button>
+        </div>
+      )}
 
       <SectionCard icon="barcode" title={t('ยิงบาร์โค้ด / ค้นหาสินค้า')}>
         <div className="flex gap-2">

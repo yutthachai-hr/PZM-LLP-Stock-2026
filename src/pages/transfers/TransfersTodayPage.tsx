@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { BarcodeScanner } from '../../components/BarcodeScanner'
+import { readTransferCode } from '../../lib/transferQr'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -44,6 +46,19 @@ export function TransfersTodayPage() {
   const [rows, setRows] = useState<Transfer[] | null>(null)
   const [card, setCard] = useState<ArrivalCard>('coming')
   const [reporting, setReporting] = useState(false)
+  // Scanning a transfer's Master QR opens its receiving page (Automation Plan Phase 2).
+  const [scanning, setScanning] = useState(false)
+
+  function openScanned(code: string) {
+    setScanning(false)
+    const hit = readTransferCode(code)
+    const id = hit && ('id' in hit ? hit.id : rows?.find((r) => r.docNo === hit.docNo)?.id)
+    if (!id) {
+      toast.error(t('ไม่พบใบโอนจาก QR นี้'))
+      return
+    }
+    navigate(`/transfers/${id}/receive`)
+  }
 
   const actor = useMemo(() => (user ? { id: user.id, name: user.name, role: user.role, siteIds: user.siteIds } : null), [user])
   const mySites = useMemo(() => locations.filter((l) => l.active !== false && canUserAccessBranch(actor ?? undefined, l.id)), [locations, actor])
@@ -87,6 +102,10 @@ export function TransfersTodayPage() {
         }
         actions={
           <>
+            <Button onClick={() => setScanning(true)}>
+              <Icon name="barcode" size={16} />
+              {t('สแกน QR ใบโอน')}
+            </Button>
             <Button variant="outline" onClick={() => setReporting(true)}>
               <Icon name="warning" size={16} />
               {t('พบสินค้าส่งผิดสาขา')}
@@ -174,6 +193,7 @@ export function TransfersTodayPage() {
           }}
         />
       )}
+      <BarcodeScanner open={scanning} onClose={() => setScanning(false)} onRead={openScanned} title={t('สแกน QR ใบโอน')} />
     </FramePage>
   )
 }

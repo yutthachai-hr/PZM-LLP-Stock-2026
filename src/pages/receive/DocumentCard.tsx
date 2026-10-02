@@ -61,6 +61,8 @@ export function DocumentCard({
   onNote,
   duplicate,
   invalid,
+  onReadBill,
+  reading,
 }: {
   /** The order's supplier, when receiving against one. */
   locked?: string
@@ -79,6 +81,9 @@ export function DocumentCard({
   onNote: (v: string) => void
   duplicate: DuplicateDoc | null
   invalid: { supplier: boolean; invoice: boolean }
+  /** Read the attached picture with AI (Automation Plan Phase 4) — absent where unavailable. */
+  onReadBill?: () => void
+  reading?: boolean
 }) {
   const t = useT()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -169,6 +174,12 @@ export function DocumentCard({
                 </button>
               )}
             </div>
+            {photo && onReadBill && (
+              <Button variant="outline" onClick={onReadBill} disabled={reading} className="mt-2 w-full sm:w-auto">
+                <Icon name="sparkles" size={16} />
+                {reading ? t('AI กำลังอ่านบิล...') : t('อ่านบิลด้วย AI')}
+              </Button>
+            )}
           </Field>
         </div>
 

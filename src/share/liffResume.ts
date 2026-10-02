@@ -21,7 +21,10 @@ export const RESUME_PARAM = 'send'
 /** The same, for a company announcement (24 Sep 2026): its page reopens the send on it. */
 export const ANNOUNCE_PARAM = 'announce'
 
-export type ResumeParam = typeof RESUME_PARAM | typeof ANNOUNCE_PARAM
+/** The same, for the dashboard's daily digest (25 Sep 2026): the dashboard reopens the share. */
+export const DIGEST_PARAM = 'digest'
+
+export type ResumeParam = typeof RESUME_PARAM | typeof ANNOUNCE_PARAM | typeof DIGEST_PARAM
 
 /**
  * Which brand the order belongs to, carried alongside it.
@@ -56,7 +59,7 @@ export function liffUrl(orderId: string, param: ResumeParam = RESUME_PARAM): str
 export function brandToResume(): BrandId | null {
   if (typeof location === 'undefined') return null
   const p = new URLSearchParams(location.search)
-  if (!p.get(RESUME_PARAM) && !p.get(ANNOUNCE_PARAM)) return null
+  if (!p.get(RESUME_PARAM) && !p.get(ANNOUNCE_PARAM) && !p.get(DIGEST_PARAM)) return null
   const b = p.get(RESUME_BRAND_PARAM)
   return b === 'pizza' || b === 'lelapin' ? b : null
 }
