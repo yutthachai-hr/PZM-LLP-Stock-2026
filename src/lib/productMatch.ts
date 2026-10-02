@@ -56,6 +56,36 @@ export function normaliseName(raw: string): string {
   )
 }
 
+/** Weights and volumes, as the workbook writes them after a number. */
+const UNIT_WORDS = new Set(['KG', 'G', 'GR', 'GRAM', 'GRAMS', 'ML', 'L', 'LT', 'LTR'])
+
+/**
+ * A key with the unit word after a number dropped: "MOZZARELLA WHOLE MILK 2.72 kg*8" in the
+ * workbook against "2.72*8" in the catalogue (owner, 2 Oct 2026: it was in the system and
+ * still came up as unknown). Only the word goes — every number stays — so a different size,
+ * 4.05 against 4.10, or a pack size the catalogue does not write, still differs.
+ */
+export function looseKey(key: string): string {
+  const out: string[] = []
+  for (const t of key.split(' ')) {
+    if (UNIT_WORDS.has(t) && out.length > 0 && /^\d+(\.\d+)?$/.test(out[out.length - 1])) continue
+    out.push(t)
+  }
+  return out.join(' ')
+}
+
+/**
+ * What a name says in brackets — in the workbook that is usually the supplier: "SMOKED
+ * BACON (TGM)" and "SMOKED BACON (เบทาโก)" are two companies' bacon. normaliseName() drops it,
+ * so this is kept beside the key wherever the difference matters.
+ */
+export function bracketOf(raw: string): string {
+  return [...raw.matchAll(/\(([^()]*)\)/g)]
+    .map((m) => m[1].trim().toUpperCase().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .join(' ')
+}
+
 function tokens(key: string): Set<string> {
   return new Set(key.split(' ').filter(Boolean))
 }
@@ -105,8 +135,10 @@ const MAX_CANDIDATES = 5
  */
 export interface MatchIndex {
   byKey: Map<string, Product[]>
+  /** The same, by looseKey(): the name with the unit words after numbers dropped. */
+  byLoose: Map<string, Product[]>
   bySku: Map<string, Product>
-  aliasByKey: Map<string, string>
+  aliasByKey: Map<string, { productId: string; bracket: string }>
   keyed: { product: Product; key: string }[]
 }
 
@@ -115,17 +147,20 @@ export function buildMatchIndex(
   aliases: readonly ProductAlias[],
 ): MatchIndex {
   const byKey = new Map<string, Product[]>()
+  const byLoose = new Map<string, Product[]>()
   const bySku = new Map<string, Product>()
   const keyed: { product: Product; key: string }[] = []
   for (const p of products) {
     const key = normaliseName(p.name)
     keyed.push({ product: p, key })
     byKey.set(key, [...(byKey.get(key) ?? []), p])
+    const loose = looseKey(key)
+    byLoose.set(loose, [...(byLoose.get(loose) ?? []), p])
     bySku.set(p.sku.trim().toUpperCase(), p)
   }
-  const aliasByKey = new Map<string, string>()
-  for (const a of aliases) aliasByKey.set(a.key, a.productId)
-  return { byKey, bySku, aliasByKey, keyed }
+  const aliasByKey = new Map<string, { productId: string; bracket: string }>()
+  for (const a of aliases) aliasByKey.set(a.key, { productId: a.productId, bracket: bracketOf(a.sourceName) })
+  return { byKey, byLoose, bySku, aliasByKey, keyed }
 }
 
 /**
@@ -145,16 +180,26 @@ export function matchProduct(rawName: string, index: MatchIndex): ProductMatch {
   const bySku = index.bySku.get(rawName.trim().toUpperCase())
   if (bySku && bySku.active) return { kind: 'exact', key, product: bySku, candidates: [] }
 
-  const aliasTarget = index.aliasByKey.get(key)
-  if (aliasTarget) {
-    const p = index.keyed.find((k) => k.product.id === aliasTarget)?.product
-    if (p) return { kind: 'alias', key, product: p, candidates: [] }
+  // A spelling somebody confirmed — unless the brackets name someone else. Confirming
+  // "SMOKED BACON(TGM)" must not quietly settle "SMOKED BACON(เบทาโก)" on TGM's bacon (owner's
+  // workbook, 2 Oct 2026): that row is asked about instead.
+  const alias = index.aliasByKey.get(key)
+  if (alias) {
+    const p = index.keyed.find((k) => k.product.id === alias.productId)?.product
+    const said = bracketOf(rawName)
+    if (p && (!said || !alias.bracket || said === alias.bracket)) return { kind: 'alias', key, product: p, candidates: [] }
   }
 
   const same = (index.byKey.get(key) ?? []).filter((p) => p.active)
   if (same.length === 1) return { kind: 'exact', key, product: same[0], candidates: [] }
   if (same.length > 1) {
     return { kind: 'ambiguous', key, candidates: same.map((product) => ({ product, score: 1 })) }
+  }
+  // The same name but for a unit word after a number ("2.72 kg*8" against "2.72*8").
+  const loose = (index.byLoose.get(looseKey(key)) ?? []).filter((p) => p.active)
+  if (loose.length === 1) return { kind: 'exact', key, product: loose[0], candidates: [] }
+  if (loose.length > 1) {
+    return { kind: 'ambiguous', key, candidates: loose.map((product) => ({ product, score: 1 })) }
   }
 
   const scored: MatchCandidate[] = []

@@ -26,7 +26,11 @@ import {
   rowState,
 } from '../../services/purchaseBatch'
 import type { BatchRow, PurchaseBatch } from '../../types'
+import { buildMatchIndex, matchProduct } from '../../lib/productMatch'
+import { saveAlias } from '../../services/productAliases'
+import { updateProduct } from '../../services/products'
 import { badgeColor, issueText, rowStateText } from './issues'
+import { ResolveRowModal, type ResolveResult } from './ResolveRowModal'
 import { useAssessContext } from './useAssessContext'
 
 /**
@@ -40,6 +44,8 @@ import { useAssessContext } from './useAssessContext'
  */
 
 const LS_LOCATION = 'pmstock:purchase:locationId'
+/** The answers given on the preview, per file and order round, kept until the batch is made. */
+const LS_EDITS = 'pmstock:purchase:edits:'
 const LS_MAPPING = 'pmstock:purchase:mapping'
 
 function remembered<T>(key: string): T | null {
@@ -65,7 +71,7 @@ export function PurchaseImportPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { products, locations } = useData()
-  const { ctx, aliases, loading: ctxLoading, error: ctxError } = useAssessContext()
+  const { ctx, aliases, suppliers, loading: ctxLoading, error: ctxError, reload: reloadCtx } = useAssessContext()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [fileName, setFileName] = useState('')
@@ -81,6 +87,19 @@ export function PurchaseImportPage() {
   const [needsMapping, setNeedsMapping] = useState(false)
   const [locationId, setLocationId] = useState(() => remembered<string>(LS_LOCATION) ?? '')
   const [busy, setBusy] = useState(false)
+  // Rows settled right here on the preview (owner, 2 Oct 2026: "ตรวจยังไง ไม่มีให้เลือกอะไรเลย" —
+  // until now every question waited for the next page). Kept on this device per file and
+  // round, so closing the page loses nothing; cleared once the batch is made.
+  const [edits, setEdits] = useState<Record<number, BatchRow>>({})
+  const [resolving, setResolving] = useState<BatchRow | null>(null)
+  const editsKey = fileHash ? `${LS_EDITS}${fileHash}:${blockIdx}` : ''
+  useEffect(() => {
+    setEdits((editsKey && remembered<Record<number, BatchRow>>(editsKey)) || {})
+  }, [editsKey])
+  function keepEdits(next: Record<number, BatchRow>) {
+    setEdits(next)
+    if (editsKey) remember(editsKey, next)
+  }
 
   const activeLocations = useMemo(() => locations.filter((l) => l.active !== false), [locations])
   useEffect(() => {
@@ -94,8 +113,29 @@ export function PurchaseImportPage() {
   /** The rows as the batch would hold them — built and judged the same way the batch does. */
   const rows = useMemo<BatchRow[] | null>(() => {
     if (!block || !ctx) return null
-    return assessRows(buildBatchRows(block, products, aliases), ctx)
-  }, [block, ctx, products, aliases])
+    return assessRows(
+      buildBatchRows(block, products, aliases).map((r) => edits[r.idx] ?? r),
+      ctx,
+    )
+  }, [block, ctx, products, aliases, edits])
+
+  /** The closest product for a row nothing was matched to — shown, never taken. */
+  const index = useMemo(() => buildMatchIndex(products, aliases), [products, aliases])
+  const nearest = (r: BatchRow) => (r.productId ? undefined : matchProduct(r.rawName, index).candidates[0]?.product)
+
+  async function resolved(r: ResolveResult) {
+    if (!user) return
+    const actor = { id: user.id, name: user.name }
+    try {
+      if (r.saveAlias && r.row.productId) await saveAlias({ sourceName: r.row.rawName, productId: r.row.productId, actor })
+      if (r.setPrimary && r.row.productId && r.row.supplierId) await updateProduct(r.row.productId, { supplierId: r.row.supplierId })
+      keepEdits({ ...edits, [r.row.idx]: r.row })
+      setResolving(null)
+      if (r.saveAlias) await reloadCtx()
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
 
   const counts = useMemo(() => {
     const c = { ready: 0, review: 0, blocked: 0, skipped: 0 }
@@ -176,6 +216,11 @@ export function PurchaseImportPage() {
         rows,
         actor: { id: user.id, name: user.name },
       })
+      try {
+        if (editsKey) localStorage.removeItem(editsKey)
+      } catch {
+        /* nothing kept */
+      }
       toast.success(t('สร้างชุด {no} แล้ว', { no: batch.batchNo }))
       navigate(`/purchase/${batch.id}`)
     } catch (err) {
@@ -288,7 +333,7 @@ export function PurchaseImportPage() {
           <SectionHeader
             icon="search"
             title={t('3. ตรวจก่อนสร้าง')}
-            description={t('แถวที่ระบบไม่แน่ใจจะถูกถามในหน้าถัดไป — ไม่มีการเดาผู้ขาย')}
+            description={t('กด "ตรวจ" ที่แถวสีเหลืองเพื่อเลือกสินค้า ผู้ขาย จำนวน หรือหน่วยได้ที่นี่เลย — ชื่อที่ยืนยันแล้วระบบจำไว้ ครั้งหน้าไม่ถามซ้ำ ระบบไม่เดาให้เอง')}
             badge={
               rows ? (
                 <span className="flex flex-wrap gap-1">
@@ -305,41 +350,65 @@ export function PurchaseImportPage() {
             <p className="text-sm text-ink-soft">{t('รอบนี้ไม่มีแถวที่ใส่จำนวนสั่ง')}</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              {/* Fixed widths, words wrapped inside their own column: a long name or a long
+                  reason never pushes into the next one (owner, 2 Oct 2026). */}
+              <table className="w-full min-w-[960px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-12" />
+                  <col className="w-[20%]" />
+                  <col className="w-28" />
+                  <col className="w-[22%]" />
+                  <col className="w-[11%]" />
+                  <col />
+                  <col className="w-24" />
+                </colgroup>
                 <thead className="border-b border-line text-left text-xs text-ink-soft">
                   <tr>
-                    <th className="py-1 pr-2">{t('แถว')}</th>
-                    <th className="py-1 pr-2">{t('ในไฟล์')}</th>
-                    <th className="py-1 pr-2 text-right">{t('จำนวน')}</th>
-                    <th className="py-1 pr-2">{t('สินค้าในระบบ')}</th>
-                    <th className="py-1 pr-2">{t('ผู้ขาย')}</th>
-                    <th className="py-1">{t('สถานะ')}</th>
+                    <th className="py-1.5 pr-2">{t('แถว')}</th>
+                    <th className="py-1.5 pr-2">{t('ในไฟล์')}</th>
+                    <th className="py-1.5 pr-3 text-right">{t('จำนวน')}</th>
+                    <th className="py-1.5 pr-2">{t('สินค้าในระบบ')}</th>
+                    <th className="py-1.5 pr-2">{t('ผู้ขาย')}</th>
+                    <th className="py-1.5 pr-2">{t('สถานะ')}</th>
+                    <th className="py-1.5" />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => {
                     const state = rowState(r)
+                    const near = nearest(r)
+                    const open = state === 'review' || state === 'blocked'
                     return (
-                      <tr key={r.idx} className="border-b border-line align-top row-hover">
-                        <td className="num py-1.5 pr-2 text-ink-faint">{r.excelRow}</td>
-                        <td className="py-1.5 pr-2 text-ink">{r.rawName}</td>
-                        <td className="num whitespace-nowrap py-1.5 pr-2 text-right">
+                      <tr key={r.idx} className={`border-b border-line align-top row-hover ${open ? 'bg-warn-soft/30' : ''}`}>
+                        <td className="num py-2 pr-2 text-ink-faint">{r.excelRow}</td>
+                        <td className="break-words py-2 pr-2 text-ink">{r.rawName}</td>
+                        <td className="num py-2 pr-3 text-right">
                           {r.qty !== undefined ? fmtQty(r.qty) : <span className="text-warn">{r.rawQty}</span>}{' '}
                           <span className="text-ink-soft">{r.entryUnit ?? r.unit ?? r.rawUnit}</span>
                         </td>
-                        <td className="py-1.5 pr-2">
-                          {r.productName ?? <span className="text-ink-faint">—</span>}
+                        <td className="break-words py-2 pr-2">
+                          {r.productName ?? (
+                            <span className="text-ink-faint">
+                              —
+                              {near && <span className="block text-xs">{t('ใกล้เคียง: {name}', { name: near.name })}</span>}
+                            </span>
+                          )}
                         </td>
-                        <td className="py-1.5 pr-2">{r.supplierName ?? <span className="text-ink-faint">—</span>}</td>
-                        <td className="py-1.5">
+                        <td className="break-words py-2 pr-2">{r.supplierName ?? <span className="text-ink-faint">—</span>}</td>
+                        <td className="py-2 pr-2">
                           <Badge color={badgeColor(state)}>{rowStateText(state, t)}</Badge>
                           {r.issues.length > 0 && (
-                            <ul className="mt-1 space-y-0.5 text-xs text-ink-soft">
+                            <ul className="mt-1 space-y-0.5 break-words text-xs text-ink-soft">
                               {r.issues.map((i) => (
                                 <li key={i.code}>• {issueText(i, t)}</li>
                               ))}
                             </ul>
                           )}
+                        </td>
+                        <td className="py-1.5 text-right">
+                          <Button size="sm" variant={open ? 'primary' : 'ghost'} onClick={() => setResolving(r)} disabled={!ctx}>
+                            {open ? t('ตรวจ') : t('แก้')}
+                          </Button>
                         </td>
                       </tr>
                     )
@@ -355,6 +424,16 @@ export function PurchaseImportPage() {
             </Button>
           </div>
         </Card>
+      )}
+
+      {resolving && ctx && (
+        <ResolveRowModal
+          row={resolving}
+          suppliers={suppliers}
+          aliases={aliases}
+          onClose={() => setResolving(null)}
+          onSave={resolved}
+        />
       )}
     </div>
   )

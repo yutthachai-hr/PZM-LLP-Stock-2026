@@ -351,7 +351,7 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'name', 'contactNumber', 'email', 'type', 'active',
           'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'name', 'code', 'contactNumber', 'email', 'type', 'note',
-          'contactName', 'phone2', 'address', 'taxId', 'paymentTerms', 'category', 'links',
+          'contactName', 'phone2', 'address', 'taxId', 'paymentTerms', 'category', 'lineGroup', 'links',
           'defaultLocationId', 'leadTimeDays', 'orderDays', 'cutoffTime',
           'active', 'createdAt', 'updatedAt'])
         && text(d.name, 200)
@@ -379,6 +379,8 @@ service cloud.firestore {
         && (!('taxId' in d) || text(d.taxId, 30))
         && (!('paymentTerms' in d) || text(d.paymentTerms, 100))
         && (!('category' in d) || text(d.category, 100))
+        // The LINE group their orders go to, as LINE shows its name (2 Oct 2026).
+        && (!('lineGroup' in d) || text(d.lineGroup, 100))
         && (!('links' in d) || (d.links is list && d.links.size() <= 20));
     }
 

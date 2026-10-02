@@ -50,11 +50,12 @@ export interface SupplierInput {
   taxId?: string
   paymentTerms?: string
   category?: string
+  lineGroup?: string
   links?: SupplierLink[]
 }
 
 /** The optional free-text fields, handled the same way on create and on update. */
-const DETAIL_KEYS = ['contactName', 'phone2', 'address', 'taxId', 'paymentTerms', 'category'] as const
+const DETAIL_KEYS = ['contactName', 'phone2', 'address', 'taxId', 'paymentTerms', 'category', 'lineGroup'] as const
 const DETAIL_MAX: Record<(typeof DETAIL_KEYS)[number], number> = {
   contactName: 200,
   phone2: 40,
@@ -62,6 +63,7 @@ const DETAIL_MAX: Record<(typeof DETAIL_KEYS)[number], number> = {
   taxId: 30,
   paymentTerms: 100,
   category: 100,
+  lineGroup: 100,
 }
 
 /** Links are kept as given, trimmed, and only when they have both a label and a URL. */

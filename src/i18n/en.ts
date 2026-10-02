@@ -923,7 +923,6 @@ export const EN: Record<string, string> = {
   'รอบสั่งในไฟล์': 'Order day in the file',
   '{n} รายการสั่ง': '{n} rows to order',
   '3. ตรวจก่อนสร้าง': '3. Check before creating',
-  'แถวที่ระบบไม่แน่ใจจะถูกถามในหน้าถัดไป — ไม่มีการเดาผู้ขาย': 'Rows the app is unsure about are asked on the next screen — suppliers are never guessed',
   'พร้อม {n}': '{n} ready',
   'ติดปัญหา {n}': '{n} blocked',
   'กำลังจับคู่สินค้า…': 'Matching products…',
@@ -2696,4 +2695,14 @@ export const EN: Record<string, string> = {
   // ---- count import keeps a draft (30 Sep 2026) ----
   'ทำต่อจากร่างที่ค้างไว้ในเครื่องนี้ — คำตอบเดิมอยู่ครบ': 'Carrying on from the draft kept on this device — every answer is still here',
   'ล้างร่าง เริ่มใหม่': 'Clear the draft and start again',
+  // ---- order import: settle rows on the preview; a supplier's LINE group (2 Oct 2026) ----
+  'กด "ตรวจ" ที่แถวสีเหลืองเพื่อเลือกสินค้า ผู้ขาย จำนวน หรือหน่วยได้ที่นี่เลย — ชื่อที่ยืนยันแล้วระบบจำไว้ ครั้งหน้าไม่ถามซ้ำ ระบบไม่เดาให้เอง': 'Press "Check" on a yellow row to pick the product, supplier, quantity or unit right here — a confirmed name is remembered and not asked again. Nothing is guessed',
+  'ใกล้เคียง: {name}': 'Closest: {name}',
+  'ตรวจ': 'Check',
+  'แก้': 'Edit',
+  'กลุ่ม LINE': 'LINE group',
+  'ชื่อกลุ่ม LINE ที่ส่งใบสั่งซื้อให้ผู้ขายนี้ — ขึ้นตอนกดส่ง จะได้ไม่ต้องจำ': 'The LINE group this supplier\'s orders go to — shown when sending, so nobody has to remember it',
+  'เช่น PZM x ZAKANA สั่งของ': 'e.g. PZM x ZAKANA orders',
+  'ส่งเข้ากลุ่ม LINE: {name}': 'Send to LINE group: {name}',
+  'ยังไม่ได้ระบุกลุ่ม LINE ของผู้ขายนี้ — ใส่ได้ที่หน้าผู้ขาย': 'No LINE group set for this supplier yet — add it on the supplier page',
 }

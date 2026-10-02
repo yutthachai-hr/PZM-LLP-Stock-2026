@@ -523,6 +523,13 @@ describe('suppliers', () => {
     await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s6'), supplier('s6', { creditLimit: 5000 })))
   })
 
+  // Owner, 2 Oct 2026: which LINE group a supplier's orders go to.
+  test('the LINE group name is optional, text, and bounded', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s7'), supplier('s7', { lineGroup: 'PZM x ZAKANA สั่งของ' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s8'), supplier('s8', { lineGroup: 'x'.repeat(101) })))
+    await assertFails(setDoc(doc(as(ADMIN), 'suppliers/s8'), supplier('s8', { lineGroup: 42 })))
+  })
+
   test('note is optional, and bounded', async () => {
     await assertSucceeds(setDoc(doc(as(ADMIN), 'suppliers/s1'), supplier('s1', { note: 'ok' })))
     await assertFails(
