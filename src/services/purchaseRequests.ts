@@ -203,6 +203,40 @@ export async function createRequest(params: {
   })
 }
 
+/**
+ * One line placed on a request's items: a new line, or more of a line already there.
+ *
+ * The same product from the same supplier in the same unit is one line, not two: adding it
+ * again adds to the quantity. Two lines for one product reached a supplier as "PARIS HAM
+ * 10 KG / PARIS HAM 20 KG" on 21 Sep 2026, keyed twice in the picker.
+ */
+function placeItem(
+  pr: PurchaseRequest,
+  line: LineInput,
+  products: readonly Product[],
+  suppliers: readonly Supplier[],
+): { items: PurchaseRequestItem[]; stored?: PurchaseRequestItem; twin?: { was: PurchaseRequestItem; now: PurchaseRequestItem; before: number; after: number } } {
+  // One past the highest idx, not the length: a draft line that was removed leaves a
+  // gap, and reusing its number would make old history entries point at the new line.
+  const idx = pr.items.reduce((m, i) => Math.max(m, i.idx + 1), 0)
+  const item = buildItem(idx, line, products, suppliers)
+  const byManager = pr.status === 'pendingApproval'
+  const twin = liveItems(pr.items).find(
+    (x) => x.productId === item.productId && x.supplierId === item.supplierId && sameUnit(x.entryUnit ?? '', item.entryUnit ?? ''),
+  )
+  if (twin) {
+    const field = byManager ? 'approvedQty' : 'requestedQty'
+    const before = twin[field] ?? twin.requestedQty ?? 0
+    const after = roundQty(before + item.requestedQty!)
+    const now = { ...twin, [field]: after }
+    return { items: pr.items.map((x) => (x.idx === twin.idx ? now : x)), twin: { was: twin, now, before, after } }
+  }
+  const stored: PurchaseRequestItem = byManager
+    ? { ...item, requestedQty: null, approvedQty: item.requestedQty!, managerAdded: true }
+    : item
+  return { items: [...pr.items, stored], stored }
+}
+
 /** Add a line. A manager adding one during review marks it so; its requested quantity is none. */
 export async function addItem(params: {
   id: string
@@ -216,49 +250,50 @@ export async function addItem(params: {
     if (liveItems(pr.items).length >= MAX_ITEMS) {
       throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
     }
-    // One past the highest idx, not the length: a draft line that was removed leaves a
-    // gap, and reusing its number would make old history entries point at the new line.
-    const idx = pr.items.reduce((m, i) => Math.max(m, i.idx + 1), 0)
-    const item = buildItem(idx, params.line, params.products, params.suppliers)
     const byManager = pr.status === 'pendingApproval'
-    // The same product from the same supplier in the same unit is one line, not two:
-    // adding it again adds to the quantity. Two lines for one product reached a supplier
-    // as "PARIS HAM 10 KG / PARIS HAM 20 KG" on 21 Sep 2026, keyed twice in the picker.
-    const twin = liveItems(pr.items).find(
-      (x) => x.productId === item.productId && x.supplierId === item.supplierId && sameUnit(x.entryUnit ?? '', item.entryUnit ?? ''),
-    )
-    if (twin) {
-      const field = byManager ? 'approvedQty' : 'requestedQty'
-      const before = twin[field] ?? twin.requestedQty ?? 0
-      const after = roundQty(before + item.requestedQty!)
-      const merged = { ...twin, [field]: after }
-      return {
-        ...pr,
-        items: pr.items.map((x) => (x.idx === twin.idx ? merged : x)),
-        history: [
-          ...pr.history,
-          entry(params.actor, byManager ? 'managerQtyChanged' : 'qtyChanged', {
-            itemIdx: twin.idx,
-            detail: twin.productName,
-            oldValue: describe(twin, before),
-            newValue: describe(merged, after),
-          }),
-        ],
-      }
+    const placed = placeItem(pr, params.line, params.products, params.suppliers)
+    const history = placed.twin
+      ? entry(params.actor, byManager ? 'managerQtyChanged' : 'qtyChanged', {
+          itemIdx: placed.twin.was.idx,
+          detail: placed.twin.was.productName,
+          oldValue: describe(placed.twin.was, placed.twin.before),
+          newValue: describe(placed.twin.now, placed.twin.after),
+        })
+      : entry(params.actor, byManager ? 'managerAddedItem' : 'itemAdded', {
+          itemIdx: placed.stored!.idx,
+          detail: describe(placed.stored!, byManager ? placed.stored!.approvedQty : placed.stored!.requestedQty),
+        })
+    return { ...pr, items: placed.items, history: [...pr.history, history] }
+  })
+}
+
+/**
+ * Several lines at once: the order workbook read into a request (owner, 2 Oct 2026: "เพิ่ม
+ * ช่อง import excel ในหน้ารายการขอสั่งซื้อ"). One write and one history entry naming the file,
+ * each line placed exactly as addItem would place it — a product already on the request
+ * gets the quantity added, not a second line. All or nothing: a line that cannot be built
+ * stops the whole import before anything is written.
+ */
+export async function addItems(params: {
+  id: string
+  lines: readonly LineInput[]
+  products: readonly Product[]
+  suppliers: readonly Supplier[]
+  actor: Actor
+  /** Where the lines came from — the file and its order round — for the history. */
+  source: string
+}): Promise<PurchaseRequest> {
+  if (params.lines.length === 0) throw new AppError('ยังไม่มีรายการสินค้า')
+  return mutate(params.id, (pr) => {
+    requireEditable(pr, params.actor)
+    let cur = pr
+    for (const line of params.lines) cur = { ...cur, items: placeItem(cur, line, params.products, params.suppliers).items }
+    if (liveItems(cur.items).length > MAX_ITEMS) {
+      throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
     }
-    const stored: PurchaseRequestItem = byManager
-      ? { ...item, requestedQty: null, approvedQty: item.requestedQty!, managerAdded: true }
-      : item
     return {
-      ...pr,
-      items: [...pr.items, stored],
-      history: [
-        ...pr.history,
-        entry(params.actor, byManager ? 'managerAddedItem' : 'itemAdded', {
-          itemIdx: stored.idx,
-          detail: describe(stored, byManager ? stored.approvedQty : stored.requestedQty),
-        }),
-      ],
+      ...cur,
+      history: [...pr.history, entry(params.actor, 'itemsImported', { detail: `${params.source} · ${params.lines.length}` })],
     }
   })
 }

@@ -2580,4 +2580,10 @@ export const EN: Record<string, string> = {
   'เช่น PZM x ZAKANA สั่งของ': 'e.g. PZM x ZAKANA orders',
   'ส่งเข้ากลุ่ม LINE: {name}': 'Send to LINE group: {name}',
   'ยังไม่ได้ระบุกลุ่ม LINE ของผู้ขายนี้ — ใส่ได้ที่หน้าผู้ขาย': 'No LINE group set for this supplier yet — add it on the supplier page',
+  // ---- the order workbook read into a purchase request (2 Oct 2026) ----
+  'ข้าม {n}': 'Skipped {n}',
+  'เพิ่ม {n} รายการจาก Excel แล้ว': 'Added {n} lines from Excel',
+  'ไฟล์รายการสั่งของแบบเดียวกับหน้าสั่งซื้อ — รายการจะเข้าใบขอนี้ แล้วยังต้องให้หัวหน้าอนุมัติตามปกติ': 'The same order file as on the orders page — the lines join this request, which still goes to a manager for approval as usual',
+  'ตรวจให้ครบก่อน (เหลือ {n}) — รายการที่ไม่สั่ง กด "ตรวจ" แล้ว "ข้ามรายการนี้"': 'Check every row first ({n} left) — for a line you will not order, press "Check" then "Skip this row"',
+  'เพิ่มลงใบขอ ({n} รายการ)': 'Add to request ({n} lines)',
 }

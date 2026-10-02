@@ -22,6 +22,7 @@ import { bkkDayEnd, bkkDayStart } from '../../lib/inventoryRules/time'
 import { ReasonModal } from './ReasonModal'
 import type { PurchaseRequest, PurchaseRequestItem, RequestUrgency, Role } from '../../types'
 import { ProductPicker, type PickedLine } from './ProductPicker'
+import { RequestExcelImport } from './RequestExcelImport'
 
 /**
  * Building a request: the picker on one side, the cart on the other, one screen.
@@ -65,6 +66,9 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
   // Starting a new request while one of your own is still a draft or sent back — the owner
   // did exactly that after a phone left PR-00003 behind when the quota ran out.
   const [waiting, setWaiting] = useState<PurchaseRequest[]>([])
+  // The order workbook read into this request (owner, 2 Oct 2026). Opened straight away when
+  // the list's "นำเข้าจาก Excel" brought the person here.
+  const [importing, setImporting] = useState(() => !initial && query.get('import') === '1')
 
   const actor = useMemo(() => (user ? { id: user.id, name: user.name, role: user.role as Role } : null), [user])
 
@@ -137,6 +141,18 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
       setPr(next)
       toast.success(t('เพิ่ม {name} แล้ว', { name: line.productName }))
     })
+  }
+
+  async function addFromExcel(lines: S.LineInput[], source: string): Promise<boolean> {
+    if (!actor) return false
+    const done = await run('import', async () => {
+      const cur = await ensure()
+      const next = await S.addItems({ id: cur.id, lines, products, suppliers, actor, source })
+      setPr(next)
+      toast.success(t('เพิ่ม {n} รายการจาก Excel แล้ว', { n: lines.length }))
+      return true
+    })
+    return done === true
   }
 
   async function setQty(item: PurchaseRequestItem, qty: number, entryUnit?: string) {
@@ -216,12 +232,20 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                 {t('ข้ามใบนี้')}
               </Button>
             )}
+            {!importing && (
+              <Button variant="outline" onClick={() => setImporting(true)} disabled={!!busy}>
+                <Icon name="upload" size={15} />
+                {t('นำเข้าจาก Excel')}
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => navigate('/requests')}>
               {t('บันทึกร่าง')}
             </Button>
           </div>
         }
       />
+
+      {importing && <RequestExcelImport onAdd={addFromExcel} onClose={() => setImporting(false)} />}
 
       {/* Hidden while its reason box is open, so the two dialogs never stack. */}
       {!pr && waiting.length > 0 && !skipping && (
