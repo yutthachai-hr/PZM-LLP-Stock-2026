@@ -154,6 +154,8 @@ export const EN: Record<string, string> = {
   เข้าสู่ระบบบริหารสต๊อก: 'Sign in to stock management',
   อีเมล: 'Email',
   รหัสผ่าน: 'Password',
+  แสดงรหัสผ่าน: 'Show password',
+  ซ่อนรหัสผ่าน: 'Hide password',
   ชื่อผู้ดูแล: 'Administrator name',
   'เช่น สมชาย': 'e.g. Somchai',
   'อย่างน้อย 6 ตัวอักษร': 'At least 6 characters',
