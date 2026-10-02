@@ -245,34 +245,18 @@ export async function addItem(params: {
   suppliers: readonly Supplier[]
   actor: Actor
 }): Promise<PurchaseRequest> {
-  return mutate(params.id, (pr) => {
-    requireEditable(pr, params.actor)
-    if (liveItems(pr.items).length >= MAX_ITEMS) {
-      throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
-    }
-    const byManager = pr.status === 'pendingApproval'
-    const placed = placeItem(pr, params.line, params.products, params.suppliers)
-    const history = placed.twin
-      ? entry(params.actor, byManager ? 'managerQtyChanged' : 'qtyChanged', {
-          itemIdx: placed.twin.was.idx,
-          detail: placed.twin.was.productName,
-          oldValue: describe(placed.twin.was, placed.twin.before),
-          newValue: describe(placed.twin.now, placed.twin.after),
-        })
-      : entry(params.actor, byManager ? 'managerAddedItem' : 'itemAdded', {
-          itemIdx: placed.stored!.idx,
-          detail: describe(placed.stored!, byManager ? placed.stored!.approvedQty : placed.stored!.requestedQty),
-        })
-    return { ...pr, items: placed.items, history: [...pr.history, history] }
-  })
+  return mutate(params.id, (pr) => withLine(pr, params))
 }
 
 /**
- * Several lines at once: the order workbook read into a request (owner, 2 Oct 2026: "เพิ่ม
- * ช่อง import excel ในหน้ารายการขอสั่งซื้อ"). One write and one history entry naming the file,
- * each line placed exactly as addItem would place it — a product already on the request
- * gets the quantity added, not a second line. All or nothing: a line that cannot be built
- * stops the whole import before anything is written.
+ * Several lines in one write, each placed exactly as addItem would place it — a product
+ * already on the request gets the quantity added, not a second line. All or nothing: a line
+ * that cannot be built stops the whole write before anything is stored.
+ *
+ * With a `source` — the order workbook read into a request (owner, 2 Oct 2026: "เพิ่มช่อง
+ * import excel ในหน้ารายการขอสั่งซื้อ") — the history gets one entry naming the file and its
+ * order round. Without one (a draft filled from the daily suggestions) it reads the same as
+ * keying the lines one by one.
  */
 export async function addItems(params: {
   id: string
@@ -281,10 +265,11 @@ export async function addItems(params: {
   suppliers: readonly Supplier[]
   actor: Actor
   /** Where the lines came from — the file and its order round — for the history. */
-  source: string
+  source?: string
 }): Promise<PurchaseRequest> {
   if (params.lines.length === 0) throw new AppError('ยังไม่มีรายการสินค้า')
   return mutate(params.id, (pr) => {
+    if (!params.source) return params.lines.reduce((cur, line) => withLine(cur, { ...params, line }), pr)
     requireEditable(pr, params.actor)
     let cur = pr
     for (const line of params.lines) cur = { ...cur, items: placeItem(cur, line, params.products, params.suppliers).items }
@@ -296,6 +281,31 @@ export async function addItems(params: {
       history: [...pr.history, entry(params.actor, 'itemsImported', { detail: `${params.source} · ${params.lines.length}` })],
     }
   })
+}
+
+/** One line added to a request in memory, with its history: the rules of addItem. */
+function withLine(
+  pr: PurchaseRequest,
+  params: { line: LineInput; products: readonly Product[]; suppliers: readonly Supplier[]; actor: Actor },
+): PurchaseRequest {
+  requireEditable(pr, params.actor)
+  if (liveItems(pr.items).length >= MAX_ITEMS) {
+    throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
+  }
+  const byManager = pr.status === 'pendingApproval'
+  const placed = placeItem(pr, params.line, params.products, params.suppliers)
+  const history = placed.twin
+    ? entry(params.actor, byManager ? 'managerQtyChanged' : 'qtyChanged', {
+        itemIdx: placed.twin.was.idx,
+        detail: placed.twin.was.productName,
+        oldValue: describe(placed.twin.was, placed.twin.before),
+        newValue: describe(placed.twin.now, placed.twin.after),
+      })
+    : entry(params.actor, byManager ? 'managerAddedItem' : 'itemAdded', {
+        itemIdx: placed.stored!.idx,
+        detail: describe(placed.stored!, byManager ? placed.stored!.approvedQty : placed.stored!.requestedQty),
+      })
+  return { ...pr, items: placed.items, history: [...pr.history, history] }
 }
 
 /** The requester's quantity, before submission. Managers use setApprovedQty. */

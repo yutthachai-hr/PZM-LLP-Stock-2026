@@ -138,6 +138,22 @@ describe('building a request', () => {
     expect(next.history.at(-1)).toMatchObject({ action: 'itemsImported', by: STAFF.id, detail: 'order.xlsx · 3/10 · 3' })
   })
 
+  test('without a file name, several lines read in the history as if keyed one by one', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
+    const next = await S.addItems({
+      id: pr.id,
+      lines: [
+        { productId: 'p-redoak', supplierId: 's-ack', qty: 1 },
+        { productId: 'p-zero', supplierId: 's-thai', qty: 4 },
+      ],
+      products,
+      suppliers,
+      actor: STAFF,
+    })
+    expect(next.history.slice(-2).map((h) => h.action)).toEqual(['qtyChanged', 'itemAdded'])
+    expect(liveItems(next.items).map((i) => i.requestedQty)).toEqual([3, 4])
+  })
+
   test('one bad line stops the whole import, and only an editable request takes one', async () => {
     const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
     const bad = [
