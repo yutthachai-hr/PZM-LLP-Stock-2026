@@ -2639,7 +2639,6 @@ export const EN: Record<string, string> = {
   'ไฟล์ยอดขาย (CSV / Excel)': 'Sales file (CSV / Excel)',
   'เลือกไฟล์': 'Choose file',
   'สาขานี้นำเข้ายอดขายวันที่ {date} ไปแล้วใน {docNo} — ตรวจให้แน่ใจว่าไม่ใช่ไฟล์เดิม': 'This branch already imported sales for {date} as {docNo} — make sure this is not the same file',
-  'ชีต': 'Sheet',
   'คอลัมน์รหัสเมนู': 'Menu code column',
   'คอลัมน์ชื่อเมนู': 'Menu name column',
   'คอลัมน์จำนวนที่ขาย': 'Quantity sold column',
