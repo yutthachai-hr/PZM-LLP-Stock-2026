@@ -10,6 +10,7 @@ export type Insight =
   | { kind: 'receiptsUp' | 'receiptsDown'; pct: number }
   | { kind: 'receiptsFlat' }
   | { kind: 'topIssue'; name: string; pct: number }
+  | { kind: 'noIssue' }
   | { kind: 'valueUp' | 'valueDown'; pct: number }
   | { kind: 'valueFlat' }
   | { kind: 'lowStock'; count: number }
@@ -46,6 +47,8 @@ export function insights(x: InsightInput): Insight[] {
   if (total > 0) {
     const top = x.issued.reduce((a, b) => (b.amount > a.amount ? b : a))
     out.push({ kind: 'topIssue', name: top.name, pct: Math.round((top.amount / total) * 1000) / 10 })
+  } else {
+    out.push({ kind: 'noIssue' })
   }
 
   if (x.valueBefore !== null && x.valueBefore > 0) {

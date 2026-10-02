@@ -692,6 +692,15 @@ describe('where the sheet has got to', () => {
     expect(o).toMatchObject({ shareStatus: 'sent', sentBy: 'uid-staff', sentByName: 'Staff', imageVersion: 2 })
     expect(o.sentAt).toBeGreaterThan(0)
   })
+
+  test('confirming a send hands back the written sentAt so the badge clears without a reload', async () => {
+    const id = await placeOrder()
+    const written = await setShareStatus(id, 'sent', ACTOR, 1)
+    // The caller updates its in-memory copy with this; needsResend must then read false.
+    const o = orders().find((x) => x.id === id)!
+    expect(written.sentAt).toBe(o.sentAt)
+    expect(needsResend({ ...o, ...written })).toBe(false)
+  })
 })
 
 test('one product keyed twice in the same unit is one line with the sum', async () => {

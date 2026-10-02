@@ -100,9 +100,9 @@ export function SendWizard({
 
   async function record(order: PurchaseOrder, status: 'shareOpened' | 'sent' | 'skipped' | 'failed', version?: number) {
     if (!user) return
-    await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
+    const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
     if (status === 'sent' || status === 'skipped') doneHere.current.add(order.id)
-    await onStatus({ ...order, shareStatus: status })
+    await onStatus({ ...order, shareStatus: status, ...written })
   }
 
   async function send() {

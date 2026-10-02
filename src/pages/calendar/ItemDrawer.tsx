@@ -421,7 +421,7 @@ function TaskBody({ event: e, status, locationName }: { event: StockEvent; statu
           {formatThaiDateShort(e.dueAt)} {timeOf(e.dueAt)}
         </Row>
       )}
-      <Row label={t('คลัง/สาขา')}>{locationName(e.locationId) ?? <Muted>{t('ไม่ระบุ')}</Muted>}</Row>
+      <Row label={t('คลัง/สาขา')}>{locationName(e.locationId) ?? <Muted>{t('ไม่ระบุ (ทุกสาขา)')}</Muted>}</Row>
       <Row label={t('ผู้รับผิดชอบ')}>{e.assignedToAll ? t('ทุกคน') : e.assignedToName || <Muted>{t('ยังไม่มอบหมาย')}</Muted>}</Row>
       <Row label={t('หมายเหตุ')}>{e.note ? <span className="whitespace-pre-line">{e.note}</span> : <Muted>{t('ไม่มี')}</Muted>}</Row>
       {e.sourceType === 'schedule' && <Row label={t('ที่มา')}>{t('สร้างจากตารางนับสต๊อก')}</Row>}

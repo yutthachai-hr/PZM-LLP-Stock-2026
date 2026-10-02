@@ -229,7 +229,7 @@ function ByProduct({
                         <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                           <span className="doc-no">{p.sku}</span>
                           <span>{p.unitType}</span>
-                          {supplierName ? <span>{supplierName}</span> : <span className="text-warn">{t('ยังไม่มีผู้ขาย')}</span>}
+                          {supplierName ? <span>{supplierName} ({t('ผู้ขายประจำ')})</span> : <span className="text-warn">{t('ยังไม่มีผู้ขาย')}</span>}
                         </div>
                       </div>
                       {inCart.has(p.id) && <Badge color="blue">{t('อยู่ในรายการแล้ว')}</Badge>}

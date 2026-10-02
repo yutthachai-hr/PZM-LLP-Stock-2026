@@ -19,6 +19,7 @@ test('the most-used product and its share of everything used', () => {
   const r = insights({ ...base, issued: [{ name: 'Mozzarella', amount: 18 }, { name: 'Flour', amount: 72 }, { name: 'Ham', amount: 10 }] })
   expect(r.find((i) => i.kind === 'topIssue')).toEqual({ kind: 'topIssue', name: 'Flour', pct: 72 })
   expect(insights(base).some((i) => i.kind === 'topIssue')).toBe(false)
+  expect(insights(base).some((i) => i.kind === 'noIssue')).toBe(true)
 })
 
 test('stock value against the start of the period', () => {

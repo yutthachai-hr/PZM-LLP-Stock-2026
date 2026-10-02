@@ -166,8 +166,8 @@ export function EventEditor({
         <Field label={t('กำหนดเสร็จ (ไม่บังคับ)')}>
           <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
-        <Field label={t('คลัง/สาขา')}>
-          <SiteSelect value={locationId} onChange={setLocationId} locations={locations} emptyLabel={t('ไม่ระบุ')} />
+        <Field label={t('คลัง/สาขา')} hint={!locationId ? t('ไม่ระบุ = เป็นงานรวมทุกสาขา หรือไม่เจาะจงสาขา') : undefined}>
+          <SiteSelect value={locationId} onChange={setLocationId} locations={locations} emptyLabel={t('ไม่ระบุ (ทุกสาขา / ไม่เจาะจง)')} />
         </Field>
         <fieldset>
           <legend className="mb-1.5 block text-sm font-medium text-ink">{t('ผู้รับผิดชอบ')}</legend>

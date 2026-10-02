@@ -333,7 +333,7 @@ export async function setShareStatus(
   status: PurchaseShareStatus,
   actor: { id: string; name: string },
   imageVersion?: number,
-): Promise<void> {
+): Promise<{ sentAt?: number }> {
   const now = Date.now()
   const patch: Record<string, unknown> = { shareStatus: status, updatedAt: now }
   if (status === 'shareOpened') patch.shareOpenedAt = now
@@ -344,6 +344,9 @@ export async function setShareStatus(
     if (imageVersion !== undefined) patch.imageVersion = imageVersion
   }
   await scoped().update(COL.purchaseOrders, id, patch)
+  // The screen that called this still holds the pre-write order. Hand back what changed so
+  // its "needs resend" badge can drop without a full reload (UX-0005).
+  return status === 'sent' ? { sentAt: now } : {}
 }
 
 /**

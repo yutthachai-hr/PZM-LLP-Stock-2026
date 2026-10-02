@@ -204,6 +204,7 @@ export function ReportsPage() {
     setBusy('excel')
     try {
       await buildExcel()
+      toast.success(t('ดาวน์โหลดไฟล์ Excel แล้ว'))
     } catch (e) {
       // An export that fails silently leaves someone waiting for a file that is not coming.
       toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
@@ -216,6 +217,7 @@ export function ReportsPage() {
     setBusy('pdf')
     try {
       await buildPdf()
+      toast.success(t('ดาวน์โหลดไฟล์ PDF แล้ว'))
     } catch (e) {
       toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
