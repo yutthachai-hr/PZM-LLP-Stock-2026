@@ -8,7 +8,7 @@ import { sameUnit } from '../lib/units'
 import { requireQty, roundQty } from '../lib/validate'
 import { createPurchaseOrder } from './purchaseOrders'
 import { deliver } from './notifications'
-import { prSubmittedDraft } from '../lib/inventoryRules/notifications'
+import { prReturnedDraft, prSubmittedDraft } from '../lib/inventoryRules/notifications'
 import {
   COL,
   type Product,
@@ -600,7 +600,7 @@ export async function returnRequest(params: { id: string; reason: string; actor:
   requireManager(params.actor)
   const reason = params.reason.trim()
   if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ส่งกลับ')
-  return mutate(params.id, (pr) => {
+  const returned = await mutate(params.id, (pr) => {
     if (!canTransition(pr.status, 'returned')) throw new AppError('ส่งกลับได้เฉพาะรายการที่รออนุมัติ')
     return {
       ...pr,
@@ -609,6 +609,8 @@ export async function returnRequest(params: { id: string; reason: string; actor:
       history: [...pr.history, entry(params.actor, 'returned', { newValue: reason })],
     }
   })
+  await deliver(prReturnedDraft(returned, params.actor.name), params.actor)
+  return returned
 }
 
 export async function rejectRequest(params: { id: string; reason: string; actor: Actor }): Promise<PurchaseRequest> {

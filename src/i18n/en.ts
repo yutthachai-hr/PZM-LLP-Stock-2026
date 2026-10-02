@@ -1334,6 +1334,7 @@ export const EN: Record<string, string> = {
   'เริ่ม {time} · {location} — เลยกำหนดแล้วยังไม่เสร็จ': 'Started {time} · {location} — past its deadline, not done',
   '{by} ทำเสร็จแล้ว รอหัวหน้าอนุมัติ': '{by} finished it — waiting for a manager',
   '{by} · {location} · {n} รายการ': '{by} · {location} · {n} items',
+  'หัวหน้าส่งกลับให้แก้ไข {docNo}': 'Returned for changes: {docNo}',
   '{docNo} · {location} · {n} รายการ': '{docNo} · {location} · {n} items',
   'เลยกำหนดส่ง {days} วัน · {location}': '{days} days late · {location}',
   'สั่งให้ทันก่อน {time}': 'Order before {time}',

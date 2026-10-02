@@ -9,15 +9,40 @@ interface BrandState {
 
 const Ctx = createContext<BrandState | null>(null)
 
+// Per tab: a refresh keeps the brand, a new visit still starts at the picker.
+const SS_KEY = 'pmstock:v1:tabBrand'
+function tabBrand(): BrandId | null {
+  try {
+    const b = sessionStorage.getItem(SS_KEY)
+    if (b === 'pizza' || b === 'lelapin') {
+      setActiveBrand(b)
+      return b
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
 export function BrandProvider({ children }: { children: ReactNode }) {
-  const [brand, setBrand] = useState<BrandId | null>(null)
+  const [brand, setBrand] = useState<BrandId | null>(tabBrand)
 
   function choose(b: BrandId) {
     setActiveBrand(b) // update the data-layer resolver BEFORE the app subscribes
     setBrand(b)
+    try {
+      sessionStorage.setItem(SS_KEY, b)
+    } catch {
+      /* ignore */
+    }
   }
   function reset() {
     setBrand(null)
+    try {
+      sessionStorage.removeItem(SS_KEY)
+    } catch {
+      /* ignore */
+    }
   }
 
   // Paint the whole interface in the open brand's colour. The tokens in index.css read
