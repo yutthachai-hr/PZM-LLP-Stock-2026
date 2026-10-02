@@ -116,6 +116,57 @@ describe('building a request', () => {
     await expect(S.addItem({ id: pr.id, line: { productId: 'p-redoak', supplierId: 'nope', qty: 1 }, products, suppliers, actor: STAFF })).rejects.toThrow()
   })
 
+  // Owner, 2 Oct 2026: the order workbook read straight into a request.
+  test('lines from the workbook go in at once, merging with lines already there', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
+    const next = await S.addItems({
+      id: pr.id,
+      lines: [
+        { productId: 'p-redoak', supplierId: 's-ack', qty: 3 },
+        { productId: 'p-coke', supplierId: 's-thai', qty: 6, note: 'ส่ง 3/10' },
+        { productId: 'p-coke', supplierId: 's-thai', qty: 1 },
+      ],
+      products,
+      suppliers,
+      actor: STAFF,
+      source: 'order.xlsx · 3/10',
+    })
+    expect(liveItems(next.items).map((i) => [i.productName, i.requestedQty, i.note])).toEqual([
+      ['RED OAK SALAD', 5, undefined],
+      ['COKE CAN 325 ML 1X24', 7, 'ส่ง 3/10'],
+    ])
+    expect(next.history.at(-1)).toMatchObject({ action: 'itemsImported', by: STAFF.id, detail: 'order.xlsx · 3/10 · 3' })
+  })
+
+  test('without a file name, several lines read in the history as if keyed one by one', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
+    const next = await S.addItems({
+      id: pr.id,
+      lines: [
+        { productId: 'p-redoak', supplierId: 's-ack', qty: 1 },
+        { productId: 'p-zero', supplierId: 's-thai', qty: 4 },
+      ],
+      products,
+      suppliers,
+      actor: STAFF,
+    })
+    expect(next.history.slice(-2).map((h) => h.action)).toEqual(['qtyChanged', 'itemAdded'])
+    expect(liveItems(next.items).map((i) => i.requestedQty)).toEqual([3, 4])
+  })
+
+  test('one bad line stops the whole import, and only an editable request takes one', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
+    const bad = [
+      { productId: 'p-coke', supplierId: 's-thai', qty: 6 },
+      { productId: 'nope', supplierId: 's-thai', qty: 1 },
+    ]
+    await expect(S.addItems({ id: pr.id, lines: bad, products, suppliers, actor: STAFF, source: 'x' })).rejects.toThrow()
+    expect(liveItems(requests()[0].items)).toHaveLength(1)
+    const good = [{ productId: 'p-coke', supplierId: 's-thai', qty: 6 }]
+    await expect(S.addItems({ id: pr.id, lines: good, products, suppliers, actor: OTHER_STAFF, source: 'x' })).rejects.toThrow()
+    await expect(S.addItems({ id: pr.id, lines: [], products, suppliers, actor: STAFF, source: 'x' })).rejects.toThrow()
+  })
+
   // "PARIS HAM 10 KG / PARIS HAM 20 KG" on one sheet, 21 Sep 2026: the product was keyed
   // twice in the picker and each press made a line.
   test('the same product from the same supplier keyed twice is one line with the sum', async () => {

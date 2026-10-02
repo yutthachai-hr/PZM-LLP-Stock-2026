@@ -276,10 +276,17 @@ export function PurchaseRequestsPage() {
   )
 
   const heroActions = (
-    <Button onClick={() => navigate('/requests/new')}>
-      <Icon name="plus" size={16} />
-      {t('สร้างรายการขอสั่งซื้อ')}
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      {/* The order workbook read straight into a new request (owner, 2 Oct 2026). */}
+      <Button variant="outline" onClick={() => navigate('/requests/new?import=1')}>
+        <Icon name="upload" size={16} />
+        {t('นำเข้าจาก Excel')}
+      </Button>
+      <Button onClick={() => navigate('/requests/new')}>
+        <Icon name="plus" size={16} />
+        {t('สร้างรายการขอสั่งซื้อ')}
+      </Button>
+    </div>
   )
 
   return (

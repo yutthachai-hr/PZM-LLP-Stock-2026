@@ -616,6 +616,7 @@ export function historyText(action: string, t: (k: string) => string): string {
   const map: Record<string, string> = {
     created: t('สร้างรายการ'),
     itemAdded: t('เพิ่มสินค้า'),
+    itemsImported: t('นำเข้าจาก Excel'),
     qtyChanged: t('แก้จำนวนที่ขอ'),
     itemRemoved: t('ลบสินค้า'),
     supplierChanged: t('เปลี่ยนผู้ขาย'),
