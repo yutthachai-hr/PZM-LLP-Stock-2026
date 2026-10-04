@@ -50,8 +50,8 @@ function Gate() {
 
   // reset the brand choice on logout so the picker shows again next login
   useEffect(() => {
-    if (!user) reset()
-  }, [user, reset])
+    if (!loading && !user) reset()
+  }, [loading, user, reset])
 
   // A send picked up after a trip through LINE says which brand its order belongs to, so
   // it opens that one and lands on the sheet. Every other visit still starts at the picker

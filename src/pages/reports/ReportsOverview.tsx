@@ -9,7 +9,7 @@ import { Icon, type IconName } from '../../components/Icon'
 import { SiteSelect } from '../../components/SiteChip'
 import { Input, Select } from '../../components/ui'
 import { dateInputToMs, fmtMoney, fmtQty, msToDateInput } from '../../lib/format'
-import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
+import { bkkDayStart, DAY_MS, BKK_OFFSET_MS } from '../../lib/inventoryRules/time'
 import { shortages } from '../../lib/inventoryRules/lowStock'
 import { change, covers, valueAsOf } from '../../lib/stats/periodCompare'
 import { insights, type Insight } from '../../lib/stats/insights'
@@ -36,9 +36,21 @@ export function ReportsOverview() {
   const today = bkkDayStart(Date.now())
   const [fromStr, setFromStr] = useState(msToDateInput(today - (DEFAULT_DAYS - 1) * DAY_MS))
   const [toStr, setToStr] = useState(msToDateInput(today))
+  const [preset, setPreset] = useState('14')
   const [locationId, setLocationId] = useState('')
   const [category, setCategory] = useState('')
   const [supplierId, setSupplierId] = useState('')
+
+  const { startOfThisMonth, startOfLastMonth, endOfLastMonth } = useMemo(() => {
+    const d = new Date(today + BKK_OFFSET_MS)
+    const y = d.getUTCFullYear()
+    const m = d.getUTCMonth()
+    return {
+      startOfThisMonth: Date.UTC(y, m, 1) - BKK_OFFSET_MS,
+      startOfLastMonth: Date.UTC(y, m - 1, 1) - BKK_OFFSET_MS,
+      endOfLastMonth: Date.UTC(y, m, 0) - BKK_OFFSET_MS,
+    }
+  }, [today])
 
   const categories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products])
 
@@ -169,6 +181,7 @@ export function ReportsOverview() {
     <div className="space-y-4 xl:space-y-5">
       <FilterBar
         onReset={() => {
+          setPreset('14')
           setFromStr(msToDateInput(today - (DEFAULT_DAYS - 1) * DAY_MS))
           setToStr(msToDateInput(today))
           setLocationId('')
@@ -176,11 +189,64 @@ export function ReportsOverview() {
           setSupplierId('')
         }}
       >
+        <FilterField label={t('ช่วงเวลา')}>
+          <Select
+            value={preset}
+            onChange={(e) => {
+              const val = e.target.value
+              setPreset(val)
+              if (val === '7') {
+                setFromStr(msToDateInput(today - 6 * DAY_MS))
+                setToStr(msToDateInput(today))
+              } else if (val === '14') {
+                setFromStr(msToDateInput(today - (DEFAULT_DAYS - 1) * DAY_MS))
+                setToStr(msToDateInput(today))
+              } else if (val === '30') {
+                setFromStr(msToDateInput(today - 29 * DAY_MS))
+                setToStr(msToDateInput(today))
+              } else if (val === 'thisMonth') {
+                setFromStr(msToDateInput(startOfThisMonth))
+                setToStr(msToDateInput(today))
+              } else if (val === 'lastMonth') {
+                setFromStr(msToDateInput(startOfLastMonth))
+                setToStr(msToDateInput(endOfLastMonth))
+              }
+            }}
+          >
+            <option value="14">{t('14 วันล่าสุด (ค่าเริ่มต้น)')}</option>
+            <option value="7">{t('7 วันล่าสุด')}</option>
+            <option value="30">{t('30 วันล่าสุด')}</option>
+            <option value="thisMonth">{t('เดือนนี้')}</option>
+            <option value="lastMonth">{t('เดือนก่อน')}</option>
+            <option value="custom">{t('กำหนดเอง')}</option>
+          </Select>
+        </FilterField>
         <FilterField label={t('ตั้งแต่วันที่')}>
-          <Input type="date" value={fromStr} max={toStr} onChange={(e) => e.target.value && setFromStr(e.target.value)} />
+          <Input
+            type="date"
+            value={fromStr}
+            max={toStr}
+            onChange={(e) => {
+              if (e.target.value) {
+                setFromStr(e.target.value)
+                setPreset('custom')
+              }
+            }}
+          />
         </FilterField>
         <FilterField label={t('ถึงวันที่')}>
-          <Input type="date" value={toStr} min={fromStr} max={msToDateInput(today)} onChange={(e) => e.target.value && setToStr(e.target.value)} />
+          <Input
+            type="date"
+            value={toStr}
+            min={fromStr}
+            max={msToDateInput(today)}
+            onChange={(e) => {
+              if (e.target.value) {
+                setToStr(e.target.value)
+                setPreset('custom')
+              }
+            }}
+          />
         </FilterField>
         <FilterField label={t('สาขา')}>
           <SiteSelect value={locationId} onChange={setLocationId} locations={locations} emptyLabel={t('ทุกสาขา')} className="w-full" />
@@ -330,6 +396,7 @@ function InsightRow({ insight: i, t }: { insight: Insight; t: TFn }) {
     receiptsDown: { icon: 'trendDown', tone: 'amber', title: t('การรับสินค้าลดลง') },
     receiptsFlat: { icon: 'chart', tone: 'slate', title: t('การรับสินค้าเท่าเดิม') },
     topIssue: { icon: 'chart', tone: 'blue', title: t('สินค้าที่เบิกใช้มากที่สุด') },
+    noIssue: { icon: 'chart', tone: 'slate', title: t('ไม่มีการเบิกใช้ในช่วงนี้') },
     valueUp: { icon: 'box', tone: 'amber', title: t('มูลค่าคงคลังเพิ่มขึ้น') },
     valueDown: { icon: 'box', tone: 'amber', title: t('มูลค่าคงคลังลดลง') },
     valueFlat: { icon: 'box', tone: 'slate', title: t('มูลค่าคงคลังทรงตัว') },
@@ -345,7 +412,9 @@ function InsightRow({ insight: i, t }: { insight: Insight; t: TFn }) {
           ? t('จำนวนรายการรับเข้าเท่ากับช่วงก่อนหน้า')
           : i.kind === 'topIssue'
             ? t('{name} คิดเป็น {pct}% ของการเบิกใช้ทั้งหมด', { name: i.name, pct: i.pct })
-            : i.kind === 'valueUp'
+            : i.kind === 'noIssue'
+              ? t('ไม่มีการเบิกใช้ในช่วงนี้')
+              : i.kind === 'valueUp'
               ? t('มูลค่าสินค้าคงคลังเพิ่มขึ้น {pct}% จากต้นช่วง', { pct: i.pct })
               : i.kind === 'valueDown'
                 ? t('มูลค่าสินค้าคงคลังลดลง {pct}% จากต้นช่วง', { pct: i.pct })

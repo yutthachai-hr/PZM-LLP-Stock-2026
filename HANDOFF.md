@@ -220,23 +220,6 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 ### ข้ามใบขอสั่งซื้อ (PR) + เตือนร่างค้าง (25 ก.ย., branch `feat/pr-skip`) — **LIVE 25 ก.ย. 2569**
 เคส PR-00003 ร่างค้างตอนมือถือติดโควตา แล้วไปสร้างใบใหม่. สถานะใหม่ `skipped` (สุดทาง): จาก `draft`/`returned` เท่านั้น, เจ้าของใบหรือหัวหน้า/แอดมิน, ต้องมีเหตุผล (`skipReason/skippedBy/skippedByName/skippedAt`). **แก้ไม่ได้ ลบไม่ได้ แม้แอดมิน** — rules: `requestEdit` ปฏิเสธทุก update ของใบที่ `skipped`, `requestMove` อนุญาต → skipped เฉพาะผู้ขอ/manager ที่ลงชื่อตัวเอง, `allow delete` ของแอดมินยกเว้น PR ที่ skipped. เปิด `/requests/new` แล้วมีร่าง/ใบส่งกลับของตัวเอง → กล่องเตือน (เปิดทำต่อ / ข้าม / สร้างใหม่ต่อ) อ่านจาก `requestCache` 30 วันเดียวกับหน้ารายการ. ใบที่ข้ามไม่นับเป็น "กำลังสั่ง" ใน `openPurchaseFor` อีก → คำแนะนำสั่งซื้อกลับมา. tests: `tests/purchase-requests.test.ts` (+4), rules (+2). เจ้าของกดข้าม PR-00003 เองในระบบจริง
 
-### ข้อเสนอแนะประจำวัน — Master Automation Plan Phase 1 (25 ก.ย., branch `feat/daily-suggestions`) — **DEMO เท่านั้น ยังไม่ขึ้น production**
-เจ้าของสั่ง: *"ยังไม่ต้อง push โชว์ใน demo ก่อน"* และ *"ระบบเดิม…ให้คงเดิมไว้ก่อนแล้วดึงระบบใหม่ขึ้นมาให้เปรียบเทียบ อย่าเปลี่ยนเองโดยไม่ถาม"* → คำแนะนำรายสินค้าในปฏิทิน/ปุ่ม "ขอสั่งซื้อ"/เลื่อนเตือน/กระดิ่ง **ไม่ได้แตะเลย**. การ์ดใหม่บนหน้าแรก (หัวหน้า/แอดมิน ทั้งคอมและมือถือ) `src/components/dashboard/DailySuggestions.tsx` ใช้ `feed.insights.reorders` ตัวเดียวกับปฏิทิน (`useCalendarFeed` คืน `insights` เพิ่ม) → `src/lib/inventoryRules/suggestions.ts` `dailySuggestions()`:
-- คลังหลัก: เส้นเดียวกับปฏิทิน จัดตามผู้ขาย → ปุ่ม "สร้างร่างใบขอสั่งซื้อ" = `createRequest` + `addItems` (ใหม่: หลายบรรทัดใน transaction เดียว กติกาเดียวกับ addItem) → เปิด PR ต่อตามขั้นตอนเดิม
-- สาขา: คิดใหม่ด้วย `recommend()` แต่ lead = `TRANSFER_LEAD_DAYS` 1 วัน (ค่าคงที่ ไม่ใช่ setting เพราะจะต้องแก้ rules) ไม่เกินของที่คลังมี แบ่งทีละสาขา และหักของที่ใบโอนร่าง/รออนุมัติจองไว้แล้ว → "สร้างร่างใบขอโอน" = `createDraft` + `saveItems` ของ Logistics (ไม่ได้แก้ไฟล์ Logistics)
-- บรรทัดที่มีใบค้างอยู่ขึ้น "มีใบค้าง PR/TR-…" ไม่ติ๊ก ไม่ร่างซ้ำ. ไม่เขียนอะไรจนกว่าจะกดปุ่ม. อ่านจาก cache ของปฏิทิน/กระดิ่ง + ใบโอนเปิดอยู่ครั้งเดียวต่อการเปิดหน้า
-- ข้อจำกัดที่รู้: คลังหลักยังไม่เผื่อของที่กำลังจะโอนไปสาขา (ถ้าโอนเยอะ คลังจะต่ำกว่าขั้นต่ำแล้วค่อยแนะนำวันถัดไป)
-- **กับดัก:** `origin/demo` มี commit นี้แต่ `main` ไม่มี → `git push origin HEAD:demo` จาก main จะถูกปฏิเสธ (non-fast-forward) — ห้าม force; เมื่อเจ้าของอนุมัติให้ merge `feat/daily-suggestions` เข้า main แล้ว push ทั้งสอง. ถ้าต้อง push demo ก่อนนั้น ให้ merge main เข้า demo แทน
-- tests `tests/daily-suggestions.test.ts` (9). Phase 2–5 ยังเป็นโครงในแผน รอเริ่มทีละ Phase
-
-### Master Automation Plan Phase 2–5 (25 ก.ย., branch `feat/daily-suggestions`) — **DEMO เท่านั้น**
-เจ้าของ: *"ทำให้เสร็จครบทุก phase แล้วขึ้น demo"*. ทั้งหมดอยู่บน `origin/demo` (ยังไม่เข้า main)
-- **P2 Master QR:** `src/components/TransferQr.tsx` (ใช้ `BrowserQRCodeSvgWriter` จาก `@zxing/browser` ที่มีอยู่แล้ว ไม่เพิ่ม dependency) ปุ่ม "QR ใบโอน" บนใบโอนสถานะ inTransit/receiving พิมพ์ได้ · QR = URL หน้าตรวจรับ `lib/transferQr.ts` (`readTransferCode` รับ URL หรือ "TR-12") · "สแกน QR ใบโอน" บนใบรายการส่งสินค้า · หน้าตรวจรับมีแถบ "รับครบตามใบส่ง" กดครั้งเดียว = ติ๊กทุกบรรทัดตามจำนวนส่งแล้วยืนยันทันที (ซ่อนเมื่อมีผลต่าง) — แก้ไฟล์ Logistics แบบเพิ่มเท่านั้น
-- **P3 สูตรอาหาร + POS:** collection ใหม่ `recipes` (types `Recipe`, `COL.recipes`) · `services/recipes.ts` (cache ต่อแบรนด์, รหัสห้ามซ้ำ "045"=45, ไม่ลบ ปิดแทน, `addMissingMenu` เติมรหัสเมนู 64 รายการจาก `lib/menuCodes.ts` ที่ดึงจาก menu-exam/) · หน้า `/recipes` (ไม่ได้เพิ่มเมนูใน NAV — เข้าทางลิงก์จากหน้าเบิก/โอน โหมด POS) · หน้าเบิก/โอน โหมดที่ 3 "ตัดตามยอดขาย POS" (`pages/issue/PosImport.tsx`, `/issue?mode=pos`) เลือกไฟล์ CSV/Excel เลือกคอลัมน์เอง (เดาให้ก่อน `lib/posImport.ts`) → จับคู่สูตรด้วยรหัสแล้วชื่อ/alias → รวมวัตถุดิบ → consumeStock ใบเดียว หมายเหตุ "ยอดขาย POS {วันที่} · {ไฟล์}" · เตือนถ้าสาขา+วันเดียวกันนำเข้าแล้ว · บรรทัดสต๊อกไม่พอไม่ติ๊ก · **rules เขียน+เทสต์แล้วแต่ยังไม่ deploy** (validRecipe/recipeEdit: หัวหน้า/แอดมินเท่านั้น ลงชื่อ ห้ามลบแม้แอดมิน) — ก่อนขึ้น production ต้อง deploy rules ก่อน push และถามเจ้าของ · demo seed มีสูตรตัวอย่าง 3 เมนู
-- **P4 AI อ่านบิล:** `functions/api/ocr-bill.ts` (Pages Function, auth แบบเดียวกับ po-image) เรียก Gemini (`gemini-2.5-flash`, override ด้วย `GEMINI_MODEL`) **ต้องมี secret `GEMINI_API_KEY` ใน Cloudflare Pages (Preview สำหรับ demo, Production สำหรับของจริง)** ไม่มี = 503 ไม่มีรูปออกไปไหน — การใส่ key คือการตัดสินใจของเจ้าของว่าจะส่งรูปบิลให้ Google · `lib/billOcr.ts` (cleanOcr ไม่เชื่อคำตอบ, matchOcrLines ใช้ `productMatch` เฉพาะ exact/alias) · `pages/receive/ocrApply.ts` เติมฟอร์มโดยไม่ทับที่คนพิมพ์ โหมด PO ใส่เฉพาะบรรทัดในใบสั่งและหน่วยที่สั่ง · ปุ่ม "อ่านบิลด้วย AI" ในการ์ดเอกสารของ /receive เมื่อแนบรูป (ซ่อนบน localhost)
-- **P5 สรุปเข้า LINE:** ปุ่ม "แชร์สรุปเข้า LINE" บนการ์ดข้อเสนอแนะ → `lib/dailyDigest.ts` (Flex bubble แถวละลิงก์ https + ข้อความสำรอง) ส่งผ่าน LIFF shareTargetPicker (`SharePayload.flex` ใหม่) ถ้าไม่มี LIFF ใช้ share sheet/คลิปบอร์ด · กลับจาก LINE Login ด้วย `?digest=` แล้วแชร์ต่อ (`DIGEST_PARAM`)
-- tests ใหม่: transfer-qr (3), daily-digest (3), pos-import (6), recipes (4), bill-ocr (3), ocr-fill (5), rules recipes (3). รวม unit 882 / rules 202
-
 ### นับ ณ วันที่ — ยอดนับที่คีย์ทีหลัง (25 ก.ย., branch `feat/count-as-of`) — **LIVE 29 ก.ย. 2569** (ขึ้นพร้อมนับสต๊อกประจำเดือน)
 ปัญหาจริง: ยอดนับเช้า 1/9/2569 ยังไม่ได้คีย์ แต่รายการรับ/เบิกเดือน ก.ย. เข้าไปแล้ว — ทุกทางที่ "ตั้งยอดตามที่นับ" เดิมคำนวณ `นับได้ − ยอดตอนนี้` วันที่ที่เลือกแค่ใช้ลงแถว จึงลบรายการหลังวันนับทิ้ง (Import กันไว้ด้วยการปฏิเสธสินค้าที่ขยับหลังวันนับ ซึ่งคือตัวที่ขยับบ่อยสุด)
 - `lib/ledger.ts`: `balanceBefore(all, {productId, locationId}, before)` (เดินหน้าจาก ledger ทั้งหมด) และ `balanceAtDayEnd(now, later, scope, after)` (ถอยหลังจากยอดตอนนี้ ลบทุกแถวที่ลงวันที่ ≥ after) — ไม่นับแถว void และแถว legacy แยกหน่วย (อยู่คนละยอด)
@@ -259,15 +242,33 @@ tests: `tests/share-provider.test.ts` 13 คดี (เพิ่ม 4)
 - **WIP (งานระหว่างทำ) ข้อ 1–2 (29 ก.ย.)** — รายละเอียดทั้งหมดใน `docs/PLAN-wip-production.md`: รหัส `WIP-01-<กลุ่ม>-<nnn>` (PZM 24) / `WIP-LL-01-<กลุ่ม>-<nnn>` (LLP 5) ใน `src/seed/wip.ts`, แอดมินกด ทะเบียนสินค้า → "เพิ่มสินค้า WIP" (ตรวจก่อนเพิ่ม, รหัสที่มีแล้วข้าม) · รับสินค้าเข้าโหมดที่ 3 **"รับจากครัว (ผลิตเอง)"** = เฉพาะสินค้าหมวด WIP, ผู้ขาย "ครัว (ผลิตเอง)", ไม่มีเลขบิล/วันที่บิล/รูป · ส่งสาขา = Logistics/โอน, หน้าร้านใช้ = เบิกใช้ (ของเดิม) · ไม่ต้อง deploy rules · **ข้อ 3 ผลิตตามสูตร (ตัดวัตถุดิบอัตโนมัติ) = เฟสถัดไป** โครงอยู่ในไฟล์ plan
 - **ไม่มีข้อมูลเปลี่ยนเอง**: เจ้าของต้องกดเอง — ทะเบียนสินค้า → "เพิ่มสินค้า WIP" และ นับสต๊อกประจำเดือน → นำเข้าจาก Excel (ใบนับ 1/9 ลง 31/8 แบบตั้งยอดเริ่มต้น)
 - **30 ก.ย. นำเข้าถามยอดนับก่อน**: เจ้าของพิมพ์ยอดนับลงช่องอัตราสองครั้ง (ผักชีฝรั่ง 2 → 4 KG, Parma 13 KG × 13 = 169 EA) → บรรทัดหน่วยไม่ตรงถาม "นับได้กี่ <หน่วย>" เป็นค่าเริ่ม, อัตราเป็นตัวเลือกที่สองและแสดงการคำนวณ, "จำไว้ที่สินค้า" ใช้ได้เฉพาะโหมดอัตรา (`answeredQty` ใน lib/countImport)
+- ข้อ 3 ของ WIP (ผลิตตามสูตร ตัดวัตถุดิบอัตโนมัติ) ยังไม่ทำ — ต้องได้สูตรจริงจากเจ้าของ
+
+### ข้อเสนอแนะประจำวัน — Master Automation Plan Phase 1 (25 ก.ย., branch `feat/daily-suggestions`) — **DEMO เท่านั้น ยังไม่ขึ้น production**
+เจ้าของสั่ง: *"ยังไม่ต้อง push โชว์ใน demo ก่อน"* และ *"ระบบเดิม…ให้คงเดิมไว้ก่อนแล้วดึงระบบใหม่ขึ้นมาให้เปรียบเทียบ อย่าเปลี่ยนเองโดยไม่ถาม"* → คำแนะนำรายสินค้าในปฏิทิน/ปุ่ม "ขอสั่งซื้อ"/เลื่อนเตือน/กระดิ่ง **ไม่ได้แตะเลย**. การ์ดใหม่บนหน้าแรก (หัวหน้า/แอดมิน ทั้งคอมและมือถือ) `src/components/dashboard/DailySuggestions.tsx` ใช้ `feed.insights.reorders` ตัวเดียวกับปฏิทิน (`useCalendarFeed` คืน `insights` เพิ่ม) → `src/lib/inventoryRules/suggestions.ts` `dailySuggestions()`:
+- คลังหลัก: เส้นเดียวกับปฏิทิน จัดตามผู้ขาย → ปุ่ม "สร้างร่างใบขอสั่งซื้อ" = `createRequest` + `addItems` (ใหม่: หลายบรรทัดใน transaction เดียว กติกาเดียวกับ addItem) → เปิด PR ต่อตามขั้นตอนเดิม
+- สาขา: คิดใหม่ด้วย `recommend()` แต่ lead = `TRANSFER_LEAD_DAYS` 1 วัน (ค่าคงที่ ไม่ใช่ setting เพราะจะต้องแก้ rules) ไม่เกินของที่คลังมี แบ่งทีละสาขา และหักของที่ใบโอนร่าง/รออนุมัติจองไว้แล้ว → "สร้างร่างใบขอโอน" = `createDraft` + `saveItems` ของ Logistics (ไม่ได้แก้ไฟล์ Logistics)
+- บรรทัดที่มีใบค้างอยู่ขึ้น "มีใบค้าง PR/TR-…" ไม่ติ๊ก ไม่ร่างซ้ำ. ไม่เขียนอะไรจนกว่าจะกดปุ่ม. อ่านจาก cache ของปฏิทิน/กระดิ่ง + ใบโอนเปิดอยู่ครั้งเดียวต่อการเปิดหน้า
+- ข้อจำกัดที่รู้: คลังหลักยังไม่เผื่อของที่กำลังจะโอนไปสาขา (ถ้าโอนเยอะ คลังจะต่ำกว่าขั้นต่ำแล้วค่อยแนะนำวันถัดไป)
+- **กับดัก:** `origin/demo` มี commit นี้แต่ `main` ไม่มี → `git push origin HEAD:demo` จาก main จะถูกปฏิเสธ (non-fast-forward) — ห้าม force; เมื่อเจ้าของอนุมัติให้ merge `feat/daily-suggestions` เข้า main แล้ว push ทั้งสอง. ถ้าต้อง push demo ก่อนนั้น ให้ merge main เข้า demo แทน
+- tests `tests/daily-suggestions.test.ts` (9). Phase 2–5 ยังเป็นโครงในแผน รอเริ่มทีละ Phase
+
+### Master Automation Plan Phase 2–5 (25 ก.ย., branch `feat/daily-suggestions`) — **DEMO เท่านั้น**
+เจ้าของ: *"ทำให้เสร็จครบทุก phase แล้วขึ้น demo"*. ทั้งหมดอยู่บน `origin/demo` (ยังไม่เข้า main)
+- **P2 Master QR:** `src/components/TransferQr.tsx` (ใช้ `BrowserQRCodeSvgWriter` จาก `@zxing/browser` ที่มีอยู่แล้ว ไม่เพิ่ม dependency) ปุ่ม "QR ใบโอน" บนใบโอนสถานะ inTransit/receiving พิมพ์ได้ · QR = URL หน้าตรวจรับ `lib/transferQr.ts` (`readTransferCode` รับ URL หรือ "TR-12") · "สแกน QR ใบโอน" บนใบรายการส่งสินค้า · หน้าตรวจรับมีแถบ "รับครบตามใบส่ง" กดครั้งเดียว = ติ๊กทุกบรรทัดตามจำนวนส่งแล้วยืนยันทันที (ซ่อนเมื่อมีผลต่าง) — แก้ไฟล์ Logistics แบบเพิ่มเท่านั้น
+- **P3 สูตรอาหาร + POS:** collection ใหม่ `recipes` (types `Recipe`, `COL.recipes`) · `services/recipes.ts` (cache ต่อแบรนด์, รหัสห้ามซ้ำ "045"=45, ไม่ลบ ปิดแทน, `addMissingMenu` เติมรหัสเมนู 64 รายการจาก `lib/menuCodes.ts` ที่ดึงจาก menu-exam/) · หน้า `/recipes` (ไม่ได้เพิ่มเมนูใน NAV — เข้าทางลิงก์จากหน้าเบิก/โอน โหมด POS) · หน้าเบิก/โอน โหมดที่ 3 "ตัดตามยอดขาย POS" (`pages/issue/PosImport.tsx`, `/issue?mode=pos`) เลือกไฟล์ CSV/Excel เลือกคอลัมน์เอง (เดาให้ก่อน `lib/posImport.ts`) → จับคู่สูตรด้วยรหัสแล้วชื่อ/alias → รวมวัตถุดิบ → consumeStock ใบเดียว หมายเหตุ "ยอดขาย POS {วันที่} · {ไฟล์}" · เตือนถ้าสาขา+วันเดียวกันนำเข้าแล้ว · บรรทัดสต๊อกไม่พอไม่ติ๊ก · **rules เขียน+เทสต์แล้วแต่ยังไม่ deploy** (validRecipe/recipeEdit: หัวหน้า/แอดมินเท่านั้น ลงชื่อ ห้ามลบแม้แอดมิน) — ก่อนขึ้น production ต้อง deploy rules ก่อน push และถามเจ้าของ · demo seed มีสูตรตัวอย่าง 3 เมนู
+- **P4 AI อ่านบิล:** `functions/api/ocr-bill.ts` (Pages Function, auth แบบเดียวกับ po-image) เรียก Gemini (`gemini-2.5-flash`, override ด้วย `GEMINI_MODEL`) **ต้องมี secret `GEMINI_API_KEY` ใน Cloudflare Pages (Preview สำหรับ demo, Production สำหรับของจริง)** ไม่มี = 503 ไม่มีรูปออกไปไหน · Gemini ตอบ 429 (โควตาฟรีหมด) → สลับไป Workers AI `llama-4-scout` ผ่าน binding `AI` ใน wrangler.toml อัตโนมัติ — การใส่ key คือการตัดสินใจของเจ้าของว่าจะส่งรูปบิลให้ Google · `lib/billOcr.ts` (cleanOcr ไม่เชื่อคำตอบ, matchOcrLines ใช้ `productMatch` เฉพาะ exact/alias) · `pages/receive/ocrApply.ts` เติมฟอร์มโดยไม่ทับที่คนพิมพ์ โหมด PO ใส่เฉพาะบรรทัดในใบสั่งและหน่วยที่สั่ง · ปุ่ม "อ่านบิลด้วย AI" ในการ์ดเอกสารของ /receive เมื่อแนบรูป (ซ่อนบน localhost)
+- **P5 สรุปเข้า LINE:** ปุ่ม "แชร์สรุปเข้า LINE" บนการ์ดข้อเสนอแนะ → `lib/dailyDigest.ts` (Flex bubble แถวละลิงก์ https + ข้อความสำรอง) ส่งผ่าน LIFF shareTargetPicker (`SharePayload.flex` ใหม่) ถ้าไม่มี LIFF ใช้ share sheet/คลิปบอร์ด · กลับจาก LINE Login ด้วย `?digest=` แล้วแชร์ต่อ (`DIGEST_PARAM`)
+- tests ใหม่: transfer-qr (3), daily-digest (3), pos-import (6), recipes (4), bill-ocr (3), ocr-fill (5), rules recipes (3). รวม unit 882 / rules 202
 
 ## 5. ตัวเลขทดสอบ (unit + rules tests, รันผ่านหมดทุกครั้งก่อน commit)
 
 ```
-npm test              # 836 unit tests
-npm run test:rules    # 197 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
-npm run build          # tsc -b + typecheck functions/ (Cloudflare) + vite build
-npm run lint            # 0 errors
-npm run i18n:check      # ครบทุกข้อความ
+npm test              # 950 unit tests
+npm run test:rules    # 214 rules tests (ต้องมี Java สำหรับ emulator) — รวม firestore-rules-budget.test.ts ที่ replay เอกสารกว้างสุด
+npm run build         # tsc -b + typecheck functions/ (Cloudflare) + vite build
+npm run lint          # 0 errors
+npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 ```
 
 ---

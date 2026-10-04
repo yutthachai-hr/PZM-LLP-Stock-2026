@@ -718,6 +718,7 @@ export type NotificationKind =
   | 'taskEscalated' // past its deadline long enough to tell the managers
   | 'taskApproval' // handed in, waiting for a manager's sign-off
   | 'prSubmitted' // a purchase request waiting for approval
+  | 'prReturned' // a manager sent a request back to its requester
   | 'poArriving' // goods due today
   | 'poDelayed' // goods late
   | 'cutoffToday' // a supplier's order cut-off is today

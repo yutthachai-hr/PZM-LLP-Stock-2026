@@ -242,6 +242,11 @@ export function LineBuilder({
             ))}
           </div>
         )}
+        {search.trim() !== '' && matches.length === 0 && (
+          <div className="mt-1 rounded-lg border border-line bg-surface px-3 py-3 text-sm text-ink-soft shadow-lg md:absolute md:z-20 md:w-full">
+            {t('ไม่พบสินค้าที่ตรงกัน')}
+          </div>
+        )}
       </div>
 
       {lines.length === 0 ? (

@@ -270,6 +270,7 @@ export function OrdersPage() {
     try {
       const { exportExcel } = await import('../lib/export')
       exportExcel(t('ใบสั่งซื้อ_{ts}', { ts: Date.now() }), 'Orders', exportRows())
+      toast.success(t('ดาวน์โหลดไฟล์ Excel แล้ว'))
     } catch (e) {
       toast.error(errText(e, t))
     } finally {
@@ -293,6 +294,7 @@ export function OrdersPage() {
         head,
         body: rows.map((r) => head.map((h) => r[h])),
       })
+      toast.success(t('ดาวน์โหลดไฟล์ PDF แล้ว'))
     } catch (e) {
       toast.error(errText(e, t))
     } finally {
@@ -314,7 +316,7 @@ export function OrdersPage() {
   const orderColumns: Column<PurchaseOrder>[] = [
     {
       key: 'supplier',
-      header: t('ผู้ขาย / เลขที่ PO'),
+      header: t('ผู้ขาย / เลขที่ PO (รันแยกตามผู้ขาย)'),
       primary: true,
       className: 'min-w-44',
       cell: (o) => (
@@ -657,7 +659,7 @@ function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: P
         onRowClick={onOpen}
         empty={<EmptyState icon="x" title={t('ไม่มีใบสั่งซื้อที่ยกเลิกในช่วงนี้')} />}
         columns={[
-          { key: 'docNo', header: t('เลขที่'), primary: true, cell: (o) => <span className="doc-no">{o.docNo}</span> },
+          { key: 'docNo', header: t('เลขที่ (รันแยกตามผู้ขาย)'), primary: true, cell: (o) => <span className="doc-no">{o.docNo}</span> },
           { key: 'supplier', header: t('ผู้ขาย'), cell: (o) => o.supplierName },
           { key: 'ordered', header: t('วันที่สั่ง'), cell: (o) => formatThaiDate(o.orderedAt) },
           { key: 'location', header: t('คลังปลายทาง'), cell: (o) => <SiteChip locationId={o.locationId} /> },
@@ -857,55 +859,81 @@ function LineList({
   lines,
   setLines,
   plainUnits,
+  onOrder,
 }: {
   products: Product[]
   lines: LineDraft
   setLines: (fn: (cur: LineDraft) => LineDraft) => void
   plainUnits: string[]
+  onOrder?: ReadonlySet<string>
 }) {
   const t = useT()
+  if (products.length === 0) {
+    return (
+      <div className="max-h-80 overflow-auto rounded-lg border border-line">
+        <p className="p-6 text-center text-sm text-ink-soft">{t('ผู้ขายรายนี้ยังไม่มีสินค้าผูกไว้')}</p>
+      </div>
+    )
+  }
+
+  const renderItem = (p: Product) => {
+    const line = lines[p.id]
+    return (
+      <li key={p.id} className="p-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm text-ink">{p.name}</span>
+            <span className="flex gap-2 text-xs text-ink-faint">
+              <span className="doc-no">{p.sku}</span>
+              <span>
+                {t('หน่วยรับเข้า')}: {p.unitType}
+              </span>
+            </span>
+          </span>
+          {/* The same box the receiving screen uses, so the units on offer
+              here are the units the delivery can be keyed in. */}
+          <div className="w-full shrink-0 sm:w-64">
+            <QtyInput
+              unitType={p.unitType}
+              plainUnits={plainUnits}
+              conversions={p.unitConversions}
+              value={line?.base ?? 0}
+              onChange={(e) => setLines((cur) => ({ ...cur, [p.id]: { qty: e.entryQty, unit: e.entryUnit ?? p.unitType, base: e.qty } }))}
+              product={p}
+            />
+            {line && line.qty > 0 && !sameUnit(line.unit, p.unitType) && (
+              <p className="mt-1 text-right text-xs text-ink-faint">
+                {t('ผู้ขายเห็น {qty} {unit}', { qty: fmtQty(line.qty), unit: line.unit })}
+              </p>
+            )}
+          </div>
+        </div>
+      </li>
+    )
+  }
+
+  const inOrder = onOrder ? products.filter((p) => onOrder.has(p.id)) : []
+  const others = onOrder ? products.filter((p) => !onOrder.has(p.id)) : products
+
   return (
     <div className="max-h-80 overflow-auto rounded-lg border border-line">
-      {products.length === 0 ? (
-        <p className="p-6 text-center text-sm text-ink-soft">{t('ผู้ขายรายนี้ยังไม่มีสินค้าผูกไว้')}</p>
+      {onOrder && inOrder.length > 0 ? (
+        <div>
+          <div className="bg-sunken px-3 py-1.5 text-xs font-semibold text-ink-soft">
+            {t('รายการในใบสั่งซื้อ ({n})', { n: inOrder.length })}
+          </div>
+          <ul className="divide-y divide-line">{inOrder.map(renderItem)}</ul>
+          {others.length > 0 && (
+            <>
+              <div className="border-t border-line bg-sunken px-3 py-1.5 text-xs font-semibold text-ink-soft">
+                {t('เพิ่มสินค้าอื่นของผู้ขายรายนี้ ({n})', { n: others.length })}
+              </div>
+              <ul className="divide-y divide-line">{others.map(renderItem)}</ul>
+            </>
+          )}
+        </div>
       ) : (
-        <ul className="divide-y divide-line">
-          {products.map((p) => {
-            const line = lines[p.id]
-            return (
-              <li key={p.id} className="p-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-ink">{p.name}</span>
-                    <span className="flex gap-2 text-xs text-ink-faint">
-                      <span className="doc-no">{p.sku}</span>
-                      <span>
-                        {t('หน่วยรับเข้า')}: {p.unitType}
-                      </span>
-                    </span>
-                  </span>
-                  {/* The same box the receiving screen uses, so the units on offer
-                      here are the units the delivery can be keyed in. */}
-                  <div className="w-full shrink-0 sm:w-64">
-                    <QtyInput
-                      unitType={p.unitType}
-                      plainUnits={plainUnits}
-                      conversions={p.unitConversions}
-                      value={line?.base ?? 0}
-                      onChange={(e) => setLines((cur) => ({ ...cur, [p.id]: { qty: e.entryQty, unit: e.entryUnit ?? p.unitType, base: e.qty } }))}
-                      product={p}
-                    />
-                    {line && line.qty > 0 && !sameUnit(line.unit, p.unitType) && (
-                      <p className="mt-1 text-right text-xs text-ink-faint">
-                        {t('ผู้ขายเห็น {qty} {unit}', { qty: fmtQty(line.qty), unit: line.unit })}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+        <ul className="divide-y divide-line">{products.map(renderItem)}</ul>
       )}
     </div>
   )
@@ -941,17 +969,18 @@ function AmendOrderModal({
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const onOrder = useMemo(() => new Set(order.lines.map((l) => l.productId)), [order])
+
   // The order's own lines first, whatever state their product is in now, then the rest of
   // what the supplier sells.
   const list = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const onOrder = new Set(order.lines.map((l) => l.productId))
     const own = products.filter((p) => onOrder.has(p.id))
     const others = products
       .filter((p) => !onOrder.has(p.id) && p.supplierId === order.supplierId && p.active !== false)
       .sort((a, b) => a.name.localeCompare(b.name))
     return [...own, ...others].filter((p) => looseMatch([p.name, p.sku], q))
-  }, [products, order, search])
+  }, [products, order, search, onOrder])
 
   const chosen = Object.entries(lines).filter(([, l]) => l.qty > 0)
 
@@ -992,7 +1021,7 @@ function AmendOrderModal({
           </Field>
         </div>
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('ค้นหาในรายการของผู้ขายรายนี้')} />
-        <LineList products={list} lines={lines} setLines={setLines} plainUnits={plainUnits} />
+        <LineList products={list} lines={lines} setLines={setLines} plainUnits={plainUnits} onOrder={onOrder} />
         <Field label={t('หมายเหตุในใบ')}>
           <Input value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>

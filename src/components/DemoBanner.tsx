@@ -20,6 +20,9 @@ import { Icon } from './Icon'
  * It sits below the drawer and the modals rather than above them. Being permanently on
  * screen is the point, but not at the cost of covering the sign-out button in an open
  * menu — and anything that covers the page is itself transient.
+ *
+ * Desktop: bottom-right, because bottom-left is the sidebar's sign-out / brand switch
+ * (UX test 2026-10-02). pointer-events-none so a click on it lands on whatever is under it.
  */
 export function DemoBanner() {
   const t = useT()
@@ -27,7 +30,7 @@ export function DemoBanner() {
   return (
     <div
       role="status"
-      className="fixed left-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
+      className="pointer-events-none fixed left-3 md:left-auto md:right-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
     >
       <Icon name="warning" size={13} />
       <span>{t('โหมดสาธิต — ไม่ใช่สต๊อกจริง')}</span>
@@ -56,7 +59,7 @@ function LiveDataOnLocalhostWarning() {
   return (
     <div
       role="alert"
-      className="fixed left-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
+      className="pointer-events-none fixed left-3 md:left-auto md:right-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
     >
       <Icon name="warning" size={13} />
       <span>{t('เซิร์ฟเวอร์ทดสอบนี้ต่อกับข้อมูลจริง — ใช้ npm run demo')}</span>

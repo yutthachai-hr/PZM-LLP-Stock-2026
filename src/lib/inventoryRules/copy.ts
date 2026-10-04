@@ -12,6 +12,7 @@ export const NOTIFICATION_TITLE: Record<NotificationKind, string> = {
   taskEscalated: 'งานค้างนานเกินกำหนด: {title}', // i18n-key
   taskApproval: 'รอตรวจงาน: {title}', // i18n-key
   prSubmitted: 'รายการขอสั่งซื้อรออนุมัติ {docNo}', // i18n-key
+  prReturned: 'หัวหน้าส่งกลับให้แก้ไข {docNo}', // i18n-key
   poArriving: 'ของเข้าวันนี้: {supplier}', // i18n-key
   poDelayed: 'ของยังไม่มา: {supplier} ({docNo})', // i18n-key
   cutoffToday: 'วันนี้ตัดรอบสั่ง {supplier} เวลา {time}', // i18n-key
@@ -34,6 +35,7 @@ export const NOTIFICATION_BODY: Record<NotificationKind, string> = {
   taskEscalated: 'เริ่ม {time} · {location} — เลยกำหนดแล้วยังไม่เสร็จ', // i18n-key
   taskApproval: '{by} ทำเสร็จแล้ว รอหัวหน้าอนุมัติ', // i18n-key
   prSubmitted: '{by} · {location} · {n} รายการ', // i18n-key
+  prReturned: '{by}: {reason}', // i18n-key
   poArriving: '{docNo} · {location} · {n} รายการ', // i18n-key
   poDelayed: 'เลยกำหนดส่ง {days} วัน · {location}', // i18n-key
   cutoffToday: 'สั่งให้ทันก่อน {time}', // i18n-key

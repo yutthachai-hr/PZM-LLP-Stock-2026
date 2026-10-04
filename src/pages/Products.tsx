@@ -445,7 +445,7 @@ export function ProductsPage() {
           <div className="pb-4">
             {view === 'grid' ? (
               <div className="px-4 md:px-5">
-                <ProductGrid rows={pageRows} onOpen={setEditing} t={t} />
+                <ProductGrid rows={pageRows} onOpen={(p) => navigate(`/products/${encodeURIComponent(p.id)}/card`)} t={t} />
               </div>
             ) : (
               <div className="md:px-5">
@@ -454,7 +454,7 @@ export function ProductsPage() {
                   columns={columns}
                   rowKey={(r) => r.p.id}
                   minWidth={960}
-                  onRowClick={(r) => setEditing(r.p)}
+                  onRowClick={(r) => navigate(`/products/${encodeURIComponent(r.p.id)}/card`)}
                   selection={{ selected, onChange: setSelected }}
                   rowMenu={(r) =>
                     productMenu(r, t, {

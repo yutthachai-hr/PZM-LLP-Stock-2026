@@ -271,6 +271,12 @@ export function ProductEditor({
 
   return (
     <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
+      {!canEdit && product && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-sunken/60 p-3 text-sm">
+          <Icon name="info" size={18} className="mt-0.5 shrink-0 text-ink-faint" />
+          <p className="text-ink-soft">{t('สินค้านี้เปิดดูได้อย่างเดียว — ต้องเป็นผู้ดูแลระบบจึงจะแก้ไขได้ ให้แจ้งผู้ดูแลถ้าต้องการเปลี่ยน')}</p>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2 flex items-center gap-4">
           <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-line bg-sunken">

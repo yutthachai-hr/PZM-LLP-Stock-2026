@@ -593,7 +593,8 @@ export function AdjustPage() {
             chips={reasonChips}
             value={defaultReason}
             onChange={(k) => {
-              if (k === defaultReason) setRows((rs) => rs.map((r) => ({ ...r, reason: k })))
+              // Rows still on the old default follow the chip; a second press overrides hand-picked ones too.
+              setRows((rs) => rs.map((r) => (k === defaultReason || r.reason === defaultReason ? { ...r, reason: k } : r)))
               setDefaultReason(k)
             }}
           />

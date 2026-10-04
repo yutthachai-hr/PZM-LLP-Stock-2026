@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { Button, Card, Field, Input } from '../components/ui'
+import { Icon } from '../components/Icon'
 import { isDemoMode, parseConfigInput, saveFirebaseConfig } from '../firebase/config'
 import { resetDemoData } from '../services/demoSeed'
 import { DEMO_ADMIN, DEMO_USERS } from '../services/demoUsers'
@@ -13,6 +14,7 @@ export function LoginPage() {
   const { login, signUp, needsBootstrap, mode, notice } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -103,14 +105,26 @@ export function LoginPage() {
             />
           </Field>
           <Field label={t("รหัสผ่าน")} required hint={bootstrap ? t("อย่างน้อย 6 ตัวอักษร") : undefined}>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={bootstrap ? 'new-password' : 'current-password'}
-              minLength={6}
-              required
-            />
+            <div className="relative">
+              <Input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={bootstrap ? 'new-password' : 'current-password'}
+                minLength={6}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                aria-label={showPw ? t('ซ่อนรหัสผ่าน') : t('แสดงรหัสผ่าน')}
+                aria-pressed={showPw}
+                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-soft hover:text-ink"
+              >
+                <Icon name={showPw ? 'eyeOff' : 'eye'} size={18} />
+              </button>
+            </div>
           </Field>
 
           {bootstrap && !firstAdmin && (

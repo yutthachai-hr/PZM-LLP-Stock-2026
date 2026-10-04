@@ -145,7 +145,7 @@ export function BranchOverviewCard({ branches }: { branches: BranchRow[] }) {
                 <td className="px-3 py-2.5 text-center">
                   {b.low > 0 ? <QtyPill tone="red">{b.low}</QtyPill> : <span className="num text-ink-soft">0</span>}
                 </td>
-                <td className="num px-3 py-2.5 text-right text-ink">฿ {fmtMoney(b.value)}</td> {/* i18n-key */}
+                <td className="num px-3 py-2.5 text-right text-ink">฿ {fmtMoney(b.value)}</td>{/* i18n-key */}
                 <td className="px-3 py-2.5">
                   {/* A dot and a word, as the mock-up draws it — a pill would not fit beside four columns. */}
                   <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${b.low > 0 ? 'text-warn' : 'text-in'}`}>

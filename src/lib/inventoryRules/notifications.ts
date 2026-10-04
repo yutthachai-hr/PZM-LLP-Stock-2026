@@ -55,6 +55,7 @@ export const CATEGORY: Record<NotificationKind, NotificationCategory> = {
   taskEscalated: 'task',
   taskApproval: 'task',
   prSubmitted: 'purchasing',
+  prReturned: 'purchasing',
   poArriving: 'purchasing',
   poDelayed: 'purchasing',
   cutoffToday: 'supplier',
@@ -288,6 +289,19 @@ export function prSubmittedDraft(pr: PurchaseRequest, locationName: (id: string 
     priority: 'medium',
     to: { roles: MANAGERS },
     params: { docNo: pr.docNo, by: pr.requestedByName, location: locationName(pr.locationId), n: pr.items.filter((i) => !i.removed).length },
+    link: `/requests/${pr.id}`,
+    locationId: pr.locationId,
+  }
+}
+
+/** To the requester only, the moment a manager sends their request back. */
+export function prReturnedDraft(pr: PurchaseRequest, by: string): NotificationDraft {
+  return {
+    id: `prReturned__${pr.id}__${pr.revision}`,
+    kind: 'prReturned',
+    priority: 'high',
+    to: { uids: [pr.requestedBy] },
+    params: { docNo: pr.docNo, by, reason: pr.returnReason ?? '' },
     link: `/requests/${pr.id}`,
     locationId: pr.locationId,
   }
