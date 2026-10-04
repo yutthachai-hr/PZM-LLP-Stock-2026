@@ -341,18 +341,26 @@ export function DailySuggestions() {
       title={t('ข้อเสนอแนะประจำวัน')}
       count={suggestions ? t('({n} รายการ)', { n: blocks.reduce((n, b) => n + b.lines.length, 0) }) : undefined}
       actions={
-        // LINE's green, not LINE's logo (owner, 4 Oct 2026): LINE allows its icon on a share
-        // button only as its own unaltered file, and forbids look-alikes — the colour says
-        // where this goes without either.
-        <Button
+        // LINE's own Thai share button (owner, 4 Oct 2026), the file from LINE's design guide
+        // (developers.line.biz, buttons_th_v3.zip) used exactly as published: LINE allows its
+        // icon on a share button only unaltered. Its grey twin while the button cannot be used.
+        // Files saved at twice their size for sharp screens, so shown at half.
+        <button
+          type="button"
           onClick={() => void shareDigest()}
           disabled={!suggestions || !!busy}
-          size="sm"
-          className="!border-transparent !bg-[#06C755] !text-white hover:!bg-[#05b14b]"
+          aria-label={busy === 'digest' ? t('กำลังเปิด LINE...') : t('แชร์ LINE')}
+          title={busy === 'digest' ? t('กำลังเปิด LINE...') : t('แชร์ LINE')}
+          className="shrink-0 cursor-pointer rounded-md transition-opacity hover:opacity-85 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
-          <Icon name="share" size={15} />
-          {busy === 'digest' ? t('กำลังเปิด LINE...') : t('แชร์ LINE')}
-        </Button>
+          <img
+            src={!suggestions || busy ? '/brand/line/share-th-grey.png' : '/brand/line/share-th.png'}
+            alt=""
+            width={68}
+            height={30}
+            className="block h-[30px] w-[68px]"
+          />
+        </button>
       }
     >
       {!suggestions ? (
