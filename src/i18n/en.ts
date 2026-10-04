@@ -2625,7 +2625,7 @@ export const EN: Record<string, string> = {
   'ส่งสรุปเข้า LINE แล้ว': 'Summary sent to LINE',
   'คัดลอกสรุปแล้ว — วางในกลุ่ม LINE ได้เลย': 'Summary copied — paste it into the LINE group',
   'เปิดหน้าแชร์แล้ว': 'Share sheet opened',
-  'แชร์สรุปเข้า LINE': 'Share summary to LINE',
+  'แชร์ LINE': 'Share to LINE',
   'สแกนเพื่อตรวจรับสินค้า': 'Scan to receive',
   'QR ใบโอน {docNo}': 'Transfer QR {docNo}',
   'กำลังสร้าง QR...': 'Making the QR...',

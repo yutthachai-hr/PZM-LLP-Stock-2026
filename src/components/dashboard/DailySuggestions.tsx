@@ -341,9 +341,17 @@ export function DailySuggestions() {
       title={t('ข้อเสนอแนะประจำวัน')}
       count={suggestions ? t('({n} รายการ)', { n: blocks.reduce((n, b) => n + b.lines.length, 0) }) : undefined}
       actions={
-        <Button variant="outline" onClick={() => void shareDigest()} disabled={!suggestions || !!busy}>
-          <Icon name="share" size={16} />
-          {busy === 'digest' ? t('กำลังเปิด LINE...') : t('แชร์สรุปเข้า LINE')}
+        // LINE's green, not LINE's logo (owner, 4 Oct 2026): LINE allows its icon on a share
+        // button only as its own unaltered file, and forbids look-alikes — the colour says
+        // where this goes without either.
+        <Button
+          onClick={() => void shareDigest()}
+          disabled={!suggestions || !!busy}
+          size="sm"
+          className="!border-transparent !bg-[#06C755] !text-white hover:!bg-[#05b14b]"
+        >
+          <Icon name="share" size={15} />
+          {busy === 'digest' ? t('กำลังเปิด LINE...') : t('แชร์ LINE')}
         </Button>
       }
     >
