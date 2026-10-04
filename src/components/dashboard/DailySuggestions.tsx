@@ -29,7 +29,8 @@ import type { Role, StockLocation, Transfer, TransferItem } from '../../types'
 import { SectionCard, StatusChip } from '../frame'
 import { Icon } from '../Icon'
 import { useToast } from '../Toast'
-import { Button, Input } from '../ui'
+import { Button, Input, Modal } from '../ui'
+import { shortSiteName, siteNumber } from '../../lib/siteTone'
 
 /** How many lines a block shows before "see all". */
 const FOLD = 8
@@ -97,6 +98,9 @@ export function DailySuggestions() {
   const [qty, setQty] = useState<Record<Key, string>>({})
   const [busy, setBusy] = useState('')
   const [open, setOpen] = useState<Record<string, boolean>>({})
+  // Which site's list is open in its window (owner, 4 Oct 2026: the card took most of
+  // the dashboard; one round icon per site now, its list opened on a tap).
+  const [showing, setShowing] = useState<string | null>(null)
 
   const actor = user ? { id: user.id, name: user.name, role: user.role as Role, siteIds: user.siteIds } : null
   const { brand } = useBrand()
@@ -229,6 +233,7 @@ export function DailySuggestions() {
           title: t('{site} — ขอสั่งซื้อ', { site: p.location.name }),
           hint: t('สร้างเป็นร่างใบขอสั่งซื้อใบเดียว ให้หัวหน้าตรวจและอนุมัติ แล้วแยกใบสั่งซื้อตามผู้ขายตามปกติ'),
           lines: p.lines,
+          site: p.location,
           kind: 'pr' as const,
           action: t('สร้างร่างใบขอสั่งซื้อ ({n} รายการ)', { n: chosen(p.location.id, p.lines).length }),
           run: () => void draftRequest(p.location, p.lines),
@@ -239,6 +244,7 @@ export function DailySuggestions() {
           title: t('{from} → {to} — ขอโอน', { from: x.from.name, to: x.to.name }),
           hint: t('คิดว่าของจากคลังถึงสาขาใน {n} วัน และไม่เกินที่คลังมีอยู่', { n: TRANSFER_LEAD_DAYS }),
           lines: x.lines,
+          site: x.to,
           kind: 'tr' as const,
           action: t('สร้างร่างใบขอโอน ({n} รายการ)', { n: chosen(`${x.from.id}>${x.to.id}`, x.lines).length }),
           run: () => void draftTransfer(x.from, x.to, x.lines),
@@ -246,6 +252,88 @@ export function DailySuggestions() {
         })),
       ]
     : []
+
+  type Block = (typeof blocks)[number]
+
+  /** One site's lines, the ticks and quantities, and the button that drafts them. */
+  function blockBody(b: Block) {
+    const all = open[b.id] ? b.lines : b.lines.slice(0, FOLD)
+    const n = chosen(b.id, b.lines).length
+    return (
+      <div className="rounded-xl border border-line">
+        <ul className="divide-y divide-line">
+          {all.map((l) => {
+            const k = keyOf(b.id, l.product.id)
+            const on = isOn(k, l)
+            return (
+              <li key={k} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 md:grid-cols-[auto_minmax(0,1fr)_6rem_8rem_10rem]">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={(e) => setTicked((c) => ({ ...c, [k]: e.target.checked }))}
+                  aria-label={t('เลือก {name}', { name: l.product.name })}
+                  className="h-5 w-5 cursor-pointer accent-[var(--color-brand)]"
+                />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-ink">{l.product.name}</div>
+                  <div className="truncate text-xs text-ink-faint">
+                    {b.kind === 'pr' && <>{l.supplierName ?? t('ยังไม่มีผู้ขาย')} · </>}
+                    {l.basis === 'usage' && l.avgDaily ? t('ใช้วันละ {n}', { n: fmtQty(l.avgDaily) }) : t('ตามขั้นต่ำ')}
+                    {/* On a phone the on-hand column is not there; say it here. */}
+                    <span className="md:hidden"> · {t('มี {n} {unit}', { n: fmtQty(l.onHand), unit: l.product.unitType })}</span>
+                  </div>
+                </div>
+                <div className="num hidden text-right text-xs text-ink-soft md:block">
+                  {t('มี {n} {unit}', { n: fmtQty(l.onHand), unit: l.product.unitType })}
+                </div>
+                <div className="col-span-2 col-start-2 flex items-center gap-2 md:col-span-1 md:col-start-auto">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min={0}
+                    value={qty[k] ?? String(l.qty)}
+                    onChange={(e) => setQty((c) => ({ ...c, [k]: e.target.value }))}
+                    aria-label={t('จำนวน: {name}', { name: l.product.name })}
+                    className="num min-h-10 !w-24 text-right"
+                  />
+                  <span className="text-xs text-ink-soft">{l.product.unitType}</span>
+                </div>
+                <div className="col-span-3 flex flex-wrap gap-1 md:col-span-1 md:justify-end">
+                  {l.inProgress && (
+                    <StatusChip tone="slate" size="sm" icon="clock">
+                      {t('มีใบค้าง {docNo}', { docNo: l.inProgress.docNo })}
+                    </StatusChip>
+                  )}
+                  {l.limitedTo !== undefined && (
+                    <StatusChip tone="amber" size="sm">
+                      {l.limitedTo > 0 ? t('คลังมีแค่ {n}', { n: fmtQty(l.limitedTo) }) : t('คลังไม่มีของ')}
+                    </StatusChip>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+        {b.lines.length > FOLD && (
+          <button
+            type="button"
+            onClick={() => setOpen((c) => ({ ...c, [b.id]: !c[b.id] }))}
+            className="w-full cursor-pointer border-t border-line py-2 text-sm font-medium text-brand hover:bg-sunken"
+          >
+            {open[b.id] ? t('ย่อ') : t('ดูทั้งหมด ({n})', { n: b.lines.length })}
+          </button>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2.5">
+          <span className="text-xs text-ink-faint">{b.hint}</span>
+          <Button onClick={b.run} disabled={!!busy || n === 0} className="w-full sm:w-auto">
+            <Icon name="plus" size={16} />
+            {busy === b.busyKey ? t('กำลังสร้าง...') : b.action}
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <SectionCard
@@ -259,100 +347,49 @@ export function DailySuggestions() {
         </Button>
       }
     >
-      <p className="mb-3 text-xs text-ink-soft">
-        {t('คำนวณจากยอดคงเหลือ ขั้นต่ำ และอัตราการใช้ — ตัวเลขเดียวกับคำแนะนำในปฏิทินคลัง ยังไม่มีอะไรถูกบันทึกจนกว่าจะกดสร้างร่าง')}
-      </p>
       {!suggestions ? (
         <p className="py-4 text-center text-sm text-ink-faint">{t('กำลังคำนวณ...')}</p>
       ) : blocks.length === 0 ? (
         <p className="py-4 text-center text-sm text-ink-faint">{t('วันนี้ยังไม่มีอะไรต้องสั่งหรือโอน')}</p>
       ) : (
-        <div className="space-y-5">
+        <div className="flex flex-wrap gap-x-6 gap-y-3">
           {blocks.map((b) => {
-            const all = open[b.id] ? b.lines : b.lines.slice(0, FOLD)
-            const n = chosen(b.id, b.lines).length
+            const no = siteNumber(b.site)
             return (
-              <div key={b.id} className="rounded-xl border border-line">
-                <div className="flex flex-wrap items-center gap-2 border-b border-line bg-sunken/60 px-3 py-2.5">
-                  <Icon name={b.kind === 'pr' ? 'cart' : 'send'} size={17} className="text-brand" />
-                  <span className="min-w-0 flex-1 text-sm font-bold text-ink">{b.title}</span>
-                  <span className="text-xs text-ink-soft">{t('{n} รายการ', { n: b.lines.length })}</span>
-                </div>
-                <ul className="divide-y divide-line">
-                  {all.map((l) => {
-                    const k = keyOf(b.id, l.product.id)
-                    const on = isOn(k, l)
-                    return (
-                      <li key={k} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 md:grid-cols-[auto_minmax(0,1fr)_6rem_8rem_10rem]">
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          onChange={(e) => setTicked((c) => ({ ...c, [k]: e.target.checked }))}
-                          aria-label={t('เลือก {name}', { name: l.product.name })}
-                          className="h-5 w-5 cursor-pointer accent-[var(--color-brand)]"
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-ink">{l.product.name}</div>
-                          <div className="truncate text-xs text-ink-faint">
-                            {b.kind === 'pr' && <>{l.supplierName ?? t('ยังไม่มีผู้ขาย')} · </>}
-                            {l.basis === 'usage' && l.avgDaily ? t('ใช้วันละ {n}', { n: fmtQty(l.avgDaily) }) : t('ตามขั้นต่ำ')}
-                            {/* On a phone the on-hand column is not there; say it here. */}
-                            <span className="md:hidden"> · {t('มี {n} {unit}', { n: fmtQty(l.onHand), unit: l.product.unitType })}</span>
-                          </div>
-                        </div>
-                        <div className="num hidden text-right text-xs text-ink-soft md:block">
-                          {t('มี {n} {unit}', { n: fmtQty(l.onHand), unit: l.product.unitType })}
-                        </div>
-                        <div className="col-span-2 col-start-2 flex items-center gap-2 md:col-span-1 md:col-start-auto">
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            step="any"
-                            min={0}
-                            value={qty[k] ?? String(l.qty)}
-                            onChange={(e) => setQty((c) => ({ ...c, [k]: e.target.value }))}
-                            aria-label={t('จำนวน: {name}', { name: l.product.name })}
-                            className="num min-h-10 !w-24 text-right"
-                          />
-                          <span className="text-xs text-ink-soft">{l.product.unitType}</span>
-                        </div>
-                        <div className="col-span-3 flex flex-wrap gap-1 md:col-span-1 md:justify-end">
-                          {l.inProgress && (
-                            <StatusChip tone="slate" size="sm" icon="clock">
-                              {t('มีใบค้าง {docNo}', { docNo: l.inProgress.docNo })}
-                            </StatusChip>
-                          )}
-                          {l.limitedTo !== undefined && (
-                            <StatusChip tone="amber" size="sm">
-                              {l.limitedTo > 0 ? t('คลังมีแค่ {n}', { n: fmtQty(l.limitedTo) }) : t('คลังไม่มีของ')}
-                            </StatusChip>
-                          )}
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-                {b.lines.length > FOLD && (
-                  <button
-                    type="button"
-                    onClick={() => setOpen((c) => ({ ...c, [b.id]: !c[b.id] }))}
-                    className="w-full cursor-pointer border-t border-line py-2 text-sm font-medium text-brand hover:bg-sunken"
-                  >
-                    {open[b.id] ? t('ย่อ') : t('ดูทั้งหมด ({n})', { n: b.lines.length })}
-                  </button>
-                )}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2.5">
-                  <span className="text-xs text-ink-faint">{b.hint}</span>
-                  <Button onClick={b.run} disabled={!!busy || n === 0} className="w-full sm:w-auto">
-                    <Icon name="plus" size={16} />
-                    {busy === b.busyKey ? t('กำลังสร้าง...') : b.action}
-                  </Button>
-                </div>
-              </div>
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setShowing(b.id)}
+                className="group flex w-24 cursor-pointer flex-col items-center gap-1.5 text-center"
+                aria-label={b.title}
+              >
+                <span className="relative flex h-14 w-14 items-center justify-center rounded-full border-2 border-brand bg-surface text-brand transition-colors group-hover:bg-brand-soft">
+                  <Icon name={b.site.type === 'warehouse' ? 'building' : 'store'} size={24} />
+                  <span className="num absolute -right-1.5 -top-1.5 min-w-6 rounded-full bg-brand px-1.5 text-xs font-bold leading-5 text-white">
+                    {b.lines.length}
+                  </span>
+                </span>
+                <span className="text-sm font-semibold leading-tight text-ink">
+                  {shortSiteName(b.site.name)}
+                  {no !== null && ` ${no}`}
+                </span>
+                <span className="text-xs leading-tight text-ink-soft">{b.kind === 'pr' ? t('ขอสั่งซื้อ') : t('ขอโอน')}</span>
+              </button>
             )
           })}
         </div>
       )}
+      {(() => {
+        const b = blocks.find((x) => x.id === showing)
+        return b ? (
+          <Modal open wide onClose={() => setShowing(null)} title={b.title}>
+            <p className="mb-3 text-xs text-ink-soft">
+              {t('คำนวณจากยอดคงเหลือ ขั้นต่ำ และอัตราการใช้ — ตัวเลขเดียวกับคำแนะนำในปฏิทินคลัง ยังไม่มีอะไรถูกบันทึกจนกว่าจะกดสร้างร่าง')}
+            </p>
+            {blockBody(b)}
+          </Modal>
+        ) : null
+      })()}
     </SectionCard>
   )
 }

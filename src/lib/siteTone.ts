@@ -20,6 +20,21 @@ function slot(l: Pick<StockLocation, 'name' | 'nameEn' | 'type'>): number | null
   return null
 }
 
+/**
+ * A site's number as the company says it (owner, 4 Oct 2026: "สารสินคือสาขา 2 ส่วนอ่อนนุชคือ
+ * สาขา 3"): Sukhumvit 1, Sarasin 2, On Nut 3 — the same order as the tints. Null for a site
+ * the names do not cover.
+ */
+export function siteNumber(l: Pick<StockLocation, 'name' | 'nameEn' | 'type'>): number | null {
+  const s = slot(l)
+  return s === null ? null : s + 1
+}
+
+/** A site's name without "สาขา" in front, for a short label: "สาขาสารสิน" → "สารสิน". */
+export function shortSiteName(name: string): string {
+  return name.replace(/^สาขา\s*/, '').trim() || name
+}
+
 export function siteTones(locations: readonly Pick<StockLocation, 'id' | 'name' | 'nameEn' | 'type'>[]): Map<string, string> {
   const out = new Map<string, string>()
   const used = new Set<number>()
