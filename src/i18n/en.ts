@@ -2724,4 +2724,6 @@ export const EN: Record<string, string> = {
   'มีในรายการแล้ว': 'already on the list',
   'ยังไม่ได้เปิดใช้ AI อ่านบิล — ผู้ดูแลต้องตั้งค่า GEMINI_API_KEY ใน Cloudflare ก่อน': 'Bill reading is not switched on — an admin must set GEMINI_API_KEY in Cloudflare first',
   'AI อ่านบิลไม่สำเร็จ ({status}) — ลองถ่ายใหม่ให้ชัดขึ้น หรือคีย์เอง': 'AI could not read the bill ({status}) — take a clearer photo, or key it in',
+  // ---- kept on demo: the POS import sheet picker ----
+  'ชีต': 'Sheet',
 }
