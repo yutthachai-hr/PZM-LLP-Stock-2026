@@ -122,7 +122,12 @@ function DeskDashboard() {
 
       {/* Phase 1 of the automation plan: every reorder suggestion of the day, draftable in
           one press. For the people who decide what to buy and send. */}
-      {isManager(user?.role) && <DailySuggestions />}
+      {/* As wide as the movement chart under it, not the whole page (owner, 4 Oct 2026). */}
+      {isManager(user?.role) && (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
+          <DailySuggestions />
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
         <WeeklyMovementCard weekly={f.weekly} />
