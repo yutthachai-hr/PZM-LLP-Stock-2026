@@ -335,7 +335,7 @@ export function supplierAnswerDraft(
   }
 }
 
-/** A หัวหน้า or admin approved or refused a supplier's date: to whoever sent the order. */
+/** A manager or admin approved or refused a supplier's date: to whoever sent the order. */
 export function supplierDecisionDraft(
   po: PurchaseOrder,
   approved: boolean,

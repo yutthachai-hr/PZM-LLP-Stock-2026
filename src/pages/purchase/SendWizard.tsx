@@ -13,6 +13,9 @@ import { errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
 import { imageHostAvailable, uploadPoImage } from '../../services/poImages'
 import { setShareStatus } from '../../services/purchaseOrders'
+import { supplierLink } from '../../services/supplierConfirmation'
+import { requestedOf } from '../../lib/supplierConfirmation'
+import { formatDateFor } from '../../lib/format'
 import { pickShareProvider, statusFor, type PurchaseShareProvider } from '../../share'
 import { liffNeedsLogin } from '../../share/lineLiffProvider'
 import { isStandalone } from '../../share/liffResume'
@@ -123,12 +126,27 @@ export function SendWizard({
       // Opened is written before the picker, so a tab closed mid-way still shows the
       // truth: this one was started and not finished.
       if (current.shareStatus !== 'shareOpened') await record(current, 'shareOpened')
+      // The supplier's confirmation link goes with the last page only (5 Oct 2026). No link
+      // (not set up yet, or offline) → the sheet goes out exactly as before.
+      const link = isLast ? await supplierLink(current) : null
+      const asked = requestedOf(link?.order ?? current)
+      const caption = link
+        ? [
+            t('📦 มีใบสั่งซื้อใหม่จาก {company}', { company }),
+            '',
+            `PO: ${current.docNo}`,
+            `Supplier: ${current.supplierName}`,
+            `Requested Delivery: ${asked !== undefined ? formatDateFor(asked, sheetLang) : t('ไม่ระบุ')}`,
+            '',
+            t('กรุณาตรวจสอบและยืนยันวันจัดส่ง: {url}', { url: link.url }),
+          ].join('\n')
+        : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + (page.of > 1 ? ` (${page.n}/${page.of})` : '')
       setBusy('share')
       const outcome = await provider.share({
         subject: { kind: 'order', id: current.id },
         file,
         hosted,
-        caption: t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + (page.of > 1 ? ` (${page.n}/${page.of})` : ''),
+        caption,
       })
       if (outcome === 'cancelled') return
       if (!isLast) {

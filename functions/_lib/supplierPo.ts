@@ -147,6 +147,7 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
   const rejection = lastRejection(o)
   const key = (ms: number | undefined) => (ms === undefined ? null : msToDateKey(ms))
   return {
+    brand,
     company: COMPANY[brand],
     supplierName: o.supplierName,
     docNo: o.docNo,
