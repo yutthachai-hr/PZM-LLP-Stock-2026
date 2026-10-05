@@ -121,25 +121,22 @@ function DeskDashboard() {
       </StatRow>
 
       {/* Phase 1 of the automation plan: every reorder suggestion of the day, draftable in
-          one press. For the people who decide what to buy and send. */}
-      {/* As wide as the movement chart under it, not the whole page (owner, 4 Oct 2026). */}
-      {isManager(user?.role) && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
-          <DailySuggestions />
-        </div>
-      )}
+          one press, for the people who decide what to buy and send — as wide as the movement
+          chart under it (owner, 4 Oct 2026), with the quick menu beside it (5 Oct 2026). */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
+        {isManager(user?.role) && <DailySuggestions />}
+        <QuickMenuCard />
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
         <WeeklyMovementCard weekly={f.weekly} />
         <LowStockCard low={f.low} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.75fr)] xl:gap-5">
-        <div className="md:col-span-2 xl:col-span-1">
-          <BranchOverviewCard branches={f.branches} />
-        </div>
+      {/* The branches and the latest activity, side by side at equal widths (5 Oct 2026). */}
+      <div className="grid gap-4 xl:grid-cols-2 xl:gap-5">
+        <BranchOverviewCard branches={f.branches} />
         <RecentActivityCard movements={movements} requests={f.requests} orders={f.orders} />
-        <QuickMenuCard />
       </div>
     </FramePage>
   )
