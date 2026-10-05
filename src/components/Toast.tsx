@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
 type ToastKind = 'success' | 'error' | 'info'
 interface Toast {
@@ -26,11 +26,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000)
   }, [])
 
-  const api: ToastApi = {
-    success: (m) => push('success', m),
-    error: (m) => push('error', m),
-    info: (m) => push('info', m),
-  }
+  // One object for the life of the provider. It used to be rebuilt on every render, so any
+  // toast appearing or expiring handed every `useToast()` caller a new identity — and the
+  // Orders page, whose loader depends on it, reloaded the whole list, flashed its spinner
+  // and unmounted the open LINE send wizard mid-render ("Invalid element provided as first
+  // argument", owner's screenshot, 5 Oct 2026).
+  const api = useMemo<ToastApi>(
+    () => ({
+      success: (m) => push('success', m),
+      error: (m) => push('error', m),
+      info: (m) => push('info', m),
+    }),
+    [push],
+  )
 
   const style: Record<ToastKind, string> = {
     success: 'bg-in',
