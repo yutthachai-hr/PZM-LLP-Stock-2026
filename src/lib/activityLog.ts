@@ -127,6 +127,20 @@ export function buildActivityLog(input: ActivityInput): ActivityEntry[] {
         .join(' · ')
       push({ ...base, key: `po:${o.id}:r${r.rev}`, at: r.at, action: t('แก้ไขใบสั่งซื้อ (Rev.{n})', { n: r.rev }), detail: `${r.reason} — ${detail}`, by: r.byName })
     }
+    // The supplier's answers to the delivery date (5 Oct 2026). The link being issued or
+    // opened is on the order's own timeline; the log keeps what decided a date.
+    for (const h of o.deliveryDateHistory ?? []) {
+      const label: Record<string, string> = {
+        accepted: t('ผู้ขายยืนยันวันส่ง'),
+        autoApplied: t('ผู้ขายเปลี่ยนวันส่ง'),
+        proposed: t('ผู้ขายขอเลื่อนวันส่ง (รออนุมัติ)'),
+        approved: t('อนุมัติวันส่งใหม่'),
+        rejected: t('ไม่อนุมัติวันส่งใหม่'),
+      }
+      if (!label[h.action]) continue
+      const dates = t('กำหนดส่ง: {from} → {to}', { from: h.from !== undefined ? input.formatDate(h.from) : '—', to: h.to !== undefined ? input.formatDate(h.to) : '—' })
+      push({ ...base, key: `po:${o.id}:dd:${h.id}`, at: h.at, action: label[h.action], detail: h.note ? `${dates} — ${h.note}` : dates, by: h.byName })
+    }
     // Since 24 Sep 2026 an order may arrive in several deliveries: one entry each, with
     // what came and any line that differed from what was still owed.
     const nameOf = new Map(o.lines.map((l) => [l.productId, l.productName]))

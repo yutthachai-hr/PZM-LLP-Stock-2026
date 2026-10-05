@@ -129,4 +129,19 @@ describe('the activity log', () => {
     expect(log[0].detail).toBe('Prawn · 5 → 4')
     expect(log[2].docNo).toBe('ตามตาราง')
   })
+  test("a supplier's date answers are logged; issuing and opening the link are not (5 Oct 2026)", () => {
+    const o = {
+      id: 'po9', docNo: 'PO-00009', supplierId: 's', supplierName: 'PANFOOD', status: 'ordered', locationId: 'main',
+      orderedAt: D0, lines: [], createdBy: 'u1', createdByName: 'Nuiy', createdAt: D0, updatedAt: D0,
+      deliveryDateHistory: [
+        { id: 'h1', at: D0 + 1000, source: 'purchasing', action: 'requested', to: D0 + DAY, byName: 'Nuiy' },
+        { id: 'h2', at: D0 + 2000, source: 'supplier', action: 'proposed', from: D0 + DAY, to: D0 + 5 * DAY, byName: 'Somchai', note: 'รถเต็ม' },
+        { id: 'h3', at: D0 + 3000, source: 'purchasing', action: 'approved', from: D0 + DAY, to: D0 + 5 * DAY, byName: 'Boss' },
+      ],
+    } as unknown as PurchaseOrder
+    const log = buildActivityLog({ ...input, movements: [], orders: [o], requests: [], events: [] })
+    const dd = log.filter((e) => e.key.includes(':dd:'))
+    expect(dd.map((e) => [e.action, e.by])).toEqual([['อนุมัติวันส่งใหม่', 'Boss'], ['ผู้ขายขอเลื่อนวันส่ง (รออนุมัติ)', 'Somchai']])
+    expect(dd[1].detail).toContain('รถเต็ม')
+  })
 })
