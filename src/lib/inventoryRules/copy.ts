@@ -62,6 +62,14 @@ export const NOTIFICATION_BODY: Record<NotificationKind, string> = {
   weeklySummary: 'งานเสร็จ {done} · ไม่เสร็จ {missed} · รับของ {deliveries} (ช้า {late}) · ปรับสต๊อก {adjustments} · ของเสีย ฿{waste}', // i18n-key
 }
 
+/** A slot with nothing in it (a task with no location) leaves " · " behind; take it out. */
+export function tidyCopy(text: string): string {
+  return text
+    .replace(/(\s·\s*)+(?=\s—|\s·|$)/g, '')
+    .replace(/^\s*·\s*/, '')
+    .trim()
+}
+
 export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   task: 'งาน', // i18n-key
   inventory: 'สต๊อก', // i18n-key

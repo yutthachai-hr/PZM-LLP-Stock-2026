@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { formatThaiDateTime } from '../../lib/format'
-import { CATEGORY_LABEL, NOTIFICATION_BODY, NOTIFICATION_TITLE } from '../../lib/inventoryRules/copy'
+import { CATEGORY_LABEL, NOTIFICATION_BODY, NOTIFICATION_TITLE, tidyCopy } from '../../lib/inventoryRules/copy'
 import { isFor, isUnread } from '../../lib/inventoryRules/notifications'
 import { markAllRead, markRead, useNotificationPrefs } from '../../services/notifications'
 import type { AppNotification, NotificationCategory, Role } from '../../types'
@@ -26,13 +26,7 @@ const TAB_LABEL: Record<Tab, string> = {
   system: 'สรุป', // i18n-key
 }
 
-/** A slot with nothing in it (a task with no location) leaves " · " behind; take it out. */
-function tidy(text: string): string {
-  return text
-    .replace(/(\s·\s*)+(?=\s—|\s·|$)/g, '')
-    .replace(/^\s*·\s*/, '')
-    .trim()
-}
+const tidy = tidyCopy
 
 const TONE: Record<AppNotification['priority'], string> = {
   critical: 'bg-out',
@@ -55,6 +49,17 @@ export function NotificationBell() {
   const prefs = useNotificationPrefs(user?.id)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('all')
+
+  // A popup summarising several new ones opens the bell on their category.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const want = (e as CustomEvent<{ tab?: string }>).detail?.tab
+      setTab(want && (TABS as string[]).includes(want) ? (want as Tab) : 'all')
+      setOpen(true)
+    }
+    window.addEventListener('pzm:open-notifications', onOpen)
+    return () => window.removeEventListener('pzm:open-notifications', onOpen)
+  }, [])
 
   const mine = useMemo(() => {
     if (!user) return []

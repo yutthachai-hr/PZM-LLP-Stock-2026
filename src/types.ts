@@ -890,6 +890,16 @@ export interface NotificationPrefs {
   kind: 'prefs'
   userId: string
   mute: Partial<Record<NotificationCategory, NotificationPriority[]>>
+  /**
+   * Sound for popups that arrive while the app is open (5 Oct 2026). Absent = the
+   * defaults (on, volume 0.6, every category). Saved from Settings in N6.
+   */
+  sound?: {
+    enabled: boolean
+    volume: number
+    /** A category switched off here plays no sound (its popup still shows). */
+    off?: string[]
+  }
   updatedAt: number
 }
 

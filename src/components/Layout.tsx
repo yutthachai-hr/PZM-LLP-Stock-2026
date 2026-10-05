@@ -13,6 +13,7 @@ import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
 import { useSupplierRefresh } from '../data/useSupplierRefresh'
+import { NotificationHost } from './notifications/NotificationHost'
 import { navFor, titleFor } from './nav/navItems'
 import { SideLive } from './nav/SideLive'
 import { SideNav } from './nav/SideNav'
@@ -36,6 +37,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-canvas">
+      {/* New notifications as popups, on every page (5 Oct 2026). */}
+      <NotificationHost />
       {/* Sidebar (desktop, xl and up) — sticky so it stays put while the content scrolls.
           A tablet gets the rail, a phone the tab bar (spec, 21 Sep 2026). */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface xl:flex">

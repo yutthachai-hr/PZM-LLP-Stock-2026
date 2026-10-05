@@ -122,7 +122,8 @@ export function SuppliersPage() {
   const [sort, setSort] = useState<SortKey>('name')
   const [category, setCategory] = useState('')
   const [terms, setTerms] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // ?id=<supplier> opens its detail — the link a notification's "ดูผู้ขาย" button carries.
+  const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(location.search).get('id'))
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [issuing, setIssuing] = useState(false)
   const filterCount =
