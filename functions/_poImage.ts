@@ -48,13 +48,18 @@ const JWKS = createRemoteJWKSet(
   new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'),
 )
 
-export async function verifyFirebaseToken(header: string | null): Promise<string | null> {
+/**
+ * The uid of a valid Firebase ID token in an Authorization header. `projectId` defaults to
+ * the pinned production project; a function may pass FIREBASE_PROJECT_ID from its own
+ * environment instead (a deployment pointed at another project) — never the token's claim.
+ */
+export async function verifyFirebaseToken(header: string | null, projectId: string = PROJECT_ID): Promise<string | null> {
   const m = header?.match(/^Bearer (.+)$/i)
   if (!m) return null
   try {
     const { payload } = await jwtVerify(m[1], JWKS, {
-      issuer: `https://securetoken.google.com/${PROJECT_ID}`,
-      audience: PROJECT_ID,
+      issuer: `https://securetoken.google.com/${projectId}`,
+      audience: projectId,
     })
     return typeof payload.sub === 'string' && payload.sub ? payload.sub : null
   } catch {

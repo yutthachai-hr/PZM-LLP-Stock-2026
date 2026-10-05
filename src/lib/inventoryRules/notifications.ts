@@ -59,6 +59,11 @@ export const CATEGORY: Record<NotificationKind, NotificationCategory> = {
   poArriving: 'purchasing',
   poDelayed: 'purchasing',
   cutoffToday: 'supplier',
+  supplierConfirmed: 'supplier',
+  supplierDateChanged: 'supplier',
+  supplierDatePending: 'supplier',
+  supplierDateApproved: 'supplier',
+  supplierDateRejected: 'supplier',
   transferSubmitted: 'inventory',
   transferArriving: 'inventory',
   transferIssue: 'inventory',
@@ -291,6 +296,65 @@ export function prSubmittedDraft(pr: PurchaseRequest, locationName: (id: string 
     params: { docNo: pr.docNo, by: pr.requestedByName, location: locationName(pr.locationId), n: pr.items.filter((i) => !i.removed).length },
     link: `/requests/${pr.id}`,
     locationId: pr.locationId,
+  }
+}
+
+/** `D/M/YYYY` of a Bangkok day, for a notification's {date}. */
+function dayLabel(ms: number): string {
+  const d = new Date(bkkDayStart(ms) + 7 * 3_600_000)
+  return `${d.getUTCDate()}/${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`
+}
+
+/** Who hears about a supplier's answer: whoever placed and sent the order, and the managers. */
+function orderPeople(po: PurchaseOrder): NotificationAudience {
+  const uids = [...new Set([po.sentBy, po.createdBy].filter((u): u is string => !!u))]
+  return uids.length ? { roles: MANAGERS, uids } : { roles: MANAGERS }
+}
+
+/**
+ * A supplier answered through their link (5 Oct 2026). One per answer — the id carries the
+ * answer's history entry, so a retried write lands on the same document.
+ */
+export function supplierAnswerDraft(
+  po: PurchaseOrder,
+  kind: 'supplierConfirmed' | 'supplierDateChanged' | 'supplierDatePending',
+  changeId: string,
+  date: number,
+  by: string,
+): NotificationDraft {
+  return {
+    id: `${kind}__${po.id}__${changeId}`,
+    kind,
+    priority: kind === 'supplierDatePending' ? 'high' : kind === 'supplierDateChanged' ? 'medium' : 'info',
+    // A date beyond the range is a decision only a หัวหน้า or admin can take.
+    to: kind === 'supplierDatePending' ? { roles: MANAGERS } : orderPeople(po),
+    params: { docNo: po.docNo, supplier: po.supplierName, date: dayLabel(date), by },
+    link: `/orders?po=${po.id}`,
+    locationId: po.locationId,
+    supplierId: po.supplierId,
+  }
+}
+
+/** A หัวหน้า or admin approved or refused a supplier's date: to whoever sent the order. */
+export function supplierDecisionDraft(
+  po: PurchaseOrder,
+  approved: boolean,
+  changeId: string,
+  date: number,
+  by: string,
+  reason = '',
+): NotificationDraft {
+  const uids = [...new Set([po.sentBy, po.createdBy].filter((u): u is string => !!u))]
+  const kind = approved ? 'supplierDateApproved' : 'supplierDateRejected'
+  return {
+    id: `${kind}__${po.id}__${changeId}`,
+    kind,
+    priority: 'info',
+    to: uids.length ? { uids } : { roles: MANAGERS },
+    params: { docNo: po.docNo, supplier: po.supplierName, date: dayLabel(date), by, reason },
+    link: `/orders?po=${po.id}`,
+    locationId: po.locationId,
+    supplierId: po.supplierId,
   }
 }
 
