@@ -17,6 +17,8 @@ const FIELDS: { key: Key; label: string; hint: string }[] = [
   { key: 'usageWindowDays', label: 'คิดอัตราการใช้จากกี่วันย้อนหลัง', hint: 'ใช้คำนวณวันที่คาดว่าของจะหมด' }, // i18n-key
   { key: 'reminderBeforeMin', label: 'เตือนก่อนเริ่มงาน (นาที)', hint: 'เวลาที่ส่งแจ้งเตือนก่อนงานเริ่ม' }, // i18n-key
   { key: 'escalateAfterHours', label: 'แจ้งหัวหน้าเมื่องานเลยกำหนด (ชั่วโมง)', hint: 'งานค้างเกินเท่านี้จะส่งถึงหัวหน้า' }, // i18n-key
+  { key: 'supplierMaxPostponeDays', label: 'ผู้ขายเลื่อนวันส่งเองได้ไม่เกิน (วัน)', hint: 'เลื่อนเกินนี้ต้องรอหัวหน้าอนุมัติ ส่งเร็วขึ้นได้เสมอ' }, // i18n-key
+  { key: 'supplierLinkTtlDays', label: 'ลิงก์ยืนยันของผู้ขายใช้ได้นานสุด (วัน)', hint: 'ลิงก์ยังหมดอายุหลังวันส่งด้วย' }, // i18n-key
 ]
 
 /**

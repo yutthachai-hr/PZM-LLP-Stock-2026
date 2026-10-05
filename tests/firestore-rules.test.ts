@@ -942,6 +942,18 @@ describe('inventory schedules and settings', () => {
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'inventorySchedules/s1')))
   })
 
+  test('the supplier-link settings are optional and bounded (5 Oct 2026)', async () => {
+    const base = { id: 'settings', kind: 'settings', adjustValueBaht: 1000, adjustPct: 20, wasteValueBaht: 500, coverDays: 7, reminderBeforeMin: 60, escalateAfterHours: 4, usageWindowDays: 30, updatedAt: ts() }
+    const at = doc(as(ADMIN), 'inventorySchedules/settings')
+    await assertSucceeds(setDoc(at, { ...base, supplierMaxPostponeDays: 2, supplierLinkTtlDays: 30 }))
+    await assertSucceeds(setDoc(at, { ...base, supplierMaxPostponeDays: 0 }))
+    await assertFails(setDoc(at, { ...base, supplierMaxPostponeDays: -1 }))
+    await assertFails(setDoc(at, { ...base, supplierMaxPostponeDays: 61 }))
+    await assertFails(setDoc(at, { ...base, supplierLinkTtlDays: 91 }))
+    await assertFails(setDoc(at, { ...base, supplierMaxPostponeDays: '2' }))
+    await assertFails(setDoc(doc(as(MANAGER), 'inventorySchedules/settings'), { ...base, supplierMaxPostponeDays: 30 }))
+  })
+
   test('the schedule shape is pinned', async () => {
     await assertFails(setDoc(doc(as(ADMIN), 'inventorySchedules/s1'), schedule('s1', { frequency: 'hourly' })))
     await assertFails(setDoc(doc(as(ADMIN), 'inventorySchedules/s1'), schedule('s1', { dayOfMonth: 32 })))
@@ -1153,6 +1165,33 @@ describe('orders placed with suppliers', () => {
     const many = Array.from({ length: 51 }, (_, i) => ({ docNo: 'RC-' + i, date: ts(), invoiceNo: 'x', byId: STAFF, byName: 'S', lines: [] }))
     await assertFails(setDoc(at(STAFF), order({ receipts: many })))
     await assertFails(setDoc(at(STAFF), order({ closedShortAt: 'today' })))
+  })
+
+  test("the supplier's answer is the server's alone: no client writes it, admins included", async () => {
+    // functions/api/supplier* write these with a service account, which the rules do not
+    // see. The rules' part is to refuse them from everyone else — a staff member must not
+    // be able to mark an order "supplier confirmed" by hand (5 Oct 2026).
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'purchaseOrders/po1'), order({ expectedAt: ts() + 86_400_000, supplierConfirmationStatus: 'waiting', requestedDeliveryDate: ts() + 86_400_000 }))
+    })
+    const fields: Record<string, unknown> = {
+      supplierConfirmationStatus: 'confirmed',
+      confirmedDeliveryDate: ts(),
+      requestedDeliveryDate: ts(),
+      supplierConfirmedAt: ts(),
+      supplierConfirmedBy: { via: 'link', name: 'x' },
+      supplierDeliveryNote: 'x',
+      deliveryDateHistory: [],
+      pendingDeliveryDate: { date: ts(), at: ts(), changeId: 'c' },
+      supplierLink: { version: 9, rev: 0, issuedAt: ts(), issuedBy: STAFF, expiresAt: ts() },
+      supplierActivity: [],
+    }
+    for (const [k, v] of Object.entries(fields)) {
+      for (const who of [STAFF, MANAGER, ADMIN]) await assertFails(updateDoc(at(who), { [k]: v, updatedAt: ts() }))
+    }
+    await assertFails(setDoc(at(STAFF, 'po2'), order({ id: 'po2', supplierConfirmationStatus: 'confirmed' })))
+    // …while an order that carries them can still be received and amended as before.
+    await assertSucceeds(updateDoc(at(STAFF), { note: 'โทรตามแล้ว', updatedAt: ts() }))
   })
 
   test('someone waiting for approval sees no orders at all', async () => {

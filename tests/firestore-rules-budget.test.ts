@@ -93,12 +93,24 @@ test('an admin can reopen the widest approved request (the dearest transition)',
   })
 })
 
+// The supplier's answer at its widest (5 Oct 2026): written by the server, carried on the
+// order through every later client write. The rules only ever see these as untouched keys.
+const supplierAnswer = () => ({
+  requestedDeliveryDate: ts(), confirmedDeliveryDate: ts(), supplierConfirmationStatus: 'pending_date_approval',
+  supplierConfirmedAt: ts(), supplierConfirmedBy: { via: 'link', name: 'Somchai' }, supplierDeliveryNote: 'x'.repeat(300),
+  pendingDeliveryDate: { date: ts(), note: 'n', name: 'S', at: ts(), changeId: 'c' },
+  supplierLink: { version: 9, rev: 2, issuedAt: ts(), issuedBy: STAFF, expiresAt: ts(), openedAt: ts() },
+  deliveryDateHistory: Array.from({ length: 100 }, (_, i) => ({ id: 'h' + i, at: ts(), source: 'supplier', action: 'autoApplied', from: ts(), to: ts(), byName: 'S', note: 'n', requestId: 'r' + i })),
+  supplierActivity: Array.from({ length: 100 }, (_, i) => ({ id: 'a' + i, at: ts(), kind: 'autoApplied', byName: 'S', date: ts(), note: 'n', requestId: 'r' + i })),
+})
+
 test('staff can receive the widest purchase order, and an admin can renumber it', async () => {
   const po = {
     id: 'po1', docNo: 'PO-00001', supplierId: 's1', supplierName: 'S', status: 'ordered', locationId: 'loc',
     orderedAt: ts(), lines: Array.from({ length: 200 }, (_, i) => ({ productId: 'p' + i, productName: 'X', sku: 'S', unit: 'KG', entryUnit: 'Carton', qty: 2, note: 'n' })),
     note: 'n', eventId: 'e1', batchId: 'b1', requestId: 'r1', approvedBy: STAFF, approvedByName: 'AA', approvedAt: ts(),
     shareStatus: 'sent', shareOpenedAt: ts(), sentAt: ts(), sentBy: STAFF, sentByName: 'AA', imageVersion: 3,
+    ...supplierAnswer(),
     createdBy: STAFF, createdByName: 'AA', createdAt: ts(), updatedAt: ts(),
   }
   for (const brand of ['purchaseOrders', 'lelapin__purchaseOrders']) {
@@ -125,6 +137,7 @@ test('staff can check in one more delivery on the widest partly received order (
     revision: 2, revisions: Array.from({ length: 49 }, (_, i) => ({ rev: i, at: ts(), by: STAFF, byName: 'AA', reason: 'r', changes: [] })),
     invoiceNo: 'IV-40', movementDocNo: 'RC-40', receivedAt: ts(), receivedBy: STAFF, receivedByName: 'AA',
     receipts: Array.from({ length: 40 }, (_, i) => receipt(i + 1)),
+    ...supplierAnswer(),
     createdBy: STAFF, createdByName: 'AA', createdAt: ts(), updatedAt: ts(),
   }
   for (const brand of ['purchaseOrders', 'lelapin__purchaseOrders']) {
