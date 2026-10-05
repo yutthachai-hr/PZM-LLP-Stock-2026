@@ -428,3 +428,34 @@ input[type='number'] {
 @media (prefers-reduced-motion: reduce) {
   .lv-stack *, .lv-stack *::before, .lv-stack *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---- login mascots (components/login): a sprite walking in place ---------------------
+   One transform animation stepped through the frames; the window crops to one frame.
+   Transform and opacity only, so nothing reflows and the GPU does the moving. */
+.mascot { position: relative; }
+.mascot-window { position: absolute; inset: 0; overflow: hidden; }
+.mascot-strip {
+  display: block;
+  height: 100%;
+  max-width: none;
+  animation: mascot-walk var(--mascot-seconds) steps(var(--mascot-frames)) infinite;
+  will-change: transform;
+  user-select: none;
+  pointer-events: none;
+}
+@keyframes mascot-walk { to { transform: translateX(-100%); } }
+.mascot-shadow {
+  position: absolute;
+  bottom: 0;
+  width: 58%;
+  height: 6%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.08) 60%, transparent);
+  transform: translateX(-50%);
+  animation-duration: var(--mascot-seconds);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-strip, .mascot-shadow { animation: none; }
+}

@@ -1,7 +1,11 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
+import { sendPasswordResetEmail } from 'firebase/auth'
 import { useAuth } from '../auth/AuthContext'
-import { Button, Card, Field, Input } from '../components/ui'
-import { Icon } from '../components/Icon'
+import { brandDef, lastBrand, type BrandId } from '../brand/brand'
+import { Button } from '../components/ui'
+import { Icon, type IconName } from '../components/Icon'
+import { AnimatedMascot } from '../components/login/AnimatedMascot'
+import { getAuthInstance } from '../firebase/app'
 import { isDemoMode, parseConfigInput, saveFirebaseConfig } from '../firebase/config'
 import { resetDemoData } from '../services/demoSeed'
 import { DEMO_ADMIN, DEMO_USERS } from '../services/demoUsers'
@@ -9,15 +13,35 @@ import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
 import { LangToggle } from '../i18n/LangToggle'
 
+/**
+ * The words under each brand's heading, and its short name — the owner's mock-ups say
+ * "Pizza Mania Stock" and "Le Lapin Stock".
+ */
+const LOOK: Record<BrandId, { short: string; tagline: string }> = {
+  pizza: { short: 'Pizza Mania', tagline: 'จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่สะดุด' }, // i18n-key
+  lelapin: { short: 'Le Lapin', tagline: 'จัดการสต๊อก ติดตามวัตถุดิบ ให้ทุกสาขาเดินได้ราบรื่น' }, // i18n-key
+}
+
+/**
+ * Sign in, laid out as the owner's mock-ups (5 Oct 2026): the brand's heading and its
+ * mascot walking in place, the form in a card beside them. Before anyone signs in there is
+ * no brand yet, so the page wears the brand this device used last — Pizza Mania the first
+ * time — and a switch at the top changes it. Everything the old screen did is still here:
+ * the first admin, asking for access in cloud mode, the demo reset and the cloud link.
+ */
 export function LoginPage() {
   const t = useT()
   const { login, signUp, needsBootstrap, mode, notice } = useAuth()
+  const [brand, setBrand] = useState<BrandId>(() => lastBrand())
+  const def = brandDef(brand)
+  const look = LOOK[brand]
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [showCloud, setShowCloud] = useState(false)
   const [cfgText, setCfgText] = useState('')
   const [cfgErr, setCfgErr] = useState('')
@@ -42,6 +66,7 @@ export function LoginPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setInfo('')
     setBusy(true)
     try {
       if (bootstrap) {
@@ -56,160 +81,256 @@ export function LoginPage() {
     }
   }
 
-  // Sign-in and brand choice happen before a brand is picked, so there is no brand
-  // accent to use yet. The gradient is deliberately both brands at once — Pizza Mania
-  // red into Le Lapin orange — rather than a token.
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 p-4">
-      <Card className="w-full max-w-sm p-6">
-        <LangToggle className="mx-auto mb-4 w-32" />
-        <div className="mb-6 text-center">
-          {/* The installed icon, not an emoji: this is the screen someone lands on after
-              tapping that icon on their home screen, and it should be the same mark. */}
-          <img
-            src="/pwa-192.png"
-            alt=""
-            width={56}
-            height={56}
-            className="mx-auto rounded-xl"
-          />
-          <h1 className="mt-2 text-xl font-bold text-brand">The Inventory OS</h1>
-          <p className="text-sm text-ink-soft">
-            {!bootstrap
-              ? t("เข้าสู่ระบบบริหารสต๊อก")
-              : firstAdmin
-                ? t("ตั้งค่าผู้ดูแลระบบคนแรก")
-                : t("ขอสิทธิ์เข้าใช้งาน")}
-          </p>
-        </div>
+  /**
+   * "Forgot password" (owner, 5 Oct 2026): Firebase mails a reset link, free. The answer is
+   * the same whether or not the address has an account, so the screen cannot be used to
+   * find out who works here. A local or demo build has no mail to send.
+   */
+  async function forgot() {
+    setError('')
+    setInfo('')
+    if (mode !== 'cloud') return setInfo(t('โหมดในเครื่องส่งอีเมลไม่ได้ — ให้ผู้ดูแลระบบตั้งรหัสผ่านใหม่ให้'))
+    const em = email.trim()
+    if (!em) return setError(t('ใส่อีเมลก่อน แล้วกด "ลืมรหัสผ่าน?" อีกครั้ง'))
+    setBusy(true)
+    try {
+      await sendPasswordResetEmail(getAuthInstance(), em)
+      setInfo(t('ถ้าอีเมลนี้มีบัญชีอยู่ ระบบส่งลิงก์ตั้งรหัสผ่านใหม่ไปแล้ว — เช็กกล่องจดหมาย (และโฟลเดอร์สแปม)'))
+    } catch (err) {
+      // An unknown address is answered like a known one, for the reason above.
+      if (String(err).includes('auth/user-not-found')) setInfo(t('ถ้าอีเมลนี้มีบัญชีอยู่ ระบบส่งลิงก์ตั้งรหัสผ่านใหม่ไปแล้ว — เช็กกล่องจดหมาย (และโฟลเดอร์สแปม)'))
+      else setError(humanError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
 
-        <form onSubmit={submit} className="space-y-4">
-          {bootstrap && (
-            <Field label={firstAdmin ? t("ชื่อผู้ดูแล") : t("ชื่อของคุณ")} required>
-              <Input
+  // The page takes the chosen brand's colours itself: the app sets them only after a brand
+  // is picked, which is after this screen.
+  const vars = {
+    // The utilities' own variables: --color-brand is worked out once on :root, so setting
+    // --brand-accent here would not reach it.
+    '--color-brand': def.accent,
+    '--color-brand-soft': def.accentSoft,
+    '--color-brand-vivid': def.accentVivid,
+  } as CSSProperties
+
+  return (
+    <div style={vars} className="relative min-h-screen overflow-x-hidden bg-[#fffdfc] text-ink">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-8 lg:px-14 lg:pt-8">
+        <div className="flex items-center gap-3">
+          <img src={def.logo} alt="" width={52} height={52} className="h-12 w-12 rounded-full object-cover sm:h-13 sm:w-13" />
+          <div className="leading-tight">
+            <div className="text-lg font-extrabold tracking-tight text-brand-vivid sm:text-xl">{look.short.toUpperCase()}</div>
+            <div className="text-xs text-ink-soft">The Inventory OS</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div role="group" aria-label={t('แบรนด์')} className="flex rounded-full border border-line bg-surface p-0.5 text-xs">
+            {(['pizza', 'lelapin'] as const).map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => setBrand(b)}
+                aria-pressed={brand === b}
+                className={`cursor-pointer rounded-full px-3 py-1.5 font-semibold transition-colors ${
+                  brand === b ? 'bg-brand text-white' : 'text-ink-soft hover:text-ink'
+                }`}
+              >
+                {LOOK[b].short}
+              </button>
+            ))}
+          </div>
+          <LangToggle className="w-28" />
+        </div>
+      </header>
+
+      <main className="mx-auto grid max-w-[1400px] items-center gap-6 px-5 pb-10 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(380px,440px)] lg:gap-10 lg:px-14 lg:pt-4">
+        {/* ---- the brand and its mascot ---- */}
+        <section className="relative grid items-center gap-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="relative z-10">
+            <span className="mb-5 block h-1 w-12 rounded-full bg-brand-vivid" aria-hidden="true" />
+            <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
+              {t('เข้าสู่ระบบ')}
+              <br />
+              <span className="text-brand-vivid">{look.short}</span> Stock
+            </h1>
+            <p className="mt-4 max-w-sm text-base leading-relaxed text-ink-soft">{t(look.tagline)}</p>
+          </div>
+          <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[300px] md:max-w-[380px]">
+            {/* A soft blob of the brand's colour behind the figure, as in the mock-ups. */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-[2%] bottom-[4%] top-[14%] rounded-[46%_54%_42%_58%/52%_44%_56%_48%] bg-brand-soft"
+            />
+            <AnimatedMascot brand={brand} className="relative w-full" />
+          </div>
+        </section>
+
+        {/* ---- the form ---- */}
+        <section className="w-full rounded-3xl border border-line/70 bg-surface p-6 shadow-[0_24px_60px_-28px_rgb(0_0_0/0.25)] sm:p-9">
+          <h2 className="text-3xl font-extrabold tracking-tight">
+            {!bootstrap ? t('เข้าสู่ระบบ') : firstAdmin ? t('ตั้งค่าผู้ดูแลระบบคนแรก') : t('ขอสิทธิ์เข้าใช้งาน')}
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft">{t('ยินดีต้อนรับกลับสู่ {name} Stock', { name: look.short })}</p>
+
+          <form onSubmit={submit} className="mt-6 space-y-4">
+            {bootstrap && (
+              <IconInput
+                icon="user"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t("เช่น สมชาย")}
+                onChange={setName}
+                placeholder={firstAdmin ? t('ชื่อผู้ดูแล') : t('ชื่อของคุณ')}
                 required
               />
-            </Field>
-          )}
-          <Field label={t("อีเมล")} required>
-            <Input
+            )}
+            <IconInput
+              icon="user"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@email.com"
+              onChange={setEmail}
+              placeholder={t('อีเมล')}
               autoComplete="username"
               required
             />
-          </Field>
-          <Field label={t("รหัสผ่าน")} required hint={bootstrap ? t("อย่างน้อย 6 ตัวอักษร") : undefined}>
-            <div className="relative">
-              <Input
-                type={showPw ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={bootstrap ? 'new-password' : 'current-password'}
-                minLength={6}
-                required
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? t('ซ่อนรหัสผ่าน') : t('แสดงรหัสผ่าน')}
-                aria-pressed={showPw}
-                className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-soft hover:text-ink"
-              >
-                <Icon name={showPw ? 'eyeOff' : 'eye'} size={18} />
-              </button>
-            </div>
-          </Field>
-
-          {bootstrap && !firstAdmin && (
-            <p className="rounded-lg bg-sunken px-3 py-2 text-xs text-ink-soft">
-              {t("บัญชีใหม่จะยังเข้าใช้ข้อมูลไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ")}
-            </p>
-          )}
-          {notice && !error && (
-            <div className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
-              {t(notice)}
-            </div>
-          )}
-          {error && (
-            <div className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{t(error)}</div>
-          )}
-
-          <Button type="submit" disabled={busy} className="w-full">
-            {busy
-              ? t("กำลังดำเนินการ...")
-              : !bootstrap
-                ? t("เข้าสู่ระบบ")
-                : firstAdmin
-                  ? t("สร้างบัญชีผู้ดูแล")
-                  : t("ส่งคำขอเข้าใช้งาน")}
-          </Button>
-        </form>
-
-        {mode === 'cloud' && (
-          <button
-            type="button"
-            onClick={() => {
-              setWantRegister((v) => !v)
-              setError('')
-            }}
-            className="mt-3 block w-full text-center text-xs text-brand hover:underline"
-          >
-            {bootstrap ? t("มีบัญชีอยู่แล้ว? เข้าสู่ระบบ") : t("ยังไม่มีบัญชี? ขอสิทธิ์เข้าใช้งาน")}
-          </button>
-        )}
-
-        <p className="mt-4 text-center text-xs text-ink-faint">
-          {mode === 'cloud'
-            ? t("โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์")
-            : t("โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้")}
-        </p>
-
-        {isDemoMode() && <DemoSetup />}
-
-        {/* Not in a demo build: getFirebaseConfig() ignores a saved config there, so the
-            panel would take a real project's keys and then appear to do nothing. */}
-        {mode === 'local' && !isDemoMode() && (
-          <div className="mt-3 border-t border-line pt-3">
-            {!showCloud ? (
-              <button
-                onClick={() => setShowCloud(true)}
-                className="mx-auto block text-xs text-brand hover:underline"
-              >
-                {t("เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)")}
-              </button>
+            <IconInput
+              icon="lock"
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={setPassword}
+              placeholder={t('รหัสผ่าน')}
+              autoComplete={bootstrap ? 'new-password' : 'current-password'}
+              minLength={6}
+              required
+              trailing={
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  aria-label={showPw ? t('ซ่อนรหัสผ่าน') : t('แสดงรหัสผ่าน')}
+                  aria-pressed={showPw}
+                  className="flex h-full w-12 cursor-pointer items-center justify-center text-ink-soft hover:text-ink"
+                >
+                  <Icon name={showPw ? 'eyeOff' : 'eye'} size={19} />
+                </button>
+              }
+            />
+            {bootstrap ? (
+              <p className="text-xs text-ink-faint">{t('อย่างน้อย 6 ตัวอักษร')}</p>
             ) : (
-              <div className="space-y-2">
-                <p className="text-xs text-ink-soft">
-                  {t("วางค่า")} <span className="font-mono">firebaseConfig</span> {t("จาก Firebase Console:")}
-                </p>
-                <textarea
-                  className="w-full rounded-lg border border-line-strong p-2 font-mono text-xs"
-                  rows={6}
-                  placeholder={'{\n  "apiKey": "...",\n  "authDomain": "xxx.firebaseapp.com",\n  "projectId": "xxx",\n  "appId": "..."\n}'}
-                  value={cfgText}
-                  onChange={(e) => setCfgText(e.target.value)}
-                />
-                {cfgErr && <p className="text-xs text-danger">{cfgErr}</p>}
-                <div className="flex gap-2">
-                  <Button onClick={connectCloud} className="flex-1">
-                    {t("เชื่อมต่อ Cloud")}
-                  </Button>
-                  <Button variant="secondary" onClick={() => setShowCloud(false)}>
-                    {t("ยกเลิก")}
-                  </Button>
-                </div>
+              <div className="flex justify-end">
+                <button type="button" onClick={() => void forgot()} disabled={busy} className="cursor-pointer text-sm text-brand hover:underline">
+                  {t('ลืมรหัสผ่าน?')}
+                </button>
               </div>
             )}
-          </div>
-        )}
-      </Card>
+
+            {bootstrap && !firstAdmin && (
+              <p className="rounded-lg bg-sunken px-3 py-2 text-xs text-ink-soft">
+                {t('บัญชีใหม่จะยังเข้าใช้ข้อมูลไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ')}
+              </p>
+            )}
+            {notice && !error && <div className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{t(notice)}</div>}
+            {info && !error && <div className="rounded-lg bg-in-soft px-3 py-2 text-sm text-in">{info}</div>}
+            {error && <div className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{t(error)}</div>}
+
+            <Button type="submit" disabled={busy} className="!h-13 w-full !rounded-xl !text-base">
+              {busy
+                ? t('กำลังดำเนินการ...')
+                : !bootstrap
+                  ? t('เข้าสู่ระบบ')
+                  : firstAdmin
+                    ? t('สร้างบัญชีผู้ดูแล')
+                    : t('ส่งคำขอเข้าใช้งาน')}
+              {!busy && <Icon name="arrowRight" size={18} />}
+            </Button>
+          </form>
+
+          {mode === 'cloud' && (
+            <p className="mt-5 text-center text-sm text-ink-soft">
+              {bootstrap ? t('มีบัญชีอยู่แล้ว?') : t('ยังไม่มีบัญชี?')}{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setWantRegister((v) => !v)
+                  setError('')
+                  setInfo('')
+                }}
+                className="cursor-pointer font-semibold text-brand hover:underline"
+              >
+                {bootstrap ? t('เข้าสู่ระบบ') : t('ขอสิทธิ์เข้าใช้งาน')}
+              </button>
+            </p>
+          )}
+
+          <p className="mt-4 text-center text-xs text-ink-faint">
+            {mode === 'cloud' ? t('โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์') : t('โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้')}
+          </p>
+
+          {isDemoMode() && <DemoSetup />}
+
+          {/* Not in a demo build: getFirebaseConfig() ignores a saved config there, so the
+              panel would take a real project's keys and then appear to do nothing. */}
+          {mode === 'local' && !isDemoMode() && (
+            <div className="mt-3 border-t border-line pt-3">
+              {!showCloud ? (
+                <button onClick={() => setShowCloud(true)} className="mx-auto block text-xs text-brand hover:underline">
+                  {t('เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)')}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-ink-soft">
+                    {t('วางค่า')} <span className="font-mono">firebaseConfig</span> {t('จาก Firebase Console:')}
+                  </p>
+                  <textarea
+                    className="w-full rounded-lg border border-line-strong p-2 font-mono text-xs"
+                    rows={6}
+                    placeholder={'{\n  "apiKey": "...",\n  "authDomain": "xxx.firebaseapp.com",\n  "projectId": "xxx",\n  "appId": "..."\n}'}
+                    value={cfgText}
+                    onChange={(e) => setCfgText(e.target.value)}
+                  />
+                  {cfgErr && <p className="text-xs text-danger">{cfgErr}</p>}
+                  <div className="flex gap-2">
+                    <Button onClick={connectCloud} className="flex-1">
+                      {t('เชื่อมต่อ Cloud')}
+                    </Button>
+                    <Button variant="secondary" onClick={() => setShowCloud(false)}>
+                      {t('ยกเลิก')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  )
+}
+
+/** A tall field with its icon inside on the left, as the mock-ups draw them. */
+function IconInput({
+  icon,
+  value,
+  onChange,
+  trailing,
+  ...rest
+}: {
+  icon: IconName
+  value: string
+  onChange: (v: string) => void
+  trailing?: React.ReactNode
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+  return (
+    <div className="relative flex h-13 items-center rounded-xl border border-line bg-sunken/70 transition-colors focus-within:border-brand focus-within:bg-surface focus-within:ring-2 focus-within:ring-brand/20">
+      <Icon name={icon} size={20} className="ml-4 shrink-0 text-brand" />
+      <input
+        {...rest}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={rest.placeholder}
+        className="h-full min-w-0 flex-1 bg-transparent px-3 text-base text-ink outline-none placeholder:text-ink-faint"
+      />
+      {trailing}
     </div>
   )
 }
@@ -227,9 +348,9 @@ function humanError(err: unknown): string {
   if (msg.includes('auth/email-already-in-use')) return 'อีเมลนี้ถูกใช้แล้ว' // i18n-key
   if (msg.includes('auth/weak-password')) return 'รหัสผ่านสั้นเกินไป (อย่างน้อย 6 ตัว)' // i18n-key
   if (msg.includes('auth/invalid-email')) return 'รูปแบบอีเมลไม่ถูกต้อง' // i18n-key
+  if (msg.includes('auth/too-many-requests')) return 'ลองหลายครั้งเกินไป — รอสักครู่แล้วลองใหม่' // i18n-key
   return msg
 }
-
 
 /**
  * Rebuild the demo from nothing, in one tap, and sign in.
@@ -262,13 +383,7 @@ function DemoSetup() {
       <p className="mt-0.5 text-xs text-ink-soft">
         {t('ลบข้อมูลในเครื่องนี้ทั้งหมด แล้วตั้งค่าใหม่: ผู้ใช้ 3 บทบาท, คลังทั้งสองแบรนด์, และแคตตาล็อกสินค้า')}
       </p>
-      <Button
-        variant="secondary"
-        onClick={go}
-        disabled={busy}
-        className="mt-2 w-full"
-        type="button"
-      >
+      <Button variant="secondary" onClick={go} disabled={busy} className="mt-2 w-full" type="button">
         {busy ? t('กำลังเตรียม...') : t('รีเซ็ตข้อมูลเดโม')}
       </Button>
       <p className="mt-2 text-xs text-ink-faint">
