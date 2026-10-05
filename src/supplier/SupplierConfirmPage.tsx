@@ -41,7 +41,7 @@ type LoadState =
 
 type Outcome = 'confirmed' | 'changed' | 'pending'
 
-const tokenFromPath = () => decodeURIComponent(location.pathname.replace(/^\/s\//, '').replace(/\/$/, ''))
+const tokenFromPath = () => decodeURIComponent(location.pathname.replace(/^\/supplier\/po\//, '').replace(/\/$/, ''))
 
 function newRequestId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()

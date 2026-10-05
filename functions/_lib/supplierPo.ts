@@ -135,7 +135,7 @@ export async function mintLink(deps: Deps, authorization: string | null, body: u
     expMs: res.reply.expiresAt,
   }
   const token = await signSupplierToken(claims, deps.secret)
-  return ok({ url: `${deps.origin}/s/${token}`, token, expiresAt: res.reply.expiresAt, order: res.order })
+  return ok({ url: `${deps.origin}/supplier/po/${token}`, token, expiresAt: res.reply.expiresAt, order: res.order })
 }
 
 // -------------------------------------------------------------- the supplier page ----

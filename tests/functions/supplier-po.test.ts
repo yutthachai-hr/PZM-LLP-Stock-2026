@@ -128,9 +128,9 @@ describe('POST /api/supplier-po/link', () => {
       expect((await mintLink(deps, who ? auth(who) : null, { brand: 'pizza', poId: 'po1' })).status).toBe(401)
     }
   })
-  test('gives one link per order version, pointing at /s/', async () => {
+  test('gives one link per order version, pointing at /supplier/po/', async () => {
     const r = await mintLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })
-    expect(r.body.url).toBe(`https://pzmstock.pages.dev/s/${r.body.token}`)
+    expect(r.body.url).toBe(`https://pzmstock.pages.dev/supplier/po/${r.body.token}`)
     expect(po().supplierConfirmationStatus).toBe('waiting')
     const again = await mintLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })
     expect(again.body.token).toBe(r.body.token)

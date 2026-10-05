@@ -70,6 +70,15 @@ export function msToDateKey(ms: number): string {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
 }
 
+/**
+ * `DD/MM/YYYY` of a Bangkok day for a message to a supplier — the Buddhist year in Thai
+ * (06/10/2569), the Gregorian one in English, as the company's own paperwork writes it.
+ */
+export function supplierDateLabel(ms: number, lang: 'th' | 'en'): string {
+  const [y, m, d] = msToDateKey(ms).split('-')
+  return `${d}/${m}/${lang === 'th' ? Number(y) + 543 : y}`
+}
+
 /** True when this request id has already been applied — a retried submit, not a new one. */
 export function isReplay(o: PurchaseOrder, requestId: string): boolean {
   if (!requestId) return false
