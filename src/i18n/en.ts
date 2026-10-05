@@ -2726,4 +2726,11 @@ export const EN: Record<string, string> = {
   'AI อ่านบิลไม่สำเร็จ ({status}) — ลองถ่ายใหม่ให้ชัดขึ้น หรือคีย์เอง': 'AI could not read the bill ({status}) — take a clearer photo, or key it in',
   // ---- kept on demo: the POS import sheet picker ----
   'ชีต': 'Sheet',
+  // ---- a new supplier from the product form (5 Oct 2026) ----
+  'มีผู้ขาย "{name}" อยู่แล้ว — เลือกให้แล้ว': 'Supplier "{name}" is already on the list — selected it',
+  'เพิ่มผู้ขาย "{name}" แล้ว': 'Added supplier "{name}"',
+  '+ เพิ่มผู้ขายใหม่…': '+ Add a new supplier…',
+  'เบอร์ติดต่อ (ไม่บังคับ)': 'Phone (optional)',
+  'รายละเอียดอื่นใส่ภายหลังได้ที่หน้าผู้ขาย': 'Other details can be added later on the suppliers page',
+  'บันทึกผู้ขาย': 'Save supplier',
 }
