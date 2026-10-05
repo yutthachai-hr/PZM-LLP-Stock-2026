@@ -148,17 +148,19 @@ export function LoginPage() {
 
       <main className="mx-auto grid max-w-[1400px] items-center gap-6 px-5 pb-10 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(380px,440px)] lg:gap-10 lg:px-14 lg:pt-4">
         {/* ---- the brand and its mascot ---- */}
-        <section className="relative grid items-center gap-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        {/* On a phone, or a screen with little height, the figure stands beside the heading and
+            stays small, so the form is still on the first screen. */}
+        <section className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,0.72fr)] items-center gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:gap-4">
           <div className="relative z-10">
-            <span className="mb-5 block h-1 w-12 rounded-full bg-brand-vivid" aria-hidden="true" />
-            <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
+            <span className="mb-3 block h-1 w-12 rounded-full bg-brand-vivid sm:mb-5" aria-hidden="true" />
+            <h1 className="text-[1.7rem] font-extrabold leading-[1.1] tracking-tight min-[400px]:text-3xl sm:text-5xl">
               {t('เข้าสู่ระบบ')}
               <br />
               <span className="text-brand-vivid">{look.short}</span> Stock
             </h1>
-            <p className="mt-4 max-w-sm text-base leading-relaxed text-ink-soft">{t(look.tagline)}</p>
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-ink-soft sm:mt-4 sm:text-base">{t(look.tagline)}</p>
           </div>
-          <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[300px] md:max-w-[380px]">
+          <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[300px] md:max-w-[380px] [@media(max-height:560px)]:max-w-[170px]">
             {/* The brand's scene behind the figure, its ground line on the mascot's. */}
             <LoginScenery
               brand={brand}

@@ -16,6 +16,10 @@ import type { BrandId } from '../../brand/brand'
  * attributes on the SVG's own elements: React renders once and never again per frame. It
  * stops while the tab is hidden (the browser pauses rAF), while it is off screen, and for
  * anyone who asks for reduced motion — then it stands in its first pose.
+ *
+ * The rabbit's legs are drawn, not cut: one curve hip → ankle through the knee, in the
+ * drawing's outline, shade and fill. Add ?rigdebug to the address to see every hip, knee and
+ * ankle, the near leg in blue and the far leg in pink, and the ground line.
  */
 
 interface RigPart {
@@ -31,6 +35,7 @@ interface Rig {
   seconds: number
   order: string[]
   legStyle: 'image' | 'stroke'
+  legCurve?: 'quadratic' | null
   stroke?: {
     outline: number[]
     outline_w: number
@@ -61,19 +66,33 @@ function loadRig(slug: string): Promise<Rig> {
   return p
 }
 
+/** The leg as one curve through the knee: M hip Q c ankle with c = 2·knee − (hip + ankle)/2. */
+function legPath(v: number[]): string {
+  const [hx, hy, kx, ky, ax, ay] = v
+  return `M${hx} ${hy}Q${2 * kx - (hx + ax) / 2} ${2 * ky - (hy + ay) / 2} ${ax} ${ay}`
+}
+
+const DEBUG_SIDES = [
+  ['near', '#28aaff'],
+  ['far', '#ff3caa'],
+] as const
+
 const rgb = (c: number[], f = 1) => `rgb(${Math.round(c[0] * f)} ${Math.round(c[1] * f)} ${Math.round(c[2] * f)})`
 
 export function AnimatedMascot({ brand, className = '' }: { brand: BrandId; className?: string }) {
   const slug = SLUG[brand]
-  const [rig, setRig] = useState<Rig | null>(null)
+  // the rig is kept with the brand it was loaded for: on a brand switch the old rig must not
+  // be drawn with the new brand's file paths, even for the one render before it is replaced
+  const [loaded, setLoaded] = useState<{ slug: string; rig: Rig } | null>(null)
+  const rig = loaded?.slug === slug ? loaded.rig : null
   const svgRef = useRef<SVGSVGElement>(null)
+  const [debug] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('rigdebug'))
 
   useEffect(() => {
     let live = true
-    setRig(null)
     loadRig(slug)
-      .then((r) => live && setRig(r))
-      .catch(() => live && setRig(null))
+      .then((r) => live && setLoaded({ slug, rig: r }))
+      .catch(() => live && setLoaded(null))
     return () => {
       live = false
     }
@@ -86,6 +105,8 @@ export function AnimatedMascot({ brand, className = '' }: { brand: BrandId; clas
     for (const key of rig.order) nodes.set(key, Array.from(svg.querySelectorAll(`[data-part="${key}"]`)))
     const shadow = svg.querySelector('[data-shadow]')
     const N = rig.samples.length
+    // the joint overlay needs the legs' samples; a rig exported without them just plays
+    const showJoints = debug && 'near_leg' in rig.samples[0] && 'far_leg' in rig.samples[0]
 
     function apply(phase: number) {
       const f = phase * N
@@ -95,11 +116,12 @@ export function AnimatedMascot({ brand, className = '' }: { brand: BrandId; clas
       const A = rig!.samples[i]
       const B = rig!.samples[j]
       const at = (key: string, n: number) => A[key][n] + (B[key][n] - A[key][n]) * k
+      const leg = (key: string) => [0, 1, 2, 3, 4, 5].map((n) => at(key, n))
       for (const key of rig!.order) {
         const els = nodes.get(key) ?? []
         if (key.endsWith('_leg')) {
-          const pts = `${at(key, 0)},${at(key, 1)} ${at(key, 2)},${at(key, 3)} ${at(key, 4)},${at(key, 5)}`
-          for (const el of els) el.setAttribute('points', pts)
+          const d = legPath(leg(key))
+          for (const el of els) el.setAttribute('d', d)
           continue
         }
         const part = rig!.parts[key]
@@ -114,6 +136,14 @@ export function AnimatedMascot({ brand, className = '' }: { brand: BrandId; clas
       if (shadow) {
         shadow.setAttribute('cx', String(at('shadow', 0)))
         shadow.setAttribute('rx', String(at('shadow', 1)))
+      }
+      for (const [side] of showJoints ? DEBUG_SIDES : []) {
+        const v = leg(`${side}_leg`)
+        svg!.querySelector(`[data-debug="${side}"]`)?.setAttribute('points', `${v[0]},${v[1]} ${v[2]},${v[3]} ${v[4]},${v[5]}`)
+        svg!.querySelectorAll(`[data-debug-joint="${side}"]`).forEach((c, n) => {
+          c.setAttribute('cx', String(v[n * 2]))
+          c.setAttribute('cy', String(v[n * 2 + 1]))
+        })
       }
     }
 
@@ -145,7 +175,7 @@ export function AnimatedMascot({ brand, className = '' }: { brand: BrandId; clas
       io.disconnect()
       reduce.removeEventListener('change', run)
     }
-  }, [rig])
+  }, [rig, debug])
 
   if (!rig) {
     // Holds the space while the rig loads, so nothing shifts when it arrives.
@@ -168,15 +198,28 @@ export function AnimatedMascot({ brand, className = '' }: { brand: BrandId; clas
           const line = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' } as const
           return (
             <g key={key}>
-              <polyline data-part={key} {...line} stroke={rgb(st.outline, dimF)} strokeWidth={st.outline_w} />
-              <polyline data-part={key} {...line} stroke={rgb(st.shade, dimF)} strokeWidth={st.fill_w} transform={`translate(${st.shade_dx} 0)`} />
-              <polyline data-part={key} {...line} stroke={rgb(st.fill, dimF)} strokeWidth={st.fill_w - st.shade_w} transform={`translate(${st.fill_dx} 0)`} />
+              <path data-part={key} {...line} stroke={rgb(st.outline, dimF)} strokeWidth={st.outline_w} />
+              <path data-part={key} {...line} stroke={rgb(st.shade, dimF)} strokeWidth={st.fill_w} transform={`translate(${st.shade_dx} 0)`} />
+              <path data-part={key} {...line} stroke={rgb(st.fill, dimF)} strokeWidth={st.fill_w - st.shade_w} transform={`translate(${st.fill_dx} 0)`} />
             </g>
           )
         }
         const p = rig.parts[key]
         return <image key={key} data-part={key} href={`/login/rig/${slug}/${p.src}`} width={p.w} height={p.h} />
       })}
+      {debug && (
+        <g>
+          <line x1={0} x2={W} y1={rig.ground} y2={rig.ground} stroke="#00a0ff" strokeWidth={3} />
+          {DEBUG_SIDES.map(([side, color]) => (
+            <g key={side}>
+              <polyline data-debug={side} fill="none" stroke={color} strokeWidth={6} />
+              {[0, 1, 2].map((n) => (
+                <circle key={n} data-debug-joint={side} r={12} fill="#fff" stroke={color} strokeWidth={5} />
+              ))}
+            </g>
+          ))}
+        </g>
+      )}
     </svg>
   )
 }
