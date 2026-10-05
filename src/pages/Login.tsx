@@ -5,6 +5,7 @@ import { brandDef, lastBrand, type BrandId } from '../brand/brand'
 import { Button } from '../components/ui'
 import { Icon, type IconName } from '../components/Icon'
 import { AnimatedMascot } from '../components/login/AnimatedMascot'
+import { LoginScenery } from '../components/login/LoginScenery'
 import { getAuthInstance } from '../firebase/app'
 import { isDemoMode, parseConfigInput, saveFirebaseConfig } from '../firebase/config'
 import { resetDemoData } from '../services/demoSeed'
@@ -158,10 +159,11 @@ export function LoginPage() {
             <p className="mt-4 max-w-sm text-base leading-relaxed text-ink-soft">{t(look.tagline)}</p>
           </div>
           <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[300px] md:max-w-[380px]">
-            {/* A soft blob of the brand's colour behind the figure, as in the mock-ups. */}
-            <div
-              aria-hidden="true"
-              className="absolute inset-x-[2%] bottom-[4%] top-[14%] rounded-[46%_54%_42%_58%/52%_44%_56%_48%] bg-brand-soft"
+            {/* The brand's scene behind the figure, its ground line on the mascot's. */}
+            <LoginScenery
+              brand={brand}
+              className="pointer-events-none absolute left-[-20%] w-[140%]"
+              style={{ bottom: brand === 'pizza' ? '-2.3%' : '1.5%' }}
             />
             <AnimatedMascot brand={brand} className="relative w-full" />
           </div>
