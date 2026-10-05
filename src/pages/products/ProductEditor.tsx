@@ -29,7 +29,7 @@ import {
 } from '../../services/products'
 import { changeProductUnit, setStockCount } from '../../services/stock'
 import { useEntryUnits } from '../../services/entryUnits'
-import { useSuppliers } from '../../services/suppliers'
+import { createSupplier, useSuppliers } from '../../services/suppliers'
 import { sameUnit, unitNameFor } from '../../lib/units'
 import { compressImage } from '../../lib/image'
 import type { CostEntry, Product } from '../../types'
@@ -40,6 +40,9 @@ import { isWipCategory, nextWipCode, type WipBrand } from '../../lib/wipCode'
 import { WIP_ITEMS } from '../../seed/wip'
 import { errText } from '../../i18n/AppError'
 
+
+/** The supplier select's "add a new one" choice — never a real supplier id. */
+const NEW_SUPPLIER = '__new__'
 
 export function ProductEditor({
   product,
@@ -103,6 +106,35 @@ export function ProductEditor({
   const plainUnits = useEntryUnits()
   // Read once per session, not once per dialog: it is about a hundred documents.
   const supplierChoices = useSuppliers()
+  // A supplier that is not in the list yet, added right here (owner, 5 Oct 2026: "ผู้ขาย
+  // ใหม่ควรเพิ่มได้จากหน้าเพิ่มสินค้าใหม่ได้เลย") — a name and, if known, a number; the rest
+  // of its details are filled in on the suppliers page later.
+  const [newSupplier, setNewSupplier] = useState<{ name: string; phone: string } | null>(null)
+  const [savingSupplier, setSavingSupplier] = useState(false)
+
+  async function addSupplier() {
+    if (!newSupplier) return
+    const name = newSupplier.name.trim()
+    if (!name) return toast.error(t('กรุณากรอกชื่อผู้ขาย'))
+    // The same name already on the list is that supplier, not a second one.
+    const same = supplierChoices.find((s) => s.name.trim().toLowerCase() === name.toLowerCase())
+    if (same) {
+      setForm((f) => ({ ...f, supplierId: same.id }))
+      setNewSupplier(null)
+      return toast.success(t('มีผู้ขาย "{name}" อยู่แล้ว — เลือกให้แล้ว', { name: same.name }))
+    }
+    setSavingSupplier(true)
+    try {
+      const id = await createSupplier({ name, contactNumber: newSupplier.phone.trim(), email: '', type: 'takingReturn' })
+      setForm((f) => ({ ...f, supplierId: id }))
+      setNewSupplier(null)
+      toast.success(t('เพิ่มผู้ขาย "{name}" แล้ว', { name }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setSavingSupplier(false)
+    }
+  }
   const unitChoices = useMemo(() => {
     const out = [...plainUnits]
     if (form.unitType && !out.some((u) => sameUnit(u, form.unitType))) out.unshift(form.unitType)
@@ -411,11 +443,16 @@ export function ProductEditor({
             This is for the handful whose names never did, and for changing one by hand. */}
         <Field label={t("ผู้ขาย")}>
           <Select
-            value={form.supplierId ?? ''}
-            onChange={(e) => setForm({ ...form, supplierId: e.target.value || undefined })}
+            value={newSupplier ? NEW_SUPPLIER : (form.supplierId ?? '')}
+            onChange={(e) => {
+              if (e.target.value === NEW_SUPPLIER) return setNewSupplier({ name: '', phone: '' })
+              setNewSupplier(null)
+              setForm({ ...form, supplierId: e.target.value || undefined })
+            }}
             disabled={!canEdit}
           >
             <option value="">{t("— ยังไม่ระบุ —")}</option>
+            {canEdit && <option value={NEW_SUPPLIER}>{t('+ เพิ่มผู้ขายใหม่…')}</option>}
             {/* An id that matches nobody here (a supplier deleted, or one from the other
                 brand) is shown as such rather than quietly reading as "not set" — the
                 person sees there is something to fix and can pick the right one. */}
@@ -433,6 +470,35 @@ export function ProductEditor({
                 </option>
               ))}
           </Select>
+          {newSupplier && (
+            <div className="mt-2 space-y-2 rounded-lg border border-brand/40 bg-brand-soft/40 p-3">
+              <Input
+                value={newSupplier.name}
+                onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
+                placeholder={t('ชื่อผู้ขาย')}
+                aria-label={t('ชื่อผู้ขาย')}
+                maxLength={200}
+                autoFocus
+              />
+              <Input
+                value={newSupplier.phone}
+                onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                placeholder={t('เบอร์ติดต่อ (ไม่บังคับ)')}
+                aria-label={t('เบอร์ติดต่อ (ไม่บังคับ)')}
+                inputMode="tel"
+                maxLength={40}
+              />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="mr-auto text-xs text-ink-soft">{t('รายละเอียดอื่นใส่ภายหลังได้ที่หน้าผู้ขาย')}</span>
+                <Button variant="secondary" size="sm" onClick={() => setNewSupplier(null)} disabled={savingSupplier}>
+                  {t('ยกเลิก')}
+                </Button>
+                <Button size="sm" onClick={() => void addSupplier()} disabled={savingSupplier || !newSupplier.name.trim()}>
+                  {savingSupplier ? t('กำลังบันทึก...') : t('บันทึกผู้ขาย')}
+                </Button>
+              </div>
+            </div>
+          )}
         </Field>
         {/* Who else sells it. The automatic order never picks one of these by itself; it is
             the list a person sees when the usual supplier cannot deliver. */}
