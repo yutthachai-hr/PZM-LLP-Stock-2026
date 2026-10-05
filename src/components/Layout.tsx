@@ -12,6 +12,7 @@ import { InstallHint } from '../pwa/InstallHint'
 import { TopBar } from './TopBar'
 import { useTodayEventCount } from '../data/useTodayEventCount'
 import { Badge } from './ui'
+import { useSupplierRefresh } from '../data/useSupplierRefresh'
 import { navFor, titleFor } from './nav/navItems'
 import { SideLive } from './nav/SideLive'
 import { SideNav } from './nav/SideNav'
@@ -25,6 +26,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation()
   // The background jobs the cron Worker also runs — see data/useAutomation.ts.
   useAutomation()
+  // A supplier's answer moves an order's date server-side; bring it into the calendar.
+  useSupplierRefresh(!!user)
 
   const def = brand ? brandDef(brand) : null
   const items = navFor(user?.role)

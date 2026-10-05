@@ -530,6 +530,33 @@ export interface PurchaseOrder {
   sentByName?: string
   /** Which rendering of the sheet was sent, so a regenerated one can be told apart. */
   imageVersion?: number
+  /**
+   * The supplier's answer to the delivery date (5 Oct 2026). Every field from here to
+   * `supplierActivity` is written only by the server (functions/api/supplier*) — the rules'
+   * `orderEdit` key list does not name them, so no signed-in client can touch them. All are
+   * absent on orders sent before this existed; `requestedOf()` in lib/supplierConfirmation
+   * reads such an order's `expectedAt` as the date asked for.
+   *
+   * The date we asked for, ms epoch of the Bangkok day. Snapshotted when the supplier link
+   * is issued and never moved by anything the supplier does; only a purchasing revision
+   * that changes `expectedAt` moves it (and the move is written to `deliveryDateHistory`).
+   */
+  requestedDeliveryDate?: number
+  /** The date agreed with the supplier. When set, `expectedAt` equals it. */
+  confirmedDeliveryDate?: number
+  supplierConfirmationStatus?: SupplierConfirmationStatus
+  supplierConfirmedAt?: number
+  supplierConfirmedBy?: SupplierIdentity
+  /** The supplier's own note with their latest answer. */
+  supplierDeliveryNote?: string
+  /** Every date decision, oldest first: asked, accepted, proposed, applied, approved, refused. */
+  deliveryDateHistory?: DeliveryDateChange[]
+  /** A proposed date beyond `supplierMaxPostponeDays`, waiting for a หัวหน้า or admin. */
+  pendingDeliveryDate?: PendingDeliveryDate
+  /** The link the supplier answers through. A new version kills every older link. */
+  supplierLink?: SupplierLinkState
+  /** Every supplier interaction for the order's timeline, oldest first. */
+  supplierActivity?: SupplierActivity[]
   note?: string
   createdBy: string
   createdByName: string
@@ -538,6 +565,77 @@ export interface PurchaseOrder {
 }
 
 export type PurchaseShareStatus = 'shareOpened' | 'sent' | 'skipped' | 'failed'
+
+/**
+ * Where the supplier's answer stands. Kept apart from `PurchaseOrder.status` on purpose:
+ * receiving, cancelling and the rules all key on `ordered`, and a supplier saying "yes"
+ * must not change any of that.
+ */
+export type SupplierConfirmationStatus = 'waiting' | 'confirmed' | 'changed' | 'pending_date_approval'
+
+/** Who answered for the supplier. No login exists: the link is the credential. */
+export interface SupplierIdentity {
+  via: 'link' | 'line'
+  /** What they typed on the page (optional there), or their LINE display name. */
+  name?: string
+  lineUserId?: string
+}
+
+export interface DeliveryDateChange {
+  id: string
+  at: number
+  source: 'supplier' | 'purchasing' | 'system'
+  action: 'requested' | 'accepted' | 'proposed' | 'autoApplied' | 'approved' | 'rejected' | 'reset' | 'superseded'
+  from?: number
+  to?: number
+  byName: string
+  byId?: string
+  note?: string
+  /** The page's request id, so a retried submit is recognised instead of applied twice. */
+  requestId?: string
+}
+
+export interface PendingDeliveryDate {
+  date: number
+  note?: string
+  name?: string
+  at: number
+  /** The `deliveryDateHistory` entry that proposed it; the approve/reject call names it. */
+  changeId: string
+}
+
+export interface SupplierLinkState {
+  version: number
+  /** The order's `revision` when the link was issued. An amendment after that resets it. */
+  rev: number
+  issuedAt: number
+  issuedBy: string
+  /** Hard cap; the link also dies at the end of the delivery day (see linkActiveUntil). */
+  expiresAt: number
+  openedAt?: number
+}
+
+export type SupplierActivityKind =
+  | 'linkIssued'
+  | 'opened'
+  | 'accepted'
+  | 'proposed'
+  | 'autoApplied'
+  | 'pendingApproval'
+  | 'approved'
+  | 'rejected'
+  | 'reset'
+
+export interface SupplierActivity {
+  id: string
+  at: number
+  kind: SupplierActivityKind
+  byName: string
+  byId?: string
+  date?: number
+  note?: string
+  requestId?: string
+}
 
 /**
  * Something that has to happen, on a date, at a location.
@@ -691,6 +789,14 @@ export interface InventorySettings {
   escalateAfterHours: number
   /** Days of movement history the usage rate is averaged over. */
   usageWindowDays: number
+  /**
+   * How many days later than asked a supplier may move a delivery on their own (5 Oct
+   * 2026, owner: 2). Beyond it the new date waits for a หัวหน้า or admin. Earlier dates —
+   * never before today — apply on their own. Absent on settings saved before it existed.
+   */
+  supplierMaxPostponeDays?: number
+  /** The longest a supplier link lives, in days, whatever the delivery date says. */
+  supplierLinkTtlDays?: number
   updatedBy?: string
   updatedAt: number
 }
@@ -705,6 +811,8 @@ export const DEFAULT_INVENTORY_SETTINGS: Omit<InventorySettings, 'updatedAt' | '
   reminderBeforeMin: 60,
   escalateAfterHours: 4,
   usageWindowDays: 30,
+  supplierMaxPostponeDays: 2,
+  supplierLinkTtlDays: 30,
 }
 
 // ---------------------------------------------------------------- notifications ----
@@ -722,6 +830,11 @@ export type NotificationKind =
   | 'poArriving' // goods due today
   | 'poDelayed' // goods late
   | 'cutoffToday' // a supplier's order cut-off is today
+  | 'supplierConfirmed' // a supplier accepted the delivery date asked for
+  | 'supplierDateChanged' // a supplier moved the delivery date within the allowed range
+  | 'supplierDatePending' // a supplier asked for a date beyond the range: needs a decision
+  | 'supplierDateApproved' // a หัวหน้า/admin approved that date
+  | 'supplierDateRejected' // a หัวหน้า/admin refused it
   | 'transferSubmitted' // a branch transfer waiting for approval
   | 'transferArriving' // stock in transit arriving today
   | 'transferIssue' // transfer discrepancy or misroute reported

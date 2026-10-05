@@ -8,11 +8,13 @@ import { Icon } from '../../components/Icon'
 import { useSuppliers } from '../../services/suppliers'
 import { PoSheet, SheetLangToggle } from '../../components/PoSheet'
 import { Badge, Button, Modal } from '../../components/ui'
-import { useI18n, useT, type Lang } from '../../i18n/I18nContext'
+import { translatorFor, useI18n, useT, type Lang, type TFn } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
 import { imageHostAvailable, uploadPoImage } from '../../services/poImages'
 import { setShareStatus } from '../../services/purchaseOrders'
+import { supplierLink } from '../../services/supplierConfirmation'
+import { requestedOf, supplierDateLabel } from '../../lib/supplierConfirmation'
 import { pickShareProvider, statusFor, type PurchaseShareProvider } from '../../share'
 import { liffNeedsLogin } from '../../share/lineLiffProvider'
 import { isStandalone } from '../../share/liffResume'
@@ -123,12 +125,31 @@ export function SendWizard({
       // Opened is written before the picker, so a tab closed mid-way still shows the
       // truth: this one was started and not finished.
       if (current.shareStatus !== 'shareOpened') await record(current, 'shareOpened')
+      // The new-order message and the supplier's confirmation link go with the first page
+      // (5 Oct 2026): text, then the [ยืนยันวันจัดส่ง] card, then the sheet. Still the
+      // person's own LINE through the picker — which takes plain text only, so a real @All
+      // mention cannot be made here and none is faked as text. No link (not set up yet,
+      // or offline) → the sheet goes out exactly as before.
+      const link = pageIdx === 0 ? await supplierLink(current) : null
+      const st = translatorFor(sheetLang)
+      const asked = requestedOf(link?.order ?? current)
+      const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''
+      const caption = link
+        ? newOrderMessage(st, {
+            company,
+            docNo: current.docNo + pageTag,
+            supplier: current.supplierName,
+            date: asked !== undefined ? supplierDateLabel(asked, sheetLang) : undefined,
+            url: link.url,
+          })
+        : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + pageTag
       setBusy('share')
       const outcome = await provider.share({
         subject: { kind: 'order', id: current.id },
         file,
         hosted,
-        caption: t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + (page.of > 1 ? ` (${page.n}/${page.of})` : ''),
+        caption,
+        card: link ? confirmCard(link.url, current.docNo, st) : undefined,
       })
       if (outcome === 'cancelled') return
       if (!isLast) {
@@ -258,4 +279,44 @@ export function SendWizard({
       </div>
     </Modal>
   )
+}
+
+/** The supplier's confirm button as a Flex card: one link (URI) action, all the picker allows. */
+function confirmCard(url: string, docNo: string, t: TFn): { altText: string; contents: Record<string, unknown> } {
+  const label = t('ยืนยันวันจัดส่ง')
+  return {
+    altText: `${label} ${docNo}: ${url}`,
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: [
+          { type: 'text', text: docNo, weight: 'bold', size: 'md' },
+          { type: 'text', text: t('กดเพื่อยืนยันหรือเลือกวันจัดส่ง'), size: 'sm', color: '#64748b', wrap: true },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [{ type: 'button', style: 'primary', color: '#06c755', action: { type: 'uri', label, uri: url } }],
+      },
+    },
+  }
+}
+
+/** The new-order message in the sheet's language, as the owner wrote it (5 Oct 2026). */
+function newOrderMessage(t: TFn, m: { company: string; docNo: string; supplier: string; date?: string; url: string }): string {
+  return [
+    t('📦 ใบสั่งซื้อใหม่จาก {company}', { company: m.company.toUpperCase() }),
+    '',
+    m.docNo,
+    t('ผู้ขาย: {name}', { name: m.supplier }),
+    t('วันที่ต้องการสินค้า: {date}', { date: m.date ?? t('ไม่ระบุ') }),
+    '',
+    t('กรุณาตรวจสอบและยืนยันวันที่สามารถจัดส่งได้'),
+    m.url,
+  ].join('\n')
 }

@@ -143,6 +143,7 @@ export const lineLiffProvider: PurchaseShareProvider = {
     const result = await sdk.shareTargetPicker(
       [
         { type: 'text', text: payload.caption },
+        ...(payload.card ? [{ type: 'flex' as const, altText: payload.card.altText, contents: payload.card.contents as never }] : []),
         ...(payload.hosted
           ? [
               {

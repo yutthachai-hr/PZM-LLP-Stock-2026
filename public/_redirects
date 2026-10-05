@@ -1,1 +1,4 @@
+# The supplier's delivery-date page. Target /supplier, NOT /supplier.html: Pages turns a
+# .html target into a 308 to /supplier and the token in the path is lost (5 Oct 2026).
+/supplier/po/*    /supplier   200
 /*    /index.html   200

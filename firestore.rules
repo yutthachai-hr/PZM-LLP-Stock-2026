@@ -1443,11 +1443,16 @@ service cloud.firestore {
 
     function validInventorySettings(d) {
       return d.keys().hasOnly(['id', 'kind', 'adjustValueBaht', 'adjustPct', 'wasteValueBaht', 'coverDays',
-          'reminderBeforeMin', 'escalateAfterHours', 'usageWindowDays', 'updatedBy', 'updatedAt'])
+          'reminderBeforeMin', 'escalateAfterHours', 'usageWindowDays',
+          'supplierMaxPostponeDays', 'supplierLinkTtlDays', 'updatedBy', 'updatedAt'])
         && d.id == 'settings'
         && nonneg(d.adjustValueBaht, 100000000) && nonneg(d.adjustPct, 100) && nonneg(d.wasteValueBaht, 100000000)
         && nonneg(d.coverDays, 365) && nonneg(d.reminderBeforeMin, 10080) && nonneg(d.escalateAfterHours, 720)
-        && nonneg(d.usageWindowDays, 365) && epochMs(d.updatedAt);
+        && nonneg(d.usageWindowDays, 365) && epochMs(d.updatedAt)
+        // The supplier link (5 Oct 2026): how much later a supplier may move a delivery on
+        // their own, and the longest a link lives. Optional — older settings lack them.
+        && (!('supplierMaxPostponeDays' in d) || nonneg(d.supplierMaxPostponeDays, 60))
+        && (!('supplierLinkTtlDays' in d) || nonneg(d.supplierLinkTtlDays, 90));
     }
 
     function validPrefs(d) {

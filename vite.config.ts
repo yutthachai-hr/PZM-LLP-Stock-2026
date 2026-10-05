@@ -55,7 +55,20 @@ export default defineConfig({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        // The supplier's page (/supplier/po/<token>) is its own entry, and /api is the server: a
+        // staff phone with the app installed must not answer either from the app shell.
+        navigateFallbackDenylist: [/^\/supplier\/po\//, /^\/api\//],
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      // Two pages: the app, and the supplier's delivery-date page (supplier.html, served
+      // at /supplier/po/* by public/_redirects) — a separate, small bundle with no Firebase in it.
+      input: {
+        main: 'index.html',
+        supplier: 'supplier.html',
+      },
+    },
+  },
 })

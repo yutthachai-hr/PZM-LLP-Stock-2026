@@ -44,3 +44,6 @@ samples/
 public/__demo-order.xlsx
 .superpowers/
 dist-demo
+
+# Cloudflare local secrets (wrangler pages dev)
+.dev.vars

@@ -412,6 +412,48 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 
 ---
 
+## 11. ผู้ขายยืนยันวันส่ง (Supplier PO Confirmation) — branch `feat/supplier-confirmation` (5 ต.ค.) **ยังไม่ขึ้นของจริง**
+
+**คำตัดสินของเจ้าของ:**
+- ส่ง PO ด้วย **LINE ส่วนตัว** ผ่าน LIFF shareTargetPicker เหมือนเดิม — **ห้ามย้ายไป LINE OA / Messaging API**
+- เลื่อนช้ากว่าเดิมได้เอง ≤ `supplierMaxPostponeDays` (2 วัน) / ส่งเร็วขึ้นได้เสมอ / เกินนั้นต้องให้หัวหน้าหรือแอดมินอนุมัติ
+- ลิงก์ใช้ซ้ำได้จนถึงวันส่ง และบันทึกทุกคำตอบ
+
+**@All จริงทำไม่ได้กับวิธีส่งปัจจุบัน:** LIFF 2.31 shareTargetPicker รับได้แค่ text ธรรมดา, รูป, วิดีโอ, เสียง, ตำแหน่ง และ template/flex ที่มีแต่ปุ่ม URI (`@liff/send-messages/lib/type.d.ts`, เอกสาร LIFF) — **ไม่มี textV2** จึงสร้าง mention จริงไม่ได้ และไม่ปลอมเป็นข้อความ "@All" ทางเลือกในอนาคตมีแค่ automation ของ LINE Desktop (ต้องมีโปรแกรมรันบนคอม) หรือ OA ซึ่งเจ้าของไม่เอา
+
+**การทำงาน:**
+1. SendWizard ขอลิงก์จาก `POST /api/supplier-po/link`
+2. หน้าแรกส่ง: ข้อความใบสั่งซื้อใหม่ (รูปแบบของเจ้าของ) → การ์ด Flex ปุ่ม [ยืนยันวันจัดส่ง] → รูปใบ
+3. ผู้ขายเปิด `/supplier/po/<token>` (`supplier.html` แยก bundle ไม่มี Firebase) → `GET/POST /api/supplier/<token>`
+4. เกินช่วงที่อนุญาต → หัวหน้า/แอดมินอนุมัติในหน้ารายละเอียด PO → `POST /api/supplier-po/decide`
+
+**กติกาข้อมูล:**
+- เซิร์ฟเวอร์ (service account) เขียนฟิลด์ supplier ของ PO ได้ฝ่ายเดียว — `orderEdit` hasOnly ของเดิมกัน client อยู่แล้ว จึง **ไม่ได้แก้ rules ของ PO** (มีเทสยืนยัน)
+- `expectedAt` = วันที่คาดว่าจะได้รับจริง (ปฏิทินอ่านช่องนี้); `requestedDeliveryDate` ไม่ถูกทับ
+- `status` ของ PO ไม่เปลี่ยน — ใช้ `supplierConfirmationStatus` แยก
+- การตอบของผู้ขายไม่สร้าง revision
+- allow-list ของสิ่งที่เซิร์ฟเวอร์เขียนได้อยู่ใน `functions/_lib/serverStore.ts`
+
+**ไฟล์:** `src/lib/supplierConfirmation.ts` (กฎล้วน), `functions/_lib/*`, `functions/api/supplier*`, `src/supplier/*`, `src/pages/purchase/SupplierConfirmationPanel.tsx`, `src/data/useSupplierRefresh.ts`
+
+**เทส:** `tests/supplier-confirmation.test.ts`, `tests/functions/supplier-po.test.ts`, rules tests (settings + ฟิลด์ที่เซิร์ฟเวอร์เขียนฝ่ายเดียว + budget)
+
+**ลองในเครื่อง:**
+- `.dev.vars` = `SUPPLIER_DEV_FIXTURE=1` + `SUPPLIER_LINK_SECRET` (gitignored)
+- wrangler ในเครื่องต่อ binding `AI` ไม่ได้ถ้าไม่ login → ใช้สำเนาใน scratch ที่ wrangler.toml มีแค่ KV
+- ขอลิงก์ด้วย `curl -X POST /api/supplier-po/link -H 'authorization: Bearer dev'`
+
+**กับดัก:**
+- `_redirects` ต้องชี้ไปที่ `/supplier` ไม่ใช่ `/supplier.html` — Pages จะ 308 แล้ว token หลุด
+- รายการ `/* /index.html` ถูก wrangler ข้ามเป็น loop (ไม่เป็นไร Pages fallback ให้เอง)
+
+**ลำดับขึ้นของจริง (เจ้าของต้องทำ):**
+1. deploy rules **ก่อน** แอป — saveSettings เขียน key ใหม่ ถ้า rules เก่าจะปฏิเสธ
+2. สร้าง service account (`roles/datastore.user`) แล้วใส่ Pages secret `FIREBASE_SERVICE_ACCOUNT` + `SUPPLIER_LINK_SECRET` (≥ 32 ตัว)
+3. merge เข้า `main`
+
+ถ้าไม่มี secret endpoint จะคืน 503 และส่งแบบเดิมทุกอย่าง (ใช้เป็นสวิตช์ปิดได้)
+
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 
 บอก Claude session ใหม่ประมาณนี้:

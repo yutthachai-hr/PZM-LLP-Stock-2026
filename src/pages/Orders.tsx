@@ -49,6 +49,8 @@ import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
 import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { SendWizard } from './purchase/SendWizard'
+import { SupplierConfirmationPanel } from './purchase/SupplierConfirmationPanel'
+import { confirmationBadge, requestedOf } from '../lib/supplierConfirmation'
 import { RESUME_PARAM } from '../share/liffResume'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
@@ -114,7 +116,7 @@ export function OrdersPage() {
   const [sendingMany, setSendingMany] = useState<PurchaseOrder[] | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [supplierFilter, setSupplierFilter] = useState('')
-  type StateFilter = '' | 'late' | 'sent' | 'unsent' | 'draft'
+  type StateFilter = '' | 'late' | 'sent' | 'unsent' | 'draft' | 'supplierWaiting' | 'datePending'
   const [stateFilter, setStateFilter] = useState<StateFilter>('')
 
   const load = useCallback(async () => {
@@ -185,6 +187,8 @@ export function OrdersPage() {
         if (!stateFilter) return true
         if (stateFilter === 'late') return lateIds.has(o.id)
         if (stateFilter === 'draft') return o.status === 'draft'
+        if (stateFilter === 'supplierWaiting') return o.status === 'ordered' && o.supplierConfirmationStatus === 'waiting'
+        if (stateFilter === 'datePending') return o.status === 'ordered' && o.supplierConfirmationStatus === 'pending_date_approval'
         if (stateFilter === 'sent') return o.shareStatus === 'sent' && !needsResend(o)
         return o.status === 'ordered' && (o.shareStatus !== 'sent' || needsResend(o))
       })
@@ -514,6 +518,8 @@ export function OrdersPage() {
                 <option value="sent">{t('ส่งเข้า LINE แล้ว')}</option>
                 <option value="unsent">{t('ยังไม่ได้ส่ง LINE')}</option>
                 <option value="draft">{t('ร่าง — รออนุมัติ')}</option>
+                <option value="supplierWaiting">{t('รอผู้ขายยืนยัน')}</option>
+                <option value="datePending">{t('รออนุมัติวันส่ง')}</option>
               </Select>
             </FilterField>
           )}
@@ -587,6 +593,10 @@ export function OrdersPage() {
           locationName={locationById(viewing.locationId)?.name ?? ''}
           onClose={() => setViewing(null)}
           onSend={viewing.status === 'ordered' ? () => { setViewing(null); setSending(viewing) } : undefined}
+          onChanged={(next) => {
+            setViewing(next)
+            setOrders((cur) => cur.map((o) => (o.id === next.id ? next : o)))
+          }}
         />
       )}
       {sendingMany && (
@@ -699,6 +709,11 @@ function OrderStatus({ order, late }: { order: PurchaseOrder; late: boolean }) {
       ) : (
         order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>
       )}
+      {(() => {
+        // The supplier's answer to the delivery date (5 Oct 2026); none on orders never linked.
+        const b = confirmationBadge(order)
+        return b && <Badge color={b.color}>{t(b.label)}</Badge>
+      })()}
       {!done && partialLabel(order, t) && <Badge color="amber">{partialLabel(order, t)}</Badge>}
       {late && <Badge color="red">{t('รอมา {days} วัน', { days: daysWaiting(order) })}</Badge>}
     </div>
@@ -736,6 +751,15 @@ function DueCell({ order, late, expectedAt }: { order: PurchaseOrder; late: bool
       <div>
         <div className="num whitespace-nowrap">{t('กำหนด {date}', { date: formatThaiDate(expectedAt) })}</div>
         {order.expectedAt === undefined && <div className="text-xs text-ink-faint">{t('ตามระยะส่งของผู้ขาย')}</div>}
+        {(() => {
+          // The supplier moved it: the date asked for stays visible, struck through.
+          const asked = requestedOf(order)
+          return order.confirmedDeliveryDate !== undefined && asked !== undefined && asked !== order.confirmedDeliveryDate ? (
+            <div className="num text-xs text-ink-faint">
+              {t('ขอไว้')} <s>{formatThaiDate(asked)}</s>
+            </div>
+          ) : null
+        })()}
       </div>
     </div>
   )
@@ -1240,12 +1264,15 @@ function OrderSheet({
   locationName,
   onClose,
   onSend,
+  onChanged,
 }: {
   order: PurchaseOrder
   locationName: string
   onClose: () => void
   /** Offered on an order still waiting for goods: opens the LINE send wizard for it. */
   onSend?: () => void
+  /** The order after the server changed it (a supplier date approved, a link issued). */
+  onChanged?: (order: PurchaseOrder) => void
 }) {
   const t = useT()
   const { lang } = useI18n()
@@ -1306,6 +1333,7 @@ function OrderSheet({
       <div className="space-y-3">
         <SheetLangToggle value={sheetLang} onChange={setSheetLang} />
         <PoSheet order={order} locationName={locationName} company={company} ref={sheet} lang={sheetLang} />
+        {onChanged && <SupplierConfirmationPanel order={order} onChanged={onChanged} />}
         {order.revisions && order.revisions.length > 0 && <RevisionHistory revisions={order.revisions} />}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>

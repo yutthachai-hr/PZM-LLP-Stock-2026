@@ -51,6 +51,13 @@ export interface SharePayload {
    * share sheet and the clipboard, which cannot carry one, send `caption` as before.
    */
   flex?: { altText: string; contents: Record<string, unknown> }
+  /**
+   * A Flex card sent between the caption and the picture — the supplier's
+   * [ยืนยันวันจัดส่ง] button (5 Oct 2026). LIFF only: the picker allows link (URI) buttons
+   * and nothing else, which is all this is. The share sheet cannot carry a card, so the
+   * caption already holds the same link as text.
+   */
+  card?: { altText: string; contents: Record<string, unknown> }
 }
 
 export interface PurchaseShareProvider {
