@@ -144,3 +144,38 @@ describe('who sees what', () => {
     for (const d of all) expect(routes.some((r) => d.link.startsWith(r))).toBe(true)
   })
 })
+
+describe('plan C2: work left half-done', () => {
+  const transfer = (over: Record<string, unknown>) =>
+    ({ id: 't1', docNo: 'TR-0001', status: 'inTransit', fromLocationId: 'wh', toLocationId: 'br', lines: [], createdAt: NOW - 10 * DAY_MS, updatedAt: 1, ...over }) as never
+  const partial = (over: Partial<PurchaseOrder> = {}): PurchaseOrder =>
+    ({
+      id: 'po1', docNo: 'PO-1', supplierId: 's1', supplierName: 'SUP', status: 'ordered', locationId: 'wh', orderedAt: NOW - 20 * DAY_MS,
+      lines: [{ productId: 'p', productName: 'P', unit: 'KG', orderedQty: 10, receivedQty: 4 }],
+      receipts: [{ docNo: 'RC-1', date: NOW - 8 * DAY_MS, invoiceNo: 'I', byId: 'u', byName: 'U', lines: [] }],
+      createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1, ...over,
+    }) as PurchaseOrder
+
+  test('a transfer in transit two days is stuck; five days is critical', () => {
+    const run = (approvedAt: number) => evaluate({ ...base, jobs: ['stalled'], transfers: [transfer({ approvedAt })] })
+    expect(run(NOW - 1 * DAY_MS)).toEqual([])
+    expect(run(NOW - 3 * DAY_MS).map((d) => [d.id, d.priority])).toEqual([['transferStuck__t1', 'high']])
+    expect(run(NOW - 6 * DAY_MS).map((d) => d.priority)).toEqual(['high', 'critical'])
+    expect(evaluate({ ...base, jobs: ['stalled'], transfers: [transfer({ approvedAt: NOW - 9 * DAY_MS, status: 'completed' })] })).toEqual([])
+  })
+
+  test('an order part-received and silent for a week is stalled', () => {
+    const run = (po: PurchaseOrder) => evaluate({ ...base, jobs: ['stalled'], orders: [po] })
+    expect(run(partial()).map((d) => [d.id, d.kind, d.params.n])).toEqual([['poPartial__po1', 'poPartial', 1]])
+    expect(run(partial({ receipts: [{ docNo: 'RC-1', date: NOW - 2 * DAY_MS, invoiceNo: 'I', byId: 'u', byName: 'U', lines: [] }] }))).toEqual([])
+    expect(run(partial({ receipts: [] }))).toEqual([])
+    expect(run(partial({ lines: [{ productId: 'p', productName: 'P', unit: 'KG', orderedQty: 10, receivedQty: 10 }] }))).toEqual([])
+  })
+
+  test('both are states: resolved once the goods are in', () => {
+    const drafts = evaluate({ ...base, jobs: ['stalled'], transfers: [transfer({ approvedAt: NOW - 3 * DAY_MS })] })
+    const known = new Map(drafts.map((d) => [d.id, toDoc(d, NOW, 'client', 'u') as AppNotification]))
+    const after = plan([], known, ['stalled'], NOW + DAY_MS, 'client', 'u')
+    expect(after.resolve).toEqual(['transferStuck__t1'])
+  })
+})

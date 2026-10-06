@@ -223,7 +223,7 @@ export async function runNotificationJobs(
     adjustmentsSince: today - 7 * DAY_MS,
   })
   const locationName = (id: string | undefined) => data.locations.find((l) => l.id === id)?.name ?? ''
-  const jobs: JobName[] = ['tasks', 'purchasing', 'inventory', 'brief', 'weekly', 'risk']
+  const jobs: JobName[] = ['tasks', 'purchasing', 'inventory', 'brief', 'weekly', 'risk', 'stalled']
   const risk = riskEngineInput({
     orders: riskOrders,
     transfers,
@@ -256,6 +256,7 @@ export async function runNotificationJobs(
     locationName,
     settings: config.settings,
     risk,
+    transfers,
   })
   const known = new Map(data.notifications.map((n) => [n.id, n]))
   const missing = drafts.map((d) => d.id).filter((id) => !known.has(id))

@@ -860,6 +860,8 @@ export type NotificationKind =
   | 'transferSubmitted' // a branch transfer waiting for approval
   | 'transferArriving' // stock in transit arriving today
   | 'transferIssue' // transfer discrepancy or misroute reported
+  | 'transferStuck' // goods dispatched days ago and still not received (plan C2)
+  | 'poPartial' // an order part-received, the rest still owed long after (plan C2)
   | 'lowStock'
   | 'outOfStock'
   | 'stockoutSoon' // at the current rate of use, gone before the next delivery could land

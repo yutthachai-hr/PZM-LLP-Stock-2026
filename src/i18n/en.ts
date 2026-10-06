@@ -3101,4 +3101,9 @@ export const EN: Record<string, string> = {
   'การเชื่อมต่อขาด — ตัวเลขบนจออาจไม่เป็นปัจจุบัน': 'Connection lost — figures on screen may be out of date',
   'โหลดข้อมูลไม่สำเร็จ — ตัวเลขบนจออาจไม่ครบ': 'Data could not be loaded — figures on screen may be incomplete',
   'อ่านความเสี่ยงการส่งของไม่สำเร็จ': 'Could not read delivery risk',
+  // Plan C2: stuck transfers, stalled part-received orders (6 Oct 2026)
+  'สินค้าโอนค้างในทาง {days} วัน: {docNo}': 'Transfer in transit for {days} days: {docNo}',
+  'ใบสั่งซื้อรับไม่ครบค้างนาน: {supplier} ({docNo})': 'Part-received order still open: {supplier} ({docNo})',
+  'จาก {from} ไป {to} — ปลายทางยังไม่กดรับ': 'From {from} to {to} — not yet received at the destination',
+  'ยังค้างรับ {n} รายการ · ส่งครั้งล่าสุด {days} วันก่อน · {location}': '{n} lines still owed · last delivery {days} days ago · {location}',
 }

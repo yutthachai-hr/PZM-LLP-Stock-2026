@@ -49,6 +49,8 @@ export const STATEFUL: ReadonlySet<NotificationKind> = new Set<NotificationKind>
   'reorder',
   'deliveryRisk',
   'stockoutRisk',
+  'transferStuck',
+  'poPartial',
 ])
 
 export const CATEGORY: Record<NotificationKind, NotificationCategory> = {
@@ -73,6 +75,8 @@ export const CATEGORY: Record<NotificationKind, NotificationCategory> = {
   transferSubmitted: 'inventory',
   transferArriving: 'inventory',
   transferIssue: 'inventory',
+  transferStuck: 'inventory',
+  poPartial: 'purchasing',
   lowStock: 'inventory',
   outOfStock: 'inventory',
   stockoutSoon: 'inventory',
@@ -92,6 +96,8 @@ export const JOB_KINDS = {
   weekly: ['weeklySummary'],
   // Delivery risk and stock-outs before deliveries (S3/S4): run by the app, not the Worker.
   risk: ['deliveryRisk', 'stockoutRisk'],
+  // Work left half-done (plan C2): run by the app, which already holds transfers.
+  stalled: ['transferStuck', 'poPartial'],
 } satisfies Record<string, NotificationKind[]>
 
 export type JobName = keyof typeof JOB_KINDS
@@ -128,6 +134,8 @@ export interface EngineInput {
   weekly?: WeeklyFigures
   locationName: (id: string | undefined) => string
   settings: { reminderBeforeMin: number; escalateAfterHours: number }
+  /** Transfers, for the stalled job: goods in transit too long. */
+  transfers?: readonly Transfer[]
   /** Late-delivery risk and stock-outs before deliveries, already computed (lib/deliveryRisk, lib/inventoryRisk). */
   risk?: RiskEngineInput
 }
@@ -157,6 +165,12 @@ export interface RiskEngineInput {
     docNo: string
   }[]
 }
+
+/** Days in transit before a transfer is called stuck, and before it is critical (plan C2). */
+export const TRANSFER_STUCK_DAYS = 2
+export const TRANSFER_STUCK_CRITICAL_DAYS = 5
+/** Days since an order's last delivery, with lines still owed, before it is called stalled. */
+export const PO_PARTIAL_DAYS = 7
 
 const RISK_LADDER: RiskLevelName[] = ['MEDIUM', 'HIGH', 'CRITICAL']
 const RISK_PRIORITY: Record<RiskLevelName, NotificationPriority> = { LOW: 'info', MEDIUM: 'medium', HIGH: 'high', CRITICAL: 'critical' }
@@ -220,6 +234,42 @@ export function evaluate(input: EngineInput): NotificationDraft[] {
         if (at < now) continue
         out.push({ id: `cutoffToday__${s.id}__${today}`, kind: 'cutoffToday', priority: 'medium', to: { roles: MANAGERS }, params: { supplier: s.name, time: bkkTimeOf(at) }, link: '/requests', supplierId: s.id })
       }
+    }
+  }
+
+  if (jobs.has('stalled')) {
+    for (const tr of input.transfers ?? []) {
+      if (tr.status !== 'inTransit' && tr.status !== 'receiving') continue
+      const since = tr.approvedAt ?? tr.submittedAt ?? tr.createdAt
+      const days = Math.floor((now - since) / DAY_MS)
+      if (days < TRANSFER_STUCK_DAYS) continue
+      const base = {
+        kind: 'transferStuck' as const,
+        to: { roles: MANAGERS },
+        params: { docNo: tr.docNo, from: loc(tr.fromLocationId), to: loc(tr.toLocationId), days },
+        link: `/transfers/${tr.id}`,
+        locationId: tr.toLocationId,
+      }
+      out.push({ id: `transferStuck__${tr.id}`, priority: 'high', ...base })
+      if (days >= TRANSFER_STUCK_CRITICAL_DAYS) out.push({ id: `transferStuck__${tr.id}__${TRANSFER_STUCK_CRITICAL_DAYS}d`, priority: 'critical', ...base })
+    }
+    for (const po of input.orders ?? []) {
+      if (po.status !== 'ordered' || !po.receipts?.length) continue
+      const owed = po.lines.filter((l) => l.orderedQty - (l.receivedQty ?? 0) > 1e-9).length
+      if (!owed) continue
+      const last = Math.max(...po.receipts.map((r) => r.date))
+      const days = Math.floor((now - last) / DAY_MS)
+      if (days < PO_PARTIAL_DAYS) continue
+      out.push({
+        id: `poPartial__${po.id}`,
+        kind: 'poPartial',
+        priority: 'medium',
+        to: { roles: MANAGERS },
+        params: { supplier: po.supplierName, docNo: po.docNo, location: loc(po.locationId), n: owed, days },
+        link: `/orders?po=${po.id}`,
+        locationId: po.locationId,
+        supplierId: po.supplierId,
+      })
     }
   }
 
