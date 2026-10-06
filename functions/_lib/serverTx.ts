@@ -1,5 +1,5 @@
 import { DELETE_FIELD, type TxContext } from '../../src/backend/tx'
-import { assertCommandWrite, brandCollection, type ServerStore, type ServerWrite, type StockCommand } from './serverStore'
+import { assertCommandWrite, brandCollection, type ServerStore, type ServerWrite } from './serverStore'
 
 /**
  * A Firestore-style transaction over the service-account store (ADR-001): the same
@@ -24,7 +24,7 @@ export class TxConflict extends Error {
 export async function runServerTx<R>(
   store: ServerStore,
   brand: 'pizza' | 'lelapin',
-  command: StockCommand,
+  command: { name: string; writes: Readonly<Record<string, readonly string[]>> },
   body: (tx: TxContext) => Promise<R>,
   tries = 5,
 ): Promise<R> {
@@ -73,7 +73,7 @@ export async function runServerTx<R>(
       const [c, ...rest] = p.split('/')
       list.push({ op: 'verify', collection: c, id: rest.join('/'), data: {}, precondition: seen === null ? { exists: false } : { updateTime: seen } })
     }
-    assertCommandWrite(command, list)
+    assertCommandWrite(command.name, command.writes, list)
     if (!list.some((w) => w.op !== 'verify')) return result
     if (await store.commit(list)) return result
   }

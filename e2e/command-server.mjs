@@ -13,7 +13,7 @@ const PORT = 5177
 const PROJECT = 'demo-pzm-e2e'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const vite = await createServer({ root, logLevel: 'error', server: { middlewareMode: true, hmr: false }, appType: 'custom' })
-const { receivePOCommand } = await vite.ssrLoadModule('/functions/_lib/stockCommands.ts')
+const { runStockCommand } = await vite.ssrLoadModule('/functions/_lib/stockCommands.ts')
 const { restServerStore } = await vite.ssrLoadModule('/functions/_lib/serverStore.ts')
 
 const store = restServerStore(PROJECT, '', fetch, { host: 'http://127.0.0.1:8080' })
@@ -36,19 +36,18 @@ const deps = {
   },
 }
 
-const routes = { '/api/stock/receive-po': receivePOCommand }
 
 createHttp(async (req, res) => {
   if (req.url === '/health') return res.end('ok')
-  const handler = routes[req.url ?? '']
-  if (!handler || req.method !== 'POST') {
+  const name = (req.url ?? '').match(/^\/api\/stock\/([A-Za-z]+)$/)?.[1]
+  if (!name || req.method !== 'POST') {
     res.statusCode = 404
     return res.end()
   }
   let raw = ''
   for await (const chunk of req) raw += chunk
   try {
-    const r = await handler(deps, req.headers.authorization ?? null, raw ? JSON.parse(raw) : null)
+    const r = await runStockCommand(deps, name, req.headers.authorization ?? null, raw ? JSON.parse(raw) : null)
     res.writeHead(r.status, { 'content-type': 'application/json' })
     res.end(JSON.stringify(r.body))
   } catch (e) {

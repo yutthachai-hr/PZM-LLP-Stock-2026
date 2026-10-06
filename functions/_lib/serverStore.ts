@@ -47,33 +47,6 @@ export interface ServerWrite {
   precondition?: { updateTime: string } | { exists: boolean }
 }
 
-/**
- * What each stock command may write, by collection kind and operation (ADR-001). The
- * service account is outside the security rules, so this list IS the rule for these
- * endpoints, and a test pins it. Nothing outside it can be written, by any command.
- */
-export const COMMAND_WRITES = {
-  receivePO: {
-    stockMovements: ['set'],
-    stockLevels: ['set'],
-    counters: ['set'],
-    movementImages: ['set'],
-    purchaseOrders: ['update'],
-  },
-} as const satisfies Record<string, Record<string, readonly ('set' | 'update')[]>>
-
-export type StockCommand = keyof typeof COMMAND_WRITES
-
-/** Throws unless every write is one this command is allowed to make. */
-export function assertCommandWrite(command: StockCommand, writes: readonly ServerWrite[]): void {
-  const allowed = COMMAND_WRITES[command] as Record<string, readonly string[]>
-  for (const w of writes) {
-    if (w.op === 'verify') continue
-    const ops = allowed[baseOf(w.collection)]
-    if (!ops || !ops.includes(w.op)) throw new Error(`${command} may not ${w.op} ${w.collection}`)
-  }
-}
-
 /** The order fields a supplier answer, a link or a decision may write. */
 export const SERVER_PO_FIELDS = [
   'requestedDeliveryDate',
@@ -108,6 +81,24 @@ export function assertServerWrite(collection: string, fields: Record<string, unk
 export function brandCollection(brand: 'pizza' | 'lelapin', name: string): string {
   if (name === 'users' || name === 'meta' || name === 'revokedUsers' || brand === 'pizza') return name
   return `${brand}__${name}`
+}
+
+
+/**
+ * Throws unless every write is one this command is allowed to make (ADR-001). The service
+ * account is outside the security rules, so the command's own `writes` list — collection
+ * kind → operations — is the rule; a test pins every command's list.
+ */
+export function assertCommandWrite(
+  command: string,
+  allowed: Readonly<Record<string, readonly string[]>>,
+  writes: readonly ServerWrite[],
+): void {
+  for (const w of writes) {
+    if (w.op === 'verify') continue
+    const ops = allowed[baseOf(w.collection)]
+    if (!ops || !ops.includes(w.op)) throw new Error(`${command} may not ${w.op} ${w.collection}`)
+  }
 }
 
 export function restServerStore(

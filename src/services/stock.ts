@@ -1,10 +1,18 @@
-import { backend } from '../backend'
+import { backend, BACKEND_MODE } from '../backend'
+import { commandOn } from '../lib/stockCommands'
+import type { CommandSpec } from '../commands/spec'
+import {
+  adjustStockCommand,
+  consumeStockCommand,
+  fileCountCommand,
+  issueStockCommand,
+  receiveStockCommand,
+} from '../commands/stockCommands'
 import { noteWritten } from '../data/recentWrites'
 import { DELETE_FIELD, type Backend, type TxContext } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import {
   COL,
-  ADJUST_REASONS,
   type StockMovement,
   type Product,
   type AppUser,
@@ -16,22 +24,15 @@ import { genId } from '../lib/id'
 import { getBrand } from '../brand/brand'
 import { sameUnit } from '../lib/units'
 import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
-import { balancesFromLedger, levelId, levelRef, parseLevelId } from '../lib/levelKey'
+import { balancesFromLedger, levelRef, parseLevelId } from '../lib/levelKey'
 export { balancesFromLedger, parseLevelId } from '../lib/levelKey'
 import {
-  keyedFields,
+  type ConsumeParams,
   keyedUnit,
   levelDoc,
-  makeDocNo,
-  mergeLines,
-  planAdjust,
-  planIssue,
-  planReceive,
   requireMasterData,
-  shortMessage,
   type Actor,
   type FileMovement,
-  type MovementLine,
   type PlanAdjustParams,
   type PlanIssueParams,
   type PlanReceiveParams,
@@ -42,7 +43,6 @@ import {
   requireQty,
   requireCountQty,
   requireEpochMs,
-  requireOneOf,
   requireId,
   roundQty,
 } from '../lib/validate'
@@ -102,17 +102,55 @@ function noteChanged(mv: StockMovement, patch: Record<string, unknown>): void {
   noteWritten([next as unknown as StockMovement])
 }
 
+/**
+ * Run a stock command (ADR-001): on the server when this build sends it there, otherwise
+ * here, through `filing`. The same transaction body either way (src/commands).
+ */
+export async function execute<P, R>(spec: CommandSpec<P, R>, params: P, actor: Actor): Promise<R> {
+  // Pinned before anything is awaited: a brand switched mid-save must not split the work.
+  const brand = getBrand()
+  const db = scoped()
+  const remote = await callCommand<R>(spec.name, params, brand)
+  if (remote !== NOT_SENT) return remote
+  return filing(db, (tx, file) => spec.run(tx, file, params, actor))
+}
+
+/** What callCommand returns when the command stays on the client path. */
+export const NOT_SENT = Symbol('not-sent')
+
+/**
+ * POST /api/stock/<name>. The server's refusals come back as the app's own words (key +
+ * values) and are thrown as such. NOT_SENT when this build does not send the command, or
+ * the server is not set up yet (503) — the client path then files it.
+ */
+export async function callCommand<R>(name: string, params: unknown, brand = getBrand()): Promise<R | typeof NOT_SENT> {
+  if (BACKEND_MODE !== 'cloud' || !commandOn(name)) return NOT_SENT
+  const { authHeader } = await import('./poImages')
+  const res = await fetch(`/api/stock/${name}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({ brand, params }),
+  })
+  if (res.status === 503) return NOT_SENT
+  const out = (await res.json().catch(() => ({}))) as { result?: R; error?: string; key?: string; vars?: Record<string, string | number> }
+  if (res.status === 422 && out.key) throw new AppError(out.key, out.vars)
+  if (res.status === 409) throw new AppError('ข้อมูลเพิ่งเปลี่ยนระหว่างบันทึก กรุณาลองอีกครั้ง')
+  if (res.status === 401) throw new AppError('กรุณาเข้าสู่ระบบใหม่')
+  if (res.status === 403) throw new AppError('ไม่มีสิทธิ์ทำรายการนี้')
+  if (!res.ok || !('result' in out)) throw new AppError('บันทึกไม่สำเร็จ ลองอีกครั้ง')
+  return out.result as R
+}
+
 export async function receiveStock(params: PlanReceiveParams): Promise<string> {
-  return filing(scoped(), async (tx, file) => (await planReceive(tx, params)).commit(file))
+  const { actor, ...rest } = params
+  return execute(receiveStockCommand, rest, actor)
 }
 
 /** Issue / transfer goods from one location to another (main -> branch). Moves stock. */
 export async function issueStock(params: PlanIssueParams): Promise<string> {
-  const db = scoped()
-  return filing(db, async (tx, file) => {
-    const planned = await planIssue(tx, params, file)
-    return planned.commit()
-  })
+  const { actor, transferId, ...rest } = params
+  if (transferId) throw new AppError('รายการโอนบันทึกผ่านเอกสารโอนเท่านั้น')
+  return execute(issueStockCommand, rest, actor)
 }
 
 /**
@@ -125,70 +163,9 @@ export async function issueStock(params: PlanIssueParams): Promise<string> {
  * pressing save again deducted it a second time. It is an ordinary Firestore document
  * (base64, since Cloud Storage left the free plan), so it belongs in the same commit.
  */
-export async function consumeStock(params: {
-  lines: MovementLine[]
-  fromLocationId: string
-  date: number
-  actor: Actor
-  note?: string
-  photoDataUrl?: string
-}): Promise<string> {
-  const { fromLocationId, date, actor, note, photoDataUrl } = params
-  const lines = mergeLines(params.lines)
-  requireEpochMs(date)
-  requireId(fromLocationId, 'fromLocationId')
-  const db = scoped()
-
-  return filing(db, async (tx, file) => {
-    // ---- reads ----
-    await requireMasterData(
-      tx,
-      lines.map((l) => l.productId),
-      [fromLocationId],
-    )
-    const counter = await tx.get<{ value: number }>(COL.counters, 'consume')
-    const seq = (counter?.value ?? 0) + 1
-    const levels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
-    )
-    lines.forEach((l, i) => {
-      const avail = levels[i]?.qty ?? 0
-      if (l.qty > avail) throw shortMessage(l, avail)
-    })
-    // ---- writes ----
-    const doc = makeDocNo('consume', seq)
-    tx.set(COL.counters, 'consume', { value: seq })
-    const now = Date.now()
-    if (photoDataUrl) {
-      tx.set(COL.movementImages, doc, { dataUrl: photoDataUrl })
-    }
-    lines.forEach((l, i) => {
-      const cur = levels[i]?.qty ?? 0
-      tx.set(
-        COL.stockLevels,
-        levelRef(fromLocationId, l).id,
-        levelDoc(fromLocationId, l.productId, cur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
-      )
-      const mv: Omit<StockMovement, 'id'> = {
-        docNo: doc,
-        type: 'consume',
-        productId: l.productId,
-        productName: l.productName,
-        unit: l.unit,
-        ...keyedFields(l),
-        qty: l.qty,
-        fromLocationId,
-        note: l.note ?? note,
-        hasPhoto: !!photoDataUrl,
-        date,
-        byUserId: actor.id,
-        byUserName: actor.name,
-        createdAt: now,
-      }
-      file(mv)
-    })
-    return doc
-  })
+export async function consumeStock(params: ConsumeParams): Promise<string> {
+  const { actor, ...rest } = params
+  return execute(consumeStockCommand, rest, actor)
 }
 
 /**
@@ -240,65 +217,30 @@ export async function adjustStock(params: {
   actor: Actor
   note?: string
 }): Promise<string> {
+  // One line of adjustStockLines: the same command, the same checks.
   const { productId, productName, unit, locationId, actor, note } = params
-  const [line] = mergeLines([{ productId, productName, unit, entryUnit: params.entryUnit, entryQty: params.entryQty, qty: params.qty }])
-  const ref = levelRef(locationId, line)
-  const qty = line.qty
-  const direction = requireOneOf(params.direction, ['in', 'out'] as const)
-  const reason = requireOneOf(
-    params.reason,
-    ADJUST_REASONS.map((r) => r.value) as readonly string[],
-  )
-  const date = requireEpochMs(params.date)
-  requireId(productId, 'productId')
-  requireId(locationId, 'locationId')
-  const db = scoped()
-
-  return filing(db, async (tx, file) => {
-    await requireMasterData(tx, [productId], [locationId])
-    const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
-    const seq = (counter?.value ?? 0) + 1
-    const level = await tx.get<StockLevel>(COL.stockLevels, ref.id)
-    const cur = level?.qty ?? 0
-    const delta = direction === 'in' ? qty : -qty
-    const next = roundQty(cur + delta)
-    if (next < 0) throw shortMessage(line, cur)
-
-    const docNo = makeDocNo('adjust', seq)
-    tx.set(COL.counters, 'adjust', { value: seq })
-    const now = Date.now()
-    tx.set(
-      COL.stockLevels,
-      ref.id,
-      levelDoc(locationId, productId, next, actor, now, ref.unit),
-    )
-    const mv: Omit<StockMovement, 'id'> = {
-      docNo,
-      type: 'adjust',
+  return adjustStockLines({
+    lines: [{
       productId,
       productName,
       unit,
-      ...keyedFields(line),
-      qty,
-      ...(direction === 'in' ? { toLocationId: locationId } : { fromLocationId: locationId }),
-      reason,
-      note,
-      date,
-      byUserId: actor.id,
-      byUserName: actor.name,
-      createdAt: now,
-    }
-    file(mv)
-    return docNo
+      ...(params.entryUnit !== undefined ? { entryUnit: params.entryUnit } : {}),
+      ...(params.entryQty !== undefined ? { entryQty: params.entryQty } : {}),
+      qty: params.qty,
+      direction: params.direction,
+      reason: params.reason,
+    }],
+    locationId,
+    date: params.date,
+    actor,
+    ...(note !== undefined ? { note } : {}),
   })
 }
 
 export async function adjustStockLines(params: PlanAdjustParams): Promise<string> {
-  const db = scoped()
-  return filing(db, async (tx, file) => {
-    const planned = await planAdjust(tx, params, file)
-    return planned.commit()
-  })
+  const { actor, transferId, ...rest } = params
+  if (transferId) throw new AppError('รายการโอนบันทึกผ่านเอกสารโอนเท่านั้น')
+  return execute(adjustStockCommand, rest, actor)
 }
 
 /**
@@ -321,8 +263,9 @@ export async function setStockCount(params: {
   note?: string
   date?: number
 }): Promise<boolean> {
-  const targetQty = requireCountQty(params.targetQty)
-  return fileCount(params, (cur) => roundQty(targetQty - cur))
+  requireCountQty(params.targetQty)
+  const { actor, ...rest } = params
+  return execute(fileCountCommand, rest, actor)
 }
 
 /**
@@ -349,66 +292,8 @@ export async function postCountAsOf(params: {
 }): Promise<boolean> {
   const delta = roundQty(requireCountQty(params.countedQty) - params.asOfQty)
   if (!Number.isFinite(delta)) throw new AppError('ค่าไม่ถูกต้อง: {value}', { value: String(params.asOfQty) })
-  return fileCount(params, () => delta)
-}
-
-/** The write both counts share: one `opening` adjustment on the product's own row. */
-async function fileCount(
-  params: {
-    productId: string
-    productName: string
-    unit: string
-    locationId: string
-    actor: Actor
-    note?: string
-    date?: number
-  },
-  deltaFrom: (current: number) => number,
-): Promise<boolean> {
-  const { productId, productName, unit, locationId, actor, note } = params
-  requireId(productId, 'productId')
-  requireId(locationId, 'locationId')
-  const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
-  const db = scoped()
-
-  return filing(db, async (tx, file) => {
-    await requireMasterData(tx, [productId], [locationId])
-    // A count is someone standing in front of the shelf reconciling the product's own
-    // balance, so it always lands on that row — there is no unit box on that screen.
-    const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
-    const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
-    const cur = level?.qty ?? 0
-    const delta = deltaFrom(cur)
-    if (delta === 0) return false
-    const next = roundQty(cur + delta)
-    if (next < 0) throw shortMessage({ productId, productName, unit, qty: Math.abs(delta) }, cur)
-
-    const seq = (counter?.value ?? 0) + 1
-    const now = Date.now()
-    tx.set(COL.counters, 'adjust', { value: seq })
-    tx.set(
-      COL.stockLevels,
-      levelId(locationId, productId),
-      levelDoc(locationId, productId, next, actor, now),
-    )
-    const mv: Omit<StockMovement, 'id'> = {
-      docNo: makeDocNo('adjust', seq),
-      type: 'adjust',
-      productId,
-      productName,
-      unit,
-      qty: Math.abs(delta),
-      ...(delta > 0 ? { toLocationId: locationId } : { fromLocationId: locationId }),
-      reason: 'opening',
-      note: note ?? 'ตั้งยอดคงเหลือ',
-      date,
-      byUserId: actor.id,
-      byUserName: actor.name,
-      createdAt: now,
-    }
-    file(mv)
-    return true
-  })
+  const { actor, ...rest } = params
+  return execute(fileCountCommand, rest, actor)
 }
 
 /** Edit the quantity/date/note of an existing movement, re-applying the balance delta atomically. */

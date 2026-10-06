@@ -20,7 +20,7 @@ test('one device receives an order in full: one receipt, stock and order agree',
   const page = await signedIn(browser, 'staffA', '/receive?po=po1')
   await prepareFullReceipt(page, 'INV-100')
   // Through the trusted command (ADR-001, .env.e2e) — not a silent fall back to the client.
-  const viaCommand = page.waitForResponse('**/api/stock/receive-po')
+  const viaCommand = page.waitForResponse('**/api/stock/receivePO')
   await confirmButton(page).click()
   expect((await viaCommand).status()).toBe(200)
 
@@ -108,7 +108,7 @@ test('the answer is lost after the save: confirming again files nothing twice', 
     await route.fetch() // the server commits…
     await route.abort('connectionreset') // …and the reply never reaches the phone
   }
-  await page.route('**/api/stock/receive-po', lose)
+  await page.route('**/api/stock/receivePO', lose)
   await page.route('**/documents:commit*', lose)
   await confirmButton(page).click()
   // If the app surfaced the failure, the person tries again — the same receipt, the same id.

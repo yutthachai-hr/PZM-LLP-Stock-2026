@@ -2,7 +2,7 @@ import type { TxContext } from '../backend/tx'
 import { AppError } from '../i18n/AppError'
 import { COL, ADJUST_REASONS, type StockMovement, type MovementType, type Product, type StockLevel, type StockLocation } from '../types'
 import { sameUnit } from '../lib/units'
-import { filedUnit, levelRef } from '../lib/levelKey'
+import { filedUnit, levelId, levelRef } from '../lib/levelKey'
 import { requireQty, requireEpochMs, requireOneOf, requireId, roundQty } from '../lib/validate'
 
 /**
@@ -519,5 +519,128 @@ export async function planAdjust(
       })
       return docNo
     },
+  }
+}
+
+export interface ConsumeParams {
+  lines: MovementLine[]
+  fromLocationId: string
+  date: number
+  actor: Actor
+  note?: string
+  photoDataUrl?: string
+}
+
+/** Use up stock at a location (services/stock.ts consumeStock), as a transaction body. */
+export async function consumeInTx(tx: TxContext, file: FileMovement, params: ConsumeParams): Promise<string> {
+  const { fromLocationId, date, actor, note, photoDataUrl } = params
+  const lines = mergeLines(params.lines)
+  requireEpochMs(date)
+  requireId(fromLocationId, 'fromLocationId')
+  {
+    // ---- reads ----
+    await requireMasterData(
+      tx,
+      lines.map((l) => l.productId),
+      [fromLocationId],
+    )
+    const counter = await tx.get<{ value: number }>(COL.counters, 'consume')
+    const seq = (counter?.value ?? 0) + 1
+    const levels = await Promise.all(
+      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
+    )
+    lines.forEach((l, i) => {
+      const avail = levels[i]?.qty ?? 0
+      if (l.qty > avail) throw shortMessage(l, avail)
+    })
+    // ---- writes ----
+    const doc = makeDocNo('consume', seq)
+    tx.set(COL.counters, 'consume', { value: seq })
+    const now = Date.now()
+    if (photoDataUrl) {
+      tx.set(COL.movementImages, doc, { dataUrl: photoDataUrl })
+    }
+    lines.forEach((l, i) => {
+      const cur = levels[i]?.qty ?? 0
+      tx.set(
+        COL.stockLevels,
+        levelRef(fromLocationId, l).id,
+        levelDoc(fromLocationId, l.productId, cur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
+      )
+      const mv: Omit<StockMovement, 'id'> = {
+        docNo: doc,
+        type: 'consume',
+        productId: l.productId,
+        productName: l.productName,
+        unit: l.unit,
+        ...keyedFields(l),
+        qty: l.qty,
+        fromLocationId,
+        note: l.note ?? note,
+        hasPhoto: !!photoDataUrl,
+        date,
+        byUserId: actor.id,
+        byUserName: actor.name,
+        createdAt: now,
+      }
+      file(mv)
+    })
+    return doc
+  }
+}
+
+export interface FileCountParams {
+  productId: string
+  productName: string
+  unit: string
+  locationId: string
+  actor: Actor
+  note?: string
+  date?: number
+}
+
+/** The write both counts share: one `opening` adjustment on the product's own row. */
+export async function fileCountInTx(tx: TxContext, file: FileMovement, params: FileCountParams, deltaFrom: (current: number) => number): Promise<boolean> {
+  const { productId, productName, unit, locationId, actor, note } = params
+  requireId(productId, 'productId')
+  requireId(locationId, 'locationId')
+  const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
+  {
+    await requireMasterData(tx, [productId], [locationId])
+    // A count is someone standing in front of the shelf reconciling the product's own
+    // balance, so it always lands on that row — there is no unit box on that screen.
+    const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
+    const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
+    const cur = level?.qty ?? 0
+    const delta = deltaFrom(cur)
+    if (delta === 0) return false
+    const next = roundQty(cur + delta)
+    if (next < 0) throw shortMessage({ productId, productName, unit, qty: Math.abs(delta) }, cur)
+
+    const seq = (counter?.value ?? 0) + 1
+    const now = Date.now()
+    tx.set(COL.counters, 'adjust', { value: seq })
+    tx.set(
+      COL.stockLevels,
+      levelId(locationId, productId),
+      levelDoc(locationId, productId, next, actor, now),
+    )
+    const mv: Omit<StockMovement, 'id'> = {
+      docNo: makeDocNo('adjust', seq),
+      type: 'adjust',
+      productId,
+      productName,
+      unit,
+      qty: Math.abs(delta),
+      ...(delta > 0 ? { toLocationId: locationId } : { fromLocationId: locationId }),
+      reason: 'opening',
+      note: note ?? 'ตั้งยอดคงเหลือ',
+      date,
+      byUserId: actor.id,
+      byUserName: actor.name,
+      createdAt: now,
+    }
+    file(mv)
+    return true
   }
 }

@@ -1,6 +1,4 @@
-import { backend, BACKEND_MODE } from '../backend'
-import { commandOn } from '../lib/stockCommands'
-import { authHeader } from './poImages'
+import { backend } from '../backend'
 import { DELETE_FIELD, type TxContext } from '../backend/types'
 import { isLate } from '../lib/inventoryRules/purchasing'
 import { getBrand } from '../brand/brand'
@@ -10,7 +8,7 @@ import { sameUnit } from '../lib/units'
 import { resolveFactor, toBase } from '../lib/uom'
 import { requireEpochMs, roundQty } from '../lib/validate'
 import { orderCache } from '../data/orderCache'
-import { filing } from './stock'
+import { callCommand, filing, NOT_SENT } from './stock'
 import { hasOutstanding, receiptIdFor, receiveOrderInTx, type ReceiptLineInput } from '../commands/receivePO'
 import { genId } from '../lib/id'
 import {
@@ -615,23 +613,26 @@ export async function receivePurchaseOrder(params: {
   // Through the trusted command boundary when this build says so (ADR-001): the server
   // works the balances out. Same receipt id either way, so a retry on the other path still
   // finds the first one. A server not set up yet (503) leaves the client path in charge.
-  if (BACKEND_MODE === 'cloud' && commandOn('receivePO')) {
-    const viaServer = await receiveViaCommand({
-      brand: getBrand(),
-      orderId,
-      invoiceNo,
-      lines: params.lines,
-      operationId,
-      date,
-      ...(params.docDate !== undefined ? { docDate: params.docDate } : {}),
-      ...(note ? { note } : {}),
-      ...(params.photoDataUrl ? { photoDataUrl: params.photoDataUrl } : {}),
-      ...(closeReason ? { closeReason } : {}),
-    })
-    if (viaServer) return viaServer
+  const brand = getBrand()
+  const remote = await callCommand<{ docNo: string; receivedLines: number; status: PurchaseOrderStatus; outstandingLines: number; replayed?: boolean; order?: PurchaseOrder }>('receivePO', {
+    orderId,
+    invoiceNo,
+    lines: params.lines,
+    operationId,
+    date,
+    ...(params.docDate !== undefined ? { docDate: params.docDate } : {}),
+    ...(note ? { note } : {}),
+    ...(params.photoDataUrl ? { photoDataUrl: params.photoDataUrl } : {}),
+    ...(closeReason ? { closeReason } : {}),
+  }, brand)
+  if (remote !== NOT_SENT) {
+    const { order, ...result } = remote
+    if (order) orderCache.patch(order)
+    delete (result as { seen?: number }).seen
+    return result
   }
 
-  const db = scoped()
+  const db = backend.forBrand(brand)
   let written: PurchaseOrder | null = null
   let seen: number | null = null
   const run = filing(db, async (tx, file) => {
@@ -671,43 +672,6 @@ export async function receivePurchaseOrder(params: {
   }
   if (written) orderCache.patch(written)
   return result
-}
-
-/**
- * POST /api/stock/receive-po. The server's refusals come back as the app's own words
- * (key + values) and are thrown as such; null when the server is not set up (503), so the
- * caller files on the client path instead.
- */
-async function receiveViaCommand(body: Record<string, unknown>): Promise<{ docNo: string; receivedLines: number; status: PurchaseOrderStatus; outstandingLines: number; replayed?: boolean } | null> {
-  const res = await fetch('/api/stock/receive-po', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...(await authHeader()) },
-    body: JSON.stringify(body),
-  })
-  if (res.status === 503) return null
-  const out = (await res.json().catch(() => ({}))) as {
-    error?: string
-    key?: string
-    vars?: Record<string, string | number>
-    order?: PurchaseOrder
-    docNo?: string
-    receivedLines?: number
-    status?: PurchaseOrderStatus
-    outstandingLines?: number
-    replayed?: boolean
-  }
-  if (res.status === 422 && out.key) throw new AppError(out.key, out.vars)
-  if (res.status === 409) throw new AppError('ข้อมูลเพิ่งเปลี่ยนระหว่างบันทึก กรุณาลองอีกครั้ง')
-  if (res.status === 401) throw new AppError('กรุณาเข้าสู่ระบบใหม่')
-  if (!res.ok || !out.docNo || !out.status) throw new AppError('บันทึกไม่สำเร็จ ลองอีกครั้ง')
-  if (out.order) orderCache.patch(out.order)
-  return {
-    docNo: out.docNo,
-    receivedLines: out.receivedLines ?? 0,
-    status: out.status,
-    outstandingLines: out.outstandingLines ?? 0,
-    ...(out.replayed ? { replayed: true } : {}),
-  }
 }
 
 /**
