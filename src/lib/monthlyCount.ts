@@ -113,16 +113,18 @@ export function resultsOf(rows: readonly CountRow[]): Record<string, MonthlyCoun
 }
 
 /**
- * The adjustments to file, in parts small enough for one transaction each: every counted
- * row with a difference, less those already filed. Two writes a line (balance, ledger row)
- * against Firestore's 500 per transaction, with room for the counter and the sheet.
+ * The counted products to settle, in parts small enough for one transaction each: every
+ * counted product not yet settled (plan A10 — the difference is worked out inside the
+ * transaction, so a product that showed none on screen is checked too). Two writes a line
+ * (balance, ledger row) against Firestore's 500 per transaction, with room for the counter
+ * and the sheet.
  */
 export const POST_CHUNK = 200
 
-export function postingPlan(rows: readonly CountRow[], postedIds: readonly string[] = []): CountRow[][] {
+export function postingPlan<T extends { productId: string }>(rows: readonly T[], postedIds: readonly string[] = []): T[][] {
   const done = new Set(postedIds)
-  const todo = rows.filter((r) => r.diff !== null && r.diff !== 0 && !done.has(r.productId))
-  const parts: CountRow[][] = []
+  const todo = rows.filter((r) => !done.has(r.productId))
+  const parts: T[][] = []
   for (let i = 0; i < todo.length; i += POST_CHUNK) parts.push(todo.slice(i, i + POST_CHUNK))
   return parts
 }

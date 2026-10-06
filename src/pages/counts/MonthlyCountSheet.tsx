@@ -16,7 +16,7 @@ import { exportExcel } from '../../lib/export'
 import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import { balanceAtDayEnd } from '../../lib/ledger'
-import { countRows, monthBefore, monthlyCountId, postingPlan, resultsOf, type CountRow } from '../../lib/monthlyCount'
+import { countRows, monthBefore, monthlyCountId, resultsOf, type CountRow } from '../../lib/monthlyCount'
 import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
@@ -239,18 +239,20 @@ export function MonthlyCountSheet() {
         await recordMonthlyCount({ id, results, actor })
         toast.success(t('บันทึกผลนับไว้แล้ว — สต๊อกไม่ถูกปรับ'))
       } else {
-        const parts = postingPlan(now, sheet.postedIds).map((part) =>
-          part.map((r) => ({
+        // The figures counted, not the differences: the posting works each difference out
+        // again inside its transaction from the books as they are then (plan A10).
+        const counts = now
+          .filter((r) => r.countedQty !== null)
+          .map((r) => ({
             productId: r.productId,
             productName: byId.get(r.productId)?.name ?? r.productId,
             unit: byId.get(r.productId)?.unitType ?? '',
-            diff: r.diff ?? 0,
-          })),
-        )
+            counted: r.countedQty!,
+            cost: byId.get(r.productId)?.cost ?? 0,
+          }))
         const docs = await postMonthlyCount({
           id,
-          parts,
-          results,
+          counts,
           actor,
           reason: asOpening ? 'opening' : 'count',
           note: asOpening

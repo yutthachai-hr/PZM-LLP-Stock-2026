@@ -82,18 +82,14 @@ describe('isBig', () => {
 })
 
 describe('postingPlan', () => {
-  test('only differences not yet filed, in parts a transaction can hold', () => {
-    const rows = Array.from({ length: POST_CHUNK + 5 }, (_, i) => ({
-      productId: `p${i}`,
-      systemQty: 1,
-      countedQty: 2,
-      diff: 1,
-      value: 1,
-      big: false,
-    }))
-    rows.push({ productId: 'same', systemQty: 1, countedQty: 1, diff: 0, value: 0, big: false })
+  test('every counted product not yet settled, in parts a transaction can hold', () => {
+    const rows = Array.from({ length: POST_CHUNK + 5 }, (_, i) => ({ productId: `p${i}` }))
+    rows.push({ productId: 'same' })
     const parts = postingPlan(rows, ['p0'])
-    expect(parts.map((p) => p.length)).toEqual([POST_CHUNK, 4])
-    expect(parts.flat().some((r) => r.productId === 'p0' || r.productId === 'same')).toBe(false)
+    // A product that shows no difference on screen is still checked (plan A10): the books
+    // may have moved by the time it is filed.
+    expect(parts.map((p) => p.length)).toEqual([POST_CHUNK, 5])
+    expect(parts.flat().some((r) => r.productId === 'p0')).toBe(false)
+    expect(parts.flat().some((r) => r.productId === 'same')).toBe(true)
   })
 })

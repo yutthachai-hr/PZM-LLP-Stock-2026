@@ -3064,4 +3064,6 @@ export const EN: Record<string, string> = {
   '{who} ยกเลิกใบสั่งซื้อ': '{who} cancelled the order',
   // Plan A8: a row received against a purchase order (6 Oct 2026)
   'รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน': 'This line was received against order {docNo} — only the note can be changed. If the quantity or details are wrong, record a stock adjustment instead',
+  // Plan A10: monthly count posting (6 Oct 2026)
+  'มีการบันทึกสต๊อกของคลังนี้ระหว่างยืนยันหลายครั้ง — กรุณากดยืนยันอีกครั้ง': 'Stock at this location kept changing while confirming — please confirm again',
 }
