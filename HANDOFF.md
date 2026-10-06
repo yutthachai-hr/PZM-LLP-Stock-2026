@@ -446,6 +446,34 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 
 ถ้าไม่มี secret endpoint จะคืน 503 และส่งแบบเดิมทุกอย่าง (ใช้เป็นสวิตช์ปิดได้)
 
+## 12. Supplier Intelligence + แจ้งเตือนแบบเด้ง (6 ต.ค.)
+
+แผนเต็มอยู่ใน `docs/PLAN-supplier-intelligence.md` และ `docs/PLAN-realtime-notifications.md`
+
+**Supplier Intelligence**
+- **S1** `src/lib/deliveryMetrics.ts`: ผลการส่งของต่อ PO **คำนวณจากข้อมูลเดิม ไม่เก็บลง PO** จึงไม่มี migration และ PO เก่าใช้กฎเดียวกัน ตรงเวลาวัดกับวันที่ยืนยัน
+- **S2**
+  - `supplierPerformance.ts` และ `supplierScore.ts` (น้ำหนักอยู่ใน `SUPPLIER_SCORE_CONFIG` ที่เดียว ถ้าส่งของแล้วไม่ถึง 5 ใบไม่ให้เกรด)
+  - หน้า `/suppliers/performance`
+- **S3** `deliveryRisk.ts`: คะแนนจากกฎ /100 ทุกแต้มมีเหตุผลกำกับ (version `rules-1`) **ห้ามแสดงเป็น %**
+- **S4** `inventoryRisk.ts`: ของหมดก่อนของมา, ของมาไม่พอ, ของเสี่ยงช้าแต่เผื่อเวลาน้อย คำแนะนำโอนต้องเหลือขั้นต่ำและ cover ให้ต้นทาง
+- **S5** `deliveryDataset.ts`: ชุดข้อมูลสำหรับโมเดล (ไม่มี leakage, แบ่งตามเวลา) **ยังไม่ train อะไร**
+- ข้อมูลทั้งหมดผ่าน session cache (`useSupplierIntel`) ไม่มี listener ใหม่
+- **ยังไม่ได้เก็บ:** จำนวนที่ตีกลับ (หน้ารับของไม่บันทึก)
+
+**แจ้งเตือนแบบเด้ง**
+- `NotificationHost` ใน Layout ใช้ listener เดิมของกระดิ่ง
+- `presentNotification()` คือที่เดียวที่ตัดสินว่าแจ้งเตือนแต่ละชนิดแสดงอย่างไร
+- `notificationQueue.ts` กันซ้ำด้วย `id@createdAt` (re-arm = เด้งใหม่, reconnect = ไม่เด้ง) รวมหลายอันเป็นใบเดียว แต่ critical แยกใบเสมอ
+- `notificationSound.ts` เสียงสร้างด้วย Web Audio
+- ตั้งค่าเสียงและปิดชั่วคราวเก็บใน `prefs__<uid>.sound`
+- แจ้งเตือนความเสี่ยงเป็น job `risk` ใน `evaluate` (เครื่องหัวหน้า/แอดมินรันทุก 30 นาที ส่วน Worker ยังไม่รัน job นี้) หนึ่งเอกสารต่อระดับที่ถึง
+- Debug ได้จาก `window.__pzmNotificationLog`
+
+**Rules ที่เปลี่ยน**
+- `validPrefs` เพิ่ม `sound`
+- staff สร้างแจ้งเตือน `poSent` ได้
+
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 
 บอก Claude session ใหม่ประมาณนี้:

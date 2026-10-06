@@ -196,15 +196,15 @@ export function SupplierPerformancePage() {
               <table className="w-full min-w-[920px] text-sm">
                 <thead className="bg-sunken text-[13px] text-ink-soft">
                   <tr>
-                    {head('name', 'ผู้ขาย', 'text-left')} {/* i18n-key */}
-                    {head('score', 'คะแนน')} {/* i18n-key */}
+                    {head('name', 'ผู้ขาย', 'text-left') /* i18n-key */}
+                    {head('score', 'คะแนน') /* i18n-key */}
                     <th className="px-3 py-2.5 text-center font-semibold">{t('เกรด')}</th>
                     <th className="px-3 py-2.5 text-left font-semibold">{t('ความเชื่อมั่น')}</th>
-                    {head('onTime', 'ตรงเวลา')} {/* i18n-key */}
-                    {head('delay', 'ช้าเฉลี่ย (วัน)')} {/* i18n-key */}
-                    {head('fill', 'ส่งครบ')} {/* i18n-key */}
-                    {head('acceptance', 'รับวันที่ขอ')} {/* i18n-key */}
-                    {head('response', 'ตอบเฉลี่ย')} {/* i18n-key */}
+                    {head('onTime', 'ตรงเวลา') /* i18n-key */}
+                    {head('delay', 'ช้าเฉลี่ย (วัน)') /* i18n-key */}
+                    {head('fill', 'ส่งครบ') /* i18n-key */}
+                    {head('acceptance', 'รับวันที่ขอ') /* i18n-key */}
+                    {head('response', 'ตอบเฉลี่ย') /* i18n-key */}
                     <th className="px-3 py-2.5 text-left font-semibold">{t('ความเสี่ยง / แนวโน้ม')}</th>
                   </tr>
                 </thead>
