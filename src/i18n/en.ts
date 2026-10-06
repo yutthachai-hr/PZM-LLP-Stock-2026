@@ -3119,4 +3119,7 @@ export const EN: Record<string, string> = {
   'กลุ่มงาน': 'Group',
   'ไม่มีงานค้างให้ตัดสินใจ': 'Nothing waiting for a decision',
   'ค้าง/ล่าช้า': 'Stuck / late',
+  // Plan C4: offline indicator (6 Oct 2026)
+  'ออฟไลน์': 'Offline',
+  'ดูข้อมูลที่โหลดไว้ได้ แต่การบันทึกต้องรอให้กลับมาออนไลน์ สิ่งที่คีย์ค้างไว้จะเก็บในเครื่องนี้': 'what is loaded can still be viewed, but saving waits until you are back online. Anything half-keyed is kept on this device.',
 }

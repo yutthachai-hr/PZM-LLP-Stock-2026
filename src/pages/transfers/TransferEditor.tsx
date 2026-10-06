@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useDraft } from '../../lib/useDraft'
+import { DraftNotice } from '../../components/DraftNotice'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -62,6 +64,30 @@ export function TransferEditor({ initial, onChange }: TransferEditorProps) {
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<Transfer[]>([])
 
+  const [unchanged] = useState(() => JSON.stringify([note, lines]))
+  // Half-keyed lines survive leaving the screen (plan C4, lib/useDraft.ts) — per document,
+  // so a new request and an edit of TR-0003 keep their own.
+  const draft = useMemo(() => ({ fromLocationId, toLocationId, dateStr, note, lines }), [fromLocationId, toLocationId, dateStr, note, lines])
+  const { restored, clear: clearDraft } = useDraft(
+    initial ? `transfer-${initial.id}` : 'transfer-new',
+    draft,
+    (d) => {
+      if (d.fromLocationId) setFromLocationId(d.fromLocationId)
+      if (d.toLocationId) setToLocationId(d.toLocationId)
+      if (d.dateStr) setDateStr(d.dateStr)
+      setNote(d.note ?? '')
+      setLines(d.lines ?? [])
+    },
+    // An edit opened and left as it was is not a draft: only a change is.
+    (d) => (initial ? JSON.stringify([d.note, d.lines]) === unchanged : d.lines.length === 0 && !d.note.trim()),
+  )
+  function discardDraft() {
+    clearDraft()
+    const [n, l] = JSON.parse(unchanged) as [string, Line[]]
+    setNote(n)
+    setLines(l)
+  }
+
   // What other requests already ask of the source, and what is on the road — one bounded
   // read of the open documents, not a subscription.
   useEffect(() => {
@@ -120,6 +146,7 @@ export function TransferEditor({ initial, onChange }: TransferEditorProps) {
     try {
       const draft = await ensureDraft()
       const saved = lines.length ? await saveItems(draft.id, items(), actor, note) : draft
+      clearDraft()
       toast.success(t('บันทึกร่างเรียบร้อย ({docNo})', { docNo: saved.docNo }))
       onChange(saved)
       navigate(`/transfers/${saved.id}`, { replace: true })
@@ -138,6 +165,7 @@ export function TransferEditor({ initial, onChange }: TransferEditorProps) {
     try {
       const draft = await ensureDraft()
       const submitted = await submitTransfer(draft.id, actor, items())
+      clearDraft()
       toast.success(t('ส่งคำขอโอนสินค้าเรียบร้อย ({docNo})', { docNo: submitted.docNo }))
       onChange(submitted)
       navigate(`/transfers/${submitted.id}`, { replace: true })
@@ -159,6 +187,7 @@ export function TransferEditor({ initial, onChange }: TransferEditorProps) {
         title={initial ? t('แก้ไขคำขอโอน ({docNo})', { docNo: initial.docNo }) : t('สร้างคำขอโอนสินค้า')}
         subtitle={t('เลือกสาขาต้นทาง ปลายทาง และระบุสินค้าที่ต้องการโอน')}
       />
+      {restored && <DraftNotice onDiscard={discardDraft} />}
 
       {initial?.status === 'returned' && initial.returnReason && (
         <AlertBanner tone="warn">

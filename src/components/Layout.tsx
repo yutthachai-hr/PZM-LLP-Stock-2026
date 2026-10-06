@@ -20,6 +20,7 @@ import { SideNav } from './nav/SideNav'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
 import { LiveErrorBanner } from './LiveErrorBanner'
+import { OfflineBanner } from './OfflineBanner'
 import { ErrorBoundary } from './ErrorBoundary'
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -69,6 +70,7 @@ export function Layout({ children }: { children: ReactNode }) {
             much clear below its last row (the demo pill sits above the bar too). */}
         <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 [padding-bottom:calc(var(--tabbar-h)+1rem)] sm:p-5 sm:[padding-bottom:calc(var(--tabbar-h)+1.25rem)] md:[padding-bottom:1.25rem] lg:p-6 lg:[padding-bottom:1.5rem]">
           <InstallHint />
+          <OfflineBanner />
           <LiveErrorBanner />
           {/* On a desktop the page sits on one white sheet over the canvas (the owner's
               mock-up, 21 Sep 2026): the screen reads as one document with its sections
