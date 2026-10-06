@@ -18,6 +18,8 @@ import { genId } from '../lib/id'
 import { getBrand } from '../brand/brand'
 import { sameUnit } from '../lib/units'
 import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
+import { balancesFromLedger, filedUnit, levelId, levelRef, parseLevelId } from '../lib/levelKey'
+export { balancesFromLedger, parseLevelId } from '../lib/levelKey'
 import {
   QTY_STEP,
   requireQty,
@@ -72,46 +74,6 @@ const PREFIX: Record<MovementType, string> = {
   consume: 'CS',
 }
 
-/**
- * Which balance a movement belongs to.
- *
- * One balance per product per location, in the product's own unit, under the plain
- * `location__product` key (owner's rule of 20 Sep 2026 — see lib/uom.ts). A row keyed in
- * another unit is converted before it gets here, so it lands on that same balance.
- *
- * The `#Unit` rows are the legacy of the earlier rule (13–20 Sep 2026), under which a row
- * keyed as "10 Pack" was filed on its own Pack balance. A movement from that time carries
- * `entryUnit` and no `entryQty`; it keeps filing to its `#Unit` row until the migration
- * tool converts it, so voiding or editing an old row still finds the balance it moved.
- */
-function levelId(locationId: string, productId: string, unit?: string, baseUnit?: string): string {
-  const base = `${locationId}__${productId}`
-  const u = (unit ?? '').trim()
-  return !u || u === (baseUnit ?? '').trim() ? base : `${base}${UNIT_SEP}${u}`
-}
-
-/**
- * Separator between the product key and the unit.
- *
- * Deliberately not `__`: the existing key is split on that, and a unit name containing one
- * would silently become part of the product id.
- */
-const UNIT_SEP = '#'
-
-/**
- * The unit a row's balance is counted in: the product's own, except for a legacy row that
- * was never converted, which stays on the balance of the unit it was keyed in.
- */
-function filedUnit(l: { unit: string; entryUnit?: string; entryQty?: number }): string {
-  return isLegacyUnitRow(l) ? l.entryUnit!.trim() : l.unit
-}
-
-/** The balance unit, but only when it is not the product's own — what a legacy `#Unit` row is stamped with. */
-function extraUnit(x: { unit: string; entryUnit?: string; entryQty?: number }): string | undefined {
-  const filed = filedUnit(x)
-  return filed === x.unit ? undefined : filed
-}
-
 /** The unit keyed, when it differs from the product's own — what the movement records. */
 function keyedUnit(x: { unit: string; entryUnit?: string }): string | undefined {
   const u = (x.entryUnit ?? '').trim()
@@ -124,22 +86,6 @@ function keyedFields(x: { unit: string; entryUnit?: string; entryQty?: number })
   return u && x.entryQty !== undefined ? { entryUnit: u, entryQty: x.entryQty } : {}
 }
 
-/**
- * The balance row for one line or one movement, and the unit to stamp on it.
- *
- * Both shapes carry the product's own unit and, optionally, the one that was keyed, which is
- * why voiding a movement can find exactly the row it created without reading the product.
- */
-function levelRef(
-  locationId: string,
-  x: { productId: string; unit: string; entryUnit?: string; entryQty?: number },
-): { id: string; unit?: string } {
-  return {
-    id: levelId(locationId, x.productId, filedUnit(x), x.unit),
-    unit: extraUnit(x),
-  }
-}
-
 /** "สต๊อกไม่พอ" with the base balance, and what was keyed when that differs. */
 function shortMessage(l: MovementLine, avail: number): AppError {
   const keyed = keyedUnit(l)
@@ -149,23 +95,6 @@ function shortMessage(l: MovementLine, avail: number): AppError {
     })
   }
   return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
-}
-
-/** Split a balance key back into its parts. The unit is absent for the product's own. */
-export function parseLevelId(id: string): {
-  locationId: string
-  productId: string
-  unit?: string
-} {
-  const hash = id.indexOf(UNIT_SEP)
-  const head = hash === -1 ? id : id.slice(0, hash)
-  const unit = hash === -1 ? undefined : id.slice(hash + 1)
-  const cut = head.indexOf('__')
-  return {
-    locationId: cut === -1 ? head : head.slice(0, cut),
-    productId: cut === -1 ? '' : head.slice(cut + 2),
-    ...(unit ? { unit } : {}),
-  }
 }
 
 /**
@@ -1313,29 +1242,6 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
     noted = () => noteChanged(mv, patchDoc)
   })
   noted()
-}
-
-/** Balances rebuilt from the ledger, keyed `${locationId}__${productId}`. */
-/**
- * Every balance the ledger adds up to, keyed the way stockLevels is — one per product per
- * location per keyed unit. Exported for the restore, which used to keep its own copy that
- * only knew the product's own unit: a 10 Pack balance was zeroed by the restore meant to
- * save it, because the copy never produced a `#Pack` key for it to survive under.
- */
-export function balancesFromLedger(movements: StockMovement[]): Map<string, number> {
-  const map = new Map<string, number>()
-  for (const m of movements) {
-    if (m.voided) continue
-    if (m.fromLocationId) {
-      const k = levelRef(m.fromLocationId, m).id
-      map.set(k, roundQty((map.get(k) ?? 0) - m.qty))
-    }
-    if (m.toLocationId) {
-      const k = levelRef(m.toLocationId, m).id
-      map.set(k, roundQty((map.get(k) ?? 0) + m.qty))
-    }
-  }
-  return map
 }
 
 export interface LevelDrift {

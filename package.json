@@ -14,6 +14,7 @@
     "import-items": "node scripts/import-items.mjs",
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
     "ux-lab": "node --experimental-strip-types scripts/ux-lab/cli.mjs",
+    "audit:integrity": "node scripts/integrity-audit.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project pzm-rules-test \"vitest run --config vitest.rules.config.ts\"",
     "build:demo": "vite build --mode demo --outDir dist-demo",
     "preview": "vite preview --outDir dist-demo",
