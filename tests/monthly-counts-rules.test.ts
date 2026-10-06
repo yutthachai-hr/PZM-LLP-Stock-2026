@@ -82,6 +82,18 @@ describe('starting a sheet', () => {
   })
 })
 
+describe('plan E2: a blind sheet', () => {
+  test('may be started blind; the flag is a boolean and never changes afterwards', async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), 'monthlyCounts', ID), sheet(STAFF, { blind: true })))
+    await assertFails(setDoc(doc(as(STAFF), 'monthlyCounts', 'main__2026-10'), sheet(STAFF, { id: 'main__2026-10', month: '2026-10', blind: 'yes' })))
+    await seed({ blind: true })
+    await assertFails(updateDoc(doc(as(STAFF), 'monthlyCounts', ID), { blind: false, updatedAt: Date.now(), updatedBy: STAFF, updatedByName: 'x' }))
+    await assertFails(
+      updateDoc(doc(as(MANAGER), 'monthlyCounts', ID), { blind: false, status: 'recorded', results, confirmedBy: MANAGER, confirmedByName: 'x', confirmedAt: Date.now(), updatedAt: Date.now() }),
+    )
+  })
+})
+
 describe('counting', () => {
   test('anyone active changes the figures while counting, signed', async () => {
     await seed()

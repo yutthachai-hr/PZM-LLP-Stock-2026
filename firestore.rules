@@ -1549,7 +1549,7 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'locationId', 'month', 'countDate', 'status', 'lines',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'locationId', 'month', 'countDate', 'status', 'lines', 'questions',
-          'results', 'postedIds', 'adjDocNos', 'note', 'createdBy', 'createdByName', 'createdAt',
+          'results', 'postedIds', 'adjDocNos', 'note', 'blind', 'createdBy', 'createdByName', 'createdAt',
           'updatedAt', 'updatedBy', 'updatedByName', 'confirmedBy', 'confirmedByName', 'confirmedAt'])
         && d.id == docId && docId == d.locationId + '__' + d.month
         && text(d.locationId, 200) && d.month.matches('^[0-9]{4}-[0-9]{2}$') && epochMs(d.countDate)
@@ -1560,6 +1560,7 @@ service cloud.firestore {
         && (!('postedIds' in d) || (d.postedIds is list && d.postedIds.size() <= 3000))
         && (!('adjDocNos' in d) || (d.adjDocNos is list && d.adjDocNos.size() <= 50))
         && (!('note' in d) || text(d.note, 2000))
+        && (!('blind' in d) || d.blind is bool)
         && text(d.createdBy, 200) && text(d.createdByName, 200)
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }
@@ -1576,7 +1577,7 @@ service cloud.firestore {
       let o = resource.data;
       let e = d.diff(o).affectedKeys();
       return validMonthlyCount(docId, d)
-        && !e.hasAny(['id', 'locationId', 'month', 'countDate', 'createdBy', 'createdByName', 'createdAt'])
+        && !e.hasAny(['id', 'locationId', 'month', 'countDate', 'blind', 'createdBy', 'createdByName', 'createdAt'])
         && (
           (o.status == 'counting' && d.status == 'counting'
             && e.hasOnly(['lines', 'questions', 'updatedAt', 'updatedBy', 'updatedByName'])

@@ -29,6 +29,8 @@ export function MonthlyCountsPage() {
   const [month, setMonth] = useState(() => previousMonth(Date.now()))
   const [sheets, setSheets] = useState<MonthlyCount[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [blind, setBlind] = useState(false)
+  const isManager = user?.role === 'admin' || user?.role === 'manager'
 
   useEffect(() => {
     if (!locationId && sites[0]) setLocationId(sites[0].id)
@@ -51,7 +53,7 @@ export function MonthlyCountsPage() {
     if (!user) return
     setBusy(true)
     try {
-      const id = await openMonthlyCount({ locationId, month, actor: { id: user.id, name: user.name } })
+      const id = await openMonthlyCount({ locationId, month, actor: { id: user.id, name: user.name }, blind: isManager && blind })
       navigate(`/counts/${encodeURIComponent(id)}`)
     } catch (e) {
       toast.error(errText(e, t))
@@ -81,6 +83,15 @@ export function MonthlyCountsPage() {
             {t('เปิดใบนับ')}
           </Button>
         </div>
+        {isManager && (
+          <label className="mt-3 flex items-start gap-2 text-sm text-ink">
+            <input type="checkbox" className="mt-1" checked={blind} onChange={(e) => setBlind(e.target.checked)} />
+            <span>
+              {t('นับแบบไม่เห็นยอด (blind count)')}
+              <span className="block text-xs text-ink-faint">{t('พนักงานที่นับจะไม่เห็นยอดในระบบและผลต่าง หัวหน้ายังเห็นตอนตรวจ — ใช้กับใบที่ยังไม่เคยเปิด')}</span>
+            </span>
+          </label>
+        )}
         <p className="mt-3 text-xs leading-relaxed text-ink-faint">
           {t('นับเช้าวันที่ 1 ก่อนรับและเบิกของ แล้วเลือกเดือนที่เพิ่งจบ — ยอดที่นับได้คือยอดปิดของเดือนนั้นและยอดยกมาของเดือนใหม่')}
         </p>

@@ -32,8 +32,8 @@ export async function getMonthlyCount(id: string): Promise<MonthlyCount | null> 
 }
 
 /** The sheet for this location and month — opened if it exists, started if not. */
-export async function openMonthlyCount(params: { locationId: string; month: string; actor: Actor }): Promise<string> {
-  const { locationId, month, actor } = params
+export async function openMonthlyCount(params: { locationId: string; month: string; actor: Actor; blind?: boolean }): Promise<string> {
+  const { locationId, month, actor, blind } = params
   if (!locationId) throw new AppError('กรุณาเลือกคลัง')
   if (!/^\d{4}-\d{2}$/.test(month)) throw new AppError('กรุณาเลือกเดือน')
   const id = monthlyCountId(locationId, month)
@@ -48,6 +48,7 @@ export async function openMonthlyCount(params: { locationId: string; month: stri
       countDate: countDayOf(month),
       status: 'counting',
       lines: {},
+      ...(blind ? { blind: true } : {}),
       createdBy: actor.id,
       createdByName: actor.name,
       createdAt: now,

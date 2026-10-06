@@ -123,6 +123,8 @@ export function MonthlyCountSheet() {
   )
 
   const counting = sheet?.status === 'counting'
+  // Plan E2: on a blind sheet the counter sees only what they count; a manager reviews.
+  const blind = !!sheet?.blind && counting && !isManager
   const lines = useMemo(() => {
     const out = { ...(sheet?.lines ?? {}) }
     for (const [pid, v] of Object.entries(edits)) {
@@ -265,7 +267,7 @@ export function MonthlyCountSheet() {
   }
 
   const columns: Column<CountRow>[] = useMemo(
-    () => [
+    () => ([
       {
         key: 'product',
         header: t('สินค้า'),
@@ -338,8 +340,8 @@ export function MonthlyCountSheet() {
         align: 'right',
         cell: (r) => <span className="num text-ink-faint">{r.lastDiff === undefined ? '—' : `${r.lastDiff > 0 ? '+' : ''}${fmtQty(r.lastDiff)}`}</span>,
       },
-    ],
-    [t, byId, counting, setCount],
+    ] satisfies Column<CountRow>[]).filter((c) => !blind || c.key === 'product' || c.key === 'counted'),
+    [t, byId, counting, setCount, blind],
   )
 
   if (sheet === undefined) return <p className="p-6 text-sm text-ink-faint">{t('กำลังโหลด...')}</p>
@@ -364,11 +366,9 @@ export function MonthlyCountSheet() {
         SKU: p?.sku ?? '',
         [t('สินค้า')]: p?.name ?? r.productId,
         [t('หน่วย')]: p?.unitType ?? '',
-        [t('ระบบ ณ สิ้นเดือน')]: r.systemQty,
+        ...(blind ? {} : { [t('ระบบ ณ สิ้นเดือน')]: r.systemQty }),
         [t('นับได้')]: r.countedQty ?? '',
-        [t('ผลต่าง')]: r.diff ?? '',
-        [t('มูลค่า')]: r.value ?? '',
-        [t('เดือนก่อน')]: r.lastDiff ?? '',
+        ...(blind ? {} : { [t('ผลต่าง')]: r.diff ?? '', [t('มูลค่า')]: r.value ?? '', [t('เดือนก่อน')]: r.lastDiff ?? '' }),
       }
     }))
   }
@@ -411,7 +411,11 @@ export function MonthlyCountSheet() {
 
       {restored && counting && <DraftNotice onDiscard={() => { setEdits({}); clearDraft() }} />}
 
-      {counting ? (
+      {blind ? (
+        <AlertBanner tone="info" icon="info">
+          {t('นับแบบไม่เห็นยอด — ใส่จำนวนที่นับได้จริงทุกช่อง ช่องที่เว้นว่าง = ยังไม่นับ หัวหน้าจะเทียบกับยอดในระบบตอนตรวจ')}
+        </AlertBanner>
+      ) : counting ? (
         <AlertBanner tone="info" icon="info">
           {t('ยอดที่คีย์ยังไม่ปรับสต๊อก — ผลต่างเทียบกับยอดในระบบ ณ สิ้นวัน {date} ช่องที่เว้นว่าง = ยังไม่นับ (ไม่ถูกปรับ) ใส่ 0 ถ้านับแล้วไม่มีของ', { date: dayLabel })}
         </AlertBanner>
@@ -432,7 +436,12 @@ export function MonthlyCountSheet() {
         </AlertBanner>
       )}
 
-      {summary && (
+      {summary && blind && (
+        <StatRow columns={4}>
+          <StatTile icon="clipboardList" label={t('นับแล้ว')} value={`${summary.counted} / ${summary.total}`} />
+        </StatRow>
+      )}
+      {summary && !blind && (
         <StatRow columns={4}>
           <StatTile icon="clipboardList" label={t('นับแล้ว')} value={`${summary.counted} / ${summary.total}`} />
           <StatTile icon="adjust" label={t('มีผลต่าง')} value={summary.withDiff} tone="amber" />
@@ -461,11 +470,11 @@ export function MonthlyCountSheet() {
             value={filter}
             onChange={setFilter}
             chips={[
-              { key: 'all', label: t('ทั้งหมด'), count: summary?.total },
-              { key: 'diff', label: t('มีผลต่าง'), count: summary?.withDiff },
-              { key: 'big', label: t('ต่างมาก'), count: summary?.big },
-              { key: 'uncounted', label: t('ยังไม่นับ'), count: summary ? summary.total - summary.counted : undefined },
-            ]}
+              { key: 'all' as Filter, label: t('ทั้งหมด'), count: summary?.total },
+              { key: 'diff' as Filter, label: t('มีผลต่าง'), count: summary?.withDiff },
+              { key: 'big' as Filter, label: t('ต่างมาก'), count: summary?.big },
+              { key: 'uncounted' as Filter, label: t('ยังไม่นับ'), count: summary ? summary.total - summary.counted : undefined },
+            ].filter((c) => !blind || c.key === 'all' || c.key === 'uncounted')}
           />
           <SearchInput value={query} onChange={setQuery} placeholder={t('ค้นหาสินค้า...')} className="w-full sm:ml-auto sm:w-72" />
         </div>

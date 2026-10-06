@@ -3145,4 +3145,8 @@ export const EN: Record<string, string> = {
   'มีผลต่างมาก {n} รายการ — ตรวจและอนุมัติผลต่างก่อนปรับสต๊อก': '{n} big differences — review and approve them before adjusting stock',
   'ตรวจผลต่างมาก {n} รายการแล้ว อนุมัติให้ปรับ': 'I have reviewed the {n} big differences and approve them',
   'ผลต่างเกิน 10% ของยอดในระบบ หรือเกิน 500 บาท — ดูได้จากตัวกรอง \"ต่างมาก\" ชื่อผู้อนุมัติจะถูกบันทึกไว้กับผลนับ': 'Over 10% of the books or over 500 baht — see the "Big difference" filter. Your name is kept with the count.',
+  // Plan E2: blind count (6 Oct 2026)
+  'นับแบบไม่เห็นยอด (blind count)': 'Blind count',
+  'พนักงานที่นับจะไม่เห็นยอดในระบบและผลต่าง หัวหน้ายังเห็นตอนตรวจ — ใช้กับใบที่ยังไม่เคยเปิด': 'Counters do not see the book figures or differences; managers still see them to review. Applies to a sheet not opened before.',
+  'นับแบบไม่เห็นยอด — ใส่จำนวนที่นับได้จริงทุกช่อง ช่องที่เว้นว่าง = ยังไม่นับ หัวหน้าจะเทียบกับยอดในระบบตอนตรวจ': 'Blind count — enter what you actually count; a blank box means not counted. A manager compares with the books when reviewing.',
 }

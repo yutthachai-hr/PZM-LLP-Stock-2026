@@ -1667,6 +1667,12 @@ export interface MonthlyCount {
   /** The business date of the month's last day: where a difference is filed. */
   countDate: number
   status: MonthlyCountStatus
+  /**
+   * A blind count (plan E2): while counting, staff see no book figures — only what they
+   * count. Managers still see them to review. Set when the sheet is opened, never changed.
+   * A screen setting, not a secret: the balances themselves stay readable as always.
+   */
+  blind?: boolean
   /** productId → the count. A product not in here was not counted and is not adjusted. */
   lines: Record<string, MonthlyCountLine>
   /** Imported rows awaiting a decision, keyed by source and row. Must be empty to confirm. */
