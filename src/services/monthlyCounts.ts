@@ -153,8 +153,10 @@ export async function postMonthlyCount(params: {
    * so it must not read as shrinkage in the reports (owner, 29 Sep 2026).
    */
   reason?: 'count' | 'opening'
+  /** The manager approves the big differences (plan E2); without it a big one refuses. */
+  approveBig?: boolean
 }): Promise<string[]> {
-  const { id, actor, note, reason = 'count' } = params
+  const { id, actor, note, reason = 'count', approveBig } = params
   const db = scoped()
   const docNos: string[] = []
   for (let attempt = 0; ; attempt++) {
@@ -168,7 +170,7 @@ export async function postMonthlyCount(params: {
     const finish = parts.length === 0 ? [[]] : parts
     try {
       for (const part of finish) {
-        const docNo = await execute(postCountCommand, { id, productIds: part.map((r) => r.productId), note, reason }, actor)
+        const docNo = await execute(postCountCommand, { id, productIds: part.map((r) => r.productId), note, reason, ...(approveBig ? { approveBig } : {}) }, actor)
         if (docNo) docNos.push(docNo)
       }
       return docNos

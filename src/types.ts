@@ -1654,6 +1654,8 @@ export interface MonthlyCountResult {
   countedQty: number
   diff: number
   value: number
+  /** A big difference (lib/monthlyCount isBig) a manager looked at and approved (plan E2). */
+  bigApprovedBy?: string
 }
 
 export interface MonthlyCount {

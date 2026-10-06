@@ -3141,4 +3141,8 @@ export const EN: Record<string, string> = {
   'ขอซื้ออนุมัติแล้ว + ใบสั่งซื้อร่าง (ยังไม่สั่ง)': 'Approved requests + draft orders (not placed)',
   'มีคำขอโอนออกรออนุมัติ {qty} {unit} — ยังไม่หักจากพร้อมใช้': '{qty} {unit} in transfer requests awaiting approval — not taken off available',
   'บางรายการใช้หน่วยที่ยังไม่มีอัตราแปลง จึงไม่ได้นับรวม': 'Some lines are in a unit with no conversion rate, so they are not counted',
+  // Plan E2: big count differences need approval (6 Oct 2026)
+  'มีผลต่างมาก {n} รายการ — ตรวจและอนุมัติผลต่างก่อนปรับสต๊อก': '{n} big differences — review and approve them before adjusting stock',
+  'ตรวจผลต่างมาก {n} รายการแล้ว อนุมัติให้ปรับ': 'I have reviewed the {n} big differences and approve them',
+  'ผลต่างเกิน 10% ของยอดในระบบ หรือเกิน 500 บาท — ดูได้จากตัวกรอง \"ต่างมาก\" ชื่อผู้อนุมัติจะถูกบันทึกไว้กับผลนับ': 'Over 10% of the books or over 500 baht — see the "Big difference" filter. Your name is kept with the count.',
 }

@@ -51,13 +51,13 @@ function seedSheet(flour: number, salt = 4) {
 describe('postMonthlyCount', () => {
   test('files counted − books on the count day, on that day, and the sheet keeps the figures', async () => {
     seedSheet(8)
-    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })
+    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count', approveBig: true })
     expect(adjustments()).toHaveLength(1)
     expect(adjustments()[0]).toMatchObject({ productId: 'flour', qty: 2, fromLocationId: WH, date: COUNT_DAY })
     expect(level('flour')).toBe(13) // 8 counted + 5 that came after
     const sheet = raw('monthlyCounts')[0] as { status: string; results: Record<string, unknown>; postedIds: string[] }
     expect(sheet.status).toBe('posted')
-    expect(sheet.results.flour).toEqual({ systemQty: 10, countedQty: 8, diff: -2, value: -40 })
+    expect(sheet.results.flour).toEqual({ systemQty: 10, countedQty: 8, diff: -2, value: -40, bigApprovedBy: ACTOR.name })
     expect(sheet.results.salt).toEqual({ systemQty: 4, countedQty: 4, diff: 0, value: 0 })
     expect(sheet.postedIds.sort()).toEqual(['flour', 'salt'])
   })
@@ -84,7 +84,7 @@ describe('postMonthlyCount', () => {
       }
     })
     try {
-      await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })
+      await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count', approveBig: true })
     } finally {
       spy.mockRestore()
     }
@@ -97,8 +97,30 @@ describe('postMonthlyCount', () => {
 
   test('a sheet already posted is not posted again', async () => {
     seedSheet(8)
-    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })
+    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count', approveBig: true })
+    await expect(postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count', approveBig: true })).rejects.toThrow()
+    expect(adjustments()).toHaveLength(1)
+  })
+})
+
+describe('plan E2: a big difference waits for a manager to approve it', () => {
+  test('refused without approval, nothing filed; filed and signed with it', async () => {
+    seedSheet(8) // 10 on the books → −2 is 20%: big
     await expect(postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })).rejects.toThrow()
+    expect(adjustments()).toHaveLength(0)
+    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count', approveBig: true })
+    expect(adjustments()).toHaveLength(1)
+  })
+
+  test('small differences need no approval', async () => {
+    seedSheet(10, 4) // flour matches the books, salt matches: nothing big
+    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })
+    expect((raw('monthlyCounts')[0] as { status: string }).status).toBe('posted')
+  })
+
+  test('the opening count sets the books and needs no approval', async () => {
+    seedSheet(8)
+    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'opening', reason: 'opening' })
     expect(adjustments()).toHaveLength(1)
   })
 })

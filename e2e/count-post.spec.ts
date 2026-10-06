@@ -43,6 +43,12 @@ test('stock keyed while the sheet is open: after posting, the count day holds wh
   const page = await signedIn(browser, 'manager', `/counts/wh__${MONTH}`)
   await page.getByRole('button', { name: 'ยืนยันและปรับสต๊อก' }).first().click()
   await expect(page.getByRole('dialog')).toBeVisible()
+  // A big difference is filed only once the manager approves it (plan E2): the confirm
+  // button waits for the tick.
+  const confirmBtn = page.getByRole('dialog').getByRole('button', { name: 'ยืนยัน', exact: true })
+  await expect(confirmBtn).toBeDisabled()
+  await page.getByRole('dialog').getByLabel(/ตรวจผลต่างมาก/).check()
+  await expect(confirmBtn).toBeEnabled()
 
   // Another device keys a forgotten delivery dated on the count day while the dialog is open:
   // the books on that day are now 13, not the 10 the screen showed.

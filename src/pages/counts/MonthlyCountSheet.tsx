@@ -56,6 +56,8 @@ export function MonthlyCountSheet() {
   const [importing, setImporting] = useState(false)
   const [photoImport, setPhotoImport] = useState(false)
   const [asOpening, setAsOpening] = useState(false)
+  // Plan E2: the manager says they looked at the big differences before they are filed.
+  const [bigOk, setBigOk] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -245,6 +247,7 @@ export function MonthlyCountSheet() {
           id,
           actor,
           reason: asOpening ? 'opening' : 'count',
+          approveBig: bigOk,
           note: asOpening
             ? t('ตั้งยอดเริ่มต้นระบบจากยอดนับ {month}', { month: sheet.month })
             : t('นับสต๊อกประจำเดือน {month}', { month: sheet.month }),
@@ -525,6 +528,17 @@ export function MonthlyCountSheet() {
               <p>
                 {t('ระบบจะปรับ {n} รายการที่มีผลต่าง เป็นใบปรับสต๊อกลงวันที่ {date} เหตุผล "ปรับตามการนับ" — รายการรับ/เบิก/โอนหลังวันนั้นอยู่ครบ รายการที่ยังไม่นับจะไม่ถูกปรับ', { n: toPost, date: dayLabel })}
               </p>
+              {!asOpening && (summary?.big ?? 0) > 0 && (
+                <label className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2">
+                  <input type="checkbox" className="mt-1" checked={bigOk} onChange={(e) => setBigOk(e.target.checked)} />
+                  <span>
+                    <b>{t('ตรวจผลต่างมาก {n} รายการแล้ว อนุมัติให้ปรับ', { n: summary?.big ?? 0 })}</b>
+                    <span className="block text-xs text-ink-soft">
+                      {t('ผลต่างเกิน 10% ของยอดในระบบ หรือเกิน 500 บาท — ดูได้จากตัวกรอง "ต่างมาก" ชื่อผู้อนุมัติจะถูกบันทึกไว้กับผลนับ')}
+                    </span>
+                  </span>
+                </label>
+              )}
               <label className="flex items-start gap-2 rounded-lg border border-line bg-sunken px-3 py-2">
                 <input type="checkbox" className="mt-1" checked={asOpening} onChange={(e) => setAsOpening(e.target.checked)} />
                 <span>
@@ -547,7 +561,7 @@ export function MonthlyCountSheet() {
             <Button variant="secondary" onClick={() => setAsking(null)} disabled={busy}>
               {t('ยกเลิก')}
             </Button>
-            <Button onClick={() => asking && void confirm(asking)} disabled={busy}>
+            <Button onClick={() => asking && void confirm(asking)} disabled={busy || (asking === 'post' && !asOpening && (summary?.big ?? 0) > 0 && !bigOk)}>
               {busy ? t('กำลังบันทึก...') : t('ยืนยัน')}
             </Button>
           </div>

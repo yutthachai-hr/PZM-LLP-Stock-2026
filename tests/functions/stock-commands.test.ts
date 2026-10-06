@@ -308,7 +308,7 @@ describe('postCount on the server', () => {
       'wh__2026-09': { locationId: 'wh', month: '2026-09', countDate: COUNT_DAY, status: 'counting', lines: { flour: { qty: 1, by: 'u', byName: 'U', at: 1 } }, createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 },
     },
   })
-  const body = { brand: 'pizza', params: { id: 'wh__2026-09', productIds: ['flour'], note: 'count', reason: 'count' } }
+  const body = { brand: 'pizza', params: { id: 'wh__2026-09', productIds: ['flour'], note: 'count', reason: 'count', approveBig: true } }
 
   test('takes the counted figure from the sheet, not the caller; staff may not post', async () => {
     const d = deps(memoryServerStore(countWorld()))
@@ -331,7 +331,7 @@ describe('postCount on the server', () => {
     setActiveBrand('pizza')
     for (const [k, docs] of Object.entries(countWorld())) mem.seed(k, Object.entries(docs).map(([id, v]) => ({ ...(v as object), id })))
     const { postMonthlyCount } = await import('../../src/services/monthlyCounts')
-    await postMonthlyCount({ id: 'wh__2026-09', actor: { id: 'mgr', name: 'Manager M' }, note: 'count' })
+    await postMonthlyCount({ id: 'wh__2026-09', actor: { id: 'mgr', name: 'Manager M' }, note: 'count', approveBig: true })
     const strip = (o: Record<string, unknown>) => {
       const { createdAt: _c, updatedAt: _u, confirmedAt: _a, id: _i, ...rest } = o
       void [_c, _u, _a, _i]
@@ -446,5 +446,20 @@ describe('plan B5 through the server command', () => {
     const po = doc(d, 'purchaseOrders', 'po1') as unknown as PurchaseOrder
     expect(po.receipts?.[0].lines.find((l) => l.productId === 'flour')).toMatchObject({ rejectedQty: 2, rejectReason: 'damaged' })
     expect((doc(d, 'stockLevels', 'wh__flour') as { qty: number }).qty).toBe(11)
+  })
+})
+
+describe('plan E2 through the server command', () => {
+  test('postCount refuses a big difference without approveBig, and rejects a non-boolean one', async () => {
+    const world2 = () => ({
+      ...world(),
+      stockLevels: { wh__flour: { productId: 'flour', locationId: 'wh', qty: 3, updatedAt: 1, updatedBy: 'x' } },
+      monthlyCounts: { 'wh__2026-09': { locationId: 'wh', month: '2026-09', countDate: Date.UTC(2026, 8, 30, 3), status: 'counting', lines: { flour: { qty: 1, by: 'u', byName: 'U', at: 1 } }, createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 } },
+    })
+    const d = deps(memoryServerStore(world2()))
+    const params = { id: 'wh__2026-09', productIds: ['flour'], note: 'count', reason: 'count' }
+    expect((await runStockCommand(d, 'postCount', 'Bearer mgr', { brand: 'pizza', params })).status).toBe(422)
+    expect((await runStockCommand(d, 'postCount', 'Bearer mgr', { brand: 'pizza', params: { ...params, approveBig: 'yes' } })).status).toBe(400)
+    expect((await runStockCommand(d, 'postCount', 'Bearer mgr', { brand: 'pizza', params: { ...params, approveBig: true } })).status).toBe(200)
   })
 })
