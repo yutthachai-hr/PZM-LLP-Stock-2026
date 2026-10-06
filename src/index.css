@@ -236,6 +236,13 @@ input[type='number'] {
   html {
     font-size: 17px;
   }
+  /* Pinch-zoom is allowed (plan D5', WCAG 1.4.4), so iOS would zoom into any field under
+     16px the moment it is tapped. A field on a phone is 1rem (17px), whatever its class. */
+  input,
+  select,
+  textarea {
+    font-size: 1rem !important;
+  }
 }
 
 /* ---------------------------------------------------------------------------

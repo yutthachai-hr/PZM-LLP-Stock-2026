@@ -192,7 +192,42 @@ export function SupplierPerformancePage() {
           {detail && <SupplierDetail stats={detail.stats} score={detail.score} onClose={() => setParams({}, { replace: true })} />}
 
           <section className={frameCard}>
-            <div className="overflow-x-auto px-2 pb-3 pt-2 md:px-4">
+            {/* A phone gets a card per supplier (plan D5'); the ten-column table needs 920px. */}
+            <ul className="divide-y divide-line md:hidden">
+              {sorted.map(({ stats: s, score }) => (
+                <li key={s.supplierId}>
+                  <button
+                    type="button"
+                    onClick={() => setParams({ supplier: s.supplierId })}
+                    className={`w-full space-y-1.5 px-4 py-3 text-left row-hover ${selected === s.supplierId ? 'bg-brand-soft' : ''}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate font-semibold text-ink">{s.supplierName}</span>
+                      {worstRisk.get(s.supplierId) && <RiskBadge level={worstRisk.get(s.supplierId)!} />}
+                      {score.grade && <Badge color={GRADE_TONE[score.grade]}>{score.grade}</Badge>}
+                      <span className="num w-9 text-right text-lg font-bold text-ink">{score.score === null ? '—' : Math.round(score.score)}</span>
+                    </span>
+                    <span className="grid grid-cols-3 gap-x-2 text-xs text-ink-soft">
+                      <span>
+                        {t('ตรงเวลา')} <b className="num text-ink">{pct(s.onTime.rate)}</b>
+                      </span>
+                      <span>
+                        {t('ส่งครบ')} <b className="num text-ink">{pct(s.fill.rate)}</b>
+                      </span>
+                      <span>
+                        {t('ช้าเฉลี่ย (วัน)')} <b className="num text-ink">{days(s.delay.avg)}</b>
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-ink-faint">
+                      {t(CONFIDENCE_LABEL[s.confidence])}
+                      <Trend dir={s.trend.direction} />
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {!sorted.length && <li className="px-4 py-8 text-center text-sm text-ink-faint">{t('ยังไม่มีใบสั่งซื้อในช่วงนี้')}</li>}
+            </ul>
+            <div className="hidden overflow-x-auto px-2 pb-3 pt-2 md:block md:px-4">
               <table className="w-full min-w-[920px] text-sm">
                 <thead className="bg-sunken text-[13px] text-ink-soft">
                   <tr>
