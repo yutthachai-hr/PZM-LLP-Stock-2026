@@ -591,6 +591,14 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - **E4 รอเจ้าของ** (error reporting เขียนที่ไหน)
 - ผลเทส: unit 1,233 · rules 218 · e2e 28/0/0
 
+### Phase D (D1' D2' D3' D5' D6' เสร็จ — D4' รอเจ้าของ) → `docs/evidence/phase-d.md`
+- **D1':** lazy routes: main 1,209 KB → 218 KB, JS ตอนเปิดแอป 3.50 MB → 1.66 MB, ตรวจด้วย `npm run check:bundle`
+- **D2':** notifications เป็น context แยก + `SupplierIntelProvider`
+- **D3':** rangeCache อ่านเฉพาะช่วงที่ขาด + readMeter นับ getOne/getBy
+- **D5':** เปิด pinch-zoom + การ์ดมือถือ RequestReview / ผลงานผู้ขาย (ไม่ prefill จำนวนรับตามคำสั่งเจ้าของ 24 ก.ย.)
+- **D6':** DataTable render layout เดียว + `paged`
+- **Lighthouse ยังไม่ได้วัด** ต้องวัดในเครื่องเจ้าของ
+
 ### กับดักของ harness
 - เอกสารที่ seed ต้องมี field `id` (rules อ่านค่านี้) ยกเว้น `users`
 - `counters` ต้องมี `id` ด้วย
