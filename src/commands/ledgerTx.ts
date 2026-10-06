@@ -1,6 +1,7 @@
 import type { TxContext } from '../backend/tx'
 import { AppError } from '../i18n/AppError'
-import { COL, ADJUST_REASONS, type StockMovement, type MovementType, type Product, type StockLevel, type StockLocation } from '../types'
+import { COL, ADJUST_REASONS, TRANSIT_LOCATION_ID, type MonthlyCount, type StockMovement, type MovementType, type Product, type StockLevel, type StockLocation } from '../types'
+import { monthlyCountId, monthOf } from '../lib/monthlyCount'
 import { sameUnit } from '../lib/units'
 import { filedUnit, levelId, levelRef } from '../lib/levelKey'
 import { requireQty, requireEpochMs, requireOneOf, requireId, roundQty } from '../lib/validate'
@@ -189,6 +190,40 @@ export async function requireMasterData(
 
 /** Receive goods into a location (usually the main warehouse). Adds stock. */
 /**
+ * The period lock (plan B1, 6 Oct 2026): once a location's monthly count for a month is
+ * posted, that month is closed there — nothing more is filed into it, so the figures the
+ * count settled cannot be changed quietly afterwards. Read inside the transaction, so a
+ * count posted a moment ago is seen. The transit location has no counts and no lock.
+ *
+ * Only an admin correcting a row (editMovement / voidMovement) may reach into a closed
+ * month, and only with a reason, which is kept on the row.
+ */
+export async function requireOpenPeriod(tx: TxContext, locationIds: readonly (string | undefined)[], date: number): Promise<void> {
+  const month = monthOf(date)
+  const ids = [...new Set(locationIds.filter((x): x is string => !!x && x !== TRANSIT_LOCATION_ID))]
+  const sheets = await Promise.all(ids.map((id) => tx.get<MonthlyCount>(COL.monthlyCounts, monthlyCountId(id, month))))
+  sheets.forEach((sheet, i) => {
+    if (sheet?.status === 'posted') {
+      throw new AppError(PERIOD_CLOSED, { month, location: ids[i] })
+    }
+  })
+}
+
+/** The month closed at any of these locations, or null — for an admin's correction, which may pass with a reason. */
+export async function closedPeriod(tx: TxContext, locationIds: readonly (string | undefined)[], date: number): Promise<string | null> {
+  try {
+    await requireOpenPeriod(tx, locationIds, date)
+    return null
+  } catch (e) {
+    if (e instanceof AppError && e.key === PERIOD_CLOSED) return monthOf(date)
+    throw e
+  }
+}
+
+/** The words of the period lock's refusal. */
+export const PERIOD_CLOSED = 'เดือน {month} ของคลังนี้ปิดยอดนับแล้ว — บันทึกย้อนหลังเข้าเดือนนี้ไม่ได้' // i18n-key
+
+/**
  * A receipt's paperwork, kept as fields (owner, 24 Sep 2026) instead of one free-text note:
  * who it came from, the number printed on their document and its date, and the order it
  * checks in. Every field is optional so a receipt keyed the old way still files.
@@ -266,6 +301,7 @@ export async function planReceive(tx: TxContext, params: PlanReceiveParams): Pro
     lines.map((l) => l.productId),
     [toLocationId],
   )
+  await requireOpenPeriod(tx, [toLocationId], date)
   const counter = await tx.get<{ value: number }>(COL.counters, 'receive')
   const seq = (counter?.value ?? 0) + 1
   const levels = await Promise.all(
@@ -354,6 +390,7 @@ export async function planIssue(
     lines.map((l) => l.productId),
     [fromLocationId, toLocationId],
   )
+  await requireOpenPeriod(tx, [fromLocationId, toLocationId], date)
   const counter = await tx.get<{ value: number }>(COL.counters, 'issue')
   const seq = (counter?.value ?? 0) + 1
   const fromLevels = await Promise.all(
@@ -476,6 +513,7 @@ export async function planAdjust(
     lines.map((x) => x.line.productId),
     [locationId],
   )
+  await requireOpenPeriod(tx, [locationId], date)
   const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
   const seq = (counter?.value ?? 0) + 1
   const levels = await Promise.all(
@@ -544,6 +582,7 @@ export async function consumeInTx(tx: TxContext, file: FileMovement, params: Con
       lines.map((l) => l.productId),
       [fromLocationId],
     )
+    await requireOpenPeriod(tx, [fromLocationId], date)
     const counter = await tx.get<{ value: number }>(COL.counters, 'consume')
     const seq = (counter?.value ?? 0) + 1
     const levels = await Promise.all(
@@ -607,6 +646,7 @@ export async function fileCountInTx(tx: TxContext, file: FileMovement, params: F
   const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
   {
     await requireMasterData(tx, [productId], [locationId])
+    await requireOpenPeriod(tx, [locationId], date)
     // A count is someone standing in front of the shelf reconciling the product's own
     // balance, so it always lands on that row — there is no unit box on that screen.
     const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))

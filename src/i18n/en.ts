@@ -3075,4 +3075,8 @@ export const EN: Record<string, string> = {
   'คลังนี้มีประวัติการเคลื่อนไหวแล้ว — ลบไม่ได้ ให้ปิดใช้งานแทน': 'This location has stock history — it cannot be deleted; deactivate it instead',
   'ลบ "{name}" ? ลบได้เฉพาะสินค้าที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน': 'Delete "{name}"? Only a product that has never moved can be deleted — otherwise deactivate it',
   'ลบ "{name}" ? ลบได้เฉพาะคลังที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน': 'Delete "{name}"? Only a location that has never moved stock can be deleted — otherwise deactivate it',
+  // Plan B1: period lock (6 Oct 2026)
+  'เดือน {month} ของคลังนี้ปิดยอดนับแล้ว — บันทึกย้อนหลังเข้าเดือนนี้ไม่ได้': '{month} is closed at this location (its count is posted) — nothing can be dated into it',
+  'เดือน {month} ปิดยอดนับแล้ว — ระบุเหตุผลการแก้ไขย้อนหลัง': '{month} is closed (its count is posted) — give a reason for changing it',
+  'เหตุผลการแก้ไขย้อนหลัง (เดือนที่ปิดยอดแล้ว)': 'Reason for changing a closed month',
 }

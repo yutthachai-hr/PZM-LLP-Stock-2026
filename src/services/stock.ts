@@ -27,6 +27,7 @@ import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '.
 import { balancesFromLedger, levelRef, parseLevelId } from '../lib/levelKey'
 export { balancesFromLedger, parseLevelId } from '../lib/levelKey'
 import {
+  closedPeriod,
   type ConsumeParams,
   keyedUnit,
   levelDoc,
@@ -304,6 +305,9 @@ export async function postCountAsOf(params: {
 
 /** Edit the quantity/date/note of an existing movement, re-applying the balance delta atomically. */
 /** Why a row received against an order cannot be changed in place (plan A8). */
+/** An admin's correction reaching into a closed month (plan B1). */
+const PERIOD_CLOSED_EDIT = 'เดือน {month} ปิดยอดนับแล้ว — ระบุเหตุผลการแก้ไขย้อนหลัง' // i18n-key
+
 const ORDER_LOCKED = 'รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน' // i18n-key
 
 /** How many edits one row will carry before the history itself becomes the problem. */
@@ -320,6 +324,11 @@ export interface MovementPatch {
   entryUnit?: string
   fromLocationId?: string
   toLocationId?: string
+  /**
+   * Why a row in a month whose count is posted is being changed (plan B1). Required then,
+   * and kept on the row's edit history; ignored otherwise.
+   */
+  overrideReason?: string
 }
 
 /**
@@ -368,6 +377,13 @@ export async function editMovement(params: {
     }
     if (from && to && from === to) throw new AppError('คลังต้นทางและปลายทางต้องต่างกัน')
     await requireMasterData(tx, [], [from, to].filter((x): x is string => !!x))
+    // The period lock (plan B1): a row in a closed month, or moved into one, changes only
+    // with a reason, which stays on the row.
+    const closed =
+      (await closedPeriod(tx, [mv.fromLocationId, mv.toLocationId], mv.date)) ??
+      (await closedPeriod(tx, [from, to], patch.date ?? mv.date))
+    const overrideReason = patch.overrideReason?.trim()
+    if (closed && !overrideReason) throw new AppError(PERIOD_CLOSED_EDIT, { month: closed })
 
     // What the row is keyed in after the edit, and how many of that.
     //
@@ -510,7 +526,7 @@ export async function editMovement(params: {
       // Appended, never replaced. The rules check it grew by exactly one and that the new
       // entry names the caller, so an edit cannot be filed under somebody else. The old and
       // new values ride along so the activity log can say what the row used to say.
-      edits: [...(mv.edits ?? []), { by: actor.id, byName: actor.name, at: now, changed, changes }],
+      edits: [...(mv.edits ?? []), { by: actor.id, byName: actor.name, at: now, changed, changes, ...(closed && overrideReason ? { periodOverride: overrideReason } : {}) }],
       updatedBy: actor.id,
       updatedByName: actor.name,
       updatedAt: now,
