@@ -282,6 +282,15 @@ export function DailySuggestions() {
                     {/* On a phone the on-hand column is not there; say it here. */}
                     <span className="md:hidden"> · {t('มี {n} {unit}', { n: fmtQty(l.onHand), unit: l.product.unitType })}</span>
                   </div>
+                  {/* Plan F1: the figures the quantity came from, on every line. */}
+                  <div className="text-[11px] text-ink-faint">
+                    {t('ที่มา: ค้างรับ {inc} · ของมาถึงใน {lead} วัน · สำรอง {cover} วัน', {
+                      inc: fmtQty(l.evidence.incoming),
+                      lead: l.evidence.leadTimeDays,
+                      cover: l.evidence.coverDays,
+                    })}
+                    {l.evidence.daysLeft !== null && <> · {t('ของที่มีพอ {d} วัน', { d: fmtQty(Math.round(l.evidence.daysLeft * 10) / 10) })}</>}
+                  </div>
                 </div>
                 <div className="num hidden text-right text-xs text-ink-soft md:block">
                   {t('มี {n} {unit}', { n: fmtQty(l.onHand), unit: l.product.unitType })}

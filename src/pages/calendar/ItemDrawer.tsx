@@ -174,6 +174,10 @@ export function ItemDrawer({
             </Row>
             <Row label={t('เหตุผล')}>{reasonLabel(item.meta.movement.reason, t)}</Row>
             <Row label={t('มูลค่า')}>{item.meta.value > 0 ? fmtMoney(item.meta.value) : <Muted>{t('ไม่ทราบต้นทุน')}</Muted>}</Row>
+            {item.meta.pct != null && <Row label={t('สัดส่วนของยอดก่อนปรับ')}>{`${Math.round(item.meta.pct)}%`}</Row>}
+            <Row label={t('ทำไมจึงแจ้ง')}>
+              {item.meta.kind === 'waste' ? t('ของเสีย/สูญหายมูลค่าเกินเกณฑ์ที่ตั้งไว้') : t('มูลค่าหรือสัดส่วนการปรับเกินเกณฑ์ที่ตั้งไว้ (ตั้งค่า › เกณฑ์)')}
+            </Row>
             <Row label={t('คลัง/สาขา')}>{locationName(item.locationId) ?? ''}</Row>
             <Row label={t('โดย')}>{item.meta.movement.byUserName}</Row>
             <Row label={t('เลขที่')}>
@@ -391,6 +395,7 @@ function ReorderBody({ meta, inProgress }: { meta: Extract<CalendarItem['meta'],
       <Row label={t('ใช้เฉลี่ยต่อวัน')}>{meta.avgDaily !== null ? `${fmtQty(meta.avgDaily)} ${u}` : <Muted>{t('ประวัติยังไม่พอ')}</Muted>}</Row>
       {meta.daysLeft !== null && <Row label={t('คาดว่าจะหมดใน')}>{t('{n} วัน', { n: Math.floor(meta.daysLeft) })}</Row>}
       <Row label={t('ผู้ขาย')}>{meta.supplier?.name ?? <Muted>{t('ยังไม่ระบุ')}</Muted>}</Row>
+      {meta.leadTimeDays !== undefined && <Row label={t('ระยะส่งที่ใช้คิด')}>{t('{n} วัน', { n: meta.leadTimeDays })}</Row>}
       <Row label={t('คิดจาก')}>
         {meta.basis === 'usage' ? t('อัตราการใช้ × (ระยะส่ง + วันสำรอง) + ขั้นต่ำ') : t('ยังไม่มีประวัติการใช้พอ — เติมให้ถึง 2 เท่าของขั้นต่ำ')}
       </Row>

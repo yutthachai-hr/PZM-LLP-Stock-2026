@@ -3149,4 +3149,12 @@ export const EN: Record<string, string> = {
   'นับแบบไม่เห็นยอด (blind count)': 'Blind count',
   'พนักงานที่นับจะไม่เห็นยอดในระบบและผลต่าง หัวหน้ายังเห็นตอนตรวจ — ใช้กับใบที่ยังไม่เคยเปิด': 'Counters do not see the book figures or differences; managers still see them to review. Applies to a sheet not opened before.',
   'นับแบบไม่เห็นยอด — ใส่จำนวนที่นับได้จริงทุกช่อง ช่องที่เว้นว่าง = ยังไม่นับ หัวหน้าจะเทียบกับยอดในระบบตอนตรวจ': 'Blind count — enter what you actually count; a blank box means not counted. A manager compares with the books when reviewing.',
+  // Plan F1: suggestion evidence (6 Oct 2026)
+  'ที่มา: ค้างรับ {inc} · ของมาถึงใน {lead} วัน · สำรอง {cover} วัน': 'Based on: {inc} on order · arrives in {lead} days · {cover} days of cover',
+  'ของที่มีพอ {d} วัน': 'on hand lasts {d} days',
+  'สัดส่วนของยอดก่อนปรับ': 'Share of the balance before',
+  'ทำไมจึงแจ้ง': 'Why this was flagged',
+  'ของเสีย/สูญหายมูลค่าเกินเกณฑ์ที่ตั้งไว้': 'Waste or loss worth more than the set threshold',
+  'มูลค่าหรือสัดส่วนการปรับเกินเกณฑ์ที่ตั้งไว้ (ตั้งค่า › เกณฑ์)': 'Value or share adjusted is over the set threshold (Settings › Thresholds)',
+  'ระยะส่งที่ใช้คิด': 'Lead time assumed',
 }

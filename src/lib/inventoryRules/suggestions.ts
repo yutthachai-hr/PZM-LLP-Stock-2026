@@ -52,6 +52,20 @@ export interface SuggestionLine {
   inProgress: InProgress | null
   /** A branch line cut down to what the warehouse holds (0 = none there at all). */
   limitedTo?: number
+  /**
+   * What the quantity was worked out from (plan F1: no suggestion without its evidence):
+   * already on order, the lead time assumed, the days of cover asked for, and how long
+   * what is on hand lasts at the current rate.
+   */
+  evidence: SuggestionEvidence
+}
+
+export interface SuggestionEvidence {
+  incoming: number
+  leadTimeDays: number
+  coverDays: number
+  /** Null without a usage rate. */
+  daysLeft: number | null
 }
 
 export interface PurchaseSuggestion {
@@ -99,6 +113,7 @@ export function dailySuggestions(input: {
         supplierId: r.supplier?.id ?? r.product.supplierId,
         supplierName: r.supplier?.name,
         inProgress: r.inProgress ? { kind: r.inProgress.kind, id: r.inProgress.id, docNo: r.inProgress.docNo } : null,
+        evidence: { incoming: r.incoming, leadTimeDays: r.leadTimeDays, coverDays: input.coverDays, daysLeft: r.daysLeft },
       }))
       .sort(bySupplierThenName)
     if (lines.length) purchase.push({ location: wh, lines })
@@ -154,6 +169,7 @@ export function dailySuggestions(input: {
           avgDaily: r.avgDaily,
           inProgress,
           ...(qty < rec.recommendedQty ? { limitedTo: qty } : {}),
+          evidence: { incoming: r.incoming, leadTimeDays: rec.leadTimeDays, coverDays: input.coverDays, daysLeft: rec.daysLeft },
         })
       }
       lines.sort((a, b) => a.product.name.localeCompare(b.product.name))

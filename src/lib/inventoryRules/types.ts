@@ -81,7 +81,14 @@ export type ItemMeta =
       /** Runs out before what is on order arrives (lib/inventoryRisk). */
       shortage?: FeedShortage
     }
-  | { kind: 'adjustment' | 'waste'; movement: StockMovement; product?: Product; value: number }
+  | {
+      kind: 'adjustment' | 'waste'
+      movement: StockMovement
+      product?: Product
+      value: number
+      /** Share of the balance before it, in % — what crossed the threshold (plan F1 evidence). */
+      pct?: number | null
+    }
   | {
       kind: 'reorder'
       product: Product
@@ -93,6 +100,8 @@ export type ItemMeta =
       recommendedQty: number
       supplier?: Supplier
       basis: 'usage' | 'minStock'
+      /** The lead time the quantity assumed (plan F1 evidence). */
+      leadTimeDays?: number
     }
 
 export interface CalendarItem {

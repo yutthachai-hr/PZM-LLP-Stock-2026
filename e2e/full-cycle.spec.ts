@@ -55,6 +55,8 @@ test('request → orders → receive → count → post: the auditor finds no mi
   const brand = manager.getByRole('button', { name: 'Pizza Mania' })
   if (await brand.isVisible().catch(() => false)) await brand.click()
   await manager.getByRole('button', { name: 'ยืนยันและปรับสต๊อก' }).first().click()
+  // −1 on 10 is a 10% difference: big, so the manager approves it first (plan E2).
+  await manager.getByRole('dialog').getByLabel(/ตรวจผลต่างมาก/).check()
   await manager.getByRole('dialog').getByRole('button', { name: 'ยืนยัน', exact: true }).click()
   await expect.poll(async () => (await getDoc(`monthlyCounts/wh__${MONTH}`))?.status, { timeout: 20_000 }).toBe('posted')
   expect((await getDoc('stockLevels/wh__flour'))?.qty).toBe(15) // 9 counted + 6 received after
