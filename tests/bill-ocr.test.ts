@@ -47,3 +47,28 @@ describe('matching the lines', () => {
     expect(r.unmatched.map((l) => l.name)).toEqual(['Olive oil extra virgin'])
   })
 })
+
+describe('answers as models actually shape them (6 Oct 2026)', () => {
+  test('the LINE order screenshot: "2 kg" strings, items/quantity keys — every row kept', () => {
+    const bill = cleanOcr({
+      model: 'gemini-3.5-flash',
+      items: [
+        { product: 'Feta cheese', quantity: '2 kg' },
+        { product: 'Plain yoghurt', quantity: '3kg' },
+        { name: 'Garlic dill white cheese', qty: '2 Kg.' },
+      ],
+    })
+    expect(bill.model).toBe('gemini-3.5-flash')
+    expect(bill.lines).toEqual([
+      { name: 'Feta cheese', qty: 2, unit: 'kg' },
+      { name: 'Plain yoghurt', qty: 3, unit: 'kg' },
+      { name: 'Garlic dill white cheese', qty: 2, unit: 'Kg' },
+    ])
+  })
+  test('a separate unit field wins over one inside the quantity; thousands and decimals', () => {
+    expect(cleanOcr({ lines: [{ name: 'Flour', qty: '1,250.5 g', unit: 'KG' }] }).lines).toEqual([{ name: 'Flour', qty: 1250.5, unit: 'KG' }])
+  })
+  test('a bare array of rows is read too; rows with no number are dropped', () => {
+    expect(cleanOcr([{ name: 'Ham', qty: 'two' }, { name: 'Bacon', qty: 4 }]).lines).toEqual([{ name: 'Bacon', qty: 4, unit: undefined }])
+  })
+})

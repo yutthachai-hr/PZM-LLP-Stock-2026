@@ -23,6 +23,8 @@ export interface OcrBill {
   /** YYYY-MM-DD, as the date box stores it. */
   date?: string
   lines: OcrLine[]
+  /** Which model answered, as the server reports it — for saying who found nothing. */
+  model?: string
 }
 
 const str = (v: unknown, max: number): string | undefined => {
@@ -31,21 +33,45 @@ const str = (v: unknown, max: number): string | undefined => {
   return s || undefined
 }
 
-/** Whatever the model returned, as an OcrBill — or an empty one. Never throws. */
+/**
+ * A quantity as models actually write it: 2, "2", "1,250.5", "2 kg", "2kg", "x2".
+ * Returns the number and whatever unit trailed it.
+ */
+export function readQtyText(v: unknown): { qty: number; unit?: string } {
+  if (typeof v === 'number') return { qty: Number.isFinite(v) ? v : 0 }
+  const m = /(-?\d[\d,]*(?:\.\d+)?)\s*([^\d\s][^\d]*)?/.exec(String(v ?? '').trim())
+  if (!m) return { qty: 0 }
+  const qty = Number(m[1].replace(/,/g, ''))
+  const unit = m[2]?.trim().replace(/[.,;:)]+$/, '')
+  return { qty: Number.isFinite(qty) ? qty : 0, ...(unit ? { unit: unit.slice(0, 20) } : {}) }
+}
+
+const pick = (o: Record<string, unknown>, keys: readonly string[]) => keys.map((k) => o[k]).find((v) => v !== undefined && v !== null && v !== '')
+
+/**
+ * Whatever the model returned, as an OcrBill — or an empty one. Never throws.
+ *
+ * Lenient on purpose (6 Oct 2026): models answer `items` or `products` instead of `lines`,
+ * `quantity` instead of `qty`, and "2 kg" instead of 2 — the strict reading dropped every
+ * row of a perfectly readable order and said "no lines found".
+ */
 export function cleanOcr(raw: unknown): OcrBill {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const date = str(r.date, 10)
-  const lines = Array.isArray(r.lines) ? r.lines : []
+  const list = pick(r, ['lines', 'items', 'products', 'rows'])
+  const lines = Array.isArray(list) ? list : Array.isArray(raw) ? raw : []
   return {
-    supplier: str(r.supplier, 200),
-    invoiceNo: str(r.invoiceNo, 100),
+    model: str(r.model, 80),
+    supplier: str(pick(r, ['supplier', 'vendor', 'seller']), 200),
+    invoiceNo: str(pick(r, ['invoiceNo', 'invoice', 'documentNo', 'number']), 100),
     date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
     lines: lines
       .slice(0, 100)
       .map((l) => {
         const o = (l && typeof l === 'object' ? l : {}) as Record<string, unknown>
-        const qty = Number(String(o.qty ?? '').replace(/,/g, ''))
-        return { name: str(o.name, 200) ?? '', qty: Number.isFinite(qty) ? roundQty(qty) : 0, unit: str(o.unit, 20) }
+        const read = readQtyText(pick(o, ['qty', 'quantity', 'amount', 'count']))
+        const unit = str(pick(o, ['unit', 'uom']), 20) ?? read.unit
+        return { name: str(pick(o, ['name', 'product', 'item', 'description']), 200) ?? '', qty: roundQty(read.qty), unit }
       })
       .filter((l) => l.name && l.qty > 0),
   }

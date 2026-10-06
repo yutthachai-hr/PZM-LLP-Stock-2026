@@ -32,12 +32,14 @@ const FALLBACK_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct'
 
 const PROMPT = [
   'You read a document from a Thai restaurant business that lists products and quantities:',
-  'a supplier delivery note or invoice, a purchase/order list, a stock-count sheet (possibly handwritten), or a transfer slip.',
+  'a supplier delivery note or invoice, a purchase/order list, a stock-count sheet (possibly handwritten), a transfer slip,',
+  'or a screenshot of a chat message (LINE) in which someone lists what to order, one product per line, e.g. "Feta cheese 2 kg".',
   'Return JSON only, no prose, with this shape:',
   '{"supplier": string, "invoiceNo": string, "date": "YYYY-MM-DD", "lines": [{"name": string, "qty": number, "unit": string}]}',
   'supplier: the selling company name as printed. invoiceNo: the document/invoice/bill number.',
   'date: the document date; convert Thai Buddhist years (e.g. 2569) to Gregorian (2026).',
   'lines: one per product row, name exactly as printed (include the product code if one is printed beside it), qty the quantity on that row as a number (delivered, ordered, counted or transferred), unit as printed (KG, EA, Carton, Pack...).',
+  'qty MUST be a JSON number (2, not "2 kg"); put the unit in "unit". Use exactly the key "lines".',
   'Leave a field empty or out when it is not on the page. Never invent rows.',
 ].join('\n')
 
@@ -73,7 +75,14 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
   }
   if (res.ok) {
     const out = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-    return reply(out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '', model)
+    const text = out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+    // A second opinion on a picture the first model found nothing in (owner, 6 Oct 2026:
+    // "ลองไปใช้โมเดลอื่น"): the Workers AI reader looks at it too, and the answer with lines wins.
+    if (!lineCount(text) && env.AI && m[1] !== 'application/pdf') {
+      const second = await fallback(env.AI, image)
+      if (lineCount(second)) return reply(second, FALLBACK_MODEL)
+    }
+    return reply(text, model)
   }
   // Any other failure: a picture still has the Workers AI reader; a PDF does not.
   const detail = await errorDetail(res)
@@ -83,6 +92,24 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
   }
   if (res.status === 429) return json(429, { error: 'quota', model })
   return json(502, { error: 'model', status: res.status, model, message: detail })
+}
+
+/** How many rows an answer holds, however it was shaped — 0 for none or unreadable. */
+function lineCount(answer: unknown): number {
+  let o: unknown = answer
+  if (typeof answer === 'string') {
+    const from = answer.indexOf('{')
+    const to = answer.lastIndexOf('}')
+    try {
+      o = from >= 0 && to > from ? JSON.parse(answer.slice(from, to + 1)) : null
+    } catch {
+      return 0
+    }
+  }
+  if (!o || typeof o !== 'object') return 0
+  const r = o as Record<string, unknown>
+  const list = r.lines ?? r.items ?? r.products ?? r.rows
+  return Array.isArray(list) ? list.length : 0
 }
 
 /** Set once per isolate when discovery replaces a retired default. */
@@ -135,14 +162,14 @@ async function fallback(ai: Ai, image: string): Promise<unknown> {
 }
 
 function reply(answer: unknown, model: string): Response {
-  if (answer && typeof answer === 'object') return json(200, answer)
+  if (answer && typeof answer === 'object') return json(200, { ...(answer as object), model })
   const text = String(answer)
   // The JSON object, whatever the model wrapped around it (prose, ```json fences).
   const from = text.indexOf('{')
   const to = text.lastIndexOf('}')
   try {
     if (from < 0 || to < from) throw new Error('no object')
-    return json(200, JSON.parse(text.slice(from, to + 1)))
+    return json(200, { ...JSON.parse(text.slice(from, to + 1)), model })
   } catch {
     return json(502, { error: 'unreadable', model, message: text.slice(0, 200) })
   }

@@ -2732,6 +2732,7 @@ export const EN: Record<string, string> = {
   'รายละเอียดอื่นใส่ภายหลังได้ที่หน้าผู้ขาย': 'Other details can be added later on the suppliers page',
   'บันทึกผู้ขาย': 'Save supplier',
   // File import everywhere (6 Oct 2026)
+  "AI ({model}) ไม่พบรายการสินค้าในเอกสารนี้ — ลองรูปที่ชัดขึ้น หรือใช้ Excel": "AI ({model}) found no product lines — try a clearer picture, or Excel",
   "AI อ่านแล้วแต่ตอบกลับไม่เป็นรายการ — ลองรูปที่ชัดขึ้น หรือคีย์เอง": "AI read it but did not answer with lines — try a clearer picture, or key it in",
   "AI อ่านบิลไม่สำเร็จ ({status}) {why}": "AI could not read it ({status}) {why}",
   "นำเข้าไฟล์ไปที่ไหน?": "Import a file into…",
@@ -2750,7 +2751,6 @@ export const EN: Record<string, string> = {
   "สินค้าและสต๊อกตั้งต้น": "Products and opening stock",
   "รายการสินค้า / สต๊อกปิดงวดจาก Excel": "Product list / closing stock from Excel",
   "ไม่พบแถวสินค้าในไฟล์ — ต้องมีหัวคอลัมน์ชื่อสินค้า (หรือรหัส) และจำนวน": "No product rows found — the sheet needs a product (or code) column and a quantity column",
-  "AI ไม่พบรายการสินค้าในเอกสารนี้ — ลองรูปที่ชัดขึ้น หรือใช้ Excel": "AI found no product lines — try a clearer picture, or Excel",
   "นำเข้ารายการสินค้า": "Import product lines",
   "แถวแรก ๆ ต้องมีหัวคอลัมน์ ชื่อสินค้า (หรือรหัส) และ จำนวน": "Near the top: a product (or code) column and a quantity column",
   "รูป / PDF (AI อ่าน)": "Photo / PDF (read by AI)",
