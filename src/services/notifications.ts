@@ -112,7 +112,28 @@ export async function savePrefs(uid: string, mute: Partial<Record<NotificationCa
     const kept = [...new Set(list.filter((p) => p !== 'critical'))]
     if (kept.length) clean[cat] = kept
   }
-  const doc: NotificationPrefs = { id: prefsId(uid), kind: 'prefs', userId: uid, mute: clean, updatedAt: Date.now() }
+  await writePrefs(uid, { mute: clean })
+}
+
+/** Popup sound and mute (5 Oct 2026), in the same document as the bell's mutes. */
+export async function saveSoundPrefs(uid: string, sound: NonNullable<NotificationPrefs['sound']>): Promise<void> {
+  const clean: NonNullable<NotificationPrefs['sound']> = {
+    enabled: !!sound.enabled,
+    volume: Math.min(1, Math.max(0, Number(sound.volume) || 0)),
+  }
+  if (sound.off?.length) clean.off = [...new Set(sound.off)]
+  if (sound.mutedUntil && sound.mutedUntil > Date.now()) clean.mutedUntil = sound.mutedUntil
+  if (sound.allowCritical === false) clean.allowCritical = false
+  await writePrefs(uid, { sound: clean })
+}
+
+/** One write of the whole document, keeping whichever half is not being changed. */
+async function writePrefs(uid: string, change: Partial<Pick<NotificationPrefs, 'mute' | 'sound'>>): Promise<void> {
+  const cur = cachedPrefs?.uid === uid && cachedPrefs.brand === getBrand() ? cachedPrefs.prefs : await scoped().getOne<NotificationPrefs>(COL.inventorySchedules, prefsId(uid))
+  const doc: NotificationPrefs = { id: prefsId(uid), kind: 'prefs', userId: uid, mute: cur?.mute ?? {}, updatedAt: Date.now() }
+  if (cur?.sound) doc.sound = cur.sound
+  if (change.mute) doc.mute = change.mute
+  if (change.sound) doc.sound = change.sound
   await scoped().set(COL.inventorySchedules, doc.id, doc as unknown as Record<string, unknown>)
   cachedPrefs = { uid, brand: getBrand(), prefs: doc }
   announce()

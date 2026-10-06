@@ -19,6 +19,8 @@ import {
 } from '../types'
 import { fetchRange as fetchEvents, patchEvent } from '../data/eventCache'
 import { orderCache } from '../data/orderCache'
+import { transferCache } from '../data/transferCache'
+import { riskEngineInput } from '../lib/riskNotifications'
 import { requestCache } from '../data/requestCache'
 import { applyPlan, getNotifications } from './notifications'
 import { loadScheduleConfig } from './schedules'
@@ -196,12 +198,15 @@ export async function runNotificationJobs(
   now = Date.now(),
 ): Promise<number> {
   const today = bkkDayStart(now)
-  const [events, orders, requests, suppliers, config] = await Promise.all([
+  const [events, orders, requests, suppliers, config, riskOrders, transfers] = await Promise.all([
     fetchEvents(today - TASK_LOOKBACK_DAYS * DAY_MS, bkkDayEnd(now) + DAY_MS),
     orderCache.fetchRange(today - 45 * DAY_MS, bkkDayEnd(now)),
     requestCache.fetchRange(today - 30 * DAY_MS, bkkDayEnd(now)),
     loadSuppliers(),
     loadScheduleConfig(),
+    // The risk rules look back 90 days; one wider read that covers the 45 above too.
+    orderCache.fetchRange(today - 120 * DAY_MS, bkkDayEnd(now) + DAY_MS),
+    transferCache.fetchRange(today - 30 * DAY_MS, bkkDayEnd(now) + DAY_MS),
   ])
   const view = stockView(data)
   const insights = inventoryInsights({
@@ -218,7 +223,20 @@ export async function runNotificationJobs(
     adjustmentsSince: today - 7 * DAY_MS,
   })
   const locationName = (id: string | undefined) => data.locations.find((l) => l.id === id)?.name ?? ''
-  const jobs: JobName[] = ['tasks', 'purchasing', 'inventory', 'brief', 'weekly']
+  const jobs: JobName[] = ['tasks', 'purchasing', 'inventory', 'brief', 'weekly', 'risk']
+  const risk = riskEngineInput({
+    orders: riskOrders,
+    transfers,
+    suppliers,
+    products: data.products,
+    locations: data.locations,
+    qtyAt: view.qtyAt,
+    minFor: view.minFor,
+    tracksProduct: view.tracksProduct,
+    movements: data.movements,
+    usageWindowDays: config.settings.usageWindowDays,
+    now,
+  })
   const drafts = evaluate({
     now,
     jobs,
@@ -237,6 +255,7 @@ export async function runNotificationJobs(
     }),
     locationName,
     settings: config.settings,
+    risk,
   })
   const known = new Map(data.notifications.map((n) => [n.id, n]))
   const missing = drafts.map((d) => d.id).filter((id) => !known.has(id))

@@ -24,6 +24,12 @@ export interface NotificationAction {
 
 export interface PresentedNotification {
   id: string
+  /**
+   * This occurrence: the id plus when it was (re)armed. A state that clears and comes back
+   * is armed again with a new time — a new crossing worth a popup — while a reconnect
+   * re-delivering the same document is the same occurrence and pops nothing.
+   */
+  occurrence: string
   type: NotificationKind
   severity: Severity
   /** Shown as a popup when it arrives (always listed in the bell regardless). */
@@ -55,6 +61,10 @@ const SOUND_CATEGORY: Partial<Record<NotificationKind, SoundCategory>> = {
   supplierDatePending: 'dateChanges',
   supplierDateRejected: 'dateChanges',
   poDelayed: 'deliveryRisks',
+  deliveryRisk: 'deliveryRisks',
+  stockoutRisk: 'stockoutRisks',
+  supplierOpened: 'informational',
+  poSent: 'informational',
   poArriving: 'informational',
   stockoutSoon: 'stockoutRisks',
   outOfStock: 'stockoutRisks',
@@ -99,9 +109,16 @@ export function presentNotification(n: AppNotification): PresentedNotification {
   if (n.supplierId && entity.type === 'po' && n.category === 'supplier') {
     actions.push({ label: 'ดูผู้ขาย', url: `/suppliers?id=${encodeURIComponent(n.supplierId)}` }) // i18n-key
   }
-  const popup = !NEVER_POPUP.has(n.kind) && (severity !== 'info' || INFO_POPUP.has(n.kind))
+  if (n.kind === 'stockoutRisk') {
+    actions.splice(0, actions.length, { label: 'ดูความเสี่ยง', url: n.link }) // i18n-key
+    actions.push({ label: 'ตัวเลือกโอนของ', url: '/transfers/new' }) // i18n-key
+  }
+  // A delivery-risk level below the one reached is history the moment it is written.
+  const notCurrent = n.kind === 'deliveryRisk' && n.params.current !== 1
+  const popup = !NEVER_POPUP.has(n.kind) && !notCurrent && (severity !== 'info' || INFO_POPUP.has(n.kind))
   return {
     id: n.id,
+    occurrence: `${n.id}@${n.createdAt}`,
     type: n.kind,
     severity,
     popup,

@@ -32,6 +32,8 @@ function note(id: string, kind: NotificationKind, priority: NotificationPriority
     ...over,
   }
 }
+/** A card's key: the occurrence (id@armedAt). Notes here are armed at NOW − 1 s. */
+const k = (id: string) => `${id}@${NOW - 1000}`
 const item = (n: AppNotification, category: NotificationCategory = n.category) => ({ presented: presentNotification(n), category })
 
 describe('presentation: one function decides how each kind is shown', () => {
@@ -74,8 +76,8 @@ describe('what pops', () => {
   test('a new one after that pops once', () => {
     const s0 = receive(emptyQueue(), first, NOW).state
     const r = receive(s0, [...first, item(note('new1', 'supplierDateChanged', 'medium'))], NOW)
-    expect(r.fresh.map((c) => c.key)).toEqual(['new1'])
-    expect(r.state.visible.map((c) => c.key)).toEqual(['new1'])
+    expect(r.fresh.map((c) => c.key)).toEqual([k('new1')])
+    expect(r.state.visible.map((c) => c.key)).toEqual([k('new1')])
     // The listener delivering the same list again (a reconnect) pops nothing more.
     const again = receive(r.state, [...first, item(note('new1', 'supplierDateChanged', 'medium'))], NOW + 5000)
     expect(again.fresh).toEqual([])
@@ -86,6 +88,34 @@ describe('what pops', () => {
     const s0 = receive(emptyQueue(), [], NOW).state
     const stale = item(note('stale', 'supplierDateChanged', 'medium', { createdAt: NOW - FRESH_MS - 1 }))
     expect(receive(s0, [stale], NOW).fresh).toEqual([])
+  })
+
+  test('a state that cleared and came back (re-armed, new time) pops again — the same doc re-delivered does not', () => {
+    const risk = (createdAt: number) => item(note('deliveryRisk__po6__HIGH', 'deliveryRisk', 'high', { category: 'purchasing', createdAt, params: { docNo: 'PO-6', supplier: 'P', score: 72, current: 1 } }))
+    let s = receive(emptyQueue(), [risk(NOW - 60_000)], NOW).state
+    expect(receive(s, [risk(NOW - 60_000)], NOW).fresh).toEqual([])
+    const r = receive(s, [risk(NOW - 500)], NOW)
+    expect(r.fresh).toHaveLength(1)
+    s = r.state
+    expect(s.visible).toHaveLength(1)
+  })
+
+  test('a delivery-risk level below the one reached never pops', () => {
+    const s0 = receive(emptyQueue(), [], NOW).state
+    const lower = item(note('deliveryRisk__po6__MEDIUM', 'deliveryRisk', 'medium', { category: 'purchasing', params: { docNo: 'PO-6', supplier: 'P', score: 72, current: 0 } }))
+    const top = item(note('deliveryRisk__po6__HIGH', 'deliveryRisk', 'high', { category: 'purchasing', params: { docNo: 'PO-6', supplier: 'P', score: 72, current: 1 } }))
+    expect(receive(s0, [lower, top], NOW).fresh.map((c) => c.items[0].id)).toEqual(['deliveryRisk__po6__HIGH'])
+  })
+
+  test('supplier opened the link and PO sent: listed, never popped, no sound', () => {
+    expect(presentNotification(note('o', 'supplierOpened', 'info'))).toMatchObject({ popup: false, sound: null })
+    expect(presentNotification(note('p', 'poSent', 'info', { category: 'purchasing' }))).toMatchObject({ popup: false, sound: null })
+  })
+
+  test('a stock-out risk offers View Risk and Transfer Options', () => {
+    const p = presentNotification(note('st', 'stockoutRisk', 'critical', { category: 'inventory', link: '/', productId: 'fries' }))
+    expect(p).toMatchObject({ severity: 'critical', sound: 'critical', soundCategory: 'stockoutRisks' })
+    expect(p.actions.map((a) => a.url)).toEqual(['/', '/transfers/new'])
   })
 
   test('info kinds never pop', () => {
@@ -101,7 +131,7 @@ describe('bursts and the stack', () => {
     const many = ['a', 'b', 'c', 'd', 'e'].map((id) => item(note(id, 'stockoutSoon', 'high', { category: 'inventory', link: '/products', productId: id })))
     const r = receive(s0, many, NOW)
     expect(r.fresh).toHaveLength(1)
-    expect(r.fresh[0]).toMatchObject({ key: 'burst:inventory:a', severity: 'warning', category: 'inventory' })
+    expect(r.fresh[0]).toMatchObject({ key: `burst:inventory:${k('a')}`, severity: 'warning', category: 'inventory' })
     expect(r.fresh[0].items).toHaveLength(5)
     expect(soundFor(r.fresh)).toBe('warning')
   })
@@ -110,13 +140,13 @@ describe('bursts and the stack', () => {
     const crit = item(note('out', 'outOfStock', 'critical', { category: 'inventory', link: '/products', productId: 'fries' }))
     const soon = ['a', 'b', 'c'].map((id) => item(note(id, 'stockoutSoon', 'high', { category: 'inventory', link: '/products', productId: id })))
     const r = receive(s0, [crit, ...soon], NOW)
-    expect(r.fresh.map((c) => c.key)).toEqual(['out', 'burst:inventory:a'])
+    expect(r.fresh.map((c) => c.key)).toEqual([k('out'), `burst:inventory:${k('a')}`])
     expect(soundFor(r.fresh)).toBe('critical')
   })
 
   test('two arrivals pop separately; the sound is the most severe one', () => {
     const r = receive(s0, [item(note('ok', 'supplierConfirmed', 'info')), item(note('bad', 'outOfStock', 'critical', { category: 'inventory', link: '/products' }))], NOW)
-    expect(r.fresh.map((c) => c.key)).toEqual(['bad', 'ok'])
+    expect(r.fresh.map((c) => c.key)).toEqual([k('bad'), k('ok')])
     expect(soundFor(r.fresh)).toBe('critical')
   })
 
@@ -134,10 +164,10 @@ describe('bursts and the stack', () => {
   test('success and warning time out; critical stays until dismissed', () => {
     let s = receive(s0, [item(note('w', 'supplierDateChanged', 'medium')), item(note('c', 'outOfStock', 'critical', { category: 'inventory' }))], NOW).state
     s = expire(s, NOW + (AUTO_DISMISS_MS.warning as number) + 1)
-    expect(s.visible.map((c) => c.key)).toEqual(['c'])
+    expect(s.visible.map((c) => c.key)).toEqual([k('c')])
     s = expire(s, NOW + 24 * 3_600_000)
-    expect(s.visible.map((c) => c.key)).toEqual(['c'])
-    expect(dismiss(s, 'c', NOW).visible).toEqual([])
+    expect(s.visible.map((c) => c.key)).toEqual([k('c')])
+    expect(dismiss(s, k('c'), NOW).visible).toEqual([])
   })
 
   test('a fresh queue (another user signing in) has seen nothing of the last one', () => {

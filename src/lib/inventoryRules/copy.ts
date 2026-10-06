@@ -21,6 +21,10 @@ export const NOTIFICATION_TITLE: Record<NotificationKind, string> = {
   supplierDatePending: 'รออนุมัติวันส่งใหม่: {supplier} ({docNo})', // i18n-key
   supplierDateApproved: 'อนุมัติวันส่งใหม่แล้ว: {supplier} ({docNo})', // i18n-key
   supplierDateRejected: 'ไม่อนุมัติวันส่งใหม่: {supplier} ({docNo})', // i18n-key
+  supplierOpened: 'ผู้ขายเปิดใบสั่งซื้อแล้ว: {supplier} ({docNo})', // i18n-key
+  poSent: 'ส่งใบสั่งซื้อเข้า LINE แล้ว: {supplier} ({docNo})', // i18n-key
+  deliveryRisk: 'ความเสี่ยงส่งช้าเพิ่มขึ้น: {supplier} ({docNo})', // i18n-key
+  stockoutRisk: 'เสี่ยงของหมด: {product} · {location}', // i18n-key
   transferSubmitted: 'คำขอโอนสินค้ารออนุมัติ {docNo}', // i18n-key
   transferArriving: 'สินค้ากำลังมาส่ง: {docNo}', // i18n-key
   transferIssue: 'แจ้งผลต่าง/ปัญหาสินค้าโอน: {docNo}', // i18n-key
@@ -49,6 +53,10 @@ export const NOTIFICATION_BODY: Record<NotificationKind, string> = {
   supplierDatePending: 'ขอส่งวันที่ {date} เกินช่วงที่อนุญาต · {by}', // i18n-key
   supplierDateApproved: 'วันส่ง {date} · {by}', // i18n-key
   supplierDateRejected: 'วันที่ขอ {date} · {by}: {reason}', // i18n-key
+  supplierOpened: 'เปิดลิงก์ยืนยันวันส่ง', // i18n-key
+  poSent: '{by}', // i18n-key
+  deliveryRisk: 'คะแนนความเสี่ยง {score}/100', // i18n-key
+  stockoutRisk: 'คาดว่าหมด {date} · ของมาช้ากว่านั้น {days} วัน ({docNo})', // i18n-key
   transferSubmitted: '{by} · จาก {from} ไป {to} · {n} รายการ', // i18n-key
   transferArriving: 'จาก {from} มา {to} · {n} รายการ', // i18n-key
   transferIssue: '{by} รายงานปัญหาการรับของที่ {to}', // i18n-key

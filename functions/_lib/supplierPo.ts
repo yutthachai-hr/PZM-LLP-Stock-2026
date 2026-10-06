@@ -17,7 +17,7 @@ import {
   type RespondOutcome,
   type SupplierPatch,
 } from '../../src/lib/supplierConfirmation'
-import { supplierAnswerDraft, supplierDecisionDraft, toDoc } from '../../src/lib/inventoryRules/notifications'
+import { supplierAnswerDraft, supplierDecisionDraft, supplierOpenedDraft, toDoc } from '../../src/lib/inventoryRules/notifications'
 import { DAY_MS } from '../../src/lib/inventoryRules/time'
 import { brandCollection, type ServerStore } from './serverStore'
 import { signSupplierToken, verifySupplierToken, type SupplierClaims, type TokenBrand } from './supplierToken'
@@ -188,7 +188,11 @@ export async function viewLink(deps: Deps, token: string): Promise<Reply> {
   if (opened) {
     // Recording the first view is worth one write, not a failed page: ignore a lost race.
     try {
-      if (await deps.store.patchIf(col, claims.poId, opened, got.updateTime)) order = applyPatch(order, opened)
+      if (await deps.store.patchIf(col, claims.poId, opened, got.updateTime)) {
+        order = applyPatch(order, opened)
+        // The bell only (info, no popup): whoever sent it can see the supplier has looked.
+        await notify(deps, claims.brand, toDoc(supplierOpenedDraft(order, claims.version), now, 'worker', 'supplier-link'))
+      }
     } catch {
       /* best effort */
     }

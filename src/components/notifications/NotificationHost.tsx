@@ -8,6 +8,7 @@ import { isFor } from '../../lib/inventoryRules/notifications'
 import { presentNotification, type Severity } from '../../lib/notificationPresentation'
 import { BURST_WINDOW_MS, dismiss, emptyQueue, expire, receive, soundFor, type PopupCard, type QueueState } from '../../lib/notificationQueue'
 import { notificationSound } from '../../lib/notificationSound'
+import { logNotification } from '../../lib/notificationLog'
 import { markRead, useNotificationPrefs } from '../../services/notifications'
 import type { AppNotification, Role } from '../../types'
 import { Icon, type IconName } from '../Icon'
@@ -100,16 +101,25 @@ function Host({ uid, role }: { uid: string; role: Role }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       for (const n of mine) byId.current.set(n.id, n)
-      const list = mine.map((n) => ({ presented: presentNotification(n), category: n.category }))
       const now = Date.now()
+      // Muted for a while: nothing pops or sounds (critical still does unless switched off);
+      // what arrives meanwhile is history by the time the mute ends.
+      const muted = !!sound.mutedUntil && sound.mutedUntil > now
+      const list = mine.map((n) => {
+        const presented = presentNotification(n)
+        const silence = muted && (presented.severity !== 'critical' || sound.allowCritical === false)
+        return { presented: silence ? { ...presented, popup: false, sound: null } : presented, category: n.category }
+      })
       const { fresh } = receive(stateRef.current, list, now)
       dispatch({ type: 'receive', list, now })
+      if (fresh.length) logNotification('displayed', { cards: fresh.map((c) => c.key), count: fresh.reduce((s, c) => s + c.items.length, 0) })
       const name = soundFor(fresh.filter((c) => !lastPlayed.current.has(c.key)))
       fresh.forEach((c) => lastPlayed.current.add(c.key))
       if (!name) return
       const off = new Set(sound.off ?? [])
       const allowed = fresh.some((c) => c.items.some((i) => i.sound && !off.has(i.soundCategory)))
       const result = notificationSound.play(name, { enabled: sound.enabled && allowed, volume: sound.volume })
+      logNotification('sound', { name, result })
       if (result === 'needs-unlock' && !promptDismissed()) setAskSound(true)
     }, BURST_WINDOW_MS)
     return () => clearTimeout(timer)
@@ -130,6 +140,7 @@ function Host({ uid, role }: { uid: string; role: Role }) {
     (card: PopupCard, url: string) => {
       close(card.key)
       navigate(url)
+      logNotification('opened', { card: card.key, url })
       // Opening it is reading it; a dismissed popup stays unread in the bell.
       for (const item of card.items) {
         const n = byId.current.get(item.id)

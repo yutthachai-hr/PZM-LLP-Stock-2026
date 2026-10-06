@@ -1456,8 +1456,15 @@ service cloud.firestore {
     }
 
     function validPrefs(d) {
-      return d.keys().hasOnly(['id', 'kind', 'userId', 'mute', 'updatedAt'])
-        && d.userId == request.auth.uid && d.mute is map && epochMs(d.updatedAt);
+      return d.keys().hasOnly(['id', 'kind', 'userId', 'mute', 'sound', 'updatedAt'])
+        && d.userId == request.auth.uid && d.mute is map && epochMs(d.updatedAt)
+        // Popup sound and mute (5 Oct 2026).
+        && (!('sound' in d) || (d.sound is map
+          && d.sound.keys().hasOnly(['enabled', 'volume', 'off', 'mutedUntil', 'allowCritical'])
+          && d.sound.enabled is bool && nonneg(d.sound.volume, 1)
+          && (!('off' in d.sound) || (d.sound.off is list && d.sound.off.size() <= 10))
+          && (!('mutedUntil' in d.sound) || epochMs(d.sound.mutedUntil))
+          && (!('allowCritical' in d.sound) || d.sound.allowCritical is bool)));
     }
 
     function validSnooze(d) {
@@ -1584,7 +1591,7 @@ service cloud.firestore {
       let d = request.resource.data;
       return validNotification(docId, d) && d.source == 'client' && d.createdBy == request.auth.uid
         && d.readBy.size() == 0 && d.active == true
-        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste', 'transferArriving', 'transferIssue', 'transferSubmitted', 'transferDiscrepancy']);
+        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste', 'transferArriving', 'transferIssue', 'transferSubmitted', 'transferDiscrepancy', 'poSent']);
     }
 
     function notificationUpdate(docId) {

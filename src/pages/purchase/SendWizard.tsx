@@ -13,6 +13,8 @@ import { errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
 import { imageHostAvailable, uploadPoImage } from '../../services/poImages'
 import { setShareStatus } from '../../services/purchaseOrders'
+import { deliver } from '../../services/notifications'
+import { poSentDraft } from '../../lib/inventoryRules/notifications'
 import { supplierLink } from '../../services/supplierConfirmation'
 import { requestedOf, supplierDateLabel } from '../../lib/supplierConfirmation'
 import { pickShareProvider, statusFor, type PurchaseShareProvider } from '../../share'
@@ -104,6 +106,8 @@ export function SendWizard({
     if (!user) return
     const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
     if (status === 'sent' || status === 'skipped') doneHere.current.add(order.id)
+    // The bell's record that it went (info, no popup); best effort like every deliver().
+    if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
     await onStatus({ ...order, shareStatus: status, ...written })
   }
 

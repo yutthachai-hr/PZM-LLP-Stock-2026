@@ -47,6 +47,8 @@ export const STATEFUL: ReadonlySet<NotificationKind> = new Set<NotificationKind>
   'outOfStock',
   'stockoutSoon',
   'reorder',
+  'deliveryRisk',
+  'stockoutRisk',
 ])
 
 export const CATEGORY: Record<NotificationKind, NotificationCategory> = {
@@ -64,6 +66,10 @@ export const CATEGORY: Record<NotificationKind, NotificationCategory> = {
   supplierDatePending: 'supplier',
   supplierDateApproved: 'supplier',
   supplierDateRejected: 'supplier',
+  supplierOpened: 'supplier',
+  poSent: 'purchasing',
+  deliveryRisk: 'purchasing',
+  stockoutRisk: 'inventory',
   transferSubmitted: 'inventory',
   transferArriving: 'inventory',
   transferIssue: 'inventory',
@@ -84,6 +90,8 @@ export const JOB_KINDS = {
   inventory: ['lowStock', 'outOfStock', 'stockoutSoon', 'reorder', 'adjustment', 'waste'],
   brief: ['dailyBrief'],
   weekly: ['weeklySummary'],
+  // Delivery risk and stock-outs before deliveries (S3/S4): run by the app, not the Worker.
+  risk: ['deliveryRisk', 'stockoutRisk'],
 } satisfies Record<string, NotificationKind[]>
 
 export type JobName = keyof typeof JOB_KINDS
@@ -120,7 +128,38 @@ export interface EngineInput {
   weekly?: WeeklyFigures
   locationName: (id: string | undefined) => string
   settings: { reminderBeforeMin: number; escalateAfterHours: number }
+  /** Late-delivery risk and stock-outs before deliveries, already computed (lib/deliveryRisk, lib/inventoryRisk). */
+  risk?: RiskEngineInput
 }
+
+export type RiskLevelName = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+/** Plain data, so this engine (also bundled into the Worker) needs no risk module. */
+export interface RiskEngineInput {
+  deliveries: readonly {
+    poId: string
+    docNo: string
+    supplierId: string
+    supplierName: string
+    locationId: string
+    level: RiskLevelName
+    score: number
+    people: string[]
+  }[]
+  shortages: readonly {
+    productId: string
+    productName: string
+    locationId: string
+    locationName: string
+    level: RiskLevelName
+    stockoutDate: number
+    gapDays: number
+    docNo: string
+  }[]
+}
+
+const RISK_LADDER: RiskLevelName[] = ['MEDIUM', 'HIGH', 'CRITICAL']
+const RISK_PRIORITY: Record<RiskLevelName, NotificationPriority> = { LOW: 'info', MEDIUM: 'medium', HIGH: 'high', CRITICAL: 'critical' }
 
 const OPEN_TASK = (e: StockEvent) => e.status === 'upcoming' || e.status === 'inProgress'
 
@@ -167,7 +206,10 @@ export function evaluate(input: EngineInput): NotificationDraft[] {
       if (state === 'arrivingToday') {
         out.push({ id: `poArriving__${po.id}__${today}`, kind: 'poArriving', priority: 'info', to: { all: true }, params, ...common })
       } else if (state === 'delayed') {
-        out.push({ id: `poDelayed__${po.id}`, kind: 'poDelayed', priority: 'high', to: { roles: MANAGERS }, params: { ...params, days: daysLate(po, now, lead(po.supplierId)) }, ...common })
+        const late = daysLate(po, now, lead(po.supplierId))
+        out.push({ id: `poDelayed__${po.id}`, kind: 'poDelayed', priority: 'high', to: { roles: MANAGERS }, params: { ...params, days: late }, ...common })
+        // Three days late is no longer a nudge (5 Oct 2026): a second, critical alert.
+        if (late >= 3) out.push({ id: `poDelayed__${po.id}__3d`, kind: 'poDelayed', priority: 'critical', to: { roles: MANAGERS }, params: { ...params, days: late }, ...common })
       }
     }
     for (const pr of input.requests ?? []) {
@@ -267,6 +309,42 @@ export function evaluate(input: EngineInput): NotificationDraft[] {
     })
   }
 
+
+  // Risk crossing a level (S3/S4, 5 Oct 2026). One document per level reached, so a
+  // score moving inside a level writes nothing; every level up to the current one is
+  // drafted so dropping back does not announce the lower level as if it were new, and only
+  // the current level carries `current: 1` — the one that pops up.
+  if (jobs.has('risk') && input.risk) {
+    for (const d of input.risk.deliveries) {
+      const reached = RISK_LADDER.filter((l) => RISK_LADDER.indexOf(l) <= RISK_LADDER.indexOf(d.level as never))
+      if (d.level === 'LOW') continue
+      for (const level of reached) {
+        out.push({
+          id: `deliveryRisk__${d.poId}__${level}`,
+          kind: 'deliveryRisk',
+          priority: RISK_PRIORITY[level],
+          to: d.people.length ? { roles: MANAGERS, uids: d.people } : { roles: MANAGERS },
+          params: { docNo: d.docNo, supplier: d.supplierName, score: d.score, current: level === d.level ? 1 : 0 },
+          link: `/orders?po=${d.poId}`,
+          locationId: d.locationId,
+          supplierId: d.supplierId,
+        })
+      }
+    }
+    for (const s of input.risk.shortages) {
+      if (s.level !== 'HIGH' && s.level !== 'CRITICAL') continue
+      out.push({
+        id: `stockoutRisk__${s.productId}__${s.locationId}`,
+        kind: 'stockoutRisk',
+        priority: s.level === 'CRITICAL' ? 'critical' : 'high',
+        to: { roles: MANAGERS },
+        params: { product: s.productName, location: s.locationName, date: dayLabel(s.stockoutDate), days: s.gapDays, docNo: s.docNo },
+        link: '/',
+        locationId: s.locationId,
+        productId: s.productId,
+      })
+    }
+  }
   return out
 }
 
@@ -329,6 +407,34 @@ export function supplierAnswerDraft(
     // A date beyond the range is a decision only a หัวหน้า or admin can take.
     to: kind === 'supplierDatePending' ? { roles: MANAGERS } : orderPeople(po),
     params: { docNo: po.docNo, supplier: po.supplierName, date: dayLabel(date), by },
+    link: `/orders?po=${po.id}`,
+    locationId: po.locationId,
+    supplierId: po.supplierId,
+  }
+}
+
+/** The supplier opened the link (once per link version): to whoever sent it. Info only. */
+export function supplierOpenedDraft(po: PurchaseOrder, linkVersion: number): NotificationDraft {
+  return {
+    id: `supplierOpened__${po.id}__${linkVersion}`,
+    kind: 'supplierOpened',
+    priority: 'info',
+    to: orderPeople(po),
+    params: { docNo: po.docNo, supplier: po.supplierName },
+    link: `/orders?po=${po.id}`,
+    locationId: po.locationId,
+    supplierId: po.supplierId,
+  }
+}
+
+/** The sheet went out through LINE: the bell only, for the managers and the sender. */
+export function poSentDraft(po: PurchaseOrder, by: { id: string; name: string }, imageVersion: number): NotificationDraft {
+  return {
+    id: `poSent__${po.id}__${imageVersion}`,
+    kind: 'poSent',
+    priority: 'info',
+    to: { roles: MANAGERS, uids: [by.id] },
+    params: { docNo: po.docNo, supplier: po.supplierName, by: by.name },
     link: `/orders?po=${po.id}`,
     locationId: po.locationId,
     supplierId: po.supplierId,

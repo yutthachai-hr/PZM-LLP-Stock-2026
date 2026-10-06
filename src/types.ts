@@ -835,6 +835,10 @@ export type NotificationKind =
   | 'supplierDatePending' // a supplier asked for a date beyond the range: needs a decision
   | 'supplierDateApproved' // a หัวหน้า/admin approved that date
   | 'supplierDateRejected' // a หัวหน้า/admin refused it
+  | 'supplierOpened' // a supplier opened the link (info, the bell only)
+  | 'poSent' // the sheet went out through LINE (info, the bell only)
+  | 'deliveryRisk' // an open order's late-delivery risk reached a level (one per level)
+  | 'stockoutRisk' // a location runs out before what is on order arrives
   | 'transferSubmitted' // a branch transfer waiting for approval
   | 'transferArriving' // stock in transit arriving today
   | 'transferIssue' // transfer discrepancy or misroute reported
@@ -899,6 +903,10 @@ export interface NotificationPrefs {
     volume: number
     /** A category switched off here plays no sound (its popup still shows). */
     off?: string[]
+    /** Until this instant, no popups and no sound (the bell still fills). */
+    mutedUntil?: number
+    /** Critical alerts still pop and sound while muted. Absent = yes. */
+    allowCritical?: boolean
   }
   updatedAt: number
 }

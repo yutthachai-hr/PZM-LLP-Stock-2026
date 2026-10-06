@@ -165,9 +165,12 @@ describe('GET /api/supplier/<token>', () => {
     })
     expect(JSON.stringify(r.body)).not.toMatch(/staff1|Nok|sentBy|createdBy/)
     expect(po().supplierLink?.openedAt).toBe(NOW)
+    // The first view is in the sender's bell (info: listed, never popped) — once.
+    expect(notes()).toEqual([expect.objectContaining({ kind: 'supplierOpened', priority: 'info', to: { roles: ['manager', 'admin'], uids: ['staff1'] } })])
     const writes = db.writes
     await viewLink(deps, token)
     expect(db.writes).toBe(writes)
+    expect(notes()).toHaveLength(1)
   })
   test('every link that is not ours gets the same 404', async () => {
     const token = await link()

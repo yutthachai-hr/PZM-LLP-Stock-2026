@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react'
 import { getPurchaseOrder } from '../services/purchaseOrders'
 import { useData } from './DataContext'
 import { orderCache } from './orderCache'
+import type { PurchaseOrder } from '../types'
+
+/** Fired with the fresh order when a supplier's answer changed it server-side. */
+export const ORDER_UPDATED = 'pzm:order-updated'
 
 /**
  * A supplier's answer is written by the server, which the calendar's order cache never
@@ -28,7 +32,12 @@ export function useSupplierRefresh(enabled: boolean): void {
       const poId = /^supplier\w+__(.+?)__/.exec(n.id)?.[1]
       if (!poId) continue
       void getPurchaseOrder(poId)
-        .then((o) => o && orderCache.patch(o))
+        .then((o) => {
+          if (!o) return
+          orderCache.patch(o)
+          // Screens holding their own copy (the Orders list, an open order sheet) take it too.
+          window.dispatchEvent(new CustomEvent<PurchaseOrder>(ORDER_UPDATED, { detail: o }))
+        })
         .catch(() => {})
     }
   }, [enabled, notifications])

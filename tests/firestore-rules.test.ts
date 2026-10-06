@@ -965,6 +965,15 @@ describe('inventory schedules and settings', () => {
     await assertSucceeds(setDoc(doc(as(STAFF), `inventorySchedules/prefs__${STAFF}`), { id: `prefs__${STAFF}`, kind: 'prefs', userId: STAFF, mute: { inventory: ['info'] }, updatedAt: ts() }))
     await assertFails(setDoc(doc(as(STAFF), `inventorySchedules/prefs__${MANAGER}`), { id: `prefs__${MANAGER}`, kind: 'prefs', userId: MANAGER, mute: {}, updatedAt: ts() }))
     await assertFails(setDoc(doc(as(STAFF), `inventorySchedules/prefs__${STAFF}`), { id: `prefs__${STAFF}`, kind: 'prefs', userId: MANAGER, mute: {}, updatedAt: ts() }))
+    // Popup sound and mute live in the same document (5 Oct 2026), shape pinned.
+    const mine = doc(as(STAFF), `inventorySchedules/prefs__${STAFF}`)
+    const prefs = (sound: unknown) => ({ id: `prefs__${STAFF}`, kind: 'prefs', userId: STAFF, mute: {}, sound, updatedAt: ts() })
+    await assertSucceeds(setDoc(mine, prefs({ enabled: true, volume: 0.6 })))
+    await assertSucceeds(setDoc(mine, prefs({ enabled: false, volume: 0, off: ['informational'], mutedUntil: ts() + 3_600_000, allowCritical: false })))
+    await assertFails(setDoc(mine, prefs({ enabled: true, volume: 2 })))
+    await assertFails(setDoc(mine, prefs({ enabled: 'yes', volume: 0.5 })))
+    await assertFails(setDoc(mine, prefs({ enabled: true, volume: 0.5, autoplay: true })))
+    await assertFails(setDoc(mine, prefs('loud')))
     await assertSucceeds(setDoc(doc(as(STAFF), 'inventorySchedules/snooze__reorder__p1__loc1'), { id: 'snooze__reorder__p1__loc1', kind: 'snooze', until: ts() + 86400000, by: STAFF, byName: 'S', createdAt: ts() }))
     await assertFails(setDoc(doc(as(STAFF), 'inventorySchedules/snooze__x'), { id: 'snooze__x', kind: 'snooze', until: ts(), by: ADMIN, byName: 'A', createdAt: ts() }))
     // The other brand has its own.
@@ -1567,6 +1576,13 @@ describe('notifications', () => {
     await assertFails(setDoc(doc(as(STAFF), 'notifications/random'), note('random', { kind: 'taskApproval' })))
     // Born unread and live.
     await assertFails(setDoc(doc(as(STAFF), 'notifications/taskApproval__e4__1'), note('taskApproval__e4__1', { readBy: { [MANAGER]: 1 } })))
+  })
+
+  test('staff record their own PO send (5 Oct 2026); managers write the risk alerts', async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), 'notifications/poSent__po1__2'), note('poSent__po1__2', { category: 'purchasing', priority: 'info' })))
+    await assertFails(setDoc(doc(as(STAFF), 'notifications/deliveryRisk__po1__HIGH'), note('deliveryRisk__po1__HIGH', { category: 'purchasing', priority: 'high' })))
+    await assertSucceeds(setDoc(doc(as(MANAGER), 'notifications/deliveryRisk__po1__HIGH'), note('deliveryRisk__po1__HIGH', { category: 'purchasing', priority: 'high', createdBy: MANAGER, params: { docNo: 'PO-1', supplier: 'S', score: 72, current: 1 } })))
+    await assertSucceeds(setDoc(doc(as(MANAGER), 'notifications/stockoutRisk__p1__l1'), note('stockoutRisk__p1__l1', { category: 'inventory', priority: 'critical', createdBy: MANAGER, link: '/' })))
   })
 
   test('a manager stands in for the Worker: any kind, re-arm and resolve', async () => {

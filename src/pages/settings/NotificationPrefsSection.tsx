@@ -6,6 +6,7 @@ import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { CATEGORY_LABEL, NOTIFICATION_PRIORITY_LABEL } from '../../lib/inventoryRules/copy'
 import { savePrefs, useNotificationPrefs } from '../../services/notifications'
+import { NotificationSoundSettings } from './NotificationSoundSettings'
 import type { NotificationCategory, NotificationPriority } from '../../types'
 
 const CATEGORIES: NotificationCategory[] = ['task', 'inventory', 'purchasing', 'supplier', 'system']
@@ -94,6 +95,9 @@ export function NotificationPrefsSection() {
           </Button>
         </div>
       </Card>
+      <div className="mt-4">
+        <NotificationSoundSettings />
+      </div>
     </div>
   )
 }

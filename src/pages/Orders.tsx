@@ -5,6 +5,7 @@ import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useData } from '../data/DataContext'
 import { orderCache } from '../data/orderCache'
+import { ORDER_UPDATED } from '../data/useSupplierRefresh'
 import { useToast } from '../components/Toast'
 import { DataTable } from '../components/DataTable'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
@@ -137,6 +138,18 @@ export function OrdersPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // A supplier answered while this page is open (5 Oct 2026): the row and an open sheet
+  // show the new date at once, without a reload or a re-read of the list.
+  useEffect(() => {
+    const onUpdate = (e: Event) => {
+      const next = (e as CustomEvent<PurchaseOrder>).detail
+      setOrders((cur) => (cur.some((o) => o.id === next.id) ? cur.map((o) => (o.id === next.id ? next : o)) : cur))
+      setViewing((cur) => (cur && cur.id === next.id ? next : cur))
+    }
+    window.addEventListener(ORDER_UPDATED, onUpdate)
+    return () => window.removeEventListener(ORDER_UPDATED, onUpdate)
+  }, [])
 
   // Opened from the calendar: ?po=<id> shows the sheet, ?receive=<id> goes to the receiving
   // screen with that order picked (24 Sep 2026 — the check-in modal is retired).

@@ -115,7 +115,19 @@ export function NotificationBell() {
           ))}
         </div>
         <div className="mb-2 flex items-center justify-between text-xs text-ink-soft">
-          <span>{t('ยังไม่อ่าน {n}', { n: unread.length })}</span>
+          <span className="flex items-center gap-3">
+            {t('ยังไม่อ่าน {n}', { n: unread.length })}
+            <button
+              className="inline-flex items-center gap-1 text-brand hover:underline"
+              onClick={() => {
+                setOpen(false)
+                navigate('/settings/notifications')
+              }}
+            >
+              <Icon name="settings" size={12} />
+              {t('ตั้งค่าการแจ้งเตือน')}
+            </button>
+          </span>
           {unread.length > 0 && (
             <Button variant="secondary" onClick={readAll}>
               <Icon name="check" size={14} />

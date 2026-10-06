@@ -28,7 +28,7 @@ export const AUTO_DISMISS_MS: Record<Severity, number | null> = {
 }
 
 export interface PopupCard {
-  /** The notification id, or `burst:<category>:<first id>` for a summary. */
+  /** The occurrence (id@armedAt), or `burst:<category>:<first occurrence>` for a summary. */
   key: string
   severity: Severity
   /** The notifications behind it (one, or the burst's). */
@@ -58,13 +58,13 @@ export function receive(
   now: number,
 ): { state: QueueState; fresh: PopupCard[] } {
   if (state.seen === null) {
-    return { state: { ...state, seen: new Set(incoming.map((i) => i.presented.id)) }, fresh: [] }
+    return { state: { ...state, seen: new Set(incoming.map((i) => i.presented.occurrence)) }, fresh: [] }
   }
   const seen = new Set(state.seen)
   const arrivals: typeof incoming[number][] = []
   for (const i of incoming) {
-    if (seen.has(i.presented.id)) continue
-    seen.add(i.presented.id)
+    if (seen.has(i.presented.occurrence)) continue
+    seen.add(i.presented.occurrence)
     if (!i.presented.popup) continue
     if (now - i.presented.createdAt > FRESH_MS) continue
     arrivals.push(i)
@@ -77,17 +77,17 @@ export function receive(
   const cards: PopupCard[] = []
   for (const a of arrivals) {
     if (a.presented.severity === 'critical') {
-      cards.push({ key: a.presented.id, severity: 'critical', items: [a.presented], category: a.category, shownAt: null, ttl: AUTO_DISMISS_MS.critical })
+      cards.push({ key: a.presented.occurrence, severity: 'critical', items: [a.presented], category: a.category, shownAt: null, ttl: AUTO_DISMISS_MS.critical })
     } else byCat.set(a.category, [...(byCat.get(a.category) ?? []), a])
   }
   for (const [category, list] of byCat) {
     if (list.length >= BURST_COLLAPSE_AT) {
       const items = list.map((l) => l.presented)
       const severity = items.reduce<Severity>((s, i) => (SEVERITY_RANK[i.severity] > SEVERITY_RANK[s] ? i.severity : s), 'info')
-      cards.push({ key: `burst:${category}:${items[0].id}`, severity, items, category, shownAt: null, ttl: AUTO_DISMISS_MS[severity] })
+      cards.push({ key: `burst:${category}:${items[0].occurrence}`, severity, items, category, shownAt: null, ttl: AUTO_DISMISS_MS[severity] })
     } else {
       for (const l of list) {
-        cards.push({ key: l.presented.id, severity: l.presented.severity, items: [l.presented], category, shownAt: null, ttl: AUTO_DISMISS_MS[l.presented.severity] })
+        cards.push({ key: l.presented.occurrence, severity: l.presented.severity, items: [l.presented], category, shownAt: null, ttl: AUTO_DISMISS_MS[l.presented.severity] })
       }
     }
   }
