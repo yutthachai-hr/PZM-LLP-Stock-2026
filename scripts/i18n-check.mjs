@@ -17,11 +17,12 @@ import { EN } from '../src/i18n/en.ts'
 const SRC = fileURLToPath(new URL('../src/', import.meta.url))
 const SKIP = /catalog\.generated|sarabunFont|[\\/]i18n[\\/]/
 // Files that legitimately hold Thai as data or as translation keys, not as rendered copy.
-// lib/orderSheet.ts holds the Thai column headings of the company's own order workbook:
+// lib/orderSheet.ts holds the Thai column headings of the company's own order workbook
+// (lib/sheetLines.ts the header words of any plain sheet):
 // data it reads, never copy it shows. lib/siteTone.ts matches the sites' own Thai names;
 // lib/inventoryRules/uom.ts the Thai spellings of gram / kilogram / litre it accepts.
 // seed/wip.ts is the work-in-process catalogue: names and units as the workbook writes them.
-const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]seed[\\/](products|wip)\.ts$|[\\/]lib[\\/](orderSheet|siteTone)\.ts$|[\\/]inventoryRules[\\/]uom\.ts$/
+const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]seed[\\/](products|wip)\.ts$|[\\/]lib[\\/](orderSheet|sheetLines|siteTone)\.ts$|[\\/]inventoryRules[\\/]uom\.ts$/
 
 const THAI = /[฀-๿]/
 

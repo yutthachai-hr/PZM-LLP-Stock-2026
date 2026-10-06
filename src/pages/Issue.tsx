@@ -284,7 +284,7 @@ function TransferForm({
       </SectionCard>
 
       <SectionCard icon="package" title={t('รายการสินค้า')} count={lines.length ? t('({n} รายการ)', { n: lines.length }) : undefined}>
-        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" focusOn={focusOn} lineNotes />
+        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" focusOn={focusOn} lineNotes importable />
       </SectionCard>
 
       <SubmitBar hasDraft={!isEmpty(draft)}>
@@ -430,7 +430,7 @@ function ConsumeForm({
       </SectionCard>
 
       <SectionCard icon="package" title={t('รายการสินค้าที่เบิก')} count={lines.length ? t('({n} รายการ)', { n: lines.length }) : undefined}>
-        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" focusOn={focusOn} lineNotes />
+        <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" focusOn={focusOn} lineNotes importable />
       </SectionCard>
 
       <SectionCard icon="camera" title={t('ปลายทางและหลักฐาน')}>

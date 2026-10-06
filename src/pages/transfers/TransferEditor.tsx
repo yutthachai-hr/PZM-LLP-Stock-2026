@@ -200,7 +200,7 @@ export function TransferEditor({ initial, onChange }: TransferEditorProps) {
         </SectionCard>
 
         <SectionCard icon="package" title={t('รายการสินค้าที่ต้องการโอน')} count={lines.length ? t('({n} รายการ)', { n: lines.length }) : undefined}>
-          <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" lineNotes={false} />
+          <LineBuilder products={products} lines={lines} onChange={setLines} availableAt={availableAt} direction="out" lineNotes={false} importable />
         </SectionCard>
 
         {lines.length > 0 && (

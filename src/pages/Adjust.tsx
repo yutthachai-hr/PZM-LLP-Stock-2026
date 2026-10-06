@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { LineImportModal } from '../components/import/LineImportModal'
 import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
@@ -86,6 +87,8 @@ export function AdjustPage() {
   const [dateStr, setDateStr] = useState(msToDateInput(todayMs()))
   const [note, setNote] = useState('')
   const [rows, setRows] = useState<AdjRow[]>([])
+  // ?import=1 (the quick menu's "import a file") opens the import straight away.
+  const [fileImport, setFileImport] = useState(() => new URLSearchParams(window.location.search).get('import') === '1')
   const [defaultReason, setDefaultReason] = useState<string>('count')
   const [search, setSearch] = useState('')
   const [sheetFor, setSheetFor] = useState<Product | null>(null)
@@ -378,6 +381,35 @@ export function AdjustPage() {
           count={rows.length ? t('({n} รายการ)', { n: rows.length }) : undefined}
         >
           <div className="space-y-3">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setFileImport(true)}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-sm font-medium text-ink-soft hover:bg-sunken hover:text-ink"
+              >
+                <Icon name="upload" size={16} />
+                {t('นำเข้าจากไฟล์ (Excel / รูป / PDF)')}
+              </button>
+            </div>
+            {fileImport && (
+              // A count sheet from a file: each line becomes "counted = n", like keying it.
+              <LineImportModal
+                products={products}
+                onClose={() => setFileImport(false)}
+                onImport={(imported) =>
+                  setRows((rs) => {
+                    const next = [...rs]
+                    for (const i of imported) {
+                      const row: AdjRow = { productId: i.product.id, productName: i.product.name, unit: i.product.unitType, mode: 'count', value: i.qty, reason: defaultReason, ...(i.note ? { note: i.note } : {}) }
+                      const at = next.findIndex((r) => r.productId === i.product.id)
+                      if (at >= 0) next[at] = { ...next[at], mode: 'count', value: i.qty, entryUnit: undefined, entryQty: undefined }
+                      else next.push(row)
+                    }
+                    return next
+                  })
+                }
+              />
+            )}
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
                 <Icon name="search" size={18} />

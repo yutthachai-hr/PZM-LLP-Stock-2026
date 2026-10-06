@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useViewport } from '../lib/viewport'
 import { lineOf, upsertLine } from '../lib/lines'
@@ -7,6 +8,7 @@ import { QtySheet } from './QtySheet'
 import type { Product } from '../types'
 import { ProductThumb } from './ProductThumb'
 import { QtyInput } from './QtyInput'
+import { LineImportModal, type ImportedLine } from './import/LineImportModal'
 import { useEntryUnits } from '../services/entryUnits'
 import { Input } from './ui'
 import { Icon } from './Icon'
@@ -59,6 +61,7 @@ export function LineBuilder({
   focusOn = 0,
   onHandAt,
   lineNotes = false,
+  importable = false,
 }: {
   products: Product[]
   lines: Line[]
@@ -78,8 +81,21 @@ export function LineBuilder({
    * the cursor would otherwise be sitting in a box that is no longer there.
    */
   focusOn?: number
+  /** Offer "import from a file" (spreadsheet / photo / PDF) above the search box. */
+  importable?: boolean
 }) {
   const t = useT()
+  // Arriving from the quick menu's "import a file" (?import=1) opens the import at once.
+  const [params, setParams] = useSearchParams()
+  const [importing, setImporting] = useState(() => importable && params.get('import') === '1')
+  useEffect(() => {
+    if (importable && params.get('import') === '1') {
+      const next = new URLSearchParams(params)
+      next.delete('import')
+      setParams(next, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [search, setSearch] = useState('')
   const [scanning, setScanning] = useState(false)
   const searchBox = useRef<HTMLInputElement>(null)
@@ -184,8 +200,52 @@ export function LineBuilder({
   const sign = inbound ? '+' : '−'
   const signColor = inbound ? 'text-in' : 'text-out'
 
+  /**
+   * Lines from a file (6 Oct 2026): a spreadsheet, or a photo / PDF read by AI. Each line
+   * joins the list — added to one already there for the same product and unit — and the
+   * person still checks and confirms the whole document as before.
+   */
+  function addImported(imported: ImportedLine[]) {
+    const next = [...lines]
+    for (const i of imported) {
+      const at = next.findIndex((l) => l.productId === i.product.id && (l.entryUnit ?? '') === (i.entryUnit ?? ''))
+      if (at >= 0) {
+        const l = next[at]
+        next[at] = {
+          ...l,
+          qty: l.qty + i.qty,
+          ...(i.entryUnit ? { entryQty: (l.entryQty ?? 0) + (i.entryQty ?? 0) } : {}),
+          ...(i.note && !l.note ? { note: i.note } : {}),
+        }
+      } else {
+        next.push({
+          productId: i.product.id,
+          productName: i.product.name,
+          unit: i.product.unitType,
+          qty: i.qty,
+          ...(i.entryUnit ? { entryUnit: i.entryUnit, entryQty: i.entryQty } : {}),
+          ...(i.note ? { note: i.note } : {}),
+        })
+      }
+    }
+    onChange(next)
+  }
+
   return (
     <div className="space-y-3">
+      {importable && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setImporting(true)}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-sm font-medium text-ink-soft hover:bg-sunken hover:text-ink"
+          >
+            <Icon name="upload" size={16} />
+            {t('นำเข้าจากไฟล์ (Excel / รูป / PDF)')}
+          </button>
+        </div>
+      )}
+      {importing && <LineImportModal products={products} onClose={() => setImporting(false)} onImport={(l) => addImported(l)} />}
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
           <Icon name="search" size={18} />

@@ -50,6 +50,7 @@ import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
 import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { SendWizard } from './purchase/SendWizard'
+import { LineImportModal } from '../components/import/LineImportModal'
 import { DeliveryRiskCard, SupplierConfirmationPanel } from './purchase/SupplierConfirmationPanel'
 import { confirmationBadge, requestedOf } from '../lib/supplierConfirmation'
 import { RESUME_PARAM } from '../share/liffResume'
@@ -1144,6 +1145,7 @@ function NewOrderModal({
   // Quantity and the unit it was keyed in, per product. The unit is offered from the same
   // list the receiving screen offers — the product's own first, then the owner's — because
   // the owner's rule is that an order is placed in the unit the goods will be received in.
+  const [fileImport, setFileImport] = useState(false)
   const [lines, setLines] = useState<LineDraft>({})
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1243,12 +1245,35 @@ function NewOrderModal({
 
         {supplierId && (
           <>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('ค้นหาในรายการของผู้ขายรายนี้')}
-            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('ค้นหาในรายการของผู้ขายรายนี้')}
+                className="flex-1"
+              />
+              <Button variant="outline" onClick={() => setFileImport(true)}>
+                <Icon name="upload" size={15} />
+                {t('นำเข้าจากไฟล์ (Excel / รูป / PDF)')}
+              </Button>
+            </div>
             <LineList products={theirs} lines={lines} setLines={setLines} plainUnits={plainUnits} />
+            {fileImport && (
+              <LineImportModal
+                // Matched only against this supplier's own products: an order goes to one supplier.
+                products={products.filter((p) => p.supplierId === supplierId && p.active !== false)}
+                onClose={() => setFileImport(false)}
+                onImport={(imported) =>
+                  setLines((cur) => {
+                    const next = { ...cur }
+                    for (const i of imported) {
+                      next[i.product.id] = { qty: i.entryUnit ? (i.entryQty ?? i.qty) : i.qty, unit: i.entryUnit ?? i.product.unitType, base: i.qty }
+                    }
+                    return next
+                  })
+                }
+              />
+            )}
           </>
         )}
 

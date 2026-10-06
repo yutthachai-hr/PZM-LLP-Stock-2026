@@ -62,6 +62,7 @@ export function DocumentCard({
   duplicate,
   invalid,
   onReadBill,
+  onReadFile,
   reading,
 }: {
   /** The order's supplier, when receiving against one. */
@@ -83,10 +84,13 @@ export function DocumentCard({
   invalid: { supplier: boolean; invoice: boolean }
   /** Read the attached picture with AI (Automation Plan Phase 4) — absent where unavailable. */
   onReadBill?: () => void
+  /** Read a bill from a file instead — a PDF from the supplier, or a saved picture (6 Oct 2026). */
+  onReadFile?: (file: File) => void
   reading?: boolean
 }) {
   const t = useT()
   const fileRef = useRef<HTMLInputElement>(null)
+  const billFileRef = useRef<HTMLInputElement>(null)
   const other = supplierId === OTHER_SUPPLIER
   const active = suppliers.filter((s) => s.active !== false).sort((a, b) => a.name.localeCompare(b.name))
 
@@ -174,12 +178,33 @@ export function DocumentCard({
                 </button>
               )}
             </div>
-            {photo && onReadBill && (
-              <Button variant="outline" onClick={onReadBill} disabled={reading} className="mt-2 w-full sm:w-auto">
-                <Icon name="sparkles" size={16} />
-                {reading ? t('AI กำลังอ่านบิล...') : t('อ่านบิลด้วย AI')}
-              </Button>
-            )}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {photo && onReadBill && (
+                <Button variant="outline" onClick={onReadBill} disabled={reading} className="w-full sm:w-auto">
+                  <Icon name="sparkles" size={16} />
+                  {reading ? t('AI กำลังอ่านบิล...') : t('อ่านบิลด้วย AI')}
+                </Button>
+              )}
+              {onReadFile && (
+                <>
+                  <input
+                    ref={billFileRef}
+                    type="file"
+                    accept="image/*,application/pdf,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      e.target.value = ''
+                      if (f) onReadFile(f)
+                    }}
+                  />
+                  <Button variant="outline" onClick={() => billFileRef.current?.click()} disabled={reading} className="w-full sm:w-auto">
+                    <Icon name="upload" size={16} />
+                    {t('อ่านบิลจากไฟล์ (รูป / PDF)')}
+                  </Button>
+                </>
+              )}
+            </div>
           </Field>
         </div>
 

@@ -18,7 +18,7 @@ import { useSuppliers } from '../services/suppliers'
 import { compressImage } from '../lib/image'
 import { matchOcrLines } from '../lib/billOcr'
 import { buildMatchIndex } from '../lib/productMatch'
-import { billReaderAvailable, readBillPhoto } from '../services/billOcr'
+import { billReaderAvailable, readBillPhoto, readDocumentFile } from '../services/billOcr'
 import { ocrFill, type OcrFill } from './receive/ocrApply'
 import { shownUnit } from '../lib/ledger'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
@@ -126,6 +126,12 @@ export function ReceivePage() {
   useEffect(loadOrders, [loadOrders])
 
   // /receive?po=<id> — from the Orders page or the calendar: that order, ready to check in.
+  // From the quick menu's "import a file": the file's lines go on a manual receipt.
+  useEffect(() => {
+    if (params.get('import') === '1' && d.mode === 'po' && !d.poId) patch({ mode: 'manual' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const linked = params.get('po')
   useEffect(() => {
     if (!linked || linkRef.current === linked) return
@@ -322,11 +328,11 @@ export function ReceivePage() {
   // A bill read by AI (Automation Plan Phase 4): it only fills the form; the person checks.
   const [reading, setReading] = useState(false)
   const [ocr, setOcr] = useState<OcrFill | null>(null)
-  async function readBill() {
-    if (!photo) return
+  async function readBill(file?: File) {
+    if (!photo && !file) return
     setReading(true)
     try {
-      const bill = await readBillPhoto(photo)
+      const bill = file ? await readDocumentFile(file) : await readBillPhoto(photo!)
       const filled = ocrFill(bill, matchOcrLines(bill, buildMatchIndex(products, [])), { draft: d, order, suppliers })
       patch(filled.patch)
       setOcr(filled)
@@ -461,6 +467,7 @@ export function ReceivePage() {
                   onHandAt={d.toLocationId ? (id) => qtyAt(d.toLocationId, id) : undefined}
                   focusOn={focusLines}
                   lineNotes
+                  importable
                 />
               </SectionCard>
             </>
@@ -485,6 +492,7 @@ export function ReceivePage() {
               duplicate={duplicate}
               invalid={{ supplier: tried && problem === 'noSupplier', invoice: tried && problem === 'noInvoice' }}
               onReadBill={billReaderAvailable() ? () => void readBill() : undefined}
+              onReadFile={billReaderAvailable() ? (f) => void readBill(f) : undefined}
               reading={reading}
             />
           )}

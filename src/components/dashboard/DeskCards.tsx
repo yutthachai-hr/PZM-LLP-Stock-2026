@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -9,6 +9,7 @@ import type { StockShortage } from '../../lib/inventoryRules/lowStock'
 import { activityKind, type ActivityKind } from '../../lib/stats/periodCompare'
 import type { PurchaseOrder, PurchaseRequest, StockMovement } from '../../types'
 import { BarsChart } from '../charts'
+import { Modal } from '../ui'
 import { Icon, type IconName } from '../Icon'
 import { ItemCell, QtyPill, SectionCard, SeeAll, toneIcon, type Tone } from '../frame'
 import type { BranchRow } from './useDashboardFigures'
@@ -280,7 +281,21 @@ const QUICK: { to: string; label: string; icon: IconName; tone: Tone; manager?: 
   { to: '/issue', label: 'โอนสาขา', icon: 'swap', tone: 'blue' }, // i18n-key
   { to: '/adjust', label: 'ปรับสต๊อก', icon: 'adjust', tone: 'purple' }, // i18n-key
   { to: '/reports', label: 'รายงาน', icon: 'report', tone: 'slate' }, // i18n-key
-  { to: '/import', label: 'นำเข้า Excel', icon: 'upload', tone: 'green', admin: true }, // i18n-key
+  // Not a page: opens a chooser of where the file goes (6 Oct 2026).
+  { to: '#import', label: 'นำเข้าไฟล์', icon: 'upload', tone: 'green' }, // i18n-key
+]
+
+/** Where an imported file can go, for whom — the quick menu's chooser. */
+const IMPORT_TARGETS: { to: string; label: string; hint: string; icon: IconName; manager?: boolean; admin?: boolean }[] = [
+  { to: '/receive?import=1', label: 'รับสินค้าเข้า', hint: 'บิล / ใบส่งของ — Excel, รูป หรือ PDF', icon: 'receive' }, // i18n-key
+  { to: '/requests/new?fileImport=1', label: 'ขอสั่งซื้อ', hint: 'รายการที่ต้องการ — Excel, รูป หรือ PDF', icon: 'note' }, // i18n-key
+  { to: '/requests/new?import=1', label: 'ขอสั่งซื้อจากใบสั่งของบริษัท', hint: 'ไฟล์ Excel ใบสั่งของแบบหลายวัน', icon: 'fileSheet' }, // i18n-key
+  { to: '/purchase/import', label: 'สร้างใบสั่งซื้อจาก Excel', hint: 'ใบสั่งของบริษัท → ร่างใบสั่งซื้อแยกผู้ขาย', icon: 'cart', manager: true }, // i18n-key
+  { to: '/issue?import=1', label: 'โอน / เบิกสินค้า', hint: 'ใบโอน / ใบเบิก — Excel, รูป หรือ PDF', icon: 'swap' }, // i18n-key
+  { to: '/issue?mode=pos', label: 'ตัดสต๊อกจากยอดขาย POS', hint: 'ไฟล์ยอดขายจากเครื่อง POS', icon: 'store' }, // i18n-key
+  { to: '/adjust?import=1', label: 'ปรับสต๊อก', hint: 'ใบนับ / ยอดที่นับได้ — Excel, รูป หรือ PDF', icon: 'adjust' }, // i18n-key
+  { to: '/counts', label: 'นับสต๊อกประจำเดือน', hint: 'เปิดใบนับ แล้วกดนำเข้า Excel หรืออ่านใบนับ', icon: 'clipboardList' }, // i18n-key
+  { to: '/import', label: 'สินค้าและสต๊อกตั้งต้น', hint: 'รายการสินค้า / สต๊อกปิดงวดจาก Excel', icon: 'package', admin: true }, // i18n-key
 ]
 
 export function QuickMenuCard() {
@@ -290,10 +305,23 @@ export function QuickMenuCard() {
   const manager = role === 'admin' || role === 'manager'
   // A manager orders directly, so "request" gives way to "order"; staff get the request.
   const items = QUICK.filter((q) => (q.admin ? role === 'admin' : q.manager ? manager : q.to !== '/requests/new' || !manager)).slice(0, 6)
+  const [choosing, setChoosing] = useState(false)
+  const targets = IMPORT_TARGETS.filter((x) => (x.admin ? role === 'admin' : x.manager ? manager : true))
   return (
     <SectionCard icon="zap" title={t('เมนูด่วน')}>
       <div className="grid grid-cols-3 gap-2.5">
-        {items.map((q) => (
+        {items.map((q) =>
+          q.to === '#import' ? (
+            <button
+              key={q.to}
+              type="button"
+              onClick={() => setChoosing(true)}
+              className={`flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center text-xs font-semibold outline-none transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-brand/40 ${toneIcon[q.tone]}`}
+            >
+              <Icon name={q.icon} size={22} />
+              <span className="leading-tight">{t(q.label)}</span>
+            </button>
+          ) : (
           <Link
             key={q.to}
             to={q.to}
@@ -302,8 +330,28 @@ export function QuickMenuCard() {
             <Icon name={q.icon} size={22} />
             <span className="leading-tight">{t(q.label)}</span>
           </Link>
-        ))}
+          ),
+        )}
       </div>
+      <Modal open={choosing} onClose={() => setChoosing(false)} title={t('นำเข้าไฟล์ไปที่ไหน?')}>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {targets.map((x) => (
+            <li key={x.to}>
+              <Link
+                to={x.to}
+                onClick={() => setChoosing(false)}
+                className="flex min-h-16 items-start gap-3 rounded-xl border border-line px-3 py-2.5 hover:border-line-strong hover:bg-sunken"
+              >
+                <Icon name={x.icon} size={20} className="mt-0.5 shrink-0 text-brand" />
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{t(x.label)}</span>
+                  <span className="block text-xs text-ink-soft">{t(x.hint)}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </SectionCard>
   )
 }

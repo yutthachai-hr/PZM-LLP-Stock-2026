@@ -21,6 +21,7 @@ import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
 import type { MonthlyCount, MonthlyCountResult, StockMovement } from '../../types'
+import { LineImportModal } from '../../components/import/LineImportModal'
 import { CountImport, type ImportedQuestion } from './CountImport'
 import { QuestionsCard } from './QuestionsCard'
 import { MonthLabel, StatusBadge } from './labels'
@@ -53,6 +54,7 @@ export function MonthlyCountSheet() {
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState<'record' | 'post' | null>(null)
   const [importing, setImporting] = useState(false)
+  const [photoImport, setPhotoImport] = useState(false)
   const [asOpening, setAsOpening] = useState(false)
 
   useEffect(() => {
@@ -394,6 +396,12 @@ export function MonthlyCountSheet() {
                 {t('นำเข้าจาก Excel')}
               </Button>
             )}
+            {counting && (
+              <Button variant="secondary" onClick={() => setPhotoImport(true)}>
+                <Icon name="camera" size={16} />
+                {t('อ่านใบนับ (รูป / PDF)')}
+              </Button>
+            )}
             <Link to="/counts" className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm text-ink-soft hover:bg-sunken">
               <Icon name="chevronLeft" size={16} />
               {t('ใบนับทั้งหมด')}
@@ -553,6 +561,18 @@ export function MonthlyCountSheet() {
           </div>
         </div>
       </Modal>
+      {photoImport && (
+        // A photographed or scanned count sheet, read by AI: each counted line fills its box,
+        // and the person reviews the sheet before confirming as always.
+        <LineImportModal
+          title={t('อ่านใบนับสต๊อก')}
+          products={products}
+          onClose={() => setPhotoImport(false)}
+          onImport={(imported) => {
+            for (const i of imported) setCount(i.product.id, i.qty)
+          }}
+        />
+      )}
       {importing && (
         <CountImport
           open
