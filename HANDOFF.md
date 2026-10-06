@@ -599,6 +599,29 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - **D6':** DataTable render layout เดียว + `paged`
 - **Lighthouse ยังไม่ได้วัด** ต้องวัดในเครื่องเจ้าของ
 
+### Phase E (E1 E2 เสร็จ) → `docs/evidence/phase-e.md`
+- **E1:** Stock Card แสดง มี / จอง / พร้อมใช้ / กำลังมา / วางแผนเข้า
+  - จอง = 0 เพราะอนุมัติโอนแล้วของออกทันที
+  - PR approved และ PO ร่างนับเป็น "วางแผนเข้า" ไม่หักยอด
+- **E2:** ผลต่างนับมาก (เกิน 10% หรือ 500 บาท) ต้องหัวหน้าติ๊กอนุมัติ และเก็บชื่อผู้อนุมัติ
+- **E2:** blind count (rules เพิ่ม field `blind` **ยังไม่ deploy**)
+
+### Phase F (F1 แบบแนะนำเท่านั้น) → `docs/evidence/phase-f.md`
+- คำแนะนำทุกตัวแสดงที่มา
+- `tests/suggest-only.test.ts` กันไม่ให้งานเบื้องหลังเขียน PR/PO/สต๊อก
+- **ยังไม่เพิ่ม AI ใหม่** ต้องให้ Auditor 0 critical 14 วันบนข้อมูลจริงก่อน และ anomaly ต้องรอ B2
+- ผลเทสล่าสุด: unit 1,248 · rules 219 · e2e 29/0/0
+
+### ค้างที่ต้องให้เจ้าของตัดสิน/ทำ (รวมทุกเฟส)
+1. **B2:** collection `auditLog`
+2. **E4:** error reporting เขียนที่ไหน
+3. **D4':** รวม Batch Excel เข้า PR / ตัดโหมดโอนใน Issue
+4. lot/วันหมดอายุ
+5. **Deploy ตามลำดับ:** service account → แอป → ตรวจ `/api/stock/receivePO` → rules
+6. dry-run backfill baseQty และ Lighthouse บนเครื่องเจ้าของ
+7. **E3:** ใส่ key ให้ cron Worker
+8. Auditor 14 วันก่อนเปิด AI ตัวใหม่
+
 ### กับดักของ harness
 - เอกสารที่ seed ต้องมี field `id` (rules อ่านค่านี้) ยกเว้น `users`
 - `counters` ต้องมี `id` ด้วย
