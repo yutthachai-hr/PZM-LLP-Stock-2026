@@ -1448,6 +1448,8 @@ export const COL = {
   transfers: 'transfers',
   /** Monthly stock-count sheets: counted first, confirmed later (29 Sep 2026). */
   monthlyCounts: 'monthlyCounts',
+  /** Phase G9: intelligence predictions kept to compare with what happened. Create-only. */
+  intelShadow: 'intelShadow',
   productAliases: 'productAliases',
   announcements: 'announcements',
   recipes: 'recipes',

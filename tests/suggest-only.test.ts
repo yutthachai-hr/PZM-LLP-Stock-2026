@@ -33,4 +33,9 @@ describe('suggest-only: background jobs', () => {
     expect(files.length).toBeGreaterThan(5)
     for (const f of files) expect(readFileSync(new URL(f, dir), 'utf8'), f).not.toMatch(/from '(\.\.\/)+(backend|services|firebase)|from '\.\.\/data/)
   })
+  test('Phase G9: shadow mode writes only intelShadow', () => {
+    const svc = read('src/services/intelShadow.ts')
+    expect(new Set(svc.match(/COL\.\w+/g))).toEqual(new Set(['COL.intelShadow']))
+    expect(svc).not.toMatch(/\.(update|remove|add|transaction)\(/)
+  })
 })

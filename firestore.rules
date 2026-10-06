@@ -1605,6 +1605,41 @@ service cloud.firestore {
       allow delete: if admin() && resource.data.status in ['counting', 'recorded'];
     }
 
+    // ------------------------------------------------------------ intelligence shadow ----
+
+    /**
+     * Phase G9 (6 Oct 2026): what the intelligence predicted, kept to compare with what
+     * happened. Written by a manager's or admin's device, in their name; immutable — no one
+     * may change or delete a prediction after the fact, or the comparison means nothing.
+     * Read by managers and admins, on demand (the evaluation screen), never subscribed.
+     */
+    function validShadow(docId, d) {
+      return d.keys().hasOnly(['id', 'kind', 'engineVersion', 'createdAt', 'inputsAsOf', 'createdBy',
+          'poId', 'supplierId', 'dueDate', 'score', 'level', 'dataConfidence', 'reasons', 'day', 'items'])
+        && d.id == docId && d.createdBy == request.auth.uid
+        && text(d.engineVersion, 40) && epochMs(d.createdAt) && epochMs(d.inputsAsOf)
+        && (
+          (d.kind == 'deliveryRisk' && docId.matches('^dr__.{1,200}$') && text(d.poId, 200) && docId == 'dr__' + d.poId
+            && d.score is number && d.score >= 0 && d.score <= 100
+            && d.level in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+            && d.reasons is list && d.reasons.size() <= 12)
+          || (d.kind == 'stockout' && docId.matches('^so__[0-9]{8}$') && epochMs(d.day)
+            && d.items is list && d.items.size() <= 300)
+        );
+    }
+
+    match /intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /lelapin__intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
     match /inventorySchedules/{docId} {
       allow read: if active();
       allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
