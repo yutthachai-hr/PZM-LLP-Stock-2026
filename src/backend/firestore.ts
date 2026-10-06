@@ -36,7 +36,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
 
     mode: 'cloud',
 
-    subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void {
+    subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions, onError?: (e: unknown) => void): () => void {
       const db = getDb()
       const c = resolve(collection)
       const ref = fbCollection(db, c)
@@ -58,6 +58,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
         },
         (err) => {
           console.error(`[firestore] subscribe ${c} failed`, err)
+          onError?.(err)
         },
       )
       return unsub

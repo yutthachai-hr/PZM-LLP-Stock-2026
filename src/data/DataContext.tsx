@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
+import { worstFailure, type LiveFailure } from './liveError'
 import { overlayRecent, subscribeRecentWrites } from './recentWrites'
 import { windowStart } from './ledgerWindow'
 import { MONTH_DAYS } from './windowDays'
@@ -37,6 +38,10 @@ interface DataState {
    */
   notifications: AppNotification[]
   loading: boolean
+  /** The worst listener the database ended (plan C1), or null when all are live. */
+  liveError: LiveFailure | null
+  /** Subscribe again every listener that failed. */
+  retryLive: () => void
 
   /** Business date of the oldest movement currently subscribed to. */
   movementsFrom: number
@@ -102,8 +107,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // be rejected, and the only screen that reads `users` is the admin section of Settings.
   const isAdmin = user?.role === 'admin'
 
-  const { data: products, loading: pLoading } = useLive<Product>(COL.products)
-  const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations)
+  const productsLive = useLive<Product>(COL.products)
+  const { data: products, loading: pLoading } = productsLive
+  const locationsLive = useLive<StockLocation>(COL.locations)
+  const { data: rawLocations, loading: lLoading } = locationsLive
   const { lang } = useI18n()
   const transitLocation = useMemo(
     () => rawLocations.find((l) => l.type === 'transit' || l.id === TRANSIT_LOCATION_ID),
@@ -119,29 +126,43 @@ export function DataProvider({ children }: { children: ReactNode }) {
     () => (lang === 'en' ? regularLocations.map((l) => (l.nameEn ? { ...l, name: l.nameEn } : l)) : regularLocations),
     [regularLocations, lang],
   )
-  const { data: levels, loading: sLoading } = useLive<StockLevel>(COL.stockLevels)
+  const levelsLive = useLive<StockLevel>(COL.stockLevels)
+  const { data: levels, loading: sLoading } = levelsLive
   const [movementsFrom, setMovementsFrom] = useState(() => windowStart(RECENT_DAYS))
   const ensureMovementsFrom = useCallback((date: number) => {
     setMovementsFrom((cur) => (date < cur ? date : cur))
   }, [])
 
-  const { data: liveMovements, loading: mLoading } = useLive<StockMovement>(COL.movements, {
+  const movementsLive = useLive<StockMovement>(COL.movements, {
     sinceField: 'date',
     sinceValue: movementsFrom,
   })
+  const { data: liveMovements, loading: mLoading } = movementsLive
   // Rows this device just wrote, shown until the listener confirms them (recentWrites.ts).
   const [recent, setRecent] = useState<StockMovement[]>([])
   useEffect(() => subscribeRecentWrites(setRecent), [])
   const movements = useMemo(() => overlayRecent(liveMovements, recent), [liveMovements, recent])
-  const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides)
-  const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin })
+  const overridesLive = useLive<MinOverride>(COL.minOverrides)
+  const minOverrides = overridesLive.data
+  const usersLive = useLive<AppUser>(COL.users, { enabled: isAdmin })
+  const users = usersLive.data
   // Fixed for the session: a moving lower bound would re-subscribe (and re-read) every render.
   const [notificationsFrom] = useState(() => windowStart(NOTIFICATION_WINDOW_DAYS))
-  const { data: notifications } = useLive<AppNotification>(COL.notifications, {
+  const notificationsLive = useLive<AppNotification>(COL.notifications, {
     enabled: !!user,
     sinceField: 'createdAt',
     sinceValue: notificationsFrom,
   })
+  const notifications = notificationsLive.data
+
+  // Plan C1: a listener the database ended is said on screen, with a retry — never shown
+  // as an empty warehouse.
+  const lives = [productsLive, locationsLive, levelsLive, movementsLive, overridesLive, usersLive, notificationsLive]
+  const liveError = worstFailure(lives.map((l) => l.error))
+  // Only the failed ones: subscribing a healthy listener again re-reads all it holds.
+  const failed = useRef<(() => void)[]>([])
+  failed.current = lives.filter((l) => l.error).map((l) => l.retry)
+  const retryLive = useCallback(() => failed.current.forEach((r) => r()), [])
 
   const value = useMemo<DataState>(() => {
     const productMap = new Map(products.map((p) => [p.id, p]))
@@ -175,6 +196,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       users,
       notifications,
       loading: pLoading || lLoading || sLoading || mLoading,
+      liveError,
+      retryLive,
       movementsFrom,
       ensureMovementsFrom,
       productById: (id) => productMap.get(id),
@@ -199,6 +222,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     lLoading,
     sLoading,
     mLoading,
+    liveError,
+    retryLive,
     movementsFrom,
     ensureMovementsFrom,
   ])

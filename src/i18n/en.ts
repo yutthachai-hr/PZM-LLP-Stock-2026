@@ -3090,4 +3090,15 @@ export const EN: Record<string, string> = {
   'เลือกเหตุผล': 'Choose a reason',
   'ส่งผิดรายการ': 'Wrong item',
   'คุณภาพไม่ผ่าน': 'Failed quality check',
+  // Plan C1: listener errors, error boundary, intel failures (6 Oct 2026)
+  'หน้านี้แสดงผลไม่สำเร็จ': 'This page could not be shown',
+  'ข้อมูลที่บันทึกไว้ไม่ได้รับผลกระทบ ลองโหลดหน้านี้ใหม่ หรือไปหน้าอื่นก่อน': 'Nothing saved is affected. Reload this page, or go to another page for now.',
+  'ลองใหม่': 'Try again',
+  'โหลดหน้าใหม่': 'Reload page',
+  'อ่านใบสั่งซื้อ/ใบโอนไม่สำเร็จ — ยังประเมินความเสี่ยงไม่ได้': 'Could not read orders or transfers — risk cannot be assessed yet',
+  'ไม่มีสิทธิ์อ่านข้อมูลบางส่วน — ตัวเลขบนจออาจไม่ครบ': 'Access to some data was refused — figures on screen may be incomplete',
+  'โควตาการอ่านข้อมูลวันนี้เต็ม — ตัวเลขบนจออาจไม่เป็นปัจจุบัน': 'Today\'s read quota is used up — figures on screen may be out of date',
+  'การเชื่อมต่อขาด — ตัวเลขบนจออาจไม่เป็นปัจจุบัน': 'Connection lost — figures on screen may be out of date',
+  'โหลดข้อมูลไม่สำเร็จ — ตัวเลขบนจออาจไม่ครบ': 'Data could not be loaded — figures on screen may be incomplete',
+  'อ่านความเสี่ยงการส่งของไม่สำเร็จ': 'Could not read delivery risk',
 }

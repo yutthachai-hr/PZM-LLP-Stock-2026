@@ -36,8 +36,12 @@ export interface Backend {
    * brand halfway through cannot split the work across two namespaces.
    */
   forBrand(brand: BrandId): Backend
-  /** Live subscription: fires immediately with current docs, then on every change. Returns unsubscribe. */
-  subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void
+  /**
+   * Live subscription: fires immediately with current docs, then on every change. Returns
+   * unsubscribe. `onError` hears a listener the database ended (refused by the rules, quota
+   * spent) — after that it delivers nothing more, and the caller must subscribe again.
+   */
+  subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions, onError?: (e: unknown) => void): () => void
   /**
    * Live subscription to ONE document, reporting null while it does not exist.
    *

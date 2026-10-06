@@ -19,6 +19,8 @@ import { SideLive } from './nav/SideLive'
 import { SideNav } from './nav/SideNav'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
+import { LiveErrorBanner } from './LiveErrorBanner'
+import { ErrorBoundary } from './ErrorBoundary'
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout, mode } = useAuth()
@@ -67,6 +69,7 @@ export function Layout({ children }: { children: ReactNode }) {
             much clear below its last row (the demo pill sits above the bar too). */}
         <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 [padding-bottom:calc(var(--tabbar-h)+1rem)] sm:p-5 sm:[padding-bottom:calc(var(--tabbar-h)+1.25rem)] md:[padding-bottom:1.25rem] lg:p-6 lg:[padding-bottom:1.5rem]">
           <InstallHint />
+          <LiveErrorBanner />
           {/* On a desktop the page sits on one white sheet over the canvas (the owner's
               mock-up, 21 Sep 2026): the screen reads as one document with its sections
               inside it, rather than as loose boxes floating on grey. On a phone there is
@@ -75,7 +78,7 @@ export function Layout({ children }: { children: ReactNode }) {
               its own white card on the canvas, so it gets no sheet — a card on a white sheet
               is white on white. Unconverted pages keep the sheet until their round. */}
           <div className="xl:min-h-full xl:rounded-2xl xl:border xl:border-line xl:bg-surface xl:p-6 xl:shadow-sm xl:has-[[data-frame]]:rounded-none xl:has-[[data-frame]]:border-0 xl:has-[[data-frame]]:bg-transparent xl:has-[[data-frame]]:p-0 xl:has-[[data-frame]]:shadow-none">
-            {children}
+            <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
           </div>
         </main>
       </div>

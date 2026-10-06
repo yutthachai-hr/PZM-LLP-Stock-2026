@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { assessAll, type DeliveryRisk } from '../lib/deliveryRisk'
 import { shortageRisks, type ShortageRisk } from '../lib/inventoryRisk'
 import { bkkDayEnd, bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
@@ -26,6 +26,12 @@ const TRANSFER_DAYS = 30
 
 export interface SupplierIntel {
   ready: boolean
+  /**
+   * The orders or transfers could not be read (plan C1). Then there is no verdict at all —
+   * an empty list here would read as "no risk", which is the one thing it does not mean.
+   */
+  failed: boolean
+  retry: () => void
   orders: PurchaseOrder[]
   risks: Map<string, DeliveryRisk>
   shortages: ShortageRisk[]
@@ -47,23 +53,36 @@ export function useSupplierIntel(): SupplierIntel {
   const to = bkkDayEnd(now) + DAY_MS
   const tFrom = today - TRANSFER_DAYS * DAY_MS
   const [rows, setRows] = useState<{ orders: PurchaseOrder[]; transfers: Transfer[] } | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
 
   useEffect(() => {
     let alive = true
     Promise.all([orderCache.fetchRange(from, to), transferCache.fetchRange(tFrom, to)])
-      .then(([orders, transfers]) => alive && setRows({ orders, transfers }))
-      .catch(() => alive && setRows({ orders: [], transfers: [] }))
+      .then(([orders, transfers]) => {
+        if (!alive) return
+        setFailed(false)
+        setRows({ orders, transfers })
+      })
+      .catch((e) => {
+        console.error('[intel] cannot read orders or transfers', e)
+        if (alive) setFailed(true)
+      })
     const refresh = () => {
       const orders = orderCache.peekRange(from, to)
       const transfers = transferCache.peekRange(tFrom, to)
-      if (orders && transfers) setRows({ orders, transfers })
+      if (orders && transfers) {
+        setFailed(false)
+        setRows({ orders, transfers })
+      }
     }
     const offs = [orderCache.subscribe(refresh), transferCache.subscribe(refresh)]
     return () => {
       alive = false
       offs.forEach((off) => off())
     }
-  }, [from, to, tFrom])
+  }, [from, to, tFrom, attempt])
 
   const risks = useMemo(() => (rows ? assessAll(rows.orders, now, suppliers) : new Map<string, DeliveryRisk>()), [rows, now, suppliers])
 
@@ -84,5 +103,5 @@ export function useSupplierIntel(): SupplierIntel {
     })
   }, [rows, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, data.movements, settings.usageWindowDays, risks, suppliers, now])
 
-  return { ready: !!rows, orders: rows?.orders ?? [], risks, shortages }
+  return { ready: !!rows && !failed, failed, retry, orders: rows?.orders ?? [], risks, shortages }
 }

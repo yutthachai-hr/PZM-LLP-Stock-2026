@@ -76,6 +76,11 @@ export async function putDoc(path: string, data: Record<string, unknown>, opts: 
   await ok(await fetch(`${FS}/${path}`, { method: 'PATCH', headers: { ...OWNER, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) }), `put ${path}`)
 }
 
+/** Delete a document as the emulator owner. */
+export async function deleteDoc(path: string): Promise<void> {
+  await ok(await fetch(`${FS}/${path}`, { method: 'DELETE', headers: OWNER }), `delete ${path}`)
+}
+
 export async function getDoc(path: string): Promise<{ [k: string]: Json } | null> {
   const res = await fetch(`${FS}/${path}`, { headers: OWNER })
   if (res.status === 404) return null
