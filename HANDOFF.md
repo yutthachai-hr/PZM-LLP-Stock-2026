@@ -581,6 +581,16 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - **B2 (`auditLog`) ยังไม่ทำ** จึงยังไม่ผ่านเกณฑ์ Phase B ข้อ "ทุก action มีแถว audit"
 - ผลเทส: unit 1,223 · rules 218 · e2e 20/0/0
 
+### Phase C (C1–C5 เสร็จ) → `docs/evidence/phase-c.md`
+- **C1:** listener ที่ล้มแสดงแบนเนอร์พร้อมปุ่มลองใหม่, ErrorBoundary ต่อหน้า, intel อ่านล้มแล้วบอกว่าล้ม ไม่แสดงเป็น "ไม่มีความเสี่ยง"
+- **C2:** แจ้งเตือน `transferStuck` (≥ 2 วัน, ≥ 5 วัน = วิกฤต) และ `poPartial` (รับบางส่วนแล้วเงียบ ≥ 7 วัน)
+- **C3:** หน้า `/inbox` "งานรอตัดสินใจ" (หัวหน้า/แอดมิน)
+- **C4:** แบนเนอร์ออฟไลน์ + draft ของใบขอโอน
+- **C5:** แถบแดงวิกฤตค้างจนกด "รับทราบ", toast error ค้างจนปิด และไม่ทับ tab bar
+- axe 0 serious บน 5 หน้า (เพิ่ม devDependency `@axe-core/playwright`, `--color-danger` เปลี่ยนเป็น #cc1f1f)
+- **E4 รอเจ้าของ** (error reporting เขียนที่ไหน)
+- ผลเทส: unit 1,233 · rules 218 · e2e 28/0/0
+
 ### กับดักของ harness
 - เอกสารที่ seed ต้องมี field `id` (rules อ่านค่านี้) ยกเว้น `users`
 - `counters` ต้องมี `id` ด้วย
