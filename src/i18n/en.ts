@@ -2733,6 +2733,9 @@ export const EN: Record<string, string> = {
   'รายละเอียดอื่นใส่ภายหลังได้ที่หน้าผู้ขาย': 'Other details can be added later on the suppliers page',
   'บันทึกผู้ขาย': 'Save supplier',
   // Supplier intelligence (5 Oct 2026)
+  "ชุดข้อมูลสำหรับโมเดล (CSV)": "Model dataset (CSV)",
+  "{n} แถว ({late} ช้า) — พอเริ่มทดลองโมเดลได้": "{n} rows ({late} late) — enough to start trying a model",
+  "{n} แถว ({late} ช้า) — ยังไม่พอ (ต้องการ {min} / {minLate})": "{n} rows ({late} late) — not enough yet (needs {min} / {minLate})",
   "{supplier} · {docNo} · เสี่ยงสูง {score}/100": "{supplier} · {docNo} · high risk {score}/100",
   "{supplier} · {docNo} · เสี่ยงวิกฤต {score}/100": "{supplier} · {docNo} · critical risk {score}/100",
   "เสี่ยงของหมด {product} · {location}": "Stock-out risk {product} · {location}",

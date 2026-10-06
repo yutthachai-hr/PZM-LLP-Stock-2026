@@ -7,6 +7,8 @@ import { Badge, Input, SegTab, Spinner } from '../../components/ui'
 import { orderCache } from '../../data/orderCache'
 import { useSupplierIntel } from '../../data/useSupplierIntel'
 import { useT } from '../../i18n/I18nContext'
+import { useAuth } from '../../auth/AuthContext'
+import { datasetRows, MODEL_READY, readiness, toCsv } from '../../lib/deliveryDataset'
 import type { DeliveryOutcome } from '../../lib/deliveryMetrics'
 import { LEVEL_RANK, type RiskLevel } from '../../lib/deliveryRisk'
 import { formatThaiDate } from '../../lib/format'
@@ -71,6 +73,7 @@ function useWindowOrders(window: PerformanceWindow) {
 
 export function SupplierPerformancePage() {
   const t = useT()
+  const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const [window, setWindow] = useState<PerformanceWindow>('90d')
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'score', desc: true })
@@ -159,7 +162,12 @@ export function SupplierPerformancePage() {
 
   return (
     <FramePage>
-      <PageHero icon="chart" title={t('ผลงานผู้ขาย')} subtitle={t('วัดจากวันส่งที่ผู้ขายยืนยัน · คะแนนจากกฎที่อธิบายได้')} />
+      <PageHero
+        icon="chart"
+        title={t('ผลงานผู้ขาย')}
+        subtitle={t('วัดจากวันส่งที่ผู้ขายยืนยัน · คะแนนจากกฎที่อธิบายได้')}
+        actions={user?.role === 'admin' && orders ? <DatasetButton orders={orders} /> : undefined}
+      />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1 rounded-lg bg-sunken p-1">
           {WINDOWS.map((w) => (
@@ -445,4 +453,36 @@ function monthlyOnTime(outcomes: readonly DeliveryOutcome[]) {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-6)
     .map(([k, v]) => ({ label: `${Number(k.slice(5))}/${k.slice(2, 4)}`, rate: v.n ? v.hits / v.n : null }))
+}
+
+/**
+ * Model readiness (S5): the versioned feature dataset of the window as a CSV, and whether
+ * there is enough of it yet. Nothing is trained in the app.
+ */
+function DatasetButton({ orders }: { orders: PurchaseOrder[] }) {
+  const t = useT()
+  const rows = useMemo(() => datasetRows(orders), [orders])
+  const r = readiness(rows)
+  function download() {
+    const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `delivery-dataset-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+  return (
+    <span className="flex flex-col items-end gap-0.5">
+      <button className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-sm font-medium text-ink hover:bg-sunken" onClick={download} disabled={!rows.length}>
+        <Icon name="download" size={16} />
+        {t('ชุดข้อมูลสำหรับโมเดล (CSV)')}
+      </button>
+      <span className="text-[11px] text-ink-faint">
+        {r.ready
+          ? t('{n} แถว ({late} ช้า) — พอเริ่มทดลองโมเดลได้', { n: r.rows, late: r.late })
+          : t('{n} แถว ({late} ช้า) — ยังไม่พอ (ต้องการ {min} / {minLate})', { n: r.rows, late: r.late, min: MODEL_READY.minRows, minLate: MODEL_READY.minLate })}
+      </span>
+    </span>
+  )
 }
