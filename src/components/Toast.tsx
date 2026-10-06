@@ -57,9 +57,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={api}>
       {children}
-      {/* Above the phone's tab bar, never over it (plan C5); a live region, so a screen
+      {/* Above the phone's tab bar and its raised "+" (1.5rem over it), never over them (plan C5); a live region, so a screen
           reader says it — an error at once, anything else when it has a pause. */}
-      <div className="pointer-events-none fixed inset-x-4 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+0.5rem)] z-[100] flex flex-col items-end gap-2 md:inset-x-auto md:bottom-4 md:right-4">
+      <div className="pointer-events-none fixed inset-x-4 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+2rem)] z-[100] flex flex-col items-end gap-2 md:inset-x-auto md:bottom-4 md:right-4">
         {toasts.map((t) => (
           <div
             key={t.id}

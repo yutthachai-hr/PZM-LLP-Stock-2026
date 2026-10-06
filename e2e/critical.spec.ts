@@ -39,8 +39,10 @@ test('on a 375px phone an error toast sits above the tab bar and stays until clo
   const toast = page.getByRole('alert').filter({ hasText: 'เลือกต้นทางและปลายทาง' })
   await expect(toast).toBeVisible()
   const tabBar = await page.getByRole('navigation', { name: 'เมนูหลัก' }).boundingBox()
+  const plus = await page.getByRole('button', { name: 'ทำรายการ' }).boundingBox()
   const box = await toast.boundingBox()
-  expect(box && tabBar && box.y + box.height <= tabBar.y).toBe(true)
+  // Clear of the bar and of its raised "+" button.
+  expect(box && tabBar && plus && box.y + box.height <= Math.min(tabBar.y, plus.y)).toBe(true)
   await page.screenshot({ path: 'test-results/c5-toast-375.png' })
   await page.waitForTimeout(4500)
   await expect(toast).toBeVisible()
