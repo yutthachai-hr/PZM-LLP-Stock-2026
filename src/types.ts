@@ -219,6 +219,8 @@ export interface StockMovement {
    */
   edits?: MovementEdit[]
   voided?: boolean
+  /** Why an admin voided it (plan A9, 6 Oct 2026). Absent on rows voided before. */
+  voidReason?: string
   /** When this movement came from a branch transfer (transfers/{id}). */
   transferId?: string
 }

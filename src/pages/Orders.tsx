@@ -34,11 +34,13 @@ import { usePaged } from '../lib/usePaged'
 import {
   CHASE_AFTER_DAYS,
   amendPurchaseOrder,
+  approvePurchaseOrder,
   cancelPurchaseOrder,
   closeOrderRemainder,
   createPurchaseOrder,
   daysWaiting,
   expectedDeliveryAt,
+  getPurchaseOrder,
   listOrdersInRange,
   needsResend,
   overdueOrders,
@@ -92,6 +94,7 @@ export function OrdersPage() {
   const t = useT()
   const toast = useToast()
   const { user } = useAuth()
+  const isManager = user?.role === 'admin' || user?.role === 'manager'
   const { brand } = useBrand()
   const { products, locations, locationById } = useData()
   const navigate = useNavigate()
@@ -240,6 +243,20 @@ export function OrdersPage() {
     }
   }
 
+  // A manager or admin places a draft (plan B4): staff orders and imported lists wait for this.
+  async function approve(order: PurchaseOrder) {
+    if (!user) return
+    try {
+      await approvePurchaseOrder(order.id, { id: user.id, name: user.name })
+      const next = (await getPurchaseOrder(order.id)) ?? order
+      setOrders((cur) => cur.map((o) => (o.id === order.id ? next : o)))
+      orderCache.patch(next)
+      toast.success(t('อนุมัติ {docNo} แล้ว — สั่งซื้อได้', { docNo: order.docNo }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
+
   async function cancel(order: PurchaseOrder, reason: string) {
     if (!user) return
     try {
@@ -339,6 +356,7 @@ export function OrdersPage() {
       onAmend: () => setAmending(o),
       onCancel: () => setCancelling(o),
       onCloseShort: () => setClosing(o),
+      ...(isManager && o.status === 'draft' ? { onApprove: () => void approve(o) } : {}),
     }
   }
 
@@ -614,6 +632,7 @@ export function OrdersPage() {
           products={products}
           locations={locations}
           actor={{ id: user.id, name: user.name }}
+          asDraft={!isManager}
           onClose={() => setCreating(false)}
           onDone={() => void load()}
         />
@@ -701,6 +720,7 @@ export function OrdersPage() {
             onCancel: () => setCancelling(panelOrder),
             onCloseShort: () => setClosing(panelOrder),
             onSheet: () => setViewing(panelOrder),
+            ...(isManager && panelOrder.status === 'draft' ? { onApprove: () => void approve(panelOrder) } : {}),
           }}
         />
       </aside>
@@ -849,6 +869,7 @@ function OrderActions({
   onCancel,
   onCloseShort,
   onSend,
+  onApprove,
 }: {
   order: PurchaseOrder
   /** Table row on a desktop: smaller buttons, one line. */
@@ -859,6 +880,8 @@ function OrderActions({
   onCancel: () => void
   onCloseShort: () => void
   onSend: () => void
+  // Offered to a manager or admin on a draft (plan B4).
+  onApprove?: () => void
 }) {
   const t = useT()
   const live = order.status === 'ordered'
@@ -887,6 +910,12 @@ function OrderActions({
         <Button variant="outline" size={size} onClick={onSend} title={t('ส่ง LINE')} aria-label={t('ส่ง LINE')}>
           <Icon name="share" size={16} />
           <span className={label}>{t('ส่ง LINE')}</span>
+        </Button>
+      )}
+      {onApprove && (
+        <Button size={size} variant="success" onClick={onApprove}>
+          <Icon name="check" size={16} />
+          {t('อนุมัติสั่งซื้อ')}
         </Button>
       )}
       {live && (
@@ -1182,6 +1211,7 @@ function NewOrderModal({
   products,
   locations,
   actor,
+  asDraft,
   onClose,
   onDone,
 }: {
@@ -1189,6 +1219,8 @@ function NewOrderModal({
   products: Product[]
   locations: { id: string; name: string; active?: boolean }[]
   actor: { id: string; name: string }
+  // Staff: the order waits for a manager or admin to approve it (plan B4).
+  asDraft?: boolean
   onClose: () => void
   onDone: () => void
 }) {
@@ -1251,9 +1283,10 @@ function NewOrderModal({
         lines: chosen.map(([productId, l]) => ({ productId, qty: l.qty, entryUnit: l.unit })),
         products,
         actor,
+        ...(asDraft ? { asDraft: true } : {}),
         ...(expected ? { expectedAt: dateInputToMs(expected) } : {}),
       })
-      toast.success(t('สั่งของแล้ว'))
+      toast.success(asDraft ? t('บันทึกเป็นร่างแล้ว — รอหัวหน้าอนุมัติก่อนสั่ง') : t('สั่งของแล้ว'))
       clearDraft()
       onDone()
       onClose()

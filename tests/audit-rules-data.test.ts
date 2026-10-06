@@ -148,18 +148,18 @@ describe('F02 — the ledger records who, and keeps it', () => {
     )
   })
 
-  test('correcting the quantity, date and note is still allowed', async () => {
-    await assertSucceeds(
-      updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), {
-        qty: 7,
-        date: now(),
-        note: 'corrected',
-        edits: [{ by: STAFF, byName: 'Staff', at: now(), changed: ['qty'] }],
-        updatedBy: STAFF,
-        updatedByName: 'Staff',
-        updatedAt: now(),
-      }),
-    )
+  test('correcting the quantity, date and note is an admin\'s, signed (plan A9)', async () => {
+    const fix = (uid: string) => ({
+      qty: 7,
+      date: now(),
+      note: 'corrected',
+      edits: [{ by: uid, byName: uid, at: now(), changed: ['qty'] }],
+      updatedBy: uid,
+      updatedByName: uid,
+      updatedAt: now(),
+    })
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), fix(STAFF)))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), fix(ADMIN)))
   })
 
   test('a correction that leaves no trace is refused', async () => {
@@ -181,8 +181,9 @@ describe('F02 — the ledger records who, and keeps it', () => {
   })
 
   test('voiding is an admin decision, whatever the UI shows', async () => {
-    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), { voided: true }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true }))
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), { voided: true, voidReason: 'x' }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true, voidReason: 'keyed twice' }))
   })
 
   test('a movement still cannot be deleted by anyone', async () => {

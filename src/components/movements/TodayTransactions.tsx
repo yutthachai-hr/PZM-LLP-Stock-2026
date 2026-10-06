@@ -127,7 +127,8 @@ export function TodayTransactions({
                   {m.voided && <span>· {t('(ยกเลิก)')}</span>}
                 </div>
               </div>
-              {!m.voided && user && (
+              {/* Correcting a recorded row is an admin's (plan A9, rules enforce it). */}
+              {!m.voided && user?.role === 'admin' && (
                 <button
                   type="button"
                   onClick={() => setEditing(m)}

@@ -993,7 +993,7 @@ describe('a row received against an order changes only with the order (plan A8)'
 
   test('it cannot be voided: a wrong delivery is put right with an adjustment', async () => {
     const mv = await received()
-    await expect(voidMovement(mv, ACTOR)).rejects.toThrow()
+    await expect(voidMovement(mv, ACTOR, 'keyed twice')).rejects.toThrow()
     expect(movements().find((m) => m.id === mv)?.voided).toBeUndefined()
     expect(balance('p1')).toBe(10)
   })

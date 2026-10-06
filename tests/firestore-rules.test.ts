@@ -676,20 +676,19 @@ describe('staff', () => {
 })
 
 describe('the ledger is append-only', () => {
-  test('staff and admins may add and amend movements', async () => {
+  test('staff add movements; only an admin amends or voids one, and a void says why (plan A9)', async () => {
     const trail = (uid: string, n: number) =>
       Array.from({ length: n }, (_, _i) => ({ by: uid, byName: uid, at: ts(), changed: ['qty'] }))
     await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m3'), movement('m3')))
-    await assertSucceeds(
-      updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: trail(STAFF, 1) }),
-    )
-    await assertSucceeds(
-      updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { qty: 9, edits: [...trail(STAFF, 1), ...trail(ADMIN, 1)] }),
-    )
-    // Voiding is the one amendment staff may not make. The UI only ever offered the button
-    // to admins; now the database agrees, so the API cannot be used to skip that.
-    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { voided: true }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true }))
+    // A correction is an admin's, signed (audit S5).
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: trail(STAFF, 1) }))
+    await assertFails(updateDoc(doc(as(MANAGER), 'stockMovements/m1'), { qty: 3, edits: trail(MANAGER, 1) }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { qty: 9, edits: trail(ADMIN, 1) }))
+    // Voiding: an admin, with a reason.
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { voided: true, voidReason: 'x' }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true, voidReason: '' }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true, voidReason: 'keyed twice' }))
   })
 
   test('a correction has to name the person making it, and cannot lose the ones before', async () => {
@@ -698,18 +697,18 @@ describe('the ledger is append-only', () => {
     const at = (uid: string) => doc(as(uid), 'stockMovements/m1')
 
     // Changing a quantity while leaving no trace at all.
-    await assertFails(updateDoc(at(STAFF), { qty: 3 }))
+    await assertFails(updateDoc(at(ADMIN), { qty: 3 }))
     // Signing the edit with a colleague's account.
-    await assertFails(updateDoc(at(STAFF), { qty: 3, edits: [entry(ADMIN)] }))
+    await assertFails(updateDoc(at(ADMIN), { qty: 3, edits: [entry(STAFF)] }))
     // Adding two entries at once, or none, so the count stops matching the corrections.
-    await assertFails(updateDoc(at(STAFF), { qty: 3, edits: [entry(STAFF), entry(STAFF)] }))
-    await assertFails(updateDoc(at(STAFF), { qty: 3, edits: [] }))
+    await assertFails(updateDoc(at(ADMIN), { qty: 3, edits: [entry(ADMIN), entry(ADMIN)] }))
+    await assertFails(updateDoc(at(ADMIN), { qty: 3, edits: [] }))
 
-    await assertSucceeds(updateDoc(at(STAFF), { qty: 3, edits: [entry(STAFF)] }))
-    // A second editor appends; dropping the first one's entry is refused.
+    await assertSucceeds(updateDoc(at(ADMIN), { qty: 3, edits: [entry(ADMIN)] }))
+    // A second edit appends; dropping the first entry is refused.
     await assertFails(updateDoc(at(ADMIN), { qty: 4, edits: [entry(ADMIN)] }))
     await assertSucceeds(
-      updateDoc(at(ADMIN), { qty: 4, edits: [entry(STAFF), entry(ADMIN)] }),
+      updateDoc(at(ADMIN), { qty: 4, edits: [entry(ADMIN), entry(ADMIN)] }),
     )
   })
 
@@ -717,12 +716,15 @@ describe('the ledger is append-only', () => {
     // Correcting a product whose unit was set up wrong rewrites every row filed under the
     // old one, so each of those rows has to name whoever did it.
     const entry = (uid: string) => ({ by: uid, byName: uid, at: ts(), changed: ['unit'] })
-    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { unit: 'EA' }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { unit: 'EA' }))
     await assertFails(
-      updateDoc(doc(as(STAFF), 'stockMovements/m1'), { unit: 'EA', edits: [entry(ADMIN)] }),
+      updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { unit: 'EA', edits: [entry(STAFF)] }),
+    )
+    await assertFails(
+      updateDoc(doc(as(STAFF), 'stockMovements/m1'), { unit: 'EA', edits: [entry(STAFF)] }),
     )
     await assertSucceeds(
-      updateDoc(doc(as(STAFF), 'stockMovements/m1'), { unit: 'EA', edits: [entry(STAFF)] }),
+      updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { unit: 'EA', edits: [entry(ADMIN)] }),
     )
   })
 
@@ -900,14 +902,14 @@ describe('a balance counted in a unit somebody keyed', () => {
       setDoc(doc(as(STAFF), 'stockMovements/m-str'), movement('m-str', STAFF, { qty: 1000, entryUnit: 'Carton', entryQty: '2' })),
     )
     // Re-keying the entry quantity is an edit like any other: signed, or refused.
-    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m-conv'), { qty: 1500, entryQty: 3, updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m-conv'), { qty: 1500, entryQty: 3, updatedAt: ts() }))
     await assertSucceeds(
-      updateDoc(doc(as(STAFF), 'stockMovements/m-conv'), {
+      updateDoc(doc(as(ADMIN), 'stockMovements/m-conv'), {
         qty: 1500,
         entryQty: 3,
-        edits: [{ by: STAFF, byName: 'Staff', at: ts(), changed: ['จำนวน'] }],
-        updatedBy: STAFF,
-        updatedByName: 'Staff',
+        edits: [{ by: ADMIN, byName: 'Admin', at: ts(), changed: ['จำนวน'] }],
+        updatedBy: ADMIN,
+        updatedByName: 'Admin',
         updatedAt: ts(),
       }),
     )
@@ -999,36 +1001,43 @@ describe('orders placed with suppliers', () => {
     locationId: 'loc1',
     orderedAt: ts(),
     lines: [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3 }],
-    createdBy: STAFF,
-    createdByName: 'Staff',
+    // Placed by a หัวหน้า: staff file drafts (plan B4, tested at the end of this block).
+    createdBy: MANAGER,
+    createdByName: 'Manager',
     createdAt: ts(),
     updatedAt: ts(),
     ...over,
   })
   const at = (uid: string, id = 'po1') => doc(as(uid), 'purchaseOrders', id)
 
-  test('staff place orders — it is everyday work, like recording stock', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order()))
+  test('a หัวหน้า places an order; staff file a draft for one to approve (owner, 6 Oct 2026, plan B4)', async () => {
+    await assertSucceeds(setDoc(at(MANAGER), order()))
+    // Staff cannot place one themselves…
+    await assertFails(setDoc(at(STAFF, 'po2'), order({ id: 'po2', createdBy: STAFF, createdByName: 'Staff' })))
+    // …they file a draft, which they cannot approve either; a manager can.
+    await assertSucceeds(setDoc(at(STAFF, 'po3'), order({ id: 'po3', status: 'draft', createdBy: STAFF, createdByName: 'Staff' })))
+    await assertFails(updateDoc(at(STAFF, 'po3'), { status: 'ordered', orderedAt: ts(), approvedBy: STAFF, approvedByName: 'Staff', approvedAt: ts(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(MANAGER, 'po3'), { status: 'ordered', orderedAt: ts(), approvedBy: MANAGER, approvedByName: 'Manager', approvedAt: ts(), updatedAt: ts() }))
   })
 
   test('an order cannot be filed in a colleague name', async () => {
     // The dashboard's "who ordered this" has to mean something when goods do not turn up.
-    await assertFails(setDoc(at(STAFF), order({ createdBy: ADMIN })))
+    await assertFails(setDoc(at(MANAGER), order({ createdBy: ADMIN })))
   })
 
   test('an order cannot be born already received', async () => {
-    await assertFails(setDoc(at(STAFF), order({ status: 'received' })))
+    await assertFails(setDoc(at(MANAGER), order({ status: 'received' })))
   })
 
   test('the delivery date is kept, and is an epoch', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order({ expectedAt: ts() + 86_400_000 })))
-    await assertFails(setDoc(at(STAFF, 'po2'), order({ id: 'po2', expectedAt: 'Thursday' })))
+    await assertSucceeds(setDoc(at(MANAGER), order({ expectedAt: ts() + 86_400_000 })))
+    await assertFails(setDoc(at(MANAGER, 'po2'), order({ id: 'po2', expectedAt: 'Thursday' })))
   })
 
   test('a placed order changes only as a numbered, signed, explained revision', async () => {
     // The supplier holds the number; a silent change to the lines or the date is exactly
     // what an audit cannot follow (owner, 18 Sep 2026).
-    await assertSucceeds(setDoc(at(STAFF), order({ expectedAt: ts() + 86_400_000 })))
+    await assertSucceeds(setDoc(at(MANAGER), order({ expectedAt: ts() + 86_400_000 })))
     const lines = [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 5 }]
     await assertFails(updateDoc(at(STAFF), { lines, updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { expectedAt: ts() + 2 * 86_400_000, updatedAt: ts() }))
@@ -1038,17 +1047,17 @@ describe('orders placed with suppliers', () => {
     await assertFails(updateDoc(at(STAFF), { lines, revision: 2, revisions: [], updatedAt: ts() }))
     await assertSucceeds(updateDoc(at(STAFF), { lines, revision: 2, revisions: [rev(1), rev(2)], updatedAt: ts() }))
     // A draft is still being written: its lines move freely.
-    await assertSucceeds(setDoc(at(STAFF, 'po2'), order({ id: 'po2', status: 'draft', batchId: 'b1' })))
+    await assertSucceeds(setDoc(at(MANAGER, 'po2'), order({ id: 'po2', status: 'draft', batchId: 'b1' })))
     await assertSucceeds(updateDoc(at(STAFF, 'po2'), { lines, updatedAt: ts() }))
   })
 
   test('the shape is pinned, and an empty order is not one', async () => {
-    await assertFails(setDoc(at(STAFF), order({ extra: 'x' })))
-    await assertFails(setDoc(at(STAFF), order({ lines: [] })))
-    await assertFails(setDoc(at(STAFF), order({ status: 'sent' })))
-    await assertFails(setDoc(at(STAFF), order({ orderedAt: 'today' })))
+    await assertFails(setDoc(at(MANAGER), order({ extra: 'x' })))
+    await assertFails(setDoc(at(MANAGER), order({ lines: [] })))
+    await assertFails(setDoc(at(MANAGER), order({ status: 'sent' })))
+    await assertFails(setDoc(at(MANAGER), order({ orderedAt: 'today' })))
     // An update is checked on the fields it writes (orderWritten), so a bad value is still refused.
-    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(setDoc(at(MANAGER), order()))
     await assertFails(updateDoc(at(STAFF), { shareStatus: 'bogus', updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { invoiceNo: 42, updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { receipts: 'RC-1', updatedAt: ts() }))
@@ -1057,7 +1066,7 @@ describe('orders placed with suppliers', () => {
 
   test('received means there is an invoice number and a stock receipt behind it', async () => {
     // Without this the invoice number is a habit the form could be talked out of.
-    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(setDoc(at(MANAGER), order()))
     await assertFails(updateDoc(at(STAFF), { status: 'received', updatedAt: ts() }))
     await assertFails(
       updateDoc(at(STAFF), { status: 'received', invoiceNo: 'IV-1', updatedAt: ts() }),
@@ -1076,7 +1085,7 @@ describe('orders placed with suppliers', () => {
   })
 
   test('what the order IS cannot be rewritten after the fact', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(setDoc(at(MANAGER), order()))
     await assertFails(updateDoc(at(STAFF), { supplierId: 'sup2', updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { docNo: 'PO-09999', updatedAt: ts() }))
     // The one exception: an admin putting the per-supplier sequence right (15 Sep 2026).
@@ -1102,7 +1111,7 @@ describe('orders placed with suppliers', () => {
   })
 
   test('whoever checks the delivery in signs for it themselves', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(setDoc(at(MANAGER), order()))
     await assertFails(
       updateDoc(at(STAFF), { receivedBy: ADMIN, receivedByName: 'Admin', updatedAt: ts() }),
     )
@@ -1110,7 +1119,7 @@ describe('orders placed with suppliers', () => {
 
   test('a placed order is cancelled in the caller name with a reason, never deleted', async () => {
     // The number stays on the books with who called it off and why (owner, 18 Sep 2026).
-    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(setDoc(at(MANAGER), order()))
     await assertFails(deleteDoc(at(STAFF)))
     await assertFails(updateDoc(at(STAFF), { status: 'cancelled', updatedAt: ts() }))
     await assertFails(
@@ -1125,10 +1134,10 @@ describe('orders placed with suppliers', () => {
   })
 
   test('a draft nobody approved can still be dropped; one that reached the books cannot', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order({ status: 'draft', batchId: 'b1' })))
+    await assertSucceeds(setDoc(at(MANAGER), order({ status: 'draft', batchId: 'b1' })))
     await assertSucceeds(deleteDoc(at(STAFF)))
     await assertSucceeds(
-      setDoc(at(STAFF, 'po2'), order({ id: 'po2', docNo: 'PO-00002' })),
+      setDoc(at(MANAGER, 'po2'), order({ id: 'po2', docNo: 'PO-00002' })),
     )
     await assertSucceeds(
       updateDoc(at(STAFF, 'po2'), {
@@ -1146,7 +1155,7 @@ describe('orders placed with suppliers', () => {
   })
 
   test('a short delivery keeps the order open, one appended receipt at a time (24 Sep 2026)', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(setDoc(at(MANAGER), order()))
     const receipt = (n: number) => ({ docNo: 'RC-0000' + n, date: ts(), invoiceNo: 'IV-' + n, byId: STAFF, byName: 'Staff', lines: [{ productId: 'p1', qty: 1 }] })
     const partLines = [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3, receivedQty: 1 }]
     const arrival = (n: number) => ({ invoiceNo: 'IV-' + n, movementDocNo: 'RC-0000' + n, receivedBy: STAFF, receivedByName: 'Staff', receivedAt: ts(), updatedAt: ts() })
@@ -1170,10 +1179,10 @@ describe('orders placed with suppliers', () => {
   })
 
   test('the receipts list is a list and cannot grow without bound', async () => {
-    await assertFails(setDoc(at(STAFF), order({ receipts: 'RC-1' })))
+    await assertFails(setDoc(at(MANAGER), order({ receipts: 'RC-1' })))
     const many = Array.from({ length: 51 }, (_, i) => ({ docNo: 'RC-' + i, date: ts(), invoiceNo: 'x', byId: STAFF, byName: 'S', lines: [] }))
-    await assertFails(setDoc(at(STAFF), order({ receipts: many })))
-    await assertFails(setDoc(at(STAFF), order({ closedShortAt: 'today' })))
+    await assertFails(setDoc(at(MANAGER), order({ receipts: many })))
+    await assertFails(setDoc(at(MANAGER), order({ closedShortAt: 'today' })))
   })
 
   test("the supplier's answer is the server's alone: no client writes it, admins included", async () => {
@@ -1198,13 +1207,13 @@ describe('orders placed with suppliers', () => {
     for (const [k, v] of Object.entries(fields)) {
       for (const who of [STAFF, MANAGER, ADMIN]) await assertFails(updateDoc(at(who), { [k]: v, updatedAt: ts() }))
     }
-    await assertFails(setDoc(at(STAFF, 'po2'), order({ id: 'po2', supplierConfirmationStatus: 'confirmed' })))
+    await assertFails(setDoc(at(MANAGER, 'po2'), order({ id: 'po2', supplierConfirmationStatus: 'confirmed' })))
     // …while an order that carries them can still be received and amended as before.
     await assertSucceeds(updateDoc(at(STAFF), { note: 'โทรตามแล้ว', updatedAt: ts() }))
   })
 
   test('someone waiting for approval sees no orders at all', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order()))
+    await assertSucceeds(setDoc(at(MANAGER), order()))
     await assertFails(getDoc(at(PENDING)))
     await assertFails(getDoc(doc(anon(), 'purchaseOrders/po1')))
   })
@@ -1283,23 +1292,26 @@ describe('orders from an imported list', () => {
   })
   const at = (uid: string) => doc(as(uid), 'purchaseOrders', 'po9')
 
-  test('a draft may be filed, and approved by whoever signs it', async () => {
+  test('a draft may be filed by anyone, and approved by a หัวหน้า or admin in their own name (plan B4)', async () => {
     await assertSucceeds(setDoc(at(STAFF), order()))
     await assertFails(
-      updateDoc(at(STAFF), { status: 'ordered', orderedAt: ts(), approvedBy: ADMIN, approvedByName: 'Admin', approvedAt: ts(), updatedAt: ts() }),
+      updateDoc(at(MANAGER), { status: 'ordered', orderedAt: ts(), approvedBy: ADMIN, approvedByName: 'Admin', approvedAt: ts(), updatedAt: ts() }),
+    )
+    await assertFails(
+      updateDoc(at(STAFF), { status: 'ordered', orderedAt: ts(), approvedBy: STAFF, approvedByName: 'Staff', approvedAt: ts(), updatedAt: ts() }),
     )
     await assertSucceeds(
-      updateDoc(at(STAFF), { status: 'ordered', orderedAt: ts(), approvedBy: STAFF, approvedByName: 'Staff', approvedAt: ts(), updatedAt: ts() }),
+      updateDoc(at(MANAGER), { status: 'ordered', orderedAt: ts(), approvedBy: MANAGER, approvedByName: 'Manager', approvedAt: ts(), updatedAt: ts() }),
     )
   })
 
   test('the order date moves only when a draft is placed', async () => {
-    await assertSucceeds(setDoc(at(STAFF), order({ status: 'ordered' })))
+    await assertSucceeds(setDoc(at(MANAGER), order({ status: 'ordered', createdBy: MANAGER, createdByName: 'Manager' })))
     await assertFails(updateDoc(at(STAFF), { orderedAt: ts() + 1, updatedAt: ts() }))
   })
 
   test("where the sheet got to is recorded in the sender's own name, and only as one of the known words", async () => {
-    await assertSucceeds(setDoc(at(STAFF), order({ status: 'ordered' })))
+    await assertSucceeds(setDoc(at(MANAGER), order({ status: 'ordered', createdBy: MANAGER, createdByName: 'Manager' })))
     await assertSucceeds(updateDoc(at(STAFF), { shareStatus: 'shareOpened', shareOpenedAt: ts(), updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { shareStatus: 'delivered', updatedAt: ts() }))
     await assertFails(
@@ -1447,8 +1459,21 @@ describe('purchase requests', () => {
     await assertSucceeds(updateDoc(at(STAFF), { status: 'pendingApproval', history: grow(), updatedAt: ts() }))
     await assertSucceeds(updateDoc(at(MANAGER), { status: 'approved', approvedBy: MANAGER, approvedByName: 'M', approvedAt: ts(), history: grow(), updatedAt: ts() }))
     await assertFails(updateDoc(at(STAFF), { status: 'poCreated', history: grow(), updatedAt: ts() }))
-    await assertSucceeds(updateDoc(at(STAFF), { status: 'poCreated', orders: [{ supplierId: 's1', supplierName: 'S', poId: 'po1', docNo: 'PO-00001' }], history: grow(), updatedAt: ts() }))
-    // An order may say which request it came from
+    const orders = [{ supplierId: 's1', supplierName: 'S', poId: 'po1', docNo: 'PO-00001' }]
+    const converted = (uid: string) => [...pr().history, { at: ts(), by: uid, byName: 'x', action: 'convertedToPo' }]
+    // The conversion is signed by whoever converts (plan A5): not unsigned, not a colleague.
+    await assertFails(updateDoc(at(STAFF), { status: 'poCreated', orders, history: grow(), updatedAt: ts() }))
+    await assertFails(updateDoc(at(STAFF), { status: 'poCreated', orders, history: converted(MANAGER), updatedAt: ts() }))
+    // An approved request's lines are what was approved (plan A5).
+    await assertFails(updateDoc(at(MANAGER), { items: [], history: grow(), updatedAt: ts() }))
+    await assertSucceeds(updateDoc(at(STAFF), { status: 'poCreated', orders, history: converted(STAFF), updatedAt: ts() }))
+    // An order may say which request it came from — staff may place it because the
+    // request is converted (plan B4); one naming a request that is not, may not.
+    await assertFails(setDoc(doc(as(STAFF), 'purchaseOrders', 'po2'), {
+      id: 'po2', docNo: 'PO-00002', supplierId: 's1', supplierName: 'S', status: 'ordered', locationId: 'loc1', orderedAt: ts(),
+      lines: [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3 }], requestId: 'no-such-request',
+      createdBy: STAFF, createdByName: 'Staff', createdAt: ts(), updatedAt: ts(),
+    }))
     await assertSucceeds(setDoc(doc(as(STAFF), 'purchaseOrders', 'po1'), {
       id: 'po1', docNo: 'PO-00001', supplierId: 's1', supplierName: 'S', status: 'ordered', locationId: 'loc1', orderedAt: ts(),
       lines: [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3 }], requestId: 'pr1',

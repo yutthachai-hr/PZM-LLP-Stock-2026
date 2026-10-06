@@ -1245,7 +1245,10 @@ export async function rebuildProductLevels(
  * already been consumed downstream needs a correcting adjustment, not a quiet deletion of the
  * history that explains the stock.
  */
-export async function voidMovement(movementId: string, actor: Actor): Promise<void> {
+export async function voidMovement(movementId: string, actor: Actor, reason: string): Promise<void> {
+  // An admin's decision, with why (plan A9): the rules refuse a void without one.
+  const why = reason.trim()
+  if (!why) throw new AppError('กรุณาระบุเหตุผลที่ยกเลิก')
   const db = scoped()
   let noted = () => {}
   await db.transaction(async (tx) => {
@@ -1289,7 +1292,7 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
         levelDoc(mv.toLocationId, mv.productId, next, actor, now, levelRef(mv.toLocationId, mv).unit),
       )
     }
-    const patchDoc = { voided: true, updatedBy: actor.id, updatedByName: actor.name, updatedAt: now }
+    const patchDoc = { voided: true, voidReason: why, updatedBy: actor.id, updatedByName: actor.name, updatedAt: now }
     tx.update(COL.movements, movementId, patchDoc)
     noted = () => noteChanged(mv, patchDoc)
   })

@@ -160,7 +160,7 @@ describe('undoing a converted line', () => {
   test('voiding a Carton receipt takes its KG back off the one balance', async () => {
     await receive(1, 'Carton')
     await receive(2)
-    await voidMovement(movements()[0].id as string, ACTOR)
+    await voidMovement(movements()[0].id as string, ACTOR, 'keyed twice')
     expect(qtyFor(MAIN)).toBe(2)
     expect(await findLevelDrift()).toEqual([])
   })
@@ -185,7 +185,7 @@ describe('rows filed under the old rule', () => {
 
   test('voiding a legacy row finds the #Unit balance it made', async () => {
     seedLegacy(10, 'Pack')
-    await voidMovement('legacy-Pack-10', ACTOR)
+    await voidMovement('legacy-Pack-10', ACTOR, 'keyed twice')
     expect(qtyFor(MAIN, 'Pack')).toBe(0)
     expect(await findLevelDrift()).toEqual([])
   })
@@ -374,7 +374,7 @@ describe('who edited a row, all of them', () => {
   test('a voided row cannot be edited at all', async () => {
     await receive(5)
     const id = movements()[0].id as string
-    await voidMovement(id, ACTOR)
+    await voidMovement(id, ACTOR, 'keyed twice')
     await expect(
       editMovement({ movementId: id, patch: { qty: 9 }, actor: ACTOR }),
     ).rejects.toThrow()

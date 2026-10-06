@@ -117,6 +117,27 @@ service cloud.firestore {
       return name.matches('^lelapin__.*') ? name.split('__')[1] : name;
     }
 
+    // The same brand's collection of another kind: `lelapin__stockMovements` → `lelapin__transfers`.
+    function sibling(name, other) {
+      return name.matches('^lelapin__.*') ? 'lelapin__' + other : other;
+    }
+
+    // A transfer that really exists and has left the approval stage, as it stands at the end
+    // of this write (plan A4, 6 Oct 2026). Stock moves between sites only under such a
+    // document; naming a transfer that does not exist, or one still being drafted, is refused.
+    function realTransfer(name, id) {
+      let path = /databases/$(database)/documents/$(sibling(name, 'transfers'))/$(id);
+      return existsAfter(path)
+        && getAfter(path).data.status in ['inTransit', 'receiving', 'completed', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved'];
+    }
+
+    // An order placed from a request is placed by the request's conversion: the request
+    // is poCreated at the end of the same write (plan B4 with A6).
+    function convertedRequest(name, id) {
+      let path = /databases/$(database)/documents/$(sibling(name, 'purchaseRequests'))/$(id);
+      return existsAfter(path) && getAfter(path).data.status == 'poCreated';
+    }
+
     // Movements are the ledger every balance is rebuilt from, so they are append-only for
     // everyone, admins included. Voiding and editing are updates that keep the original
     // row, and nothing in the app deletes one.
@@ -216,7 +237,7 @@ service cloud.firestore {
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'supplierId', 'supplierName', 'invoiceNo', 'docDate', 'poId', 'poDocNo',
           'date', 'byUserId', 'byUserName', 'createdAt',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'transferId'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'voidReason', 'transferId'
         ])
         && d.type in ['receive', 'issue', 'adjust', 'consume']
         && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
@@ -244,6 +265,7 @@ service cloud.firestore {
         && (!('poId' in d) || text(d.poId, 200))
         && (!('poDocNo' in d) || text(d.poDocNo, 40))
         && (!('voided' in d) || d.voided is bool)
+        && (!('voidReason' in d) || text(d.voidReason, 500))
         && (!('transferId' in d) || text(d.transferId, 200))
         && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
         && (!('toLocationId' in d) || text(d.toLocationId, 200))
@@ -947,6 +969,11 @@ service cloud.firestore {
         : k == 'purchaseOrders'
         ? request.resource.data.createdBy == request.auth.uid
           && request.resource.data.status != 'received'
+          // Staff do not place an order on their own (owner, 6 Oct 2026, plan B4): theirs
+          // is a draft until a หัวหน้า or admin approves it — unless it comes from a request
+          // a manager already approved, converted in this same write.
+          && (request.resource.data.status != 'ordered' || roleIsManager()
+              || ('requestId' in request.resource.data && convertedRequest(name, request.resource.data.requestId)))
         // An import is filed by whoever imported it, and is not born approved or sent.
         : k == 'purchaseBatches'
         ? request.resource.data.createdBy == request.auth.uid
@@ -981,6 +1008,11 @@ service cloud.firestore {
           // staff move it through a transfer, whose rows name it.
           && (request.resource.data.type != 'issue' || !('toLocationId' in request.resource.data)
               || 'transferId' in request.resource.data || roleIsManager())
+          // The transfer it names must be real and past approval (plan A4).
+          && (!('transferId' in request.resource.data) || realTransfer(name, request.resource.data.transferId))
+          // An adjustment says why, in the words the reports group by (plan B7).
+          && (request.resource.data.type != 'adjust'
+              || request.resource.data.get('reason', '') in ['lost', 'broken', 'expired', 'damage', 'found', 'count', 'opening'])
         );
     }
 
@@ -1048,6 +1080,8 @@ service cloud.firestore {
             || request.resource.data.revisions.size() > resource.data.revisions.size())
         // The order date only moves when a draft is placed.
         && (!('orderedAt' in e) || resource.data.status == 'draft')
+        // Placing a draft is a หัวหน้า's or admin's word (plan B4).
+        && (resource.data.status != 'draft' || request.resource.data.status != 'ordered' || roleIsManager())
         // Cancelling is signed by the caller, and a cancelled order is closed for good —
         // only an admin putting numbers right may still touch it.
         && (!('cancelledBy' in request.resource.data) || request.resource.data.cancelledBy == request.auth.uid)
@@ -1136,12 +1170,20 @@ service cloud.firestore {
         && resource.data.status != 'skipped'
         && request.resource.data.history.size() >= resource.data.history.size()
         && (request.resource.data.status == resource.data.status || requestMove())
+        // What a manager approved is what gets ordered (plan A5): the lines are frozen once
+        // a request is approved, until an admin reopens it.
+        && (!('items' in editedKeys()) || !(resource.data.status in ['approved', 'poCreated']))
         && (!('approvedBy' in request.resource.data)
             || request.resource.data.approvedBy == resource.data.approvedBy
             || request.resource.data.approvedBy == request.auth.uid)
         && (!('rejectedBy' in request.resource.data)
             || request.resource.data.rejectedBy == resource.data.rejectedBy
             || request.resource.data.rejectedBy == request.auth.uid);
+    }
+
+    function convertedByCaller() {
+      let h = request.resource.data.history;
+      return h[h.size() - 1].by == request.auth.uid && h[h.size() - 1].action == 'convertedToPo';
     }
 
     function requestMove() {
@@ -1153,8 +1195,9 @@ service cloud.firestore {
           && (resource.data.requestedBy == request.auth.uid || roleIsManager()))
         // the manager's three words
         || (to in ['returned', 'approved', 'rejected'] && from == 'pendingApproval' && roleIsManager())
-        // turning an approved request into orders: anyone who may place an order
-        || (to == 'poCreated' && from == 'approved')
+        // turning an approved request into orders: anyone who may place an order, in their
+        // own name — the conversion's history entry names the caller (plan A5)
+        || (to == 'poCreated' && from == 'approved' && convertedByCaller())
         // reopening a decision: admin only
         || (to == 'pendingApproval' && from in ['approved', 'rejected'] && roleIsAdmin())
         // setting it aside before review: the requester or a manager, in their own name
@@ -1268,17 +1311,19 @@ service cloud.firestore {
       // the document's quantities are what explain them.
       return !('transferId' in resource.data) && editedKeys().hasOnly([
           'qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'voidReason'
         ])
-        && (!editedKeys().hasAny(['voided']) || roleIsAdmin())
+        // Voiding is an admin's, and says why (plan A9).
+        && (!editedKeys().hasAny(['voided', 'voidReason'])
+            || (roleIsAdmin() && request.resource.data.get('voidReason', '').size() > 0))
         && (!('updatedBy' in request.resource.data)
             || request.resource.data.updatedBy == request.auth.uid)
-        // Changing what a row says means appending to its history, in the caller's own name.
-        // `unit` is here because correcting a product's unit restamps every row filed under
-        // the old one, and that is an edit like any other: it signs itself.
+        // Changing what a row says is an admin's (plan A9), and means appending to its
+        // history in their own name. `unit` is here because correcting a product's unit
+        // restamps every row filed under the old one, and that is an edit like any other.
         && (!editedKeys().hasAny(['qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit',
                                   'fromLocationId', 'toLocationId'])
-            || appendedOwnEdit());
+            || (roleIsAdmin() && appendedOwnEdit()));
     }
 
     /**

@@ -188,6 +188,9 @@ describe('the ledger rows of a transfer', () => {
 
   test('staff move stock between sites only through a transfer; a manager may still do it directly', async () => {
     await assertFails(setDoc(doc(as(WAREHOUSE), 'stockMovements/m1'), mv('m1', WAREHOUSE, { toLocationId: 'sarasin' })))
+    // …a real one, past approval (plan A4): one that does not exist, or a draft, is refused.
+    await assertFails(setDoc(doc(as(WAREHOUSE), 'stockMovements/m2'), mv('m2', WAREHOUSE, { transferId: 't1' })))
+    await seedDoc('transfers/t1', inTransit('t1'))
     await assertSucceeds(setDoc(doc(as(WAREHOUSE), 'stockMovements/m2'), mv('m2', WAREHOUSE, { transferId: 't1' })))
     await assertSucceeds(setDoc(doc(as(MANAGER), 'stockMovements/m3'), mv('m3', MANAGER, { toLocationId: 'sarasin' })))
     // Using stock up at the counter (no destination) is still everyday work.

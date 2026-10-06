@@ -539,7 +539,7 @@ describe('the ledger rows a transfer made', () => {
     const t = await approved(SARASIN, [line(COKE, 24)])
     const row = movements().find((m) => m.transferId === t.id)!
     await expect(editMovement({ movementId: row.id, patch: { qty: 1 }, actor: ADMIN })).rejects.toThrow()
-    await expect(voidMovement(row.id, ADMIN)).rejects.toThrow()
+    await expect(voidMovement(row.id, ADMIN, 'keyed twice')).rejects.toThrow()
     expect(level(TRANSIT, COKE.id)).toBe(24)
   })
 })

@@ -201,6 +201,11 @@ export interface NewOrderParams {
   batchId?: string
   /** The approved purchase request this comes from. Placed at once — the approval was the decision. */
   requestId?: string
+  /**
+   * Filed as a draft for a หัวหน้า or admin to approve: an order staff key by hand
+   * (owner, 6 Oct 2026, plan B4). The rules refuse staff an `ordered` one.
+   */
+  asDraft?: boolean
   note?: string
 }
 
@@ -222,7 +227,7 @@ export function newOrderFields(params: NewOrderParams, now: number): Omit<Purcha
   return {
     supplierId: supplier.id,
     supplierName: supplier.name,
-    status: (params.batchId ? 'draft' : 'ordered') satisfies PurchaseOrderStatus,
+    status: (params.batchId || params.asDraft ? 'draft' : 'ordered') satisfies PurchaseOrderStatus,
     locationId,
     orderedAt,
     ...(params.expectedAt !== undefined ? { expectedAt: params.expectedAt } : {}),

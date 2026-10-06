@@ -29,6 +29,8 @@ export interface OrderPanelActions {
   onCloseShort: () => void
   /** The printable / shareable sheet (the A5 page and the JPG). */
   onSheet: () => void
+  // A manager or admin placing a draft (plan B4).
+  onApprove?: () => void
 }
 
 export function OrderPanel({
@@ -288,6 +290,12 @@ export function OrderPanel({
               <Button variant="outline" className="whitespace-nowrap" onClick={actions.onSend}>
                 <Icon name="share" size={16} />
                 {t('ส่ง LINE')}
+              </Button>
+            )}
+            {actions.onApprove && (
+              <Button variant="success" className="flex-1 whitespace-nowrap" onClick={actions.onApprove}>
+                <Icon name="check" size={16} />
+                {t('อนุมัติสั่งซื้อ')}
               </Button>
             )}
             {live && (

@@ -74,6 +74,8 @@ export function PurchaseBatchReviewPage() {
 
   const actor = useMemo(() => (user ? { id: user.id, name: user.name } : null), [user])
   const isAdmin = user?.role === 'admin'
+  // Placing an order is a หัวหน้า's or admin's word (owner, 6 Oct 2026, plan B4).
+  const canApprove = isAdmin || user?.role === 'manager'
   const company = brand ? brandDef(brand).name : ''
 
   /** A group's readiness from its rows alone — `groupState` says "ordered" once a draft exists. */
@@ -326,7 +328,7 @@ export function PurchaseBatchReviewPage() {
                       {t('ดูรูป')}
                     </Button>
                   )}
-                  {order && !placed && state === 'ready' && (
+                  {order && !placed && state === 'ready' && canApprove && (
                     <Button onClick={() => void approve(g.supplierId)} disabled={!!busy}>
                       {t('อนุมัติ')}
                     </Button>
@@ -410,7 +412,7 @@ export function PurchaseBatchReviewPage() {
                 {t('ยกเลิกชุด')}
               </Button>
             )}
-            {editable && readyGroups.some((g) => !placedOrders.some((o) => o.id === g.poId)) && (
+            {editable && canApprove && readyGroups.some((g) => !placedOrders.some((o) => o.id === g.poId)) && (
               <Button onClick={() => void approve()} disabled={!!busy}>
                 <Icon name="check" size={16} />
                 {t('อนุมัติทั้งหมดที่พร้อม ({n})', {

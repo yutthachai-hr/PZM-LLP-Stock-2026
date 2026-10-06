@@ -3066,4 +3066,8 @@ export const EN: Record<string, string> = {
   'รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน': 'This line was received against order {docNo} — only the note can be changed. If the quantity or details are wrong, record a stock adjustment instead',
   // Plan A10: monthly count posting (6 Oct 2026)
   'มีการบันทึกสต๊อกของคลังนี้ระหว่างยืนยันหลายครั้ง — กรุณากดยืนยันอีกครั้ง': 'Stock at this location kept changing while confirming — please confirm again',
+  // Plan B4: staff orders wait for approval (6 Oct 2026)
+  'อนุมัติ {docNo} แล้ว — สั่งซื้อได้': '{docNo} approved — the order is placed',
+  'อนุมัติสั่งซื้อ': 'Approve order',
+  'บันทึกเป็นร่างแล้ว — รอหัวหน้าอนุมัติก่อนสั่ง': 'Saved as a draft — waiting for a manager to approve it',
 }
