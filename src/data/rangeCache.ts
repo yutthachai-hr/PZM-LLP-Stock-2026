@@ -1,4 +1,5 @@
 import { getBrand } from '../brand/brand'
+import { cacheGet, cacheSet } from './localCache'
 
 /**
  * A session cache of date-range reads, one per collection the calendar draws from.
@@ -25,11 +26,39 @@ export interface RangeCache<T extends { id: string }> {
   peekRange(from: number, to: number): T[] | undefined
   /** True when a held range covers this one — used to skip a loading state. */
   hasRange(from: number, to: number): boolean
+  /**
+   * Ask only for rows changed since the newest held (persisted caches): what other devices
+   * wrote, for the price of the changes. A cache without persistence does nothing here.
+   */
+  refreshChanged(): Promise<void>
   /** Fold a created or changed row into every held range it belongs to, and out of the rest. */
   patch(row: T): void
   remove(id: string): void
   subscribe(fn: () => void): () => void
   clear(): void
+}
+
+/**
+ * Kept on the device across sessions (release hardening: Firestore reads). A new tab or a
+ * phone opening the app again starts from what was held, asks once for the rows changed
+ * since (`fetchChanged`, on a field every write sets), and reads in full again after
+ * `maxAgeMs` — which is also how a deleted row (a dropped draft) leaves other devices.
+ */
+export interface RangePersist<T> {
+  /** Storage key, unique per project and brand. Null = do not persist (demo mode). */
+  key: () => string | null
+  updatedAtOf: (row: T) => number
+  fetchChanged: (since: number) => Promise<T[]>
+  maxAgeMs?: number
+  marginMs?: number
+}
+
+interface PersistedRanges<T> {
+  v: 1
+  fullAt: number
+  maxUpdated: number
+  ranges: { from: number; to: number }[]
+  rows: T[]
 }
 
 export function createRangeCache<T extends { id: string }>(opts: {
@@ -38,6 +67,7 @@ export function createRangeCache<T extends { id: string }>(opts: {
   atOf: (row: T) => number
   /** Tie-break after the date, for a stable order. */
   compare?: (a: T, b: T) => number
+  persist?: RangePersist<T>
 }): RangeCache<T> {
   const held = new Map<string, { from: number; to: number; rows: T[] }>()
   // Reads in flight, so two screens mounting together do not both query a window one of
@@ -51,6 +81,71 @@ export function createRangeCache<T extends { id: string }>(opts: {
   }
   const brandKey = (from: number, to: number) => `${getBrand()}|${from}|${to}`
   const mine = (k: string) => k.startsWith(`${getBrand()}|`)
+
+  // ---- persistence (optional) ----
+  const hydrated = new Map<string, Promise<void>>()
+  const fullAt = new Map<string, number>()
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  function save() {
+    const key = opts.persist?.key()
+    if (!key || !opts.persist) return
+    const p = opts.persist
+    const brand = getBrand()
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      const ranges: { from: number; to: number }[] = []
+      const rows = new Map<string, T>()
+      for (const [k, r] of held) {
+        if (!k.startsWith(`${brand}|`)) continue
+        ranges.push({ from: r.from, to: r.to })
+        for (const row of r.rows) rows.set(row.id, row)
+      }
+      let maxUpdated = 0
+      for (const row of rows.values()) maxUpdated = Math.max(maxUpdated, p.updatedAtOf(row))
+      const rec: PersistedRanges<T> = { v: 1, fullAt: fullAt.get(brand) ?? Date.now(), maxUpdated, ranges, rows: [...rows.values()] }
+      void cacheSet(key, rec)
+    }, 1000)
+  }
+  function hydrate(): Promise<void> {
+    const brand = getBrand()
+    const key = opts.persist?.key()
+    if (!key || !opts.persist) return Promise.resolve()
+    const p = opts.persist
+    let h = hydrated.get(brand)
+    if (h) return h
+    h = (async () => {
+      const rec = await cacheGet<PersistedRanges<T>>(key)
+      const now = Date.now()
+      if (!rec || rec.v !== 1 || now - rec.fullAt > (p.maxAgeMs ?? 24 * 3_600_000)) {
+        fullAt.set(brand, now)
+        return
+      }
+      fullAt.set(brand, rec.fullAt)
+      for (const r of rec.ranges) {
+        held.set(`${brand}|${r.from}|${r.to}`, { from: r.from, to: r.to, rows: sort(rec.rows.filter((x) => opts.atOf(x) >= r.from && opts.atOf(x) <= r.to)) })
+      }
+      // What changed since this device last looked, folded in like a write would be.
+      try {
+        const changed = await p.fetchChanged(Math.max(0, Math.min(rec.maxUpdated, now) - (p.marginMs ?? 30 * 60_000)))
+        for (const row of changed) patchHeld(row)
+      } catch {
+        // Could not ask: forget what was held rather than show it as current.
+        for (const k of [...held.keys()]) if (k.startsWith(`${brand}|`)) held.delete(k)
+        fullAt.set(brand, now)
+      }
+      announce()
+    })()
+    hydrated.set(brand, h)
+    return h
+  }
+  function patchHeld(row: T) {
+    const at = opts.atOf(row)
+    for (const [k, r] of held) {
+      if (!mine(k)) continue
+      const without = r.rows.filter((x) => x.id !== row.id)
+      r.rows = at >= r.from && at <= r.to ? sort([...without, row]) : without
+    }
+  }
 
   function covering(from: number, to: number): { from: number; to: number; rows: T[] } | undefined {
     const exact = held.get(brandKey(from, to))
@@ -70,6 +165,7 @@ export function createRangeCache<T extends { id: string }>(opts: {
 
   return {
     async fetchRange(from, to, o) {
+      await hydrate()
       if (!o?.force) {
         const hit = covering(from, to)
         if (hit) return slice(hit, from, to)
@@ -97,9 +193,24 @@ export function createRangeCache<T extends { id: string }>(opts: {
         for (const [key] of overlap) held.delete(key)
         held.set(brandKey(span.from, span.to), { ...span, rows })
         announce()
+        save()
         return slice({ rows }, from, to)
       } finally {
         pending.delete(k)
+      }
+    },
+    async refreshChanged() {
+      const p = opts.persist
+      if (!p || !p.key()) return
+      await hydrate()
+      let newest = 0
+      for (const [k, r] of held) if (mine(k)) for (const row of r.rows) newest = Math.max(newest, p.updatedAtOf(row))
+      if (!newest) return
+      const changed = await p.fetchChanged(Math.max(0, Math.min(newest, Date.now()) - (p.marginMs ?? 30 * 60_000)))
+      for (const row of changed) patchHeld(row)
+      if (changed.length) {
+        announce()
+        save()
       }
     },
     peekRange(from, to) {
@@ -110,19 +221,16 @@ export function createRangeCache<T extends { id: string }>(opts: {
       return covering(from, to) !== undefined
     },
     patch(row) {
-      const at = opts.atOf(row)
-      for (const [k, r] of held) {
-        if (!mine(k)) continue
-        const without = r.rows.filter((x) => x.id !== row.id)
-        r.rows = at >= r.from && at <= r.to ? sort([...without, row]) : without
-      }
+      patchHeld(row)
       announce()
+      save()
     },
     remove(id) {
       for (const [k, r] of held) {
         if (mine(k)) r.rows = r.rows.filter((x) => x.id !== id)
       }
       announce()
+      save()
     },
     subscribe(fn) {
       listeners.add(fn)
@@ -130,6 +238,7 @@ export function createRangeCache<T extends { id: string }>(opts: {
     },
     clear() {
       held.clear()
+      hydrated.clear()
       announce()
     },
   }

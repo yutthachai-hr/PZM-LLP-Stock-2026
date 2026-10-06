@@ -133,10 +133,14 @@ export function OrdersPage() {
     setLoading(true)
     try {
       const to = Date.now()
-      const rows = await listOrdersInRange(to - days * DAY, to + DAY)
-      setOrders(rows)
-      // Keep the calendar's copy current without it re-reading the month.
-      for (const o of rows) orderCache.patch(o)
+      // Release hardening (Firestore reads): through the shared order cache — held for the
+      // session and on the device — and then only what changed since, so another device's
+      // answer or receipt still shows without the whole window being read on every visit.
+      const from = to - days * DAY
+      await orderCache.fetchRange(from, to + DAY)
+      await orderCache.refreshChanged()
+      const held = orderCache.peekRange(from, to + DAY)
+      setOrders(held ? [...held].sort((a, b) => b.orderedAt - a.orderedAt) : await listOrdersInRange(from, to + DAY))
     } catch (e) {
       toast.error(errText(e, t))
     } finally {

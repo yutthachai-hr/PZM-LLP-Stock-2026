@@ -1442,6 +1442,21 @@ service cloud.firestore {
 
     // Written only by the cron Worker (service account, outside these rules). Screens read
     // it to say when the automation last ran.
+    // The devices' cache epoch per brand (release hardening: Firestore reads). Every active
+    // user's device reads it once per open; an admin action that deletes or rewrites
+    // history bumps a collection's number so every device reads that collection in full.
+    match /meta/{docId} {
+      allow get: if docId.matches('^cacheEpoch_(pizza|lelapin)$') && active();
+      allow create, update: if docId.matches('^cacheEpoch_(pizza|lelapin)$') && admin()
+        && request.resource.data.keys().hasOnly(['id', 'products', 'stockLevels', 'stockMovements', 'notifications', 'productMinOverrides'])
+        && request.resource.data.id == docId
+        && (!('products' in request.resource.data) || request.resource.data.products is number)
+        && (!('stockLevels' in request.resource.data) || request.resource.data.stockLevels is number)
+        && (!('stockMovements' in request.resource.data) || request.resource.data.stockMovements is number)
+        && (!('notifications' in request.resource.data) || request.resource.data.notifications is number)
+        && (!('productMinOverrides' in request.resource.data) || request.resource.data.productMinOverrides is number);
+    }
+
     match /meta/cronStatus {
       allow get: if active();
       allow write: if false;

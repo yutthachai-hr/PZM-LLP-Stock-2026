@@ -15,7 +15,7 @@ import {
 import { getDb } from '../firebase/app'
 import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
-import { noteRead } from '../data/readMeter'
+import { noteListen, noteRead } from '../data/readMeter'
 
 // Firestore implementation. Real-time across all devices, offline persistence enabled.
 // Collection names are brand-scoped via resolveCollection() so brands stay fully isolated.
@@ -61,7 +61,13 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
           onError?.(err)
         },
       )
-      return unsub
+      noteListen(c, 1)
+      let open = true
+      return () => {
+        if (open) noteListen(c, -1)
+        open = false
+        unsub()
+      }
     },
 
     subscribeOne<T>(
@@ -72,7 +78,9 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
     ): () => void {
       const db = getDb()
       const c = resolve(collection)
-      return onSnapshot(
+      noteListen(`${c}/one`, 1)
+      let open = true
+      const unsub = onSnapshot(
         doc(db, c, id),
         (snap) => {
           noteRead(c, 1)
@@ -83,6 +91,11 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
           onError?.(err)
         },
       )
+      return () => {
+        if (open) noteListen(`${c}/one`, -1)
+        open = false
+        unsub()
+      }
     },
 
     async getRange<T>(
@@ -155,7 +168,10 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       return runTransaction(db, async (t) => {
         const tx: TxContext = {
           async get<T>(collection: string, id: string): Promise<T | null> {
-            const snap = await t.get(doc(db, resolve(collection), id))
+            const c = resolve(collection)
+            const snap = await t.get(doc(db, c, id))
+            // A transaction's read is billed like any other — and again on each retry.
+            noteRead(c, 1)
             return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
           },
           set(collection, id, data) {

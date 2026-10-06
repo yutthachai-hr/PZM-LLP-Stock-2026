@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import { COL, type StockLocation, type LocationType } from '../types'
@@ -24,7 +25,7 @@ export async function updateLocation(
   await backend.update(COL.locations, id, next)
 }
 
-export async function deleteLocation(id: string): Promise<void> {
+async function deleteLocationUnbumped(id: string): Promise<void> {
   // A location with history is switched off, never deleted (plan B3): its balances are what
   // its rows add up to, and removing them strands the stock.
   const into = await backend.getBy<{ id: string }>(COL.movements, 'toLocationId', id)
@@ -35,4 +36,11 @@ export async function deleteLocation(id: string): Promise<void> {
     levels.filter((l) => l.locationId === id).map((l) => backend.remove(COL.stockLevels, l.id)),
   )
   await backend.remove(COL.locations, id)
+}
+
+/** deleteLocation, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function deleteLocation(...args: Parameters<typeof deleteLocationUnbumped>): ReturnType<typeof deleteLocationUnbumped> {
+  const result = await deleteLocationUnbumped(...args)
+  await bumpCacheEpoch(['stockLevels'])
+  return result
 }

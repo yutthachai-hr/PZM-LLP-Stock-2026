@@ -1,4 +1,5 @@
 import { backend, BACKEND_MODE } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
 import { commandOn } from '../lib/stockCommands'
 import type { CommandReader, CommandSpec } from '../commands/spec'
 import {
@@ -346,7 +347,7 @@ export interface MovementPatch {
  * Every edit appends to `edits` — never replaces it. `updatedBy` names only the last person,
  * which is precisely what a second edit would hide.
  */
-export async function editMovement(params: {
+async function editMovementUnbumped(params: {
   movementId: string
   patch: MovementPatch
   actor: Actor
@@ -553,7 +554,7 @@ const MAX_RELABEL = 1000
  * So every movement for this product is restamped, and each one carries an entry in its own
  * edit history naming who did it. Nothing is deleted and no quantity moves.
  */
-export async function changeProductUnit(params: {
+async function changeProductUnitUnbumped(params: {
   productId: string
   unitType: string
   unit: string
@@ -631,7 +632,7 @@ export async function changeProductUnit(params: {
  * cannot be deleted — the rules keep them). Shared by the unit change and the unit
  * migration. Refuses a ledger that sums below zero anywhere, like recomputeLevels.
  */
-export async function rebuildProductLevels(
+async function rebuildProductLevelsUnbumped(
   db: Backend,
   productId: string,
   movements: readonly StockMovement[],
@@ -666,7 +667,7 @@ export async function rebuildProductLevels(
  * already been consumed downstream needs a correcting adjustment, not a quiet deletion of the
  * history that explains the stock.
  */
-export async function voidMovement(movementId: string, actor: Actor, reason: string): Promise<void> {
+async function voidMovementUnbumped(movementId: string, actor: Actor, reason: string): Promise<void> {
   // An admin's decision, with why (plan A9): the rules refuse a void without one.
   const why = reason.trim()
   if (!why) throw new AppError('กรุณาระบุเหตุผลที่ยกเลิก')
@@ -810,7 +811,7 @@ export async function movementsChangedSince(db: Backend, since: number): Promise
  * fingerprinted before and after, and the rebuild is abandoned rather than applied if it
  * moved. Run it when nobody else is recording.
  */
-export async function recomputeLevels(actor: Actor): Promise<void> {
+async function recomputeLevelsUnbumped(actor: Actor): Promise<void> {
   const db = scoped()
   const readAt = Date.now()
   const movements = await db.getAll<StockMovement>(COL.movements)
@@ -856,3 +857,38 @@ export async function recomputeLevels(actor: Actor): Promise<void> {
 
 // re-export for convenience
 export type { Product, AppUser }
+
+/** editMovement, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function editMovement(...args: Parameters<typeof editMovementUnbumped>): ReturnType<typeof editMovementUnbumped> {
+  const result = await editMovementUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels'])
+  return result
+}
+
+/** changeProductUnit, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function changeProductUnit(...args: Parameters<typeof changeProductUnitUnbumped>): ReturnType<typeof changeProductUnitUnbumped> {
+  const result = await changeProductUnitUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels', 'products'])
+  return result
+}
+
+/** rebuildProductLevels, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function rebuildProductLevels(...args: Parameters<typeof rebuildProductLevelsUnbumped>): ReturnType<typeof rebuildProductLevelsUnbumped> {
+  const result = await rebuildProductLevelsUnbumped(...args)
+  await bumpCacheEpoch(['stockLevels'])
+  return result
+}
+
+/** voidMovement, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function voidMovement(...args: Parameters<typeof voidMovementUnbumped>): ReturnType<typeof voidMovementUnbumped> {
+  const result = await voidMovementUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels'])
+  return result
+}
+
+/** recomputeLevels, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function recomputeLevels(...args: Parameters<typeof recomputeLevelsUnbumped>): ReturnType<typeof recomputeLevelsUnbumped> {
+  const result = await recomputeLevelsUnbumped(...args)
+  await bumpCacheEpoch(['stockLevels'])
+  return result
+}

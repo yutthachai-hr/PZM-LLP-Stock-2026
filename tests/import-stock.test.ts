@@ -511,6 +511,22 @@ describe('posting the counts', () => {
     expect(new Date(count?.date as number).toDateString()).toBe('Fri Jul 31 2026')
   })
 
+  test('release hardening: the ledger from the count day on + today\'s balance gives the same plan as the whole ledger', async () => {
+    await receiveStock({ lines: [{ productId: 'p1', productName: 'SWISS BROWN MUSHROOMS', unit: 'KG', qty: 5 }], toLocationId: MAIN, date: new Date(2026, 5, 2).getTime(), actor: ACTOR, note: 'old' })
+    await receiveStock({ lines: [{ productId: 'p1', productName: 'SWISS BROWN MUSHROOMS', unit: 'KG', qty: 20 }], toLocationId: MAIN, date: new Date(2026, 8, 5).getTime(), actor: ACTOR, note: 'new' })
+    const rows = [['VGT-01-01-001', 'SWISS BROWN MUSHROOMS', '1/KG', 8, 'KG', null, null, 3, 'KG', null, null]] as (string | number | null)[][]
+    const full = planFor(rows, await loadLedger())
+    const { sheets } = parseStockWorkbook(workbook(rows))
+    const mapping = mapAll(sheets[0], HEADERS)
+    const from = Math.min(...mapping.snapshots.filter((x) => x.include).map((x) => x.date as number)) - 86_400_000
+    const ranged = await loadLedger(from)
+    expect(ranged.length).toBeLessThan((await loadLedger()).length)
+    const level = (l: string, pid: string) => ((raw('stockLevels') as { id: string; qty: number }[]).find((x) => x.id === `${l}__${pid}`)?.qty ?? 0)
+    const plan = buildImportPlan(sheets[0], mapping, PRODUCTS, LOCATIONS, ranged, level)
+    expect(plan.postings.map((x) => [x.date, x.locationId, x.asOfQty, x.targetQty])).toEqual(full.postings.map((x) => [x.date, x.locationId, x.asOfQty, x.targetQty]))
+    expect(plan.movedSince.length).toBe(full.movedSince.length)
+  })
+
   test('a later transfer stays on top of the count at both ends', async () => {
     await setStockCount({
       productId: 'p1',

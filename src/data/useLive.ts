@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { backend } from '../backend'
 import { retryDelayMs } from '../auth/profileError'
 import { liveErrorKind, retriesBySelf, type LiveFailure } from './liveError'
+import { cachedListen, type CacheRecord } from './cachedLive'
+import { cacheGet, cacheSet } from './localCache'
+import { getBrand } from '../brand/brand'
+import { getFirebaseConfig } from '../firebase/config'
 
 /**
  * Subscribe to a collection in real time.
@@ -24,7 +28,19 @@ export function useLive<T>(
     enabled = true,
     sinceField,
     sinceValue,
-  }: { enabled?: boolean; sinceField?: string; sinceValue?: number } = {},
+    cache,
+  }: {
+    enabled?: boolean
+    sinceField?: string
+    sinceValue?: number
+    /**
+     * Keep the set on this device and ask only for what changed (data/cachedLive). `field`
+     * is the timestamp every write sets; `epoch` the brand's cache epoch for this
+     * collection — undefined while it is still being read, and nothing is subscribed until
+     * it is. Cloud only: the demo backend costs nothing to read.
+     */
+    cache?: { field: string; epoch: number | undefined }
+  } = {},
 ): { data: T[]; loading: boolean; error: LiveFailure | null; retry: () => void } {
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,6 +62,36 @@ export function useLive<T>(
         ? { field: sinceField, value: sinceValue }
         : undefined
     let timer: ReturnType<typeof setTimeout> | undefined
+    const onError = (err: unknown) => {
+      const kind = liveErrorKind(err)
+      setError({ collection, kind })
+      setLoading(false)
+      if (retriesBySelf(kind)) timer = setTimeout(() => setAttempt((n) => n + 1), retryDelayMs(++failures.current))
+    }
+    if (cache && backend.mode === 'cloud') {
+      if (cache.epoch === undefined) return
+      const key = `${getFirebaseConfig()?.projectId ?? 'none'}:${getBrand()}:${collection}:${sinceField ?? ''}`
+      const unsubCached = cachedListen<T & { id: string }>(
+        {
+          subscribe: (cb, s, onErr) => backend.subscribe<T & { id: string }>(collection, cb, s ? { since: s } : undefined, onErr),
+          load: () => cacheGet<CacheRecord<T & { id: string }>>(key),
+          save: (rec) => cacheSet(key, rec),
+          now: () => Date.now(),
+        },
+        { field: cache.field, epoch: cache.epoch, ...(since ? { window: since } : {}) },
+        (docs) => {
+          failures.current = 0
+          setData(docs)
+          setLoading(false)
+          setError(null)
+        },
+        onError,
+      )
+      return () => {
+        if (timer) clearTimeout(timer)
+        unsubCached()
+      }
+    }
     const unsub = backend.subscribe<T>(
       collection,
       (docs) => {
@@ -55,19 +101,14 @@ export function useLive<T>(
         setError(null)
       },
       since ? { since } : undefined,
-      (err) => {
-        const kind = liveErrorKind(err)
-        setError({ collection, kind })
-        setLoading(false)
-        if (retriesBySelf(kind)) timer = setTimeout(() => setAttempt((n) => n + 1), retryDelayMs(++failures.current))
-      },
+      onError,
     )
     return () => {
       if (timer) clearTimeout(timer)
       unsub()
     }
     // `attempt` only re-runs this effect: a retry is a new subscription.
-  }, [collection, enabled, sinceField, sinceValue, attempt])
+  }, [collection, enabled, sinceField, sinceValue, attempt, cache?.field, cache?.epoch])
 
   return { data, loading, error, retry }
 }

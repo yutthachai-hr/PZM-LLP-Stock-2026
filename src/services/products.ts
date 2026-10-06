@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
 import { getBrand } from '../brand/brand'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
@@ -165,7 +166,7 @@ export async function addConversion(
   return next
 }
 
-export async function deleteProduct(id: string): Promise<void> {
+async function deleteProductUnbumped(id: string): Promise<void> {
   // A product with history is switched off, never deleted (plan B3, 6 Oct 2026): deleting
   // one used to take its balances with it while its rows stayed, which is how stock went
   // missing from the screens (the Phase 0 audit's SAUSAGE MIX, 20 EA nobody could see).
@@ -193,4 +194,11 @@ export async function removeProductImage(id: string): Promise<void> {
 export async function getProductImage(id: string): Promise<string | null> {
   const img = await backend.getOne<ProductImage>(COL.productImages, id)
   return img?.dataUrl ?? null
+}
+
+/** deleteProduct, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function deleteProduct(...args: Parameters<typeof deleteProductUnbumped>): ReturnType<typeof deleteProductUnbumped> {
+  const result = await deleteProductUnbumped(...args)
+  await bumpCacheEpoch(['products', 'stockLevels'])
+  return result
 }

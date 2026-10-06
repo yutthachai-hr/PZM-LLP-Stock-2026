@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
 import type { Backend } from '../backend/types'
 import { COL, type Announcement, type PurchaseOrder, type StockMovement, type StockLevel, type Transfer } from '../types'
 import { brandDef, getBrand, type BrandId } from '../brand/brand'
@@ -477,7 +478,7 @@ export interface RestoreResult {
  * Running it twice is safe, which matters because there is no transaction big enough to
  * hold a whole database. If it fails partway, running it again finishes the job.
  */
-export async function restoreBackup(
+async function restoreBackupUnbumped(
   b: BackupFile,
   mode: RestoreMode = RESTORE_MODES.repair,
 ): Promise<RestoreResult> {
@@ -604,4 +605,11 @@ async function rebuildDerived(db: Backend): Promise<number> {
     n++
   }
   return n
+}
+
+/** restoreBackup, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function restoreBackup(...args: Parameters<typeof restoreBackupUnbumped>): ReturnType<typeof restoreBackupUnbumped> {
+  const result = await restoreBackupUnbumped(...args)
+  await bumpCacheEpoch(['products', 'stockLevels', 'stockMovements', 'notifications', 'productMinOverrides'])
+  return result
 }

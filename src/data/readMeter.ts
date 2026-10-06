@@ -52,3 +52,20 @@ export function subscribeReadTally(fn: () => void): () => void {
   listeners.add(fn)
   return () => listeners.delete(fn)
 }
+
+/** Live listeners right now, by collection — a leaked one shows as a count that never drops. */
+const live = new Map<string, number>()
+export function noteListen(collection: string, delta: 1 | -1): void {
+  const n = (live.get(collection) ?? 0) + delta
+  if (n <= 0) live.delete(collection)
+  else live.set(collection, n)
+}
+export function liveListeners(): Record<string, number> {
+  return Object.fromEntries(live)
+}
+
+// The read benchmark (e2e/read-benchmark.spec.ts) reads the tally from the page. Only in the
+// emulator build — the condition is a constant false in any other build and is dropped.
+if (import.meta.env.VITE_USE_EMULATOR === '1' && typeof window !== 'undefined') {
+  ;(window as unknown as { __pzmReads: unknown }).__pzmReads = { tally: readTally, reset: resetReadTally, listeners: liveListeners }
+}

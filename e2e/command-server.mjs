@@ -16,7 +16,26 @@ const vite = await createServer({ root, logLevel: 'error', server: { middlewareM
 const { runStockCommand } = await vite.ssrLoadModule('/functions/_lib/stockCommands.ts')
 const { restServerStore } = await vite.ssrLoadModule('/functions/_lib/serverStore.ts')
 
-const store = restServerStore(PROJECT, '', fetch, { host: 'http://127.0.0.1:8080' })
+const raw = restServerStore(PROJECT, '', fetch, { host: 'http://127.0.0.1:8080' })
+// What the commands read on the server: billed like the app's reads (the read benchmark
+// asks GET /__reads). A get is one read found or not; a query at least one.
+const serverReads = { total: 0, byCollection: {} }
+const count = (c, n) => {
+  serverReads.total += n
+  serverReads.byCollection[c] = (serverReads.byCollection[c] ?? 0) + n
+}
+const store = {
+  ...raw,
+  async get(c, id) {
+    count(c, 1)
+    return raw.get(c, id)
+  },
+  async query(c, filters) {
+    const rows = await raw.query(c, filters)
+    count(c, Math.max(1, rows.length))
+    return rows
+  },
+}
 let n = 0
 const deps = {
   store,
@@ -39,6 +58,14 @@ const deps = {
 
 createHttp(async (req, res) => {
   if (req.url === '/health') return res.end('ok')
+  if (req.url === '/__reads') {
+    if (req.method === 'POST') {
+      serverReads.total = 0
+      serverReads.byCollection = {}
+    }
+    res.writeHead(200, { 'content-type': 'application/json' })
+    return res.end(JSON.stringify(serverReads))
+  }
   const name = (req.url ?? '').match(/^\/api\/stock\/([A-Za-z]+)$/)?.[1]
   if (!name || req.method !== 'POST') {
     res.statusCode = 404

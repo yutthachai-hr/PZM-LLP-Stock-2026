@@ -1,0 +1,313 @@
+{
+ "label": "before",
+ "sizes": {
+  "products": 460,
+  "locations": 3,
+  "levels": 1400,
+  "overrides": 50,
+  "suppliers": 30,
+  "movementsPerDay": 60,
+  "days": 45,
+  "ordersPerDay": 1,
+  "notificationsPerDay": 40
+ },
+ "coldStart.dashboard": {
+  "client": 2848,
+  "server": 0,
+  "total": 2848,
+  "byCollection": {
+   "users": 1,
+   "inventorySchedules": 7,
+   "stockEvents": 3,
+   "messages": 2,
+   "suppliers": 31,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 298,
+   "purchaseOrders": 168,
+   "purchaseRequests": 2,
+   "transfers": 14,
+   "meta": 2
+  }
+ },
+ "warm./products": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "warm./receive": {
+  "client": 14,
+  "server": 0,
+  "total": 14,
+  "byCollection": {
+   "purchaseOrders": 14
+  }
+ },
+ "warm./orders": {
+  "client": 62,
+  "server": 0,
+  "total": 62,
+  "byCollection": {
+   "purchaseOrders": 62
+  }
+ },
+ "warm./movements": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "warm./suppliers/performance": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "warm./calendar": {
+  "client": 4,
+  "server": 0,
+  "total": 4,
+  "byCollection": {
+   "stockEvents": 1,
+   "purchaseOrders": 1,
+   "purchaseRequests": 2
+  }
+ },
+ "warm./inbox": {
+  "client": 34,
+  "server": 0,
+  "total": 34,
+  "byCollection": {
+   "purchaseOrders": 16,
+   "purchaseRequests": 2,
+   "transfers": 12,
+   "monthlyCounts": 4
+  }
+ },
+ "warm./products/p1/card": {
+  "client": 22,
+  "server": 0,
+  "total": 22,
+  "byCollection": {
+   "purchaseOrders": 16,
+   "purchaseRequests": 2,
+   "transfers": 2,
+   "stockMovements": 2
+  }
+ },
+ "routeSwitching.secondRound": {
+  "client": 142,
+  "server": 0,
+  "total": 142,
+  "byCollection": {
+   "transfers": 26,
+   "purchaseOrders": 108,
+   "purchaseRequests": 4,
+   "monthlyCounts": 4
+  }
+ },
+ "notifications.openBell": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "reconnect.inSession": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "secondTab.dashboard": {
+  "client": 2835,
+  "server": 0,
+  "total": 2835,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31,
+   "purchaseOrders": 168,
+   "purchaseRequests": 2,
+   "transfers": 14
+  }
+ },
+ "cold./products": {
+  "client": 2651,
+  "server": 0,
+  "total": 2651,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31
+  }
+ },
+ "cold./receive": {
+  "client": 2665,
+  "server": 0,
+  "total": 2665,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31,
+   "purchaseOrders": 14
+  }
+ },
+ "cold./orders": {
+  "client": 2713,
+  "server": 0,
+  "total": 2713,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31,
+   "purchaseOrders": 62
+  }
+ },
+ "cold./movements": {
+  "client": 2651,
+  "server": 0,
+  "total": 2651,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31
+  }
+ },
+ "cold./suppliers/performance": {
+  "client": 2864,
+  "server": 0,
+  "total": 2864,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31,
+   "purchaseOrders": 212,
+   "transfers": 1
+  }
+ },
+ "cold./calendar": {
+  "client": 2832,
+  "server": 0,
+  "total": 2832,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 2,
+   "messages": 2,
+   "suppliers": 31,
+   "purchaseOrders": 178,
+   "purchaseRequests": 1,
+   "transfers": 1
+  }
+ },
+ "cold./inbox": {
+  "client": 2807,
+  "server": 0,
+  "total": 2807,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 425,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31,
+   "purchaseOrders": 137,
+   "purchaseRequests": 2,
+   "transfers": 13,
+   "monthlyCounts": 4
+  }
+ },
+ "cold./products/p1/card": {
+  "client": 2795,
+  "server": 0,
+  "total": 2795,
+  "byCollection": {
+   "users": 1,
+   "products": 462,
+   "locations": 3,
+   "stockLevels": 1380,
+   "stockMovements": 427,
+   "productMinOverrides": 50,
+   "notifications": 289,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 31,
+   "purchaseOrders": 137,
+   "purchaseRequests": 2,
+   "transfers": 3
+  }
+ },
+ "liveListenersOnSettings": {
+  "users/one": 1,
+  "products": 1,
+  "locations": 1,
+  "stockLevels": 1,
+  "stockMovements": 1,
+  "productMinOverrides": 1,
+  "notifications": 1
+ }
+}

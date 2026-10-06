@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
+import { useCacheEpoch } from './cacheEpoch'
 import { worstFailure, type LiveFailure } from './liveError'
 import { overlayRecent, subscribeRecentWrites } from './recentWrites'
 import { windowStart } from './ledgerWindow'
@@ -109,7 +110,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // be rejected, and the only screen that reads `users` is the admin section of Settings.
   const isAdmin = user?.role === 'admin'
 
-  const productsLive = useLive<Product>(COL.products)
+  // Release hardening (Firestore reads): the four big sets are kept on the device and only
+  // what changed is read (data/cachedLive). The epoch says when an admin action means
+  // everything must be read again.
+  const epoch = useCacheEpoch(!!user)
+  const ep = (c: string) => (epoch === undefined ? undefined : (epoch[c] ?? 0))
+  const productsLive = useLive<Product>(COL.products, { cache: { field: 'updatedAt', epoch: ep('products') } })
   const { data: products, loading: pLoading } = productsLive
   const locationsLive = useLive<StockLocation>(COL.locations)
   const { data: rawLocations, loading: lLoading } = locationsLive
@@ -128,7 +134,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     () => (lang === 'en' ? regularLocations.map((l) => (l.nameEn ? { ...l, name: l.nameEn } : l)) : regularLocations),
     [regularLocations, lang],
   )
-  const levelsLive = useLive<StockLevel>(COL.stockLevels)
+  const levelsLive = useLive<StockLevel>(COL.stockLevels, { cache: { field: 'updatedAt', epoch: ep('stockLevels') } })
   const { data: levels, loading: sLoading } = levelsLive
   const [movementsFrom, setMovementsFrom] = useState(() => windowStart(RECENT_DAYS))
   const ensureMovementsFrom = useCallback((date: number) => {
@@ -138,13 +144,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const movementsLive = useLive<StockMovement>(COL.movements, {
     sinceField: 'date',
     sinceValue: movementsFrom,
+    // Rows are written once; a void or an edit bumps the epoch.
+    cache: { field: 'createdAt', epoch: ep('stockMovements') },
   })
   const { data: liveMovements, loading: mLoading } = movementsLive
   // Rows this device just wrote, shown until the listener confirms them (recentWrites.ts).
   const [recent, setRecent] = useState<StockMovement[]>([])
   useEffect(() => subscribeRecentWrites(setRecent), [])
   const movements = useMemo(() => overlayRecent(liveMovements, recent), [liveMovements, recent])
-  const overridesLive = useLive<MinOverride>(COL.minOverrides)
+  // Written only by a restore (which bumps the epoch): no timestamp to follow, so the
+  // change check finds nothing and the set is read in full weekly or on a bump.
+  const overridesLive = useLive<MinOverride>(COL.minOverrides, { cache: { field: 'updatedAt', epoch: ep('productMinOverrides') } })
   const minOverrides = overridesLive.data
   const usersLive = useLive<AppUser>(COL.users, { enabled: isAdmin })
   const users = usersLive.data
@@ -154,6 +164,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     enabled: !!user,
     sinceField: 'createdAt',
     sinceValue: notificationsFrom,
+    cache: { field: 'updatedAt', epoch: ep('notifications') },
   })
   const notifications = notificationsLive.data
 

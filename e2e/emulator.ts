@@ -81,6 +81,15 @@ export async function deleteDoc(path: string): Promise<void> {
   await ok(await fetch(`${FS}/${path}`, { method: 'DELETE', headers: OWNER }), `delete ${path}`)
 }
 
+/** Many documents at once (owner, rules skipped), 400 to a commit. Each doc's `id` is stamped in. */
+export async function putMany(collection: string, docs: ({ id: string } & Record<string, unknown>)[]): Promise<void> {
+  const root = `projects/${PROJECT}/databases/(default)/documents`
+  for (let i = 0; i < docs.length; i += 400) {
+    const writes = docs.slice(i, i + 400).map((d) => ({ update: { name: `${root}/${collection}/${d.id}`, fields: (encode(d).mapValue as { fields: Record<string, FsValue> }).fields } }))
+    await ok(await fetch(`${FS}:commit`, { method: 'POST', headers: { ...OWNER, 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) }), `commit ${collection}`)
+  }
+}
+
 export async function getDoc(path: string): Promise<{ [k: string]: Json } | null> {
   const res = await fetch(`${FS}/${path}`, { headers: OWNER })
   if (res.status === 404) return null

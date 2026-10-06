@@ -1,5 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { onBrandChange } from '../brand/brand'
+import { cacheGet, cacheSet } from '../data/localCache'
+import { getFirebaseConfig } from '../firebase/config'
+import { getBrand, onBrandChange } from '../brand/brand'
 import { backend } from '../backend'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
@@ -421,10 +423,38 @@ export function patchSupplierCache(id: string, row: Supplier | null): void {
   announce()
 }
 
+/**
+ * The list from this device's copy plus what changed since (release hardening: Firestore
+ * reads), read in full at most once a day — also how a deleted supplier leaves other
+ * devices. Cloud only; anything that goes wrong reads in full as before.
+ */
+async function suppliersWithDeviceCache(): Promise<Supplier[]> {
+  if (backend.mode !== 'cloud') return listSuppliers()
+  const key = `${getFirebaseConfig()?.projectId ?? 'none'}:${getBrand()}:suppliers`
+  const now = Date.now()
+  try {
+    const rec = await cacheGet<{ v: 1; fullAt: number; rows: Supplier[] }>(key)
+    if (rec && rec.v === 1 && now - rec.fullAt < 24 * 3_600_000) {
+      const newest = Math.min(now, Math.max(0, ...rec.rows.map((r) => r.updatedAt ?? 0)))
+      const changed = await backend.forBrand(getBrand()).getRange<Supplier>(COL.suppliers, 'updatedAt', newest - 30 * 60_000, Number.MAX_SAFE_INTEGER)
+      const byId = new Map(rec.rows.map((r) => [r.id, r]))
+      for (const r of changed) byId.set(r.id, r)
+      const rows = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
+      void cacheSet(key, { ...rec, rows })
+      return rows
+    }
+  } catch {
+    /* fall through to a full read */
+  }
+  const rows = await listSuppliers()
+  void cacheSet(key, { v: 1, fullAt: now, rows })
+  return rows
+}
+
 export async function loadSuppliers(): Promise<Supplier[]> {
   if (cached) return cached
   if (inflight) return inflight
-  inflight = listSuppliers()
+  inflight = suppliersWithDeviceCache()
     .then((rows) => {
       cached = rows
       announce()
