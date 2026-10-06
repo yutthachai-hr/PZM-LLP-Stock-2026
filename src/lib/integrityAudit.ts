@@ -44,9 +44,9 @@ export interface AuditInput {
   products: readonly Product[]
   locations: readonly StockLocation[]
   /**
-   * The cached balances. Absent when the source does not have them — a backup file leaves
-   * them out, because a restore rebuilds them from the ledger — and then the checks that
-   * compare against them are skipped and say so, rather than passing.
+   * The cached balances. Absent when the source does not have them (an older or trimmed
+   * file) — then the checks that compare against them are skipped and say so, rather
+   * than passing.
    */
   stockLevels?: readonly StockLevel[]
   movements: readonly StockMovement[]

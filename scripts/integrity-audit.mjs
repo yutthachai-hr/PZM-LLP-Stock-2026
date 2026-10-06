@@ -34,7 +34,7 @@ try {
   const report = auditIntegrity({
     products: d.products ?? [],
     locations: d.locations ?? [],
-    // A backup leaves balances out (a restore rebuilds them); the audit skips that check.
+    // Present in current backups; a file without them skips that one check and says so.
     stockLevels: d.stockLevels,
     movements: d.stockMovements ?? [],
     purchaseOrders: d.purchaseOrders ?? [],
