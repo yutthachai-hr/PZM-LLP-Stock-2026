@@ -166,7 +166,12 @@ export async function addConversion(
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  // Remove product + image + cached balances. Movements keep denormalised names for history.
+  // A product with history is switched off, never deleted (plan B3, 6 Oct 2026): deleting
+  // one used to take its balances with it while its rows stayed, which is how stock went
+  // missing from the screens (the Phase 0 audit's SAUSAGE MIX, 20 EA nobody could see).
+  const used = await backend.getBy<{ id: string }>(COL.movements, 'productId', id)
+  if (used.length > 0) throw new AppError('สินค้านี้มีประวัติการเคลื่อนไหวแล้ว — ลบไม่ได้ ให้ปิดใช้งานแทน')
+  // Nothing ever moved: the product, its image and any empty balance rows go.
   const levels = await backend.getAll<StockLevel>(COL.stockLevels)
   await Promise.all(
     levels.filter((l) => l.productId === id).map((l) => backend.remove(COL.stockLevels, l.id)),

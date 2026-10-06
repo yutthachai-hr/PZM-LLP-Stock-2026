@@ -1,5 +1,6 @@
 import { backend } from '../backend'
 import { DELETE_FIELD } from '../backend/types'
+import { AppError } from '../i18n/AppError'
 import { COL, type StockLocation, type LocationType } from '../types'
 
 export async function createLocation(name: string, type: LocationType, nameEn?: string): Promise<string> {
@@ -24,6 +25,11 @@ export async function updateLocation(
 }
 
 export async function deleteLocation(id: string): Promise<void> {
+  // A location with history is switched off, never deleted (plan B3): its balances are what
+  // its rows add up to, and removing them strands the stock.
+  const into = await backend.getBy<{ id: string }>(COL.movements, 'toLocationId', id)
+  const outOf = into.length ? [] : await backend.getBy<{ id: string }>(COL.movements, 'fromLocationId', id)
+  if (into.length || outOf.length) throw new AppError('คลังนี้มีประวัติการเคลื่อนไหวแล้ว — ลบไม่ได้ ให้ปิดใช้งานแทน')
   const levels = await backend.getAll<{ id: string; locationId: string }>(COL.stockLevels)
   await Promise.all(
     levels.filter((l) => l.locationId === id).map((l) => backend.remove(COL.stockLevels, l.id)),

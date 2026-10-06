@@ -274,7 +274,7 @@ export function ProductEditor({
     if (!product) return
     const ok = await confirm({
       title: t("ลบสินค้า"),
-      message: t('ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ', { name: product.name, }),
+      message: t('ลบ "{name}" ? ลบได้เฉพาะสินค้าที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน', { name: product.name }),
       danger: true,
       confirmText: t("ลบ"),
     })

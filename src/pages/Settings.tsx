@@ -676,7 +676,7 @@ function LocationsSection() {
   async function remove(l: StockLocation) {
     const ok = await confirm({
       title: t("ลบคลัง"),
-      message: t('ลบ "{name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)', { name: l.name, }),
+      message: t('ลบ "{name}" ? ลบได้เฉพาะคลังที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน', { name: l.name }),
       danger: true,
       confirmText: t("ลบ"),
     })

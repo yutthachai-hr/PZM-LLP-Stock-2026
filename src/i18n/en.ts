@@ -249,8 +249,6 @@ export const EN: Record<string, string> = {
   กรุณาใส่หมวดหมู่: 'Please enter a category',
   เพิ่มสินค้าแล้ว: 'Product added',
   บันทึกการแก้ไขแล้ว: 'Changes saved',
-  'ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ':
-    'Delete “{name}”? Movement history is kept, but the product leaves the list.',
   'นำเข้าแคตตาล็อกสินค้า ({n} รายการ)': 'Import product catalogue ({n} items)',
   'ล้างและนำเข้าใหม่': 'Reset and re-import',
   ล้างและนำเข้าสินค้าใหม่: 'Reset and re-import products',
@@ -399,8 +397,6 @@ export const EN: Record<string, string> = {
   ใส่ชื่อคลัง: 'Enter a location name',
   'คลังหลัก (Warehouse)': 'Warehouse',
   'สาขา (Branch)': 'Branch',
-  'ลบ "{name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)':
-    'Delete “{name}”? Its balances are removed too (history is kept).',
   เพิ่มผู้ใช้: 'Add user',
   เพิ่มผู้ใช้แล้ว: 'User added',
   ลบผู้ใช้: 'Delete user',
@@ -3074,4 +3070,9 @@ export const EN: Record<string, string> = {
   'มีการบันทึกสต๊อกของคลังนี้ระหว่างยืนยัน กำลังอ่านยอดใหม่': 'Stock at this location changed while confirming — reading the books again',
   'ไม่มีสิทธิ์ทำรายการนี้': 'You do not have permission for this',
   'รายการโอนบันทึกผ่านเอกสารโอนเท่านั้น': 'Transfers are recorded through a transfer document only',
+  // Plan B3: no hard delete with history (6 Oct 2026)
+  'สินค้านี้มีประวัติการเคลื่อนไหวแล้ว — ลบไม่ได้ ให้ปิดใช้งานแทน': 'This product has stock history — it cannot be deleted; deactivate it instead',
+  'คลังนี้มีประวัติการเคลื่อนไหวแล้ว — ลบไม่ได้ ให้ปิดใช้งานแทน': 'This location has stock history — it cannot be deleted; deactivate it instead',
+  'ลบ "{name}" ? ลบได้เฉพาะสินค้าที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน': 'Delete "{name}"? Only a product that has never moved can be deleted — otherwise deactivate it',
+  'ลบ "{name}" ? ลบได้เฉพาะคลังที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน': 'Delete "{name}"? Only a location that has never moved stock can be deleted — otherwise deactivate it',
 }

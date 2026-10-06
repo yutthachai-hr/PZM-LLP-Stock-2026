@@ -22,6 +22,9 @@ export interface Env {
   PO_IMAGES: KVNamespace
   /** Demo deployments only: a shared key accepted in place of a Firebase token. */
   PO_IMAGE_DEMO_KEY?: string
+  /** For checking the caller is still active (plan B6); see _lib/activeUser.ts. */
+  FIREBASE_SERVICE_ACCOUNT?: string
+  FIREBASE_PROJECT_ID?: string
 }
 
 export const MAX_BYTES = 1_500_000
