@@ -3122,4 +3122,8 @@ export const EN: Record<string, string> = {
   // Plan C4: offline indicator (6 Oct 2026)
   'ออฟไลน์': 'Offline',
   'ดูข้อมูลที่โหลดไว้ได้ แต่การบันทึกต้องรอให้กลับมาออนไลน์ สิ่งที่คีย์ค้างไว้จะเก็บในเครื่องนี้': 'what is loaded can still be viewed, but saving waits until you are back online. Anything half-keyed is kept on this device.',
+  // Plan C5: critical bar, sticky error toasts (6 Oct 2026)
+  'วิกฤต {n} รายการ': '{n} critical',
+  'รับทราบ': 'Acknowledge',
+  'ปิด': 'Close',
 }

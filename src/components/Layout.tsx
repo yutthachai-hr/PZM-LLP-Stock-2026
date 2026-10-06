@@ -21,6 +21,7 @@ import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
 import { LiveErrorBanner } from './LiveErrorBanner'
 import { OfflineBanner } from './OfflineBanner'
+import { CriticalBar } from './notifications/CriticalBar'
 import { ErrorBoundary } from './ErrorBoundary'
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -63,6 +64,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar title={t(titleFor(location.pathname))} />
+        {/* Critical notifications stay here until acknowledged (plan C5). */}
+        <CriticalBar />
 
         {/* The page column is capped: a stock table stretched across a 27" monitor puts the
             product name and its quantity at opposite ends of the desk. */}

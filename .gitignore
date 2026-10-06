@@ -54,3 +54,7 @@ dist-demo
 
 # Cloudflare local secrets (wrangler pages dev)
 .dev.vars
+
+# Playwright output
+test-results/
+playwright-report/
