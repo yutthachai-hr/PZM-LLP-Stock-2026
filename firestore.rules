@@ -1577,14 +1577,17 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
           'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt'])
         && d.keys().hasOnly(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
-          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt', 'resolvedAt', 'locationId', 'productId', 'supplierId'])
+          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt', 'resolvedAt', 'locationId', 'productId', 'supplierId',
+          'audienceKeys'])
         && d.id == docId && text(d.kind, 40) && docId.matches('^' + d.kind + '__.+')
         && d.category in ['task', 'inventory', 'purchasing', 'supplier', 'system']
         && d.priority in ['critical', 'high', 'medium', 'info']
         && d.to is map && d.params is map && d.params.size() <= 20 && text(d.link, 300)
         && d.active is bool && d.readBy is map && d.source in ['worker', 'client']
         && text(d.createdBy, 200) && epochMs(d.createdAt) && epochMs(d.updatedAt) && epochMs(d.expiresAt)
-        && (!('resolvedAt' in d) || epochMs(d.resolvedAt));
+        && (!('resolvedAt' in d) || epochMs(d.resolvedAt))
+        // The recipients as query keys (6 Oct 2026): what the bell's indexed query matches.
+        && (!('audienceKeys' in d) || (d.audienceKeys is list && d.audienceKeys.size() <= 40));
     }
 
     function notificationCreate(docId) {

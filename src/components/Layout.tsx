@@ -19,6 +19,7 @@ import { SideLive } from './nav/SideLive'
 import { SideNav } from './nav/SideNav'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
+import { SupplierIntelProvider } from '../data/useSupplierIntel'
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout, mode } = useAuth()
@@ -36,6 +37,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const todayCount = useTodayEventCount(!!user)
 
   return (
+    // Supplier intelligence computed once for every screen that shows it (data/useSupplierIntel.ts).
+    <SupplierIntelProvider>
     <div className="flex min-h-screen bg-canvas">
       {/* New notifications as popups, on every page (5 Oct 2026). */}
       <NotificationHost />
@@ -81,6 +84,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </div>
       <BottomTabBar />
     </div>
+    </SupplierIntelProvider>
   )
 }
 

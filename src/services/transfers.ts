@@ -249,7 +249,9 @@ const ACTIVE: TransferStatus[] = ['inTransit', 'receiving', 'discrepancy', 'pend
  */
 export async function listActiveTransfers(locationId?: string): Promise<Transfer[]> {
   const db = scoped()
-  const rows = (await Promise.all(ACTIVE.map((s) => db.getBy<Transfer>(COL.transfers, 'status', s)))).flat()
+  // One `in` query, not one per status: an empty query still costs a read, and this ran
+  // five times on every dashboard mount (perf/firestore-read-budget).
+  const rows = await db.query<Transfer>(COL.transfers, { filters: [{ field: 'status', op: 'in', value: ACTIVE }] }, { label: 'transfers.active' })
   return rows
     .filter((t) => !locationId || t.toLocationId === locationId || t.fromLocationId === locationId)
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -272,7 +274,7 @@ export async function getDiscrepancyPhoto(photoId: string): Promise<string | nul
 /** Everything not finished: submitted requests plus everything on the road. */
 export async function listOpenTransfers(): Promise<Transfer[]> {
   const db = scoped()
-  const rows = (await Promise.all((['pendingApproval', ...ACTIVE] as TransferStatus[]).map((s) => db.getBy<Transfer>(COL.transfers, 'status', s)))).flat()
+  const rows = await db.query<Transfer>(COL.transfers, { filters: [{ field: 'status', op: 'in', value: ['pendingApproval', ...ACTIVE] }] }, { label: 'transfers.open' })
   return rows.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 

@@ -8,6 +8,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 // wrangler.toml present, takes no plain build variables from its dashboard — so the flag
 // is derived here. Locally `npm run demo` sets it through .env.demo instead.
 if (process.env.CF_PAGES_BRANCH === 'demo') process.env.VITE_DEMO_MODE = '1'
+// The test-only emulator switch (.env.e2e) must never reach a Pages build.
+if (process.env.CF_PAGES && process.env.VITE_USE_EMULATOR) throw new Error('VITE_USE_EMULATOR is for the local Playwright tests only')
 
 // https://vite.dev/config/
 export default defineConfig({

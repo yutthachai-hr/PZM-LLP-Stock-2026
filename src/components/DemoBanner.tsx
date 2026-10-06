@@ -1,5 +1,5 @@
 import { BACKEND_MODE } from '../backend'
-import { isDemoMode } from '../firebase/config'
+import { isDemoMode, isEmulatorMode } from '../firebase/config'
 import { useT } from '../i18n/I18nContext'
 import { Icon } from './Icon'
 
@@ -56,6 +56,14 @@ function LiveDataOnLocalhostWarning() {
   const t = useT()
   const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname)
   if (!local || BACKEND_MODE !== 'cloud') return null
+  // The Playwright tests' emulators: cloud code, but a throwaway database on this machine.
+  if (isEmulatorMode()) {
+    return (
+      <div className="pointer-events-none fixed left-3 md:left-auto md:right-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-surface shadow-lg [margin-bottom:env(safe-area-inset-bottom)]">
+        {t('ฐานข้อมูลจำลองสำหรับทดสอบ (emulator)')}
+      </div>
+    )
+  }
   return (
     <div
       role="alert"

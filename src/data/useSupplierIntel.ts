@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { assessAll, type DeliveryRisk } from '../lib/deliveryRisk'
 import { shortageRisks, type ShortageRisk } from '../lib/inventoryRisk'
 import { bkkDayEnd, bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
@@ -31,14 +31,44 @@ export interface SupplierIntel {
   shortages: ShortageRisk[]
 }
 
+const EMPTY: SupplierIntel = { ready: false, orders: [], risks: new Map(), shortages: [] }
+
+/**
+ * One computation for the whole app (perf/firestore-read-budget, 6 Oct 2026). The dashboard
+ * alone mounted it twice (risk panel, and the calendar feed under daily suggestions), each
+ * with its own clock and its own pass over every product; PhoneHome the same. Mounted once
+ * in Layout, it runs only while some screen is using it.
+ */
+const Ctx = createContext<{ intel: SupplierIntel; use: () => () => void } | null>(null)
+
+export function SupplierIntelProvider({ children }: { children: ReactNode }) {
+  const [users, setUsers] = useState(0)
+  const use = useMemo(() => () => {
+    setUsers((n) => n + 1)
+    return () => setUsers((n) => n - 1)
+  }, [])
+  const intel = useIntelWhile(users > 0)
+  const value = useMemo(() => ({ intel, use }), [intel, use])
+  return createElement(Ctx.Provider, { value }, children)
+}
+
 export function useSupplierIntel(): SupplierIntel {
+  const shared = useContext(Ctx)
+  const use = shared?.use
+  useEffect(() => (use ? use() : undefined), [use])
+  const own = useIntelWhile(!shared)
+  return shared ? shared.intel : own
+}
+
+function useIntelWhile(active: boolean): SupplierIntel {
   // One clock per screen, moved every five minutes: "overdue" and "runs out tomorrow"
   // change with time even when no data does — but not on every render.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
+    if (!active) return
     const id = setInterval(() => setNow(Date.now()), 5 * 60_000)
     return () => clearInterval(id)
-  }, [])
+  }, [active])
   const data = useData()
   const suppliers = useSuppliers()
   const { settings } = useScheduleConfig()
@@ -49,6 +79,7 @@ export function useSupplierIntel(): SupplierIntel {
   const [rows, setRows] = useState<{ orders: PurchaseOrder[]; transfers: Transfer[] } | null>(null)
 
   useEffect(() => {
+    if (!active) return
     let alive = true
     Promise.all([orderCache.fetchRange(from, to), transferCache.fetchRange(tFrom, to)])
       .then(([orders, transfers]) => alive && setRows({ orders, transfers }))
@@ -63,12 +94,12 @@ export function useSupplierIntel(): SupplierIntel {
       alive = false
       offs.forEach((off) => off())
     }
-  }, [from, to, tFrom])
+  }, [from, to, tFrom, active])
 
-  const risks = useMemo(() => (rows ? assessAll(rows.orders, now, suppliers) : new Map<string, DeliveryRisk>()), [rows, now, suppliers])
+  const risks = useMemo(() => (rows && active ? assessAll(rows.orders, now, suppliers) : new Map<string, DeliveryRisk>()), [active, rows, now, suppliers])
 
   const shortages = useMemo(() => {
-    if (!rows) return []
+    if (!rows || !active) return []
     return shortageRisks({
       products: data.products,
       locations: data.locations,
@@ -82,7 +113,7 @@ export function useSupplierIntel(): SupplierIntel {
       leadTimeOf: (id) => suppliers.find((s) => s.id === id)?.leadTimeDays,
       now,
     })
-  }, [rows, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, data.movements, settings.usageWindowDays, risks, suppliers, now])
+  }, [active, rows, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, data.movements, settings.usageWindowDays, risks, suppliers, now])
 
-  return { ready: !!rows, orders: rows?.orders ?? [], risks, shortages }
+  return useMemo(() => (active ? { ready: !!rows, orders: rows?.orders ?? [], risks, shortages } : EMPTY), [active, rows, risks, shortages])
 }

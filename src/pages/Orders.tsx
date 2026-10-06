@@ -5,6 +5,7 @@ import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useData } from '../data/DataContext'
 import { orderCache } from '../data/orderCache'
+import { bkkDayEnd, bkkDayStart } from '../lib/inventoryRules/time'
 import { ORDER_UPDATED } from '../data/useSupplierRefresh'
 import { useToast } from '../components/Toast'
 import { DataTable } from '../components/DataTable'
@@ -39,7 +40,6 @@ import {
   createPurchaseOrder,
   daysWaiting,
   expectedDeliveryAt,
-  listOrdersInRange,
   needsResend,
   overdueOrders,
   summariseBySupplier,
@@ -121,14 +121,15 @@ export function OrdersPage() {
   type StateFilter = '' | 'late' | 'sent' | 'unsent' | 'draft' | 'supplierWaiting' | 'datePending'
   const [stateFilter, setStateFilter] = useState<StateFilter>('')
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true)
     try {
-      const to = Date.now()
-      const rows = await listOrdersInRange(to - days * DAY, to + DAY)
-      setOrders(rows)
-      // Keep the calendar's copy current without it re-reading the month.
-      for (const o of rows) orderCache.patch(o)
+      // Through the session cache, on whole Bangkok days (perf/firestore-read-budget): a
+      // second visit reads only what changed since, instead of every order in the window
+      // again — 130 orders a visit in the 6 Oct measurement.
+      const now = Date.now()
+      const rows = await orderCache.fetchRange(bkkDayStart(now) - days * DAY, bkkDayEnd(now) + DAY, { force })
+      setOrders([...rows].sort((a, b) => b.orderedAt - a.orderedAt))
     } catch (e) {
       toast.error(errText(e, t))
     } finally {
@@ -598,7 +599,7 @@ export function OrdersPage() {
           locations={locations}
           actor={{ id: user.id, name: user.name }}
           onClose={() => setCreating(false)}
-          onDone={() => void load()}
+          onDone={() => void load(true)}
         />
       )}
       {viewing && (

@@ -5,6 +5,7 @@ import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import { COL, type Product, type Supplier, type SupplierItem, type SupplierLink, type SupplierType } from '../types'
 import { updateProduct } from './products'
+import { loadSyncedList } from '../data/syncedList'
 
 /**
  * Who we buy from, and what they sell us.
@@ -120,9 +121,12 @@ function checkCutoff(time: string | undefined): void {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new AppError('เวลาตัดรอบต้องเป็น HH:mm')
 }
 
-/** Every supplier, once. ~20 documents. Called when the Suppliers screen opens. */
+/**
+ * Every supplier. Kept on the device and refreshed by what changed (data/syncedList.ts):
+ * 86 documents on every open until 6 Oct 2026.
+ */
 export async function listSuppliers(): Promise<Supplier[]> {
-  const rows = await backend.getAll<Supplier>(COL.suppliers)
+  const rows = [...(await loadSyncedList<Supplier>(COL.suppliers, 'suppliers'))]
   return rows.sort((a, b) => a.name.localeCompare(b.name))
 }
 

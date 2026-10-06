@@ -6,6 +6,8 @@ interface ImportMetaEnv {
    * src/firebase/config.ts — do not test this string anywhere else.
    */
   readonly VITE_DEMO_MODE?: string
+  /** '1' under `vite --mode e2e`: the Playwright tests' local Firebase emulators (src/firebase/config.ts). */
+  readonly VITE_USE_EMULATOR?: string
   /**
    * The LIFF app id for sharing order sheets through the person's own LINE. Public — it
    * ships in client code. Absent: the share button falls back to the phone's share sheet.

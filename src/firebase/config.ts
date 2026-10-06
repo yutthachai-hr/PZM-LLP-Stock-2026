@@ -43,6 +43,28 @@ export function isDemoMode(): boolean {
   return import.meta.env.VITE_DEMO_MODE === '1'
 }
 
+/**
+ * Automated tests (Playwright) run the real Firestore code against the local emulators
+ * (owner approved, 6 Oct 2026): two browsers can then share one database, which browser
+ * storage cannot, so "two devices receive the same order at once" can actually be tried.
+ *
+ * Only on a local address, and only for a project id starting `demo-`, which the Firebase
+ * SDK never sends to Google — a build that somehow carried the flag to a real host gets no
+ * config at all (local mode), never the live project. Set by `vite --mode e2e` (.env.e2e).
+ */
+export function isEmulatorMode(): boolean {
+  if (import.meta.env.VITE_USE_EMULATOR !== '1') return false
+  const host = typeof location === 'undefined' ? '' : location.hostname
+  return host === 'localhost' || host === '127.0.0.1'
+}
+
+export const EMULATOR_CONFIG: FirebaseConfig = {
+  apiKey: 'demo-key',
+  authDomain: 'demo-pzm-e2e.firebaseapp.com',
+  projectId: 'demo-pzm-e2e',
+  appId: 'demo-pzm-e2e',
+}
+
 function isValid(c: unknown): c is FirebaseConfig {
   const o = c as Partial<FirebaseConfig>
   return !!(o && o.apiKey && o.projectId && o.appId && o.authDomain)
@@ -52,6 +74,7 @@ export function getFirebaseConfig(): FirebaseConfig | null {
   // Checked before localStorage as well as BUILT_IN: a demo device that has previously been
   // connected to the real project must not quietly reconnect to it.
   if (isDemoMode()) return null
+  if (import.meta.env.VITE_USE_EMULATOR === '1') return isEmulatorMode() ? EMULATOR_CONFIG : null
   try {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) {

@@ -1,7 +1,7 @@
 import { backend, BACKEND_MODE } from '../backend'
 import { getBrand } from '../brand/brand'
 import { inventoryInsights } from '../lib/inventoryRules/insights'
-import { evaluate, plan, weeklyFigures, type JobName } from '../lib/inventoryRules/notifications'
+import { evaluate, plan, STATEFUL, weeklyFigures, type JobName } from '../lib/inventoryRules/notifications'
 import { GENERATE_AHEAD_DAYS, missingTasks, taskIdFor } from '../lib/inventoryRules/schedules'
 import { stockView } from '../lib/inventoryRules/stockView'
 import { bkkDayEnd, bkkDayKey, bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
@@ -22,7 +22,7 @@ import { orderCache } from '../data/orderCache'
 import { transferCache } from '../data/transferCache'
 import { riskEngineInput } from '../lib/riskNotifications'
 import { requestCache } from '../data/requestCache'
-import { applyPlan, getNotifications } from './notifications'
+import { applyPlan, backfillAudience, getActiveNotifications, getNotifications } from './notifications'
 import { loadScheduleConfig } from './schedules'
 import { loadSuppliers } from './suppliers'
 
@@ -257,10 +257,60 @@ export async function runNotificationJobs(
     settings: config.settings,
     risk,
   })
+  // What is on file among the drafts and the live states. The bell's own list is now only
+  // this person's newest (perf/firestore-read-budget), so the rest is looked up: the drafts
+  // and the states this device saw last run, 30 ids a query; and every six hours one sweep
+  // of everything active, for states another device raised and nobody here has seen.
   const known = new Map(data.notifications.map((n) => [n.id, n]))
-  const missing = drafts.map((d) => d.id).filter((id) => !known.has(id))
-  for (const n of await getNotifications(missing)) known.set(n.id, n)
+  const sweep = sweepDue(now)
+  if (sweep) for (const n of await getActiveNotifications()) known.set(n.id, n)
+  const wanted = [...new Set([...drafts.map((d) => d.id), ...lastActive()])].filter((id) => !known.has(id))
+  for (const n of await getNotifications(wanted)) known.set(n.id, n)
   const written = await applyPlan(plan(drafts, known, jobs, now, 'client', actor.id))
+  await backfillAudience([...known.values()])
+  rememberActive([...known.values()].filter((n) => n.active && STATEFUL.has(n.kind)).map((n) => n.id), drafts.map((d) => d.id))
+  if (sweep) markSwept(now)
   markNotified(now)
   return written
+}
+
+// ------------------------------------------------- what the job saw last time (device) ----
+
+const ACTIVE_KEY = 'pzm.automation.activeStates'
+const SWEEP_KEY = 'pzm.automation.sweptAt'
+/** How often a device re-reads every active notification to catch states raised elsewhere. */
+export const SWEEP_EVERY_MS = 6 * 60 * 60_000
+
+function lastActive(): string[] {
+  try {
+    const raw = localStorage.getItem(`${ACTIVE_KEY}:${getBrand()}`)
+    const ids = raw ? (JSON.parse(raw) as unknown) : []
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string').slice(0, 500) : []
+  } catch {
+    return []
+  }
+}
+
+function rememberActive(active: readonly string[], drafted: readonly string[]): void {
+  try {
+    localStorage.setItem(`${ACTIVE_KEY}:${getBrand()}`, JSON.stringify([...new Set([...active, ...drafted])].slice(0, 500)))
+  } catch {
+    // harmless: the sweep catches up
+  }
+}
+
+function sweepDue(now: number): boolean {
+  try {
+    return now - Number(localStorage.getItem(`${SWEEP_KEY}:${getBrand()}`) ?? 0) >= SWEEP_EVERY_MS
+  } catch {
+    return true
+  }
+}
+
+function markSwept(now: number): void {
+  try {
+    localStorage.setItem(`${SWEEP_KEY}:${getBrand()}`, String(now))
+  } catch {
+    // harmless
+  }
 }

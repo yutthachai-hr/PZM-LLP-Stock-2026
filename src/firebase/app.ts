@@ -1,5 +1,6 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
 import {
+  connectFirestoreEmulator,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
@@ -7,8 +8,13 @@ import {
   terminate,
   type Firestore,
 } from 'firebase/firestore'
-import { getAuth, type Auth } from 'firebase/auth'
-import { getFirebaseConfig } from './config'
+import { connectAuthEmulator, getAuth, type Auth } from 'firebase/auth'
+import { getFirebaseConfig, isEmulatorMode } from './config'
+
+/** Ports in firebase.json — the automated tests' databases (see isEmulatorMode). */
+const EMULATOR_HOST = '127.0.0.1'
+const FIRESTORE_EMULATOR_PORT = 8080
+const AUTH_EMULATOR_PORT = 9099
 
 // Lazy singletons — only initialised when cloud mode is active.
 
@@ -35,12 +41,14 @@ export function getDb(): Firestore {
       tabManager: persistentMultipleTabManager(),
     }),
   })
+  if (isEmulatorMode()) connectFirestoreEmulator(_db, EMULATOR_HOST, FIRESTORE_EMULATOR_PORT)
   return _db
 }
 
 export function getAuthInstance(): Auth {
   if (_auth) return _auth
   _auth = getAuth(app())
+  if (isEmulatorMode()) connectAuthEmulator(_auth, `http://${EMULATOR_HOST}:${AUTH_EMULATOR_PORT}`, { disableWarnings: true })
   return _auth
 }
 

@@ -82,7 +82,7 @@ export interface LastCount {
  */
 export async function loadLedger(): Promise<StockMovement[]> {
   const db = backend.forBrand(getBrand())
-  return (await db.getAll<StockMovement>(COL.movements)) ?? []
+  return (await db.getAll<StockMovement>(COL.movements, { label: 'import.ledger' })) ?? []
 }
 
 /**

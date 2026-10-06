@@ -87,3 +87,35 @@ describe('the app standing in for the Worker', () => {
     expect(rows().find((n) => n.kind === 'lowStock')).toMatchObject({ active: false })
   })
 })
+
+describe('recipient-scoped inbox (perf/firestore-read-budget)', () => {
+  test('audience keys mirror who a notification is for', async () => {
+    const { audienceKeysOf, readerKeys } = await import('../src/lib/inventoryRules/notifications')
+    expect(audienceKeysOf({ all: true })).toEqual(['all'])
+    expect(audienceKeysOf({ roles: ['manager', 'admin'], uids: ['u1'] })).toEqual(['role:manager', 'role:admin', 'uid:u1'])
+    expect(readerKeys({ id: 'u1', role: 'staff' })).toEqual(['all', 'role:staff', 'uid:u1'])
+  })
+  test('the inbox query matches exactly what isAddressedTo allows', async () => {
+    const { audienceKeysOf, readerKeys, isAddressedTo } = await import('../src/lib/inventoryRules/notifications')
+    const { applySpec } = await import('../src/backend/querySpec')
+    const { inboxSpec } = await import('../src/data/notificationInbox')
+    const tos = [{ all: true }, { roles: ['manager' as const] }, { uids: ['u2'] }, { roles: ['admin' as const], uids: ['u1'] }, { roles: ['staff' as const] }]
+    const docs = tos.map((to, i) => ({ id: `n${i}`, to, audienceKeys: audienceKeysOf(to), createdAt: 100 - i }))
+    for (const user of [{ id: 'u1', role: 'staff' as const }, { id: 'u2', role: 'manager' as const }, { id: 'u9', role: 'admin' as const }]) {
+      const got = applySpec(docs, inboxSpec(user)).map((d) => d.id)
+      const want = docs.filter((d) => isAddressedTo(d.to, user)).map((d) => d.id)
+      expect(got).toEqual(want)
+      expect(readerKeys(user)).toHaveLength(3)
+    }
+  })
+  test('newest first, at most the inbox limit, older pages before a cursor', async () => {
+    const { applySpec } = await import('../src/backend/querySpec')
+    const { inboxSpec } = await import('../src/data/notificationInbox')
+    const docs = Array.from({ length: 45 }, (_, i) => ({ id: `n${i}`, audienceKeys: ['all'], createdAt: i }))
+    const first = applySpec(docs, inboxSpec({ id: 'u', role: 'staff' }))
+    expect(first).toHaveLength(30)
+    expect(first[0].createdAt).toBe(44)
+    const older = applySpec(docs, inboxSpec({ id: 'u', role: 'staff' }, first.at(-1)!.createdAt))
+    expect(older.map((d) => d.createdAt)).toEqual(Array.from({ length: 15 }, (_, i) => 14 - i))
+  })
+})

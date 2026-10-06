@@ -45,7 +45,7 @@ export function NotificationBell() {
   const toast = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { notifications } = useData()
+  const { notifications, olderNotifications } = useData()
   const prefs = useNotificationPrefs(user?.id)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('all')
@@ -162,6 +162,16 @@ export function NotificationBell() {
               )
             })}
           </ul>
+        )}
+        {olderNotifications.hasOlder && (
+          // Older ones a page at a time, on request — the bell no longer holds the whole week live.
+          <button
+            onClick={() => void olderNotifications.loadOlder()}
+            disabled={olderNotifications.olderLoading}
+            className="mt-3 w-full cursor-pointer rounded-lg border border-line py-2 text-xs text-ink-soft hover:bg-sunken disabled:cursor-wait disabled:opacity-60"
+          >
+            {olderNotifications.olderLoading ? t('กำลังโหลด…') : t('ดูการแจ้งเตือนเก่ากว่านี้')}
+          </button>
         )}
         <div className="mt-4 border-t border-line pt-3">
           <button

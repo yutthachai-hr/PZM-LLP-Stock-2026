@@ -18,6 +18,8 @@ dev-dist
 .env.*
 !.env.example
 !.env.demo
+# The Playwright tests' emulator switch — not secret, committed so the suite runs from a clone.
+!.env.e2e
 
 # Editor directories and files
 .vscode/*
@@ -34,6 +36,10 @@ dev-dist
 .firebase/
 firebase-debug.log
 firestore-debug.log
+auth-debug.log
+
+# Playwright output (reports, traces, screenshots)
+e2e-results/
 
 # Real company data staged for a local import run. Never commit.
 public/__demo-import.xlsx
