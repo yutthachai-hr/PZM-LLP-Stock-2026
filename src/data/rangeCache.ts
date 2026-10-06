@@ -10,6 +10,10 @@ import { getBrand } from '../brand/brand'
  * from any wider range already held — the dashboard's fortnight is inside the calendar's
  * month, so whichever screen opens second pays nothing.
  *
+ * A window that only partly overlaps what is held reads just the missing part and joins
+ * the pieces into one held range (plan D3'): the calendar moving a month forward reads the
+ * new weeks, not the four it already had.
+ *
  * A write patches every held range in place; nothing is ever invalidated, because
  * re-reading a month for one changed row is exactly the cost this file exists to avoid.
  */
@@ -73,14 +77,27 @@ export function createRangeCache<T extends { id: string }>(opts: {
           if (mine(k) && p.from <= from && p.to >= to) return slice({ rows: await p.promise }, from, to)
         }
       }
+      // What is held that overlaps this window: read only the gaps, then hold one range.
+      const overlap = o?.force ? [] : [...held].filter(([key, r]) => mine(key) && r.from <= to && r.to >= from)
+      const gaps = gapsIn(from, to, overlap.map(([, r]) => r))
+      const span = {
+        from: Math.min(from, ...overlap.map(([, r]) => r.from)),
+        to: Math.max(to, ...overlap.map(([, r]) => r.to)),
+      }
       const k = brandKey(from, to)
-      const promise = opts.fetch(from, to).then((rows) => sort(rows))
+      const promise = Promise.all(gaps.map((g) => opts.fetch(g.from, g.to))).then((parts) => {
+        const byId = new Map<string, T>()
+        for (const [, r] of overlap) for (const row of r.rows) byId.set(row.id, row)
+        for (const part of parts) for (const row of part) byId.set(row.id, row)
+        return sort([...byId.values()])
+      })
       pending.set(k, { from, to, promise })
       try {
         const rows = await promise
-        held.set(k, { from, to, rows })
+        for (const [key] of overlap) held.delete(key)
+        held.set(brandKey(span.from, span.to), { ...span, rows })
         announce()
-        return rows
+        return slice({ rows }, from, to)
       } finally {
         pending.delete(k)
       }
@@ -116,4 +133,18 @@ export function createRangeCache<T extends { id: string }>(opts: {
       announce()
     },
   }
+}
+
+/** The parts of [from, to] no held range covers, in order. Bounds are inclusive ms. */
+export function gapsIn(from: number, to: number, ranges: readonly { from: number; to: number }[]): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = []
+  let at = from
+  for (const r of [...ranges].sort((a, b) => a.from - b.from)) {
+    if (r.to < at) continue
+    if (r.from > at) out.push({ from: at, to: Math.min(to, r.from - 1) })
+    at = Math.max(at, r.to + 1)
+    if (at > to) break
+  }
+  if (at <= to) out.push({ from: at, to })
+  return out
 }

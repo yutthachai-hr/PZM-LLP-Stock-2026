@@ -74,7 +74,10 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       const c = resolve(collection)
       return onSnapshot(
         doc(db, c, id),
-        (snap) => cb(snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null),
+        (snap) => {
+          noteRead(c, 1)
+          cb(snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null)
+        },
         (err) => {
           console.error(`[firestore] subscribeOne ${c}/${id} failed`, err)
           onError?.(err)
@@ -92,7 +95,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       const snap = await getDocs(
         query(fbCollection(getDb(), c), where(field, '>=', from), where(field, '<=', to)),
       )
-      noteRead(c, snap.size)
+      noteRead(c, Math.max(1, snap.size))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
@@ -100,7 +103,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       const db = getDb()
       const c = resolve(collection)
       const snap = await getDocs(fbCollection(db, c))
-      noteRead(c, snap.size)
+      noteRead(c, Math.max(1, snap.size))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
@@ -109,15 +112,19 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       field: string,
       value: string | number | boolean,
     ): Promise<T[]> {
-      const snap = await getDocs(
-        query(fbCollection(getDb(), resolve(collection)), where(field, '==', value)),
-      )
+      const c = resolve(collection)
+      const snap = await getDocs(query(fbCollection(getDb(), c), where(field, '==', value)))
+      // A query that finds nothing is still billed one read (plan D3': count what is paid).
+      noteRead(c, Math.max(1, snap.size))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
     async getOne<T>(collection: string, id: string): Promise<T | null> {
       const db = getDb()
-      const snap = await getDoc(doc(db, resolve(collection), id))
+      const c = resolve(collection)
+      const snap = await getDoc(doc(db, c, id))
+      // One read, found or not (plan D3': the meter used to miss every single-document read).
+      noteRead(c, 1)
       return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
     },
 
