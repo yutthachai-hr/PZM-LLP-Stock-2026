@@ -409,6 +409,7 @@ export function MovementsPage() {
           rows={filtered}
           columns={columns}
           rowKey={(m) => m.id}
+          paged={{ size: 50, resetKey: `${productId}|${locationId}|${typeFilter}|${fromStr}|${toStr}|${docFilter}` }}
           minWidth={stockCardMode ? 820 : 720}
           maxHeight="calc(100vh - 260px)"
           rowClassName={(m) => (m.voided ? 'bg-sunken text-ink-faint' : '')}

@@ -162,7 +162,7 @@ export function CostReport() {
       {rows.length === 0 ? (
         <EmptyState icon="report" title={t('ไม่พบสินค้า')} />
       ) : (
-        <DataTable rows={rows} columns={columns} rowKey={(r) => r.p.id} minWidth={900} maxHeight="calc(100vh - 320px)" />
+        <DataTable rows={rows} columns={columns} rowKey={(r) => r.p.id} minWidth={900} maxHeight="calc(100vh - 320px)" paged={{ size: 50 }} />
       )}
     </Card>
   )

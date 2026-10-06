@@ -340,6 +340,7 @@ export function TransfersPage() {
               rows={shown}
               onRowClick={(r) => navigate(`/transfers/${r.id}`)}
               rowKey={(r) => r.id}
+              paged={{ size: 50, resetKey: `${filter}|${originSite}|${destSite}|${search}` }}
             />
           </div>
         )}

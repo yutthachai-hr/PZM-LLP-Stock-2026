@@ -363,6 +363,7 @@ export function StockCardPage() {
               rows={rows}
               columns={columns}
               rowKey={(r) => r.movement.id}
+              paged={{ size: 100, resetKey: card }}
               minWidth={900}
               maxHeight="calc(100vh - 220px)"
               rowClassName={(r) => (r.movement.voided ? 'opacity-50 line-through' : '')}
