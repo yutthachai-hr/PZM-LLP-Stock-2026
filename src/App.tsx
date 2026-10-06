@@ -27,6 +27,7 @@ import { ImportPage } from './pages/Import'
 import { SuppliersPage } from './pages/Suppliers'
 import { SupplierPerformancePage } from './pages/suppliers/SupplierPerformance'
 import { OrdersPage } from './pages/Orders'
+import { InboxPage } from './pages/Inbox'
 import { PurchaseBatchesPage } from './pages/purchase/PurchaseBatches'
 import { PurchaseImportPage } from './pages/purchase/PurchaseImport'
 import { PurchaseBatchReviewPage } from './pages/purchase/PurchaseBatchReview'
@@ -110,6 +111,7 @@ function Gate() {
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/suppliers/performance" element={<SupplierPerformancePage />} />
           <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
           <Route path="/requests" element={<PurchaseRequestsPage />} />
           <Route path="/requests/:id" element={<RequestPage />} />
           <Route path="/purchase" element={<PurchaseBatchesPage />} />

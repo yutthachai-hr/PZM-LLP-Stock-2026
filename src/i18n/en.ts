@@ -3106,4 +3106,17 @@ export const EN: Record<string, string> = {
   'ใบสั่งซื้อรับไม่ครบค้างนาน: {supplier} ({docNo})': 'Part-received order still open: {supplier} ({docNo})',
   'จาก {from} ไป {to} — ปลายทางยังไม่กดรับ': 'From {from} to {to} — not yet received at the destination',
   'ยังค้างรับ {n} รายการ · ส่งครั้งล่าสุด {days} วันก่อน · {location}': '{n} lines still owed · last delivery {days} days ago · {location}',
+  // Plan C3: Exception Inbox (6 Oct 2026)
+  'งานรอตัดสินใจ': 'Needs a decision',
+  'ใบโอนมีผลต่างรอตัดสิน: {docNo}': 'Transfer discrepancy to settle: {docNo}',
+  'ใบสั่งซื้อร่างรออนุมัติ: {supplier} ({docNo})': 'Draft order awaiting approval: {supplier} ({docNo})',
+  'ยอดนับประจำเดือนรอปิดยอด: {location} {month}': 'Monthly count waiting to be posted: {location} {month}',
+  'จาก {from} ไป {to} — ปลายทางรับไม่ตรงกับที่ส่ง': 'From {from} to {to} — received does not match what was sent',
+  'ผู้ขายขอเลื่อนวันส่งเกินช่วงที่อนุญาต · {location}': 'Supplier asked for a date beyond the allowed range · {location}',
+  'ยืนยันยอดนับแล้ว {n} รายการ — กดปิดยอดเพื่อปรับสต๊อก': '{n} lines counted and confirmed — post to adjust stock',
+  'ทุกเรื่องที่รอหัวหน้าตัดสินใจ เรียงจากเร่งที่สุด': 'Everything waiting on a manager, most urgent first',
+  'โหลดงานรอตัดสินใจไม่สำเร็จ: {what}': 'Could not load the inbox: {what}',
+  'กลุ่มงาน': 'Group',
+  'ไม่มีงานค้างให้ตัดสินใจ': 'Nothing waiting for a decision',
+  'ค้าง/ล่าช้า': 'Stuck / late',
 }
