@@ -25,7 +25,13 @@ export async function readBillPhoto(dataUrl: string): Promise<OcrBill> {
   if (res.status === 413) throw new AppError('รูปใหญ่เกินไป')
   if (res.status === 429) throw new AppError('AI อ่านเอกสารครบโควตาวันนี้แล้ว — ลองใหม่พรุ่งนี้ หรือใช้ Excel / คีย์เอง')
   if (res.status === 415) throw new AppError('รองรับเฉพาะรูปภาพหรือ PDF')
-  if (!res.ok) throw new AppError('AI อ่านบิลไม่สำเร็จ ({status}) — ลองถ่ายใหม่ให้ชัดขึ้น หรือคีย์เอง', { status: res.status })
+  if (!res.ok) {
+    // Say why: the server passes on the model's own error (a retired model, a bad key…).
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; model?: string }
+    const why = [body.model, body.message].filter(Boolean).join(' — ').slice(0, 200)
+    if (body.error === 'unreadable') throw new AppError('AI อ่านแล้วแต่ตอบกลับไม่เป็นรายการ — ลองรูปที่ชัดขึ้น หรือคีย์เอง')
+    throw new AppError('AI อ่านบิลไม่สำเร็จ ({status}) {why}', { status: res.status, why })
+  }
   return cleanOcr(await res.json())
 }
 

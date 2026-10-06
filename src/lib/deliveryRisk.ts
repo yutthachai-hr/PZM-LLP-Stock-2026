@@ -24,6 +24,8 @@ export const RISK_CONFIG = {
   points: {
     overdue: 30,
     overduePerExtraDay: 10,
+    /** Overdue alone never adds more than this — the score is out of 100. */
+    overdueMax: 70,
     otdBelow80: 25,
     otdBelow90: 10,
     twoOfLastThreeLate: 20,
@@ -91,7 +93,7 @@ export function assessDeliveryRisk(order: PurchaseOrder, ctx: RiskContext): Deli
   // Already late is the strongest signal there is.
   if (due !== null && now > bkkDayEnd(due)) {
     const days = bkkDaysBetween(due, now)
-    add('overdue', P.overdue + P.overduePerExtraDay * Math.max(0, days - 1), { days })
+    add('overdue', Math.min(P.overdueMax, P.overdue + P.overduePerExtraDay * Math.max(0, days - 1)), { days })
   }
 
   // The supplier's recent record, judged against the dates it confirmed.

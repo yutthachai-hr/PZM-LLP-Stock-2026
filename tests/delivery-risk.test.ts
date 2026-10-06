@@ -97,6 +97,11 @@ describe('reasons', () => {
     expect(r3.level).toBe('MEDIUM')
   })
 
+  test('overdue alone adds at most 70 — the score is out of 100', () => {
+    const r = assessDeliveryRisk(open({ expectedAt: day(-14) }), ctx([]))!
+    expect(r.reasons[0]).toMatchObject({ code: 'overdue', points: 70, params: { days: 14 } })
+  })
+
   test('due today is not overdue until the day is over', () => {
     expect(codes(assessDeliveryRisk(open({ expectedAt: D }), ctx([])))).not.toContain('overdue')
   })

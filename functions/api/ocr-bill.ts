@@ -1,4 +1,5 @@
 import { demoKeyOk, json, verifyFirebaseToken, type Env } from '../_poImage'
+import { pickReaderModel, type ListedModel } from '../_lib/geminiModel'
 
 /**
  * POST /api/ocr-bill — { image: "data:image/jpeg;base64,…" | "data:application/pdf;base64,…" } → { supplier, invoiceNo, date, lines }
@@ -57,21 +58,66 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
   if (!m) return json(415, { error: 'image or PDF data URL only' })
   if (image.length > MAX_IMAGE_CHARS) return json(413, { error: 'too large' })
 
-  const model = (env.GEMINI_MODEL ?? '').trim() || DEFAULT_MODEL
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  const pinned = (env.GEMINI_MODEL ?? '').trim()
+  let model = pinned || chosenModel || DEFAULT_MODEL
+  let res = await generate(key, model, m[1], m[2])
+  // The model was retired (Google answers 404 "no longer available"): ask which ones this key
+  // can use, take the newest stable Flash, remember it, try once more.
+  if (res.status === 404) {
+    const next = await discoverModel(key)
+    if (next && next !== model) {
+      chosenModel = next
+      model = next
+      res = await generate(key, model, m[1], m[2])
+    }
+  }
+  if (res.ok) {
+    const out = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+    return reply(out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '', model)
+  }
+  // Any other failure: a picture still has the Workers AI reader; a PDF does not.
+  const detail = await errorDetail(res)
+  if (env.AI && m[1] !== 'application/pdf') {
+    const answer = await fallback(env.AI, image)
+    if (answer) return reply(answer, FALLBACK_MODEL)
+  }
+  if (res.status === 429) return json(429, { error: 'quota', model })
+  return json(502, { error: 'model', status: res.status, model, message: detail })
+}
+
+/** Set once per isolate when discovery replaces a retired default. */
+let chosenModel = ''
+
+function generate(key: string, model: string, mime: string, data: string): Promise<Response> {
+  return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: PROMPT }, { inline_data: { mime_type: m[1], data: m[2] } }] }],
+      contents: [{ role: 'user', parts: [{ text: PROMPT }, { inline_data: { mime_type: mime, data } }] }],
       generationConfig: { responseMimeType: 'application/json', temperature: 0 },
     }),
   })
-  // The fallback model reads pictures only; a PDF waits for Gemini's quota to come back.
-  if (res.status === 429 && env.AI && m[1] !== 'application/pdf') return reply(await fallback(env.AI, image))
-  if (res.status === 429) return json(429, { error: 'quota' })
-  if (!res.ok) return json(502, { error: 'model', status: res.status })
-  const out = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-  return reply(out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '')
+}
+
+async function discoverModel(key: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key } })
+    if (!res.ok) return null
+    const body = (await res.json()) as { models?: ListedModel[] }
+    return pickReaderModel(body.models ?? [])
+  } catch {
+    return null
+  }
+}
+
+/** Google's own error text (never the key), cut short — enough to say what went wrong. */
+async function errorDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: { message?: string; status?: string } }
+    return [body.error?.status, body.error?.message].filter(Boolean).join(': ').slice(0, 300)
+  } catch {
+    return ''
+  }
 }
 
 /** Gemini's free tier is out for the day/minute — ask Workers AI (10k neurons/day free) instead. */
@@ -88,12 +134,17 @@ async function fallback(ai: Ai, image: string): Promise<unknown> {
   }
 }
 
-function reply(answer: unknown): Response {
+function reply(answer: unknown, model: string): Response {
   if (answer && typeof answer === 'object') return json(200, answer)
+  const text = String(answer)
+  // The JSON object, whatever the model wrapped around it (prose, ```json fences).
+  const from = text.indexOf('{')
+  const to = text.lastIndexOf('}')
   try {
-    return json(200, JSON.parse(String(answer).replace(/^[\s\S]*?(?=\{)|(?<=\})[^}]*$/g, '')))
+    if (from < 0 || to < from) throw new Error('no object')
+    return json(200, JSON.parse(text.slice(from, to + 1)))
   } catch {
-    return json(502, { error: 'unreadable' })
+    return json(502, { error: 'unreadable', model, message: text.slice(0, 200) })
   }
 }
 

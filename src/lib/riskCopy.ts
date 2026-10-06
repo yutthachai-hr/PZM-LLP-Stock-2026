@@ -24,6 +24,7 @@ export const RISK_LEVEL_COLOR: Record<RiskLevel, 'slate' | 'amber' | 'red' | 'bl
 export const RISK_REASON_TEXT: Record<RiskReasonCode, string> = {
   overdue: 'เลยวันส่งที่ยืนยันมาแล้ว {days} วัน', // i18n-key
   overduePerExtraDay: '', // folded into "overdue"
+  overdueMax: '', // a cap, not a reason
   otdBelow80: 'ผู้ขายส่งตรงเวลาเพียง {pct}% ({n} ครั้งล่าสุดใน 90 วัน)', // i18n-key
   otdBelow90: 'ผู้ขายส่งตรงเวลา {pct}% — ต่ำกว่า 90%', // i18n-key
   twoOfLastThreeLate: 'ส่งช้า {late} ใน 3 ครั้งล่าสุด', // i18n-key

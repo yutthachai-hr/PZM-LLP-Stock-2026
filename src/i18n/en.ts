@@ -2724,7 +2724,6 @@ export const EN: Record<string, string> = {
   'หน่วยในบิลไม่ตรงกับหน่วยที่สั่ง/หน่วยสินค้า': 'the bill\'s unit is not the ordered/product unit',
   'มีในรายการแล้ว': 'already on the list',
   'ยังไม่ได้เปิดใช้ AI อ่านบิล — ผู้ดูแลต้องตั้งค่า GEMINI_API_KEY ใน Cloudflare ก่อน': 'Bill reading is not switched on — an admin must set GEMINI_API_KEY in Cloudflare first',
-  'AI อ่านบิลไม่สำเร็จ ({status}) — ลองถ่ายใหม่ให้ชัดขึ้น หรือคีย์เอง': 'AI could not read the bill ({status}) — take a clearer photo, or key it in',
   // ---- a new supplier from the product form (5 Oct 2026) ----
   'มีผู้ขาย "{name}" อยู่แล้ว — เลือกให้แล้ว': 'Supplier "{name}" is already on the list — selected it',
   'เพิ่มผู้ขาย "{name}" แล้ว': 'Added supplier "{name}"',
@@ -2733,6 +2732,8 @@ export const EN: Record<string, string> = {
   'รายละเอียดอื่นใส่ภายหลังได้ที่หน้าผู้ขาย': 'Other details can be added later on the suppliers page',
   'บันทึกผู้ขาย': 'Save supplier',
   // File import everywhere (6 Oct 2026)
+  "AI อ่านแล้วแต่ตอบกลับไม่เป็นรายการ — ลองรูปที่ชัดขึ้น หรือคีย์เอง": "AI read it but did not answer with lines — try a clearer picture, or key it in",
+  "AI อ่านบิลไม่สำเร็จ ({status}) {why}": "AI could not read it ({status}) {why}",
   "นำเข้าไฟล์ไปที่ไหน?": "Import a file into…",
   "บิล / ใบส่งของ — Excel, รูป หรือ PDF": "Bill / delivery note — Excel, photo or PDF",
   "รายการที่ต้องการ — Excel, รูป หรือ PDF": "What you need — Excel, photo or PDF",
@@ -2773,6 +2774,12 @@ export const EN: Record<string, string> = {
   "อ่านไฟล์ไม่ได้": "Could not read the file",
   "อ่านรูปไม่ได้": "Could not read the picture",
   // Supplier intelligence (5 Oct 2026)
+  "ซ่อนรายการ": "Hide list",
+  "แสดงรายการ": "Show list",
+  "เลือกระดับความเสี่ยง": "Choose a risk level",
+  "ที่ต้องดู": "Needs attention",
+  "ไม่มีใบสั่งซื้อในระดับนี้": "No orders at this level",
+  "ดูเพิ่มอีก {n} ใบ": "Show {n} more",
   "ชุดข้อมูลสำหรับโมเดล (CSV)": "Model dataset (CSV)",
   "{n} แถว ({late} ช้า) — พอเริ่มทดลองโมเดลได้": "{n} rows ({late} late) — enough to start trying a model",
   "{n} แถว ({late} ช้า) — ยังไม่พอ (ต้องการ {min} / {minLate})": "{n} rows ({late} late) — not enough yet (needs {min} / {minLate})",

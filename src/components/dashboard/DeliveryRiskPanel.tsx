@@ -27,11 +27,34 @@ const COUNT_TONE: Record<RiskLevel, string> = {
 
 const btn = 'inline-flex min-h-9 items-center gap-1 rounded-md border border-line-strong px-2.5 text-xs font-medium text-ink hover:bg-sunken'
 
+const OPEN_KEY = 'pmstock:v1:dash-risk-open'
+
+function rememberedOpen(): boolean {
+  try {
+    return localStorage.getItem(OPEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function DeliveryRiskPanel() {
   const t = useT()
   const { ready, risks, shortages } = useSupplierIntel()
   const suppliers = useSuppliers()
   const [open, setOpen] = useState<string | null>(null)
+  // Folded by default (owner, 6 Oct 2026): the counts say enough at a glance; the list opens
+  // on demand — the toggle, or a level chip, which also picks that level.
+  const [expanded, setExpanded] = useState(rememberedOpen)
+  const [level, setLevel] = useState<RiskLevel | 'ALL'>('ALL')
+
+  function toggle(next: boolean) {
+    setExpanded(next)
+    try {
+      localStorage.setItem(OPEN_KEY, next ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }
 
   const counts = useMemo(() => {
     const c: Record<RiskLevel, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
@@ -39,67 +62,127 @@ export function DeliveryRiskPanel() {
     return c
   }, [risks])
 
-  // An order is on the list when it is at least MEDIUM, or a product it brings runs out first.
-  const cards = useMemo(() => {
+  const shortByPo = useMemo(() => {
     const byPo = new Map<string, ShortageRisk[]>()
     for (const s of shortages) {
       const po = s.nextIncoming?.poId ?? s.incoming[0]?.poId
       if (po) byPo.set(po, [...(byPo.get(po) ?? []), s])
     }
-    return [...risks.values()]
-      .filter((r) => LEVEL_RANK[r.level] >= LEVEL_RANK.MEDIUM || byPo.has(r.poId))
-      .map((r) => ({ risk: r, shortages: byPo.get(r.poId) ?? [] }))
-      .sort((a, b) => b.risk.score - a.risk.score)
-      .slice(0, 8)
-  }, [risks, shortages])
+    return byPo
+  }, [shortages])
 
-  const noOrder = shortages.filter((s) => !s.incoming.length).slice(0, 5)
+  // "All" lists what needs attention (MEDIUM and up, or leaving a product short); a level
+  // chip lists exactly that level — LOW included.
+  const cards = useMemo(
+    () =>
+      [...risks.values()]
+        .filter((r) => (level === 'ALL' ? LEVEL_RANK[r.level] >= LEVEL_RANK.MEDIUM || shortByPo.has(r.poId) : r.level === level))
+        .map((r) => ({ risk: r, shortages: shortByPo.get(r.poId) ?? [] }))
+        .sort((a, b) => b.risk.score - a.risk.score),
+    [risks, shortByPo, level],
+  )
+  const [limit, setLimit] = useState(8)
+  const shown = cards.slice(0, limit)
+  const noOrder = level === 'ALL' ? shortages.filter((s) => !s.incoming.length).slice(0, 5) : []
 
   return (
-    <SectionCard icon="truck" tone="red" title={t('ความเสี่ยงการส่งของ')} count={t('(คะแนนจากกฎ ไม่ใช่ความน่าจะเป็น)')} flush>
-      <div className="flex flex-wrap gap-2 px-4 pb-3 md:px-5">
+    <SectionCard
+      icon="truck"
+      tone="red"
+      title={t('ความเสี่ยงการส่งของ')}
+      count={t('(คะแนนจากกฎ ไม่ใช่ความน่าจะเป็น)')}
+      flush
+      actions={
+        <button
+          type="button"
+          onClick={() => toggle(!expanded)}
+          aria-expanded={expanded}
+          className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm font-medium text-brand hover:bg-sunken"
+        >
+          {expanded ? t('ซ่อนรายการ') : t('แสดงรายการ')}
+          <Icon name="chevronDown" size={16} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+      }
+    >
+      <div className="flex flex-wrap gap-2 px-4 pb-3 md:px-5" role="group" aria-label={t('เลือกระดับความเสี่ยง')}>
+        <button
+          type="button"
+          onClick={() => {
+            setLevel('ALL')
+            setLimit(8)
+            toggle(true)
+          }}
+          aria-pressed={expanded && level === 'ALL'}
+          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold ${
+            expanded && level === 'ALL' ? 'bg-ink text-white' : 'bg-sunken text-ink-soft hover:text-ink'
+          }`}
+        >
+          {t('ที่ต้องดู')} <span className="num">{counts.CRITICAL + counts.HIGH + counts.MEDIUM}</span>
+        </button>
         {LEVELS.map((l) => (
-          <span key={l} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold ${COUNT_TONE[l]}`}>
+          <button
+            key={l}
+            type="button"
+            onClick={() => {
+              setLevel(l)
+              setLimit(8)
+              toggle(true)
+            }}
+            aria-pressed={expanded && level === l}
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold ring-offset-1 ${COUNT_TONE[l]} ${
+              expanded && level === l ? 'ring-2 ring-ink/60' : 'hover:brightness-95'
+            }`}
+          >
             {t(RISK_LEVEL_LABEL[l])} <span className="num">{counts[l]}</span>
-          </span>
+          </button>
         ))}
       </div>
-      {!ready ? (
-        <p className="px-5 pb-5 text-sm text-ink-faint">{t('กำลังคำนวณ...')}</p>
-      ) : !cards.length && !noOrder.length ? (
-        <p className="px-5 pb-6 pt-1 text-center text-sm text-ink-faint">{t('ไม่มีใบสั่งซื้อที่เสี่ยงส่งช้า')}</p>
-      ) : (
-        <ul className="divide-y divide-line border-t border-line">
-          {cards.map(({ risk, shortages: short }) => (
-            <RiskCard
-              key={risk.poId}
-              risk={risk}
-              short={short}
-              phone={suppliers.find((s) => s.id === risk.supplierId)?.contactNumber}
-              expanded={open === risk.poId}
-              onToggle={() => setOpen(open === risk.poId ? null : risk.poId)}
-            />
-          ))}
-          {noOrder.map((s) => (
-            <li key={s.key} className="px-4 py-3 md:px-5">
-              <div className="flex items-start justify-between gap-2">
-                <ShortageSummary s={s} />
-                <RiskBadge level={s.level} />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <Link className={btn} to="/requests/new">
-                  {t('สร้างใบขอสั่งซื้อด่วน')}
-                </Link>
-                {s.transfer && (
-                  <Link className={btn} to="/transfers/new">
-                    {t('โอน {qty} {unit} จาก{from}', { qty: s.transfer.qty, unit: s.unit, from: s.transfer.fromLocationName })}
+      {expanded &&
+        (!ready ? (
+          <p className="px-5 pb-5 text-sm text-ink-faint">{t('กำลังคำนวณ...')}</p>
+        ) : !shown.length && !noOrder.length ? (
+          <p className="px-5 pb-6 pt-1 text-center text-sm text-ink-faint">
+            {level === 'ALL' ? t('ไม่มีใบสั่งซื้อที่เสี่ยงส่งช้า') : t('ไม่มีใบสั่งซื้อในระดับนี้')}
+          </p>
+        ) : (
+          <ul className="divide-y divide-line border-t border-line">
+            {shown.map(({ risk, shortages: short }) => (
+              <RiskCard
+                key={risk.poId}
+                risk={risk}
+                short={short}
+                phone={suppliers.find((s) => s.id === risk.supplierId)?.contactNumber}
+                expanded={open === risk.poId}
+                onToggle={() => setOpen(open === risk.poId ? null : risk.poId)}
+              />
+            ))}
+            {cards.length > shown.length && (
+              <li className="px-4 py-2 text-center md:px-5">
+                <button type="button" className="text-sm font-medium text-brand hover:underline" onClick={() => setLimit(limit + 20)}>
+                  {t('ดูเพิ่มอีก {n} ใบ', { n: cards.length - shown.length })}
+                </button>
+              </li>
+            )}
+            {noOrder.map((s) => (
+              <li key={s.key} className="px-4 py-3 md:px-5">
+                <div className="flex items-start justify-between gap-2">
+                  <ShortageSummary s={s} />
+                  <RiskBadge level={s.level} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Link className={btn} to="/requests/new">
+                    {t('สร้างใบขอสั่งซื้อด่วน')}
                   </Link>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+                  {s.transfer && (
+                    <Link className={btn} to="/transfers/new">
+                      {t('โอน {qty} {unit} จาก{from}', { qty: s.transfer.qty, unit: s.unit, from: s.transfer.fromLocationName })}
+                    </Link>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ))}
     </SectionCard>
   )
 }
