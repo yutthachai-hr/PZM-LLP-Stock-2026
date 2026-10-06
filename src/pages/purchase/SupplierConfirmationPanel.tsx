@@ -10,6 +10,8 @@ import { confirmationBadge, requestedOf, supplierTimeline } from '../../lib/supp
 import { decideSupplierDate, supplierLink } from '../../services/supplierConfirmation'
 import type { PurchaseOrder, SupplierActivity } from '../../types'
 import { ReasonModal } from '../requests/ReasonModal'
+import { useSupplierIntel } from '../../data/useSupplierIntel'
+import { RiskBadge, RiskReasons, ShortageSummary } from '../../components/risk/RiskParts'
 
 /**
  * The supplier's answer on an order (5 Oct 2026): the date asked for and the date agreed,
@@ -186,4 +188,28 @@ export function describeActivity(a: SupplierActivity, t: TFn): string {
     default:
       return ''
   }
+}
+
+/** The order's late-delivery risk and what it would leave short, on its own sheet. */
+export function DeliveryRiskCard({ order }: { order: PurchaseOrder }) {
+  const t = useT()
+  const { risks, shortages } = useSupplierIntel()
+  const risk = risks.get(order.id)
+  if (!risk) return null
+  const short = shortages.filter((s) => s.incoming.some((l) => l.poId === order.id))
+  return (
+    <div className="space-y-2 rounded-lg border border-line bg-sunken p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{t('ความเสี่ยงส่งช้า')}</h3>
+        <RiskBadge level={risk.level} score={risk.score} />
+      </div>
+      <RiskReasons risk={risk} />
+      {short.map((s) => (
+        <div key={s.key} className="rounded-md bg-out-soft/60 px-2.5 py-1.5">
+          <ShortageSummary s={s} />
+        </div>
+      ))}
+      <p className="text-[11px] text-ink-faint">{t('คะแนนจากกฎ ({version}) — ไม่ใช่ความน่าจะเป็น', { version: risk.version })}</p>
+    </div>
+  )
 }

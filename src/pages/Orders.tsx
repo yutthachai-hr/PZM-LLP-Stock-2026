@@ -49,7 +49,7 @@ import { useEntryUnits } from '../services/entryUnits'
 import { QtyInput } from '../components/QtyInput'
 import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { SendWizard } from './purchase/SendWizard'
-import { SupplierConfirmationPanel } from './purchase/SupplierConfirmationPanel'
+import { DeliveryRiskCard, SupplierConfirmationPanel } from './purchase/SupplierConfirmationPanel'
 import { confirmationBadge, requestedOf } from '../lib/supplierConfirmation'
 import { RESUME_PARAM } from '../share/liffResume'
 import { useDraft } from '../lib/useDraft'
@@ -1333,6 +1333,7 @@ function OrderSheet({
       <div className="space-y-3">
         <SheetLangToggle value={sheetLang} onChange={setSheetLang} />
         <PoSheet order={order} locationName={locationName} company={company} ref={sheet} lang={sheetLang} />
+        {order.status === 'ordered' && <DeliveryRiskCard order={order} />}
         {onChanged && <SupplierConfirmationPanel order={order} onChanged={onChanged} />}
         {order.revisions && order.revisions.length > 0 && <RevisionHistory revisions={order.revisions} />}
         <div className="flex flex-wrap justify-end gap-2">

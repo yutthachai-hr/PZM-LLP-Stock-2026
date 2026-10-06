@@ -14,6 +14,7 @@ import {
 } from '../components/dashboard/DeskCards'
 import { useDashboardFigures } from '../components/dashboard/useDashboardFigures'
 import { DailySuggestions } from '../components/dashboard/DailySuggestions'
+import { DeliveryRiskPanel } from '../components/dashboard/DeliveryRiskPanel'
 import { isManager } from '../lib/purchaseRequestStatus'
 import { fmtMoney, formatThaiDate } from '../lib/format'
 import { change } from '../lib/stats/periodCompare'
@@ -127,6 +128,9 @@ function DeskDashboard() {
         {isManager(user?.role) && <DailySuggestions />}
         <QuickMenuCard />
       </div>
+
+      {/* Orders likely to arrive late and what they would leave short (S3/S4, 5 Oct 2026). */}
+      <DeliveryRiskPanel />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-5">
         <WeeklyMovementCard weekly={f.weekly} />

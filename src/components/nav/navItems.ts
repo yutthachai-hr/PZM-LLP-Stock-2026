@@ -43,6 +43,7 @@ export const NAV: NavItem[] = [
   { to: '/requests', label: 'รายการขอสั่งซื้อ', icon: 'note', group: 'procurement' }, // i18n-key
   { to: '/orders', label: 'สั่งซื้อ', icon: 'cart', group: 'procurement' }, // i18n-key
   { to: '/suppliers', label: 'ผู้ขาย', icon: 'users', group: 'procurement' }, // i18n-key
+  { to: '/suppliers/performance', label: 'ผลงานผู้ขาย', icon: 'chart', group: 'procurement' }, // i18n-key
   { to: '/transfers', label: 'ระบบส่งสินค้า', icon: 'truck', group: 'delivery' }, // i18n-key
   { to: '/transfers/today', label: 'ใบรายการส่งสินค้า', icon: 'clipboardCheck', group: 'delivery' }, // i18n-key
   { to: '/calendar', label: 'ปฏิทินคลัง', icon: 'calendar' }, // i18n-key
