@@ -71,7 +71,8 @@
      apart from outbound stock by their FORM — a filled button — not by hue. */
   --color-warn: #b45309;
   --color-warn-soft: #fffbeb;
-  --color-danger: #dc2626;
+  /* #dc2626 was 4.41:1 on danger-soft — under AA for a small chip (axe, plan C exit gate). */
+  --color-danger: #cc1f1f;
   --color-danger-soft: #fef2f2;
 
   /* Set per brand at runtime by BrandContext, so a glance at the screen says

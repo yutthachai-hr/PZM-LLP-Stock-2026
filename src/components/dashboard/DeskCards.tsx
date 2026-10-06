@@ -319,7 +319,7 @@ export function QuickMenuCard() {
               className={`flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center text-xs font-semibold outline-none transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-brand/40 ${toneIcon[q.tone]}`}
             >
               <Icon name={q.icon} size={22} />
-              <span className="leading-tight">{t(q.label)}</span>
+              <span className="leading-tight text-ink">{t(q.label)}</span>
             </button>
           ) : (
           <Link
@@ -328,7 +328,7 @@ export function QuickMenuCard() {
             className={`flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center text-xs font-semibold outline-none transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-brand/40 ${toneIcon[q.tone]}`}
           >
             <Icon name={q.icon} size={22} />
-            <span className="leading-tight">{t(q.label)}</span>
+            <span className="leading-tight text-ink">{t(q.label)}</span>
           </Link>
           ),
         )}

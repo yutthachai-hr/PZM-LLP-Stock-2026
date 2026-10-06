@@ -614,7 +614,7 @@ function ModeCards({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
             <Icon name={c.icon} size={24} className="shrink-0" />
             <span className="min-w-0">
               <span className="block text-sm font-bold md:text-base">{c.title}</span>
-              <span className={`hidden text-xs md:block ${on ? 'text-in/80' : 'text-ink-faint'}`}>{c.hint}</span>
+              <span className={`hidden text-xs md:block ${on ? 'text-in' : 'text-ink-faint'}`}>{c.hint}</span>
             </span>
           </button>
         )
