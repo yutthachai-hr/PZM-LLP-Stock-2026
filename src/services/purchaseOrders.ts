@@ -415,6 +415,28 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrder | null
 export { expectedDeliveryAt, CHASE_AFTER_DAYS } from '../lib/inventoryRules/purchasing'
 
 /**
+ * Change one order inside a transaction (plan A7, 6 Oct 2026): the order is read in the
+ * transaction, `fn` checks it as it stands and says what to write, and the write commits
+ * only if nobody changed the order in between — otherwise Firestore runs `fn` again on the
+ * new state. A cancel racing a receipt therefore either sees the receipt and refuses, or
+ * lands first and the receipt is refused; never a cancelled order with stock filed on it.
+ */
+async function changeOrder(
+  id: string,
+  fn: (order: PurchaseOrder, now: number) => { patch: Record<string, unknown>; next: PurchaseOrder },
+): Promise<PurchaseOrder> {
+  const next = await scoped().transaction(async (tx) => {
+    const raw = await tx.get<PurchaseOrder>(COL.purchaseOrders, id)
+    if (!raw) throw new AppError('ไม่พบใบสั่งซื้อ')
+    const out = fn({ ...raw, id }, Date.now())
+    tx.update(COL.purchaseOrders, id, out.patch)
+    return out.next
+  })
+  orderCache.patch(next)
+  return next
+}
+
+/**
  * What differs between an order as it stands and as it is about to be: the entries a
  * revision records. Empty when nothing moved, which is not a revision.
  */
@@ -472,45 +494,39 @@ export async function amendPurchaseOrder(params: {
   const reason = params.reason.trim()
   if (!reason) throw new AppError('กรุณาระบุเหตุผลที่แก้ไข')
   if (params.expectedAt !== undefined) requireEpochMs(params.expectedAt)
-  const db = scoped()
-  const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, params.id)
-  if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
-  if (order.status !== 'ordered') throw new AppError('แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ')
-  // Its lines carry what has arrived so far; rebuilding them would lose it.
-  if (order.receipts?.length) throw new AppError('แก้ไขไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — รับส่วนที่เหลือ หรือปิดยอดค้าง')
-
   const lines = buildLines(params.lines, params.products)
   const note = params.note?.trim() || undefined
-  const changes = revisionChanges(order, { lines, expectedAt: params.expectedAt, note })
-  if (changes.length === 0) throw new AppError('ไม่มีอะไรเปลี่ยนจากเดิม')
-
-  const now = Date.now()
-  const rev = (order.revision ?? 0) + 1
-  const entry: PoRevisionEntry = { rev, at: now, by: params.actor.id, byName: params.actor.name, reason, changes }
-  const revisions = [...(order.revisions ?? []), entry].slice(-MAX_REVISIONS)
-  const patch: Record<string, unknown> = {
-    lines,
-    expectedAt: params.expectedAt === undefined ? DELETE_FIELD : params.expectedAt,
-    note: note === undefined ? DELETE_FIELD : note,
-    revision: rev,
-    revisions,
-    updatedAt: now,
-  }
-  await db.update(COL.purchaseOrders, params.id, patch)
-  const { expectedAt: _e, note: _n, ...rest } = order
-  void _e
-  void _n
-  const next: PurchaseOrder = {
-    ...rest,
-    lines,
-    ...(params.expectedAt !== undefined ? { expectedAt: params.expectedAt } : {}),
-    ...(note !== undefined ? { note } : {}),
-    revision: rev,
-    revisions,
-    updatedAt: now,
-  }
-  orderCache.patch(next)
-  return next
+  return changeOrder(params.id, (order, now) => {
+    if (order.status !== 'ordered') throw new AppError('แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ')
+    // Its lines carry what has arrived so far; rebuilding them would lose it.
+    if (order.receipts?.length) throw new AppError('แก้ไขไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — รับส่วนที่เหลือ หรือปิดยอดค้าง')
+    const changes = revisionChanges(order, { lines, expectedAt: params.expectedAt, note })
+    if (changes.length === 0) throw new AppError('ไม่มีอะไรเปลี่ยนจากเดิม')
+    const rev = (order.revision ?? 0) + 1
+    const entry: PoRevisionEntry = { rev, at: now, by: params.actor.id, byName: params.actor.name, reason, changes }
+    const revisions = [...(order.revisions ?? []), entry].slice(-MAX_REVISIONS)
+    const patch: Record<string, unknown> = {
+      lines,
+      expectedAt: params.expectedAt === undefined ? DELETE_FIELD : params.expectedAt,
+      note: note === undefined ? DELETE_FIELD : note,
+      revision: rev,
+      revisions,
+      updatedAt: now,
+    }
+    const { expectedAt: _e, note: _n, ...rest } = order
+    void _e
+    void _n
+    const next: PurchaseOrder = {
+      ...rest,
+      lines,
+      ...(params.expectedAt !== undefined ? { expectedAt: params.expectedAt } : {}),
+      ...(note !== undefined ? { note } : {}),
+      revision: rev,
+      revisions,
+      updatedAt: now,
+    }
+    return { patch, next }
+  })
 }
 
 /** A revised order that has not gone out again since: the supplier still holds the old sheet. */
@@ -796,24 +812,19 @@ export async function closeOrderRemainder(params: {
 }): Promise<PurchaseOrder> {
   const reason = params.reason.trim()
   if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ปิดยอดค้างของใบสั่งซื้อ')
-  const db = scoped()
-  const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, params.orderId)
-  if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
-  if (order.status !== 'ordered') throw new AppError('ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่')
-  if (!order.receipts?.length) throw new AppError('ใบสั่งซื้อนี้ยังไม่เคยรับของ — ถ้าไม่ได้ของเลยให้ยกเลิกใบสั่งซื้อแทน')
-  const now = Date.now()
-  const patch = {
-    status: 'received' as const,
-    closedShortReason: reason,
-    closedShortBy: params.actor.id,
-    closedShortByName: params.actor.name,
-    closedShortAt: now,
-    updatedAt: now,
-  }
-  await db.update(COL.purchaseOrders, params.orderId, patch)
-  const next: PurchaseOrder = { ...order, ...patch }
-  orderCache.patch(next)
-  return next
+  return changeOrder(params.orderId, (order, now) => {
+    if (order.status !== 'ordered') throw new AppError('ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่')
+    if (!order.receipts?.length) throw new AppError('ใบสั่งซื้อนี้ยังไม่เคยรับของ — ถ้าไม่ได้ของเลยให้ยกเลิกใบสั่งซื้อแทน')
+    const patch = {
+      status: 'received' as const,
+      closedShortReason: reason,
+      closedShortBy: params.actor.id,
+      closedShortByName: params.actor.name,
+      closedShortAt: now,
+      updatedAt: now,
+    }
+    return { patch, next: { ...order, ...patch } }
+  })
 }
 
 /**
@@ -867,27 +878,22 @@ export async function cancelPurchaseOrder(params: {
 }): Promise<PurchaseOrder> {
   const reason = params.reason.trim()
   if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ยกเลิก')
-  const db = scoped()
-  const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, params.id)
-  if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
-  if (order.status === 'received') throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว')
-  if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ยกเลิกไปแล้ว')
-  // Part of it is on the books already; cancelling would say none of it came. Closing the
-  // rest says what happened (closeOrderRemainder).
-  if (order.receipts?.length) throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — ให้ปิดยอดค้างแทน')
-  const now = Date.now()
-  const patch = {
-    status: 'cancelled' as const,
-    cancelReason: reason,
-    cancelledBy: params.actor.id,
-    cancelledByName: params.actor.name,
-    cancelledAt: now,
-    updatedAt: now,
-  }
-  await db.update(COL.purchaseOrders, params.id, patch)
-  const next: PurchaseOrder = { ...order, ...patch }
-  orderCache.patch(next)
-  return next
+  return changeOrder(params.id, (order, now) => {
+    if (order.status === 'received') throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว')
+    if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ยกเลิกไปแล้ว')
+    // Part of it is on the books already; cancelling would say none of it came. Closing the
+    // rest says what happened (closeOrderRemainder).
+    if (order.receipts?.length) throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — ให้ปิดยอดค้างแทน')
+    const patch = {
+      status: 'cancelled' as const,
+      cancelReason: reason,
+      cancelledBy: params.actor.id,
+      cancelledByName: params.actor.name,
+      cancelledAt: now,
+      updatedAt: now,
+    }
+    return { patch, next: { ...order, ...patch } }
+  })
 }
 
 /**
