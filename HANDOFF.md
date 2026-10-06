@@ -545,11 +545,13 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
   - auditor ใช้ `stuckConversions()` ตัวเดียวกับเครื่องมือซ่อม
   - เทส: `tests/purchase-requests.test.ts` (replay, เลขต่อ counter, ล้มกลางทางไม่เหลืออะไร, PO ค้างเก่าถูกปฏิเสธ, adopt, blockers) · e2e `e2e/convert-request.spec.ts` (กดครั้งเดียว, ดับเบิลคลิก, สองแท็บพร้อมกัน, คำตอบหายหลัง commit, ซ่อม PR ค้างผ่านหน้าจอแอดมิน) ทั้งหมดผ่านบน emulator ภายใต้ rules จริง
 - **ผลเทสล่าสุด (หลัง A6):** unit 1,175 ผ่าน · rules 217 ผ่าน · e2e 14/14 ตามคาด (รวม `test.fail` 4 ข้อของ hostile-client) · lint 0 errors · i18n ครบ · build ผ่าน
-- **ยังเหลือใน Phase A** (รายละเอียดอยู่ในแผน):
-  - **A7** amend/cancel/closeRemainder ทำเป็น tx
-  - **A8** แก้/void movement ที่มี poId ต้อง sync กลับไปที่ PO หรือห้ามทำ
-  - **A10** การนับประจำเดือนต้องคำนวณ diff ใหม่ใน tx
-  - จากนั้นเขียน `docs/evidence/phase-a.md` ตาม exit criteria (ข้อ 21 ในแผน)
+- **A7 เสร็จ:** amend / cancel / closeRemainder อ่านและเขียน PO ใน tx (`changeOrder`) ยกเลิกแข่งกับรับของได้ผลอย่างใดอย่างหนึ่ง ไม่มี PO ยกเลิกที่มีของเข้า
+- **A8 เสร็จ (เลือก "ห้าม"):** แถวที่รับจาก PO แก้ได้เฉพาะหมายเหตุ ห้าม void ให้ปรับสต๊อกแทน เพราะ rules ไม่ให้ถอด receipt ออกจาก PO และไม่ให้ `received` กลับเป็น `ordered`
+- **A10 เสร็จ:** `postMonthlyCount` รับ "ยอดที่นับ" แล้วคำนวณผลต่างใน tx = นับได้ − (ยอดตอนนี้ − movement หลังวันนับ) ถ้ายอดขยับหลังอ่านจะอ่านใหม่และลองใหม่ (สูงสุด 4 ครั้ง) ตรวจทุกสินค้าที่นับ ไม่เฉพาะที่มีผลต่าง
+- **A2 backfill:** `npm run backfill:po-baseqty -- <backup.json>` เป็น dry-run อ่านอย่างเดียว **ยังไม่ได้รันบน backup จริง** (ไฟล์อยู่เครื่องเจ้าของ)
+- **หน้าสั่งซื้อ (6 ต.ค. ตามภาพ mock-up ของเจ้าของ):** กดแถวแล้วเปิดแผงขวา (`src/pages/orders/OrderPanel.tsx`) สถานะบรรทัดแรกเป็น สั่งแล้ว / ส่ง LINE / ยืนยัน (EN: Ordered / LINE sent / Approved) อยู่ใน `src/pages/orders/statusWords.ts` แยกจากพจนานุกรมเพราะ "ส่ง LINE" กับ "ยืนยัน" เป็นคำบนปุ่มอยู่แล้ว
+- **หลักฐาน Phase A:** `docs/evidence/phase-a.md` — PASS ทุกข้อ ยกเว้น dry-run บน backup จริงที่ต้องรันบนเครื่องเจ้าของ
+- **ผลเทสล่าสุด (จบ Phase A):** unit 1,187 · rules 217 · e2e 17 expected / 0 unexpected / 0 flaky · lint 0 errors · i18n ครบ · build ผ่าน
 - ถัดไปคือ **A-rules** (A4, A5, A9, B7 deploy รอบเดียว ต้องให้เจ้าของยืนยัน + reauth) แล้วค่อย **A-sec** (ADR-001)
 
 ### กับดักของ harness

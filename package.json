@@ -16,6 +16,7 @@
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
     "ux-lab": "node --experimental-strip-types scripts/ux-lab/cli.mjs",
     "audit:integrity": "node scripts/integrity-audit.mjs",
+    "backfill:po-baseqty": "node scripts/backfill-po-baseqty.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project pzm-rules-test \"vitest run --config vitest.rules.config.ts\"",
     "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-pzm-e2e \"playwright test\"",
     "build:demo": "vite build --mode demo --outDir dist-demo",

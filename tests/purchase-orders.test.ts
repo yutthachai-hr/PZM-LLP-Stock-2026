@@ -998,3 +998,16 @@ describe('a row received against an order changes only with the order (plan A8)'
     expect(balance('p1')).toBe(10)
   })
 })
+
+describe('exit gate A: the same operation retried five times is one receipt', () => {
+  test('retry ×5 with one operation id: stock once, one receipt, every answer the same', async () => {
+    const id = await placeOrder()
+    const press = () =>
+      receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-X5', lines: [{ productId: 'p1', receivedQty: 0, checked: true }, { productId: 'p2', receivedQty: 0, checked: true }], actor: ACTOR, operationId: 'op-retry-x5' })
+    const answers = [await press(), ...(await Promise.all([press(), press(), press(), press()]))]
+    expect(new Set(answers.map((a) => a.docNo)).size).toBe(1)
+    expect(balance('p1')).toBe(10)
+    expect(movements()).toHaveLength(2)
+    expect(orders()[0].receipts).toHaveLength(1)
+  })
+})
