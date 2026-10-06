@@ -19,7 +19,7 @@ import {
 import { getDb } from '../firebase/app'
 import { DELETE_FIELD, type Backend, type QuerySpec, type ReadOptions, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
-import { currentResumeEpoch, noteListener, noteReadOp, RESUME_TOKEN_MS } from '../data/readMeter'
+import { currentResumeEpoch, isReturningFromAbsence, noteListener, noteReadOp, onReturnFromLongAbsence, RESUME_TOKEN_MS } from '../data/readMeter'
 
 /**
  * When each listener last heard from the server, kept across reloads: a reload within 30
@@ -45,6 +45,15 @@ function markServer(key: string, at: number): void {
   }
 }
 const activeKeys = new Set<string>()
+// Back from more than 30 minutes away: no listener has been in touch with the server
+// since, whatever the marks say (a test can declare the absence without the time passing).
+onReturnFromLongAbsence(() => {
+  try {
+    localStorage.removeItem(SEEN_KEY)
+  } catch {
+    // no storage
+  }
+})
 if (typeof document !== 'undefined') {
   // Still connected up to the moment the page is hidden: that is when the 30 minutes start.
   document.addEventListener('visibilitychange', () => {
@@ -137,7 +146,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       return () => {
         noteListener(-1)
         activeKeys.delete(key)
-        markServer(key, Date.now())
+        if (!isReturningFromAbsence()) markServer(key, Date.now())
         unsub()
       }
     },

@@ -1,0 +1,552 @@
+{
+  "label": "before",
+  "at": "2026-10-06T15:47:59.562Z",
+  "backupCounts": {
+    "meta": 2,
+    "products": 336,
+    "productImages": 205,
+    "locations": 3,
+    "productMinOverrides": 0,
+    "suppliers": 86,
+    "supplierItems": 0,
+    "companyProfile": 0,
+    "productAliases": 11,
+    "stockEvents": 9,
+    "inventorySchedules": 2,
+    "notes": 0,
+    "stockMovements": 3173,
+    "movementImages": 1,
+    "purchaseOrders": 130,
+    "purchaseBatches": 1,
+    "purchaseRequests": 7,
+    "messages": 0,
+    "announcements": 1,
+    "transfers": 0,
+    "monthlyCounts": 2,
+    "stockLevels": 524,
+    "counters": 53
+  },
+  "results": {
+    "01 cold open (manager)": {
+      "billed": 1555,
+      "docs": 1397,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 6,
+        "updates": 96,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "stockLevels.bootstrap",
+          "collection": "stockLevels",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 524,
+          "billed": 524
+        },
+        {
+          "label": "products.bootstrap",
+          "collection": "products",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 336,
+          "billed": 336
+        },
+        {
+          "label": "purchaseOrders.range",
+          "collection": "purchaseOrders",
+          "kind": "range",
+          "queries": 2,
+          "docs": 260,
+          "billed": 260
+        },
+        {
+          "label": "notifications.one",
+          "collection": "notifications",
+          "kind": "one",
+          "queries": 134,
+          "docs": 0,
+          "billed": 134
+        },
+        {
+          "label": "notifications.inbox",
+          "collection": "notifications",
+          "kind": "listen.update",
+          "queries": 96,
+          "docs": 96,
+          "billed": 96
+        },
+        {
+          "label": "suppliers.all",
+          "collection": "suppliers",
+          "kind": "all",
+          "queries": 1,
+          "docs": 86,
+          "billed": 86
+        },
+        {
+          "label": "movements.recent",
+          "collection": "stockMovements",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 56,
+          "billed": 56
+        },
+        {
+          "label": "productImages.one",
+          "collection": "productImages",
+          "kind": "one",
+          "queries": 16,
+          "docs": 16,
+          "billed": 16
+        }
+      ]
+    },
+    "02 dashboard": {
+      "billed": 38,
+      "docs": 38,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 38,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "notifications.inbox",
+          "collection": "notifications",
+          "kind": "listen.update",
+          "queries": 38,
+          "docs": 38,
+          "billed": 38
+        }
+      ]
+    },
+    "03 products": {
+      "billed": 80,
+      "docs": 80,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "productImages.one",
+          "collection": "productImages",
+          "kind": "one",
+          "queries": 80,
+          "docs": 80,
+          "billed": 80
+        }
+      ]
+    },
+    "04 receiving": {
+      "billed": 50,
+      "docs": 50,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "purchaseOrders.by.status",
+          "collection": "purchaseOrders",
+          "kind": "by",
+          "queries": 2,
+          "docs": 50,
+          "billed": 50
+        }
+      ]
+    },
+    "05 purchase orders": {
+      "billed": 260,
+      "docs": 260,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "purchaseOrders.range",
+          "collection": "purchaseOrders",
+          "kind": "range",
+          "queries": 2,
+          "docs": 260,
+          "billed": 260
+        }
+      ]
+    },
+    "06 suppliers": {
+      "billed": 174,
+      "docs": 172,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "suppliers.all",
+          "collection": "suppliers",
+          "kind": "all",
+          "queries": 2,
+          "docs": 172,
+          "billed": 172
+        },
+        {
+          "label": "supplierItems.all",
+          "collection": "supplierItems",
+          "kind": "all",
+          "queries": 2,
+          "docs": 0,
+          "billed": 2
+        }
+      ]
+    },
+    "06b supplier performance": {
+      "billed": 0,
+      "docs": 0,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": []
+    },
+    "09 movement history": {
+      "billed": 0,
+      "docs": 0,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": []
+    },
+    "11 calendar": {
+      "billed": 140,
+      "docs": 140,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "purchaseOrders.range",
+          "collection": "purchaseOrders",
+          "kind": "range",
+          "queries": 1,
+          "docs": 130,
+          "billed": 130
+        },
+        {
+          "label": "purchaseRequests.range",
+          "collection": "purchaseRequests",
+          "kind": "range",
+          "queries": 1,
+          "docs": 7,
+          "billed": 7
+        },
+        {
+          "label": "stockEvents.range",
+          "collection": "stockEvents",
+          "kind": "range",
+          "queries": 1,
+          "docs": 3,
+          "billed": 3
+        }
+      ]
+    },
+    "12 switching routes x3": {
+      "billed": 532,
+      "docs": 520,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "purchaseOrders.range",
+          "collection": "purchaseOrders",
+          "kind": "range",
+          "queries": 4,
+          "docs": 520,
+          "billed": 520
+        },
+        {
+          "label": "transfers.by.status",
+          "collection": "transfers",
+          "kind": "by",
+          "queries": 12,
+          "docs": 0,
+          "billed": 12
+        }
+      ]
+    },
+    "07 notification arrival": {
+      "billed": 13,
+      "docs": 1,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 1,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "transfers.by.status",
+          "collection": "transfers",
+          "kind": "by",
+          "queries": 12,
+          "docs": 0,
+          "billed": 12
+        },
+        {
+          "label": "notifications.inbox",
+          "collection": "notifications",
+          "kind": "listen.update",
+          "queries": 1,
+          "docs": 1,
+          "billed": 1
+        }
+      ]
+    },
+    "08 open notification centre": {
+      "billed": 0,
+      "docs": 0,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": []
+    },
+    "13 reconnect after long absence": {
+      "billed": 1055,
+      "docs": 1054,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 0,
+        "updates": 0,
+        "resumes": 6
+      },
+      "top": [
+        {
+          "label": "stockLevels.bootstrap",
+          "collection": "stockLevels",
+          "kind": "listen.resume",
+          "queries": 1,
+          "docs": 524,
+          "billed": 524
+        },
+        {
+          "label": "products.bootstrap",
+          "collection": "products",
+          "kind": "listen.resume",
+          "queries": 1,
+          "docs": 336,
+          "billed": 336
+        },
+        {
+          "label": "notifications.inbox",
+          "collection": "notifications",
+          "kind": "listen.resume",
+          "queries": 1,
+          "docs": 135,
+          "billed": 135
+        },
+        {
+          "label": "movements.recent",
+          "collection": "stockMovements",
+          "kind": "listen.resume",
+          "queries": 1,
+          "docs": 56,
+          "billed": 56
+        },
+        {
+          "label": "locations.bootstrap",
+          "collection": "locations",
+          "kind": "listen.resume",
+          "queries": 1,
+          "docs": 3,
+          "billed": 3
+        },
+        {
+          "label": "minOverrides.bootstrap",
+          "collection": "productMinOverrides",
+          "kind": "listen.resume",
+          "queries": 1,
+          "docs": 0,
+          "billed": 1
+        }
+      ]
+    },
+    "14 second tab": {
+      "billed": 1437,
+      "docs": 1416,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 6,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "stockLevels.bootstrap",
+          "collection": "stockLevels",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 524,
+          "billed": 524
+        },
+        {
+          "label": "products.bootstrap",
+          "collection": "products",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 336,
+          "billed": 336
+        },
+        {
+          "label": "purchaseOrders.range",
+          "collection": "purchaseOrders",
+          "kind": "range",
+          "queries": 2,
+          "docs": 260,
+          "billed": 260
+        },
+        {
+          "label": "notifications.inbox",
+          "collection": "notifications",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 135,
+          "billed": 135
+        },
+        {
+          "label": "suppliers.all",
+          "collection": "suppliers",
+          "kind": "all",
+          "queries": 1,
+          "docs": 86,
+          "billed": 86
+        },
+        {
+          "label": "movements.recent",
+          "collection": "stockMovements",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 56,
+          "billed": 56
+        },
+        {
+          "label": "purchaseRequests.range",
+          "collection": "purchaseRequests",
+          "kind": "range",
+          "queries": 2,
+          "docs": 14,
+          "billed": 14
+        },
+        {
+          "label": "transfers.by.status",
+          "collection": "transfers",
+          "kind": "by",
+          "queries": 12,
+          "docs": 0,
+          "billed": 12
+        }
+      ]
+    },
+    "16 cold open (staff)": {
+      "billed": 1304,
+      "docs": 1295,
+      "listeners": {
+        "active": 6,
+        "bootstraps": 6,
+        "updates": 0,
+        "resumes": 0
+      },
+      "top": [
+        {
+          "label": "stockLevels.bootstrap",
+          "collection": "stockLevels",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 524,
+          "billed": 524
+        },
+        {
+          "label": "products.bootstrap",
+          "collection": "products",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 336,
+          "billed": 336
+        },
+        {
+          "label": "notifications.inbox",
+          "collection": "notifications",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 135,
+          "billed": 135
+        },
+        {
+          "label": "purchaseOrders.range",
+          "collection": "purchaseOrders",
+          "kind": "range",
+          "queries": 1,
+          "docs": 130,
+          "billed": 130
+        },
+        {
+          "label": "suppliers.all",
+          "collection": "suppliers",
+          "kind": "all",
+          "queries": 1,
+          "docs": 86,
+          "billed": 86
+        },
+        {
+          "label": "movements.recent",
+          "collection": "stockMovements",
+          "kind": "listen.bootstrap",
+          "queries": 1,
+          "docs": 56,
+          "billed": 56
+        },
+        {
+          "label": "productImages.one",
+          "collection": "productImages",
+          "kind": "one",
+          "queries": 16,
+          "docs": 16,
+          "billed": 16
+        },
+        {
+          "label": "purchaseRequests.range",
+          "collection": "purchaseRequests",
+          "kind": "range",
+          "queries": 1,
+          "docs": 7,
+          "billed": 7
+        }
+      ]
+    }
+  }
+}

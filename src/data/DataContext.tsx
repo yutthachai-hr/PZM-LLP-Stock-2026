@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
 import { useSynced } from './syncedCollection'
+import { movementCache } from './movementCache'
 import { overlayRecent, subscribeRecentWrites } from './recentWrites'
 import { windowStart } from './ledgerWindow'
 import { MONTH_DAYS } from './windowDays'
@@ -94,6 +95,7 @@ const Ctx = createContext<DataState | null>(null)
  * the history is one click away (LedgerWindowNotice).
  */
 const RECENT_DAYS = 7
+const DAY = 86_400_000
 
 export { MONTH_DAYS, QUARTER_DAYS } from './windowDays'
 
@@ -105,7 +107,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // be rejected, and the only screen that reads `users` is the admin section of Settings.
   const isAdmin = user?.role === 'admin'
 
-  const { data: products, loading: pLoading } = useSynced<Product>(COL.products, { label: 'products' })
+  const { data: products, loading: pLoading } = useSynced<Product>(COL.products, { label: 'products', fullEvery: 7 * DAY })
   const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations, { label: 'locations.bootstrap' })
   const { lang } = useI18n()
   const transitLocation = useMemo(
@@ -123,20 +125,50 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [regularLocations, lang],
   )
   const { data: levels, loading: sLoading } = useSynced<StockLevel>(COL.stockLevels, { label: 'stockLevels' })
-  const [movementsFrom, setMovementsFrom] = useState(() => windowStart(RECENT_DAYS))
+  // The live listener covers the last week and never widens (perf/firestore-read-budget):
+  // a screen that wants older rows gets them once, through the session's movement cache,
+  // instead of re-subscribing — which made "load all history" a standing listener over the
+  // whole ledger, billed again in full on every return after half an hour.
+  const [recentFrom] = useState(() => windowStart(RECENT_DAYS))
+  const [wantedFrom, setWantedFrom] = useState(recentFrom)
+  const [olderFrom, setOlderFrom] = useState(recentFrom)
+  const [older, setOlder] = useState<StockMovement[]>([])
   const ensureMovementsFrom = useCallback((date: number) => {
-    setMovementsFrom((cur) => (date < cur ? date : cur))
+    setWantedFrom((cur) => (date < cur ? date : cur))
   }, [])
+  useEffect(() => {
+    if (wantedFrom >= recentFrom) return
+    let stopped = false
+    const show = () => {
+      const held = movementCache.peekRange(wantedFrom, recentFrom - 1)
+      if (held && !stopped) {
+        setOlder(held)
+        setOlderFrom(wantedFrom)
+      }
+    }
+    void movementCache.fetchRange(wantedFrom, recentFrom - 1).then(show, () => {})
+    const unsub = movementCache.subscribe(show)
+    return () => {
+      stopped = true
+      unsub()
+    }
+  }, [wantedFrom, recentFrom])
+  const movementsFrom = olderFrom
 
-  const { data: liveMovements, loading: mLoading } = useLive<StockMovement>(COL.movements, {
-    sinceField: 'date',
-    sinceValue: movementsFrom,
+  // The week kept on the device too, refreshed by rows created or corrected since the last
+  // sync — a return after hours costs the rows keyed in those hours, not the week again.
+  const { data: liveMovements, loading: mLoading } = useSynced<StockMovement>(COL.movements, {
     label: 'movements.recent',
+    fields: ['createdAt', 'updatedAt'],
+    window: { field: 'date', from: recentFrom },
   })
   // Rows this device just wrote, shown until the listener confirms them (recentWrites.ts).
   const [recent, setRecent] = useState<StockMovement[]>([])
   useEffect(() => subscribeRecentWrites(setRecent), [])
-  const movements = useMemo(() => overlayRecent(liveMovements, recent), [liveMovements, recent])
+  const movements = useMemo(() => {
+    const live = new Set(liveMovements.map((m) => m.id))
+    return overlayRecent([...older.filter((m) => !live.has(m.id)), ...liveMovements], recent)
+  }, [older, liveMovements, recent])
   const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides, { label: 'minOverrides.bootstrap' })
   const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin, label: 'users.bootstrap' })
   // This person's newest notifications only, filtered by the server (data/notificationInbox.ts).

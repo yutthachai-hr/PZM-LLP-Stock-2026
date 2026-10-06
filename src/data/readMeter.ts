@@ -180,12 +180,43 @@ export const RESUME_TOKEN_MS = 30 * 60_000
 
 let hiddenAt: number | null = null
 let resumeEpoch = 0
+const returnListeners = new Set<() => void>()
+
+let returning = false
+
+function longAbsenceEnded(): void {
+  resumeEpoch += 1
+  returning = true
+  try {
+    for (const fn of returnListeners) fn()
+  } finally {
+    returning = false
+  }
+}
+
+/**
+ * True while listeners are being restarted after a long absence: a listener closed now has
+ * NOT been in touch with the server lately, so its close must not count as contact.
+ */
+export function isReturningFromAbsence(): boolean {
+  return returning
+}
+
+/**
+ * Called when the page comes back from more than 30 minutes away — before Firestore resumes
+ * its listeners. A "changed since" listener re-created here with a fresh cursor is charged
+ * what changed while away; left alone it is charged everything it matched since it opened.
+ */
+export function onReturnFromLongAbsence(fn: () => void): () => void {
+  returnListeners.add(fn)
+  return () => returnListeners.delete(fn)
+}
 
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') hiddenAt = Date.now()
     else if (hiddenAt !== null) {
-      if (Date.now() - hiddenAt > RESUME_TOKEN_MS) resumeEpoch += 1
+      if (Date.now() - hiddenAt > RESUME_TOKEN_MS) longAbsenceEnded()
       hiddenAt = null
     }
   })
@@ -198,7 +229,7 @@ export function currentResumeEpoch(): number {
 
 /** For tests: pretend the page just came back from a long absence. */
 export function markLongAbsence(): void {
-  resumeEpoch += 1
+  longAbsenceEnded()
 }
 
 if (typeof window !== 'undefined') {

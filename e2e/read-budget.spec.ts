@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { test, type Page } from '@playwright/test'
 import { backupPath, seedFromBackup } from './backupStage'
-import { putDoc } from './emulator'
+import { listDocs, putDoc, putMany } from './emulator'
 import { open, signedIn } from './app'
 import type { Person } from './fixture'
 
@@ -78,9 +78,28 @@ let counts: Record<string, number> = {}
 test('read budget: everyday workflows on real data', async ({ browser }) => {
   counts = (await seedFromBackup(file!)).counts
 
+  // Warm-up, not measured: a manager's browser has already run the notification jobs once,
+  // as it has in production, so the measured sessions see the steady state rather than the
+  // first-ever burst of ~130 notifications an empty emulator produces.
+  const warm = await signedIn(browser, 'manager')
+  await settle(warm)
+  await warm.context().close()
+  // …and those notifications were written hours ago, not seconds: age them two hours.
+  const aged = (await listDocs('notifications')).map((n) => ({
+    path: `notifications/${n.id}`,
+    data: { ...n, createdAt: Number(n.createdAt) - 2 * 3_600_000, updatedAt: Number(n.updatedAt) - 2 * 3_600_000 } as Record<string, unknown>,
+  }))
+  await putMany(aged)
+
   // 1, 15. Cold open as a manager — includes the background jobs a manager's browser runs.
   const manager = await signedIn(browser, 'manager')
   await record('01 cold open (manager)', manager)
+
+  // 1b. The same device opening the app again later (a reload: a new session, the device's
+  // own copies kept) — the everyday case of a phone reopening the PWA.
+  await reset(manager)
+  await open(manager, '/')
+  await record('01b reopen app (same device)', manager)
 
   // 2–6, 9, 11. Screens, one at a time, without reloading.
   await scenario(manager, '02 dashboard', '/')
@@ -102,8 +121,9 @@ test('read budget: everyday workflows on real data', async ({ browser }) => {
   await reset(manager)
   const now = Date.now()
   await putDoc(`notifications/bench-${now}`, {
-    kind: 'poDelayed', category: 'purchasing', severity: 'warning', title: 'bench', body: 'bench', link: '/orders',
-    audience: { roles: ['manager', 'admin'] }, createdAt: now, updatedAt: now, source: 'worker',
+    kind: 'poDelayed', category: 'purchasing', link: '/orders',
+    to: { roles: ['manager', 'admin'] }, audienceKeys: ['role:manager', 'role:admin'], params: {}, active: true, readBy: {},
+    priority: 'high', createdBy: 'bench', expiresAt: now + 7 * 86_400_000, createdAt: now, updatedAt: now, source: 'worker',
   })
   await record('07 notification arrival', manager)
 
@@ -118,6 +138,8 @@ test('read budget: everyday workflows on real data', async ({ browser }) => {
   await manager.evaluate(() => (window as unknown as { __pzmReads: { markLongAbsence: () => void } }).__pzmReads.markLongAbsence())
   await manager.waitForTimeout(1500)
   await manager.context().setOffline(false)
+  // The SDK backs off before reconnecting; give every listener time to hear from the server.
+  await manager.waitForTimeout(15_000)
   await record('13 reconnect after long absence', manager)
 
   // 14. A second tab of the same person.

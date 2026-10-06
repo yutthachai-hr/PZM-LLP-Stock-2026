@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { backend, BACKEND_MODE } from '../backend'
 import { getBrand, resolveCollection } from '../brand/brand'
 import { useLive } from './useLive'
+import { onReturnFromLongAbsence } from './readMeter'
+import { clearCopies, FULL_EVERY_MS, readCopy, SKEW_MS, writeCopy } from './deviceStore'
 
 /**
  * A whole collection kept on this device, refreshed by what CHANGED since the last sync
@@ -27,10 +29,7 @@ import { useLive } from './useLive'
  * erases it with Firestore's own offline copy (`clearSyncedSnapshots`).
  */
 
-export const SKEW_MS = 30 * 60_000
-export const FULL_EVERY_MS = 24 * 60 * 60_000
-const DB_NAME = 'pzm-synced'
-const STORE = 'snapshots'
+export { SKEW_MS, FULL_EVERY_MS } from './deviceStore'
 /** Bump to discard every stored copy (a change in what is kept). */
 const VERSION = 1
 
@@ -43,55 +42,17 @@ interface Snapshot<T> {
 
 type WithStamp = { id: string; updatedAt?: number }
 
-// ------------------------------------------------------------------- storage ----
-
-let opening: Promise<IDBDatabase | null> | null = null
-function db(): Promise<IDBDatabase | null> {
-  if (opening) return opening
-  opening = new Promise((resolve) => {
-    try {
-      if (typeof indexedDB === 'undefined') return resolve(null)
-      const req = indexedDB.open(DB_NAME, 1)
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE)
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => resolve(null)
-      req.onblocked = () => resolve(null)
-    } catch {
-      resolve(null)
-    }
-  })
-  return opening
-}
-
-function run<T>(mode: IDBTransactionMode, work: (s: IDBObjectStore) => IDBRequest<T>): Promise<T | undefined> {
-  return db().then(
-    (d) =>
-      new Promise<T | undefined>((resolve) => {
-        if (!d) return resolve(undefined)
-        try {
-          const req = work(d.transaction(STORE, mode).objectStore(STORE))
-          req.onsuccess = () => resolve(req.result)
-          req.onerror = () => resolve(undefined)
-        } catch {
-          resolve(undefined)
-        }
-      }),
-  )
-}
-
 async function loadSnapshot<T>(key: string): Promise<Snapshot<T> | null> {
-  const s = (await run<Snapshot<T>>('readonly', (st) => st.get(key) as IDBRequest<Snapshot<T>>)) ?? null
+  const s = await readCopy<Snapshot<T>>(key)
   return s && s.v === VERSION && Array.isArray(s.docs) ? s : null
 }
 
 async function saveSnapshot<T>(key: string, s: Snapshot<T>): Promise<void> {
-  await run('readwrite', (st) => st.put(s, key))
+  await writeCopy(key, s)
 }
 
 /** Erase every stored copy — on sign-out, with Firestore's own offline copy. */
-export async function clearSyncedSnapshots(): Promise<void> {
-  await run('readwrite', (st) => st.clear())
-}
+export const clearSyncedSnapshots = clearCopies
 
 // --------------------------------------------------------------------- merge ----
 
@@ -119,86 +80,140 @@ export function mergeDelta<T extends WithStamp>(held: Map<string, T>, prevWindow
 
 // ---------------------------------------------------------------------- hook ----
 
+export interface SyncOptions {
+  label: string
+  /** Stamps to listen on for changes. Default `updatedAt`; the ledger adds `createdAt`. */
+  fields?: string[]
+  /** How long a copy may go without a whole read. Default a day. */
+  fullEvery?: number
+  /** Read only part of the collection whole: `field >= from` (the ledger's last week). */
+  window?: { field: string; from: number }
+}
+
+/** The newest value of one stamp field in a set of documents (0 for none). */
+export function newestOf(docs: Iterable<Record<string, unknown>>, field: string): number {
+  let n = 0
+  for (const d of docs) {
+    const v = d[field]
+    if (typeof v === 'number' && v > n) n = v
+  }
+  return n
+}
+
 /**
  * The collection, as a list, kept current. Same shape as `useLive`. In local/demo mode it
  * is simply `useLive` — there is no bill to save.
  */
-export function useSynced<T extends WithStamp>(collection: string, opts: { label: string }): { data: T[]; loading: boolean } {
+export function useSynced<T extends WithStamp>(collection: string, opts: SyncOptions): { data: T[]; loading: boolean } {
   const cloud = BACKEND_MODE === 'cloud'
-  const live = useLive<T>(collection, { enabled: !cloud, label: opts.label })
-  const synced = useSyncedCloud<T>(collection, opts.label, cloud)
+  const live = useLive<T>(collection, {
+    enabled: !cloud,
+    label: opts.label,
+    ...(opts.window ? { sinceField: opts.window.field, sinceValue: opts.window.from } : {}),
+  })
+  const synced = useSyncedCloud<T>(collection, opts, cloud)
   return cloud ? synced : live
 }
 
-function useSyncedCloud<T extends WithStamp>(collection: string, label: string, enabled: boolean): { data: T[]; loading: boolean } {
+function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptions, enabled: boolean): { data: T[]; loading: boolean } {
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const brand = getBrand()
+  const { label } = opts
+  const fields = (opts.fields ?? ['updatedAt']).join(',')
+  const fullEvery = opts.fullEvery ?? FULL_EVERY_MS
+  const winField = opts.window?.field
+  const winFrom = opts.window?.from
 
   useEffect(() => {
     if (!enabled) return
     let stopped = false
-    let unsub: (() => void) | null = null
+    const unsubs: (() => void)[] = []
+    let offReturn: (() => void) | null = null
     let saveTimer: ReturnType<typeof setTimeout> | null = null
-    const key = resolveCollection(collection, brand)
+    const key = resolveCollection(collection, brand) + (winField ? `@${winField}` : '')
     const db = backend.forBrand(brand)
     const held = new Map<string, T>()
     let fullAt = 0
-    let window = new Set<string>()
-
-    const emit = () => {
-      if (!stopped) setData([...held.values()])
+    // A row whose window field has fallen behind the window (last week's ledger) is dropped.
+    const keep = (d: T) => winField === undefined || Number((d as Record<string, unknown>)[winField] ?? 0) >= (winFrom ?? 0)
+    const prune = () => {
+      if (winField === undefined) return
+      for (const [id, d] of held) if (!keep(d)) held.delete(id)
     }
+    const emit = () => {
+      if (!stopped) setData([...held.values()].filter(keep))
+    }
+    const snapshot = (): Snapshot<T> => ({ v: VERSION, fullAt, cursor: newestStamp(held.values()), docs: [...held.values()] })
     const persist = () => {
       if (saveTimer) clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => {
-        void saveSnapshot<T>(key, { v: VERSION, fullAt, cursor: newestStamp(held.values()), docs: [...held.values()] })
-      }, 1500)
+      saveTimer = setTimeout(() => void saveSnapshot<T>(key, snapshot()), 1500)
     }
 
     void (async () => {
       const snap = await loadSnapshot<T>(key)
       if (stopped) return
-      if (snap && Date.now() - snap.fullAt < FULL_EVERY_MS) {
+      if (snap && Date.now() - snap.fullAt < fullEvery) {
         for (const d of snap.docs) held.set(d.id, d)
         fullAt = snap.fullAt
+        prune()
         emit()
         setLoading(false)
       } else {
         try {
-          const all = await db.getAll<T>(collection, { label: `${label}.full` })
+          const all =
+            winField !== undefined
+              ? await db.getRange<T>(collection, winField, winFrom ?? 0, Number.MAX_SAFE_INTEGER, { label: `${label}.full` })
+              : await db.getAll<T>(collection, { label: `${label}.full` })
           if (stopped) return
           for (const d of all) held.set(d.id, d)
           fullAt = Date.now()
           emit()
           persist()
         } catch {
-          // Offline or refused: what was held (nothing) stands; the listener below retries.
+          // Offline or refused: what was held (nothing) stands; the listeners below retry.
         }
         setLoading(false)
       }
-      const since = Math.max(0, newestStamp(held.values()) - SKEW_MS)
-      unsub = db.subscribe<T>(
-        collection,
-        (docs) => {
-          window = mergeDelta(held, window, docs)
-          emit()
-          persist()
-          setLoading(false)
-        },
-        { since: { field: 'updatedAt', value: since }, label: `${label}.delta`, onError: () => setLoading(false) },
-      )
+      const listen = () => {
+        for (const field of fields.split(',')) {
+          const since = Math.max(0, newestOf(held.values() as Iterable<Record<string, unknown>>, field) - SKEW_MS)
+          let window = new Set<string>()
+          unsubs.push(
+            db.subscribe<T>(
+              collection,
+              (docs) => {
+                window = mergeDelta(held, window, docs)
+                prune()
+                emit()
+                persist()
+                setLoading(false)
+              },
+              { since: { field, value: since }, label: `${label}.delta.${field}`, onError: () => setLoading(false) },
+            ),
+          )
+        }
+      }
+      listen()
+      // Back after more than half an hour: start again from what is held now, so the return
+      // is charged what changed while away — not everything since the app was opened.
+      offReturn = onReturnFromLongAbsence(() => {
+        if (stopped) return
+        unsubs.splice(0).forEach((u) => u())
+        listen()
+      })
     })()
 
     return () => {
       stopped = true
-      unsub?.()
+      offReturn?.()
+      unsubs.forEach((u) => u())
       if (saveTimer) {
         clearTimeout(saveTimer)
-        void saveSnapshot<T>(key, { v: VERSION, fullAt, cursor: newestStamp(held.values()), docs: [...held.values()] })
+        void saveSnapshot<T>(key, snapshot())
       }
     }
-  }, [collection, brand, enabled, label])
+  }, [collection, brand, enabled, label, fields, fullEvery, winField, winFrom])
 
   return { data, loading }
 }
