@@ -490,7 +490,7 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - popup วิกฤตยังหายใน 4 วินาที แต่ให้**ค้างเป็นแถบแดงที่กระดิ่งจนกดรับทราบ**
 - **พนักงานสร้าง PO สถานะ `ordered` เองไม่ได้แล้ว** ต้องให้หัวหน้า/แอดมินอนุมัติ (B4 ยังไม่ทำ)
 
-**ยังไม่ได้ถาม:** collection `auditLog`, ตัดปุ่มล้างแคตตาล็อก/hard delete, รวม Batch Excel เข้า PR, lot/วันหมดอายุ
+**ยังไม่ได้ถาม:** collection `auditLog`, ตัดปุ่มล้างแคตตาล็อก (hard delete ที่มีประวัติปิดแล้วใน B3), รวม Batch Excel เข้า PR, lot/วันหมดอายุ
 
 ### Branch และสถานะ (ยังไม่มีอะไร merge เข้า main)
 | Branch | งาน | สถานะ |
@@ -572,6 +572,14 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
   3. ตรวจว่า `POST /api/stock/receivePO` ตอบ 200
   4. deploy rules
 - e2e ใช้ `e2e/command-server.mjs` (handler ตัวจริงบน emulator) ผ่าน proxy ของ Vite mode e2e
+
+### Phase B (B1 B3 B5 B6 เสร็จ — B2 รอเจ้าของ) → `docs/evidence/phase-b.md`
+- **B1 period lock:** เดือนที่ post ยอดนับแล้วที่คลังนั้น บันทึกย้อนหลังเข้าไม่ได้ (`requireOpenPeriod` ใน `src/commands/ledgerTx.ts`) แอดมินแก้ได้แต่ต้องใส่เหตุผล
+- **B3:** ลบสินค้า/สถานที่ที่มี movement ไม่ได้ ให้ปิดใช้งานแทน
+- **B5:** ตีกลับตอนรับ (จำนวน + เหตุผล enum) ไม่เข้าสต๊อก + พนักงานรับเกินยอดค้างได้ไม่เกิน 10%
+- **B6:** `ocr-bill` / `po-image` เช็ค `active` + `revokedUsers`
+- **B2 (`auditLog`) ยังไม่ทำ** จึงยังไม่ผ่านเกณฑ์ Phase B ข้อ "ทุก action มีแถว audit"
+- ผลเทส: unit 1,223 · rules 218 · e2e 20/0/0
 
 ### กับดักของ harness
 - เอกสารที่ seed ต้องมี field `id` (rules อ่านค่านี้) ยกเว้น `users`
