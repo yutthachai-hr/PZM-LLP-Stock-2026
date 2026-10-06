@@ -6,7 +6,7 @@ import { useT } from '../../i18n/I18nContext'
 import { CATEGORY_LABEL, NOTIFICATION_BODY, NOTIFICATION_TITLE, tidyCopy } from '../../lib/inventoryRules/copy'
 import { isFor } from '../../lib/inventoryRules/notifications'
 import { presentNotification, type Severity } from '../../lib/notificationPresentation'
-import { BURST_WINDOW_MS, dismiss, emptyQueue, expire, receive, soundFor, type PopupCard, type QueueState } from '../../lib/notificationQueue'
+import { BURST_WINDOW_MS, dismiss, dueCards, emptyQueue, expire, LEAVE_MS, receive, soundFor, type PopupCard, type QueueState } from '../../lib/notificationQueue'
 import { notificationSound } from '../../lib/notificationSound'
 import { logNotification } from '../../lib/notificationLog'
 import { markRead, useNotificationPrefs } from '../../services/notifications'
@@ -126,15 +126,28 @@ function Host({ uid, role }: { uid: string; role: Role }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine])
 
-  // Auto-dismiss: tick only while something timed is on screen.
+  // Leaving: a card whose four seconds are up fades and slides out to the right, then goes.
+  // Cards that arrived together leave top first (their times are staggered in the queue).
+  const [leaving, setLeaving] = useState<Set<string>>(() => new Set())
+  const close = useCallback((key: string) => {
+    setLeaving((cur) => (cur.has(key) ? cur : new Set(cur).add(key)))
+    setTimeout(() => {
+      dispatch({ type: 'dismiss', key, now: Date.now() })
+      setLeaving((cur) => {
+        const next = new Set(cur)
+        next.delete(key)
+        return next
+      })
+    }, LEAVE_MS)
+  }, [])
   const timed = state.visible.some((c) => c.ttl !== null)
   useEffect(() => {
     if (!timed) return
-    const id = setInterval(() => dispatch({ type: 'tick', now: Date.now() }), 500)
+    const id = setInterval(() => {
+      for (const key of dueCards(stateRef.current, Date.now())) close(key)
+    }, 100)
     return () => clearInterval(id)
-  }, [timed])
-
-  const close = useCallback((key: string) => dispatch({ type: 'dismiss', key, now: Date.now() }), [])
+  }, [timed, close])
 
   const open = useCallback(
     (card: PopupCard, url: string) => {
@@ -209,7 +222,7 @@ function Host({ uid, role }: { uid: string; role: Role }) {
             key={card.key}
             role={card.severity === 'critical' ? 'alert' : 'status'}
             aria-live={card.severity === 'critical' ? 'assertive' : 'polite'}
-            className={`pointer-events-auto rounded-lg border border-l-4 border-line bg-surface shadow-md motion-safe:animate-[pzm-pop_160ms_ease-out] ${ui.bar}`}
+            className={`pointer-events-auto rounded-lg border border-l-4 border-line bg-surface shadow-md transition-[opacity,transform] duration-300 ease-in motion-reduce:transition-none ${leaving.has(card.key) ? 'translate-x-[110%] opacity-0' : 'motion-safe:animate-[pzm-pop_160ms_ease-out]'} ${ui.bar}`}
           >
             <div className="flex items-start gap-2 px-3 pt-2.5">
               <Icon name={ui.icon} size={18} className={`mt-0.5 shrink-0 ${ui.text}`} />

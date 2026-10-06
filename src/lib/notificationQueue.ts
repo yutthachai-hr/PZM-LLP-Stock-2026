@@ -19,13 +19,21 @@ export const BURST_COLLAPSE_AT = 3
 /** Older than this on arrival is history, whatever the listener says. */
 export const FRESH_MS = 10 * 60_000
 
+/**
+ * Every popup leaves after four seconds, critical included (owner, 6 Oct 2026: "หายไปหลัง
+ * จากผ่านไป 4 วินาที"). Nothing is lost — the bell keeps each one, unread, until opened.
+ */
 export const AUTO_DISMISS_MS: Record<Severity, number | null> = {
-  info: 6_000,
-  success: 6_000,
-  warning: 9_000,
-  // Critical stays until someone presses View or Dismiss.
-  critical: null,
+  info: 4_000,
+  success: 4_000,
+  warning: 4_000,
+  critical: 4_000,
 }
+
+/** Cards that appear together leave one after another, top first, this far apart. */
+export const STAGGER_MS = 400
+/** How long a card takes to fade and slide out to the right. */
+export const LEAVE_MS = 300
 
 export interface PopupCard {
   /** The occurrence (id@armedAt), or `burst:<category>:<first occurrence>` for a summary. */
@@ -100,7 +108,12 @@ export function receive(
 function fill(state: QueueState, now: number): QueueState {
   const visible = [...state.visible]
   const waiting = [...state.waiting].sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
-  while (visible.length < MAX_VISIBLE && waiting.length) visible.push({ ...waiting.shift()!, shownAt: now })
+  // Shown in the same moment: the lower ones wait a little longer, so they leave top first.
+  let k = 0
+  while (visible.length < MAX_VISIBLE && waiting.length) {
+    const card = waiting.shift()!
+    visible.push({ ...card, shownAt: now, ttl: card.ttl === null ? null : card.ttl + k++ * STAGGER_MS })
+  }
   return { ...state, visible, waiting }
 }
 
@@ -109,6 +122,11 @@ export function dismiss(state: QueueState, key: string, now: number): QueueState
 }
 
 /** Remove cards whose time is up. Sticky (critical) cards stay. */
+/** Cards whose time is up and that should start leaving (the host animates, then dismisses). */
+export function dueCards(state: QueueState, now: number): string[] {
+  return state.visible.filter((c) => c.ttl !== null && c.shownAt !== null && now - c.shownAt >= c.ttl).map((c) => c.key)
+}
+
 export function expire(state: QueueState, now: number): QueueState {
   const visible = state.visible.filter((c) => c.ttl === null || c.shownAt === null || now - c.shownAt < c.ttl)
   return visible.length === state.visible.length ? state : fill({ ...state, visible }, now)

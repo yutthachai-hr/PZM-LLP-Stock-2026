@@ -6,7 +6,7 @@
 
 import { describe, expect, test, vi } from 'vitest'
 import { presentNotification, severityOf } from '../src/lib/notificationPresentation'
-import { AUTO_DISMISS_MS, dismiss, emptyQueue, expire, FRESH_MS, MAX_VISIBLE, receive, soundFor } from '../src/lib/notificationQueue'
+import { dismiss, dueCards, emptyQueue, expire, FRESH_MS, MAX_VISIBLE, receive, soundFor, STAGGER_MS } from '../src/lib/notificationQueue'
 import { createSoundManager } from '../src/lib/notificationSound'
 import type { AppNotification, NotificationCategory, NotificationKind, NotificationPriority } from '../src/types'
 
@@ -161,13 +161,24 @@ describe('bursts and the stack', () => {
     expect(s.waiting).toHaveLength(1)
   })
 
-  test('success and warning time out; critical stays until dismissed', () => {
-    let s = receive(s0, [item(note('w', 'supplierDateChanged', 'medium')), item(note('c', 'outOfStock', 'critical', { category: 'inventory' }))], NOW).state
-    s = expire(s, NOW + (AUTO_DISMISS_MS.warning as number) + 1)
-    expect(s.visible.map((c) => c.key)).toEqual([k('c')])
-    s = expire(s, NOW + 24 * 3_600_000)
-    expect(s.visible.map((c) => c.key)).toEqual([k('c')])
-    expect(dismiss(s, k('c'), NOW).visible).toEqual([])
+  test('every card leaves after 4 seconds, critical too; together, the top one first (owner, 6 Oct 2026)', () => {
+    // Shown together: critical sits on top (most severe first), the warning under it.
+    const s = receive(s0, [item(note('w', 'supplierDateChanged', 'medium')), item(note('c', 'outOfStock', 'critical', { category: 'inventory' }))], NOW).state
+    expect(s.visible.map((c) => c.key)).toEqual([k('c'), k('w')])
+    expect(dueCards(s, NOW + 3_999)).toEqual([])
+    expect(dueCards(s, NOW + 4_000)).toEqual([k('c')])
+    expect(dueCards(s, NOW + 4_000 + STAGGER_MS)).toEqual([k('c'), k('w')])
+    expect(expire(s, NOW + 60_000).visible).toEqual([])
+    expect(dismiss(s, k('c'), NOW).visible.map((c) => c.key)).toEqual([k('w')])
+  })
+
+  test('a card that moves up from the queue gets its own four seconds from then', () => {
+    const cats: NotificationCategory[] = ['supplier', 'inventory', 'purchasing', 'task']
+    let s = receive(s0, cats.map((c, i) => item(note(`q${i}`, 'supplierDateChanged', 'medium', { category: c }))), NOW).state
+    s = dismiss(s, s.visible[0].key, NOW + 1_000)
+    const moved = s.visible.find((c) => c.key === k('q3'))!
+    expect(moved.shownAt).toBe(NOW + 1_000)
+    expect(moved.ttl).toBe(4_000)
   })
 
   test('a fresh queue (another user signing in) has seen nothing of the last one', () => {
