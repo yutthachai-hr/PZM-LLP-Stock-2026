@@ -49,7 +49,10 @@ test('stock keyed while the sheet is open: after posting, the count day holds wh
   await movement(stage, 'm3', 'RC-00003', 3, COUNT_DAY)
   await balance(18, stage)
 
+  // Through the trusted command (ADR-001, .env.e2e) — asserted, not assumed.
+  const viaCommand = page.waitForResponse('**/api/stock/postCount')
   await page.getByRole('dialog').getByRole('button', { name: 'ยืนยัน', exact: true }).click()
+  expect((await viaCommand).status()).toBe(200)
   await expect.poll(async () => (await getDoc(`monthlyCounts/wh__${MONTH}`))?.status, { timeout: 20_000 }).toBe('posted')
 
   const adj = (await listDocs('stockMovements')).filter((m) => m.type === 'adjust')

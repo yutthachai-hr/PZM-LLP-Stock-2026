@@ -19,7 +19,17 @@ export interface CommandActor {
   name: string
 }
 
-export interface CommandSpec<P = unknown, R = unknown> {
+/**
+ * Reads a command may make before its transaction — the ones a transaction cannot make (a
+ * query). Collection names as the app writes them; each side maps the brand.
+ */
+export interface CommandReader {
+  get<T>(collection: string, id: string): Promise<T | null>
+  getBy<T>(collection: string, field: string, value: string | number | boolean): Promise<T[]>
+  getRange<T>(collection: string, field: string, from: number, to: number): Promise<T[]>
+}
+
+export interface CommandSpec<P = unknown, R = unknown, C = undefined> {
   name: string
   /** Who may run it through the server. */
   roles: readonly Role[]
@@ -29,7 +39,9 @@ export interface CommandSpec<P = unknown, R = unknown> {
   parse(raw: unknown): P
   /** Extra checks that need the caller's role (e.g. a direct site-to-site issue). */
   authorize?(params: P, role: Role): boolean
-  run(tx: TxContext, file: FileMovement, params: P, actor: CommandActor): Promise<R>
+  /** Reads made before the transaction; their result is handed to `run`. */
+  prepare?(read: CommandReader, params: P): Promise<C>
+  run(tx: TxContext, file: FileMovement, params: P, actor: CommandActor, ctx: C): Promise<R>
 }
 
 /** A request the server will not even read the database for. */
@@ -39,4 +51,4 @@ export class BadInput extends Error {
   }
 }
 
-export const defineCommand = <P, R>(spec: CommandSpec<P, R>): CommandSpec<P, R> => spec
+export const defineCommand = <P, R, C = undefined>(spec: CommandSpec<P, R, C>): CommandSpec<P, R, C> => spec

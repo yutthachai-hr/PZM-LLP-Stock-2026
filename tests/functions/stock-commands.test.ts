@@ -167,6 +167,7 @@ describe('what the commands may write (the service account is outside the rules)
       consumeStock: [{ ...L, movementImages: ['set'] }, ['staff', 'manager', 'admin']],
       adjustStock: [L, ['staff', 'manager', 'admin']],
       fileCount: [L, ['admin']],
+      postCount: [{ ...L, monthlyCounts: ['update'] }, ['manager', 'admin']],
     })
   })
 
@@ -287,4 +288,52 @@ describe('golden comparison: every other command files what the app files', () =
       }
     })
   }
+})
+
+describe('postCount on the server', () => {
+  const COUNT_DAY = Date.UTC(2026, 8, 30) - 7 * 3_600_000
+  const countWorld = () => ({
+    ...world(),
+    stockMovements: {
+      m1: { docNo: 'RC-00001', type: 'receive', productId: 'flour', productName: 'FLOUR', unit: 'KG', qty: 3, toLocationId: 'wh', date: COUNT_DAY - 86_400_000, byUserId: 'x', byUserName: 'x', createdAt: 1 },
+      m2: { docNo: 'RC-00002', type: 'receive', productId: 'flour', productName: 'FLOUR', unit: 'KG', qty: 4, toLocationId: 'wh', date: COUNT_DAY + 3 * 86_400_000, byUserId: 'x', byUserName: 'x', createdAt: 1 },
+    },
+    stockLevels: { wh__flour: { productId: 'flour', locationId: 'wh', qty: 7, updatedAt: 1, updatedBy: 'x' } },
+    monthlyCounts: {
+      'wh__2026-09': { locationId: 'wh', month: '2026-09', countDate: COUNT_DAY, status: 'counting', lines: { flour: { qty: 1, by: 'u', byName: 'U', at: 1 } }, createdBy: 'u', createdByName: 'U', createdAt: 1, updatedAt: 1 },
+    },
+  })
+  const body = { brand: 'pizza', params: { id: 'wh__2026-09', productIds: ['flour'], note: 'count', reason: 'count' } }
+
+  test('takes the counted figure from the sheet, not the caller; staff may not post', async () => {
+    const d = deps(memoryServerStore(countWorld()))
+    expect((await runStockCommand(d, 'postCount', 'Bearer staff', body)).status).toBe(403)
+    expect((await runStockCommand(d, 'postCount', 'Bearer mgr', { ...body, params: { ...body.params, counted: 999 } })).status).toBe(400)
+    const r = await runStockCommand(d, 'postCount', 'Bearer mgr', body)
+    expect(r.status, JSON.stringify(r.body)).toBe(200)
+    // Books on the count day: 7 now − 4 after = 3; counted 1 → −2, filed on the count day.
+    const rows = [...d.store.data].filter(([k]) => k.startsWith('stockMovements/')).map(([, v]) => v.doc).filter((m) => m.type === 'adjust')
+    expect(rows).toEqual([expect.objectContaining({ qty: 2, fromLocationId: 'wh', date: COUNT_DAY, reason: 'count', byUserId: 'mgr' })])
+    expect(doc(d, 'stockLevels', 'wh__flour')?.qty).toBe(5)
+    expect(doc(d, 'monthlyCounts', 'wh__2026-09')).toMatchObject({ status: 'posted', postedIds: ['flour'], results: { flour: { systemQty: 3, countedQty: 1, diff: -2 } } })
+  })
+
+  test('golden: the server and the app post the same count', async () => {
+    const d = deps(memoryServerStore(countWorld()))
+    const r = await runStockCommand(d, 'postCount', 'Bearer mgr', body)
+    expect(r.status).toBe(200)
+    mem.resetMemory()
+    setActiveBrand('pizza')
+    for (const [k, docs] of Object.entries(countWorld())) mem.seed(k, Object.entries(docs).map(([id, v]) => ({ ...(v as object), id })))
+    const { postMonthlyCount } = await import('../../src/services/monthlyCounts')
+    await postMonthlyCount({ id: 'wh__2026-09', actor: { id: 'mgr', name: 'Manager M' }, note: 'count' })
+    const strip = (o: Record<string, unknown>) => {
+      const { createdAt: _c, updatedAt: _u, confirmedAt: _a, id: _i, ...rest } = o
+      void [_c, _u, _a, _i]
+      return rest
+    }
+    const server = (k: string) => [...d.store.data].filter(([key]) => key.startsWith(`${k}/`)).map(([, v]) => JSON.stringify(strip(v.doc))).sort()
+    const client = (k: string) => mem.raw(k).map((x) => JSON.stringify(strip(x))).sort()
+    for (const k of ['stockMovements', 'stockLevels', 'counters', 'monthlyCounts']) expect(server(k), k).toEqual(client(k))
+  })
 })

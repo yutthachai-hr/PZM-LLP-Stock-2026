@@ -31,26 +31,27 @@ beforeEach(async () => {
   setActiveBrand('pizza')
   seed('locations', [{ id: WH, name: 'Main', type: 'warehouse', active: true, createdAt: 0 }])
   seed('products', [
-    { id: 'flour', sku: 'F', name: 'FLOUR', category: 'c', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: 0, updatedAt: 0 },
-    { id: 'salt', sku: 'S', name: 'SALT', category: 'c', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: 0, updatedAt: 0 },
+    { id: 'flour', sku: 'F', name: 'FLOUR', category: 'c', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: 0, updatedAt: 0, cost: 20 },
+    { id: 'salt', sku: 'S', name: 'SALT', category: 'c', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: 0, updatedAt: 0, cost: 5 },
   ])
   // 10 on the count day; 5 more arrived three days later.
   await receiveStock({ lines: [flourLine(10)], toLocationId: WH, date: COUNT_DAY - 86_400_000, actor: ACTOR })
   await receiveStock({ lines: [{ productId: 'salt', productName: 'SALT', unit: 'KG', qty: 4 }], toLocationId: WH, date: COUNT_DAY - 86_400_000, actor: ACTOR })
   await receiveStock({ lines: [flourLine(5)], toLocationId: WH, date: LATER, actor: ACTOR })
-  seed('monthlyCounts', [
-    { id: `${WH}__2026-09`, locationId: WH, month: '2026-09', countDate: COUNT_DAY, status: 'counting', lines: {}, createdBy: 'u', createdByName: 'U', createdAt: 0, updatedAt: 0 },
-  ])
 })
 
-const counts = (flour: number, salt = 4) => [
-  { productId: 'flour', productName: 'FLOUR', unit: 'KG', counted: flour, cost: 20 },
-  { productId: 'salt', productName: 'SALT', unit: 'KG', counted: salt, cost: 5 },
-]
+/** The sheet as counted: the posting takes the figures from here, never from the caller. */
+function seedSheet(flour: number, salt = 4) {
+  const line = (qty: number) => ({ qty, by: 'u', byName: 'U', at: 0 })
+  seed('monthlyCounts', [
+    { id: `${WH}__2026-09`, locationId: WH, month: '2026-09', countDate: COUNT_DAY, status: 'counting', lines: { flour: line(flour), salt: line(salt) }, createdBy: 'u', createdByName: 'U', createdAt: 0, updatedAt: 0 },
+  ])
+}
 
 describe('postMonthlyCount', () => {
   test('files counted − books on the count day, on that day, and the sheet keeps the figures', async () => {
-    await postMonthlyCount({ id: `${WH}__2026-09`, counts: counts(8), actor: ACTOR, note: 'count' })
+    seedSheet(8)
+    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })
     expect(adjustments()).toHaveLength(1)
     expect(adjustments()[0]).toMatchObject({ productId: 'flour', qty: 2, fromLocationId: WH, date: COUNT_DAY })
     expect(level('flour')).toBe(13) // 8 counted + 5 that came after
@@ -62,6 +63,7 @@ describe('postMonthlyCount', () => {
   })
 
   test('stock filed between reading the books and posting: read again, and the count still holds', async () => {
+    seedSheet(8)
     // A delivery dated on the count day, and one dated today, both land just after the
     // posting has read the movements — the moment the old screen-side difference went stale.
     let slipped = false
@@ -82,7 +84,7 @@ describe('postMonthlyCount', () => {
       }
     })
     try {
-      await postMonthlyCount({ id: `${WH}__2026-09`, counts: counts(8), actor: ACTOR, note: 'count' })
+      await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })
     } finally {
       spy.mockRestore()
     }
@@ -94,8 +96,9 @@ describe('postMonthlyCount', () => {
   })
 
   test('a sheet already posted is not posted again', async () => {
-    await postMonthlyCount({ id: `${WH}__2026-09`, counts: counts(8), actor: ACTOR, note: 'count' })
-    await expect(postMonthlyCount({ id: `${WH}__2026-09`, counts: counts(8), actor: ACTOR, note: 'count' })).rejects.toThrow()
+    seedSheet(8)
+    await postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })
+    await expect(postMonthlyCount({ id: `${WH}__2026-09`, actor: ACTOR, note: 'count' })).rejects.toThrow()
     expect(adjustments()).toHaveLength(1)
   })
 })

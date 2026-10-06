@@ -15,6 +15,7 @@ import {
 } from './ledgerTx'
 import { receiptIdFor, receiveOrderInTx, type ReceiptLineInput } from './receivePO'
 import { BadInput, defineCommand } from './spec'
+import { postCountCommand } from './countPost'
 import { requireCountQty, roundQty } from '../lib/validate'
 import { AppError } from '../i18n/AppError'
 
@@ -239,6 +240,7 @@ export const STOCK_COMMANDS = {
   consumeStock: consumeStockCommand,
   adjustStock: adjustStockCommand,
   fileCount: fileCountCommand,
+  postCount: postCountCommand,
 } as const
 
 export type StockCommandName = keyof typeof STOCK_COMMANDS

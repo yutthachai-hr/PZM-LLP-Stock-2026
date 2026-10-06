@@ -1,4 +1,4 @@
-import { assertServerWrite, type ServerStore, type Versioned } from './serverStore'
+import { assertServerWrite, type QueryFilter, type ServerStore, type Versioned } from './serverStore'
 
 /**
  * The ServerStore in memory: the tests' database, and the local preview's
@@ -43,6 +43,19 @@ export function memoryServerStore(seed: Record<string, Record<string, Record<str
       data.set(key(c, id), { doc: { ...structuredClone(doc), id }, updateTime: stamp() })
       store.writes++
       return true
+    },
+    async query<T>(c: string, filters: readonly QueryFilter[]): Promise<T[]> {
+      const out: T[] = []
+      for (const [k, row] of data) {
+        if (!k.startsWith(`${c}/`) || k.slice(c.length + 1).includes('/')) continue
+        const ok = filters.every((f) => {
+          const v = row.doc[f.field] as string | number | boolean | undefined
+          if (v === undefined) return false
+          return f.op === '==' ? v === f.value : f.op === '>=' ? v >= f.value : v <= f.value
+        })
+        if (ok) out.push(structuredClone(row.doc) as T)
+      }
+      return out
     },
     async commit(writes) {
       // All preconditions first, then all writes: atomic, like Firestore's commit.

@@ -2,8 +2,8 @@ import type { AppUser } from '../../src/types'
 import { AppError } from '../../src/i18n/AppError'
 import { COL } from '../../src/types'
 import { STOCK_COMMANDS } from '../../src/commands/stockCommands'
-import { BadInput, type CommandSpec } from '../../src/commands/spec'
-import type { ServerStore } from './serverStore'
+import { BadInput, type CommandReader, type CommandSpec } from '../../src/commands/spec'
+import { brandCollection, type ServerStore } from './serverStore'
 import { runServerTx, TxConflict } from './serverTx'
 
 /**
@@ -46,7 +46,7 @@ async function caller(deps: StockDeps, authorization: string | null): Promise<Ap
 }
 
 export async function runStockCommand(deps: StockDeps, name: string, authorization: string | null, body: unknown): Promise<Reply> {
-  const spec = (STOCK_COMMANDS as Record<string, CommandSpec<unknown, unknown>>)[name]
+  const spec = (STOCK_COMMANDS as Record<string, CommandSpec<unknown, unknown, unknown>>)[name]
   if (!spec || !Object.hasOwn(STOCK_COMMANDS, name)) return fail(404, 'no_such_command')
   const user = await caller(deps, authorization)
   if (!user) return fail(401, 'unauthorized')
@@ -62,9 +62,16 @@ export async function runStockCommand(deps: StockDeps, name: string, authorizati
   }
   if (spec.authorize && !spec.authorize(params, user.role)) return fail(403, 'forbidden')
   const actor = { id: user.id, name: user.name }
+  const brand = b.brand
+  const read: CommandReader = {
+    get: async <T,>(c: string, id: string) => (await deps.store.get<T>(brandCollection(brand, c), id))?.doc ?? null,
+    getBy: (c, field, value) => deps.store.query(brandCollection(brand, c), [{ field, op: '==', value }]),
+    getRange: (c, field, from, to) => deps.store.query(brandCollection(brand, c), [{ field, op: '>=', value: from }, { field, op: '<=', value: to }]),
+  }
   try {
-    const result = await runServerTx(deps.store, b.brand, spec, (tx) =>
-      spec.run(tx, (mv, given) => tx.set(COL.movements, given ?? deps.makeId(), mv as Record<string, unknown>), params, actor),
+    const ctx = spec.prepare ? await spec.prepare(read, params) : undefined
+    const result = await runServerTx(deps.store, brand, spec, (tx) =>
+      spec.run(tx, (mv, given) => tx.set(COL.movements, given ?? deps.makeId(), mv as Record<string, unknown>), params, actor, ctx),
     )
     return { status: 200, body: { result } }
   } catch (e) {

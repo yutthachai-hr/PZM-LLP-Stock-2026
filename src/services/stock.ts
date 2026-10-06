@@ -1,6 +1,6 @@
 import { backend, BACKEND_MODE } from '../backend'
 import { commandOn } from '../lib/stockCommands'
-import type { CommandSpec } from '../commands/spec'
+import type { CommandReader, CommandSpec } from '../commands/spec'
 import {
   adjustStockCommand,
   consumeStockCommand,
@@ -106,13 +106,19 @@ function noteChanged(mv: StockMovement, patch: Record<string, unknown>): void {
  * Run a stock command (ADR-001): on the server when this build sends it there, otherwise
  * here, through `filing`. The same transaction body either way (src/commands).
  */
-export async function execute<P, R>(spec: CommandSpec<P, R>, params: P, actor: Actor): Promise<R> {
+export async function execute<P, R, C>(spec: CommandSpec<P, R, C>, params: P, actor: Actor): Promise<R> {
   // Pinned before anything is awaited: a brand switched mid-save must not split the work.
   const brand = getBrand()
   const db = scoped()
   const remote = await callCommand<R>(spec.name, params, brand)
   if (remote !== NOT_SENT) return remote
-  return filing(db, (tx, file) => spec.run(tx, file, params, actor))
+  const read: CommandReader = {
+    get: (c, id) => db.getOne(c, id),
+    getBy: (c, field, value) => db.getBy(c, field, value),
+    getRange: async (c, field, from, to) => (await db.getRange(c, field, from, to)) ?? [],
+  }
+  const ctx = (spec.prepare ? await spec.prepare(read, params) : undefined) as C
+  return filing(db, (tx, file) => spec.run(tx, file, params, actor, ctx))
 }
 
 /** What callCommand returns when the command stays on the client path. */

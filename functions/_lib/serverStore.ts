@@ -34,6 +34,14 @@ export interface ServerStore {
    * Only the stock commands use it, and only for the writes `assertCommandWrite` allows.
    */
   commit(writes: readonly ServerWrite[]): Promise<boolean>
+  /** Documents of one collection matching every filter (equality, or a range on one field). */
+  query<T>(collection: string, filters: readonly QueryFilter[]): Promise<T[]>
+}
+
+export interface QueryFilter {
+  field: string
+  op: '==' | '>=' | '<='
+  value: string | number | boolean
 }
 
 /** One write in a commit. `update` changes only the named fields; null in `data` removes one. */
@@ -168,6 +176,16 @@ export function restServerStore(
         update: { name: `${root}/${collection}/${id}`, fields: encodeFields({ ...doc, id }) },
         currentDocument: { exists: false },
       })
+    },
+
+    async query<T>(collection: string, filters: readonly QueryFilter[]): Promise<T[]> {
+      const OP = { '==': 'EQUAL', '>=': 'GREATER_THAN_OR_EQUAL', '<=': 'LESS_THAN_OR_EQUAL' } as const
+      const fieldFilters = filters.map((f) => ({ fieldFilter: { field: { fieldPath: f.field }, op: OP[f.op], value: encodeFields({ v: f.value }).v } }))
+      const where = fieldFilters.length === 1 ? fieldFilters[0] : { compositeFilter: { op: 'AND', filters: fieldFilters } }
+      const rows = (await call(':runQuery', { structuredQuery: { from: [{ collectionId: collection }], ...(fieldFilters.length ? { where } : {}) } })) as {
+        document?: { name: string; fields?: Record<string, FsValue> }
+      }[]
+      return rows.filter((r) => r.document).map((r) => ({ ...decodeFields(r.document!.fields ?? {}), id: r.document!.name.split('/').pop() }) as T)
     },
 
     async commit(writes) {

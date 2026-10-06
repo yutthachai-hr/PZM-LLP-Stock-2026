@@ -22,7 +22,7 @@ const SKIP = /catalog\.generated|sarabunFont|[\\/]i18n[\\/]/
 // data it reads, never copy it shows. lib/siteTone.ts matches the sites' own Thai names;
 // lib/inventoryRules/uom.ts the Thai spellings of gram / kilogram / litre it accepts.
 // seed/wip.ts is the work-in-process catalogue: names and units as the workbook writes them.
-const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]seed[\\/](products|wip)\.ts$|[\\/]lib[\\/](orderSheet|sheetLines|siteTone)\.ts$|[\\/]inventoryRules[\\/]uom\.ts$/
+const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]commands[\\/]|[\\/]seed[\\/](products|wip)\.ts$|[\\/]lib[\\/](orderSheet|sheetLines|siteTone)\.ts$|[\\/]inventoryRules[\\/]uom\.ts$/
 
 const THAI = /[฀-๿]/
 

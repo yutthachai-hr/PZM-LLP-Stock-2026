@@ -239,20 +239,10 @@ export function MonthlyCountSheet() {
         await recordMonthlyCount({ id, results, actor })
         toast.success(t('บันทึกผลนับไว้แล้ว — สต๊อกไม่ถูกปรับ'))
       } else {
-        // The figures counted, not the differences: the posting works each difference out
-        // again inside its transaction from the books as they are then (plan A10).
-        const counts = now
-          .filter((r) => r.countedQty !== null)
-          .map((r) => ({
-            productId: r.productId,
-            productName: byId.get(r.productId)?.name ?? r.productId,
-            unit: byId.get(r.productId)?.unitType ?? '',
-            counted: r.countedQty!,
-            cost: byId.get(r.productId)?.cost ?? 0,
-          }))
+        // The sheet's own figures are posted; each difference is worked out again inside its
+        // transaction from the books as they are then (plan A10, src/commands/countPost.ts).
         const docs = await postMonthlyCount({
           id,
-          counts,
           actor,
           reason: asOpening ? 'opening' : 'count',
           note: asOpening

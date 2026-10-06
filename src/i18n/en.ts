@@ -3070,4 +3070,8 @@ export const EN: Record<string, string> = {
   'อนุมัติ {docNo} แล้ว — สั่งซื้อได้': '{docNo} approved — the order is placed',
   'อนุมัติสั่งซื้อ': 'Approve order',
   'บันทึกเป็นร่างแล้ว — รอหัวหน้าอนุมัติก่อนสั่ง': 'Saved as a draft — waiting for a manager to approve it',
+  // ADR-001 stock commands (6 Oct 2026)
+  'มีการบันทึกสต๊อกของคลังนี้ระหว่างยืนยัน กำลังอ่านยอดใหม่': 'Stock at this location changed while confirming — reading the books again',
+  'ไม่มีสิทธิ์ทำรายการนี้': 'You do not have permission for this',
+  'รายการโอนบันทึกผ่านเอกสารโอนเท่านั้น': 'Transfers are recorded through a transfer document only',
 }
