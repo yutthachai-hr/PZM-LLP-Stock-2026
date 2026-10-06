@@ -71,6 +71,8 @@ export function EditMovementModal({
   }
 
   const active = useMemo(() => locations.filter((l) => l.active !== false), [locations])
+  // Received against a purchase order: only the note may change (plan A8).
+  const fromOrder = !!movement.poId
 
   async function save() {
     if (!(qty > 0)) return toast.error(t("จำนวนต้องมากกว่า 0"))
@@ -78,7 +80,7 @@ export function EditMovementModal({
     try {
       await editMovement({
         movementId: movement.id,
-        patch: {
+        patch: fromOrder ? { note } : {
           // A row keyed in the product's own unit is edited by qty; any other by entryQty.
           ...(isBase ? { qty } : { entryQty: qty }),
           date: dateInputToMs(dateStr),
@@ -106,6 +108,12 @@ export function EditMovementModal({
           <span className="font-medium">{movement.productName}</span>
           <span className="text-ink-soft"> — {t(TYPE_LABEL[movement.type])}</span>
         </div>
+        {fromOrder && (
+          <p className="rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">
+            {t('รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน', { docNo: movement.poDocNo ?? '' })}
+          </p>
+        )}
+        <fieldset disabled={fromOrder} className="contents">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("จำนวน")} required hint={preview !== null && !isBase ? `= ${fmtQty(preview)} ${baseUnit}` : undefined}>
             <Input
@@ -151,6 +159,7 @@ export function EditMovementModal({
         <Field label={t("วันที่")}>
           <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
         </Field>
+        </fieldset>
         <Field label={t("หมายเหตุ")}>
           <Input value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>

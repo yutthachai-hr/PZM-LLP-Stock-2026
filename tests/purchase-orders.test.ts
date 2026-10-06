@@ -39,6 +39,7 @@ const {
   summariseBySupplier,
 } = await import('../src/services/purchaseOrders')
 const { setActiveBrand } = await import('../src/brand/brand')
+const { editMovement, voidMovement } = await import('../src/services/stock')
 import type { Product, PurchaseOrder } from '../src/types'
 
 const ACTOR = { id: 'uid-staff', name: 'Staff' }
@@ -931,5 +932,69 @@ describe('a receipt is filed once, whatever happens to the confirm press (plan A
     const id = await placeOrder()
     await expect(receivePurchaseOrder({ orderId: id, ...all('../../x') })).rejects.toThrow()
     expect(movements()).toHaveLength(0)
+  })
+})
+
+describe('changing a placed order is one transaction (plan A7)', () => {
+  const full = { invoiceNo: 'IV-A7', lines: [{ productId: 'p1', receivedQty: 0, checked: true }, { productId: 'p2', receivedQty: 0, checked: true }], actor: ACTOR }
+
+  test('cancel and receive at once: the order and the ledger tell one story', async () => {
+    const id = await placeOrder()
+    await Promise.allSettled([
+      receivePurchaseOrder({ orderId: id, ...full, operationId: 'race-a7' }),
+      cancelPurchaseOrder({ id, reason: 'ผู้ขายแจ้งของหมด', actor: ACTOR }),
+    ])
+    const o = orders()[0]
+    if (o.status === 'cancelled') {
+      expect(movements()).toHaveLength(0)
+      expect(balance('p1')).toBe(0)
+    } else {
+      expect(o.status).toBe('received')
+      expect(o.cancelledAt).toBeUndefined()
+      expect(balance('p1')).toBe(10)
+    }
+  })
+
+  test('an amendment racing a receipt never rewrites the lines a delivery was filed against', async () => {
+    const id = await placeOrder()
+    await Promise.allSettled([
+      receivePurchaseOrder({ orderId: id, ...full, operationId: 'race-a7-amend' }),
+      amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 3 }], reason: 'ลดจำนวน', products, actor: ACTOR }),
+    ])
+    // Either order of events is fine; what must hold is that the stock filed is exactly
+    // what the order says arrived, against the lines as they stood at that moment.
+    const o = orders()[0]
+    const p1 = o.lines.find((l) => l.productId === 'p1')
+    expect(balance('p1')).toBe(p1?.receivedQty ?? 0)
+    if (o.revision) expect(p1?.orderedQty).toBe(3)
+  })
+})
+
+describe('a row received against an order changes only with the order (plan A8)', () => {
+  async function received() {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-A8', lines: [{ productId: 'p1', receivedQty: 0, checked: true }, { productId: 'p2', receivedQty: 0, checked: true }], actor: ACTOR, operationId: 'op-a8-1' })
+    return movements().find((m) => m.productId === 'p1')!.id as string
+  }
+
+  test('its quantity, date or place cannot be edited; the order and the ledger stay equal', async () => {
+    const mv = await received()
+    await expect(editMovement({ movementId: mv, patch: { qty: 7 }, actor: ACTOR })).rejects.toThrow(/PO-0000\d/)
+    await expect(editMovement({ movementId: mv, patch: { date: Date.UTC(2026, 0, 1) }, actor: ACTOR })).rejects.toThrow()
+    expect(balance('p1')).toBe(10)
+    expect(orders()[0].lines.find((l) => l.productId === 'p1')?.receivedQty).toBe(10)
+  })
+
+  test('its note can still be corrected', async () => {
+    const mv = await received()
+    await editMovement({ movementId: mv, patch: { note: 'กล่องบุบ 1 กล่อง' }, actor: ACTOR })
+    expect(movements().find((m) => m.id === mv)?.note).toBe('กล่องบุบ 1 กล่อง')
+  })
+
+  test('it cannot be voided: a wrong delivery is put right with an adjustment', async () => {
+    const mv = await received()
+    await expect(voidMovement(mv, ACTOR)).rejects.toThrow()
+    expect(movements().find((m) => m.id === mv)?.voided).toBeUndefined()
+    expect(balance('p1')).toBe(10)
   })
 })

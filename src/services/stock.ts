@@ -898,6 +898,9 @@ async function fileCount(
 }
 
 /** Edit the quantity/date/note of an existing movement, re-applying the balance delta atomically. */
+/** Why a row received against an order cannot be changed in place (plan A8). */
+const ORDER_LOCKED = 'รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน' // i18n-key
+
 /** How many edits one row will carry before the history itself becomes the problem. */
 const MAX_EDITS = 200
 
@@ -1005,6 +1008,22 @@ export async function editMovement(params: {
     }
     requireQty(qty, mv.productName)
     const stillLegacy = legacy && entryQty === undefined && !!keyedNext
+
+    // A row received against a purchase order is half of a pair: the order's lines and
+    // receipts say the same thing, and the rules never let a receipt come off an order
+    // (plan A8, 6 Oct 2026). Changing the quantity, unit, place or day here would leave
+    // the two disagreeing, so only the note may change; a wrong count is put right with
+    // an adjustment, which leaves both records true.
+    if (mv.poId) {
+      const moved =
+        qty !== mv.qty ||
+        entryQty !== mv.entryQty ||
+        unitChanged ||
+        from !== mv.fromLocationId ||
+        to !== mv.toLocationId ||
+        (patch.date !== undefined && patch.date !== mv.date)
+      if (moved) throw new AppError(ORDER_LOCKED, { docNo: mv.poDocNo ?? '' })
+    }
 
     const before = { productId: mv.productId, unit: mv.unit, entryUnit: mv.entryUnit, entryQty: mv.entryQty }
     const after = { productId: mv.productId, unit: mv.unit, entryUnit: keyedNext || undefined, entryQty }
@@ -1235,6 +1254,8 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) return
     if (mv.transferId) throw new AppError('รายการนี้มาจากเอกสารส่งสินค้า — แก้ไขผ่านเอกสารนั้น')
+    // The order it was received against still counts it (plan A8): see editMovement.
+    if (mv.poId) throw new AppError(ORDER_LOCKED, { docNo: mv.poDocNo ?? '' })
 
     const fromLevel = mv.fromLocationId
       ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.fromLocationId, mv).id)

@@ -323,7 +323,7 @@ export function MovementsPage() {
               <Button variant="ghost" onClick={() => setEditing(m)}>
                 {t('แก้ไข')}
               </Button>
-              {isAdmin && (
+              {isAdmin && !m.poId && (
                 <button
                   onClick={() => doVoid(m)}
                   className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
@@ -419,7 +419,7 @@ export function MovementsPage() {
                 <Button variant="secondary" onClick={() => setEditing(m)}>
                   {t('แก้ไข')}
                 </Button>
-                {isAdmin && (
+                {isAdmin && !m.poId && (
                   <Button variant="danger" onClick={() => doVoid(m)}>
                     {t('ยกเลิก')}
                   </Button>

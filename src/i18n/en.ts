@@ -3062,4 +3062,6 @@ export const EN: Record<string, string> = {
   '{who} รับของ {docNo} (บิล {invoice})': '{who} received {docNo} (invoice {invoice})',
   '{who} ปิดยอดค้าง': '{who} closed the remainder',
   '{who} ยกเลิกใบสั่งซื้อ': '{who} cancelled the order',
+  // Plan A8: a row received against a purchase order (6 Oct 2026)
+  'รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน': 'This line was received against order {docNo} — only the note can be changed. If the quantity or details are wrong, record a stock adjustment instead',
 }
