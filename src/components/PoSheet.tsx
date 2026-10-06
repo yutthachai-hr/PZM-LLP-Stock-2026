@@ -74,7 +74,8 @@ export function PoSheet({
         <div>
           <div className="text-xs font-bold uppercase tracking-wide text-brand">{company}</div>
           <div className="text-base font-bold">{received ? t('ใบรับของ') : t('ใบสั่งซื้อ')}</div>
-          <div className="doc-no text-xs text-ink-faint">
+          {/* the PO number in the brand's own colour, bold, so it is the first thing read (owner, 5 Oct 2026) */}
+          <div className="doc-no text-sm font-bold text-brand">
             {order.docNo}
             {order.revision ? ` · Rev.${order.revision}` : ''}
             {page && page.of > 1 ? ` · ${page.n}/${page.of}` : ''}
