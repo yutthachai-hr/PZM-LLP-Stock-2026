@@ -16,6 +16,9 @@ import type { CalendarItem, FeedInput, ItemPriority, ItemStatus } from './types'
 export const TITLE = {
   task: '{title}',
   poExpected: '{supplier} · {n} รายการ · {docNo}', // i18n-key
+  poExpectedRiskHigh: '{supplier} · {docNo} · เสี่ยงสูง {score}/100', // i18n-key
+  poExpectedRiskCritical: '{supplier} · {docNo} · เสี่ยงวิกฤต {score}/100', // i18n-key
+  stockoutRisk: 'เสี่ยงของหมด {product} · {location}', // i18n-key
   prPending: '{docNo} รออนุมัติ · {n} รายการ', // i18n-key
   cutoff: 'ตัดรอบสั่ง {supplier} · {time}', // i18n-key
   lowStock: '{product} ใกล้หมด · เหลือ {qty} {unit}', // i18n-key
@@ -114,20 +117,25 @@ export function buildFeed(input: FeedInput): CalendarItem[] {
     const delivery = deliveryState(order, now, lead)
     const late = daysLate(order, now, lead)
     const status: ItemStatus = delivery === 'received' ? 'completed' : delivery === 'delayed' ? 'overdue' : 'pending'
+    // A risky open order says so on its own entry — one entry per order, never a second.
+    const risk = order.status === 'ordered' ? input.risk?.orders.get(order.id) : undefined
+    const risky = risk && (risk.level === 'HIGH' || risk.level === 'CRITICAL')
     items.push({
       id: `poExpected__${order.id}`,
       kind: 'poExpected',
       sourceType: 'purchaseOrder',
       sourceId: order.id,
-      titleKey: TITLE.poExpected,
-      titleParams: { supplier: order.supplierName, n: order.lines.length, docNo: order.docNo },
+      titleKey: !risky ? TITLE.poExpected : risk.level === 'CRITICAL' ? TITLE.poExpectedRiskCritical : TITLE.poExpectedRiskHigh,
+      titleParams: risky
+        ? { supplier: order.supplierName, docNo: order.docNo, score: risk.score }
+        : { supplier: order.supplierName, n: order.lines.length, docNo: order.docNo },
       at,
       allDay: true,
       locationId: order.locationId,
       supplierId: order.supplierId,
-      priority: delivery === 'delayed' ? 'high' : delivery === 'arrivingToday' ? 'medium' : 'normal',
+      priority: risk?.level === 'CRITICAL' ? 'critical' : delivery === 'delayed' || risky ? 'high' : delivery === 'arrivingToday' ? 'medium' : 'normal',
       status,
-      meta: { kind: 'poExpected', order, delivery, daysLate: late, items: order.lines.length },
+      meta: { kind: 'poExpected', order, delivery, daysLate: late, items: order.lines.length, ...(risk ? { risk } : {}) },
       persisted: false,
     })
   }
@@ -210,6 +218,40 @@ export function buildFeed(input: FeedInput): CalendarItem[] {
     }
   }
 
+  // Stock-outs before a delivery take the estimate's place: same id, on the day it runs
+  // out, so a product never shows twice for one location.
+  const shortageIds = new Set<string>()
+  for (const sh of input.risk?.shortages ?? []) {
+    const product = input.products.find((p) => p.id === sh.productId)
+    const location = input.locations.find((l) => l.id === sh.locationId)
+    if (!product || !location || !inRange(sh.stockoutDate, range)) continue
+    const id = `stockoutEstimate__${product.id}__${location.id}`
+    shortageIds.add(id)
+    items.push({
+      id,
+      kind: 'stockoutEstimate',
+      sourceType: 'derived',
+      sourceId: `${location.id}__${product.id}`,
+      titleKey: TITLE.stockoutRisk,
+      titleParams: { product: product.name, location: location.name },
+      at: sh.stockoutDate,
+      allDay: true,
+      locationId: location.id,
+      productId: product.id,
+      priority: sh.level === 'CRITICAL' ? 'critical' : 'high',
+      status: 'info',
+      meta: {
+        kind: 'stockoutEstimate',
+        product,
+        location,
+        qty: sh.available,
+        avgDaily: sh.avgDaily,
+        daysLeft: sh.avgDaily > 0 ? sh.available / sh.avgDaily : 0,
+        shortage: sh,
+      },
+      persisted: false,
+    })
+  }
   // The analysis: suggestions and estimates sit on today, adjustments on their own day.
   const ins = input.insights
   if (ins && inRange(today, range)) {
@@ -244,6 +286,7 @@ export function buildFeed(input: FeedInput): CalendarItem[] {
       })
     }
     for (const s of ins.stockouts) {
+      if (shortageIds.has(`stockoutEstimate__${s.product.id}__${s.location.id}`)) continue
       items.push({
         id: `stockoutEstimate__${s.product.id}__${s.location.id}`,
         kind: 'stockoutEstimate',

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { RiskBadge } from '../../components/risk/RiskParts'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { Icon } from '../../components/Icon'
@@ -116,6 +117,11 @@ export function ItemDrawer({
         {item.meta.kind === 'poExpected' && (
           <OrderBody order={item.meta.order} locationName={locationName} leadTimeDays={suppliers.find((s) => s.id === item.supplierId)?.leadTimeDays} />
         )}
+        {item.meta.kind === 'poExpected' && item.meta.risk && (
+          <Row label={t('ความเสี่ยงส่งช้า')}>
+            <RiskBadge level={item.meta.risk.level} score={item.meta.risk.score} />
+          </Row>
+        )}
         {item.meta.kind === 'prPending' && <RequestBody request={item.meta.request} locationName={locationName} waitingDays={item.meta.waitingDays} />}
         {item.meta.kind === 'cutoff' && (
           <>
@@ -128,6 +134,24 @@ export function ItemDrawer({
           </>
         )}
         {item.meta.kind === 'reorder' && <ReorderBody meta={item.meta} inProgress={inProgress} />}
+        {item.meta.kind === 'stockoutEstimate' && item.meta.shortage && (
+          <>
+            <Row label={t('ความเสี่ยงของหมด')}>
+              <RiskBadge level={item.meta.shortage.level} />
+            </Row>
+            <Row label={t('คาดว่าหมด')}>{formatThaiDate(item.meta.shortage.stockoutDate)}</Row>
+            {item.meta.shortage.incomingDocNo && item.meta.shortage.incomingDate !== undefined && (
+              <Row label={t('ของที่กำลังมา')}>
+                {item.meta.shortage.incomingDocNo} · {formatThaiDate(item.meta.shortage.incomingDate)}
+              </Row>
+            )}
+            {item.meta.shortage.gapDays > 0 && (
+              <Row label={t('ช่วงที่ของขาด')}>
+                {t('{days} วัน ({qty} {unit})', { days: item.meta.shortage.gapDays, qty: item.meta.shortage.shortageQty, unit: item.meta.product.unitType })}
+              </Row>
+            )}
+          </>
+        )}
         {item.meta.kind === 'stockoutEstimate' && (
           <>
             <Row label={t('สินค้า')}>{item.meta.product.name}</Row>

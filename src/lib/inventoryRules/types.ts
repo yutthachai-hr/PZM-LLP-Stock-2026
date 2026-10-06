@@ -59,11 +59,28 @@ export type DeliveryState = 'expected' | 'arrivingToday' | 'delayed' | 'received
 
 export type ItemMeta =
   | { kind: 'task'; event: StockEvent }
-  | { kind: 'poExpected'; order: PurchaseOrder; delivery: DeliveryState; daysLate: number; items: number }
+  | {
+      kind: 'poExpected'
+      order: PurchaseOrder
+      delivery: DeliveryState
+      daysLate: number
+      items: number
+      /** Late-delivery risk (lib/deliveryRisk), when the calendar was given it. */
+      risk?: { level: FeedRiskLevel; score: number }
+    }
   | { kind: 'prPending'; request: PurchaseRequest; items: number; suppliers: number; waitingDays: number }
   | { kind: 'cutoff'; supplier: Supplier; time: string }
   | { kind: 'lowStock' | 'outOfStock'; product: Product; location: StockLocation; qty: number; min: number }
-  | { kind: 'stockoutEstimate'; product: Product; location: StockLocation; qty: number; avgDaily: number; daysLeft: number }
+  | {
+      kind: 'stockoutEstimate'
+      product: Product
+      location: StockLocation
+      qty: number
+      avgDaily: number
+      daysLeft: number
+      /** Runs out before what is on order arrives (lib/inventoryRisk). */
+      shortage?: FeedShortage
+    }
   | { kind: 'adjustment' | 'waste'; movement: StockMovement; product?: Product; value: number }
   | {
       kind: 'reorder'
@@ -120,4 +137,27 @@ export interface FeedInput {
   now: number
   /** Reorder suggestions, estimated stock-outs and significant adjustments (insights.ts). */
   insights?: Insights
+  /** Delivery risk per open order and stock-outs before deliveries (S3/S4). */
+  risk?: FeedRisk
+}
+
+export type FeedRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+export interface FeedShortage {
+  productId: string
+  locationId: string
+  stockoutDate: number
+  available: number
+  avgDaily: number
+  gapDays: number
+  shortageQty: number
+  level: FeedRiskLevel
+  incomingDocNo?: string
+  incomingDate?: number
+}
+
+/** Kept to plain data so the calendar (also bundled into the Worker) needs no risk module. */
+export interface FeedRisk {
+  orders: ReadonlyMap<string, { level: FeedRiskLevel; score: number }>
+  shortages: readonly FeedShortage[]
 }

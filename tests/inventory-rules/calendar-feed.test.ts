@@ -240,3 +240,37 @@ describe('buildFeed', () => {
     expect(buildFeed(feed).some((i) => i.kind === 'prPending')).toBe(false)
   })
 })
+
+describe('delivery risk on the calendar (S3/S4, 5 Oct 2026)', () => {
+  const risky = order('r1', { expectedAt: TODAY + 2 * DAY_MS })
+  const shortage = {
+    productId: 'p1', locationId: 'main', stockoutDate: TODAY + DAY_MS, available: 3, avgDaily: 3,
+    gapDays: 1, shortageQty: 3, level: 'HIGH' as const, incomingDocNo: 'PO-r1', incomingDate: TODAY + 2 * DAY_MS,
+  }
+
+  test('a high-risk order says so on its one entry; a low one reads as before', () => {
+    const risk = { orders: new Map([['r1', { level: 'HIGH' as const, score: 72 }]]), shortages: [] }
+    const feed = buildFeed(input({ orders: [risky, order('ok', { expectedAt: TODAY + 2 * DAY_MS })], risk }))
+    const r1 = feed.filter((i) => i.sourceId === 'r1')
+    expect(r1).toHaveLength(1)
+    expect(r1[0]).toMatchObject({ priority: 'high', titleKey: '{supplier} · {docNo} · เสี่ยงสูง {score}/100', titleParams: { score: 72 } })
+    expect(feed.find((i) => i.sourceId === 'ok')!.titleParams).toMatchObject({ n: 1 })
+  })
+
+  test('a stock-out before a delivery replaces the estimate (same id, on the day it runs out)', () => {
+    const risk = { orders: new Map(), shortages: [shortage] }
+    const feed = buildFeed(input({ risk }))
+    const items = feed.filter((i) => i.id === 'stockoutEstimate__p1__main')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ at: TODAY + DAY_MS, priority: 'high' })
+    expect(items[0].meta).toMatchObject({ kind: 'stockoutEstimate', shortage: { gapDays: 1 } })
+  })
+
+  test('a received order loses its risk entry styling with the data that fed it', () => {
+    const risk = { orders: new Map([['r1', { level: 'CRITICAL' as const, score: 90 }]]), shortages: [] }
+    const received = { ...risky, status: 'received' as const, receivedAt: TODAY, invoiceNo: 'i', movementDocNo: 'm' }
+    const item = buildFeed(input({ orders: [received], risk })).find((i) => i.sourceId === 'r1')!
+    expect(item.titleKey).not.toContain('เสี่ยง')
+    expect(item.status).toBe('completed')
+  })
+})

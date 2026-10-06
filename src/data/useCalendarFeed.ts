@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSupplierIntel } from './useSupplierIntel'
+import type { FeedRisk } from '../lib/inventoryRules/types'
 import { buildFeed } from '../lib/inventoryRules/calendarFeed'
 import { DAY_MS } from '../lib/inventoryRules/time'
 import type { CalendarItem } from '../lib/inventoryRules/types'
@@ -121,6 +123,29 @@ export function useCalendarFeed(range: { from: number; to: number }, now: number
     })
   }, [rows, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, data.movements, suppliers, config.settings, config.snoozes, now, range.from])
 
+  // Delivery risk and stock-outs before deliveries (S3/S4), reduced to plain data for the feed.
+  const intel = useSupplierIntel()
+  const risk = useMemo<FeedRisk>(
+    () => ({
+      orders: new Map([...intel.risks].map(([id, r]) => [id, { level: r.level, score: r.score }])),
+      shortages: intel.shortages
+        .filter((s) => s.incoming.length > 0)
+        .map((s) => ({
+          productId: s.productId,
+          locationId: s.locationId,
+          stockoutDate: s.stockoutDate,
+          available: s.available,
+          avgDaily: s.avgDaily,
+          gapDays: s.gapDays,
+          shortageQty: s.shortageQty,
+          level: s.level,
+          incomingDocNo: s.nextIncoming?.docNo ?? s.incoming[0]?.docNo,
+          incomingDate: s.nextIncoming?.date ?? s.incoming[0]?.date,
+        })),
+    }),
+    [intel.risks, intel.shortages],
+  )
+
   const items = useMemo(() => {
     if (!rows) return []
     return buildFeed({
@@ -136,8 +161,9 @@ export function useCalendarFeed(range: { from: number; to: number }, now: number
       range,
       now,
       insights,
+      risk,
     })
-  }, [rows, suppliers, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, range, now, insights])
+  }, [rows, suppliers, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, range, now, insights, risk])
 
   return {
     items,
