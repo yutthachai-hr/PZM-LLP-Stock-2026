@@ -628,9 +628,16 @@ describe('staff', () => {
     await assertSucceeds(getDoc(doc(as(STAFF), 'stockMovements/m1')))
   })
 
-  test('can record stock: movements, balances, counters, notes', async () => {
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m2'), movement('m2')))
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockLevels/l2'), level('l2')))
+  test('record stock only through the server: the ledger and balances are not theirs to write (ADR-001, audit S1)', async () => {
+    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m2'), movement('m2')))
+    await assertFails(setDoc(doc(as(STAFF), 'stockLevels/l2'), level('l2')))
+    await assertFails(setDoc(doc(as(STAFF), 'lelapin__stockLevels/l2'), level('l2')))
+    // An admin's maintenance tools still may, signed.
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockMovements/m2'), movement('m2', ADMIN)))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockLevels/l2'), level('l2', ADMIN)))
+  })
+
+  test('number documents and keep notes', async () => {
     await assertSucceeds(setDoc(doc(as(STAFF), 'counters/receive'), { id: 'receive', value: 2 }))
     await assertSucceeds(setDoc(doc(as(STAFF), 'notes/n2'), note('n2')))
     await assertSucceeds(deleteDoc(doc(as(STAFF), 'notes/n1')))
@@ -679,7 +686,8 @@ describe('the ledger is append-only', () => {
   test('staff add movements; only an admin amends or voids one, and a void says why (plan A9)', async () => {
     const trail = (uid: string, n: number) =>
       Array.from({ length: n }, (_, _i) => ({ by: uid, byName: uid, at: ts(), changed: ['qty'] }))
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m3'), movement('m3')))
+    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m3'), movement('m3')))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockMovements/m3'), movement('m3', ADMIN)))
     // A correction is an admin's, signed (audit S5).
     await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), { qty: 3, edits: trail(STAFF, 1) }))
     await assertFails(updateDoc(doc(as(MANAGER), 'stockMovements/m1'), { qty: 3, edits: trail(MANAGER, 1) }))
@@ -735,13 +743,13 @@ describe('the ledger is append-only', () => {
 
   test("a receipt's paperwork is kept as its own typed fields (24 Sep 2026)", async () => {
     const paper = { supplierId: 'sup1', supplierName: 'SIAMFOOD', invoiceNo: 'IV-1001', docDate: ts(), poId: 'po1', poDocNo: 'PO-00005' }
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockMovements/m4'), movement('m4', STAFF, paper)))
-    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m5'), movement('m5', STAFF, { ...paper, docDate: 'yesterday' })))
-    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m6'), movement('m6', STAFF, { invoiceNo: 'x'.repeat(101) })))
-    await assertFails(setDoc(doc(as(STAFF), 'stockMovements/m7'), movement('m7', STAFF, { billNo: 'IV-1' })))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockMovements/m4'), movement('m4', ADMIN, paper)))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockMovements/m5'), movement('m5', ADMIN, { ...paper, docDate: 'yesterday' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockMovements/m6'), movement('m6', ADMIN, { invoiceNo: 'x'.repeat(101) })))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockMovements/m7'), movement('m7', ADMIN, { billNo: 'IV-1' })))
     // Written once with the row: a correction cannot change whose bill it was.
-    const entry = { by: STAFF, byName: STAFF, at: ts(), changed: ['invoiceNo'] }
-    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m4'), { invoiceNo: 'IV-2', edits: [entry] }))
+    const entry = { by: ADMIN, byName: ADMIN, at: ts(), changed: ['invoiceNo'] }
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m4'), { invoiceNo: 'IV-2', edits: [entry] }))
   })
 
   test('nobody may delete a movement — not even an admin', async () => {
@@ -842,64 +850,65 @@ describe('a balance counted in a unit somebody keyed', () => {
     locationId: 'loc1',
     qty: 10,
     updatedAt: ts(),
-    updatedBy: STAFF,
+    // Balances and rows are written from a client only by an admin now (ADR-001).
+    updatedBy: ADMIN,
     ...over,
   })
 
   test('a balance in the product own unit keeps the shape it always had', async () => {
-    await assertSucceeds(setDoc(doc(as(STAFF), 'stockLevels/loc1__p1'), lvl('loc1__p1')))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockLevels/loc1__p1'), lvl('loc1__p1')))
   })
 
   test('a balance in another unit carries that unit', async () => {
     await assertSucceeds(
-      setDoc(doc(as(STAFF), 'stockLevels/loc1__p1#Pack'), lvl('loc1__p1#Pack', { unit: 'Pack' })),
+      setDoc(doc(as(ADMIN), 'stockLevels/loc1__p1#Pack'), lvl('loc1__p1#Pack', { unit: 'Pack' })),
     )
   })
 
   test('the unit is bounded, like every other stored name', async () => {
     await assertFails(
       setDoc(
-        doc(as(STAFF), 'stockLevels/loc1__p1#x'),
+        doc(as(ADMIN), 'stockLevels/loc1__p1#x'),
         lvl('loc1__p1#x', { unit: 'x'.repeat(21) }),
       ),
     )
     await assertFails(
-      setDoc(doc(as(STAFF), 'stockLevels/loc1__p1#x'), lvl('loc1__p1#x', { unit: 12 })),
+      setDoc(doc(as(ADMIN), 'stockLevels/loc1__p1#x'), lvl('loc1__p1#x', { unit: 12 })),
     )
   })
 
   test('a balance still cannot carry anything else, or go negative', async () => {
-    await assertFails(setDoc(doc(as(STAFF), 'stockLevels/loc1__p1'), lvl('loc1__p1', { hmm: 1 })))
-    await assertFails(setDoc(doc(as(STAFF), 'stockLevels/loc1__p1'), lvl('loc1__p1', { qty: -1 })))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockLevels/loc1__p1'), lvl('loc1__p1', { hmm: 1 })))
+    await assertFails(setDoc(doc(as(ADMIN), 'stockLevels/loc1__p1'), lvl('loc1__p1', { qty: -1 })))
   })
 
   test('a movement may name the unit it was keyed in', async () => {
     await assertSucceeds(
-      setDoc(doc(as(STAFF), 'stockMovements/m-pack'), movement('m-pack', STAFF, { entryUnit: 'Pack' })),
+      setDoc(doc(as(ADMIN), 'stockMovements/m-pack'), movement('m-pack', ADMIN, { entryUnit: 'Pack' })),
     )
   })
 
   test('that name is bounded too, and still cannot be anything else', async () => {
     await assertFails(
       setDoc(
-        doc(as(STAFF), 'stockMovements/m-long'),
-        movement('m-long', STAFF, { entryUnit: 'y'.repeat(21) }),
+        doc(as(ADMIN), 'stockMovements/m-long'),
+        movement('m-long', ADMIN, { entryUnit: 'y'.repeat(21) }),
       ),
     )
     await assertFails(
-      setDoc(doc(as(STAFF), 'stockMovements/m-num'), movement('m-num', STAFF, { entryUnit: 7 })),
+      setDoc(doc(as(ADMIN), 'stockMovements/m-num'), movement('m-num', ADMIN, { entryUnit: 7 })),
     )
   })
 
   test('a converted row carries what was keyed beside the base quantity (20 Sep 2026)', async () => {
     await assertSucceeds(
-      setDoc(doc(as(STAFF), 'stockMovements/m-conv'), movement('m-conv', STAFF, { qty: 1000, entryUnit: 'Carton', entryQty: 2 })),
+      setDoc(doc(as(ADMIN), 'stockMovements/m-conv'), movement('m-conv', ADMIN, { qty: 1000, entryUnit: 'Carton', entryQty: 2 })),
     )
     await assertFails(
-      setDoc(doc(as(STAFF), 'stockMovements/m-zero'), movement('m-zero', STAFF, { qty: 1000, entryUnit: 'Carton', entryQty: 0 })),
+      setDoc(doc(as(ADMIN), 'stockMovements/m-zero'), movement('m-zero', ADMIN, { qty: 1000, entryUnit: 'Carton', entryQty: 0 })),
     )
     await assertFails(
-      setDoc(doc(as(STAFF), 'stockMovements/m-str'), movement('m-str', STAFF, { qty: 1000, entryUnit: 'Carton', entryQty: '2' })),
+      setDoc(doc(as(ADMIN), 'stockMovements/m-str'), movement('m-str', ADMIN, { qty: 1000, entryUnit: 'Carton', entryQty: '2' })),
     )
     // Re-keying the entry quantity is an edit like any other: signed, or refused.
     await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m-conv'), { qty: 1500, entryQty: 3, updatedAt: ts() }))
@@ -1393,8 +1402,8 @@ describe('confirmed product spellings', () => {
 })
 
 describe('the manager role', () => {
-  test('may record stock like staff, but may not touch the catalogue or the roster', async () => {
-    await assertSucceeds(setDoc(doc(as(MANAGER), 'stockMovements/m9'), movement('m9', MANAGER)))
+  test('records stock through the server like staff, and may not touch the catalogue or the roster', async () => {
+    await assertFails(setDoc(doc(as(MANAGER), 'stockMovements/m9'), movement('m9', MANAGER)))
     await assertFails(setDoc(doc(as(MANAGER), 'products/p9'), product('p9')))
     await assertFails(updateDoc(doc(as(MANAGER), 'users', STAFF), { role: 'admin' }))
     await assertFails(getDoc(doc(as(MANAGER), 'users', STAFF)))
@@ -1569,7 +1578,8 @@ describe('collections outside the model', () => {
 
 test('both brands enforce the same rules', async () => {
   await assertSucceeds(getDoc(doc(as(STAFF), 'lelapin__products/p1')))
-  await assertSucceeds(setDoc(doc(as(STAFF), 'lelapin__stockMovements/m2'), movement('m2')))
+  await assertFails(setDoc(doc(as(STAFF), 'lelapin__stockMovements/m2'), movement('m2')))
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__stockMovements/m2'), movement('m2', ADMIN)))
   await assertFails(setDoc(doc(as(STAFF), 'lelapin__locations/l1'), location('l1')))
   await assertSucceeds(setDoc(doc(as(ADMIN), 'lelapin__locations/l1'), location('l1')))
   expect(true).toBe(true)

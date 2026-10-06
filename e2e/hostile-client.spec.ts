@@ -28,15 +28,15 @@ test('control: staff cannot make themselves admin', async () => {
 })
 
 test('S1: staff cannot write a stock balance directly', async () => {
-  test.fail(true, 'audit S1 — closed by ADR-001 (balances written only by the trusted command boundary)')
   const s = await staff()
   const status = await writeAs(s.token, 'stockLevels/wh__flour', { id: 'wh__flour', productId: 'flour', locationId: 'wh', qty: 999, updatedAt: Date.now(), updatedBy: s.uid })
   test.info().annotations.push({ type: 'observed', description: `HTTP ${status}` })
   expect(status).toBe(403)
 })
 
-// Closed by the A-rules round (6 Oct 2026): S2, S5 and B4 are gates now; S1 stays open
-// until ADR-001 moves every balance write behind the command boundary (Phase A-sec).
+// Closed (6 Oct 2026): S2, S5 and B4 by the A-rules round; S1 by ADR-001 — balances and
+// ledger rows are written by the server's stock commands, and from a client only by an
+// admin's maintenance tools. Every one of these is a permanent gate now.
 test('S2: staff cannot move stock between sites by naming a transfer that does not exist', async () => {
   await putDoc('locations/br1', { name: 'Branch 1', type: 'branch', active: true, createdAt: Date.now() })
   const s = await staff()

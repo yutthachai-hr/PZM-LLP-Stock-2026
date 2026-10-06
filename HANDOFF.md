@@ -552,7 +552,26 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - **หน้าสั่งซื้อ (6 ต.ค. ตามภาพ mock-up ของเจ้าของ):** กดแถวแล้วเปิดแผงขวา (`src/pages/orders/OrderPanel.tsx`) สถานะบรรทัดแรกเป็น สั่งแล้ว / ส่ง LINE / ยืนยัน (EN: Ordered / LINE sent / Approved) อยู่ใน `src/pages/orders/statusWords.ts` แยกจากพจนานุกรมเพราะ "ส่ง LINE" กับ "ยืนยัน" เป็นคำบนปุ่มอยู่แล้ว
 - **หลักฐาน Phase A:** `docs/evidence/phase-a.md` — PASS ทุกข้อ ยกเว้น dry-run บน backup จริงที่ต้องรันบนเครื่องเจ้าของ
 - **ผลเทสล่าสุด (จบ Phase A):** unit 1,187 · rules 217 · e2e 17 expected / 0 unexpected / 0 flaky · lint 0 errors · i18n ครบ · build ผ่าน
-- ถัดไปคือ **A-rules** (A4, A5, A9, B7 deploy รอบเดียว ต้องให้เจ้าของยืนยัน + reauth) แล้วค่อย **A-sec** (ADR-001)
+- **ผลเทสล่าสุด (จบ A-sec):** unit 1,208 · rules 218 · e2e 20/0/0 ไม่มี `test.fail` เหลือ
+
+### Phase A-rules (เสร็จบน emulator — ยังไม่ deploy) → `docs/evidence/phase-a-rules.md`
+- **A4:** `transferId` ต้องเป็นเอกสารโอนจริงที่ผ่านอนุมัติแล้ว
+- **A5:** PR ที่อนุมัติแล้วแก้รายการไม่ได้ และ `poCreated` ต้องมี history ของผู้แปลง
+- **A9:** แก้ movement ได้เฉพาะแอดมิน และ void ต้องมี `voidReason`
+- **B7:** เหตุผล adjust ต้องอยู่ใน enum
+- **B4:** พนักงานสั่งเองได้แค่ร่าง ให้หัวหน้า/แอดมินกด "อนุมัติสั่งซื้อ"
+
+### Phase A-sec / ADR-001 (เสร็จสำหรับ staff + หัวหน้า — ยังไม่ deploy) → `docs/evidence/phase-a-sec.md`
+- คำสั่ง stock 11 ตัวรันผ่าน `POST /api/stock/<command>` บน service account
+- ใช้ตัว transaction เดียวกับแอป (`src/commands/*`)
+- rules ปิดการเขียน `stockLevels`/`stockMovements` จาก client ของ staff และหัวหน้าแล้ว (S1 ปิด)
+- แอดมินยังเขียนได้ เพราะเครื่องมือดูแลข้อมูลยังเป็นทาง client
+- **ลำดับ deploy ห้ามสลับ:**
+  1. ตั้ง `FIREBASE_SERVICE_ACCOUNT` ใน Pages
+  2. deploy แอป (`.env.production` → `VITE_STOCK_COMMANDS=all`)
+  3. ตรวจว่า `POST /api/stock/receivePO` ตอบ 200
+  4. deploy rules
+- e2e ใช้ `e2e/command-server.mjs` (handler ตัวจริงบน emulator) ผ่าน proxy ของ Vite mode e2e
 
 ### กับดักของ harness
 - เอกสารที่ seed ต้องมี field `id` (rules อ่านค่านี้) ยกเว้น `users`

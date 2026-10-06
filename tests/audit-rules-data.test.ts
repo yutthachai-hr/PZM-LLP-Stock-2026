@@ -97,9 +97,9 @@ describe('F06 — only the collections the model actually declares', () => {
     await assertFails(setDoc(doc(as(STAFF), 'stockLevels__extra', 'x'), level({ id: 'x' })))
   })
 
-  test('the real Le Lapin namespace still works', async () => {
+  test('the real Le Lapin namespace still works (an admin: staff write balances only through the server)', async () => {
     await assertSucceeds(
-      setDoc(doc(as(STAFF), 'lelapin__stockLevels', 'loc1__p1'), level()),
+      setDoc(doc(as(ADMIN), 'lelapin__stockLevels', 'loc1__p1'), level({ updatedBy: ADMIN })),
     )
   })
 })
@@ -111,9 +111,9 @@ describe('F02 — the ledger records who, and keeps it', () => {
     )
   })
 
-  test('a movement filed under yourself is fine', async () => {
+  test('a movement filed under yourself is fine (an admin; staff file through the server)', async () => {
     await assertSucceeds(
-      setDoc(doc(as(STAFF), 'stockMovements', 'mv2'), movement({ id: 'mv2' })),
+      setDoc(doc(as(ADMIN), 'stockMovements', 'mv2'), movement({ id: 'mv2', byUserId: ADMIN })),
     )
   })
 
@@ -235,8 +235,15 @@ describe('F01 — a forged balance is at least shaped like a balance, and signed
     await assertFails(
       setDoc(doc(as(STAFF), 'stockLevels', 'loc1__p1'), level({ qty: 999999, updatedBy: OTHER })),
     )
-    await assertSucceeds(
+    // Since ADR-001 a staff member cannot write one at all; an admin's write is signed.
+    await assertFails(
       setDoc(doc(as(STAFF), 'stockLevels', 'loc1__p1'), level({ qty: 999999 })),
+    )
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'stockLevels', 'loc1__p1'), level({ qty: 999999 })),
+    )
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'stockLevels', 'loc1__p1'), level({ qty: 999999, updatedBy: ADMIN })),
     )
   })
 })

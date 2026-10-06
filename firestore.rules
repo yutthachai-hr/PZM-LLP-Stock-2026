@@ -943,6 +943,15 @@ service cloud.firestore {
       return (active() && staffWritable(name)) || (admin() && adminWritable(name));
     }
 
+    // The ledger and the balances are written by the trusted stock commands (ADR-001,
+    // functions/api/stock/*), which work every number out on the server. From a client,
+    // only an admin's maintenance tools still write them (corrections, unit tools, recompute,
+    // restore) — staff and managers cannot, whatever their token says (audit S1).
+    function clientStockWrite(name) {
+      let k = kind(name);
+      return !(k in ['stockLevels', 'stockMovements']) || roleIsAdmin();
+    }
+
     function editedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -1684,10 +1693,12 @@ service cloud.firestore {
       // Type and range checks belong here as well as in the services, because the services
       // are client code: a caller holding a token skips them entirely.
       allow create: if writer(collection)
+        && clientStockWrite(collection)
         && validShape(collection, docId, request.resource.data, true)
         && createdHonestly(collection);
 
       allow update: if writer(collection)
+        && clientStockWrite(collection)
         && validShape(collection, docId, request.resource.data, false)
         && editedHonestly(collection);
 

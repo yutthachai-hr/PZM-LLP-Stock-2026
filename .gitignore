@@ -20,6 +20,7 @@ dev-dist
 !.env.demo
 # The Playwright tests' emulator switch — not secret, committed so the suite runs from a clone.
 !.env.e2e
+!.env.production
 
 # Editor directories and files
 .vscode/*
