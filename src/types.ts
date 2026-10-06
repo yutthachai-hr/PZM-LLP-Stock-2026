@@ -1140,6 +1140,8 @@ export interface PurchaseRequestHistoryEntry {
   itemIdx?: number
   oldValue?: string
   newValue?: string
+  /** The conversion that wrote this entry (plan A6): one id per press of the button. */
+  runId?: string
 }
 
 /**

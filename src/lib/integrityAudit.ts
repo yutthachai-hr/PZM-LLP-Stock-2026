@@ -11,6 +11,7 @@ import {
 import { balancesFromLedger, parseLevelId } from './levelKey'
 import { resolveFactor } from './inventoryRules/uom'
 import { QTY_STEP, roundQty } from './validate'
+import { stuckConversions } from './requestConversion'
 
 /**
  * The integrity auditor (Phase 0 of the Operations OS plan, 6 Oct 2026).
@@ -265,7 +266,6 @@ function checkOrphans(input: AuditInput, live: readonly StockMovement[], out: Au
   const locations = new Set([...input.locations.map((l) => l.id), TRANSIT_LOCATION_ID])
   const orders = new Set(input.purchaseOrders.map((o) => o.id))
   const transfers = new Set(input.transfers.map((t) => t.id))
-  const requests = new Map(input.purchaseRequests.map((r) => [r.id, r]))
 
   // One finding per missing target, not per row: a deleted product with 200 rows is one problem.
   const missing = new Map<string, AuditFinding>()
@@ -294,15 +294,8 @@ function checkOrphans(input: AuditInput, live: readonly StockMovement[], out: Au
   }
 
   // Orders made from a request that still reads "approved": the conversion stopped halfway (audit D4).
-  const stuck = new Map<string, string[]>()
-  for (const o of input.purchaseOrders) {
-    if (!o.requestId || o.status === 'cancelled') continue
-    const r = requests.get(o.requestId)
-    if (!r) continue
-    if (r.status === 'approved') stuck.set(r.id, [...(stuck.get(r.id) ?? []), o.docNo])
-  }
-  for (const [id, docNos] of stuck) {
-    out.push({ category: 'orphans', severity: 'warning', code: 'requestStuckWithOrders', ref: { collection: 'purchaseRequests', id }, detail: { orders: docNos.join(', ') } })
+  for (const s of stuckConversions(input.purchaseRequests, input.purchaseOrders)) {
+    out.push({ category: 'orphans', severity: 'warning', code: 'requestStuckWithOrders', ref: { collection: 'purchaseRequests', id: s.request.id }, detail: { orders: s.orders.map((o) => o.docNo).join(', ') } })
   }
 }
 

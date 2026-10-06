@@ -498,6 +498,7 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 | `fix/import-review` | หน้ารีวิวนำเข้าไฟล์แบบการ์ด + คำแนะนำสินค้า (`src/lib/productSuggest.ts`) | เสร็จ รอสั่ง merge |
 | `feat/integrity-auditor` | **Phase 0**: auditor + harness e2e + หลักฐาน | **PASS** รอสั่ง merge |
 | `feat/phase-a-ledger` (แตกจาก `feat/integrity-auditor`) | **Phase A**: A1 + A2 เสร็จ | กำลังทำ |
+| `claude/phase-a-ledger-continue-uzbbb5` (ต่อจาก `feat/phase-a-ledger`) | **Phase A**: A6 เสร็จ | กำลังทำ รอสั่ง merge กลับเข้า `feat/phase-a-ledger` |
 
 ### Phase 0 (เสร็จ): `docs/evidence/phase-0.md`
 - **Auditor** `src/lib/integrityAudit.ts` อ่านอย่างเดียว ตรวจ 6 หมวด
@@ -535,9 +536,16 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
   - บรรทัดเก่าที่ไม่มี baseQty ใช้อัตราวันนี้ พร้อมธง `estimated`
   - เทสอยู่ใน `tests/incoming.test.ts`
   - ข้อมูลจริงตอนนี้ไม่มี PO ที่รับบางส่วนค้างอยู่ จึงไม่มีตัวเลขไหนเปลี่ยน
-- **ผลเทสล่าสุด:** unit 1,169 ผ่าน · rules 217 ผ่าน · e2e 9/9 ตามคาด · lint 0 errors · i18n ครบ · build ผ่าน
+- **A6 เสร็จ (branch `claude/phase-a-ledger-continue-uzbbb5`):** แปลง PR → PO แบบ idempotent (`convertToOrders` ใน `src/services/purchaseRequests.ts`)
+  - ทั้งหมดอยู่ใน tx เดียว: อ่าน PR ใน tx (ต้อง `approved`) → `tx.get` PO ทุกใบตาม id `po_<prId>_<supplierId>` (`conversionOrderId` ใน `src/lib/requestConversion.ts`) → อ่าน counter ของผู้ขายใน tx → สร้าง PO + counter + PR `poCreated` พร้อม `orders` ในคราวเดียว ถ้าบรรทัดไหนสั่งไม่ได้ (เช่น ไม่มีอัตราแปลง) จะไม่มีอะไรถูกเขียนเลย
+  - PR ที่เป็น `poCreated` แล้ว → คืน `orders` เดิมโดยไม่เขียนอะไร (replay) กดซ้ำ/สองแท็บ/คำตอบหายหลัง commit ได้ PO ชุดเดียว เครื่องที่แพ้ race ถูก rules ปฏิเสธ (PO มีแล้ว กลายเป็น update) ระบบอ่าน PR ใหม่แล้วคืนผลของอีกเครื่อง ไม่มี error ขึ้นจอ
+  - `createPurchaseOrder` แยกเป็น `newOrderFields` (pure) + `counterSeeds` + `nextOrderSeq` + `writeNewOrder` ใน `purchaseOrders.ts` หน้าสร้าง PO เองและการแปลง PR ใช้ชุดเดียวกัน
+  - `conversionRunId` / `convertedAt` / `convertedBy` **ยังไม่ได้เป็น field บน PR** เพราะ rules ตอนนี้ (`requestEdit` hasOnly) จะปฏิเสธ จึงเก็บไว้ใน history entry `convertedToPo` (`runId`, `at`, `by`) แทน ส่วน field บนเอกสาร + rule `convertedBy == caller` ให้ทำพร้อม **A5 ใน A-rules**
+  - **PR ค้างครึ่งทางของเก่า:** การแปลงจะปฏิเสธพร้อมบอกเลข PO ที่ค้าง และส่งแอดมินไปที่ **ตั้งค่า › ซ่อมรายการขอสั่งซื้อที่ค้าง** (`src/pages/settings/StuckRequestsSection.tsx`) ซึ่งอ่านเมื่อกดปุ่มเท่านั้น แสดงทีละใบ ให้เลือก "ผูกใบเดิม" (`convertToOrders({ adopt })` รับ PO เดิมแล้วสร้างเฉพาะผู้ขายที่ขาดใน tx เดียว แอดมินเท่านั้น) หรือ "ยกเลิกใบนี้" พร้อมเหตุผล ถ้ามี PO ซ้ำของผู้ขายเดียวกันหรือ PO ของผู้ขายที่ไม่อยู่ใน PR แล้ว ต้องยกเลิกก่อนจึงผูกได้ (`repairPlan`) **ไม่ทำอัตโนมัติ**
+  - auditor ใช้ `stuckConversions()` ตัวเดียวกับเครื่องมือซ่อม
+  - เทส: `tests/purchase-requests.test.ts` (replay, เลขต่อ counter, ล้มกลางทางไม่เหลืออะไร, PO ค้างเก่าถูกปฏิเสธ, adopt, blockers) · e2e `e2e/convert-request.spec.ts` (กดครั้งเดียว, ดับเบิลคลิก, สองแท็บพร้อมกัน, คำตอบหายหลัง commit, ซ่อม PR ค้างผ่านหน้าจอแอดมิน) ทั้งหมดผ่านบน emulator ภายใต้ rules จริง
+- **ผลเทสล่าสุด (หลัง A6):** unit 1,175 ผ่าน · rules 217 ผ่าน · e2e 14/14 ตามคาด (รวม `test.fail` 4 ข้อของ hostile-client) · lint 0 errors · i18n ครบ · build ผ่าน
 - **ยังเหลือใน Phase A** (รายละเอียดอยู่ในแผน):
-  - **A6** แปลง PR → PO แบบ idempotent: PO id `po_<prId>_<supplierId>` ทำใน tx เดียว และทำเครื่องมือซ่อม PR ค้างแยกต่างหาก
   - **A7** amend/cancel/closeRemainder ทำเป็น tx
   - **A8** แก้/void movement ที่มี poId ต้อง sync กลับไปที่ PO หรือห้ามทำ
   - **A10** การนับประจำเดือนต้องคำนวณ diff ใหม่ใน tx
@@ -551,6 +559,7 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - ถ้ามี `firebase emulators:start` ค้างอยู่ จะยึดพอร์ต 8080/9099 ต้องปิดก่อนรัน `test:e2e`
 - เครื่องที่แพ้ race ได้ `permission-denied` (rules `receipts.size == old+1`) ไม่ใช่ contention retry ข้อความ console นี้เป็นเรื่องปกติ
 - e2e ต้องใช้ Java (ตัวเดียวกับ `test:rules`) และ `npx playwright install chromium`
+- ใน Claude Code cloud ห้าม `playwright install` ให้สร้าง config ชั่วคราว (ไม่ commit) ที่ใส่ `launchOptions.executablePath: '/opt/pw-browsers/chromium'` แล้วรัน `npx firebase emulators:exec --only firestore,auth --project demo-pzm-e2e "npx playwright test -c <config>"`
 
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 

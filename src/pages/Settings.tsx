@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { UnitMigrationSection } from './settings/UnitMigrationSection'
 import { RebaseUnitSection } from './settings/RebaseUnitSection'
+import { StuckRequestsSection } from './settings/StuckRequestsSection'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
@@ -84,6 +85,7 @@ type SectionKey =
   | 'maintenance'
   | 'unitMigration'
   | 'rebaseUnit'
+  | 'stuckRequests'
   | 'company'
   | 'logistics'
 
@@ -164,6 +166,7 @@ export function SettingsPage() {
           { key: 'maintenance', label: t('ดูแลข้อมูล'), hint: t('ตรวจยอดคงเหลือให้ตรงกับประวัติ'), icon: 'refresh', show: isAdmin },
           { key: 'unitMigration', label: t('แปลงยอดแยกหน่วยเป็นหน่วยหลัก'), hint: t('รวมยอดที่เคยเก็บแยกหน่วย'), icon: 'adjust', show: isAdmin },
           { key: 'rebaseUnit', label: t('เปลี่ยนหน่วยหลักพร้อมคำนวณ'), hint: t('เปลี่ยนหน่วยหลักของสินค้าและคำนวณยอดใหม่'), icon: 'swap', show: isAdmin },
+          { key: 'stuckRequests', label: t('ซ่อมรายการขอสั่งซื้อที่ค้าง'), hint: t('รายการที่อนุมัติแล้วแต่มีใบสั่งซื้อค้างครึ่งทาง'), icon: 'warning', show: isAdmin },
         ],
       },
     ]
@@ -207,6 +210,8 @@ export function SettingsPage() {
         return actor && <UnitMigrationSection actor={actor} />
       case 'rebaseUnit':
         return actor && <RebaseUnitSection actor={actor} />
+      case 'stuckRequests':
+        return <StuckRequestsSection />
       case 'company':
         return <CompanyProfileSection />
       case 'logistics':

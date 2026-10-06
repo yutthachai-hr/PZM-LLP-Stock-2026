@@ -62,3 +62,35 @@ export async function seedStage(): Promise<Stage> {
   await putDoc('counters/purchaseOrder__sup1', { value: 1 })
   return { uid, poId: 'po1', locationId: 'wh' }
 }
+
+/**
+ * An approved purchase request on top of the stage (plan A6): flour from the stage's
+ * supplier, cheese from a second one, so converting it places two orders.
+ */
+export async function seedApprovedRequest(stage: Stage): Promise<{ requestId: string }> {
+  const now = Date.now()
+  await putDoc('suppliers/sup2', { name: 'E2E DAIRY', contactNumber: '020000001', type: 'takingReturn', active: true, createdAt: now, updatedAt: now })
+  const line = (idx: number, productId: string, productName: string, sku: string, supplierId: string, supplierName: string, qty: number) => ({
+    idx, productId, productName, sku, unit: 'KG', supplierId, supplierName, supplierChoice: 'primary', requestedQty: qty, approvedQty: qty,
+  })
+  await putDoc('purchaseRequests/pr1', {
+    docNo: 'PR-00001',
+    status: 'approved',
+    revision: 1,
+    locationId: stage.locationId,
+    items: [line(0, 'flour', 'FLOUR', 'DRY-01-001', 'sup1', 'E2E SUPPLIER', 6), line(1, 'cheese', 'MOZZARELLA', 'DAI-01-001', 'sup2', 'E2E DAIRY', 3)],
+    requestedBy: stage.uid.staffA,
+    requestedByName: PEOPLE.staffA.name,
+    submittedAt: now - 3_600_000,
+    approvedBy: stage.uid.manager,
+    approvedByName: PEOPLE.manager.name,
+    approvedAt: now - 1_800_000,
+    history: [{ at: now - 3_600_000, by: stage.uid.staffA, byName: PEOPLE.staffA.name, action: 'created' }],
+    createdBy: stage.uid.staffA,
+    createdByName: PEOPLE.staffA.name,
+    createdAt: now - 3_600_000,
+    updatedAt: now - 1_800_000,
+  })
+  await putDoc('counters/purchaseRequest', { value: 1 })
+  return { requestId: 'pr1' }
+}

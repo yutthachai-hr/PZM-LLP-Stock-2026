@@ -1,5 +1,5 @@
 import { backend } from '../backend'
-import { DELETE_FIELD } from '../backend/types'
+import { DELETE_FIELD, type TxContext } from '../backend/types'
 import { isLate } from '../lib/inventoryRules/purchasing'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
@@ -184,13 +184,7 @@ export interface OrderLineInput {
   entryUnit?: string
 }
 
-/**
- * Open an order for one supplier.
- *
- * The lines are looked up from the catalogue rather than trusted from the caller, so an
- * order always names the product and unit that existed when it was placed.
- */
-export async function createPurchaseOrder(params: {
+export interface NewOrderParams {
   supplier: Pick<Supplier, 'id' | 'name'>
   locationId: string
   lines: readonly OrderLineInput[]
@@ -208,52 +202,97 @@ export async function createPurchaseOrder(params: {
   /** The approved purchase request this comes from. Placed at once — the approval was the decision. */
   requestId?: string
   note?: string
-}): Promise<string> {
+}
+
+/**
+ * Everything a new order holds except its number, checked and built from the catalogue.
+ *
+ * Pure: the number comes from the supplier's counter inside whichever transaction places
+ * the order, so the manual screen and the request conversion (which places several orders
+ * in one transaction) number them the same way.
+ */
+export function newOrderFields(params: NewOrderParams, now: number): Omit<PurchaseOrder, 'id' | 'docNo'> {
   const { supplier, locationId, actor } = params
   if (!supplier.id) throw new AppError('กรุณาเลือกผู้ขาย')
   if (!locationId) throw new AppError('กรุณาเลือกคลังปลายทาง')
-  const orderedAt = params.orderedAt ?? Date.now()
+  const orderedAt = params.orderedAt ?? now
   requireEpochMs(orderedAt)
   if (params.expectedAt !== undefined) requireEpochMs(params.expectedAt)
-
   const lines = buildLines(params.lines, params.products)
+  return {
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    status: (params.batchId ? 'draft' : 'ordered') satisfies PurchaseOrderStatus,
+    locationId,
+    orderedAt,
+    ...(params.expectedAt !== undefined ? { expectedAt: params.expectedAt } : {}),
+    lines,
+    ...(params.eventId ? { eventId: params.eventId } : {}),
+    ...(params.batchId ? { batchId: params.batchId } : {}),
+    ...(params.requestId ? { requestId: params.requestId } : {}),
+    ...(params.note?.trim() ? { note: params.note.trim() } : {}),
+    createdBy: actor.id,
+    createdByName: actor.name,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
 
+/**
+ * Where each supplier's counter starts if it does not exist yet, by counter id.
+ *
+ * Orders placed before the numbers became per-supplier carry the old shared sequence,
+ * and the rules freeze an order's number once written — so they stay as they are, and
+ * the supplier's counter starts from the floor those orders set (see orderCounterFloors).
+ * Read outside the transaction (a query cannot run inside one) and used only when the
+ * supplier's counter does not exist yet; if two people open the same new supplier's
+ * first order at once, the second transaction retries against the counter the first
+ * one created and never sees this number.
+ */
+export async function counterSeeds(supplierIds: readonly string[]): Promise<Map<string, number>> {
   const db = scoped()
+  const out = new Map<string, number>()
+  for (const id of new Set(supplierIds)) {
+    const existing = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'supplierId', id)
+    out.set(counterId(id), orderCounterFloors(existing).get(counterId(id)) ?? 0)
+  }
+  return out
+}
 
-  // Orders placed before the numbers became per-supplier carry the old shared sequence,
-  // and the rules freeze an order's number once written — so they stay as they are, and
-  // the supplier's counter starts from the floor those orders set (see orderCounterFloors).
-  // Read outside the transaction (a query cannot run inside one) and used only when the
-  // supplier's counter does not exist yet; if two people open the same new supplier's
-  // first order at once, the second transaction retries against the counter the first
-  // one created and never sees this number.
-  const existing = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'supplierId', supplier.id)
-  const seed = orderCounterFloors(existing).get(counterId(supplier.id)) ?? 0
+/** The next number on a supplier's counter, read inside the transaction. Writes nothing. */
+export async function nextOrderSeq(tx: TxContext, supplierId: string, seeds: ReadonlyMap<string, number>): Promise<number> {
+  const counter = await tx.get<{ value: number }>(COL.counters, counterId(supplierId))
+  if (counter) return counter.value + 1
+  const seed = seeds.get(counterId(supplierId))
+  // The supplier was not known when the seeds were read, and has no counter: numbering
+  // from zero could reuse a number an old order already carries. Start again.
+  if (seed === undefined) throw new AppError('ข้อมูลเพิ่งเปลี่ยนระหว่างบันทึก กรุณาลองอีกครั้ง')
+  return seed + 1
+}
 
-  return db.transaction(async (tx) => {
-    const counter = await tx.get<{ value: number }>(COL.counters, counterId(supplier.id))
-    const seq = (counter?.value ?? seed) + 1
-    tx.set(COL.counters, counterId(supplier.id), { value: seq })
+/** Put a new order and its counter in the transaction. Every read must come before. */
+export function writeNewOrder(tx: TxContext, id: string, seq: number, fields: Omit<PurchaseOrder, 'id' | 'docNo'>): string {
+  const docNo = makeDocNo(seq)
+  tx.set(COL.counters, counterId(fields.supplierId), { value: seq })
+  tx.set(COL.purchaseOrders, id, { docNo, ...fields })
+  return docNo
+}
+
+/**
+ * Open an order for one supplier.
+ *
+ * The lines are looked up from the catalogue rather than trusted from the caller, so an
+ * order always names the product and unit that existed when it was placed.
+ */
+export async function createPurchaseOrder(params: NewOrderParams): Promise<string> {
+  // Checked before anything is read, so a bad line costs nothing.
+  newOrderFields(params, Date.now())
+  const seeds = await counterSeeds([params.supplier.id])
+  return scoped().transaction(async (tx) => {
+    const seq = await nextOrderSeq(tx, params.supplier.id, seeds)
     const now = Date.now()
     const id = `${now}-${Math.random().toString(36).slice(2, 8)}`
-    tx.set(COL.purchaseOrders, id, {
-      docNo: makeDocNo(seq),
-      supplierId: supplier.id,
-      supplierName: supplier.name,
-      status: (params.batchId ? 'draft' : 'ordered') satisfies PurchaseOrderStatus,
-      locationId,
-      orderedAt,
-      ...(params.expectedAt !== undefined ? { expectedAt: params.expectedAt } : {}),
-      lines,
-      ...(params.eventId ? { eventId: params.eventId } : {}),
-      ...(params.batchId ? { batchId: params.batchId } : {}),
-      ...(params.requestId ? { requestId: params.requestId } : {}),
-      ...(params.note?.trim() ? { note: params.note.trim() } : {}),
-      createdBy: actor.id,
-      createdByName: actor.name,
-      createdAt: now,
-      updatedAt: now,
-    })
+    writeNewOrder(tx, id, seq, newOrderFields(params, now))
     return id
   })
 }
