@@ -11,6 +11,7 @@ import { formatThaiDateShort } from '../lib/format'
 import { INBOX_DETAIL, INBOX_TITLE, inboxItems, type InboxGroup, type InboxItem, type InboxSeverity } from '../lib/exceptionInbox'
 import { loadInbox } from '../services/inbox'
 import { useSuppliers } from '../services/suppliers'
+import { useSupplierIntel } from '../data/useSupplierIntel'
 
 /**
  * The Exception Inbox (plan C3): everything waiting on a หัวหน้า, worst first, one press
@@ -38,6 +39,8 @@ export function InboxPage() {
   const { user } = useAuth()
   const { locationById } = useData()
   const suppliers = useSuppliers()
+  // Phase G10: predicted stock-outs join the decisions (HIGH/CRITICAL, with enough evidence).
+  const intel = useSupplierIntel()
   const [rows, setRows] = useState<Loaded | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState(false)
@@ -68,9 +71,13 @@ export function InboxPage() {
             ...rows,
             locationName: (id) => (id ? (locationById(id)?.name ?? '') : ''),
             leadTimeOf: (id) => suppliers.find((s) => s.id === id)?.leadTimeDays,
+            formatDate: formatThaiDateShort,
+            stockouts: intel.stockouts
+              .filter((s) => s.prediction && s.prediction.estimatedStockoutDate !== null && (s.prediction.riskLevel === 'HIGH' || s.prediction.riskLevel === 'CRITICAL') && s.meta.dataConfidence !== 'insufficient')
+              .map((s) => ({ productId: s.productId, productName: s.productName, locationId: s.locationId, level: s.prediction!.riskLevel as 'HIGH' | 'CRITICAL', date: s.prediction!.estimatedStockoutDate!, shortageQty: s.prediction!.estimatedShortageQty, gapDays: s.prediction!.gapDays })),
           })
         : [],
-    [rows, now, locationById, suppliers],
+    [rows, now, locationById, suppliers, intel.stockouts],
   )
   const count = (g: InboxGroup | 'all') => (g === 'all' ? items.length : items.filter((i) => i.group === g).length)
   const shown = group === 'all' ? items : items.filter((i) => i.group === group)

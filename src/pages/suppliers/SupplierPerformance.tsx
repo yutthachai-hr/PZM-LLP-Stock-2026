@@ -23,6 +23,7 @@ import {
 } from '../../lib/supplierPerformance'
 import { SUPPLIER_SCORE_CONFIG, supplierScore, type SupplierScore } from '../../lib/supplierScore'
 import type { PurchaseOrder } from '../../types'
+import { skuIntel } from '../../intel/supplier'
 
 /**
  * Purchasing → Supplier Performance (S2, 5 Oct 2026). Numbers come from the pure modules
@@ -373,6 +374,9 @@ function SupplierDetail({ stats: s, score, onClose }: { stats: SupplierStats; sc
             <ItemList title={t('สินค้าที่ส่งตรงเสมอ')} items={reliable.map((i) => ({ id: i.productId, name: i.productName, note: t('ตรงเวลา {n}/{n} ครั้ง', { n: i.deliveries }) }))} />
           </div>
 
+          {/* Phase G1/G10: the supplier × product record — how this supplier does on each item. */}
+          <SkuTable outcomes={s.outcomes} />
+
           <div>
             <p className="mb-1 text-xs font-semibold text-ink-soft">{t('ประวัติการส่งล่าสุด')}</p>
             <div className="overflow-x-auto">
@@ -519,5 +523,42 @@ function DatasetButton({ orders }: { orders: PurchaseOrder[] }) {
           : t('{n} แถว ({late} ช้า) — ยังไม่พอ (ต้องการ {min} / {minLate})', { n: r.rows, late: r.late, min: MODEL_READY.minRows, minLate: MODEL_READY.minLate })}
       </span>
     </span>
+  )
+}
+
+function SkuTable({ outcomes }: { outcomes: readonly DeliveryOutcome[] }) {
+  const t = useT()
+  const rows = skuIntel(outcomes).sort((a, b) => b.deliveries - a.deliveries).slice(0, 12)
+  if (!rows.length) return null
+  return (
+    <div>
+      <p className="mb-1 text-xs font-semibold text-ink-soft">{t('ผลงานรายสินค้า')}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-xs">
+          <thead className="text-left text-ink-soft">
+            <tr>
+              <th className="py-1 pr-2 font-semibold">{t('สินค้า')}</th>
+              <th className="py-1 pr-2 text-right font-semibold">{t('ครั้ง')}</th>
+              <th className="py-1 pr-2 text-right font-semibold">{t('ตรงเวลา')}</th>
+              <th className="py-1 pr-2 text-right font-semibold">{t('ส่งครบ')}</th>
+              <th className="py-1 pr-2 text-right font-semibold">{t('ช้า มัธยฐาน / P90 (วัน)')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map((r) => (
+              <tr key={r.productId}>
+                <td className="py-1 pr-2">{r.productName}</td>
+                <td className="num py-1 pr-2 text-right">{r.deliveries}</td>
+                <td className="num py-1 pr-2 text-right">{r.onTimeRate === null ? '—' : `${Math.round(r.onTimeRate * 100)}%`}</td>
+                <td className="num py-1 pr-2 text-right">{r.fillRate === null ? '—' : `${Math.round(r.fillRate * 100)}%`}</td>
+                <td className="num py-1 pr-2 text-right">
+                  {r.medianDelay ?? '—'} / {r.p90Delay ?? '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

@@ -174,12 +174,16 @@ export function stockoutFor(input: StockoutInput, product: Product, loc: StockLo
     const adjusted = simulate(available, avgDaily, incoming.map((f) => ({ qty: f.qty, date: f.adjustedDate })), today, h)
     const riskLevel = levelFor(nominal.estimatedStockoutDate, today, adjusted.estimatedStockoutDate)
     prediction = { ...nominal, riskAdjusted: adjusted, riskLevel }
-    reasons.push({ code: 'stockout.basis', params: { available: round3(available), avgDaily: round3(avgDaily), cover: round3(available / avgDaily), incoming: incoming.length } })
+    const r1 = (n: number) => Math.round(n * 10) / 10
+    reasons.push({ code: 'stockout.basis', params: { available: round3(available), avgDaily: Math.round(avgDaily * 100) / 100, cover: r1(available / avgDaily), incoming: incoming.length } })
     if (nominal.estimatedStockoutDate !== null) {
       const next = incoming.find((f) => f.date !== null && f.date > nominal.estimatedStockoutDate!)
+      const last = [...incoming].reverse().find((f) => f.date !== null)
+      // Nothing on order; a delivery due after the shelf is empty; or everything on order
+      // lands first and is simply not enough.
       reasons.push({
-        code: incoming.length ? 'stockout.gapBeforeDelivery' : 'stockout.nothingOnOrder',
-        params: { gapDays: nominal.gapDays, shortage: nominal.estimatedShortageQty, docNo: next?.docNo ?? '' },
+        code: !incoming.length ? 'stockout.nothingOnOrder' : next ? 'stockout.gapBeforeDelivery' : 'stockout.incomingNotEnough',
+        params: { gapDays: nominal.gapDays, shortage: nominal.estimatedShortageQty, docNo: next?.docNo ?? last?.docNo ?? '' },
       })
     } else if (adjusted.estimatedStockoutDate !== null) {
       const risky = incoming.find((f) => f.risk && LEVEL_RANK[f.risk.level] >= LEVEL_RANK.HIGH)

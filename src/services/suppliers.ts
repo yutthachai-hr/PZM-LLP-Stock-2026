@@ -131,6 +131,11 @@ export async function listSupplierItems(): Promise<SupplierItem[]> {
   return backend.getAll<SupplierItem>(COL.supplierItems)
 }
 
+/** One product's prices from each supplier — a few documents, not the whole catalogue (Phase G5). */
+export async function listSupplierItemsFor(productId: string): Promise<SupplierItem[]> {
+  return backend.getBy<SupplierItem>(COL.supplierItems, 'productId', productId)
+}
+
 export async function createSupplier(input: SupplierInput): Promise<string> {
   const name = clean(input.name)
   if (!name) throw new AppError('กรุณากรอกชื่อผู้ขาย')

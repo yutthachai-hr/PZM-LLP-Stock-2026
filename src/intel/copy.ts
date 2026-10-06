@@ -26,6 +26,7 @@ export const WHY_TEXT: Record<string, string> = {
 
   'stockout.basis': 'พร้อมใช้ {available} · ใช้วันละ {avgDaily} → พอ {cover} วัน · ของที่กำลังมา {incoming} รายการ', // i18n-key
   'stockout.gapBeforeDelivery': 'ของขาด {gapDays} วัน ({shortage} หน่วย) ก่อน {docNo} มาถึง', // i18n-key
+  'stockout.incomingNotEnough': 'ของที่สั่งไว้ ({docNo}) มาก่อนแต่ไม่พอ — ขาด {gapDays} วัน ({shortage} หน่วย) ใน 14 วันข้างหน้า', // i18n-key
   'stockout.nothingOnOrder': 'ไม่มีของกำลังมา — ขาด {gapDays} วัน ({shortage} หน่วย) ใน 14 วันข้างหน้า', // i18n-key
   'stockout.lateDeliveryWouldGap': 'ถ้า {docNo} ส่งช้าตามปกติของผู้ขาย ({level} · {score}/100) จะขาด {gapDays} วัน', // i18n-key
   'stockout.noUse': 'ไม่มีการใช้ช่วงนี้ — ไม่คาดว่าจะหมด', // i18n-key

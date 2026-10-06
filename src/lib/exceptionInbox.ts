@@ -22,6 +22,7 @@ export type InboxKind =
   | 'transferApproval'
   | 'poPartial'
   | 'countToPost'
+  | 'stockoutRisk'
 
 export type InboxSeverity = 'critical' | 'high' | 'medium'
 export type InboxGroup = 'approve' | 'stuck' | 'problem'
@@ -50,6 +51,7 @@ export const INBOX_GROUP: Record<InboxKind, InboxGroup> = {
   transferApproval: 'approve',
   poPartial: 'stuck',
   countToPost: 'approve',
+  stockoutRisk: 'problem',
 }
 
 /** Thai lookup keys for t(); {slots} filled from `params`. */
@@ -63,6 +65,7 @@ export const INBOX_TITLE: Record<InboxKind, string> = {
   transferApproval: 'คำขอโอนสินค้ารออนุมัติ {docNo}', // i18n-key
   poPartial: 'ใบสั่งซื้อรับไม่ครบค้างนาน: {supplier} ({docNo})', // i18n-key
   countToPost: 'ยอดนับประจำเดือนรอปิดยอด: {location} {month}', // i18n-key
+  stockoutRisk: 'คาดว่าของหมด: {product} · {location}', // i18n-key
 }
 
 export const INBOX_DETAIL: Record<InboxKind, string> = {
@@ -75,6 +78,7 @@ export const INBOX_DETAIL: Record<InboxKind, string> = {
   transferApproval: '{by} · จาก {from} ไป {to} · {n} รายการ', // i18n-key
   poPartial: 'ยังค้างรับ {n} รายการ · ส่งครั้งล่าสุด {days} วันก่อน · {location}', // i18n-key
   countToPost: 'ยืนยันยอดนับแล้ว {n} รายการ — กดปิดยอดเพื่อปรับสต๊อก', // i18n-key
+  stockoutRisk: 'คาดว่าหมด {date} · ขาด {qty} ({gap} วัน) — ดูเหตุผลและตัวเลือกโอน/สั่งซื้อ', // i18n-key
 }
 
 export interface InboxInput {
@@ -85,6 +89,9 @@ export interface InboxInput {
   counts: readonly MonthlyCount[]
   locationName: (id: string | undefined) => string
   leadTimeOf?: (supplierId: string) => number | undefined
+  /** Phase G2 predictions at HIGH or CRITICAL with enough evidence (from the intel provider). */
+  stockouts?: readonly { productId: string; productName: string; locationId: string; level: 'HIGH' | 'CRITICAL'; date: number; shortageQty: number; gapDays: number }[]
+  formatDate?: (ms: number) => string
 }
 
 const RANK: Record<InboxSeverity, number> = { critical: 0, high: 1, medium: 2 }
@@ -141,6 +148,16 @@ export function inboxItems(input: InboxInput): InboxItem[] {
   for (const c of input.counts) {
     if (c.status !== 'recorded' && c.status !== 'posting') continue
     push('countToPost', c.id, 'medium', c.confirmedAt ?? c.updatedAt, `/counts/${c.id}`, { location: loc(c.locationId), month: c.month, n: Object.keys(c.lines).length }, c.locationId)
+  }
+
+  for (const s of input.stockouts ?? []) {
+    push('stockoutRisk', `${s.productId}__${s.locationId}`, s.level === 'CRITICAL' ? 'critical' : 'high', s.date, `/products/${s.productId}/card`, {
+      product: s.productName,
+      location: loc(s.locationId),
+      date: input.formatDate ? input.formatDate(s.date) : new Date(s.date).toISOString().slice(0, 10),
+      qty: s.shortageQty,
+      gap: s.gapDays,
+    }, s.locationId)
   }
 
   return out.sort((a, b) => RANK[a.severity] - RANK[b.severity] || a.since - b.since)
