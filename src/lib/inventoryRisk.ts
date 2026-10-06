@@ -1,7 +1,7 @@
 import type { Product, PurchaseOrder, StockLocation, Transfer, TransferStatus } from '../types'
 import { confirmedDateOf } from './deliveryMetrics'
 import { LEVEL_RANK, type DeliveryRisk, type RiskLevel } from './deliveryRisk'
-import { expectedDeliveryAt } from './inventoryRules/purchasing'
+import { expectedDeliveryAt, remainingBaseQty } from './inventoryRules/purchasing'
 import { TRANSFER_LEAD_DAYS } from './inventoryRules/suggestions'
 import { bkkDayStart, DAY_MS } from './inventoryRules/time'
 import type { UsageIndex } from './inventoryRules/usage'
@@ -118,9 +118,7 @@ export function incomingLots(
     let qty = 0
     for (const l of o.lines) {
       if (l.productId !== productId) continue
-      const factor = !l.entryUnit ? 1 : l.baseQty !== undefined && l.orderedQty > 0 ? l.baseQty / l.orderedQty : null
-      if (factor === null) continue
-      qty += Math.max(0, l.orderedQty - (l.receivedQty ?? 0)) * factor
+      qty += remainingBaseQty(l).qty
     }
     if (qty <= 0) continue
     const date = confirmedDateOf(o) ?? expectedDeliveryAt(o, leadTimeOf?.(o.supplierId))

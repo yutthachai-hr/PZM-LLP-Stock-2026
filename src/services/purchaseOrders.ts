@@ -8,7 +8,8 @@ import { sameUnit } from '../lib/units'
 import { resolveFactor, toBase } from '../lib/uom'
 import { requireEpochMs, roundQty } from '../lib/validate'
 import { orderCache } from '../data/orderCache'
-import { receiveStock, type MovementLine } from './stock'
+import { filing, planReceive, type MovementLine } from './stock'
+import { genId } from '../lib/id'
 import {
   COL,
   type Product,
@@ -19,6 +20,7 @@ import {
   type PoRevisionEntry,
   type PurchaseShareStatus,
   type PoReceipt,
+  type StockMovement,
   type Supplier,
 } from '../types'
 
@@ -518,55 +520,18 @@ export function hasOutstanding(order: Pick<PurchaseOrder, 'lines'>): boolean {
 }
 
 /**
- * Check a delivery in, and take it into stock.
- *
- * The rules the owner set, enforced here rather than only in the form, because a form is
- * client code and this is the moment stock becomes real:
+ * The owner's receiving rules applied to one delivery, with no database: what each line
+ * becomes and what arrived. Pure so it runs inside the receipt's transaction, against the
+ * order as it stands at that moment rather than as a screen loaded it minutes earlier.
  *
  *   - every line still outstanding is accounted for, either ticked or given a quantity;
- *   - a line whose quantity does not match what was outstanding needs a reason against it;
- *   - the invoice number is required, exactly as it is when a receipt is keyed by hand.
- *
- * A delivery that falls short leaves the order open for the rest (owner, 24 Sep 2026): each
- * delivery is one stock receipt and one entry in `receipts`, the line quantities add up,
- * and the order becomes `received` when nothing is outstanding — or when `closeRemainder`
- * says the rest is not coming. Measured against what is outstanding, a first delivery is
- * exactly the old single check-in.
- *
- * The stock receipt is an ordinary one. It is written first — an order recorded as
- * delivered with no goods behind it is the one state worth never producing.
+ *   - a line whose quantity does not match what was outstanding needs a reason against it.
  */
-export async function receivePurchaseOrder(params: {
-  orderId: string
-  invoiceNo: string
-  lines: readonly ReceiptLineInput[]
-  actor: { id: string; name: string }
-  /** The delivery's date — what the stock receipt is filed under. */
-  date?: number
-  /** The date printed on the supplier's document, when it differs. */
-  docDate?: number
-  /** Anything else about this delivery. The bill number is not repeated in here. */
-  note?: string
-  /** A photo of the supplier's document, filed with the stock in one commit. */
-  photoDataUrl?: string
-  /** The rest is not coming: close the order with this delivery, and say why. */
-  closeRemainder?: { reason: string }
-}): Promise<{ docNo: string; receivedLines: number; status: PurchaseOrderStatus; outstandingLines: number }> {
-  const { orderId, actor } = params
-  const invoiceNo = params.invoiceNo.trim()
-  if (!invoiceNo) throw new AppError('กรุณาระบุเลขที่บิล/ใบส่งของ')
-  const closeReason = params.closeRemainder?.reason.trim()
-  if (params.closeRemainder && !closeReason) throw new AppError('กรุณาระบุเหตุผลที่ปิดยอดค้างของใบสั่งซื้อ')
-
-  const db = scoped()
-  const order = await db.getOne<PurchaseOrder>(COL.purchaseOrders, orderId)
-  if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
-  if (order.status === 'received') throw new AppError('ใบสั่งซื้อนี้รับของแล้ว')
-  if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ถูกยกเลิกแล้ว')
-  // A draft is a proposal nobody has placed; goods cannot arrive against it.
-  if (order.status === 'draft') throw new AppError('ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ')
-
-  const given = new Map(params.lines.map((l) => [l.productId, l]))
+export function settleDelivery(
+  order: Pick<PurchaseOrder, 'lines'>,
+  lines: readonly ReceiptLineInput[],
+): { settled: PurchaseOrderLine[]; arrived: { line: PurchaseOrderLine; qty: number; note?: string }[] } {
+  const given = new Map(lines.map((l) => [l.productId, l]))
   const settled: PurchaseOrderLine[] = []
   const thisDelivery: { line: PurchaseOrderLine; qty: number; note?: string }[] = []
   for (const line of order.lines) {
@@ -594,86 +559,189 @@ export async function receivePurchaseOrder(params: {
     })
     thisDelivery.push({ line, qty, ...(note ? { note } : {}) })
   }
-
   const arrived = thisDelivery.filter((d) => d.qty > 0)
   if (arrived.length === 0) throw new AppError('ไม่มีรายการที่รับเข้า')
+  return { settled, arrived }
+}
 
-  // What arrived, in the product's own unit. A line ordered in another unit converts at
-  // the rate it was placed at (baseQty / orderedQty); a line from before that was kept
-  // takes the product's rate today, and is refused if there is none — never guessed.
-  const stockLines: MovementLine[] = []
-  for (const { line: l, qty, note: why } of arrived) {
-    // A line's reason for differing travels with its stock row, so the history says why.
-    const lineNote = why ? { note: why } : {}
-    if (!l.entryUnit) {
-      stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, qty, ...lineNote })
-      continue
-    }
-    let factor = l.baseQty !== undefined && l.orderedQty > 0 ? l.baseQty / l.orderedQty : null
-    if (factor === null) {
-      const p = await db.getOne<Product>(COL.products, l.productId)
-      factor = p ? resolveFactor(p, l.entryUnit) : null
-      if (factor === null) {
-        throw new AppError('ยังไม่ได้กำหนดอัตราแปลง "{unit}" ของ "{name}" — กำหนดที่หน้าสินค้าก่อน', { unit: l.entryUnit, name: l.productName })
-      }
-    }
-    stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, entryUnit: l.entryUnit, entryQty: qty, qty: toBase(qty, factor), ...lineNote })
-  }
+/** The id a receipt's stock rows are filed under (`<id>_0`, `_1`…) — how a repeat is recognised. */
+export function receiptIdFor(orderId: string, operationId: string): string {
+  return `rc_${orderId}_${operationId}`
+}
 
+/**
+ * Check a delivery in, and take it into stock.
+ *
+ * The invoice number is required, exactly as it is when a receipt is keyed by hand. A
+ * delivery that falls short leaves the order open for the rest (owner, 24 Sep 2026): each
+ * delivery is one stock receipt and one entry in `receipts`, the line quantities add up,
+ * and the order becomes `received` when nothing is outstanding — or when `closeRemainder`
+ * says the rest is not coming.
+ *
+ * ONE transaction (plan A1, 6 Oct 2026). Until then the stock was filed first and the order
+ * updated in a second write: a dropped connection between the two left the stock in and
+ * the order still owed — and the retry filed it again — and two devices confirming the
+ * same delivery both filed it (audit D1, reproduced in e2e/receive-po.spec.ts). Now the
+ * order is read inside the transaction, the lines are settled against it as it is at that
+ * moment, and the stock rows, balances and the order are written together or not at all.
+ *
+ * `operationId` names this attempt. The screen keeps it for as long as the same receipt is
+ * being confirmed, so a retry finds the rows the first attempt filed and returns that
+ * result instead of filing again.
+ */
+export async function receivePurchaseOrder(params: {
+  orderId: string
+  invoiceNo: string
+  lines: readonly ReceiptLineInput[]
+  actor: { id: string; name: string }
+  /** Names this attempt; the same id again is the same receipt. Fresh if not given. */
+  operationId?: string
+  /** The delivery's date — what the stock receipt is filed under. */
+  date?: number
+  /** The date printed on the supplier's document, when it differs. */
+  docDate?: number
+  /** Anything else about this delivery. The bill number is not repeated in here. */
+  note?: string
+  /** A photo of the supplier's document, filed with the stock in one commit. */
+  photoDataUrl?: string
+  /** The rest is not coming: close the order with this delivery, and say why. */
+  closeRemainder?: { reason: string }
+}): Promise<{ docNo: string; receivedLines: number; status: PurchaseOrderStatus; outstandingLines: number; replayed?: boolean }> {
+  const { orderId, actor } = params
+  const invoiceNo = params.invoiceNo.trim()
+  if (!invoiceNo) throw new AppError('กรุณาระบุเลขที่บิล/ใบส่งของ')
+  const closeReason = params.closeRemainder?.reason.trim()
+  if (params.closeRemainder && !closeReason) throw new AppError('กรุณาระบุเหตุผลที่ปิดยอดค้างของใบสั่งซื้อ')
+  const operationId = params.operationId?.trim() || genId()
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(operationId)) throw new AppError('รหัสการทำรายการไม่ถูกต้อง')
+  const receiptId = receiptIdFor(orderId, operationId)
   const date = params.date ?? Date.now()
   const note = params.note?.trim()
-  // Stock first. If this fails nothing has been recorded against the order, and the check
-  // can simply be done again.
-  const docNo = await receiveStock({
-    toLocationId: order.locationId,
-    lines: stockLines,
-    actor,
-    date,
-    ...(note ? { note } : {}),
-    doc: {
-      supplierId: order.supplierId,
-      supplierName: order.supplierName,
-      invoiceNo,
-      docDate: params.docDate,
-      poId: order.id,
-      poDocNo: order.docNo,
-    },
-    photoDataUrl: params.photoDataUrl,
-  })
 
-  const receipt: PoReceipt = {
-    docNo,
-    date,
-    invoiceNo,
-    byId: actor.id,
-    byName: actor.name,
-    lines: arrived.map((d) => ({ productId: d.line.productId, qty: d.qty, ...(d.note ? { note: d.note } : {}) })),
+  const db = scoped()
+  let written: PurchaseOrder | null = null
+  let seen: number | null = null
+  const run = filing(db, async (tx, file) => {
+    written = null
+    // ---- reads (all before any write: Firestore's rule for transactions) ----
+    const already = await tx.get<StockMovement>(COL.movements, `${receiptId}_0`)
+    const order = await tx.get<PurchaseOrder>(COL.purchaseOrders, orderId)
+    if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
+    seen = order.receipts?.length ?? 0
+    if (already) {
+      // This very receipt was filed before — a retry, or the same press twice. Say what it did.
+      const stillOwed = order.lines.filter((l) => outstandingQty(l) > 0).length
+      const mine = order.receipts?.find((r) => r.docNo === already.docNo)
+      return {
+        docNo: already.docNo,
+        receivedLines: mine?.lines.length ?? 0,
+        status: order.status,
+        outstandingLines: order.status === 'received' ? 0 : stillOwed,
+        replayed: true,
+      }
+    }
+    if (order.status === 'received') throw new AppError('ใบสั่งซื้อนี้รับของแล้ว')
+    if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ถูกยกเลิกแล้ว')
+    // A draft is a proposal nobody has placed; goods cannot arrive against it.
+    if (order.status === 'draft') throw new AppError('ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ')
+
+    const { settled, arrived } = settleDelivery(order, params.lines)
+
+    // What arrived, in the product's own unit. A line ordered in another unit converts at
+    // the rate it was placed at (baseQty / orderedQty); a line from before that was kept
+    // takes the product's rate today, and is refused if there is none — never guessed.
+    const stockLines: MovementLine[] = []
+    for (const { line: l, qty, note: why } of arrived) {
+      // A line's reason for differing travels with its stock row, so the history says why.
+      const lineNote = why ? { note: why } : {}
+      if (!l.entryUnit) {
+        stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, qty, ...lineNote })
+        continue
+      }
+      let factor = l.baseQty !== undefined && l.orderedQty > 0 ? l.baseQty / l.orderedQty : null
+      if (factor === null) {
+        const p = await tx.get<Product>(COL.products, l.productId)
+        factor = p ? resolveFactor(p, l.entryUnit) : null
+        if (factor === null) {
+          throw new AppError('ยังไม่ได้กำหนดอัตราแปลง "{unit}" ของ "{name}" — กำหนดที่หน้าสินค้าก่อน', { unit: l.entryUnit, name: l.productName })
+        }
+      }
+      stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, entryUnit: l.entryUnit, entryQty: qty, qty: toBase(qty, factor), ...lineNote })
+    }
+
+    const plan = await planReceive(tx, {
+      toLocationId: order.locationId,
+      lines: stockLines,
+      actor,
+      date,
+      ...(note ? { note } : {}),
+      doc: {
+        supplierId: order.supplierId,
+        supplierName: order.supplierName,
+        invoiceNo,
+        docDate: params.docDate,
+        poId: order.id,
+        poDocNo: order.docNo,
+      },
+      photoDataUrl: params.photoDataUrl,
+    })
+
+    // ---- writes ----
+    const docNo = plan.commit(file, (i) => `${receiptId}_${i}`)
+    const receipt: PoReceipt = {
+      docNo,
+      receiptId,
+      date,
+      invoiceNo,
+      byId: actor.id,
+      byName: actor.name,
+      lines: arrived.map((d) => ({ productId: d.line.productId, qty: d.qty, ...(d.note ? { note: d.note } : {}) })),
+    }
+    const stillOwed = settled.filter((l) => outstandingQty(l) > 0).length
+    const done = stillOwed === 0 || !!closeReason
+    const status: PurchaseOrderStatus = done ? 'received' : 'ordered'
+    const now = Date.now()
+    const patch: Partial<PurchaseOrder> = {
+      status,
+      lines: settled,
+      receipts: [...(order.receipts ?? []), receipt],
+      // The latest delivery, so everything that read one receipt per order still reads true.
+      invoiceNo,
+      // The date on the delivery note, the same one the stock receipt is filed under — not
+      // the moment it was keyed. (Until 17 Sep 2026 this was Date.now().) `updatedAt` keeps
+      // the keying time.
+      receivedAt: date,
+      receivedBy: actor.id,
+      receivedByName: actor.name,
+      movementDocNo: docNo,
+      ...(closeReason && stillOwed > 0
+        ? { closedShortReason: closeReason, closedShortBy: actor.id, closedShortByName: actor.name, closedShortAt: now }
+        : {}),
+      updatedAt: now,
+    }
+    tx.update(COL.purchaseOrders, orderId, patch as Record<string, unknown>)
+    written = { ...order, ...patch } as PurchaseOrder
+    return { docNo, receivedLines: arrived.length, status, outstandingLines: done ? 0 : stillOwed }
+  })
+  let result: Awaited<typeof run>
+  try {
+    result = await run
+  } catch (e) {
+    // Another device filed a delivery on this order between our read and our commit. The
+    // rules see the order's receipts no longer growing by exactly one and refuse the whole
+    // commit — nothing of ours was written, but "insufficient permissions" tells the person
+    // nothing. Say what happened instead, so they look at what is still owed.
+    if (seen !== null && (e as { code?: string })?.code === 'permission-denied') {
+      const now = await db.getOne<PurchaseOrder>(COL.purchaseOrders, orderId)
+      if (now && (now.receipts?.length ?? 0) > seen) {
+        orderCache.patch(now)
+        throw new AppError('ใบสั่งซื้อนี้เพิ่งมีคนรับของไป ({name}) — ไม่ได้บันทึกซ้ำ ตรวจยอดค้างอีกครั้ง', { name: now.receivedByName ?? '' })
+      }
+    }
+    throw e
   }
-  const stillOwed = settled.filter((l) => outstandingQty(l) > 0).length
-  const done = stillOwed === 0 || !!closeReason
-  const status: PurchaseOrderStatus = done ? 'received' : 'ordered'
-  const now = Date.now()
-  const patch: Partial<PurchaseOrder> = {
-    status,
-    lines: settled,
-    receipts: [...(order.receipts ?? []), receipt],
-    // The latest delivery, so everything that read one receipt per order still reads true.
-    invoiceNo,
-    // The date on the delivery note, the same one the stock receipt is filed under — not
-    // the moment it was keyed. (Until 17 Sep 2026 this was Date.now().) `updatedAt` keeps
-    // the keying time.
-    receivedAt: date,
-    receivedBy: actor.id,
-    receivedByName: actor.name,
-    movementDocNo: docNo,
-    ...(closeReason && stillOwed > 0
-      ? { closedShortReason: closeReason, closedShortBy: actor.id, closedShortByName: actor.name, closedShortAt: now }
-      : {}),
-    updatedAt: now,
-  }
-  await db.update(COL.purchaseOrders, orderId, patch as Record<string, unknown>)
-  orderCache.patch({ ...order, ...patch } as PurchaseOrder)
-  return { docNo, receivedLines: arrived.length, status, outstandingLines: done ? 0 : stillOwed }
+  if (written) orderCache.patch(written)
+  return result
 }
 
 /**

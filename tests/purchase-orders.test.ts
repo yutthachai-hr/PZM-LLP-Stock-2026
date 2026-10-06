@@ -859,3 +859,77 @@ describe('an order delivered in more than one go', () => {
     expect(movements().map((m) => [m.entryQty, m.qty])).toEqual([[1, 2], [2, 4]])
   })
 })
+
+describe('a receipt is filed once, whatever happens to the confirm press (plan A1)', () => {
+  const all = (op?: string) =>
+    ({
+      invoiceNo: 'IV-7001',
+      lines: [
+        { productId: 'p1', receivedQty: 0, checked: true },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+      ...(op ? { operationId: op } : {}),
+    }) as const
+
+  test('the same operation again is the same receipt: returned, not filed twice', async () => {
+    const id = await placeOrder()
+    const first = await receivePurchaseOrder({ orderId: id, ...all('op-retry-1') })
+    const again = await receivePurchaseOrder({ orderId: id, ...all('op-retry-1') })
+    expect(again).toMatchObject({ docNo: first.docNo, replayed: true, status: 'received' })
+    expect(balance('p1')).toBe(10)
+    expect(movements()).toHaveLength(2)
+    expect(orders()[0].receipts).toHaveLength(1)
+  })
+
+  test('stock rows are filed under the receipt id, and the order records it', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, ...all('op-ids-1') })
+    expect(movements().map((m) => m.id).sort()).toEqual([`rc_${id}_op-ids-1_0`, `rc_${id}_op-ids-1_1`])
+    expect(orders()[0].receipts?.[0].receiptId).toBe(`rc_${id}_op-ids-1`)
+  })
+
+  test('a second device confirming the same delivery is refused against the order as it now stands', async () => {
+    const id = await placeOrder()
+    const results = await Promise.allSettled([
+      receivePurchaseOrder({ orderId: id, ...all('device-a-1') }),
+      receivePurchaseOrder({ orderId: id, ...all('device-b-1') }),
+    ])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(balance('p1')).toBe(10)
+    expect(movements()).toHaveLength(2)
+    expect(orders()[0].receipts).toHaveLength(1)
+  })
+
+  test('a part delivery from one device and the rest from another add up, nothing twice', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-7002',
+      lines: [
+        { productId: 'p1', receivedQty: 4, checked: false, note: 'rest tomorrow' },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+      operationId: 'part-one-1',
+    })
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-7003', lines: [{ productId: 'p1', receivedQty: 0, checked: true }], actor: ACTOR, operationId: 'part-two-1' })
+    expect(balance('p1')).toBe(10)
+    expect(orders()[0]).toMatchObject({ status: 'received' })
+    expect(orders()[0].receipts).toHaveLength(2)
+  })
+
+  test('nothing is written when the order cannot take the delivery', async () => {
+    const id = await placeOrder()
+    await cancelPurchaseOrder({ id, reason: 'supplier closed', actor: ACTOR })
+    await expect(receivePurchaseOrder({ orderId: id, ...all('cancelled-1') })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+    expect(raw('stockLevels')).toHaveLength(0)
+  })
+
+  test('an operation id that is not a plain token is refused before anything is read', async () => {
+    const id = await placeOrder()
+    await expect(receivePurchaseOrder({ orderId: id, ...all('../../x') })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+  })
+})

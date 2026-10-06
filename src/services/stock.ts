@@ -140,16 +140,24 @@ function scoped(): Backend {
  * reaches the ledger unnoted. The sink is reset on every attempt: Firestore re-runs the
  * callback on contention, and rows from an attempt that never committed must not show.
  */
+/**
+ * Writes one movement inside the transaction. `id` is given only when the caller needs a
+ * row it can find again — a receipt filed under its operation id, so pressing confirm
+ * twice, or retrying after the network dropped, finds the first one instead of filing a
+ * second (plan A1, 6 Oct 2026). Otherwise a fresh id.
+ */
+export type FileMovement = (mv: Omit<StockMovement, 'id'>, id?: string) => void
+
 export async function filing<R>(
   db: Backend | undefined,
-  run: (tx: TxContext, file: (mv: Omit<StockMovement, 'id'>) => void) => Promise<R>,
+  run: (tx: TxContext, file: FileMovement) => Promise<R>,
 ): Promise<R> {
   const targetDb = db ?? scoped()
   let sink: StockMovement[] = []
   const result = await targetDb.transaction(async (tx) => {
     sink = []
-    return run(tx, (mv) => {
-      const id = genId()
+    return run(tx, (mv, given) => {
+      const id = given ?? genId()
       tx.set(COL.movements, id, mv as Record<string, unknown>)
       sink.push({ ...mv, id } as StockMovement)
     })
@@ -284,7 +292,7 @@ function docFields(doc: ReceiptDoc | undefined): Partial<StockMovement> {
   return out
 }
 
-export async function receiveStock(params: {
+export interface PlanReceiveParams {
   lines: MovementLine[]
   toLocationId: string
   date: number
@@ -298,61 +306,84 @@ export async function receiveStock(params: {
    * stock already moved, and saving again moves it twice.
    */
   photoDataUrl?: string
-}): Promise<string> {
+}
+
+export interface PlannedReceive {
+  docNo: string
+  lines: MovementLine[]
+  /** The writes. `idFor(i)` names the i-th row when the caller needs to find it again. */
+  commit: (file: FileMovement, idFor?: (i: number) => string) => string
+}
+
+/**
+ * Plan a receipt inside a transaction: read master data, the counter and the balances,
+ * and return the writes. Split out so a purchase-order receipt can file the stock and
+ * update the order in ONE commit (plan A1) — until 6 Oct 2026 they were two, and a failure
+ * or a second device between them left stock in with the order still waiting for it.
+ */
+export async function planReceive(tx: TxContext, params: PlanReceiveParams): Promise<PlannedReceive> {
   const { toLocationId, date, actor, note, photoDataUrl } = params
   const lines = mergeLines(params.lines)
   requireEpochMs(date)
   requireId(toLocationId, 'toLocationId')
   const paperwork = docFields(params.doc)
-  const db = scoped()
 
-  return filing(db, async (tx, file) => {
-    // ---- reads ----
-    await requireMasterData(
-      tx,
-      lines.map((l) => l.productId),
-      [toLocationId],
-    )
-    const counter = await tx.get<{ value: number }>(COL.counters, 'receive')
-    const seq = (counter?.value ?? 0) + 1
-    const levels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
-    )
-    // ---- writes ----
-    const docNo = makeDocNo('receive', seq)
-    tx.set(COL.counters, 'receive', { value: seq })
-    const now = Date.now()
-    if (photoDataUrl) {
-      tx.set(COL.movementImages, docNo, { dataUrl: photoDataUrl })
-    }
-    lines.forEach((l, i) => {
-      const cur = levels[i]?.qty ?? 0
-      tx.set(
-        COL.stockLevels,
-        levelRef(toLocationId, l).id,
-        levelDoc(toLocationId, l.productId, cur + l.qty, actor, now, levelRef(toLocationId, l).unit),
-      )
-      const mv: Omit<StockMovement, 'id'> = {
-        docNo,
-        type: 'receive',
-        productId: l.productId,
-        productName: l.productName,
-        unit: l.unit,
-        ...keyedFields(l),
-        qty: l.qty,
-        toLocationId,
-        ...(l.note ?? note ? { note: l.note ?? note } : {}),
-        ...paperwork,
-        ...(photoDataUrl ? { hasPhoto: true } : {}),
-        date,
-        byUserId: actor.id,
-        byUserName: actor.name,
-        createdAt: now,
+  // ---- reads ----
+  await requireMasterData(
+    tx,
+    lines.map((l) => l.productId),
+    [toLocationId],
+  )
+  const counter = await tx.get<{ value: number }>(COL.counters, 'receive')
+  const seq = (counter?.value ?? 0) + 1
+  const levels = await Promise.all(
+    lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
+  )
+  const docNo = makeDocNo('receive', seq)
+
+  // ---- writes ----
+  return {
+    docNo,
+    lines,
+    commit: (file, idFor) => {
+      tx.set(COL.counters, 'receive', { value: seq })
+      const now = Date.now()
+      if (photoDataUrl) {
+        tx.set(COL.movementImages, docNo, { dataUrl: photoDataUrl })
       }
-      file(mv)
-    })
-    return docNo
-  })
+      lines.forEach((l, i) => {
+        const cur = levels[i]?.qty ?? 0
+        tx.set(
+          COL.stockLevels,
+          levelRef(toLocationId, l).id,
+          levelDoc(toLocationId, l.productId, cur + l.qty, actor, now, levelRef(toLocationId, l).unit),
+        )
+        const mv: Omit<StockMovement, 'id'> = {
+          docNo,
+          type: 'receive',
+          productId: l.productId,
+          productName: l.productName,
+          unit: l.unit,
+          ...keyedFields(l),
+          qty: l.qty,
+          toLocationId,
+          ...(l.note ?? note ? { note: l.note ?? note } : {}),
+          ...paperwork,
+          ...(photoDataUrl ? { hasPhoto: true } : {}),
+          date,
+          byUserId: actor.id,
+          byUserName: actor.name,
+          createdAt: now,
+        }
+        file(mv, idFor?.(i))
+      })
+      return docNo
+    },
+  }
+}
+
+export async function receiveStock(params: PlanReceiveParams): Promise<string> {
+  return filing(scoped(), async (tx, file) => (await planReceive(tx, params)).commit(file))
 }
 
 export interface PlanIssueParams {

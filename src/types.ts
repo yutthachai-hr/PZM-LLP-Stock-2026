@@ -367,6 +367,11 @@ export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received' | 'cancelled'
 /** One delivery checked in against an order: the stock receipt it became, and what came. */
 export interface PoReceipt {
   docNo: string
+  /**
+   * The id its stock rows are filed under (`rc_<order>_<operation>`, rows `_0`, `_1`…), so
+   * a retried confirm finds this receipt instead of filing another. Since 6 Oct 2026.
+   */
+  receiptId?: string
   /** The delivery's date — the one the stock receipt is filed under. */
   date: number
   invoiceNo: string

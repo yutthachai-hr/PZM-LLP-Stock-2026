@@ -25,6 +25,7 @@ import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { useDraft } from '../lib/useDraft'
+import { genId } from '../lib/id'
 import { DraftNotice } from '../components/DraftNotice'
 import type { PurchaseOrder } from '../types'
 import { PoPicker } from './receive/PoPicker'
@@ -241,6 +242,8 @@ export function ReceivePage() {
     }
     if (!toLocationId) return toast.error(t('เลือกคลังปลายทาง'))
     if (!kitchen) await checkDuplicate()
+    // The name this receipt is filed under, kept until it is filed (plan A1).
+    if (!d.operationId) setD((cur) => (cur.operationId ? cur : { ...cur, operationId: genId() }))
     setCloseShort(false)
     setCloseReason('')
     setReviewing(true)
@@ -253,6 +256,7 @@ export function ReceivePage() {
       if (order) {
         const result = await receivePurchaseOrder({
           orderId: order.id,
+          ...(d.operationId ? { operationId: d.operationId } : {}),
           invoiceNo: d.invoiceNo,
           date,
           docDate,
@@ -270,6 +274,8 @@ export function ReceivePage() {
           }),
           ...(closeShort && facts.short > 0 ? { closeRemainder: { reason: closeReason } } : {}),
         })
+        // Filed already — by the attempt whose answer never came back. Nothing new was filed.
+        if (result.replayed) toast.success(t('ใบรับนี้บันทึกไปแล้ว ({docNo}) — ไม่ได้บันทึกซ้ำ', { docNo: result.docNo }))
         setDone({ docNo: result.docNo, facts, exceptions: exceptions.length, outstandingLines: result.outstandingLines })
       } else {
         const docNo = await receiveStock({

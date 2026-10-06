@@ -718,6 +718,9 @@ export const EN: Record<string, string> = {
   'กำหนดเสร็จต้องไม่อยู่ก่อนวันเริ่ม': 'The deadline cannot be before the start',
   'ช่วงวันที่ไม่ถูกต้อง': 'Invalid date range',
   'ฐานข้อมูลจำลองสำหรับทดสอบ (emulator)': 'Test emulator database',
+  'ใบรับนี้บันทึกไปแล้ว ({docNo}) — ไม่ได้บันทึกซ้ำ': 'This receipt was already filed ({docNo}) — nothing was filed twice',
+  'รหัสการทำรายการไม่ถูกต้อง': 'Invalid operation id',
+  'ใบสั่งซื้อนี้เพิ่งมีคนรับของไป ({name}) — ไม่ได้บันทึกซ้ำ ตรวจยอดค้างอีกครั้ง': 'Someone ({name}) has just received this order — nothing was filed twice; check what is still owed',
   'เซิร์ฟเวอร์ทดสอบนี้ต่อกับข้อมูลจริง — ใช้ npm run demo':
     'This dev server is connected to live data — use npm run demo',
 

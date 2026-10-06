@@ -156,12 +156,18 @@ export interface ReceiptDraft {
   lines: Line[]
   /** Bills from an older draft still to be keyed, one at a time, after this one. */
   queue: LegacyBill[]
+  /**
+   * Names this receipt for the server (plan A1): set when it is first reviewed and kept,
+   * across a reload too, until it is filed — so confirming again after a dropped
+   * connection finds the receipt already filed instead of filing it twice. Empty until then.
+   */
+  operationId: string
 }
 
 export function emptyDraft(): ReceiptDraft {
   return {
     mode: 'po', poId: '', entries: {}, toLocationId: '', dateStr: '', docDateStr: '',
-    supplierId: '', supplierName: '', invoiceNo: '', note: '', lines: [], queue: [],
+    supplierId: '', supplierName: '', invoiceNo: '', note: '', lines: [], queue: [], operationId: '',
   }
 }
 
@@ -237,6 +243,7 @@ export function restoreReceipt(saved: unknown): ReceiptDraft {
       note: str(d.note),
       lines: linesOf(d.lines),
       queue: billsOf(d.queue),
+      operationId: /^[A-Za-z0-9_-]{6,64}$/.test(str(d.operationId)) ? str(d.operationId) : '',
     }
   }
   if (typeof d.note === 'string' || Array.isArray(d.lines)) {
