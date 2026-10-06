@@ -1011,3 +1011,50 @@ describe('exit gate A: the same operation retried five times is one receipt', ()
     expect(orders()[0].receipts).toHaveLength(1)
   })
 })
+
+describe('plan B5: goods refused at the door, and the over-receipt ceiling', () => {
+  const both = (p1: Record<string, unknown>) => [{ productId: 'p1', receivedQty: 0, checked: false, ...p1 }, { productId: 'p2', receivedQty: 0, checked: true }]
+
+  test('a refused quantity is kept on the receipt, never stocked, and the line stays owed', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R1', lines: both({ receivedQty: 7, rejectedQty: 3, rejectReason: 'damaged' }), actor: ACTOR })
+    expect(balance('p1')).toBe(7)
+    const po = orders()[0]
+    expect(po.lines[0].receivedQty).toBe(7)
+    expect(po.status).not.toBe('received')
+    expect(po.receipts?.[0].lines.find((l) => l.productId === 'p1')).toMatchObject({ rejectedQty: 3, rejectReason: 'damaged' })
+    expect(String(movements().find((m) => m.productId === 'p1')?.note)).toMatch(/ตีกลับ 3/)
+  })
+
+  test('a refusal needs its reason, and cannot be negative', async () => {
+    const id = await placeOrder()
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R2', lines: both({ receivedQty: 7, rejectedQty: 3 }), actor: ACTOR })).rejects.toThrow()
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R2', lines: both({ receivedQty: 7, note: 'x', rejectedQty: -1, rejectReason: 'other' }), actor: ACTOR })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+  })
+
+  test('a delivery refused in full files nothing', async () => {
+    const id = await placeOrder()
+    const lines = [
+      { productId: 'p1', receivedQty: 0, checked: false, rejectedQty: 10, rejectReason: 'expired' as const },
+      { productId: 'p2', receivedQty: 0, checked: false, note: 'not sent' },
+    ]
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R3', lines, actor: ACTOR })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+  })
+
+  test('more than 10% over what is owed needs a manager or admin', async () => {
+    const id = await placeOrder()
+    const over = both({ receivedQty: 12, note: 'supplier sent extra' })
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R4', lines: over, actor: { ...ACTOR, role: 'staff' } })).rejects.toThrow(/10%/)
+    // Within the tolerance a staff member may take it in.
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R4', lines: both({ receivedQty: 11, note: 'one extra' }), actor: { ...ACTOR, role: 'staff' } })
+    expect(balance('p1')).toBe(11)
+  })
+
+  test('a manager may take in more than the tolerance', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R5', lines: both({ receivedQty: 15, note: 'bulk deal' }), actor: { ...ACTOR, role: 'manager' } })
+    expect(balance('p1')).toBe(15)
+  })
+})

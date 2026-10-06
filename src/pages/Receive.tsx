@@ -250,7 +250,7 @@ export function ReceivePage() {
   }
 
   async function confirm() {
-    const actor = { id: user!.id, name: user!.name }
+    const actor = { id: user!.id, name: user!.name, role: user!.role }
     setBusy(true)
     try {
       if (order) {
@@ -270,6 +270,7 @@ export function ReceivePage() {
               receivedQty: e?.qty ?? 0,
               checked: variance(outstanding(l), e?.qty ?? null) === 'match',
               note: e?.reason,
+              ...((e?.rejected ?? 0) > 0 ? { rejectedQty: e!.rejected!, rejectReason: e!.rejectReason } : {}),
             }
           }),
           ...(closeShort && facts.short > 0 ? { closeRemainder: { reason: closeReason } } : {}),

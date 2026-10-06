@@ -1,4 +1,4 @@
-import type { Role } from '../types'
+import { REJECT_REASONS, type RejectReason, type Role } from '../types'
 import { bool, id, list, movementLine, num, obj, only, optNum, optText, photo, text } from './check'
 import {
   consumeInTx,
@@ -57,9 +57,17 @@ export const receivePOCommand = defineCommand({
       operationId,
       lines: list(p.lines, 'lines', (x): ReceiptLineInput => {
         const l = obj(x, 'line')
-        only(l, ['productId', 'receivedQty', 'checked', 'note'], 'line')
+        only(l, ['productId', 'receivedQty', 'checked', 'note', 'rejectedQty', 'rejectReason'], 'line')
         const note = optText(l.note, 'line.note')
-        return { productId: id(l.productId, 'line.productId'), receivedQty: num(l.receivedQty, 'line.receivedQty'), checked: bool(l.checked, 'line.checked'), ...(note !== undefined ? { note } : {}) }
+        if (l.rejectReason !== undefined && !(REJECT_REASONS as readonly unknown[]).includes(l.rejectReason)) throw new BadInput('line.rejectReason')
+        return {
+          productId: id(l.productId, 'line.productId'),
+          receivedQty: num(l.receivedQty, 'line.receivedQty'),
+          checked: bool(l.checked, 'line.checked'),
+          ...(note !== undefined ? { note } : {}),
+          ...(l.rejectedQty !== undefined ? { rejectedQty: num(l.rejectedQty, 'line.rejectedQty') } : {}),
+          ...(l.rejectReason !== undefined ? { rejectReason: l.rejectReason as RejectReason } : {}),
+        }
       }),
       date: num(p.date, 'date'),
       docDate: optNum(p.docDate, 'docDate'),
@@ -80,6 +88,7 @@ export const receivePOCommand = defineCommand({
       ...(p.note ? { note: p.note } : {}),
       ...(p.photoDataUrl ? { photoDataUrl: p.photoDataUrl } : {}),
       ...(p.closeReason ? { closeReason: p.closeReason } : {}),
+      ...(actor.role ? { actorRole: actor.role } : {}),
     })
     return { ...out.result, seen: out.seen, ...(out.written ? { order: out.written } : {}) }
   },

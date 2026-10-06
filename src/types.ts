@@ -367,6 +367,10 @@ export type StockEventPriority = 'normal' | 'high' | 'critical'
 export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received' | 'cancelled'
 
 /** One delivery checked in against an order: the stock receipt it became, and what came. */
+/** Why goods that arrived were refused at the door (plan B5, 6 Oct 2026). */
+export const REJECT_REASONS = ['damaged', 'expired', 'wrongItem', 'quality', 'other'] as const
+export type RejectReason = (typeof REJECT_REASONS)[number]
+
 export interface PoReceipt {
   docNo: string
   /**
@@ -380,7 +384,14 @@ export interface PoReceipt {
   byId: string
   byName: string
   /** What arrived on this delivery, in the order line's own unit (as `orderedQty`). */
-  lines: { productId: string; qty: number; note?: string }[]
+  lines: {
+    productId: string
+    qty: number
+    note?: string
+    /** Delivered but refused at the door (plan B5): not taken into stock, still owed. */
+    rejectedQty?: number
+    rejectReason?: RejectReason
+  }[]
 }
 
 /** One product on an order, as ordered and as it actually turned up. */

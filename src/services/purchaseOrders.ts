@@ -20,6 +20,7 @@ import {
   type PoRevisionChange,
   type PoRevisionEntry,
   type PurchaseShareStatus,
+  type Role,
   type Supplier,
 } from '../types'
 
@@ -585,7 +586,8 @@ export async function receivePurchaseOrder(params: {
   orderId: string
   invoiceNo: string
   lines: readonly ReceiptLineInput[]
-  actor: { id: string; name: string }
+  /** With the role, so the over-receipt tolerance knows who is receiving (plan B5). */
+  actor: { id: string; name: string; role?: Role }
   /** Names this attempt; the same id again is the same receipt. Fresh if not given. */
   operationId?: string
   /** The delivery's date — what the stock receipt is filed under. */
@@ -648,6 +650,7 @@ export async function receivePurchaseOrder(params: {
       ...(note ? { note } : {}),
       ...(params.photoDataUrl ? { photoDataUrl: params.photoDataUrl } : {}),
       ...(closeReason ? { closeReason } : {}),
+      ...(actor.role ? { actorRole: actor.role } : {}),
     })
     written = out.written
     seen = out.seen

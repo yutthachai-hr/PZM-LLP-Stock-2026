@@ -3079,4 +3079,15 @@ export const EN: Record<string, string> = {
   'เดือน {month} ของคลังนี้ปิดยอดนับแล้ว — บันทึกย้อนหลังเข้าเดือนนี้ไม่ได้': '{month} is closed at this location (its count is posted) — nothing can be dated into it',
   'เดือน {month} ปิดยอดนับแล้ว — ระบุเหตุผลการแก้ไขย้อนหลัง': '{month} is closed (its count is posted) — give a reason for changing it',
   'เหตุผลการแก้ไขย้อนหลัง (เดือนที่ปิดยอดแล้ว)': 'Reason for changing a closed month',
+  // Plan B5: refused goods at receipt, over-receipt ceiling (6 Oct 2026)
+  'รับเกินยอดค้างรับเกิน {pct}% ({name}) — ต้องให้หัวหน้าหรือแอดมินรับ': 'More than {pct}% over what is still owed ({name}) — a manager or admin must receive it',
+  'จำนวนที่ตีกลับต้องไม่ติดลบ': 'The refused quantity cannot be negative',
+  'กรุณาเลือกเหตุผลที่ตีกลับ: {name}': 'Choose why it was refused: {name}',
+  '+ ตีกลับ / ไม่รับของบางส่วน': '+ Refuse part of the delivery',
+  'ตีกลับ (ไม่รับเข้าสต๊อก)': 'Refused (not taken into stock)',
+  'จำนวนที่ตีกลับ: {name}': 'Refused quantity: {name}',
+  'เหตุผลที่ตีกลับ: {name}': 'Reason refused: {name}',
+  'เลือกเหตุผล': 'Choose a reason',
+  'ส่งผิดรายการ': 'Wrong item',
+  'คุณภาพไม่ผ่าน': 'Failed quality check',
 }

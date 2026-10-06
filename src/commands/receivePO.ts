@@ -1,6 +1,6 @@
 import type { TxContext } from '../backend/tx'
 import { AppError } from '../i18n/AppError'
-import { COL, type PoReceipt, type Product, type PurchaseOrder, type PurchaseOrderLine, type PurchaseOrderStatus, type StockMovement } from '../types'
+import { COL, type PoReceipt, type Product, type PurchaseOrder, type PurchaseOrderLine, type PurchaseOrderStatus, type RejectReason, type Role, type StockMovement } from '../types'
 import { resolveFactor, toBase } from '../lib/uom'
 import { roundQty } from '../lib/validate'
 import { planReceive, type FileMovement, type MovementLine } from './ledgerTx'
@@ -19,6 +19,24 @@ export interface ReceiptLineInput {
   /** Ticked to say it matched what was still outstanding. */
   checked: boolean
   note?: string
+  /** Delivered but refused at the door (plan B5): recorded, never taken into stock. */
+  rejectedQty?: number
+  rejectReason?: RejectReason
+}
+
+/**
+ * How far over what was still owed a delivery may go before it needs a หัวหน้า or admin
+ * (plan B5): 10%. Past that, a staff member's receipt is refused — the extra is a question
+ * for the supplier, not stock to take in quietly.
+ */
+export const OVER_RECEIPT_TOLERANCE = 0.1
+
+const REJECT_WORDS: Record<RejectReason, string> = {
+  damaged: 'เสียหาย',
+  expired: 'หมดอายุ',
+  wrongItem: 'ส่งผิดรายการ',
+  quality: 'คุณภาพไม่ผ่าน',
+  other: 'อื่นๆ',
 }
 
 /** What is still to come on a line: ordered, less every delivery so far. Never below zero. */
@@ -42,10 +60,12 @@ export function hasOutstanding(order: Pick<PurchaseOrder, 'lines'>): boolean {
 export function settleDelivery(
   order: Pick<PurchaseOrder, 'lines'>,
   lines: readonly ReceiptLineInput[],
-): { settled: PurchaseOrderLine[]; arrived: { line: PurchaseOrderLine; qty: number; note?: string }[] } {
+  /** A หัวหน้า or admin may take in more than the tolerance over what was owed (plan B5). */
+  allowOver = true,
+): { settled: PurchaseOrderLine[]; arrived: { line: PurchaseOrderLine; qty: number; note?: string; rejectedQty?: number; rejectReason?: RejectReason }[] } {
   const given = new Map(lines.map((l) => [l.productId, l]))
   const settled: PurchaseOrderLine[] = []
-  const thisDelivery: { line: PurchaseOrderLine; qty: number; note?: string }[] = []
+  const thisDelivery: { line: PurchaseOrderLine; qty: number; note?: string; rejectedQty?: number; rejectReason?: RejectReason }[] = []
   for (const line of order.lines) {
     const outstanding = outstandingQty(line)
     const input = given.get(line.productId)
@@ -58,10 +78,20 @@ export function settleDelivery(
     const qty = input.checked ? outstanding : input.receivedQty
     if (!Number.isFinite(qty) || qty < 0) throw new AppError('จำนวนที่รับต้องไม่ติดลบ')
     const note = input.note?.trim()
+    // Goods refused at the door: how many, and why, in the known words — or none at all.
+    const rejected = input.rejectedQty ?? 0
+    if (!Number.isFinite(rejected) || rejected < 0) throw new AppError('จำนวนที่ตีกลับต้องไม่ติดลบ')
+    if (rejected > 0 && !(input.rejectReason && input.rejectReason in REJECT_WORDS)) {
+      throw new AppError('กรุณาเลือกเหตุผลที่ตีกลับ: {name}', { name: line.productName })
+    }
     // A number that differs from what was owed is a discrepancy, and a discrepancy without a
-    // reason is the thing nobody can explain a month later.
-    if (qty !== outstanding && !note) {
+    // reason is the thing nobody can explain a month later. A short line whose gap was
+    // refused at the door has its reason already.
+    if (qty !== outstanding && !note && !(rejected > 0 && qty < outstanding)) {
       throw new AppError('กรุณาระบุเหตุผลของรายการที่จำนวนไม่ตรง: {name}', { name: line.productName })
+    }
+    if (!allowOver && qty > roundQty(outstanding * (1 + OVER_RECEIPT_TOLERANCE))) {
+      throw new AppError('รับเกินยอดค้างรับเกิน {pct}% ({name}) — ต้องให้หัวหน้าหรือแอดมินรับ', { name: line.productName, pct: OVER_RECEIPT_TOLERANCE * 100 })
     }
     settled.push({
       ...line,
@@ -69,10 +99,11 @@ export function settleDelivery(
       checked: !!input.checked,
       ...(note ? { note } : {}),
     })
-    thisDelivery.push({ line, qty, ...(note ? { note } : {}) })
+    thisDelivery.push({ line, qty, ...(note ? { note } : {}), ...(rejected > 0 ? { rejectedQty: roundQty(rejected), rejectReason: input.rejectReason } : {}) })
   }
-  const arrived = thisDelivery.filter((d) => d.qty > 0)
-  if (arrived.length === 0) throw new AppError('ไม่มีรายการที่รับเข้า')
+  const arrived = thisDelivery.filter((d) => d.qty > 0 || (d.rejectedQty ?? 0) > 0)
+  // A delivery that is all refused takes nothing in: there is no receipt to file.
+  if (!arrived.some((d) => d.qty > 0)) throw new AppError('ไม่มีรายการที่รับเข้า')
   return { settled, arrived }
 }
 
@@ -93,6 +124,8 @@ export interface ReceiveOrderParams {
   note?: string
   photoDataUrl?: string
   closeReason?: string
+  /** The receiver's role: past the over-receipt tolerance only a หัวหน้า or admin (plan B5). */
+  actorRole?: Role
 }
 
 export interface ReceiveOrderResult {
@@ -143,15 +176,19 @@ export async function receiveOrderInTx(tx: TxContext, file: FileMovement, params
   // A draft is a proposal nobody has placed; goods cannot arrive against it.
   if (order.status === 'draft') throw new AppError('ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ')
 
-  const { settled, arrived } = settleDelivery(order, params.lines)
+  const { settled, arrived } = settleDelivery(order, params.lines, params.actorRole === undefined || params.actorRole === 'manager' || params.actorRole === 'admin')
 
   // What arrived, in the product's own unit. A line ordered in another unit converts at
   // the rate it was placed at (baseQty / orderedQty); a line from before that was kept
   // takes the product's rate today, and is refused if there is none — never guessed.
   const stockLines: MovementLine[] = []
-  for (const { line: l, qty, note: why } of arrived) {
-    // A line's reason for differing travels with its stock row, so the history says why.
-    const lineNote = why ? { note: why } : {}
+  for (const { line: l, qty, note: why, rejectedQty, rejectReason } of arrived) {
+    if (!(qty > 0)) continue // everything on this line was refused at the door
+    // A line's reason for differing travels with its stock row, so the history says why —
+    // and so does anything refused at the door on the same delivery.
+    const refused = rejectedQty ? `ตีกลับ ${rejectedQty} (${REJECT_WORDS[rejectReason!]})` : ''
+    const said = [why, refused].filter(Boolean).join(' · ')
+    const lineNote = said ? { note: said } : {}
     if (!l.entryUnit) {
       stockLines.push({ productId: l.productId, productName: l.productName, unit: l.unit, qty, ...lineNote })
       continue
@@ -193,7 +230,12 @@ export async function receiveOrderInTx(tx: TxContext, file: FileMovement, params
     invoiceNo,
     byId: actor.id,
     byName: actor.name,
-    lines: arrived.map((d) => ({ productId: d.line.productId, qty: d.qty, ...(d.note ? { note: d.note } : {}) })),
+    lines: arrived.map((d) => ({
+      productId: d.line.productId,
+      qty: d.qty,
+      ...(d.note ? { note: d.note } : {}),
+      ...(d.rejectedQty ? { rejectedQty: d.rejectedQty, rejectReason: d.rejectReason } : {}),
+    })),
   }
   const stillOwed = settled.filter((l) => outstandingQty(l) > 0).length
   const done = stillOwed === 0 || !!closeReason

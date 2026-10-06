@@ -1,6 +1,6 @@
 import type { Line } from '../../components/LineBuilder'
 import { roundQty } from '../../lib/validate'
-import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
+import type { PurchaseOrder, PurchaseOrderLine, RejectReason } from '../../types'
 
 /**
  * The receiving screen's arithmetic, kept out of the page so it can be tested.
@@ -24,6 +24,15 @@ export const KITCHEN_SUPPLIER = 'ครัว (ผลิตเอง)' // i18n-k
 export interface PoLineEntry {
   qty: number | null
   reason: string
+  /** Delivered but refused at the door (plan B5) — never taken into stock. */
+  rejected?: number | null
+  rejectReason?: RejectReason
+}
+
+/** A refused quantity without its reason, or a negative one. */
+export function badRejection(entry: PoLineEntry | undefined): boolean {
+  const r = entry?.rejected ?? 0
+  return r < 0 || (r > 0 && !entry?.rejectReason)
 }
 
 export type Variance = 'match' | 'short' | 'over' | 'pending'
@@ -58,6 +67,8 @@ export function receiveAll(
 /** A line that differs from what was owed and says nothing about why. */
 export function needsReason(owed: number, entry: PoLineEntry | undefined): boolean {
   const v = variance(owed, entry?.qty ?? null)
+  // Refused at the door, with its reason, explains a short line (plan B5).
+  if (v === 'short' && (entry?.rejected ?? 0) > 0 && entry?.rejectReason) return false
   return (v === 'short' || v === 'over') && !entry?.reason.trim()
 }
 
@@ -87,7 +98,7 @@ export function summarise(
     else if (v === 'short') s.short++
     else if (v === 'over') s.over++
     else s.pending++
-    if (needsReason(owed, e)) s.unexplained++
+    if (needsReason(owed, e) || badRejection(e)) s.unexplained++
     if ((e?.qty ?? 0) > 0) s.arriving++
   }
   return s

@@ -426,3 +426,25 @@ describe('transfers on the server', () => {
     expect(r.status).toBe(400)
   })
 })
+
+describe('plan B5 through the server command', () => {
+  test('staff past the over-receipt ceiling is refused; a manager is not', async () => {
+    const lines = [{ productId: 'flour', receivedQty: 20, checked: false, note: 'extra' }, { productId: 'cheese', receivedQty: 0, checked: true }]
+    const d = deps()
+    expect((await receivePOCommand(d, 'Bearer staff', full({ lines }))).status).toBe(422)
+    const r = await receivePOCommand(d, 'Bearer mgr', full({ lines, operationId: 'op-b5-mgr' }))
+    expect(r.status).toBe(200)
+    expect((doc(d, 'stockLevels', 'wh__flour') as { qty: number }).qty).toBe(23)
+  })
+
+  test('a refusal travels to the receipt; an unknown reason is bad input', async () => {
+    const d = deps()
+    const bad = [{ productId: 'flour', receivedQty: 8, checked: false, rejectedQty: 2, rejectReason: 'stolen' }, { productId: 'cheese', receivedQty: 0, checked: true }]
+    expect((await receivePOCommand(d, 'Bearer staff', full({ lines: bad }))).status).toBe(400)
+    const lines = [{ ...bad[0], rejectReason: 'damaged' }, bad[1]]
+    expect((await receivePOCommand(d, 'Bearer staff', full({ lines, operationId: 'op-b5-rej' }))).status).toBe(200)
+    const po = doc(d, 'purchaseOrders', 'po1') as unknown as PurchaseOrder
+    expect(po.receipts?.[0].lines.find((l) => l.productId === 'flour')).toMatchObject({ rejectedQty: 2, rejectReason: 'damaged' })
+    expect((doc(d, 'stockLevels', 'wh__flour') as { qty: number }).qty).toBe(11)
+  })
+})
