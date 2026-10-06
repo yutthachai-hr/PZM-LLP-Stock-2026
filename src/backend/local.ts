@@ -1,4 +1,5 @@
-import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
+import { DELETE_FIELD, type Backend, type QuerySpec, type SubscribeOptions, type TxContext } from './types'
+import { applySpec } from './querySpec'
 import { resolveCollection, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 
@@ -261,9 +262,10 @@ export function createLocalBackend(brand?: BrandId): Backend {
       // Mirror the cloud backend's `since` window so both modes show the same rows.
       const since = opts?.since
       const apply = (docs: unknown[]) =>
-        since
-          ? docs.filter((d) => Number((d as Record<string, unknown>)[since.field] ?? 0) >= since.value)
-          : docs
+        applySpec(
+          since ? docs.filter((d) => Number((d as Record<string, unknown>)[since.field] ?? 0) >= since.value) : docs,
+          opts?.query,
+        )
       const listener = ((docs: unknown[]) => cb(apply(docs) as T[])) as Listener
       set.add(listener)
       // Read first, so corruption propagates rather than arriving as an empty list that
@@ -317,6 +319,15 @@ export function createLocalBackend(brand?: BrandId): Backend {
     ): Promise<T[]> {
       const all = Object.values(loadMap(resolve(collection))) as Record<string, unknown>[]
       return all.filter((d) => d[field] === value) as T[]
+    },
+
+    async query<T>(collection: string, spec: QuerySpec): Promise<T[]> {
+      return applySpec(Object.values(loadMap(resolve(collection))) as T[], spec)
+    },
+
+    async getMany<T>(collection: string, ids: readonly string[]): Promise<T[]> {
+      const map = loadMap(resolve(collection))
+      return [...new Set(ids)].filter((id) => Object.hasOwn(map, id)).map((id) => map[id] as T)
     },
 
     async getOne<T>(collection: string, id: string): Promise<T | null> {

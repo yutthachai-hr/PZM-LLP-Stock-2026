@@ -17,7 +17,8 @@ export function useLive<T>(
     enabled = true,
     sinceField,
     sinceValue,
-  }: { enabled?: boolean; sinceField?: string; sinceValue?: number } = {},
+    label,
+  }: { enabled?: boolean; sinceField?: string; sinceValue?: number; label?: string } = {},
 ): { data: T[]; loading: boolean } {
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,10 +40,16 @@ export function useLive<T>(
         setData(docs)
         setLoading(false)
       },
-      since ? { since } : undefined,
+      {
+        ...(since ? { since } : {}),
+        ...(label ? { label } : {}),
+        // A listener the rules refuse, or that cannot connect, used to leave the screen
+        // loading forever. Stop waiting; the data stays whatever it was.
+        onError: () => setLoading(false),
+      },
     )
     return unsub
-  }, [collection, enabled, sinceField, sinceValue])
+  }, [collection, enabled, sinceField, sinceValue, label])
 
   return { data, loading }
 }

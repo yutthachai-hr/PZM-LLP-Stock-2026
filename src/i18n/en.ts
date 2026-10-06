@@ -718,6 +718,8 @@ export const EN: Record<string, string> = {
   'กำหนดเสร็จต้องไม่อยู่ก่อนวันเริ่ม': 'The deadline cannot be before the start',
   'ช่วงวันที่ไม่ถูกต้อง': 'Invalid date range',
   'ฐานข้อมูลจำลองสำหรับทดสอบ (emulator)': 'Test emulator database',
+  'กำลังโหลด…': 'Loading…',
+  'ดูการแจ้งเตือนเก่ากว่านี้': 'Show older notifications',
   'เซิร์ฟเวอร์ทดสอบนี้ต่อกับข้อมูลจริง — ใช้ npm run demo':
     'This dev server is connected to live data — use npm run demo',
 

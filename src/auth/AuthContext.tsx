@@ -8,6 +8,7 @@ import {
 import { backend, BACKEND_MODE } from '../backend'
 import { COL, type AppUser } from '../types'
 import { getAuthInstance, clearLocalCaches } from '../firebase/app'
+import { clearSyncedSnapshots } from '../data/syncedCollection'
 import { clearThumbCache } from '../components/ProductThumb'
 
 import { AppError } from '../i18n/AppError'
@@ -317,7 +318,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null)
     clearThumbCache()
-    if (!opts.keepOfflineCopy) await clearLocalCaches()
+    if (!opts.keepOfflineCopy) {
+      // The app's own copies of products and balances (data/syncedCollection.ts) go with
+      // Firestore's offline copy: a shared tablet keeps nothing for the next person.
+      await clearSyncedSnapshots()
+      await clearLocalCaches()
+    }
   }
 
   return (

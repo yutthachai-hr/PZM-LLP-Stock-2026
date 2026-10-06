@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { backend } from '../backend'
 import { getBrand, onBrandChange } from '../brand/brand'
-import { toDoc, type NotificationDraft, type WritePlan } from '../lib/inventoryRules/notifications'
+import { audienceKeysOf, toDoc, type NotificationDraft, type WritePlan } from '../lib/inventoryRules/notifications'
 import { COL, type AppNotification, type NotificationCategory, type NotificationPrefs, type NotificationPriority } from '../types'
 
 /**
@@ -39,7 +39,7 @@ export async function markAllRead(list: readonly AppNotification[], uid: string)
 export async function deliver(draft: NotificationDraft, actor: { id: string }): Promise<void> {
   try {
     const db = scoped()
-    if (await db.getOne(COL.notifications, draft.id)) return
+    if (await db.getOne(COL.notifications, draft.id, { label: 'notifications.deliver.check' })) return
     await db.set(COL.notifications, draft.id, toDoc(draft, Date.now(), 'client', actor.id) as unknown as Record<string, unknown>)
   } catch {
     // see above
@@ -55,15 +55,39 @@ export async function applyPlan(p: WritePlan): Promise<number> {
   return p.create.length + p.rearm.length + p.resolve.length
 }
 
-/** Documents by id, for the drafts the caller does not already hold. One read each. */
+/**
+ * Documents by id, for the drafts the caller does not already hold — 30 ids a query, billed
+ * for what is found plus one a query. (Until 6 Oct 2026 one read each: 134 billed reads per
+ * run in the measurement, nearly all for documents that did not exist.)
+ */
 export async function getNotifications(ids: readonly string[]): Promise<AppNotification[]> {
+  if (!ids.length) return []
+  return scoped().getMany<AppNotification>(COL.notifications, ids, { label: 'notifications.job.lookup' })
+}
+
+/** Every notification still showing a live state — the job's occasional sweep for strays. */
+export async function getActiveNotifications(): Promise<AppNotification[]> {
+  return scoped().query<AppNotification>(COL.notifications, { filters: [{ field: 'active', op: '==', value: true }] }, { label: 'notifications.job.sweep' })
+}
+
+/**
+ * Give documents written before 6 Oct 2026 their `audienceKeys`, so the recipient-scoped
+ * bell finds them. Only active ones the job is already holding; a manager may rewrite a
+ * notification (rules: notificationUpdate). Best effort.
+ */
+export async function backfillAudience(docs: readonly AppNotification[]): Promise<number> {
   const db = scoped()
-  const out: AppNotification[] = []
-  for (const id of ids) {
-    const doc = await db.getOne<AppNotification>(COL.notifications, id)
-    if (doc) out.push(doc)
+  let n = 0
+  for (const d of docs) {
+    if (d.audienceKeys || !d.active) continue
+    try {
+      await db.set(COL.notifications, d.id, { ...d, audienceKeys: audienceKeysOf(d.to) } as unknown as Record<string, unknown>)
+      n++
+    } catch {
+      // the next run tries again
+    }
   }
-  return out
+  return n
 }
 
 // ------------------------------------------------------------------- preferences ----

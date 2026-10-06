@@ -136,6 +136,6 @@ test('documents are written in the existing shape (the rules accept them)', () =
   const [d] = evaluate({ ...base, jobs: ['risk'], risk: { deliveries: [delivery('MEDIUM', 40)], shortages: [] } })
   const doc = toDoc(d, NOW, 'client', 'm1')
   expect(Object.keys(doc).sort()).toEqual(
-    ['active', 'category', 'createdAt', 'createdBy', 'expiresAt', 'id', 'kind', 'link', 'locationId', 'params', 'priority', 'readBy', 'source', 'supplierId', 'to', 'updatedAt'].sort(),
+    ['active', 'audienceKeys', 'category', 'createdAt', 'createdBy', 'expiresAt', 'id', 'kind', 'link', 'locationId', 'params', 'priority', 'readBy', 'source', 'supplierId', 'to', 'updatedAt'].sort(),
   )
 })

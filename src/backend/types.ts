@@ -4,6 +4,8 @@
 // The app talks ONLY to this interface, so business logic never depends on which is active.
 
 import type { BrandId } from '../brand/brand'
+import type { QuerySpec } from './querySpec'
+export type { QueryFilter, QueryOp, QuerySpec } from './querySpec'
 
 /**
  * Marker for "remove this field", usable as a value in an update patch.
@@ -37,6 +39,17 @@ export interface SinceFilter {
 
 export interface SubscribeOptions {
   since?: SinceFilter
+  /** Stable name for the read meter (data/readMeter.ts), e.g. `products.bootstrap`. */
+  label?: string
+  /** Told when the listener fails (refused by the rules, network) instead of waiting forever. */
+  onError?: (e: unknown) => void
+  /** Filters, order and limit on top of `since` — run by the server (querySpec.ts). */
+  query?: QuerySpec
+}
+
+/** For one-shot reads: the read meter's label. */
+export interface ReadOptions {
+  label?: string
 }
 
 export interface Backend {
@@ -64,7 +77,7 @@ export interface Backend {
     cb: (doc: T | null) => void,
     onError?: (e: unknown) => void,
   ): () => void
-  getAll<T>(collection: string): Promise<T[]>
+  getAll<T>(collection: string, opts?: ReadOptions): Promise<T[]>
   /**
    * Read a bounded slice of a collection, once, with no subscription.
    *
@@ -76,7 +89,7 @@ export interface Backend {
    * Two bounds on ONE field, which Firestore's automatic index already serves, so this
    * adds no composite index to deploy.
    */
-  getRange<T>(collection: string, field: string, from: number, to: number): Promise<T[]>
+  getRange<T>(collection: string, field: string, from: number, to: number, opts?: ReadOptions): Promise<T[]>
   /**
    * Every document whose `field` equals `value`, once, with no subscription.
    *
@@ -85,8 +98,15 @@ export interface Backend {
    * ledger — can read that product's rows instead of the whole ledger, which on a busy month
    * is thousands of documents against a 50,000-a-day allowance shared by both companies.
    */
-  getBy<T>(collection: string, field: string, value: string | number | boolean): Promise<T[]>
-  getOne<T>(collection: string, id: string): Promise<T | null>
+  getBy<T>(collection: string, field: string, value: string | number | boolean, opts?: ReadOptions): Promise<T[]>
+  getOne<T>(collection: string, id: string, opts?: ReadOptions): Promise<T | null>
+  /** A bounded query, once: filters, order and limit run by the server (querySpec.ts). */
+  query<T>(collection: string, spec: QuerySpec, opts?: ReadOptions): Promise<T[]>
+  /**
+   * Several documents by id in as few round trips as the server allows (30 ids a query) —
+   * billed for what is found plus one per query, not one per id asked about.
+   */
+  getMany<T>(collection: string, ids: readonly string[], opts?: ReadOptions): Promise<T[]>
   /** Auto-generate id. Returns the new id (also written into the doc's `id` field). */
   add(collection: string, data: Record<string, unknown>): Promise<string>
   /** Create or replace a doc with an explicit id. */

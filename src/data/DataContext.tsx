@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLive } from './useLive'
+import { useSynced } from './syncedCollection'
 import { overlayRecent, subscribeRecentWrites } from './recentWrites'
 import { windowStart } from './ledgerWindow'
 import { MONTH_DAYS } from './windowDays'
@@ -17,7 +18,7 @@ import {
   type AppNotification,
   TRANSIT_LOCATION_ID,
 } from '../types'
-import { NOTIFICATION_WINDOW_DAYS } from '../lib/inventoryRules/notifications'
+import { useNotificationInbox, type Inbox } from './notificationInbox'
 
 interface DataState {
   products: Product[]
@@ -36,6 +37,8 @@ interface DataState {
    * the signed-in person. The seventh listener (it took the slot `notes` had).
    */
   notifications: AppNotification[]
+  /** Older pages of the bell, on request — never a standing listener. */
+  olderNotifications: Pick<Inbox, 'hasOlder' | 'olderLoading' | 'loadOlder'>
   loading: boolean
 
   /** Business date of the oldest movement currently subscribed to. */
@@ -102,8 +105,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // be rejected, and the only screen that reads `users` is the admin section of Settings.
   const isAdmin = user?.role === 'admin'
 
-  const { data: products, loading: pLoading } = useLive<Product>(COL.products)
-  const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations)
+  const { data: products, loading: pLoading } = useSynced<Product>(COL.products, { label: 'products' })
+  const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations, { label: 'locations.bootstrap' })
   const { lang } = useI18n()
   const transitLocation = useMemo(
     () => rawLocations.find((l) => l.type === 'transit' || l.id === TRANSIT_LOCATION_ID),
@@ -119,7 +122,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     () => (lang === 'en' ? regularLocations.map((l) => (l.nameEn ? { ...l, name: l.nameEn } : l)) : regularLocations),
     [regularLocations, lang],
   )
-  const { data: levels, loading: sLoading } = useLive<StockLevel>(COL.stockLevels)
+  const { data: levels, loading: sLoading } = useSynced<StockLevel>(COL.stockLevels, { label: 'stockLevels' })
   const [movementsFrom, setMovementsFrom] = useState(() => windowStart(RECENT_DAYS))
   const ensureMovementsFrom = useCallback((date: number) => {
     setMovementsFrom((cur) => (date < cur ? date : cur))
@@ -128,20 +131,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { data: liveMovements, loading: mLoading } = useLive<StockMovement>(COL.movements, {
     sinceField: 'date',
     sinceValue: movementsFrom,
+    label: 'movements.recent',
   })
   // Rows this device just wrote, shown until the listener confirms them (recentWrites.ts).
   const [recent, setRecent] = useState<StockMovement[]>([])
   useEffect(() => subscribeRecentWrites(setRecent), [])
   const movements = useMemo(() => overlayRecent(liveMovements, recent), [liveMovements, recent])
-  const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides)
-  const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin })
-  // Fixed for the session: a moving lower bound would re-subscribe (and re-read) every render.
-  const [notificationsFrom] = useState(() => windowStart(NOTIFICATION_WINDOW_DAYS))
-  const { data: notifications } = useLive<AppNotification>(COL.notifications, {
-    enabled: !!user,
-    sinceField: 'createdAt',
-    sinceValue: notificationsFrom,
-  })
+  const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides, { label: 'minOverrides.bootstrap' })
+  const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin, label: 'users.bootstrap' })
+  // This person's newest notifications only, filtered by the server (data/notificationInbox.ts).
+  const inbox = useNotificationInbox(user ? { id: user.id, role: user.role } : null)
+  const notifications = inbox.notifications
 
   const value = useMemo<DataState>(() => {
     const productMap = new Map(products.map((p) => [p.id, p]))
@@ -174,6 +174,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       minOverrides,
       users,
       notifications,
+      olderNotifications: { hasOlder: inbox.hasOlder, olderLoading: inbox.olderLoading, loadOlder: inbox.loadOlder },
       loading: pLoading || lLoading || sLoading || mLoading,
       movementsFrom,
       ensureMovementsFrom,
@@ -195,6 +196,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     minOverrides,
     users,
     notifications,
+    inbox.hasOlder,
+    inbox.olderLoading,
+    inbox.loadOlder,
     pLoading,
     lLoading,
     sLoading,

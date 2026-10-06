@@ -16,7 +16,7 @@ const OWNER = { Authorization: 'Bearer owner' }
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
 type FsValue = Record<string, unknown>
 
-function encode(v: unknown): FsValue {
+export function encode(v: unknown): FsValue {
   if (v === null || v === undefined) return { nullValue: null }
   if (typeof v === 'boolean') return { booleanValue: v }
   if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }
@@ -128,4 +128,21 @@ export async function writeAs(token: string, path: string, data: Record<string, 
     body: JSON.stringify({ fields }),
   })
   return res.status
+}
+
+/** Write many documents at once (owner, rules skipped), 400 per commit. Paths are `collection/id`. */
+export async function putMany(docs: { path: string; data: Record<string, unknown> }[]): Promise<void> {
+  for (let i = 0; i < docs.length; i += 400) {
+    const writes = docs.slice(i, i + 400).map((d) => ({
+      update: { name: `projects/${PROJECT}/databases/(default)/documents/${d.path}`, fields: (encode(d.data).mapValue as { fields: Record<string, FsValue> }).fields },
+    }))
+    await ok(
+      await fetch(`http://127.0.0.1:8080/v1/projects/${PROJECT}/databases/(default)/documents:commit`, {
+        method: 'POST',
+        headers: { ...OWNER, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ writes }),
+      }),
+      'commit',
+    )
+  }
 }
