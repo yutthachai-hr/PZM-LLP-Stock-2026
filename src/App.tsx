@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { BrandProvider, useBrand } from './brand/BrandContext'
 import { DataProvider } from './data/DataContext'
+import { SupplierIntelProvider } from './data/useSupplierIntel'
 import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/Confirm'
 import { I18nProvider, useT } from './i18n/I18nContext'
@@ -94,46 +95,48 @@ function Gate() {
 
   return (
     <DataProvider key={brand}>
-      <Layout>
-        <Suspense fallback={<Spinner />}>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/products/:id/card" element={<StockCardPage />} />
-          <Route path="/receive" element={<ReceivePage />} />
-          <Route path="/issue" element={<IssuePage />} />
-          <Route path="/recipes" element={<RecipesPage />} />
-          <Route path="/transfers" element={<TransfersPage />} />
-          <Route path="/transfers/today" element={<TransfersTodayPage />} />
-          <Route path="/transfers/new" element={<TransferDetailPage />} />
-          <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
-          <Route path="/transfers/:id" element={<TransferDetailPage />} />
-          <Route path="/adjust" element={<AdjustPage />} />
-          <Route path="/counts" element={<MonthlyCountsPage />} />
-          <Route path="/counts/:id" element={<MonthlyCountSheet />} />
-          <Route path="/movements" element={<MovementsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/import" element={<ImportPage />} />
-          <Route path="/suppliers" element={<SuppliersPage />} />
-          <Route path="/suppliers/performance" element={<SupplierPerformancePage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/requests" element={<PurchaseRequestsPage />} />
-          <Route path="/requests/:id" element={<RequestPage />} />
-          <Route path="/purchase" element={<PurchaseBatchesPage />} />
-          <Route path="/purchase/import" element={<PurchaseImportPage />} />
-          <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/announcements" element={<AnnouncementsPage />} />
-          <Route path="/announcements/new" element={<AnnouncementPage />} />
-          <Route path="/announcements/:company/:id" element={<AnnouncementPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/:section" element={<SettingsPage />} />
-          <Route path="/more" element={<MorePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        </Suspense>
-      </Layout>
+      <SupplierIntelProvider>
+        <Layout>
+          <Suspense fallback={<Spinner />}>
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/:id/card" element={<StockCardPage />} />
+              <Route path="/receive" element={<ReceivePage />} />
+              <Route path="/issue" element={<IssuePage />} />
+              <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/transfers" element={<TransfersPage />} />
+              <Route path="/transfers/today" element={<TransfersTodayPage />} />
+              <Route path="/transfers/new" element={<TransferDetailPage />} />
+              <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
+              <Route path="/transfers/:id" element={<TransferDetailPage />} />
+              <Route path="/adjust" element={<AdjustPage />} />
+              <Route path="/counts" element={<MonthlyCountsPage />} />
+              <Route path="/counts/:id" element={<MonthlyCountSheet />} />
+              <Route path="/movements" element={<MovementsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/import" element={<ImportPage />} />
+              <Route path="/suppliers" element={<SuppliersPage />} />
+              <Route path="/suppliers/performance" element={<SupplierPerformancePage />} />
+              <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/inbox" element={<InboxPage />} />
+              <Route path="/requests" element={<PurchaseRequestsPage />} />
+              <Route path="/requests/:id" element={<RequestPage />} />
+              <Route path="/purchase" element={<PurchaseBatchesPage />} />
+              <Route path="/purchase/import" element={<PurchaseImportPage />} />
+              <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/announcements" element={<AnnouncementsPage />} />
+              <Route path="/announcements/new" element={<AnnouncementPage />} />
+              <Route path="/announcements/:company/:id" element={<AnnouncementPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/:section" element={<SettingsPage />} />
+              <Route path="/more" element={<MorePage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </Layout>
+      </SupplierIntelProvider>
     </DataProvider>
   )
 }

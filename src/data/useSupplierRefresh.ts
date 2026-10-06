@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { getPurchaseOrder } from '../services/purchaseOrders'
-import { useData } from './DataContext'
+import { useNotifications } from './DataContext'
 import { orderCache } from './orderCache'
 import type { PurchaseOrder } from '../types'
 
@@ -14,7 +14,7 @@ export const ORDER_UPDATED = 'pzm:order-updated'
  * and the calendar moves without anyone reloading (5 Oct 2026). No new listener.
  */
 export function useSupplierRefresh(enabled: boolean): void {
-  const { notifications } = useData()
+  const notifications = useNotifications()
   const seen = useRef<Set<string> | null>(null)
 
   useEffect(() => {

@@ -32,11 +32,6 @@ interface DataState {
   movements: StockMovement[]
   minOverrides: MinOverride[]
   users: AppUser[]
-  /**
-   * Notifications created in the last week, every recipient's — the bell filters them to
-   * the signed-in person. The seventh listener (it took the slot `notes` had).
-   */
-  notifications: AppNotification[]
   loading: boolean
   /** The worst listener the database ended (plan C1), or null when all are live. */
   liveError: LiveFailure | null
@@ -79,6 +74,13 @@ interface DataState {
 }
 
 const Ctx = createContext<DataState | null>(null)
+/**
+ * Notifications created in the last week, every recipient's — the bell filters them to the
+ * signed-in person. The seventh listener (it took the slot `notes` had). A context of their
+ * own (plan D2'): a notification arriving re-renders the bell and the popups, not every
+ * screen that reads stock.
+ */
+const NotificationsCtx = createContext<AppNotification[]>([])
 
 /**
  * How far back the ledger is loaded on start-up.
@@ -194,7 +196,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       movements,
       minOverrides,
       users,
-      notifications,
       loading: pLoading || lLoading || sLoading || mLoading,
       liveError,
       retryLive,
@@ -217,7 +218,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     movements,
     minOverrides,
     users,
-    notifications,
     pLoading,
     lLoading,
     sLoading,
@@ -228,7 +228,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ensureMovementsFrom,
   ])
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+  return (
+    <Ctx.Provider value={value}>
+      <NotificationsCtx.Provider value={notifications}>{children}</NotificationsCtx.Provider>
+    </Ctx.Provider>
+  )
+}
+
+/** The week of notifications the app holds (see NotificationsCtx). */
+export function useNotifications(): AppNotification[] {
+  return useContext(NotificationsCtx)
 }
 
 export function useData(): DataState {

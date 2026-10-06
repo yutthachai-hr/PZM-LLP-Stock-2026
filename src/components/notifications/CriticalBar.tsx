@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
-import { useData } from '../../data/DataContext'
+import { useNotifications } from '../../data/DataContext'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { NOTIFICATION_TITLE, tidyCopy } from '../../lib/inventoryRules/copy'
@@ -20,7 +20,7 @@ export function CriticalBar() {
   const t = useT()
   const toast = useToast()
   const { user } = useAuth()
-  const { notifications } = useData()
+  const notifications = useNotifications()
   const prefs = useNotificationPrefs(user?.id)
   const [busy, setBusy] = useState(false)
 

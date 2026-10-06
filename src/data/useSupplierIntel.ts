@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { assessAll, type DeliveryRisk } from '../lib/deliveryRisk'
 import { shortageRisks, type ShortageRisk } from '../lib/inventoryRisk'
 import { bkkDayEnd, bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
@@ -37,7 +37,34 @@ export interface SupplierIntel {
   shortages: ShortageRisk[]
 }
 
+/**
+ * Worked out once for the whole app (plan D2'), and only while a screen that shows it is
+ * open: the dashboard's risk panel, the calendar and the order sheet used to each read and
+ * compute it separately — three runs of the shortage rules over every product on one page.
+ */
+const IntelCtx = createContext<{ intel: SupplierIntel; use: () => () => void } | null>(null)
+
+export function SupplierIntelProvider({ children }: { children: ReactNode }) {
+  const [users, setUsers] = useState(0)
+  const intel = useIntelState(users > 0)
+  const use = useCallback(() => {
+    setUsers((n) => n + 1)
+    return () => setUsers((n) => n - 1)
+  }, [])
+  const value = useMemo(() => ({ intel, use }), [intel, use])
+  return createElement(IntelCtx.Provider, { value }, children)
+}
+
+const IDLE: SupplierIntel = { ready: false, failed: false, retry: () => {}, orders: [], risks: new Map(), shortages: [] }
+
 export function useSupplierIntel(): SupplierIntel {
+  const ctx = useContext(IntelCtx)
+  const use = ctx?.use
+  useEffect(() => use?.(), [use])
+  return ctx?.intel ?? IDLE
+}
+
+function useIntelState(enabled: boolean): SupplierIntel {
   // One clock per screen, moved every five minutes: "overdue" and "runs out tomorrow"
   // change with time even when no data does — but not on every render.
   const [now, setNow] = useState(() => Date.now())
@@ -58,6 +85,7 @@ export function useSupplierIntel(): SupplierIntel {
   const retry = useCallback(() => setAttempt((n) => n + 1), [])
 
   useEffect(() => {
+    if (!enabled) return
     let alive = true
     Promise.all([orderCache.fetchRange(from, to), transferCache.fetchRange(tFrom, to)])
       .then(([orders, transfers]) => {
@@ -82,7 +110,7 @@ export function useSupplierIntel(): SupplierIntel {
       alive = false
       offs.forEach((off) => off())
     }
-  }, [from, to, tFrom, attempt])
+  }, [from, to, tFrom, attempt, enabled])
 
   const risks = useMemo(() => (rows ? assessAll(rows.orders, now, suppliers) : new Map<string, DeliveryRisk>()), [rows, now, suppliers])
 
@@ -103,5 +131,5 @@ export function useSupplierIntel(): SupplierIntel {
     })
   }, [rows, data.products, data.locations, data.qtyAt, data.minFor, data.tracksProduct, data.movements, settings.usageWindowDays, risks, suppliers, now])
 
-  return { ready: !!rows && !failed, failed, retry, orders: rows?.orders ?? [], risks, shortages }
+  return useMemo(() => ({ ready: !!rows && !failed, failed, retry, orders: rows?.orders ?? [], risks, shortages }), [rows, failed, retry, risks, shortages])
 }
