@@ -4,7 +4,7 @@
 // or a stock row. The suggestion and risk rules write nothing at all.
 //
 // A source check, so a new write slipping into a job fails here before review.
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
@@ -26,5 +26,11 @@ describe('suggest-only: background jobs', () => {
       const src = read(f)
       expect(src, f).not.toMatch(/from '(\.\.\/)+(backend|services)/)
     }
+  })
+  test('Phase G: nothing under src/intel imports anything that can write', () => {
+    const dir = new URL('../src/intel/', import.meta.url)
+    const files = readdirSync(dir).filter((f) => f.endsWith('.ts'))
+    expect(files.length).toBeGreaterThan(5)
+    for (const f of files) expect(readFileSync(new URL(f, dir), 'utf8'), f).not.toMatch(/from '(\.\.\/)+(backend|services|firebase)|from '\.\.\/data/)
   })
 })
