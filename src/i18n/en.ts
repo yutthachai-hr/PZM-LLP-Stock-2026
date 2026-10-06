@@ -3125,5 +3125,4 @@ export const EN: Record<string, string> = {
   // Plan C5: critical bar, sticky error toasts (6 Oct 2026)
   'วิกฤต {n} รายการ': '{n} critical',
   'รับทราบ': 'Acknowledge',
-  'ปิด': 'Close',
 }
