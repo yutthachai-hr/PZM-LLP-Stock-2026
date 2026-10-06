@@ -16,6 +16,7 @@ import {
 import { receiptIdFor, receiveOrderInTx, type ReceiptLineInput } from './receivePO'
 import { BadInput, defineCommand } from './spec'
 import { postCountCommand } from './countPost'
+import { approveTransferCommand, receiveTransferCommand, resolveDiscrepancyCommand, resolveMisrouteCommand } from './transferCommands'
 import { requireCountQty, roundQty } from '../lib/validate'
 import { AppError } from '../i18n/AppError'
 
@@ -241,6 +242,10 @@ export const STOCK_COMMANDS = {
   adjustStock: adjustStockCommand,
   fileCount: fileCountCommand,
   postCount: postCountCommand,
+  approveTransfer: approveTransferCommand,
+  receiveTransfer: receiveTransferCommand,
+  resolveDiscrepancy: resolveDiscrepancyCommand,
+  resolveMisroute: resolveMisrouteCommand,
 } as const
 
 export type StockCommandName = keyof typeof STOCK_COMMANDS

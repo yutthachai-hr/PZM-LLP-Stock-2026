@@ -810,6 +810,18 @@ async function placeConversion(
     if (plan.length === 0) throw new AppError('ไม่มีรายการที่อนุมัติจำนวนมากกว่า 0')
     const seqs = new Map<string, number>()
     for (const p of plan) if (!p.found) seqs.set(p.g.supplierId, await nextOrderSeq(tx, p.g.supplierId, seeds))
+    // The catalogue the screen had may not have loaded yet (a fast tap on a slow phone): any
+    // product it lacks is read here, so the order never fails for want of a list.
+    const known = new Map(params.products.map((x) => [x.id, x]))
+    for (const p of plan) {
+      if (p.found) continue
+      for (const i of p.g.items) {
+        if (known.has(i.productId)) continue
+        const got = await tx.get<Product>(COL.products, i.productId)
+        if (got) known.set(i.productId, { ...got, id: i.productId })
+      }
+    }
+    const catalogue = [...known.values()]
 
     const orders: NonNullable<PurchaseRequest['orders']> = []
     const notes: string[] = []
@@ -821,7 +833,7 @@ async function placeConversion(
             supplier: { id: p.g.supplierId, name: p.g.supplierName },
             locationId: cur.locationId,
             lines: p.g.items.map((i) => ({ productId: i.productId, qty: i.approvedQty!, ...(i.entryUnit ? { entryUnit: i.entryUnit } : {}) })),
-            products: params.products,
+            products: catalogue,
             actor: { id: params.actor.id, name: params.actor.name },
             requestId: cur.id,
             ...(params.expectedAt?.[p.g.supplierId] !== undefined ? { expectedAt: params.expectedAt[p.g.supplierId] } : {}),

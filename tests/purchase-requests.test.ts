@@ -13,7 +13,7 @@ vi.mock('../src/backend', async () => {
   const m = await import('./helpers/memory-backend')
   return { backend: m.memoryBackend, BACKEND_MODE: 'local' }
 })
-const { resetMemory, raw, seed } = await import('./helpers/memory-backend')
+const { resetMemory, raw, seed, memoryBackend } = await import('./helpers/memory-backend')
 const S = await import('../src/services/purchaseRequests')
 const { canTransition, canEditItems, isReadyForOrder, liveItems } = await import('../src/lib/purchaseRequestStatus')
 const { setActiveBrand } = await import('../src/brand/brand')
@@ -446,12 +446,14 @@ describe('idempotent conversion (plan A6, 6 Oct 2026)', () => {
 
   test('a line that cannot be ordered stops the whole conversion: no order, request still approved', async () => {
     const pr = await approved()
-    // THAINAMTHIP's product has gone from the catalogue the conversion is given.
+    // THAINAMTHIP's product has gone — from the screen's list and from the database.
+    await memoryBackend.forBrand('pizza').remove('products', 'p-coke')
     await expect(S.convertToOrders({ id: pr.id, products: products.filter((p) => p.id !== 'p-coke'), actor: STAFF })).rejects.toThrow()
     expect(orders()).toHaveLength(0)
     expect(requests()[0].status).toBe('approved')
     expect(raw('counters').filter((c) => String(c.id).startsWith('purchaseOrder__'))).toHaveLength(0)
     // …and it converts cleanly once the product is back.
+    seed('products', products.filter((p) => p.id === 'p-coke') as unknown as Record<string, unknown>[])
     const done = await S.convertToOrders({ id: pr.id, products, actor: STAFF })
     expect(done.orders).toHaveLength(2)
   })
@@ -572,5 +574,16 @@ describe('setting a request aside (owner, 25 Sep 2026)', () => {
     expect(canTransition('skipped', 'pendingApproval')).toBe(false)
     expect(canEditItems({ status: 'skipped', requestedBy: STAFF.id }, STAFF)).toBe(false)
     expect(canEditItems({ status: 'skipped', requestedBy: STAFF.id }, ADMIN)).toBe(false)
+  })
+})
+
+describe('converting before the catalogue has loaded (6 Oct 2026)', () => {
+  test('a product missing from the screen\'s list is read inside the conversion', async () => {
+    let pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
+    pr = await S.submitRequest({ id: pr.id, ctx, actor: STAFF })
+    pr = await S.approveRequest({ id: pr.id, ctx, actor: MANAGER })
+    const done = await S.convertToOrders({ id: pr.id, products: [], actor: STAFF })
+    expect(done.status).toBe('poCreated')
+    expect(orders()[0].lines.map((l) => [l.productName, l.orderedQty])).toEqual([['RED OAK SALAD', 2]])
   })
 })

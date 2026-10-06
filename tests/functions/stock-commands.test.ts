@@ -18,6 +18,7 @@ vi.mock('../../src/backend', async () => {
 const mem = await import('../helpers/memory-backend')
 const { receivePurchaseOrder } = await import('../../src/services/purchaseOrders')
 const stock = await import('../../src/services/stock')
+const T = await import('../../src/services/transfers')
 const { setActiveBrand } = await import('../../src/brand/brand')
 
 const NOW = Date.UTC(2026, 9, 6, 3)
@@ -168,6 +169,10 @@ describe('what the commands may write (the service account is outside the rules)
       adjustStock: [L, ['staff', 'manager', 'admin']],
       fileCount: [L, ['admin']],
       postCount: [{ ...L, monthlyCounts: ['update'] }, ['manager', 'admin']],
+      approveTransfer: [{ ...L, transfers: ['set'] }, ['manager', 'admin']],
+      receiveTransfer: [{ ...L, transfers: ['set'] }, ['staff', 'manager', 'admin']],
+      resolveDiscrepancy: [{ ...L, transfers: ['set'] }, ['manager', 'admin']],
+      resolveMisroute: [{ ...L, transfers: ['set'] }, ['manager', 'admin']],
     })
   })
 
@@ -335,5 +340,89 @@ describe('postCount on the server', () => {
     const server = (k: string) => [...d.store.data].filter(([key]) => key.startsWith(`${k}/`)).map(([, v]) => JSON.stringify(strip(v.doc))).sort()
     const client = (k: string) => mem.raw(k).map((x) => JSON.stringify(strip(x))).sort()
     for (const k of ['stockMovements', 'stockLevels', 'counters', 'monthlyCounts']) expect(server(k), k).toEqual(client(k))
+  })
+})
+
+describe('transfers on the server', () => {
+  const MAIN = 'loc-main'
+  const SAR = 'loc-sarasin'
+  const WH_STAFF = { id: 'u-wh', name: 'คลัง A', role: 'staff' as const, siteIds: [MAIN] }
+  const SAR_STAFF = { id: 'u-sr', name: 'สารสิน B', role: 'staff' as const, siteIds: [SAR] }
+  const MGR = { id: 'u-mgr', name: 'หัวหน้า M', role: 'manager' as const }
+  const COLS = ['locations', 'products', 'stockLevels', 'stockMovements', 'counters', 'transfers']
+
+  /** A submitted transfer of 24 COKE, Main → Sarasin, written by the app itself. */
+  async function pending() {
+    mem.resetMemory()
+    setActiveBrand('pizza')
+    mem.seed('locations', [
+      { id: MAIN, name: 'คลังหลัก', type: 'warehouse', active: true, createdAt: 1 },
+      { id: SAR, name: 'สาขาสารสิน', type: 'branch', active: true, createdAt: 1 },
+    ])
+    mem.seed('products', [{ id: 'p-coke', sku: 'P-COKE', name: 'COKE', category: 'c', unit: 'EA', unitType: 'EA', minStock: 0, hasImage: false, active: true, createdAt: 1, updatedAt: 1 }])
+    await T.ensureTransitLocation()
+    await stock.receiveStock({ lines: [{ productId: 'p-coke', productName: 'COKE', unit: 'EA', qty: 100 }], toLocationId: MAIN, date: NOW, actor: WH_STAFF })
+    const d = await T.createDraft({ fromLocationId: MAIN, toLocationId: SAR, dispatchDate: NOW, actor: WH_STAFF })
+    const sub = await T.submitTransfer(d.id, WH_STAFF, [{ idx: 0, productId: 'p-coke', productName: 'COKE', sku: 'P-COKE', unit: 'EA', requestedQty: 24, dispatchQty: 24 }])
+    const snapshot: Record<string, Record<string, Record<string, unknown>>> = {
+      users: {
+        [WH_STAFF.id]: { name: WH_STAFF.name, role: 'staff', active: true, siteIds: WH_STAFF.siteIds },
+        [SAR_STAFF.id]: { name: SAR_STAFF.name, role: 'staff', active: true, siteIds: SAR_STAFF.siteIds },
+        [MGR.id]: { name: MGR.name, role: 'manager', active: true },
+      },
+    }
+    for (const c of COLS) snapshot[c] = Object.fromEntries(mem.raw(c).map((x) => [x.id as string, x]))
+    return { transferId: sub.id, revision: sub.revision, snapshot }
+  }
+
+  /** Times and random ids differ between runs; everything else must not. */
+  const norm = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(norm)
+    if (v && typeof v === 'object') {
+      return Object.fromEntries(
+        Object.entries(v as Record<string, unknown>)
+          .filter(([k]) => !/(^at$|At$|^date$|^id$|^dispatchDate$)/.test(k))
+          .map(([k, x]) => [k, norm(x)]),
+      )
+    }
+    return v
+  }
+
+  test('a manager approves, the branch receives short, the manager writes the loss off: the same books both ways', async () => {
+    const { transferId, revision, snapshot } = await pending()
+    const d = deps(memoryServerStore(snapshot))
+    const lines = [{ idx: 0, receivedQty: 20, discrepancy: { reason: 'SHORT' } }]
+
+    // Server
+    expect((await runStockCommand(d, 'approveTransfer', 'Bearer u-wh', { brand: 'pizza', params: { transferId, expectedRevision: revision } })).status).toBe(403)
+    const a = await runStockCommand(d, 'approveTransfer', 'Bearer u-mgr', { brand: 'pizza', params: { transferId, expectedRevision: revision } })
+    expect(a.status, JSON.stringify(a.body)).toBe(200)
+    // Someone at another site cannot receive it, whatever they send.
+    expect((await runStockCommand(d, 'receiveTransfer', 'Bearer u-wh', { brand: 'pizza', params: { transferId, receivedLines: lines } })).status).toBe(422)
+    const r = await runStockCommand(d, 'receiveTransfer', 'Bearer u-sr', { brand: 'pizza', params: { transferId, receivedLines: lines } })
+    expect(r.status, JSON.stringify(r.body)).toBe(200)
+    const x = await runStockCommand(d, 'resolveDiscrepancy', 'Bearer u-mgr', { brand: 'pizza', params: { transferId, itemIdx: 0, resolution: { code: 'TRANSIT_LOSS' } } })
+    expect(x.status, JSON.stringify(x.body)).toBe(200)
+
+    // The app, from the same starting point
+    await T.reviewTransfer({ transferId, expectedRevision: revision, actor: MGR, action: 'approve' })
+    await T.confirmReceive({ transferId, actor: SAR_STAFF, receivedLines: lines as never })
+    await T.resolveDiscrepancy({ transferId, itemIdx: 0, resolution: { code: 'TRANSIT_LOSS' }, actor: MGR })
+
+    for (const c of ['stockLevels', 'counters', 'transfers']) {
+      const server = Object.fromEntries([...d.store.data].filter(([k]) => k.startsWith(`${c}/`)).map(([k, v]) => [k.split('/')[1], norm(v.doc)]))
+      const client = Object.fromEntries(mem.raw(c).map((v) => [v.id as string, norm(v)]))
+      expect(server, c).toEqual(client)
+    }
+    const rows = (all: Record<string, unknown>[]) => all.map((m) => JSON.stringify(norm(m))).sort()
+    expect(rows([...d.store.data].filter(([k]) => k.startsWith('stockMovements/')).map(([, v]) => v.doc)), 'rows').toEqual(rows(mem.raw('stockMovements')))
+  })
+
+  test('a request cannot smuggle fields into the transfer: only the known ones reach it', async () => {
+    const { transferId, revision, snapshot } = await pending()
+    const d = deps(memoryServerStore(snapshot))
+    const item = { idx: 0, productId: 'p-coke', productName: 'COKE', sku: 'P-COKE', unit: 'EA', requestedQty: 24, dispatchQty: 24, inTransitQty: 999 }
+    const r = await runStockCommand(d, 'approveTransfer', 'Bearer u-mgr', { brand: 'pizza', params: { transferId, expectedRevision: revision, items: [item] } })
+    expect(r.status).toBe(400)
   })
 })

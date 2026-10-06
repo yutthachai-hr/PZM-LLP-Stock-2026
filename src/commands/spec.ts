@@ -17,6 +17,9 @@ export type WriteOp = 'set' | 'update'
 export interface CommandActor {
   id: string
   name: string
+  /** On the server: from the caller's `users` document, never from the request. */
+  role?: Role
+  siteIds?: string[]
 }
 
 /**

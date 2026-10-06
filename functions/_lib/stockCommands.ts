@@ -61,7 +61,8 @@ export async function runStockCommand(deps: StockDeps, name: string, authorizati
     throw e
   }
   if (spec.authorize && !spec.authorize(params, user.role)) return fail(403, 'forbidden')
-  const actor = { id: user.id, name: user.name }
+  // Who it is, from their own record: name, role and sites — never from the request.
+  const actor = { id: user.id, name: user.name, role: user.role, ...(user.siteIds ? { siteIds: user.siteIds } : {}) }
   const brand = b.brand
   const read: CommandReader = {
     get: async <T,>(c: string, id: string) => (await deps.store.get<T>(brandCollection(brand, c), id))?.doc ?? null,

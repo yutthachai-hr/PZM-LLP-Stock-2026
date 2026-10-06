@@ -1,4 +1,4 @@
-import type { TxContext } from '../backend/types'
+import type { TxContext } from '../backend/tx'
 import { BKK_OFFSET_MS } from '../lib/inventoryRules/time'
 import { COL } from '../types'
 
