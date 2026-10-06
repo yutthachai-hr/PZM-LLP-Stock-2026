@@ -474,6 +474,84 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - `validPrefs` เพิ่ม `sound`
 - staff สร้างแจ้งเตือน `poSent` ได้
 
+## 13. PZM Operations OS: audit ทั้งระบบ + แก้ทีละเฟส (เริ่ม 6 ต.ค.) **← งานล่าสุด อ่านก่อน**
+
+**แผนที่เจ้าของอนุมัติ:** `docs/PLAN-operations-os.md` มีครบ 20 หัวข้อ + Top 10 + exit criteria และความเห็นแก้ 9 ข้อของเจ้าของ
+
+**ลำดับความสำคัญ:** DATA → WORKFLOW → EFFICIENCY → EXCEPTIONS → OBSERVABILITY → INTELLIGENCE → AUTOMATION
+**กติกาที่ต้องยึด:**
+- ห้ามวาง AI/automation บนข้อมูลที่ยังไม่น่าเชื่อถือ
+- **ห้าม merge เข้า main เอง** ต้องรอเจ้าของสั่ง
+- ทดสอบการเขียนข้อมูลบน demo/emulator เท่านั้น
+
+### เจ้าของตัดสินแล้ว (6 ต.ค.)
+- อนุญาตให้ใช้ Playwright และ emulator สำหรับเทส
+- ใช้ service account ตัวเดิมเขียนสต๊อกผ่าน Functions ได้ (ADR-001 ขยาย allowlist ทีละคำสั่ง)
+- popup วิกฤตยังหายใน 4 วินาที แต่ให้**ค้างเป็นแถบแดงที่กระดิ่งจนกดรับทราบ**
+- **พนักงานสร้าง PO สถานะ `ordered` เองไม่ได้แล้ว** ต้องให้หัวหน้า/แอดมินอนุมัติ (B4 ยังไม่ทำ)
+
+**ยังไม่ได้ถาม:** collection `auditLog`, ตัดปุ่มล้างแคตตาล็อก/hard delete, รวม Batch Excel เข้า PR, lot/วันหมดอายุ
+
+### Branch และสถานะ (ยังไม่มีอะไร merge เข้า main)
+| Branch | งาน | สถานะ |
+|---|---|---|
+| `fix/import-review` | หน้ารีวิวนำเข้าไฟล์แบบการ์ด + คำแนะนำสินค้า (`src/lib/productSuggest.ts`) | เสร็จ รอสั่ง merge |
+| `feat/integrity-auditor` | **Phase 0**: auditor + harness e2e + หลักฐาน | **PASS** รอสั่ง merge |
+| `feat/phase-a-ledger` (แตกจาก `feat/integrity-auditor`) | **Phase A**: A1 + A2 เสร็จ | กำลังทำ |
+
+### Phase 0 (เสร็จ): `docs/evidence/phase-0.md`
+- **Auditor** `src/lib/integrityAudit.ts` อ่านอย่างเดียว ตรวจ 6 หมวด
+  ```bash
+  npm run audit:integrity -- <backup.json>
+  ```
+  ใช้ 0 reads
+- กติกาการคิด key ของยอดคงเหลือแยกไปที่ `src/lib/levelKey.ts` ตัว auditor และ engine จึงใช้ร่วมกัน
+- **Harness e2e**
+  ```bash
+  npm run test:e2e
+  ```
+  สั่ง `firebase emulators:exec` firestore+auth project `demo-pzm-e2e` ร่วมกับ Playwright และ `vite --mode e2e` port 5176
+  - เปิดโหมดนี้ด้วย `.env.e2e` (`VITE_USE_EMULATOR=1`)
+  - ใช้ได้บน localhost เท่านั้น และถูกตัดออกจาก build ของจริง (ตรวจแล้ว 0 hits ใน `main-*.js`)
+- **Baseline จาก backup ของจริง** (`D:\AI Solution\pzm-stock-*-20261006-1500.json`)
+  - ทั้งสองแบรนด์: 0 critical, ยอดคงเหลือ drift 0
+  - **ข้อค้นพบ 1 ข้อ รอเจ้าของตัดสิน:** สินค้าเก่า "SAUSAGE MIX DOLCE (FOOD WAY)" หน่วย EA ถูกลบไปแล้ว แต่ยังมีของ **20 EA ค้างที่คลังหลัก** (RC-00019) ซึ่งมองไม่เห็นในแอป
+- **ช่องโหว่ที่ยังเปิดอยู่** (เขียนเป็น `test.fail` ใน `e2e/hostile-client.spec.ts` วันที่ปิดได้ เทสจะแดง ให้ถอด marker ออก)
+  - S1: staff เขียน `stockLevels` ตรงได้
+  - S2: ใส่ `transferId` ปลอมได้
+  - S5: staff แก้ movement ได้
+  - B4: staff สร้าง PO `ordered` ได้
+
+### Phase A (กำลังทำ) — commit `7aad548` บน `feat/phase-a-ledger`
+- **A1 เสร็จ:** การรับของจาก PO ทำใน transaction เดียว (`receivePurchaseOrder` ใน `src/services/purchaseOrders.ts`)
+  - อ่าน PO ใน tx แล้วใช้ `settleDelivery()` (pure function)
+  - `planReceive()` (แยกออกมาจาก `receiveStock` ใน `stock.ts`) แล้ว commit movement + ยอดคงเหลือ + PO พร้อมกัน
+  - movement id = `rc_<poId>_<operationId>_<n>`, `PoReceipt.receiptId` ใหม่
+  - หน้า Receive เก็บ `operationId` ใน draft จนกว่าจะบันทึกสำเร็จ ถ้า retry จะได้ผลเดิมกลับมา (`replayed`) พร้อม toast
+  - เครื่องที่แพ้ race จะถูก rules ปฏิเสธ ระบบอ่าน PO ใหม่แล้วแสดงข้อความว่า "ใบสั่งซื้อนี้เพิ่งมีคนรับของไป…"
+  - e2e: สองเครื่องกดพร้อมกันแล้วสต๊อกเข้าครั้งเดียว (ก่อนแก้ได้ 20 แทน 10), คำตอบหายหลัง commit แล้วไม่บันทึกซ้ำ
+- **A2 เสร็จ:** `remainingBaseQty()` ใน `src/lib/inventoryRules/purchasing.ts` เป็นที่เดียวที่คิดยอดค้างรับ ใช้ทั้ง `incomingFor` (คำแนะนำสั่งซื้อ) และ `inventoryRisk`
+  - สูตร = (สั่ง − รับแล้ว) × อัตราแปลง ณ วันสั่ง
+  - บรรทัดเก่าที่ไม่มี baseQty ใช้อัตราวันนี้ พร้อมธง `estimated`
+  - เทสอยู่ใน `tests/incoming.test.ts`
+  - ข้อมูลจริงตอนนี้ไม่มี PO ที่รับบางส่วนค้างอยู่ จึงไม่มีตัวเลขไหนเปลี่ยน
+- **ผลเทสล่าสุด:** unit 1,169 ผ่าน · rules 217 ผ่าน · e2e 9/9 ตามคาด · lint 0 errors · i18n ครบ · build ผ่าน
+- **ยังเหลือใน Phase A** (รายละเอียดอยู่ในแผน):
+  - **A6** แปลง PR → PO แบบ idempotent: PO id `po_<prId>_<supplierId>` ทำใน tx เดียว และทำเครื่องมือซ่อม PR ค้างแยกต่างหาก
+  - **A7** amend/cancel/closeRemainder ทำเป็น tx
+  - **A8** แก้/void movement ที่มี poId ต้อง sync กลับไปที่ PO หรือห้ามทำ
+  - **A10** การนับประจำเดือนต้องคำนวณ diff ใหม่ใน tx
+  - จากนั้นเขียน `docs/evidence/phase-a.md` ตาม exit criteria (ข้อ 21 ในแผน)
+- ถัดไปคือ **A-rules** (A4, A5, A9, B7 deploy รอบเดียว ต้องให้เจ้าของยืนยัน + reauth) แล้วค่อย **A-sec** (ADR-001)
+
+### กับดักของ harness
+- เอกสารที่ seed ต้องมี field `id` (rules อ่านค่านี้) ยกเว้น `users`
+- `counters` ต้องมี `id` ด้วย
+- การโหลดหน้าเต็มจะถามเลือกแบรนด์ใหม่ ใช้ `e2e/app.ts` `open()` ซึ่งจัดการให้
+- ถ้ามี `firebase emulators:start` ค้างอยู่ จะยึดพอร์ต 8080/9099 ต้องปิดก่อนรัน `test:e2e`
+- เครื่องที่แพ้ race ได้ `permission-denied` (rules `receipts.size == old+1`) ไม่ใช่ contention retry ข้อความ console นี้เป็นเรื่องปกติ
+- e2e ต้องใช้ Java (ตัวเดียวกับ `test:rules`) และ `npx playwright install chromium`
+
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 
 บอก Claude session ใหม่ประมาณนี้:
@@ -483,7 +561,7 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 สิ่งที่ Claude ใหม่ควรทำเป็นอันดับแรกเมื่อรับงานต่อ:
 1. `git log --oneline -20` ดูว่าทำอะไรมาล่าสุด
 2. `git status` เช็คว่ามีอะไรค้าง uncommitted
-3. เช็คหัวข้อ **"6. ค้างอยู่"** และ **"10. ปฏิทินคลัง"** (Phase A–B เสร็จแล้ว ต่อ Phase C) — branch งานคือ `feat/inventory-calendar`
+3. **งานล่าสุดคือหัวข้อ 13 (Operations OS)** — checkout `feat/phase-a-ledger` แล้วทำต่อที่ A6 ตาม `docs/PLAN-operations-os.md`
 4. ถ้าจะแก้ rules หรือ collection ใหม่ — ถามเจ้าของก่อนเสมอตามกติกาข้อ 7
 
 ---
