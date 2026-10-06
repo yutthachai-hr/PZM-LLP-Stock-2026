@@ -3127,4 +3127,18 @@ export const EN: Record<string, string> = {
   'รับทราบ': 'Acknowledge',
   // Plan D5': phone cards (6 Oct 2026)
   'จำนวนที่อนุมัติ: {name}': 'Approved quantity: {name}',
+  // Plan E1: supply position (6 Oct 2026)
+  'สถานะสินค้า: มี / จอง / พร้อมใช้ / กำลังมา': 'Supply: on hand / reserved / available / coming',
+  'อ่านใบสั่งซื้อ/คำขอที่เปิดอยู่ไม่สำเร็จ — ยังบอกยอดที่กำลังมาไม่ได้': 'Could not read open orders and requests — what is coming cannot be shown yet',
+  'มีในคลัง': 'On hand',
+  'ยอดคงเหลือตอนนี้': 'Balance now',
+  'จองแล้ว': 'Reserved',
+  'ผูกกับรายการที่อนุมัติแล้วแต่ยังไม่ออก': 'Committed by an approved document, not yet out',
+  'พร้อมใช้': 'Available',
+  'มีในคลัง − จองแล้ว': 'On hand − reserved',
+  'ใบสั่งซื้อที่สั่งแล้ว ยังค้างรับ': 'Placed orders still owed',
+  'วางแผนเข้า': 'Planned inbound',
+  'ขอซื้ออนุมัติแล้ว + ใบสั่งซื้อร่าง (ยังไม่สั่ง)': 'Approved requests + draft orders (not placed)',
+  'มีคำขอโอนออกรออนุมัติ {qty} {unit} — ยังไม่หักจากพร้อมใช้': '{qty} {unit} in transfer requests awaiting approval — not taken off available',
+  'บางรายการใช้หน่วยที่ยังไม่มีอัตราแปลง จึงไม่ได้นับรวม': 'Some lines are in a unit with no conversion rate, so they are not counted',
 }
