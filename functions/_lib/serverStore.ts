@@ -28,6 +28,50 @@ export interface ServerStore {
   patchIf(collection: string, id: string, fields: Record<string, unknown>, updateTime: string): Promise<boolean>
   /** Create only if no document has that id. False when one already does. */
   create(collection: string, id: string, doc: Record<string, unknown>): Promise<boolean>
+  /**
+   * Several writes as one atomic commit, each with its precondition (ADR-001): all land or
+   * none does. False when a precondition failed — someone wrote in between; read again.
+   * Only the stock commands use it, and only for the writes `assertCommandWrite` allows.
+   */
+  commit(writes: readonly ServerWrite[]): Promise<boolean>
+}
+
+/** One write in a commit. `update` changes only the named fields; null in `data` removes one. */
+export interface ServerWrite {
+  /** `verify` writes nothing: it only makes the commit fail if the document moved since read. */
+  op: 'set' | 'update' | 'verify'
+  collection: string
+  id: string
+  data: Record<string, unknown>
+  /** The document's updateTime when it was read, or whether it must (not) exist. */
+  precondition?: { updateTime: string } | { exists: boolean }
+}
+
+/**
+ * What each stock command may write, by collection kind and operation (ADR-001). The
+ * service account is outside the security rules, so this list IS the rule for these
+ * endpoints, and a test pins it. Nothing outside it can be written, by any command.
+ */
+export const COMMAND_WRITES = {
+  receivePO: {
+    stockMovements: ['set'],
+    stockLevels: ['set'],
+    counters: ['set'],
+    movementImages: ['set'],
+    purchaseOrders: ['update'],
+  },
+} as const satisfies Record<string, Record<string, readonly ('set' | 'update')[]>>
+
+export type StockCommand = keyof typeof COMMAND_WRITES
+
+/** Throws unless every write is one this command is allowed to make. */
+export function assertCommandWrite(command: StockCommand, writes: readonly ServerWrite[]): void {
+  const allowed = COMMAND_WRITES[command] as Record<string, readonly string[]>
+  for (const w of writes) {
+    if (w.op === 'verify') continue
+    const ops = allowed[baseOf(w.collection)]
+    if (!ops || !ops.includes(w.op)) throw new Error(`${command} may not ${w.op} ${w.collection}`)
+  }
 }
 
 /** The order fields a supplier answer, a link or a decision may write. */
@@ -66,17 +110,31 @@ export function brandCollection(brand: 'pizza' | 'lelapin', name: string): strin
   return `${brand}__${name}`
 }
 
-export function restServerStore(projectId: string, rawServiceAccount: string, fetcher: typeof fetch = fetch): ServerStore {
-  const sa = parseServiceAccount(rawServiceAccount)
+export function restServerStore(
+  projectId: string,
+  rawServiceAccount: string,
+  fetcher: typeof fetch = fetch,
+  /**
+   * Tests only: talk to the Firestore emulator (`http://127.0.0.1:8080`) with its `owner`
+   * token instead of Google with the service account.
+   */
+  emulator?: { host: string },
+): ServerStore {
   const root = `projects/${projectId}/databases/(default)/documents`
-  const base = `https://firestore.googleapis.com/v1/${root}`
+  const base = emulator ? `${emulator.host}/v1/${root}` : `https://firestore.googleapis.com/v1/${root}`
+  const sa = emulator ? null : parseServiceAccount(rawServiceAccount)
+  const bearer = async () => (sa ? await accessToken(sa, fetcher) : 'owner')
 
-  async function call(path: string, body: unknown): Promise<unknown> {
-    const res = await fetcher(`${base}${path}`, {
+  async function send(path: string, body: unknown): Promise<Response> {
+    return fetcher(`${base}${path}`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${await accessToken(sa, fetcher)}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${await bearer()}`, 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
+  }
+
+  async function call(path: string, body: unknown): Promise<unknown> {
+    const res = await send(path, body)
     if (!res.ok) throw new Error(`firestore ${path}: ${res.status} ${await res.text()}`)
     return res.json()
   }
@@ -119,6 +177,28 @@ export function restServerStore(projectId: string, rawServiceAccount: string, fe
         update: { name: `${root}/${collection}/${id}`, fields: encodeFields({ ...doc, id }) },
         currentDocument: { exists: false },
       })
+    },
+
+    async commit(writes) {
+      const body = {
+        writes: writes.map((w) => {
+          const name = `${root}/${w.collection}/${w.id}`
+          if (w.op === 'verify') return { verify: name, ...(w.precondition ? { currentDocument: w.precondition } : {}) }
+          const present: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(w.data)) if (v !== null && v !== undefined) present[k] = v
+          return {
+            update: { name, fields: encodeFields(w.op === 'set' ? { ...present, id: w.id } : present) },
+            ...(w.op === 'update' ? { updateMask: { fieldPaths: Object.keys(w.data).filter((k) => w.data[k] !== undefined) } } : {}),
+            ...(w.precondition ? { currentDocument: w.precondition } : {}),
+          }
+        }),
+      }
+      const res = await send(':commit', body)
+      if (res.ok) return true
+      const text = await res.text()
+      // A precondition that failed is a lost race, not an error: the caller reads again.
+      if (res.status === 409 || res.status === 404 || /FAILED_PRECONDITION|ALREADY_EXISTS|ABORTED|NOT_FOUND/.test(text)) return false
+      throw new Error(`firestore :commit: ${res.status} ${text}`)
     },
   }
 }

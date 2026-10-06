@@ -12,7 +12,11 @@ if (process.env.CF_PAGES_BRANCH === 'demo') process.env.VITE_DEMO_MODE = '1'
 if (process.env.CF_PAGES && process.env.VITE_USE_EMULATOR) throw new Error('VITE_USE_EMULATOR is for the local Playwright tests only')
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // The Playwright tests (mode e2e) run the stock commands through e2e/command-server.mjs —
+  // the real handler over the Firestore emulator — since Pages Functions are not served by
+  // Vite. Nothing like this exists in any other mode.
+  ...(mode === 'e2e' ? { server: { proxy: { '/api/stock': 'http://127.0.0.1:5177' } } } : {}),
   plugins: [
     react(),
     tailwindcss(),
@@ -73,4 +77,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

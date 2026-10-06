@@ -44,6 +44,27 @@ export function memoryServerStore(seed: Record<string, Record<string, Record<str
       store.writes++
       return true
     },
+    async commit(writes) {
+      // All preconditions first, then all writes: atomic, like Firestore's commit.
+      for (const w of writes) {
+        const row = data.get(key(w.collection, w.id))
+        const p = w.precondition
+        if (p && 'updateTime' in p && row?.updateTime !== p.updateTime) return false
+        if (p && 'exists' in p && !!row !== p.exists) return false
+      }
+      for (const w of writes) {
+        if (w.op === 'verify') continue
+        const row = data.get(key(w.collection, w.id))
+        const next: Record<string, unknown> = w.op === 'set' ? { id: w.id } : { ...(row?.doc ?? {}) }
+        for (const [k, v] of Object.entries(w.data)) {
+          if (v === null) delete next[k]
+          else if (v !== undefined) next[k] = structuredClone(v)
+        }
+        data.set(key(w.collection, w.id), { doc: next, updateTime: stamp() })
+        store.writes++
+      }
+      return true
+    },
     touch(c, id, fields) {
       const row = data.get(key(c, id))
       if (row) data.set(key(c, id), { doc: { ...row.doc, ...fields }, updateTime: stamp() })

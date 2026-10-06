@@ -5,23 +5,10 @@
 
 import type { BrandId } from '../brand/brand'
 
-/**
- * Marker for "remove this field", usable as a value in an update patch.
- *
- * Passing `undefined` does not do it: Firestore is initialised with
- * ignoreUndefinedProperties, so an undefined value is skipped and the old one survives —
- * clearing a product's cost saved successfully and left the cost exactly as it was. The
- * local backend, meanwhile, stored a literal undefined. One explicit marker, handled by
- * both, is the only way the two modes can agree on what clearing means.
- */
-export const DELETE_FIELD = Symbol('delete-field')
-
-export interface TxContext {
-  get<T = Record<string, unknown>>(collection: string, id: string): Promise<T | null>
-  set(collection: string, id: string, data: Record<string, unknown>): void
-  update(collection: string, id: string, patch: Record<string, unknown>): void
-  delete(collection: string, id: string): void
-}
+// The transaction surface lives on its own so code that runs on the server too (the stock
+// commands, ADR-001) can use it without pulling in anything browser-only.
+import type { TxContext } from './tx'
+export { DELETE_FIELD, type TxContext } from './tx'
 
 /**
  * Restricts a subscription to documents whose numeric `field` is at or after `value`.

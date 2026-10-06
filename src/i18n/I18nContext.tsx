@@ -16,8 +16,8 @@ import { setDateLanguage } from '../lib/format'
 
 export type Lang = 'th' | 'en'
 
-/** Interpolates {name} placeholders so counts/names stay out of the phrase table. */
-export type TFn = (thai: string, vars?: Record<string, string | number>) => string
+import type { TFn } from './tfn'
+export type { TFn } from './tfn'
 
 interface I18nState {
   lang: Lang

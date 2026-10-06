@@ -25,10 +25,19 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     ...devices['Desktop Chrome'],
   },
-  webServer: {
-    command: 'npm run dev:e2e',
-    url: 'http://localhost:5176',
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: 'npm run dev:e2e',
+      url: 'http://localhost:5176',
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
+    // The stock commands (ADR-001), as the Pages Functions would run them, over the emulator.
+    {
+      command: 'node e2e/command-server.mjs',
+      url: 'http://127.0.0.1:5177/health',
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
+  ],
 })

@@ -1,4 +1,4 @@
-import type { TFn } from './I18nContext'
+import type { TFn } from './tfn'
 
 /**
  * An error whose message is a translation key plus its values, so services can report

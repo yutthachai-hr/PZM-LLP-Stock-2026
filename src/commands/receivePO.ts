@@ -1,4 +1,4 @@
-import type { TxContext } from '../backend/types'
+import type { TxContext } from '../backend/tx'
 import { AppError } from '../i18n/AppError'
 import { COL, type PoReceipt, type Product, type PurchaseOrder, type PurchaseOrderLine, type PurchaseOrderStatus, type StockMovement } from '../types'
 import { resolveFactor, toBase } from '../lib/uom'

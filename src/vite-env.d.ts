@@ -24,4 +24,11 @@ interface ImportMetaEnv {
    * token, because a demo has no Firebase user. Never set on production.
    */
   readonly VITE_PO_IMAGE_DEMO_KEY?: string
+  /**
+   * Stock commands the app sends to the server instead of writing itself (ADR-001), comma
+   * separated, e.g. `receivePO`. Unset = every write stays on the client path. Rolling one
+   * back is removing it and redeploying — possible only until the rules close client stock
+   * writes for good (Phase A-sec's last step).
+   */
+  readonly VITE_STOCK_COMMANDS?: string
 }

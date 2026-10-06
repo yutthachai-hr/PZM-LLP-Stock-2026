@@ -1,4 +1,4 @@
-import type { TxContext } from '../backend/types'
+import type { TxContext } from '../backend/tx'
 import { AppError } from '../i18n/AppError'
 import { COL, ADJUST_REASONS, type StockMovement, type MovementType, type Product, type StockLevel, type StockLocation } from '../types'
 import { sameUnit } from '../lib/units'
@@ -64,7 +64,7 @@ export function keyedFields(x: { unit: string; entryUnit?: string; entryQty?: nu
   return u && x.entryQty !== undefined ? { entryUnit: u, entryQty: x.entryQty } : {}
 }
 
-/** "สต๊อกไม่พอ" with the base balance, and what was keyed when that differs. */
+// "Not enough stock" with the base balance, and what was keyed when that differs.
 export function shortMessage(l: MovementLine, avail: number): AppError {
   const keyed = keyedUnit(l)
   if (keyed && l.entryQty !== undefined) {

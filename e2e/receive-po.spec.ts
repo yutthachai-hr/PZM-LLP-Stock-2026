@@ -19,7 +19,10 @@ test('one device receives an order in full: one receipt, stock and order agree',
   await seedStage()
   const page = await signedIn(browser, 'staffA', '/receive?po=po1')
   await prepareFullReceipt(page, 'INV-100')
+  // Through the trusted command (ADR-001, .env.e2e) — not a silent fall back to the client.
+  const viaCommand = page.waitForResponse('**/api/stock/receive-po')
   await confirmButton(page).click()
+  expect((await viaCommand).status()).toBe(200)
 
   await expect.poll(async () => (await getDoc('purchaseOrders/po1'))?.status, { timeout: 20_000 }).toBe('received')
   expect((await receiptsOf('po1')).length).toBe(2) // one row per line
@@ -97,12 +100,16 @@ test('the answer is lost after the save: confirming again files nothing twice', 
   const page = await signedIn(browser, 'staffA', '/receive?po=po1')
   await prepareFullReceipt(page, 'INV-400')
   let cut = false
-  await page.route('**/documents:commit*', async (route) => {
+  // The save goes to the stock command when the build sends it there (ADR-001), else
+  // straight to Firestore; cut whichever carries it.
+  const lose = async (route: import('@playwright/test').Route) => {
     if (cut) return route.continue()
     cut = true
     await route.fetch() // the server commits…
     await route.abort('connectionreset') // …and the reply never reaches the phone
-  })
+  }
+  await page.route('**/api/stock/receive-po', lose)
+  await page.route('**/documents:commit*', lose)
   await confirmButton(page).click()
   // If the app surfaced the failure, the person tries again — the same receipt, the same id.
   await expect(page.getByRole('button', { name: 'กำลังบันทึก...' })).toHaveCount(0, { timeout: 30_000 })
