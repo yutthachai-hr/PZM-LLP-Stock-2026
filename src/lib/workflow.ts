@@ -88,13 +88,13 @@ export const PO = {
     // A staff order is a draft until a หัวหน้า or admin approves it (plan B4).
     approve: { from: ['draft'], to: 'ordered', roles: MANAGERS },
     // A placed order changes only as a numbered, explained revision.
-    amend: { from: ['ordered'], to: 'ordered', roles: ALL, refuse: { draft: 'แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ', received: 'แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ', cancelled: 'แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ' } },
+    amend: { from: ['ordered'], to: 'ordered', roles: ALL, refuse: { draft: 'แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ', received: 'แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ', cancelled: 'แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ' } }, // i18n-key
     send: { from: ['ordered'], to: 'ordered', roles: ALL },
     // One delivery checked in; the order stays open until everything has come (receivePO decides).
-    receive: { from: ['ordered'], to: 'ordered', roles: ALL, refuse: { received: 'ใบสั่งซื้อนี้รับของแล้ว', cancelled: 'ใบสั่งซื้อนี้ถูกยกเลิกแล้ว', draft: 'ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ' } },
-    receiveLast: { from: ['ordered'], to: 'received', roles: ALL, refuse: { received: 'ใบสั่งซื้อนี้รับของแล้ว', cancelled: 'ใบสั่งซื้อนี้ถูกยกเลิกแล้ว', draft: 'ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ' } },
-    closeShort: { from: ['ordered'], to: 'received', roles: ALL, refuse: { draft: 'ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่', received: 'ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่', cancelled: 'ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่' } },
-    cancel: { from: ['draft', 'ordered'], to: 'cancelled', roles: ALL, refuse: { received: 'ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว', cancelled: 'ใบสั่งซื้อนี้ยกเลิกไปแล้ว' } },
+    receive: { from: ['ordered'], to: 'ordered', roles: ALL, refuse: { received: 'ใบสั่งซื้อนี้รับของแล้ว', cancelled: 'ใบสั่งซื้อนี้ถูกยกเลิกแล้ว', draft: 'ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ' } }, // i18n-key
+    receiveLast: { from: ['ordered'], to: 'received', roles: ALL, refuse: { received: 'ใบสั่งซื้อนี้รับของแล้ว', cancelled: 'ใบสั่งซื้อนี้ถูกยกเลิกแล้ว', draft: 'ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ' } }, // i18n-key
+    closeShort: { from: ['ordered'], to: 'received', roles: ALL, refuse: { draft: 'ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่', received: 'ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่', cancelled: 'ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่' } }, // i18n-key
+    cancel: { from: ['draft', 'ordered'], to: 'cancelled', roles: ALL, refuse: { received: 'ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว', cancelled: 'ใบสั่งซื้อนี้ยกเลิกไปแล้ว' } }, // i18n-key
   },
 } as const satisfies Machine<PurchaseOrderStatus, string>
 
@@ -133,11 +133,11 @@ export const COUNT = {
   terminal: ['posted'],
   actions: {
     // Counting is everyone's job.
-    count: { from: ['counting'], to: 'counting', roles: ALL, refuse: { recorded: 'ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้', posting: 'ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้', posted: 'ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้' } },
+    count: { from: ['counting'], to: 'counting', roles: ALL, refuse: { recorded: 'ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้', posting: 'ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้', posted: 'ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้' } }, // i18n-key
     // What it does to the books is a manager's decision, signed.
-    record: { from: ['counting'], to: 'recorded', roles: MANAGERS, refuse: { recorded: 'ใบนับนี้ยืนยันแล้ว', posting: 'ใบนับนี้ยืนยันแล้ว', posted: 'ใบนับนี้ยืนยันแล้ว' } },
-    post: { from: ['counting', 'recorded', 'posting'], to: 'posting', roles: MANAGERS, refuse: { posted: 'ใบนับนี้ปรับสต๊อกไปแล้ว' } },
-    postDone: { from: ['posting'], to: 'posted', roles: MANAGERS, refuse: { posted: 'ใบนับนี้ปรับสต๊อกไปแล้ว' } },
+    record: { from: ['counting'], to: 'recorded', roles: MANAGERS, refuse: { recorded: 'ใบนับนี้ยืนยันแล้ว', posting: 'ใบนับนี้ยืนยันแล้ว', posted: 'ใบนับนี้ยืนยันแล้ว' } }, // i18n-key
+    post: { from: ['counting', 'recorded', 'posting'], to: 'posting', roles: MANAGERS, refuse: { posted: 'ใบนับนี้ปรับสต๊อกไปแล้ว' } }, // i18n-key
+    postDone: { from: ['posting'], to: 'posted', roles: MANAGERS, refuse: { posted: 'ใบนับนี้ปรับสต๊อกไปแล้ว' } }, // i18n-key
     remove: { from: ['counting', 'recorded'], to: 'counting', roles: ADMIN },
   },
 } as const satisfies Machine<MonthlyCountStatus, string>
