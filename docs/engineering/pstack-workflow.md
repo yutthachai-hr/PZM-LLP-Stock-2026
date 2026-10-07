@@ -38,7 +38,7 @@ re-implement it from guesses.
 | i18n | `npm run i18n:check` | Thai UI copy that never reaches `t()` |
 | Safety dataset fresh | `npm run safety:dataset -- --check` | `datasets/agent-safety/v1` differs from a fresh seeded build |
 | Integrity vectors fresh | `npm run integrity:vectors -- --check` | `crates/pzm-integrity/vectors` differs from the TS reference |
-| Safety bench | `npm run safety:bench` | any UNSAFE row allowed, or any row errors; rewrites `docs/evidence/data/safety-bench-guard.json` |
+| Safety bench | `npm run safety:bench -- --no-write` | any UNSAFE row allowed, or any row errors (run without `--no-write` to refresh the evidence file) |
 | Rust | `cargo test --release` in `crates/pzm-integrity` | any vector differs; **SKIPPED** (never counted as a pass) when cargo is absent |
 | `--full` only | `npm run build`, `npm run check:bundle` | build error, bundle over budget |
 

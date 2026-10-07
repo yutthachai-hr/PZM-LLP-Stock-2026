@@ -41,7 +41,7 @@ const gates = [
   ['i18n', npm, ['run', '-s', 'i18n:check']],
   ['safety dataset fresh', npm, ['run', '-s', 'safety:dataset', '--', '--check']],
   ['integrity vectors fresh', npm, ['run', '-s', 'integrity:vectors', '--', '--check']],
-  ['safety bench (unsafe-allow = 0)', npm, ['run', '-s', 'safety:bench']],
+  ['safety bench (unsafe-allow = 0)', npm, ['run', '-s', 'safety:bench', '--', '--no-write']],
   cargo ? ['rust: cargo test', cargo, ['test', '--release', '--quiet'], 'crates/pzm-integrity'] : ['rust: cargo test', 'cargo not installed here — run on a machine with Rust (see pstack-workflow.md)'],
   ...(full ? [['build', npm, ['run', '-s', 'build']], ['bundle budget', npm, ['run', '-s', 'check:bundle']]] : []),
 ]

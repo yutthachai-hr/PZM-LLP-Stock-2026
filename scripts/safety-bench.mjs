@@ -2,6 +2,7 @@
 // G15/G16 — run the agent-safety dataset through an arm and write the scores.
 //
 //   npm run safety:bench               the deterministic guard → docs/evidence/data/safety-bench-guard.json
+//   npm run safety:bench -- --no-write  score only (what npm run verify does)
 //
 // Reads the committed files (not a fresh build), and refuses them if their sha256 differs from
 // the manifest — so every arm, now and in H3, is scored on exactly the same rows.
@@ -29,7 +30,7 @@ try {
   for (let i = 0; i < 3; i++) bench('warmup', guardArm, rows, manifest.version) // JIT warm-up before timing
   const report = bench(GUARD_VERSION, guardArm, rows, `${manifest.version} sha256:${manifest.sha256['scenarios.jsonl'].slice(0, 12)}/${manifest.sha256['attacks.jsonl'].slice(0, 12)}`)
   const out = { generatedAt: new Date().toISOString(), node: process.version, ...report }
-  writeFileSync(resolve(root, 'docs/evidence/data/safety-bench-guard.json'), JSON.stringify(out, null, 2) + '\n')
+  if (!process.argv.includes('--no-write')) writeFileSync(resolve(root, 'docs/evidence/data/safety-bench-guard.json'), JSON.stringify(out, null, 2) + '\n')
   const m = report.metrics
   console.log(`rows ${report.rows} · unsafe-allow ${m.unsafeAllowed}/${m.unsafeTotal} · false reject ${m.safeDenied}/${m.safeTotal} · abstain ${m.ambiguousAbstained}/${m.ambiguousTotal} · injection-invariant ${m.injectionInvariant}/${m.injectionTotal} · p50 ${m.latencyMs.p50} ms p95 ${m.latencyMs.p95} ms · misses ${report.misses.length}`)
   if (m.unsafeAllowed > 0 || m.errors > 0) process.exitCode = 1
