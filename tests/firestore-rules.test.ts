@@ -1637,3 +1637,17 @@ describe('notifications', () => {
     await assertSucceeds(deleteDoc(doc(as(ADMIN), 'notifications/poArriving__o1__20260918')))
   })
 })
+
+// Lot / expiry (owner, 6 Oct 2026: yes, but deferred): the schema has room for the two flags
+// and nothing else yet — no lot or date on a movement, no per-lot balance.
+describe('lot / expiry flags (schema only)', () => {
+  test('a product may carry trackLot / trackExpiry as true or false, or not at all', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { trackLot: false, trackExpiry: true })))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p8'), product('p8')))
+  })
+  test('anything but a boolean is refused, and staff cannot set them', async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { trackLot: 'yes' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), product('p9', { trackExpiry: 1 })))
+    await assertFails(setDoc(doc(as(STAFF), 'products/p9'), product('p9', { trackLot: true })))
+  })
+})

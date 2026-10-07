@@ -306,6 +306,7 @@ service cloud.firestore {
         && d.keys().hasOnly([
           'id', 'sku', 'name', 'barcode', 'category', 'unit', 'unitType', 'minStock', 'cost',
           'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
+          'trackLot', 'trackExpiry',
           'hasImage', 'active', 'createdAt', 'updatedAt'
         ])
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
@@ -328,6 +329,9 @@ service cloud.firestore {
         // The automatic order never chooses one of these by itself.
         && (!('alternateSupplierIds' in d)
             || (d.alternateSupplierIds is list && d.alternateSupplierIds.size() <= 10))
+        // Lot / expiry, schema only (6 Oct 2026, deferred): flags, nothing reads them yet.
+        && (!('trackLot' in d) || d.trackLot is bool)
+        && (!('trackExpiry' in d) || d.trackExpiry is bool)
         && d.hasImage is bool && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }

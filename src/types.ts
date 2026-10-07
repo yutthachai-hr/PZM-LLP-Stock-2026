@@ -79,6 +79,13 @@ export interface Product {
    */
   alternateSupplierIds?: string[]
   /**
+   * Lot / expiry — schema only (owner, 6 Oct 2026: "YES but DEFER"). Absent or false means
+   * the product is tracked as today: one balance per location, no lots, no dates. Nothing
+   * reads these yet; docs/adr/ADR-002-lot-expiry.md is the design they reserve room for.
+   */
+  trackLot?: boolean
+  trackExpiry?: boolean
+  /**
    * Cost per one of the product's own unit (EA, KG…), for the stock valuation. Always the
    * latest entry of `costHistory` once one exists; the two are written together by
    * services/productCost.ts. Nothing else writes it — the price of a carton keyed here by
