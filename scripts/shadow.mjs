@@ -9,9 +9,9 @@
 //   npm run shadow -- bench                       timings of the main read queries
 //
 // Add --pg to run against the real Supabase project instead of the local copy. The connection
-// string comes from the SUPABASE_DB_URL environment variable (Supabase › Project Settings ›
-// Database › Connection string › Session pooler) — set it in your own terminal; it holds the
-// database password, so it is never written to a file or pasted anywhere.
+// string comes from SUPABASE_DB_URL (Supabase › Connect › Session pooler), and the password
+// best on its own in SUPABASE_DB_PASSWORD — any characters, encoded here. Set both in your own
+// terminal; they are never written to a file, and errors never print them.
 //
 // Reads backup FILES only. Never reads or writes Firestore; never touches production.
 // The local DB is PostgreSQL 17 (PGlite) in .shadow-db; against Supabase the same modules
@@ -42,12 +42,44 @@ const migrations = () =>
 
 const usePg = args.includes('--pg')
 
+/**
+ * The connection string, with the password put in safely. A password with # % @ / : ? in it
+ * breaks a URL, and the driver's error then printed the whole string — password included
+ * (7 Oct 2026). So the password may be given on its own (SUPABASE_DB_PASSWORD) and is
+ * URL-encoded here; and nothing below ever prints the URL.
+ */
+function connectionUrl() {
+  const raw = process.env.SUPABASE_DB_URL
+  if (!raw) throw new Error('set SUPABASE_DB_URL in this terminal first (see the top of scripts/shadow.mjs)')
+  const password = process.env.SUPABASE_DB_PASSWORD
+  // postgresql://user:[YOUR-PASSWORD]@host:port/db — split by hand: the raw string may not parse.
+  const m = raw.match(/^(postgres(?:ql)?:\/\/)([^:@/]+)(?::(.*))?@([^@/]+)(\/.*)?$/)
+  if (!m) throw new Error('SUPABASE_DB_URL does not look like postgresql://user:password@host:port/postgres')
+  const [, scheme, user, inlinePass, host, path = '/postgres'] = m
+  const pass = password ?? inlinePass
+  if (!pass || pass === '[YOUR-PASSWORD]') throw new Error('no password: put it in SUPABASE_DB_PASSWORD (any characters are fine there)')
+  return `${scheme}${user}:${encodeURIComponent(pass)}@${host}${path}`
+}
+
+/** An error's text with any connection string or password cut out. */
+function redact(text) {
+  let t = String(text)
+  for (const secret of [process.env.SUPABASE_DB_URL, process.env.SUPABASE_DB_PASSWORD]) if (secret) t = t.split(secret).join('***')
+  return t.replace(/postgres(?:ql)?:\/\/[^\s'"]+/g, 'postgresql://***')
+}
+process.on('uncaughtException', (e) => {
+  console.error(redact(e?.message ?? e))
+  process.exit(1)
+})
+process.on('unhandledRejection', (e) => {
+  console.error(redact(e?.message ?? e))
+  process.exit(1)
+})
+
 /** A real PostgreSQL (Supabase), shaped like the bits of PGlite this tool uses. */
 async function openPg() {
-  const url = process.env.SUPABASE_DB_URL
-  if (!url) throw new Error('set SUPABASE_DB_URL in this terminal first (see the top of scripts/shadow.mjs)')
   const { default: postgres } = await import('postgres')
-  const sql = postgres(url, { ssl: 'require', max: 1, onnotice: () => {}, prepare: false })
+  const sql = postgres(connectionUrl(), { ssl: 'require', max: 1, onnotice: () => {}, prepare: false })
   const shape = (s) => ({
     query: async (q, p = []) => ({ rows: await s.unsafe(q, p) }),
     exec: async (q) => s.unsafe(q),

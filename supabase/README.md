@@ -36,10 +36,20 @@ The project exists (7 Oct 2026). These commands run **on your computer**. The co
    `postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`
    Put your real password in place of `[YOUR-PASSWORD]`.
 
-2. **Set it in PowerShell** (this window only — nothing is saved to disk):
-   ```powershell
-   $env:SUPABASE_DB_URL = "postgresql://postgres.<ref>:<password>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-   ```
+2. **Set it in your terminal** (this window only — nothing is saved to disk). Leave `[YOUR-PASSWORD]` in the URL as Supabase shows it, and give the password on its own. Any characters work there; the tool encodes them.
+   - PowerShell:
+     ```powershell
+     $env:SUPABASE_DB_URL = "postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+     $env:SUPABASE_DB_PASSWORD = 'the password'
+     ```
+     Single quotes, so `$` `#` `%` stay as typed.
+   - Command Prompt:
+     ```bat
+     set "SUPABASE_DB_URL=postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+     set "SUPABASE_DB_PASSWORD=the password"
+     ```
+     In cmd a `%` in the password must be typed `%%`.
+   - The tool never prints the URL or the password, not even in an error.
 
 3. **Create the tables.** This runs only the migrations not yet applied, so it's safe to repeat:
    ```powershell
