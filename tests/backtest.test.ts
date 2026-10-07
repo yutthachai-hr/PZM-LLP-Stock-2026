@@ -64,7 +64,9 @@ describe('G8: no future leakage', () => {
       // The scrambled world may finish the order differently (that is the label), never the prediction.
       if (again) expect([again.score, again.level, again.covered]).toEqual([p.score, p.level, p.covered])
     }
-  })
+    // ~1 s alone: it recomputes the whole history 30 times. Beside the PGlite shadow tests in the
+    // full suite it passed vitest's 5 s default (7 Oct 2026), so it gets room — the check is unchanged.
+  }, 30_000)
 
   test('stockout predictions at t are identical whatever happened after t', () => {
     const t = H.start + 60 * DAY_MS

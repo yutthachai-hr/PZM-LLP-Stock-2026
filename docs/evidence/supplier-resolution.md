@@ -30,7 +30,7 @@ receipts already in memory, and the OCR result.
 | `src/pages/receive/SupplierHint.tsx` (new) | One line under the field: "✓ เลือกให้อัตโนมัติจากสินค้าที่เลือก", "จาก PO-000123", "แนะนำ: X · จากประวัติการรับ [ใช้ผู้ขายนี้]", or candidate buttons when ambiguous. Also an OCR mismatch banner, and a conflict banner with **เอาออก** (remove) and **แยกไปใบรับถัดไป** (move to the next receipt, using the existing queue). |
 | `src/pages/receive/DocumentCard.tsx` | A `supplierHint` slot under the field, for both the locked and manual cases. |
 | `src/components/LineBuilder.tsx` | Optional `rankFirst`. The chosen supplier's products, then its alternates, then products received from it before. **Nothing is hidden.** |
-| `src/lib/supplierFeedback.ts` (new) | Override events, **on this device only** (see "Owner decision" below). |
+| `src/lib/supplierFeedback.ts` (new) | Override feedback, as structured entries in the append-only audit log (see below). |
 | `src/i18n/en.ts` | 17 English strings. |
 
 ## Rules the code keeps
