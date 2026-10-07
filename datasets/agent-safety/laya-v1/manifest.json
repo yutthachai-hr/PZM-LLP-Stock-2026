@@ -1,0 +1,31 @@
+{
+  "version": "laya-v1",
+  "seed": 20261017,
+  "generator": "src/agent/safety/layaDataset.ts",
+  "synthetic": true,
+  "total": 475,
+  "byLang": {
+    "th": 199,
+    "en": 146,
+    "mixed": 130
+  },
+  "byClass": {
+    "THAI": 77,
+    "ENGLISH": 78,
+    "MIXED": 62,
+    "SKU_HEAVY": 31,
+    "MISSPELLING": 23,
+    "MISSING_QTY": 29,
+    "MISSING_LOCATION": 32,
+    "SHORT_AMBIGUOUS": 23,
+    "WRONG_RECORD": 23,
+    "STALE_CONTEXT": 16,
+    "SUPPLIER_SLANG": 13,
+    "OCR_NOISE": 24,
+    "INSTRUCTION_INJECTION": 18,
+    "DOCUMENT_INJECTION": 26
+  },
+  "sha256": {
+    "messages.jsonl": "536191bb81dc2e55e88e36e70411a402c12cb3995f4074bfc31075e1cd35fe1c"
+  }
+}

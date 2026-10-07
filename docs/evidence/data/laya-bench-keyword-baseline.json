@@ -1,0 +1,389 @@
+{
+  "generatedAt": "2026-10-07T07:25:48.469Z",
+  "machine": {
+    "platform": "win32-x64 10.0.26300",
+    "cpu": "Intel(R) Core(TM) i5-10400 CPU @ 2.90GHz",
+    "cores": 12,
+    "ramGb": 16,
+    "gpu": "none detected (nvidia-smi not available)",
+    "note": "the development machine, not the production host"
+  },
+  "caveat": "R0 keyword baseline written alongside the templates: its scores are inflated and are a harness check / floor, not evidence about real traffic.",
+  "client": {
+    "name": "keyword-baseline",
+    "checkpoint": "r0/1"
+  },
+  "dataset": "laya-v1 sha256:536191bb81dc",
+  "rows": 475,
+  "overall": {
+    "rows": 475,
+    "intent": 0.9642,
+    "completenessExact": 0.9305,
+    "completenessSlot": 0.9827,
+    "risk": 0.9811,
+    "route": 0.9768,
+    "escalation": 0.9768,
+    "injectionRecall": 1,
+    "injectionFalseAlarm": 0,
+    "failures": 0
+  },
+  "byLang": {
+    "en": {
+      "rows": 146,
+      "intent": 0.8904,
+      "completenessExact": 0.9384,
+      "completenessSlot": 0.9877,
+      "risk": 0.9452,
+      "route": 0.9384,
+      "escalation": 0.9384,
+      "injectionRecall": 1,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "mixed": {
+      "rows": 130,
+      "intent": 1,
+      "completenessExact": 0.8385,
+      "completenessSlot": 0.9554,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": 1,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "th": {
+      "rows": 199,
+      "intent": 0.995,
+      "completenessExact": 0.9849,
+      "completenessSlot": 0.997,
+      "risk": 0.995,
+      "route": 0.9899,
+      "escalation": 0.9899,
+      "injectionRecall": 1,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    }
+  },
+  "byClass": {
+    "DOCUMENT_INJECTION": {
+      "rows": 26,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": 1,
+      "injectionFalseAlarm": null,
+      "failures": 0
+    },
+    "ENGLISH": {
+      "rows": 78,
+      "intent": 0.7949,
+      "completenessExact": 0.8974,
+      "completenessSlot": 0.9795,
+      "risk": 0.8974,
+      "route": 0.8974,
+      "escalation": 0.8974,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "INSTRUCTION_INJECTION": {
+      "rows": 18,
+      "intent": 1,
+      "completenessExact": 0.6111,
+      "completenessSlot": 0.9222,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": 1,
+      "injectionFalseAlarm": null,
+      "failures": 0
+    },
+    "MISSING_LOCATION": {
+      "rows": 32,
+      "intent": 1,
+      "completenessExact": 0.9688,
+      "completenessSlot": 0.9938,
+      "risk": 1,
+      "route": 0.9688,
+      "escalation": 0.9688,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "MISSING_QTY": {
+      "rows": 29,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "MISSPELLING": {
+      "rows": 23,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "MIXED": {
+      "rows": 62,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "OCR_NOISE": {
+      "rows": 24,
+      "intent": 1,
+      "completenessExact": 0.2917,
+      "completenessSlot": 0.7917,
+      "risk": 1,
+      "route": 0.9583,
+      "escalation": 0.9583,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "SHORT_AMBIGUOUS": {
+      "rows": 23,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "SKU_HEAVY": {
+      "rows": 31,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "STALE_CONTEXT": {
+      "rows": 16,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "SUPPLIER_SLANG": {
+      "rows": 13,
+      "intent": 0.9231,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 0.9231,
+      "route": 0.9231,
+      "escalation": 0.9231,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "THAI": {
+      "rows": 77,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    },
+    "WRONG_RECORD": {
+      "rows": 23,
+      "intent": 1,
+      "completenessExact": 1,
+      "completenessSlot": 1,
+      "risk": 1,
+      "route": 1,
+      "escalation": 1,
+      "injectionRecall": null,
+      "injectionFalseAlarm": 0,
+      "failures": 0
+    }
+  },
+  "calibration": {
+    "question": "intent",
+    "ece": 0.0939,
+    "reliability": [
+      {
+        "lo": 0,
+        "hi": 0.1,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.1,
+        "hi": 0.2,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.2,
+        "hi": 0.3,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.3,
+        "hi": 0.4,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.4,
+        "hi": 0.5,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.5,
+        "hi": 0.6,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.6,
+        "hi": 0.7,
+        "count": 47,
+        "meanConfidence": 0.6,
+        "accuracy": 0.8085
+      },
+      {
+        "lo": 0.7,
+        "hi": 0.8,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.8,
+        "hi": 0.9,
+        "count": 0,
+        "meanConfidence": 0,
+        "accuracy": 0
+      },
+      {
+        "lo": 0.9,
+        "hi": 1,
+        "count": 428,
+        "meanConfidence": 0.9,
+        "accuracy": 0.9813
+      }
+    ],
+    "byBucket": [
+      {
+        "from": 0,
+        "to": 0.5,
+        "count": 0,
+        "accuracy": 0
+      },
+      {
+        "from": 0.5,
+        "to": 0.7,
+        "count": 47,
+        "accuracy": 0.8085
+      },
+      {
+        "from": 0.7,
+        "to": 0.8,
+        "count": 0,
+        "accuracy": 0
+      },
+      {
+        "from": 0.8,
+        "to": 0.9,
+        "count": 0,
+        "accuracy": 0
+      },
+      {
+        "from": 0.9,
+        "to": 0.95,
+        "count": 428,
+        "accuracy": 0.9813
+      },
+      {
+        "from": 0.95,
+        "to": 0.99,
+        "count": 0,
+        "accuracy": 0
+      },
+      {
+        "from": 0.99,
+        "to": 1,
+        "count": 0,
+        "accuracy": 0
+      }
+    ],
+    "threshold": {
+      "threshold": null,
+      "covered": 0,
+      "correct": 0,
+      "wilsonLower": 0,
+      "why": "no threshold reaches a 0.99 lower bound with ≥50 answers"
+    }
+  },
+  "routing": {
+    "thresholds": {
+      "autoRouteReadOnly": null,
+      "minUsable": 1.01
+    },
+    "split": "test",
+    "distribution": {
+      "DENY": 0,
+      "AUTO_ROUTE_READ_ONLY": 0,
+      "ESCALATE_LOCAL": 211,
+      "ESCALATE_LLM": 4,
+      "ESCALATE_SAFETY_GATE": 0,
+      "ASK_HUMAN": 22
+    },
+    "noLlmShare": 0,
+    "unsafeAutoRoutes": 0,
+    "wrongAutoRoutes": 0
+  },
+  "latencyMs": {
+    "p50": 0.009,
+    "p95": 0.031,
+    "max": 1.264
+  },
+  "failureRate": 0
+}

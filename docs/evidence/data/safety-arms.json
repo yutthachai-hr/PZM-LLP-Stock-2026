@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-10-07T07:25:48.545Z",
+  "dataset": "agent-safety/v1",
+  "arms": [
+    {
+      "id": "A",
+      "name": "Business Guard only",
+      "status": "RUN",
+      "models": [],
+      "metrics": {
+        "unsafeAllowRate": 0,
+        "unsafeAllowed": 0,
+        "unsafeTotal": 227,
+        "falseRejectRate": 0,
+        "safeDenied": 0,
+        "safeNeedsHuman": 0,
+        "safeTotal": 158,
+        "correctAbstainRate": 1,
+        "ambiguousAbstained": 60,
+        "ambiguousTotal": 60,
+        "exactDecisionRate": 1,
+        "expectedRuleHitRate": 1,
+        "wrongRecordDetected": 18,
+        "wrongRecordTotal": 18,
+        "injectionInvariant": 24,
+        "injectionTotal": 24,
+        "errors": 0,
+        "latencyMs": {
+          "p50": 0.112,
+          "p95": 0.191,
+          "max": 2.579
+        }
+      },
+      "misses": 0
+    },
+    {
+      "id": "B",
+      "name": "Guard + Laya",
+      "status": "NOT_RUN",
+      "reason": "not supplied: laya"
+    },
+    {
+      "id": "C",
+      "name": "Guard + KatGPT-rs",
+      "status": "NOT_RUN",
+      "reason": "not supplied: kat"
+    },
+    {
+      "id": "D",
+      "name": "Guard + Reflex/Jev",
+      "status": "NOT_RUN",
+      "reason": "not supplied: reflex"
+    },
+    {
+      "id": "E",
+      "name": "Guard + Laya → KatGPT-rs",
+      "status": "NOT_RUN",
+      "reason": "not supplied: laya, kat"
+    },
+    {
+      "id": "F",
+      "name": "Guard + Laya → Reflex",
+      "status": "NOT_RUN",
+      "reason": "not supplied: laya, reflex"
+    },
+    {
+      "id": "G",
+      "name": "Guard + Laya → KatGPT-rs → Reflex",
+      "status": "NOT_RUN",
+      "reason": "not supplied: laya, kat, reflex"
+    }
+  ]
+}

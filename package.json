@@ -30,7 +30,8 @@
     "safety:bench": "node scripts/safety-bench.mjs",
     "integrity:vectors": "node scripts/integrity-vectors.mjs",
     "integrity:bench": "node --expose-gc scripts/integrity-bench.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "laya:bench": "node scripts/laya-bench.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.31.0",
