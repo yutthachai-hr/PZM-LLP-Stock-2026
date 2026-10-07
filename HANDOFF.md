@@ -680,17 +680,21 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
   - ไฟล์ที่จะสร้าง และความเสี่ยง
 - **RC ยังไม่ freeze:** gate เขียวที่ `69ed912` (`docs/evidence/release-gate.md`) แต่จะ freeze RC หลัง G16 เพราะ freeze แล้วแก้ได้แค่ bug
 
-**สถานะทีละขั้น**
+**สถานะทีละขั้น (อัปเดต 7 ต.ค. — session ที่สอง)** สรุปหลักฐานรวมอยู่ที่ `docs/evidence/phase-g-agent-safety.md`
 
 | ขั้น | สถานะ |
 |---|---|
-| G11 | **เริ่มแล้ว:** `src/agent/proposal.ts` (schema `action-proposal/1`, parse แบบเข้ม, canonical JSON, hash fnv1a-64, `FORBIDDEN_ACTIONS`, `untrusted[]`, `unresolved[]`) ผ่าน typecheck **แต่ยังไม่มีเทส** |
-| G11 ที่เหลือ | `tests/agent-proposal.test.ts` และ `tests/agent-no-write-path.test.ts` (ห้าม `src/agent` import backend / services / firebase / data แบบเดียวกับ `tests/suggest-only.test.ts`) |
-| G12 | `src/agent/guard.ts` + `snapshot.ts` |
-| G13 | `crates/pzm-integrity` (lib + CLI, serde เท่านั้น) |
-| G14 | `docs/engineering/pstack-workflow.md` + `npm run verify` |
-| G15 / G16 | dataset ใน `datasets/agent-safety/v1/` |
-| ปิดเฟส | เขียน `docs/evidence/phase-g-agent-safety.md` แล้วค่อย freeze RC และขออนุมัติเจ้าของ |
+| G11 | **เสร็จ** (`be36a9d`): เทสสัญญา proposal และเทส no-write-path ที่ไล่ import ต่อกันทั้งสาย |
+| G12 | **เสร็จ** (`9c9f29e`): `guard.ts` + `snapshot.ts` + `safety/world.ts` |
+| G13 | **เสร็จ** (`9abcee6`): `crates/pzm-integrity` + TS reference + 57 vectors (`npm run integrity:vectors`, `npm run integrity:bench`) |
+| G14 | **เสร็จ** (`858d2af`, `c6806c2`): `npm run verify` และ `docs/engineering/pstack-workflow.md` (ยังไม่มี pstack ตัวจริง) |
+| G15 / G16 | **เสร็จ** (`894e468`): `npm run safety:dataset` / `npm run safety:bench` — unsafe-allow 0/227 |
+| G17 Laya | **ทำ harness แล้ว แต่ยังไม่ได้ประเมิน Laya** (`b8eabb7`): ยังไม่ได้รับ Laya / Kat / Reflex จากเจ้าของ arm B–G = NOT_RUN ดู `docs/evidence/phase-g17-laya.md` |
+| G18–G27 | **มีแค่รายงาน audit และแผน** (`933c3f4`): `docs/agent-safety/01-g18-g27-audit-and-plan.md` รออนุมัติชุดแรก |
+| Receiving supplier | **เสร็จ** (`7018770`): ระบบเลือกผู้ขายให้เอง ดู `docs/evidence/supplier-resolution.md` |
+| ปิดเฟส | **ยังไม่ freeze RC** รอเจ้าของสั่ง (ต้องรัน emulator gates ใน cloud ก่อน) |
+
+**Rust บนเครื่อง Windows นี้:** ลง rustup แล้ว (เจ้าของอนุญาต 7 ต.ค.) และตั้ง GNU toolchain override เฉพาะ `crates/pzm-integrity` เพราะเครื่องนี้ไม่มี MSVC linker ให้รัน `cargo` จากในโฟลเดอร์ crate
 
 **รายละเอียดของงานที่ยังไม่ทำ**
 
