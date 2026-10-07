@@ -64,6 +64,7 @@ test('a manager and an admin can approve the widest purchase request', async () 
     items: Array.from({ length: 200 }, (_, i) => item(i)),
     requestedBy: STAFF, requestedByName: 'AA', submittedAt: ts(),
     returnReason: 'r', rejectReason: 'x', approvalNote: 'n', rejectedBy: 'u', rejectedByName: 'n', rejectedAt: ts(), orders: [],
+    intake: ['excel', 'ocr', 'manual', 'suggestion'],
     history: Array.from({ length: 499 }, (_, i) => ({ at: ts(), by: STAFF, byName: 'AA', action: i ? 'itemAdded' : 'created', detail: 'x', itemIdx: i, oldValue: 'a', newValue: 'b' })),
     createdBy: STAFF, createdByName: 'AA', createdAt: ts(), updatedAt: ts(),
   }
@@ -74,6 +75,21 @@ test('a manager and an admin can approve the widest purchase request', async () 
       history: [...(cur.history as unknown[]), { at: ts(), by: uid, byName: 'M', action: 'approved', newValue: 'ok' }], updatedAt: ts(),
     }))
   }
+})
+
+test('D4′: a draft records its intake channels; an unknown channel or a fifth one is refused', async () => {
+  const pr = {
+    id: 'pr2', docNo: 'PR-00002', status: 'draft', revision: 1, locationId: 'loc', items: [],
+    requestedBy: STAFF, requestedByName: 'AA', history: [{ at: ts(), by: STAFF, byName: 'AA', action: 'created' }],
+    createdBy: STAFF, createdByName: 'AA', createdAt: ts(), updatedAt: ts(),
+  }
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), 'purchaseRequests/pr2'), pr))
+  const db = env.authenticatedContext(STAFF).firestore()
+  await assertSucceeds(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['excel'], updatedAt: ts() }))
+  await assertSucceeds(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['excel', 'ocr', 'manual', 'suggestion'], updatedAt: ts() }))
+  await assertFails(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['batch'], updatedAt: ts() }))
+  await assertFails(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: 'excel', updatedAt: ts() }))
+  await assertFails(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['excel', 'ocr', 'manual', 'suggestion', 'excel'], updatedAt: ts() }))
 })
 
 test('an admin can reopen the widest approved request (the dearest transition)', async () => {

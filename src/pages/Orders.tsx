@@ -455,12 +455,12 @@ export function OrdersPage() {
         title={t('สั่งซื้อ')}
         subtitle={t('สั่งของกับผู้ขาย ตรวจรับ แล้วเข้าคลังในขั้นตอนเดียว')}
         actions={
-          // Two ways in, same orders underneath: the list from Excel, or one supplier by
-          // hand. The manual screen stays exactly as it was for the days it is the right tool.
+          // Two ways in, same orders underneath: the list from Excel goes through a purchase
+          // request and its approval (D4′), or one supplier by hand.
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => navigate('/purchase')}>
+            <Button variant="secondary" onClick={() => navigate('/requests/new?import=1')}>
               <Icon name="upload" size={16} />
-              {t('นำเข้า Excel (ทางเลือก)')}
+              {t('ขอสั่งซื้อจาก Excel')}
             </Button>
             <Button onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} />

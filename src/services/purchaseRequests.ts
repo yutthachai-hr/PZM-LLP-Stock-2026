@@ -11,7 +11,7 @@ import { conversionOrderId, orderGroups, stuckConversions, type OrderGroup, type
 import { genId } from '../lib/id'
 import { deliver } from './notifications'
 import { prReturnedDraft, prSubmittedDraft } from '../lib/inventoryRules/notifications'
-import {
+import { type RequestIntake,
   COL,
   type Product,
   type PurchaseOrder,
@@ -174,6 +174,8 @@ export async function createRequest(params: {
   locationId: string
   note?: string
   actor: Actor
+  /** D4′: where the first lines will come from. */
+  intake?: RequestIntake
 }): Promise<PurchaseRequest> {
   if (!params.locationId) throw new AppError('กรุณาเลือกคลังปลายทาง')
   const db = scoped()
@@ -191,6 +193,7 @@ export async function createRequest(params: {
       locationId: params.locationId,
       ...(params.note?.trim() ? { note: params.note.trim() } : {}),
       items: [],
+      ...(params.intake ? { intake: [params.intake] } : {}),
       requestedBy: params.actor.id,
       requestedByName: params.actor.name,
       history: [entry(params.actor, 'created')],
@@ -239,6 +242,12 @@ function placeItem(
   return { items: [...pr.items, stored], stored }
 }
 
+/** D4′: the request with this channel on its intake list (once, in first-use order). */
+export function withIntake(pr: PurchaseRequest, channel: RequestIntake): PurchaseRequest {
+  const cur = pr.intake ?? []
+  return cur.includes(channel) ? pr : { ...pr, intake: [...cur, channel] }
+}
+
 /** Add a line. A manager adding one during review marks it so; its requested quantity is none. */
 export async function addItem(params: {
   id: string
@@ -247,7 +256,7 @@ export async function addItem(params: {
   suppliers: readonly Supplier[]
   actor: Actor
 }): Promise<PurchaseRequest> {
-  return mutate(params.id, (pr) => withLine(pr, params))
+  return mutate(params.id, (pr) => withIntake(withLine(pr, params), 'manual'))
 }
 
 /**
@@ -268,20 +277,26 @@ export async function addItems(params: {
   actor: Actor
   /** Where the lines came from — the file and its order round — for the history. */
   source?: string
+  /** D4′: the channel. Defaults to excel with a source, manual without. */
+  intake?: RequestIntake
 }): Promise<PurchaseRequest> {
   if (params.lines.length === 0) throw new AppError('ยังไม่มีรายการสินค้า')
+  const channel = params.intake ?? (params.source ? 'excel' : 'manual')
   return mutate(params.id, (pr) => {
-    if (!params.source) return params.lines.reduce((cur, line) => withLine(cur, { ...params, line }), pr)
+    if (!params.source) return withIntake(params.lines.reduce((cur, line) => withLine(cur, { ...params, line }), pr), channel)
     requireEditable(pr, params.actor)
     let cur = pr
     for (const line of params.lines) cur = { ...cur, items: placeItem(cur, line, params.products, params.suppliers).items }
     if (liveItems(cur.items).length > MAX_ITEMS) {
       throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
     }
-    return {
-      ...cur,
-      history: [...pr.history, entry(params.actor, 'itemsImported', { detail: `${params.source} · ${params.lines.length}` })],
-    }
+    return withIntake(
+      {
+        ...cur,
+        history: [...pr.history, entry(params.actor, 'itemsImported', { detail: `${params.source} · ${params.lines.length}` })],
+      },
+      channel,
+    )
   })
 }
 

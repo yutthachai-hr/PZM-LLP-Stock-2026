@@ -699,7 +699,7 @@ service cloud.firestore {
           'approvedBy', 'approvedByName', 'approvedAt',
           'rejectedBy', 'rejectedByName', 'rejectedAt',
           'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
-          'orders', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+          'orders', 'intake', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ]);
     }
 
@@ -727,6 +727,9 @@ service cloud.firestore {
         && d.items is list && d.items.size() <= 200
         && d.history is list && d.history.size() > 0 && d.history.size() <= 500
         && (!('orders' in d) || (d.orders is list && d.orders.size() <= 60))
+        // D4′: the channels its lines came through.
+        && (!('intake' in d) || (d.intake is list && d.intake.size() <= 4
+            && d.intake.hasOnly(['manual', 'excel', 'ocr', 'suggestion'])))
         && (!('note' in d) || text(d.note, 2000))
         && (!('submittedAt' in d) || epochMs(d.submittedAt))
         && (!('returnReason' in d) || text(d.returnReason, 2000))
@@ -1173,7 +1176,7 @@ service cloud.firestore {
           'approvedBy', 'approvedByName', 'approvedAt',
           'rejectedBy', 'rejectedByName', 'rejectedAt',
           'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
-          'orders', 'history', 'updatedAt'
+          'orders', 'intake', 'history', 'updatedAt'
         ])
         // A skipped request is final: nobody edits it, admins included (owner, 25 Sep 2026).
         && resource.data.status != 'skipped'

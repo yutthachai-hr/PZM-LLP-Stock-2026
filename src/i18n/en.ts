@@ -3267,4 +3267,10 @@ export const EN: Record<string, string> = {
   'ซ่อมบำรุงข้อมูล': 'Data maintenance',
   'รายการเคลื่อนไหว': 'Movements',
   'กู้คืนข้อมูล': 'Restore',
+  // D4′ purchase-request intake
+  'ขอสั่งซื้อจาก Excel': 'Request from Excel',
+  'ใบสั่งของบริษัท → ใบขอซื้อ → หัวหน้าอนุมัติ → ใบสั่งซื้อแยกผู้ขาย': 'Company order list → purchase request → manager approval → purchase orders by supplier',
+  'ประวัติการนำเข้า Excel แบบเดิม — ใบที่ค้างอยู่ยังเปิดทำต่อได้ ส่วน Excel ใหม่ให้ทำผ่านใบขอซื้อ': 'Earlier Excel imports — open ones can still be finished; new Excel lists go through a purchase request',
+  'กรอกเอง': 'Entered by hand',
+  'จากคำแนะนำของระบบ': 'From system suggestions',
 }

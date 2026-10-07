@@ -1,3 +1,4 @@
+import { INTAKE_LABEL } from './intake'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { siteTones } from '../../lib/siteTone'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -162,7 +163,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
       <PageHero
         icon="note"
         title={t('รายการขอสั่งซื้อ {docNo}', { docNo: pr.docNo })}
-        subtitle={`${formatThaiDate(pr.createdAt)} · ${locationName} · ${t('ผู้ขอ')}: ${pr.requestedByName}`}
+        subtitle={`${formatThaiDate(pr.createdAt)} · ${locationName} · ${t('ผู้ขอ')}: ${pr.requestedByName} · ${t('ที่มา')}: ${(pr.intake ?? ['manual']).map((c) => t(INTAKE_LABEL[c])).join(', ')}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Badge color={prBadgeColor(pr.status)}>{t(PR_STATUS_KEYS[pr.status])}</Badge>

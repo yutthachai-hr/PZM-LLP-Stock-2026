@@ -67,7 +67,8 @@ export function LineImportModal({
   documents = true,
 }: {
   products: readonly Product[]
-  onImport: (lines: ImportedLine[], source: string) => void | Promise<void | boolean>
+  /** `kind`: a spreadsheet read as-is, or a photo / PDF read by OCR (D4′ intake). */
+  onImport: (lines: ImportedLine[], source: string, kind: 'excel' | 'ocr') => void | Promise<void | boolean>
   onClose: () => void
   title?: string
   /** Offer photo / PDF reading (needs the AI reader). Spreadsheets are always offered. */
@@ -77,6 +78,7 @@ export function LineImportModal({
   const [step, setStep] = useState<Step>('pick')
   const [rows, setRows] = useState<Row[]>([])
   const [source, setSource] = useState('')
+  const [kind, setKind] = useState<'excel' | 'ocr'>('excel')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const sheetInput = useRef<HTMLInputElement>(null)
@@ -101,6 +103,7 @@ export function LineImportModal({
       const parsed = parseSheetLines(await file.arrayBuffer())
       if (!parsed.lines.length) throw new Error(t('ไม่พบแถวสินค้าในไฟล์ — ต้องมีหัวคอลัมน์ชื่อสินค้า (หรือรหัส) และจำนวน'))
       setSource(`${file.name} · ${parsed.sheet}`)
+      setKind('excel')
       setRows(toRows(parsed.lines))
       setStep('review')
     } catch (e) {
@@ -117,6 +120,7 @@ export function LineImportModal({
       const bill = await readDocumentFile(file)
       if (!bill.lines.length) throw new Error(t('AI ({model}) ไม่พบรายการสินค้าในเอกสารนี้ — ลองรูปที่ชัดขึ้น หรือใช้ Excel', { model: bill.model ?? '?' }))
       setSource([file.name, bill.supplier, bill.invoiceNo].filter(Boolean).join(' · '))
+      setKind('ocr')
       setRows(toRows(bill.lines))
       setStep('review')
     } catch (e) {
@@ -150,6 +154,7 @@ export function LineImportModal({
           ...(r.read.note ? { note: r.read.note } : {}),
         })),
         source,
+        kind,
       )
       onClose()
     } catch (e) {

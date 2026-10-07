@@ -587,3 +587,39 @@ describe('converting before the catalogue has loaded (6 Oct 2026)', () => {
     expect(orders()[0].lines.map((l) => [l.productName, l.orderedQty])).toEqual([['RED OAK SALAD', 2]])
   })
 })
+
+describe('D4′: one workflow, several intake channels', () => {
+  const line = (productId: string, supplierId: string, qty = 2) => ({ productId, supplierId, qty })
+
+  test('each channel is recorded once, in first-use order; older requests without it read as manual', async () => {
+    let pr = await S.createRequest({ locationId: MAIN, actor: STAFF })
+    expect(pr.intake).toBeUndefined()
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack')], products, suppliers, actor: STAFF, source: 'order.xlsx · Sheet1' })
+    expect(pr.intake).toEqual(['excel'])
+    pr = await S.addItems({ id: pr.id, lines: [line('p-coke', 's-thai')], products, suppliers, actor: STAFF, source: 'bill.jpg · ACK', intake: 'ocr' })
+    pr = await S.addItem({ id: pr.id, line: line('p-zero', 's-thai'), products, suppliers, actor: STAFF })
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack', 1)], products, suppliers, actor: STAFF, source: 'order2.xlsx · Sheet1' })
+    expect(pr.intake).toEqual(['excel', 'ocr', 'manual'])
+    expect(requests()[0].intake).toEqual(['excel', 'ocr', 'manual'])
+    expect(pr.history.filter((h) => h.action === 'itemsImported').map((h) => h.detail)).toEqual(['order.xlsx · Sheet1 · 1', 'bill.jpg · ACK · 1', 'order2.xlsx · Sheet1 · 1'])
+  })
+
+  test('a system suggestion is a channel, not an approval: the request is still a draft for a person to send', async () => {
+    let pr = await S.createRequest({ locationId: MAIN, actor: STAFF, intake: 'suggestion' })
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack')], products, suppliers, actor: STAFF, intake: 'suggestion' })
+    expect(pr.intake).toEqual(['suggestion'])
+    expect(pr.status).toBe('draft')
+    expect(raw('purchaseOrders')).toHaveLength(0)
+  })
+
+  test('an Excel request goes through the same approval and orders as any other', async () => {
+    let pr = await S.createRequest({ locationId: MAIN, actor: STAFF })
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack'), line('p-coke', 's-thai')], products, suppliers, actor: STAFF, source: 'order.xlsx · R1' })
+    await expect(S.approveRequest({ id: pr.id, ctx, actor: MANAGER })).rejects.toThrow()
+    await S.submitRequest({ id: pr.id, ctx, actor: STAFF })
+    await expect(S.approveRequest({ id: pr.id, ctx, actor: STAFF })).rejects.toThrow()
+    const done = await S.approveRequest({ id: pr.id, ctx, actor: MANAGER })
+    expect(done.intake).toEqual(['excel'])
+    expect(done.status === 'approved' || done.status === 'poCreated').toBe(true)
+  })
+})

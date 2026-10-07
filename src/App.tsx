@@ -36,7 +36,6 @@ const SupplierPerformancePage = lazy(() => import('./pages/suppliers/SupplierPer
 const OrdersPage = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrdersPage })))
 const InboxPage = lazy(() => import('./pages/Inbox').then((m) => ({ default: m.InboxPage })))
 const PurchaseBatchesPage = lazy(() => import('./pages/purchase/PurchaseBatches').then((m) => ({ default: m.PurchaseBatchesPage })))
-const PurchaseImportPage = lazy(() => import('./pages/purchase/PurchaseImport').then((m) => ({ default: m.PurchaseImportPage })))
 const PurchaseBatchReviewPage = lazy(() => import('./pages/purchase/PurchaseBatchReview').then((m) => ({ default: m.PurchaseBatchReviewPage })))
 const PurchaseRequestsPage = lazy(() => import('./pages/requests/PurchaseRequests').then((m) => ({ default: m.PurchaseRequestsPage })))
 const RequestPage = lazy(() => import('./pages/requests/RequestPage').then((m) => ({ default: m.RequestPage })))
@@ -123,7 +122,8 @@ function Gate() {
               <Route path="/requests" element={<PurchaseRequestsPage />} />
               <Route path="/requests/:id" element={<RequestPage />} />
               <Route path="/purchase" element={<PurchaseBatchesPage />} />
-              <Route path="/purchase/import" element={<PurchaseImportPage />} />
+              {/* D4′: Excel purchasing is a purchase-request intake now, not a batch of its own. */}
+              <Route path="/purchase/import" element={<Navigate to="/requests/new?import=1" replace />} />
               <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/announcements" element={<AnnouncementsPage />} />

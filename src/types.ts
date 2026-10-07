@@ -1165,6 +1165,13 @@ export interface PurchaseRequestHistoryEntry {
  * approved and converted, and the conversion goes through the same createPurchaseOrder
  * as the manual screen.
  */
+/**
+ * D4′: how a request's lines came in. Every channel ends in the same request, the same
+ * approval and the same orders — Excel is no longer a separate batch workflow.
+ */
+export type RequestIntake = 'manual' | 'excel' | 'ocr' | 'suggestion'
+export const REQUEST_INTAKES: readonly RequestIntake[] = ['manual', 'excel', 'ocr', 'suggestion']
+
 export interface PurchaseRequest {
   id: string
   /** PR-00001. One sequence per brand. */
@@ -1195,6 +1202,8 @@ export interface PurchaseRequest {
   skippedAt?: number
   /** The orders it became, one per supplier. Written once; a request converts once. */
   orders?: { supplierId: string; supplierName: string; poId: string; docNo: string }[]
+  /** D4′: every channel its lines came through, in the order first used. Absent on older requests (= manual). */
+  intake?: RequestIntake[]
   history: PurchaseRequestHistoryEntry[]
   createdBy: string
   createdByName: string
