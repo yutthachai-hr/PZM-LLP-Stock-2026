@@ -1,5 +1,5 @@
 import { DELETE_FIELD, type TxContext } from '../../src/backend/tx'
-import { assertCommandWrite, brandCollection, type ServerStore, type ServerWrite } from './serverStore'
+import { assertCommandWrite, baseOf, brandCollection, type ServerStore, type ServerWrite } from './serverStore'
 
 /**
  * A Firestore-style transaction over the service-account store (ADR-001): the same
@@ -21,15 +21,106 @@ export class TxConflict extends Error {
   }
 }
 
+/**
+ * The outbox (Supabase shadow, owner-approved 7 Oct 2026): every document a command writes
+ * is also described as an event in `outbox/{eventId}` — IN THE SAME COMMIT, so an event
+ * exists if and only if the change it describes committed. The replicator (worker shadow
+ * job) copies events to the Supabase shadow; Firestore stays the source of truth and the
+ * client never writes either the outbox or Supabase.
+ *
+ * Only what the shadow models becomes an event; counters and photos do not.
+ */
+export const OUTBOX_ENTITIES = new Set(['stockMovements', 'stockLevels', 'purchaseOrders', 'purchaseRequests', 'transfers'])
+
+export interface OutboxOptions {
+  now: () => number
+  /** A UUID per event: the idempotency key all the way to Supabase. */
+  eventId: () => string
+}
+
+export interface OutboxEventDoc {
+  eventId: string
+  brand: 'pizza' | 'lelapin'
+  eventType: string
+  entityType: string
+  entityId: string
+  entityVersion: number | null
+  occurredAt: number
+  createdAt: number
+  /** Order of events inside one commit (they share occurredAt). */
+  seq: number
+  schemaVersion: 1
+  /** The document as committed. */
+  payload: Record<string, unknown>
+  replicationStatus: 'pending'
+  attemptCount: 0
+}
+
+/** A document after a buffered update: the read copy with the patch applied (null removes). */
+function merged(before: Record<string, unknown> | null, patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...(before ?? {}) }
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete out[k]
+    else if (k.includes('.')) {
+      // A dotted path (readBy.uid) as Firestore applies it.
+      const parts = k.split('.')
+      let at = out
+      for (const p of parts.slice(0, -1)) at = (at[p] = { ...((at[p] as Record<string, unknown>) ?? {}) }) as Record<string, unknown>
+      at[parts[parts.length - 1]] = v
+    } else out[k] = v
+  }
+  return out
+}
+
+/** The outbox writes for a commit's writes. Pure, for the tests. */
+export function outboxWrites(
+  brand: 'pizza' | 'lelapin',
+  eventType: string,
+  writes: readonly ServerWrite[],
+  readDocs: ReadonlyMap<string, Record<string, unknown> | null>,
+  opts: OutboxOptions,
+): ServerWrite[] {
+  const now = opts.now()
+  const out: ServerWrite[] = []
+  let seq = 0
+  for (const w of writes) {
+    if (w.op === 'verify') continue
+    const entityType = baseOf(w.collection)
+    if (!OUTBOX_ENTITIES.has(entityType)) continue
+    const payload: Record<string, unknown> = w.op === 'set' ? { ...w.data, id: w.id } : { ...merged(readDocs.get(`${w.collection}/${w.id}`) ?? null, w.data), id: w.id }
+    const version = typeof payload.updatedAt === 'number' ? payload.updatedAt : typeof payload.createdAt === 'number' ? payload.createdAt : null
+    const eventId = opts.eventId()
+    const doc: OutboxEventDoc = {
+      eventId,
+      brand,
+      eventType,
+      entityType,
+      entityId: w.id,
+      entityVersion: version,
+      occurredAt: now,
+      createdAt: now,
+      seq: seq++,
+      schemaVersion: 1,
+      payload,
+      replicationStatus: 'pending',
+      attemptCount: 0,
+    }
+    out.push({ op: 'set', collection: brandCollection(brand, 'outbox'), id: eventId, data: doc as unknown as Record<string, unknown>, precondition: { exists: false } })
+  }
+  return out
+}
+
 export async function runServerTx<R>(
   store: ServerStore,
   brand: 'pizza' | 'lelapin',
   command: { name: string; writes: Readonly<Record<string, readonly string[]>> },
   body: (tx: TxContext) => Promise<R>,
   tries = 5,
+  outbox?: OutboxOptions,
 ): Promise<R> {
   for (let attempt = 0; attempt < tries; attempt++) {
     const reads = new Map<string, string | null>() // physical path → updateTime, or null when missing
+    const readDocs = new Map<string, Record<string, unknown> | null>()
     const writes = new Map<string, ServerWrite>()
     const physical = (c: string) => brandCollection(brand, c)
     const path = (c: string, id: string) => `${physical(c)}/${id}`
@@ -40,6 +131,7 @@ export async function runServerTx<R>(
         if (writing) throw new Error('a transaction must read everything before it writes')
         const got = await store.get<T>(physical(collection), id)
         reads.set(path(collection, id), got ? got.updateTime : null)
+        readDocs.set(path(collection, id), got ? (got.doc as Record<string, unknown>) : null)
         return got ? got.doc : null
       },
       set(collection, id, data) {
@@ -75,7 +167,9 @@ export async function runServerTx<R>(
     }
     assertCommandWrite(command.name, command.writes, list)
     if (!list.some((w) => w.op !== 'verify')) return result
-    if (await store.commit(list)) return result
+    // Checked above against the command's own list; the outbox is added after, by the server.
+    const all: ServerWrite[] = outbox ? [...list, ...outboxWrites(brand, command.name, list, readDocs, outbox)] : list
+    if (await store.commit(all)) return result
   }
   throw new TxConflict()
 }

@@ -58,3 +58,7 @@ dist-demo
 # Playwright output
 test-results/
 playwright-report/
+
+# Local shadow PostgreSQL (npm run shadow) and its bundled SQL
+.shadow-db/
+supabase/dist/

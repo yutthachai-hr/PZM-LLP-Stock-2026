@@ -114,7 +114,8 @@ describe('what it may write', () => {
     const toml = readFileSync(new URL('../../worker/wrangler.toml', import.meta.url), 'utf8')
     const line = toml.split(/\r?\n/).find((l) => l.startsWith('crons'))!
     const listed = [...line.matchAll(/"([^"]+)"/g)].map((m) => m[1])
-    expect(listed.sort()).toEqual(Object.keys(CRONS).sort())
+    // The jobs' crons, plus the Supabase shadow replicator's own (worker/src/index.ts SHADOW_CRON).
+    expect(listed.sort()).toEqual([...Object.keys(CRONS), '15,45 * * * *'].sort())
   })
 })
 

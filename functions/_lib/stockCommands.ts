@@ -26,6 +26,8 @@ export interface StockDeps {
   store: ServerStore
   now: () => number
   makeId: () => string
+  /** A UUID per outbox event. Absent: no outbox (the tests that do not look at it). */
+  eventId?: () => string
   verifyUser: (authorization: string | null) => Promise<string | null>
 }
 
@@ -73,6 +75,8 @@ export async function runStockCommand(deps: StockDeps, name: string, authorizati
     const ctx = spec.prepare ? await spec.prepare(read, params) : undefined
     const result = await runServerTx(deps.store, brand, spec, (tx) =>
       spec.run(tx, (mv, given) => tx.set(COL.movements, given ?? deps.makeId(), mv as Record<string, unknown>), params, actor, ctx),
+      5,
+      deps.eventId ? { now: deps.now, eventId: deps.eventId } : undefined,
     )
     return { status: 200, body: { result } }
   } catch (e) {

@@ -26,6 +26,9 @@ export function stockDeps(env: StockEnv): StockDeps | null {
     store: restServerStore(projectId, env.FIREBASE_SERVICE_ACCOUNT),
     now: () => Date.now(),
     makeId: randomId,
+    // Every committed stock change also writes its outbox event, in the same commit (owner
+    // approved the `outbox` collection 7 Oct 2026; replicated to the Supabase shadow).
+    eventId: () => crypto.randomUUID(),
     verifyUser: (h) => verifyFirebaseToken(h, projectId),
   }
 }
