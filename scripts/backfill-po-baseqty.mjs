@@ -3,9 +3,9 @@
 //
 //   npm run backfill:po-baseqty -- <backup.json> [--json plan.json]
 //
-// Lists every open order line keyed in another unit that has no `baseQty`, with the value it
-// would get at the product's rate today, and every line it could not work out (product gone,
-// no rate). Nothing is written to any database: setting the values is a separate step the
+// Classifies EVERY order line (src/lib/poBaseQtyBackfill.ts classifyPoBaseQty): already
+// valid, safe to backfill, ambiguous (needs review), invalid, or on a closed order — and how
+// many lines the backfill would change (the safe ones only). Nothing is written to any database: setting the values is a separate step the
 // owner has to order. The plan is src/lib/poBaseQtyBackfill.ts, loaded through Vite.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
@@ -30,20 +30,26 @@ if (backup.format !== 'pzm-stock-backup') {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const vite = await createServer({ root, logLevel: 'error', server: { middlewareMode: true, hmr: false }, appType: 'custom' })
 try {
-  const { planPoBaseQtyBackfill } = await vite.ssrLoadModule('/src/lib/poBaseQtyBackfill.ts')
+  const { classifyPoBaseQty } = await vite.ssrLoadModule('/src/lib/poBaseQtyBackfill.ts')
   const d = backup.data ?? {}
-  const plan = planPoBaseQtyBackfill(d.purchaseOrders ?? [], d.products ?? [])
-  console.log(`\nbaseQty backfill — DRY RUN — ${backup.brandName} (${backup.brand}), backup of ${new Date(backup.createdAt).toISOString()}`)
-  console.log(`open orders scanned ${plan.ordersScanned} · lines scanned ${plan.linesScanned}`)
-  console.log(`would set ${plan.set.length} line(s) · could not work out ${plan.gaps.length} line(s)`)
-  for (const l of plan.set) {
-    console.log(`  set  ${l.docNo} #${l.index + 1} ${l.productName}: ${l.orderedQty} ${l.entryUnit} × ${l.factor} = ${l.baseQty}`)
+  const r = classifyPoBaseQty(d.purchaseOrders ?? [], d.products ?? [], d.stockMovements ?? [])
+  const c = r.counts
+  console.log(`\nbaseQty backfill — DRY RUN, nothing is written — ${backup.brandName} (${backup.brand}), backup of ${new Date(backup.createdAt).toISOString()}`)
+  console.log(`orders ${(d.purchaseOrders ?? []).length} · total lines ${r.totalLines}`)
+  console.log(`  already valid   ${c.valid}`)
+  console.log(`  safe backfill   ${c.safe}`)
+  console.log(`  AMBIGUOUS       ${c.ambiguous}   (need review — never written)`)
+  console.log(`  INVALID         ${c.invalid}   (cannot be worked out)`)
+  console.log(`  closed orders   ${c.closed}   (owe nothing — never written)`)
+  console.log(`  would change    ${r.wouldChange}`)
+  for (const l of r.lines.filter((x) => x.class !== 'closed')) {
+    const why = Array.isArray(l.why) ? l.why.join('+') : (l.why ?? '')
+    const rates = l.ledgerRates?.length ? ` ledger rates ${l.ledgerRates.map((x) => +x.toFixed(4)).join('/')}` : ''
+    console.log(`  ${l.class.padEnd(9)} ${l.docNo} #${l.index + 1} ${l.productName}: ${l.orderedQty} ${l.entryUnit ?? ''}${l.baseQty !== null ? ` baseQty ${l.baseQty}` : ''}${l.proposed !== undefined ? ` → ${l.proposed}` : ''} ${why}${rates}`)
   }
-  for (const g of plan.gaps) {
-    console.log(`  GAP  ${g.docNo} #${g.index + 1} ${g.productName} (${g.entryUnit}): ${g.why}`)
-  }
-  if (jsonOut) writeFileSync(resolve(jsonOut), JSON.stringify(plan, null, 2))
-  process.exitCode = plan.gaps.length ? 1 : 0
+  if (jsonOut) writeFileSync(resolve(jsonOut), JSON.stringify(r, null, 2))
+  // Non-zero while anything needs a person: the backfill may not be ordered until then.
+  process.exitCode = c.ambiguous || c.invalid ? 1 : 0
 } finally {
   await vite.close()
 }
