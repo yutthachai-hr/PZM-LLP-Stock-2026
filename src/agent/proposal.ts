@@ -115,7 +115,10 @@ export function referencedIds(params: ActionProposal['parameters']): string[] {
   switch (params.kind) {
     case 'CREATE_PR_DRAFT':
       add(params.locationId)
-      for (const l of params.lines) add(l.productId), add(l.supplierId)
+      for (const l of params.lines) {
+        add(l.productId)
+        add(l.supplierId)
+      }
       break
     case 'CREATE_TRANSFER_DRAFT':
       add(params.fromLocationId)
