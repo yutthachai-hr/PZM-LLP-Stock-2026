@@ -668,6 +668,60 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 
 **ห้ามเริ่ม Phase H เอง**
 
+### 14.1 ต่อจากนี้: Agent Safety Foundation G11–G16 (เจ้าของสั่ง 7 ต.ค.) — **หยุดพักกลางงาน G11**
+
+- **ข้อความสั่งงานฉบับเต็มของเจ้าของ:** ข้อความวันที่ 7 ต.ค. ที่กำหนด G11–G16 และ H1–H10
+- **สรุปสาระและการออกแบบ:** `docs/agent-safety/00-inspection-and-design.md` (อ่านไฟล์นี้ก่อน) มีครบ 16 ข้อที่เจ้าของขอ:
+  - โค้ดที่มีอยู่จริง: **ไม่มี** agent / KatGPT / Reflex / pstack / Rust และไม่มีเส้นทาง Agent → DB
+  - สัญญา ActionProposal
+  - กฎ Business Guard พร้อม ruleId
+  - ขอบเขต Rust crate
+  - การออกแบบ dataset และวิธี benchmark
+  - ไฟล์ที่จะสร้าง และความเสี่ยง
+- **RC ยังไม่ freeze:** gate เขียวที่ `69ed912` (`docs/evidence/release-gate.md`) แต่จะ freeze RC หลัง G16 เพราะ freeze แล้วแก้ได้แค่ bug
+
+**สถานะทีละขั้น**
+
+| ขั้น | สถานะ |
+|---|---|
+| G11 | **เริ่มแล้ว:** `src/agent/proposal.ts` (schema `action-proposal/1`, parse แบบเข้ม, canonical JSON, hash fnv1a-64, `FORBIDDEN_ACTIONS`, `untrusted[]`, `unresolved[]`) ผ่าน typecheck **แต่ยังไม่มีเทส** |
+| G11 ที่เหลือ | `tests/agent-proposal.test.ts` และ `tests/agent-no-write-path.test.ts` (ห้าม `src/agent` import backend / services / firebase / data แบบเดียวกับ `tests/suggest-only.test.ts`) |
+| G12 | `src/agent/guard.ts` + `snapshot.ts` |
+| G13 | `crates/pzm-integrity` (lib + CLI, serde เท่านั้น) |
+| G14 | `docs/engineering/pstack-workflow.md` + `npm run verify` |
+| G15 / G16 | dataset ใน `datasets/agent-safety/v1/` |
+| ปิดเฟส | เขียน `docs/evidence/phase-g-agent-safety.md` แล้วค่อย freeze RC และขออนุมัติเจ้าของ |
+
+**รายละเอียดของงานที่ยังไม่ทำ**
+
+- **G12 guard**
+  - เป็น pure function: `guard(proposal, snapshot)` คืน `ALLOW` / `DENY` / `NEEDS_HUMAN` พร้อม `{ruleId, reason, evidence}`
+  - `combine()`: model ทำได้แค่ให้ผลเข้มขึ้น
+    - guard DENY ต้องเป็น DENY เสมอ
+    - ALLOW + model REJECT = DENY
+    - ALLOW + ABSTAIN = NEEDS_HUMAN
+  - period lock ใช้กติกาเดียวกับ `closedPeriod` ใน `src/services/stock.ts` (plan B1)
+  - ส่วนแปลงหน่วยใช้ `resolveFactor` จาก `src/lib/inventoryRules/uom.ts`
+  - floor ของต้นทางใช้ตรรกะเดียวกับ `src/intel/transfer.ts` (`SOURCE_KEEP_DAYS = 3`)
+- **G13 Rust**
+  - เครื่องนี้มี `cargo 1.97` และเข้าถึง crates.io ได้ ยังไม่มี target wasm32
+  - ให้ TS สร้าง test vector ใน `crates/pzm-integrity/vectors/` แล้วให้ `cargo test` ได้ผลตรงกัน
+  - ยังไม่ใส่ใน request path
+  - วัด latency และ memory ของ CLI เทียบกับ TS
+- **G14:** ไม่พบ pstack ใน repo หรือ environment นี้ ต้องขอตัวเครื่องมือหรือ source จากเจ้าของ ระหว่างนี้เขียน workflow ไว้และทำ gate ที่เป็นงานกลไกให้อัตโนมัติ
+- **G15 / G16**
+  - ใช้ generator แบบ seeded ให้ได้ไฟล์ซ้ำ byte ต่อ byte
+  - อย่างน้อยหลายร้อย scenario แบ่งเป็น SAFE / UNSAFE / AMBIGUOUS และ attacks.jsonl
+  - เทส invariance: ข้อความที่ถูกฉีดเข้ามาต้องไม่เปลี่ยนการตัดสิน
+  - benchmark: unsafe-allow rate (ตัวหลัก), false reject, abstain, p50/p95
+
+**กติกา**
+- ห้าม AI เขียน DB โดยตรง
+- ห้ามเริ่ม H1 ก่อนเจ้าของอนุมัติ
+- ห้าม merge / deploy เอง
+
+**วิธีรัน e2e ในเครื่อง cloud:** `PW_CHROMIUM=/opt/pw-browsers/chromium FLAKY_LABEL=x npx firebase emulators:exec --only firestore,auth --project demo-pzm-e2e "npx playwright test -c playwright.flaky.config.ts <spec>"`
+
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 
 บอก Claude session ใหม่ประมาณนี้:
