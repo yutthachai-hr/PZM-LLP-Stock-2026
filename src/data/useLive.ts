@@ -58,6 +58,7 @@ export function useLive<T>(
       return
     }
     setLoading(true)
+    const startedAt = Date.now()
     const since =
       sinceField !== undefined && sinceValue !== undefined
         ? { field: sinceField, value: sinceValue }
@@ -67,7 +68,7 @@ export function useLive<T>(
       const kind = liveErrorKind(err)
       // E4: a listener the database ended. Offline is the network, not a fault worth a report.
       if (kind !== 'offline') reportError(Object.assign(new Error(`listener ${collection}`), { name: `listener.${kind}` }), 'listener')
-      setError({ collection, kind })
+      setError({ collection, kind, startedAt })
       setLoading(false)
       if (retriesBySelf(kind)) timer = setTimeout(() => setAttempt((n) => n + 1), retryDelayMs(++failures.current))
     }

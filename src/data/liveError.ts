@@ -22,6 +22,12 @@ export function retriesBySelf(kind: LiveErrorKind): boolean {
 export interface LiveFailure {
   collection: string
   kind: LiveErrorKind
+  /**
+   * When the subscription that failed was started. A retry pressed after that moment did
+   * not cover it — its refusal was still on the way — so the caller retries it once more
+   * (DataContext; found by the flakiness runs, 7 Oct 2026).
+   */
+  startedAt?: number
 }
 
 /** The message a banner shows for a failed listener. Thai lookup keys for t(). */

@@ -173,9 +173,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const lives = [productsLive, locationsLive, levelsLive, movementsLive, overridesLive, usersLive, notificationsLive]
   const liveError = worstFailure(lives.map((l) => l.error))
   // Only the failed ones: subscribing a healthy listener again re-reads all it holds.
-  const failed = useRef<(() => void)[]>([])
-  failed.current = lives.filter((l) => l.error).map((l) => l.retry)
-  const retryLive = useCallback(() => failed.current.forEach((r) => r()), [])
+  // A retry covers every listener already on its way when it was pressed: one that was
+  // subscribed before the cause was fixed may be refused a moment AFTER the press, and
+  // would otherwise leave the banner up although the next attempt would succeed. Each
+  // such late refusal is retried once — its new subscription starts after the press, so
+  // this cannot loop.
+  const retryAt = useRef(0)
+  /** Failures (collection + subscription start) a retry has already been sent for. */
+  const retried = useRef(new Set<string>())
+  const failureKey = (e: LiveFailure) => `${e.collection}:${e.startedAt ?? ''}`
+  const livesRef = useRef(lives)
+  livesRef.current = lives
+  const retryLive = useCallback(() => {
+    retryAt.current = Date.now()
+    for (const l of livesRef.current) {
+      if (!l.error) continue
+      retried.current.add(failureKey(l.error))
+      l.retry()
+    }
+  }, [])
+  useEffect(() => {
+    for (const l of lives) {
+      if (!l.error || (l.error.startedAt ?? Infinity) >= retryAt.current) continue
+      const key = failureKey(l.error)
+      if (retried.current.has(key)) continue
+      retried.current.add(key)
+      l.retry()
+    }
+  })
 
   const value = useMemo<DataState>(() => {
     const productMap = new Map(products.map((p) => [p.id, p]))
