@@ -1,3 +1,4 @@
+import { auditedUpdate, recordAudit, snapshot } from './auditLog'
 import { useEffect, useSyncExternalStore } from 'react'
 import { cacheGet, cacheSet } from '../data/localCache'
 import { getFirebaseConfig } from '../firebase/config'
@@ -172,6 +173,7 @@ export async function createSupplier(input: SupplierInput): Promise<string> {
   })
   const written = await backend.getOne<Supplier>(COL.suppliers, id)
   if (written) patchSupplierCache(id, written)
+  await recordAudit({ action: 'supplier.create', entityType: 'supplier', entityId: id, after: snapshot(written as unknown as Record<string, unknown>) })
   return id
 }
 
@@ -218,7 +220,8 @@ export async function updateSupplier(
     checkCutoff(patch.cutoffTime)
     next.cutoffTime = patch.cutoffTime ? patch.cutoffTime : DELETE_FIELD
   }
-  await backend.update(COL.suppliers, id, next)
+  const action = patch.active === false ? 'supplier.deactivate' : patch.active === true ? 'supplier.activate' : 'supplier.update'
+  await auditedUpdate(COL.suppliers, id, next, { action, entityType: 'supplier' })
   if (cached) {
     const cur = cached.find((s) => s.id === id)
     if (cur) {
@@ -243,6 +246,7 @@ export async function updateSupplier(
  * cost more than the screen costs to open.
  */
 export async function deleteSupplier(id: string, products: readonly Product[]): Promise<void> {
+  const before = await backend.getOne<Record<string, unknown>>(COL.suppliers, id)
   const items = await backend.getAll<SupplierItem>(COL.supplierItems)
   await Promise.all(
     items.filter((i) => i.supplierId === id).map((i) => backend.remove(COL.supplierItems, i.id)),
@@ -252,6 +256,7 @@ export async function deleteSupplier(id: string, products: readonly Product[]): 
   }
   await backend.remove(COL.suppliers, id)
   patchSupplierCache(id, null)
+  await recordAudit({ action: 'supplier.delete', entityType: 'supplier', entityId: id, before: snapshot(before) })
 }
 
 // ---------------------------------------------------------------- product links ----
@@ -340,7 +345,7 @@ export async function addSupplierItem(
     throw new AppError('ราคาซื้อต้องไม่ติดลบ')
   }
   const now = Date.now()
-  return backend.add(COL.supplierItems, {
+  const doc = {
     supplierId,
     productId,
     ...(buyingPrice === undefined ? {} : { buyingPrice }),
@@ -348,7 +353,10 @@ export async function addSupplierItem(
     active: true,
     createdAt: now,
     updatedAt: now,
-  })
+  }
+  const id = await backend.add(COL.supplierItems, doc)
+  await recordAudit({ action: 'supplierItem.create', entityType: 'supplierItem', entityId: id, after: snapshot(doc) })
+  return id
 }
 
 export async function updateSupplierItem(
@@ -374,11 +382,13 @@ export async function updateSupplierItem(
     }
     next.buyingPrice = patch.buyingPrice
   }
-  await backend.update(COL.supplierItems, id, next)
+  await auditedUpdate(COL.supplierItems, id, next, { action: 'supplierItem.update', entityType: 'supplierItem' })
 }
 
 export async function removeSupplierItem(id: string): Promise<void> {
+  const before = await backend.getOne<Record<string, unknown>>(COL.supplierItems, id)
   await backend.remove(COL.supplierItems, id)
+  await recordAudit({ action: 'supplierItem.delete', entityType: 'supplierItem', entityId: id, before: snapshot(before) })
 }
 
 // ---------------------------------------------------------------- session cache ----

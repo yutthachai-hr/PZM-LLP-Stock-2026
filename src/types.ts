@@ -1425,6 +1425,42 @@ export interface Recipe {
   updatedByName?: string
 }
 
+/** B2: what an audit entry is about. */
+export type AuditEntityType =
+  | 'product'
+  | 'location'
+  | 'supplier'
+  | 'supplierItem'
+  | 'unitConversion'
+  | 'user'
+  | 'settings'
+  | 'schedule'
+  | 'companyProfile'
+  | 'maintenance'
+  | 'movement'
+  | 'purchaseOrder'
+  | 'backup'
+
+/** B2: one entry of the append-only audit log (services/auditLog.ts). */
+export interface AuditEntry {
+  id: string
+  actorId: string
+  actorName: string
+  actorRole: Role
+  /** What was done, e.g. `product.update`, `user.deactivate`, `backup.restore`. */
+  action: string
+  entityType: AuditEntityType
+  entityId: string
+  /** The changed fields as they were (null for a create), large values summarised. */
+  before: Record<string, unknown> | null
+  /** The changed fields as they are now (null for a delete). */
+  after: Record<string, unknown> | null
+  reason?: string
+  /** Shared by the entries one operation writes. */
+  operationId: string
+  createdAt: number
+}
+
 export const COL = {
   users: 'users',
   messages: 'messages',
@@ -1450,6 +1486,8 @@ export const COL = {
   monthlyCounts: 'monthlyCounts',
   /** Phase G9: intelligence predictions kept to compare with what happened. Create-only. */
   intelShadow: 'intelShadow',
+  /** B2: append-only record of catalogue, settings, user and maintenance changes. */
+  auditLog: 'auditLog',
   productAliases: 'productAliases',
   announcements: 'announcements',
   recipes: 'recipes',

@@ -142,6 +142,14 @@ export function createMemoryBackend(brand?: BrandId): Backend {
     })
   },
 
+  async page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]> {
+    const num = (d: unknown) => (d as Record<string, unknown>)[field] as number
+    return ([...col_(collection).values()].map(clone) as T[])
+      .filter((d) => typeof num(d) === 'number' && (opts.before === undefined || num(d) < opts.before))
+      .sort((a, b) => num(b) - num(a))
+      .slice(0, opts.limit)
+  },
+
   async getBy<T>(c: string, field: string, value: string | number | boolean): Promise<T[]> {
     return [...col_(c).values()].map((d) => clone(d)).filter((d) => d[field] === value) as T[]
   },

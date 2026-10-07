@@ -1,3 +1,4 @@
+import { auditedUpdate, recordAudit, snapshot } from './auditLog'
 import { useEffect, useSyncExternalStore } from 'react'
 import { backend } from '../backend'
 import { DELETE_FIELD } from '../backend/types'
@@ -87,6 +88,7 @@ export async function createSchedule(input: ScheduleInput, actor: { id: string }
   const now = Date.now()
   const id = await scoped().add(COL.inventorySchedules, { ...shape(input), createdBy: actor.id, createdAt: now, updatedAt: now })
   invalidateScheduleCache()
+  await recordAudit({ action: 'schedule.create', entityType: 'schedule', entityId: id, after: snapshot(shape(input) as Record<string, unknown>) })
   return id
 }
 
@@ -95,13 +97,14 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
   const next = shape(input)
   const patch: Record<string, unknown> = { ...next, updatedAt: Date.now() }
   for (const k of OPTIONAL) if (!(k in next)) patch[k] = DELETE_FIELD
-  await scoped().update(COL.inventorySchedules, id, patch)
+  await auditedUpdate(COL.inventorySchedules, id, patch, { action: 'schedule.update', entityType: 'schedule' })
   invalidateScheduleCache()
 }
 
 export async function deleteSchedule(id: string): Promise<void> {
   await scoped().remove(COL.inventorySchedules, id)
   invalidateScheduleCache()
+  await recordAudit({ action: 'schedule.delete', entityType: 'schedule', entityId: id })
 }
 
 /** Every schedule of the open brand, straight from the database. */
@@ -127,6 +130,8 @@ export async function saveSettings(
   void _u
   await scoped().set(COL.inventorySchedules, 'settings', { ...rest, ...patch, kind: 'settings', updatedBy: actor.id, updatedAt: Date.now() })
   invalidateScheduleCache()
+  const keys = Object.keys(patch)
+  await recordAudit({ action: 'settings.update', entityType: 'settings', entityId: 'inventorySettings', before: snapshot(cur as unknown as Record<string, unknown>, keys), after: snapshot(patch, keys) })
 }
 
 // ---------------------------------------------------------------- session cache ----

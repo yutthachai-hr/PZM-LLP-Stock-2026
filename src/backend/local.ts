@@ -310,6 +310,14 @@ export function createLocalBackend(brand?: BrandId): Backend {
       })
     },
 
+    async page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]> {
+      const num = (d: unknown) => (d as Record<string, unknown>)[field] as number
+      return (Object.values(loadMap(resolve(collection))) as T[])
+        .filter((d) => typeof num(d) === 'number' && (opts.before === undefined || num(d) < opts.before))
+        .sort((a, b) => num(b) - num(a))
+        .slice(0, opts.limit)
+    },
+
     async getBy<T>(
       collection: string,
       field: string,

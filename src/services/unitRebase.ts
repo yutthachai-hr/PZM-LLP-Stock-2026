@@ -1,3 +1,4 @@
+import { recordAudit } from './auditLog'
 import { backend } from '../backend'
 import { bumpCacheEpoch } from './cacheEpoch'
 import { DELETE_FIELD } from '../backend/types'
@@ -336,5 +337,7 @@ async function rebaseProductUnitUnbumped(params: {
 export async function rebaseProductUnit(...args: Parameters<typeof rebaseProductUnitUnbumped>): ReturnType<typeof rebaseProductUnitUnbumped> {
   const result = await rebaseProductUnitUnbumped(...args)
   await bumpCacheEpoch(['stockMovements', 'stockLevels', 'products'])
+  const [{ productId, to, mode, factor }] = args
+  await recordAudit({ action: 'unitConversion.rebase', entityType: 'unitConversion', entityId: productId, after: { to, mode, ...(factor !== undefined ? { factor } : {}), ...result } })
   return result
 }

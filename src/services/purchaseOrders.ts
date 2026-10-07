@@ -1,3 +1,4 @@
+import { newOperationId, recordAudit } from './auditLog'
 import { backend } from '../backend'
 import { DELETE_FIELD, type TxContext } from '../backend/types'
 import { isLate } from '../lib/inventoryRules/purchasing'
@@ -173,6 +174,10 @@ export async function renumberOrdersPerSupplier(): Promise<{ changed: RenumberCh
       if (cur && cur.value > value) await db.remove(COL.counters, id)
       await db.set(COL.counters, id, { value })
     }
+  }
+  if (changed.length) {
+    const operationId = newOperationId()
+    for (const c of changed) await recordAudit({ action: 'purchaseOrder.renumber', entityType: 'purchaseOrder', entityId: c.id, before: { docNo: c.from }, after: { docNo: c.to }, operationId })
   }
   return { changed, failed }
 }

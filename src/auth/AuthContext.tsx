@@ -1,3 +1,4 @@
+import { flushAuditOutbox, setAuditActor } from '../services/auditLog'
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   signInWithEmailAndPassword,
@@ -72,6 +73,11 @@ function rememberNotice(key: string | null): void {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
+  // B2: whoever is signed in is who the audit log names.
+  useEffect(() => {
+    setAuditActor(user)
+    if (user) void flushAuditOutbox()
+  }, [user])
   const [loading, setLoading] = useState(true)
   const [needsBootstrap, setNeedsBootstrap] = useState(false)
   const [noticeState, setNoticeState] = useState<string | null>(readNotice)

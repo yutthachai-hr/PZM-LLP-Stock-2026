@@ -1,3 +1,4 @@
+import { recordAudit, snapshot } from './auditLog'
 import { useCallback, useEffect, useState } from 'react'
 import { backend } from '../backend'
 import { brandDef, type BrandId } from '../brand/brand'
@@ -81,6 +82,8 @@ export async function saveCompanyProfile(
   }
   const { id, ...data } = next
   await db.set(COL.companyProfile, id, data)
+  const keys = ['docPrefix', 'announcementCode', 'displayName', 'nameEn', 'logoVersion']
+  await recordAudit({ action: 'companyProfile.update', entityType: 'companyProfile', entityId: brand, before: snapshot(cur as unknown as Record<string, unknown>, keys), after: snapshot(next as unknown as Record<string, unknown>, keys) })
   return next
 }
 

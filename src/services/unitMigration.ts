@@ -1,3 +1,4 @@
+import { recordAudit } from './auditLog'
 import { backend } from '../backend'
 import { bumpCacheEpoch } from './cacheEpoch'
 import { getBrand } from '../brand/brand'
@@ -126,5 +127,6 @@ async function migrateProductUnitsUnbumped(params: { productId: string; actor: {
 export async function migrateProductUnits(...args: Parameters<typeof migrateProductUnitsUnbumped>): ReturnType<typeof migrateProductUnitsUnbumped> {
   const result = await migrateProductUnitsUnbumped(...args)
   await bumpCacheEpoch(['stockMovements', 'stockLevels', 'products'])
+  await recordAudit({ action: 'unitConversion.migrate', entityType: 'unitConversion', entityId: args[0].productId, after: { ...result } })
   return result
 }

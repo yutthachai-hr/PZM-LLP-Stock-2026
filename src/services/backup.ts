@@ -1,3 +1,4 @@
+import { recordAudit } from './auditLog'
 import { backend } from '../backend'
 import { bumpCacheEpoch } from './cacheEpoch'
 import type { Backend } from '../backend/types'
@@ -611,5 +612,12 @@ async function rebuildDerived(db: Backend): Promise<number> {
 export async function restoreBackup(...args: Parameters<typeof restoreBackupUnbumped>): ReturnType<typeof restoreBackupUnbumped> {
   const result = await restoreBackupUnbumped(...args)
   await bumpCacheEpoch(['products', 'stockLevels', 'stockMovements', 'notifications', 'productMinOverrides'])
+  const [file, mode] = args
+  await recordAudit({
+    action: 'backup.restore',
+    entityType: 'backup',
+    entityId: String(file.createdAt ?? ''),
+    after: { mode: String(mode ?? 'repair'), written: result.written, kept: result.kept, rebuilt: result.rebuilt, skipped: result.skipped },
+  })
   return result
 }

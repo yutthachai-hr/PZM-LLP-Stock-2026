@@ -11,6 +11,8 @@ import {
   runTransaction,
   where,
   deleteField,
+  orderBy,
+  limit as fbLimit,
 } from 'firebase/firestore'
 import { getDb } from '../firebase/app'
 import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
@@ -128,6 +130,14 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       const c = resolve(collection)
       const snap = await getDocs(query(fbCollection(getDb(), c), where(field, '==', value)))
       // A query that finds nothing is still billed one read (plan D3': count what is paid).
+      noteRead(c, Math.max(1, snap.size))
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
+    },
+
+    async page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]> {
+      const c = resolve(collection)
+      const parts = [...(opts.before !== undefined ? [where(field, '<', opts.before)] : []), orderBy(field, 'desc'), fbLimit(opts.limit)]
+      const snap = await getDocs(query(fbCollection(getDb(), c), ...parts))
       noteRead(c, Math.max(1, snap.size))
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },

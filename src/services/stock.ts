@@ -1,3 +1,4 @@
+import { recordAudit, snapshot } from './auditLog'
 import { backend, BACKEND_MODE } from '../backend'
 import { bumpCacheEpoch } from './cacheEpoch'
 import { commandOn } from '../lib/stockCommands'
@@ -862,6 +863,8 @@ export type { Product, AppUser }
 export async function editMovement(...args: Parameters<typeof editMovementUnbumped>): ReturnType<typeof editMovementUnbumped> {
   const result = await editMovementUnbumped(...args)
   await bumpCacheEpoch(['stockMovements', 'stockLevels'])
+  const [{ movementId, patch }] = args
+  await recordAudit({ action: 'movement.edit', entityType: 'movement', entityId: movementId, after: snapshot(patch as Record<string, unknown>) })
   return result
 }
 
@@ -869,6 +872,8 @@ export async function editMovement(...args: Parameters<typeof editMovementUnbump
 export async function changeProductUnit(...args: Parameters<typeof changeProductUnitUnbumped>): ReturnType<typeof changeProductUnitUnbumped> {
   const result = await changeProductUnitUnbumped(...args)
   await bumpCacheEpoch(['stockMovements', 'stockLevels', 'products'])
+  const [{ productId, unit, unitType }] = args
+  await recordAudit({ action: 'unitConversion.changeUnit', entityType: 'unitConversion', entityId: productId, after: { unit, unitType, rows: result } })
   return result
 }
 
@@ -876,6 +881,7 @@ export async function changeProductUnit(...args: Parameters<typeof changeProduct
 export async function rebuildProductLevels(...args: Parameters<typeof rebuildProductLevelsUnbumped>): ReturnType<typeof rebuildProductLevelsUnbumped> {
   const result = await rebuildProductLevelsUnbumped(...args)
   await bumpCacheEpoch(['stockLevels'])
+  await recordAudit({ action: 'maintenance.rebuildProductLevels', entityType: 'maintenance', entityId: args[1] })
   return result
 }
 
@@ -883,6 +889,7 @@ export async function rebuildProductLevels(...args: Parameters<typeof rebuildPro
 export async function voidMovement(...args: Parameters<typeof voidMovementUnbumped>): ReturnType<typeof voidMovementUnbumped> {
   const result = await voidMovementUnbumped(...args)
   await bumpCacheEpoch(['stockMovements', 'stockLevels'])
+  await recordAudit({ action: 'movement.void', entityType: 'movement', entityId: args[0], reason: args[2] })
   return result
 }
 
@@ -890,5 +897,6 @@ export async function voidMovement(...args: Parameters<typeof voidMovementUnbump
 export async function recomputeLevels(...args: Parameters<typeof recomputeLevelsUnbumped>): ReturnType<typeof recomputeLevelsUnbumped> {
   const result = await recomputeLevelsUnbumped(...args)
   await bumpCacheEpoch(['stockLevels'])
+  await recordAudit({ action: 'maintenance.recomputeLevels', entityType: 'maintenance', entityId: 'stockLevels' })
   return result
 }

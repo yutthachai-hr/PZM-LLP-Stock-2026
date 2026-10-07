@@ -1,3 +1,4 @@
+import { auditedUpdate, recordAudit, snapshot } from './auditLog'
 import { backend } from '../backend'
 import { bumpCacheEpoch } from './cacheEpoch'
 import { getBrand } from '../brand/brand'
@@ -95,7 +96,7 @@ export async function createProduct(input: ProductInput): Promise<string> {
   void _typed
   const conversions = unitConversions ? normaliseConversions(unitConversions, input.unitType) : []
   const alternates = normaliseAlternates(alternateSupplierIds, supplierId)
-  return backend.add(COL.products, {
+  const id = await backend.add(COL.products, {
     ...rest,
     ...(barcode ? { barcode } : {}),
     ...(conversions.length ? { unitConversions: conversions } : {}),
@@ -106,6 +107,8 @@ export async function createProduct(input: ProductInput): Promise<string> {
     createdAt: now,
     updatedAt: now,
   })
+  await recordAudit({ action: 'product.create', entityType: 'product', entityId: id, after: snapshot({ ...input }) })
+  return id
 }
 
 export async function updateProduct(
@@ -137,7 +140,8 @@ export async function updateProduct(
     const conversions = unitConversions ? normaliseConversions(unitConversions, patch.unitType) : []
     write.unitConversions = conversions.length ? conversions : DELETE_FIELD
   }
-  await backend.update(COL.products, id, write)
+  const action = patch.active === false ? 'product.deactivate' : patch.active === true ? 'product.activate' : 'product.update'
+  await auditedUpdate(COL.products, id, write, { action, entityType: 'product' })
 }
 
 /**
@@ -162,7 +166,7 @@ export async function addConversion(
   const row: UnitConversion = { label: clean, size, ...(opts.per !== undefined ? { per: opts.per } : {}), ...(opts.of ? { of: opts.of } : {}) }
   const next = normaliseConversions([...kept, row], product.unitType)
   if (!next.some((c) => sameUnit(c.label, clean))) throw new AppError('อัตรานี้อ้างอิงหน่วยที่ยังไม่มีอัตรา — กำหนดหน่วยนั้นก่อน')
-  await backend.update(COL.products, product.id, { unitConversions: next, updatedAt: Date.now() })
+  await auditedUpdate(COL.products, product.id, { unitConversions: next, updatedAt: Date.now() }, { action: 'unitConversion.set', entityType: 'unitConversion' })
   return next
 }
 
@@ -198,7 +202,9 @@ export async function getProductImage(id: string): Promise<string | null> {
 
 /** deleteProduct, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
 export async function deleteProduct(...args: Parameters<typeof deleteProductUnbumped>): ReturnType<typeof deleteProductUnbumped> {
+  const before = await backend.getOne<Record<string, unknown>>(COL.products, args[0])
   const result = await deleteProductUnbumped(...args)
   await bumpCacheEpoch(['products', 'stockLevels'])
+  await recordAudit({ action: 'product.delete', entityType: 'product', entityId: args[0], before: snapshot(before) })
   return result
 }

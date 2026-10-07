@@ -77,6 +77,12 @@ export interface Backend {
    * is thousands of documents against a 50,000-a-day allowance shared by both companies.
    */
   getBy<T>(collection: string, field: string, value: string | number | boolean): Promise<T[]>
+  /**
+   * One page of a collection, newest first by a number field, below `before` when given.
+   * For history that is only ever browsed a page at a time (the audit log): never a
+   * listener, never the whole collection. One field, so no composite index.
+   */
+  page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]>
   getOne<T>(collection: string, id: string): Promise<T | null>
   /** Auto-generate id. Returns the new id (also written into the doc's `id` field). */
   add(collection: string, data: Record<string, unknown>): Promise<string>

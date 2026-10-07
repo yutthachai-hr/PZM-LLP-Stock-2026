@@ -1655,6 +1655,48 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---------------------------------------------------------------- audit log (B2) ----
+
+    /**
+     * Append-only. Anyone active may add an entry in their OWN name and role; nobody —
+     * an admin included — may change or delete one. Only an admin reads them, and only a
+     * page at a time (a query must say limit <= 50), so the history cannot become a broad
+     * listener that costs a read per entry on every open.
+     */
+    function validAudit(docId, d) {
+      return d.keys().hasOnly(['id', 'actorId', 'actorName', 'actorRole', 'action', 'entityType', 'entityId',
+          'before', 'after', 'reason', 'operationId', 'createdAt'])
+        && d.id == docId && docId.matches('^[0-9]{14}_[a-z0-9]{1,12}$')
+        && d.actorId == request.auth.uid && d.actorRole == profile().role
+        && text(d.actorName, 120)
+        && d.action is string && d.action.matches('^[a-zA-Z]{1,30}[.][a-zA-Z]{1,40}$')
+        && d.entityType in ['product', 'location', 'supplier', 'supplierItem', 'unitConversion', 'user', 'settings',
+            'schedule', 'companyProfile', 'maintenance', 'movement', 'purchaseOrder', 'backup']
+        && text(d.entityId, 200) && d.entityId.size() > 0
+        && (d.before == null || (d.before is map && d.before.size() <= 40))
+        && (d.after == null || (d.after is map && d.after.size() <= 40))
+        && (!('reason' in d) || text(d.reason, 500))
+        && text(d.operationId, 40)
+        && epochMs(d.createdAt)
+        // Written now, or from the device's outbox within the week; never dated ahead.
+        && d.createdAt <= request.time.toMillis() + 300000
+        && d.createdAt >= request.time.toMillis() - 604800000;
+    }
+
+    match /auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /lelapin__auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
     match /inventorySchedules/{docId} {
       allow read: if active();
       allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);

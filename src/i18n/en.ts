@@ -3256,4 +3256,15 @@ export const EN: Record<string, string> = {
   'การคาดการณ์ที่เก็บไว้ เทียบกับสิ่งที่เกิดขึ้นจริง': 'Kept predictions against what happened',
   // Phase G2 wording
   'ของที่สั่งไว้ ({docNo}) มาก่อนแต่ไม่พอ — ขาด {gapDays} วัน ({shortage} หน่วย) ใน 14 วันข้างหน้า': 'What is on order ({docNo}) lands first but is not enough — short {gapDays} days ({shortage} units) in the next 14 days',
+  // B2 audit log
+  'ประวัติการแก้ไข': 'Change history',
+  'ใครแก้อะไร เมื่อไร ก่อนและหลัง — แก้หรือลบไม่ได้': 'Who changed what, when, before and after — cannot be edited or deleted',
+  'ทุกการแก้ไขสินค้า คลัง ผู้ขาย หน่วย ผู้ใช้ ตั้งค่า และงานซ่อมบำรุงข้อมูล — ใครทำ เมื่อไร ก่อน/หลัง ประวัตินี้แก้หรือลบไม่ได้': 'Every change to products, locations, suppliers, units, users, settings and data maintenance — who, when, before/after. This history cannot be edited or deleted.',
+  'ดูประวัติการแก้ไข': 'Show change history',
+  'โหลดเพิ่มอีก 50 รายการ': 'Load 50 more',
+  'ราคาผู้ขาย': 'Supplier prices',
+  'หน่วยและอัตราแปลง': 'Units and conversions',
+  'ซ่อมบำรุงข้อมูล': 'Data maintenance',
+  'รายการเคลื่อนไหว': 'Movements',
+  'กู้คืนข้อมูล': 'Restore',
 }

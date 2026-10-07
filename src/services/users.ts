@@ -1,3 +1,4 @@
+import { auditedUpdate, recordAudit, snapshot } from './auditLog'
 import { initializeApp, deleteApp } from 'firebase/app'
 import {
   getAuth,
@@ -35,7 +36,7 @@ export interface NewUserInput {
  *  - local: writes a user doc with a local password (demo only).
  * Returns the new user id.
  */
-export async function createUser(input: NewUserInput): Promise<string> {
+async function createUserUnaudited(input: NewUserInput): Promise<string> {
   const email = input.email.trim().toLowerCase()
   const name = input.name.trim()
 
@@ -97,11 +98,18 @@ export async function createUser(input: NewUserInput): Promise<string> {
   })
 }
 
+export async function createUser(input: NewUserInput): Promise<string> {
+  const id = await createUserUnaudited(input)
+  await recordAudit({ action: 'user.create', entityType: 'user', entityId: id, after: { name: input.name.trim(), email: input.email.trim().toLowerCase(), role: input.role } })
+  return id
+}
+
 export async function updateUserProfile(
   id: string,
   patch: Partial<Pick<AppUser, 'name' | 'role' | 'active' | 'siteIds'>>,
 ): Promise<void> {
-  await backend.update(COL.users, id, patch as Record<string, unknown>)
+  const action = patch.active === false ? 'user.deactivate' : patch.active === true ? 'user.activate' : 'role' in patch ? 'user.role' : 'user.update'
+  await auditedUpdate(COL.users, id, patch as Record<string, unknown>, { action, entityType: 'user' })
 }
 
 /**
@@ -155,13 +163,16 @@ export async function changeOwnPassword(input: {
  * Re-hiring someone is deliberately an explicit admin action: `restoreUser` below.
  */
 export async function deleteUser(id: string, by: string): Promise<void> {
+  const before = await backend.getOne<Record<string, unknown>>(COL.users, id)
   await backend.set(COL.revokedUsers, id, { revokedAt: Date.now(), revokedBy: by })
   await backend.remove(COL.users, id)
+  await recordAudit({ action: 'user.delete', entityType: 'user', entityId: id, before: snapshot(before, ['name', 'email', 'role', 'active', 'siteIds']) })
 }
 
 /** Lift a revocation so the person can sign up (or be added) again. */
 export async function restoreUser(id: string): Promise<void> {
   await backend.remove(COL.revokedUsers, id)
+  await recordAudit({ action: 'user.restore', entityType: 'user', entityId: id })
 }
 
 export interface RevokedUser {

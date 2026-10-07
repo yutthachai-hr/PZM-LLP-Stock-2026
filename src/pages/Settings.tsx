@@ -4,6 +4,7 @@ import { UnitMigrationSection } from './settings/UnitMigrationSection'
 import { RebaseUnitSection } from './settings/RebaseUnitSection'
 import { StuckRequestsSection } from './settings/StuckRequestsSection'
 import { ShadowSection } from './settings/ShadowSection'
+import { AuditSection } from './settings/AuditSection'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
@@ -90,6 +91,7 @@ type SectionKey =
   | 'company'
   | 'logistics'
   | 'shadow'
+  | 'audit'
 
 interface MenuItem {
   key: SectionKey | 'import'
@@ -158,6 +160,7 @@ export function SettingsPage() {
           { key: 'users', label: t('ผู้ใช้งาน'), hint: t('เพิ่มผู้ใช้ กำหนดสิทธิ์ ปิดการเข้าใช้'), icon: 'users', show: isAdmin },
           { key: 'automation', label: t('งานอัตโนมัติ'), hint: t('งานที่ระบบทำเองตามเวลา'), icon: 'clock', show: isManager },
           { key: 'shadow', label: t('ผลเทียบการคาดการณ์'), hint: t('การคาดการณ์ที่เก็บไว้ เทียบกับสิ่งที่เกิดขึ้นจริง'), icon: 'chart', show: isManager },
+          { key: 'audit', label: t('ประวัติการแก้ไข'), hint: t('ใครแก้อะไร เมื่อไร ก่อนและหลัง — แก้หรือลบไม่ได้'), icon: 'history', show: isAdmin },
           { key: 'readUsage', label: t('การอ่านข้อมูล (โควตา)'), hint: t('แอปอ่านไปกี่รายการแล้ว และคอลเลกชันไหนมากที่สุด'), icon: 'cloud', show: isAdmin },
         ],
       },
@@ -221,6 +224,8 @@ export function SettingsPage() {
         return <LogisticsSection />
       case 'shadow':
         return <ShadowSection />
+      case 'audit':
+        return <AuditSection />
     }
   }
 
