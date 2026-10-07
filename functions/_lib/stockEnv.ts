@@ -11,6 +11,12 @@ import type { StockDeps } from './stockCommands'
 export interface StockEnv {
   FIREBASE_SERVICE_ACCOUNT?: string
   FIREBASE_PROJECT_ID?: string
+  /**
+   * "true" writes an outbox event with every committed stock change (the Supabase shadow).
+   * Anything else, unset included, writes none: switched on deliberately, and off again
+   * without a redeploy (Pages → Settings → Variables).
+   */
+  OUTBOX_ENABLED?: string
 }
 
 function randomId(): string {
@@ -26,9 +32,10 @@ export function stockDeps(env: StockEnv): StockDeps | null {
     store: restServerStore(projectId, env.FIREBASE_SERVICE_ACCOUNT),
     now: () => Date.now(),
     makeId: randomId,
-    // Every committed stock change also writes its outbox event, in the same commit (owner
-    // approved the `outbox` collection 7 Oct 2026; replicated to the Supabase shadow).
-    eventId: () => crypto.randomUUID(),
+    // With OUTBOX_ENABLED=true every committed stock change also writes its outbox event, in the
+    // same commit (owner approved the `outbox` collection 7 Oct 2026; replicated to the Supabase
+    // shadow). Off by default (owner, 7 Oct: no uncontrolled production behaviour on merge).
+    ...(env.OUTBOX_ENABLED === 'true' ? { eventId: () => crypto.randomUUID() } : {}),
     verifyUser: (h) => verifyFirebaseToken(h, projectId),
   }
 }
