@@ -1651,3 +1651,20 @@ describe('lot / expiry flags (schema only)', () => {
     await assertFails(setDoc(doc(as(STAFF), 'products/p9'), product('p9', { trackLot: true })))
   })
 })
+
+// The outbox (Supabase shadow, 7 Oct 2026) is written by the server's stock commands in the
+// same commit as the change, with the service account. No client — not even an admin —
+// reads, writes or forges an event: it is on none of the rules' lists, so the default denies.
+describe('outbox', () => {
+  test('no signed-in client reads or writes an event, in either brand', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), 'outbox/e1'), { eventId: 'e1', entityType: 'stockMovements' }))
+    for (const uid of [STAFF, MANAGER, ADMIN]) {
+      await assertFails(getDoc(doc(as(uid), 'outbox/e1')))
+      await assertFails(getDocs(collection(as(uid), 'outbox')))
+      await assertFails(setDoc(doc(as(uid), 'outbox/e2'), { eventId: 'e2', entityType: 'stockMovements' }))
+      await assertFails(updateDoc(doc(as(uid), 'outbox/e1'), { replicationStatus: 'applied' }))
+      await assertFails(deleteDoc(doc(as(uid), 'outbox/e1')))
+      await assertFails(setDoc(doc(as(uid), 'lelapin__outbox/e3'), { eventId: 'e3' }))
+    }
+  })
+})

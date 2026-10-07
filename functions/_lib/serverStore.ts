@@ -71,7 +71,7 @@ export const SERVER_PO_FIELDS = [
   'updatedAt',
 ] as const
 
-const baseOf = (collection: string) => (collection.includes('__') ? collection.split('__')[1] : collection)
+export const baseOf = (collection: string) => (collection.includes('__') ? collection.split('__')[1] : collection)
 
 /** Throws unless this write is one the functions are allowed to make. */
 export function assertServerWrite(collection: string, fields: Record<string, unknown>, kind: 'patch' | 'create'): void {

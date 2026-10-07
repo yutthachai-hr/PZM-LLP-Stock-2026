@@ -16,6 +16,7 @@
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
     "ux-lab": "node --experimental-strip-types scripts/ux-lab/cli.mjs",
     "audit:integrity": "node scripts/integrity-audit.mjs",
+    "shadow": "node scripts/shadow.mjs",
     "backfill:po-baseqty": "node scripts/backfill-po-baseqty.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project pzm-rules-test \"vitest run --config vitest.rules.config.ts\"",
     "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-pzm-e2e \"playwright test\"",
@@ -51,6 +52,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@cloudflare/workers-types": "^5.20260915.1",
+    "@electric-sql/pglite": "^0.3.16",
     "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.2",
@@ -60,6 +62,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "firebase-tools": "^15.24.0",
     "oxlint": "^1.71.0",
+    "postgres": "^3.4.9",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
