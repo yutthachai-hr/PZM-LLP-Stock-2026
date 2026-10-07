@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
+import { can, COUNT } from '../../lib/workflow'
 import { DataTable, type Column } from '../../components/DataTable'
 import { DraftNotice } from '../../components/DraftNotice'
 import { ChipRow, FramePage, PageHero, SectionCard, StatRow, StatTile } from '../../components/frame'
@@ -123,6 +124,11 @@ export function MonthlyCountSheet() {
   )
 
   const counting = sheet?.status === 'counting'
+  // G19: the buttons come from the count's state machine, not from comparing statuses here.
+  const actor = user ? { role: user.role } : null
+  const mayCount = !!sheet && !!actor && can(COUNT, sheet.status, 'count', actor)
+  const mayRecord = !!sheet && !!actor && can(COUNT, sheet.status, 'record', actor)
+  const mayPost = !!sheet && !!actor && can(COUNT, sheet.status, 'post', actor)
   // Plan E2: on a blind sheet the counter sees only what they count; a manager reviews.
   const blind = !!sheet?.blind && counting && !isManager
   const lines = useMemo(() => {
@@ -487,9 +493,9 @@ export function MonthlyCountSheet() {
 
       {/* A manager's two decisions: beside the save button from a tablet up; on a phone,
           stacked under the list, where each label has the full width to be read. */}
-      {isManager && sheet.status !== 'posted' && (
+      {mayPost && (
         <div className="grid gap-2 md:hidden">
-          {counting && (
+          {mayRecord && (
             <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
               {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
             </Button>
@@ -500,17 +506,17 @@ export function MonthlyCountSheet() {
           </Button>
         </div>
       )}
-      {(counting || (isManager && sheet.status !== 'posted')) && (
+      {(mayCount || (mayPost)) && (
         <SubmitBar hasDraft={pending > 0}>
-          {counting && (
+          {mayCount && (
             <Button variant={isManager ? 'secondary' : 'primary'} onClick={() => void save()} disabled={busy || !pending}>
               <Icon name="check" size={16} />
               {t('บันทึกยอดนับ ({n})', { n: pending })}
             </Button>
           )}
-          {isManager && sheet.status !== 'posted' && (
+          {mayPost && (
             <span className="hidden gap-2 md:flex">
-              {counting && (
+              {mayRecord && (
                 <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
                   {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
                 </Button>

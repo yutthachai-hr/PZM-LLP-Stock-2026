@@ -11,6 +11,8 @@ import { daysWaiting, needsResend } from '../../services/purchaseOrders'
 import type { PurchaseOrder, Supplier } from '../../types'
 import { DeliveryRiskCard, SupplierConfirmationPanel, describeActivity } from '../purchase/SupplierConfirmationPanel'
 import { statusWord } from './statusWords'
+import { useAuth } from '../../auth/AuthContext'
+import { available, PO, type PoAction } from '../../lib/workflow'
 
 /**
  * The order beside the list (owner's mock-up, 6 Oct 2026): pressing a row opens it here
@@ -79,6 +81,10 @@ export function OrderPanel({
 
   const live = order.status === 'ordered'
   const partial = live && !!order.receipts?.length
+  // G19: which actions this person may take on this order, from its state machine.
+  const { user } = useAuth()
+  const acts: readonly PoAction[] = user ? available(PO, order.status, { role: user.role }) : []
+  const may = (a: PoAction) => acts.includes(a)
   const head = headBadge(order, t)
   const confirmed = order.supplierConfirmationStatus === 'confirmed' || order.supplierConfirmationStatus === 'changed'
 
@@ -267,7 +273,7 @@ export function OrderPanel({
       {order.status !== 'cancelled' && (
         <div className="space-y-2 border-t border-line p-3">
           <div className="flex items-center gap-2">
-            {(live || order.status === 'draft') && (
+            {(may('amend') || may('closeShort') || may('cancel')) && (
               <div className="relative">
                 <Button variant="outline" onClick={() => setMore((v) => !v)} aria-expanded={more}>
                   <Icon name="moreVertical" size={16} />
@@ -275,9 +281,9 @@ export function OrderPanel({
                 </Button>
                 {more && (
                   <div className="absolute bottom-full left-0 z-10 mb-1 w-44 overflow-hidden rounded-lg border border-line bg-surface shadow-lg">
-                    {live && !partial && <MenuItem onClick={actions.onAmend}>{t('แก้ไข')}</MenuItem>}
-                    {partial && <MenuItem onClick={actions.onCloseShort}>{t('ปิดยอดค้าง')}</MenuItem>}
-                    {!partial && (
+                    {may('amend') && !partial && <MenuItem onClick={actions.onAmend}>{t('แก้ไข')}</MenuItem>}
+                    {may('closeShort') && partial && <MenuItem onClick={actions.onCloseShort}>{t('ปิดยอดค้าง')}</MenuItem>}
+                    {may('cancel') && !partial && (
                       <MenuItem danger onClick={actions.onCancel}>
                         {t('ยกเลิกใบสั่งซื้อ')}
                       </MenuItem>
@@ -286,7 +292,7 @@ export function OrderPanel({
                 )}
               </div>
             )}
-            {live && (
+            {may('send') && (
               <Button variant="outline" className="whitespace-nowrap" onClick={actions.onSend}>
                 <Icon name="share" size={16} />
                 {t('ส่ง LINE')}
@@ -298,7 +304,7 @@ export function OrderPanel({
                 {t('อนุมัติสั่งซื้อ')}
               </Button>
             )}
-            {live && (
+            {may('receive') && (
               <Button className="flex-1 whitespace-nowrap" onClick={actions.onReceive}>
                 <Icon name="truck" size={16} />
                 {partial ? t('รับส่วนที่เหลือ') : t('ตรวจรับของ')}

@@ -13,6 +13,7 @@ import { callCommand, filing, NOT_SENT } from './stock'
 import { hasOutstanding, receiptIdFor, receiveOrderInTx, type ReceiptLineInput } from '../commands/receivePO'
 import { genId } from '../lib/id'
 import { assertVersion, versionOf } from '../lib/concurrency'
+import { check, PO, PO_DELETABLE, transition } from '../lib/workflow'
 import {
   COL,
   type Product,
@@ -363,7 +364,7 @@ export async function approvePurchaseOrder(
   await db.transaction(async (tx) => {
     const order = await tx.get<PurchaseOrder>(COL.purchaseOrders, id)
     if (!order) throw new AppError('ไม่พบใบสั่งซื้อ')
-    if (order.status !== 'draft') return // already approved; idempotent by design
+    if (!check(PO, order.status, 'approve').ok) return // already approved; idempotent by design
     const now = Date.now()
     tx.update(COL.purchaseOrders, id, {
       status: 'ordered' satisfies PurchaseOrderStatus,
@@ -517,7 +518,7 @@ export async function amendPurchaseOrder(params: {
   const lines = buildLines(params.lines, params.products)
   const note = params.note?.trim() || undefined
   return changeOrderAt(params.expectedVersion)(params.id, (order, now) => {
-    if (order.status !== 'ordered') throw new AppError('แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ')
+    transition(PO, order.status, 'amend')
     // Its lines carry what has arrived so far; rebuilding them would lose it.
     if (order.receipts?.length) throw new AppError('แก้ไขไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — รับส่วนที่เหลือ หรือปิดยอดค้าง')
     const changes = revisionChanges(order, { lines, expectedAt: params.expectedAt, note })
@@ -706,7 +707,7 @@ export async function closeOrderRemainder(params: {
   const reason = params.reason.trim()
   if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ปิดยอดค้างของใบสั่งซื้อ')
   return changeOrder(params.orderId, (order, now) => {
-    if (order.status !== 'ordered') throw new AppError('ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่')
+    transition(PO, order.status, 'closeShort')
     if (!order.receipts?.length) throw new AppError('ใบสั่งซื้อนี้ยังไม่เคยรับของ — ถ้าไม่ได้ของเลยให้ยกเลิกใบสั่งซื้อแทน')
     const patch = {
       status: 'received' as const,
@@ -772,8 +773,7 @@ export async function cancelPurchaseOrder(params: {
   const reason = params.reason.trim()
   if (!reason) throw new AppError('กรุณาระบุเหตุผลที่ยกเลิก')
   return changeOrder(params.id, (order, now) => {
-    if (order.status === 'received') throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของเข้าคลังแล้ว')
-    if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ยกเลิกไปแล้ว')
+    transition(PO, order.status, 'cancel')
     // Part of it is on the books already; cancelling would say none of it came. Closing the
     // rest says what happened (closeOrderRemainder).
     if (order.receipts?.length) throw new AppError('ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — ให้ปิดยอดค้างแทน')
@@ -795,7 +795,7 @@ export async function cancelPurchaseOrder(params: {
  */
 export async function deletePurchaseOrder(id: string): Promise<void> {
   const order = await scoped().getOne<PurchaseOrder>(COL.purchaseOrders, id)
-  if (order && order.status !== 'draft') {
+  if (order && !PO_DELETABLE.includes(order.status)) {
     throw new AppError('ลบได้เฉพาะร่าง ใบที่สั่งแล้วต้องยกเลิกพร้อมเหตุผล')
   }
   await scoped().remove(COL.purchaseOrders, id)

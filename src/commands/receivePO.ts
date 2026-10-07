@@ -4,6 +4,7 @@ import { COL, type PoReceipt, type Product, type PurchaseOrder, type PurchaseOrd
 import { resolveFactor, toBase } from '../lib/uom'
 import { roundQty } from '../lib/validate'
 import { planReceive, type FileMovement, type MovementLine } from './ledgerTx'
+import { PO, transition } from '../lib/workflow'
 
 /**
  * Checking a delivery in against its order (plan A1), as a transaction body over a given
@@ -171,10 +172,9 @@ export async function receiveOrderInTx(tx: TxContext, file: FileMovement, params
       },
     }
   }
-  if (order.status === 'received') throw new AppError('ใบสั่งซื้อนี้รับของแล้ว')
-  if (order.status === 'cancelled') throw new AppError('ใบสั่งซื้อนี้ถูกยกเลิกแล้ว')
-  // A draft is a proposal nobody has placed; goods cannot arrive against it.
-  if (order.status === 'draft') throw new AppError('ใบสั่งซื้อนี้ยังเป็นร่าง ต้องอนุมัติก่อนรับของ')
+  // G19: goods arrive only against a placed order — a received, cancelled or draft one is
+  // refused by the order's state machine, in its own words.
+  transition(PO, order.status, 'receive')
 
   const { settled, arrived } = settleDelivery(order, params.lines, params.actorRole === undefined || params.actorRole === 'manager' || params.actorRole === 'admin')
 

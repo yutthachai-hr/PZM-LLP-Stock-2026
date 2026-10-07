@@ -5,6 +5,7 @@ import { countDayOf, monthlyCountId, postingPlan } from '../lib/monthlyCount'
 import { COL, type MonthlyCount, type MonthlyCountLine, type MonthlyCountQuestion, type MonthlyCountResult } from '../types'
 import { execute } from './stock'
 import { BOOKS_MOVED, postCountCommand } from '../commands/countPost'
+import { check, COUNT, transition } from '../lib/workflow'
 
 /**
  * Monthly stock-count sheets (owner, 29 Sep 2026): figures are keyed and saved without
@@ -75,7 +76,7 @@ export async function saveCountLines(params: {
   return scoped().transaction(async (tx) => {
     const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
     if (!sheet) throw new AppError('ไม่พบใบนับนี้')
-    if (sheet.status !== 'counting') throw new AppError('ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้')
+    transition(COUNT, sheet.status, 'count')
     const now = Date.now()
     const lines: Record<string, MonthlyCountLine> = { ...sheet.lines }
     for (const [productId, c] of Object.entries(changes)) {
@@ -112,7 +113,7 @@ export async function recordMonthlyCount(params: {
   await scoped().transaction(async (tx) => {
     const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
     if (!sheet) throw new AppError('ไม่พบใบนับนี้')
-    if (sheet.status !== 'counting') throw new AppError('ใบนับนี้ยืนยันแล้ว')
+    transition(COUNT, sheet.status, 'record')
     if (Object.keys(sheet.questions ?? {}).length) throw new AppError('ยังมีคำถามจากไฟล์ที่ยังไม่ได้ตอบ — ตอบให้ครบก่อนยืนยัน')
     const now = Date.now()
     tx.update(COL.monthlyCounts, id, {
@@ -163,8 +164,9 @@ export async function postMonthlyCount(params: {
   for (let attempt = 0; ; attempt++) {
     const sheet = await db.getOne<MonthlyCount>(COL.monthlyCounts, id)
     if (!sheet) throw new AppError('ไม่พบใบนับนี้')
-    if (sheet.status === 'posted') {
-      if (attempt === 0) throw new AppError('ใบนับนี้ปรับสต๊อกไปแล้ว')
+    if (!check(COUNT, sheet.status, 'post').ok) {
+      // Posted by an earlier attempt of this same call: done. Posted before it began: refused.
+      if (attempt === 0) transition(COUNT, sheet.status, 'post')
       return docNos
     }
     const parts = postingPlan(Object.keys(sheet.lines).map((productId) => ({ productId })), sheet.postedIds)
