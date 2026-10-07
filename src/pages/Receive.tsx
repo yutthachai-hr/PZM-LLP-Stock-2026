@@ -21,7 +21,8 @@ import { buildMatchIndex } from '../lib/productMatch'
 import { billReaderAvailable, readBillPhoto, readDocumentFile } from '../services/billOcr'
 import { ocrFill, type OcrFill } from './receive/ocrApply'
 import { conflictsWith, resolveReceipt, supplierRank, type Candidate, type Resolution } from '../lib/supplierResolution'
-import { recordOverride } from '../lib/supplierFeedback'
+import { overrideAudit } from '../lib/supplierFeedback'
+import { newOperationId, recordAudit } from '../services/auditLog'
 import { SupplierConflicts, SupplierHint, SupplierMismatch } from './receive/SupplierHint'
 import { shownUnit } from '../lib/ledger'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
@@ -187,9 +188,20 @@ export function ReceivePage() {
   const rankFirst = useMemo(() => (d.mode === 'manual' && supplierId ? supplierRank(supplierId, resolveCtx) : undefined), [d.mode, supplierId, resolveCtx])
 
   function chooseSupplier(id: string, name: string) {
-    // "Suggested A, chose B": a data-quality signal on this device, never applied to the product.
-    const suggested = resolution.kind === 'AUTO' || resolution.kind === 'SUGGEST' ? resolution.candidate.supplierId : d.supplierPick === 'auto' ? d.supplierId : ''
-    if (suggested && id && id !== OTHER_SUPPLIER && id !== suggested) for (const productId of lineIds) recordOverride({ productId, suggested, chosen: id, at: Date.now() })
+    // "Suggested A, chose B": a data-quality signal in the append-only audit log, one entry per
+    // line under one operation id. Never applied to the product or its preferred supplier.
+    const offered = resolution.kind === 'AUTO' || resolution.kind === 'SUGGEST' ? resolution : null
+    const suggested = offered ? offered.candidate.supplierId : d.supplierPick === 'auto' ? d.supplierId : ''
+    if (suggested && id && id !== OTHER_SUPPLIER && id !== suggested) {
+      const op = newOperationId()
+      for (const productId of lineIds)
+        void recordAudit(
+          overrideAudit(
+            { productId, suggestedSupplierId: suggested, selectedSupplierId: id, resolution: offered?.kind ?? 'AUTO', evidence: offered?.because ?? 'product', toLocationId: d.toLocationId || undefined, invoiceNo: d.invoiceNo.trim() || undefined, receiptOperationId: d.operationId || undefined },
+            op,
+          ),
+        )
+    }
     patch({ supplierId: id, supplierName: name, supplierPick: id ? 'manual' : '' })
   }
   const pickCandidate = (c: Candidate) => patch({ supplierId: c.supplierId, supplierName: c.supplierName, supplierPick: 'manual' })

@@ -1,7 +1,15 @@
 // Smart supplier resolution on receiving (owner, 7 Oct 2026).
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
+
+vi.mock('../src/backend', async () => {
+  const m = await import('./helpers/memory-backend')
+  return { backend: m.memoryBackend, BACKEND_MODE: 'local' }
+})
+const { buildAuditEntry } = await import('../src/services/auditLog')
 import { candidatesFor, conflictsWith, fitOf, resolveForProduct, resolveReceipt, supplierIssues, supplierRank, type ResolveContext } from '../src/lib/supplierResolution'
 import type { Product, StockMovement, Supplier } from '../src/types'
+import { overrideAudit, overridesFromAudit } from '../src/lib/supplierFeedback'
+
 
 const sup = (id: string, name: string, active = true) => ({ id, name, active }) as unknown as Supplier
 const prod = (id: string, name: string, supplierId?: string, alternateSupplierIds?: string[], active = true) => ({ id, name, sku: id.toUpperCase(), supplierId, alternateSupplierIds, active }) as unknown as Product
@@ -127,5 +135,28 @@ describe('data quality and feedback', () => {
     const snapshot = JSON.stringify(PRODUCTS)
     resolveReceipt({ order: null, productIds: PRODUCTS.map((p) => p.id), ocrSupplierId: 's_foodway', ctx: ctx() })
     expect(JSON.stringify(PRODUCTS)).toBe(snapshot)
+  })
+})
+
+describe('override feedback in the audit log', () => {
+  const ctxOverride = { productId: 'p_sausage', suggestedSupplierId: 's_foodway', selectedSupplierId: 's_panfood', resolution: 'AUTO' as const, evidence: 'product' as const, toLocationId: 'loc_main', invoiceNo: 'IV123', receiptOperationId: 'rcop_123456' }
+  test('one structured, rules-shaped entry per override (action x.y, entity product, small maps)', () => {
+    const e = buildAuditEntry(overrideAudit(ctxOverride, 'op-1'), { id: 'u1', name: 'Staff', role: 'staff' }, 1_791_000_000_000)
+    expect(e.action).toMatch(/^[a-zA-Z]{1,30}[.][a-zA-Z]{1,40}$/)
+    expect(e.entityType).toBe('product')
+    expect(e.entityId).toBe('p_sausage')
+    expect(e.before).toEqual({ supplierId: 's_foodway', resolution: 'AUTO', evidence: 'product' })
+    expect(e.after).toEqual({ supplierId: 's_panfood', toLocationId: 'loc_main', invoiceNo: 'IV123', receiptOperationId: 'rcop_123456', context: 'receive.manual' })
+    expect(Object.keys(e).sort()).toEqual(['action', 'actorId', 'actorName', 'actorRole', 'after', 'before', 'createdAt', 'entityId', 'entityType', 'id', 'operationId'])
+    expect(e.operationId).toBe('op-1')
+    // No probability is recorded: the resolution is a rule, not a score.
+    expect(JSON.stringify(e)).not.toMatch(/confidence|probability|score/)
+  })
+  test('entries read back as overrides, and repeats flag the mapping', () => {
+    const e = buildAuditEntry(overrideAudit(ctxOverride), { id: 'u1', name: 'Staff', role: 'staff' }, 1)
+    const other = { ...e, action: 'product.update' }
+    const events = overridesFromAudit([e, e, e, other])
+    expect(events).toHaveLength(3)
+    expect(supplierIssues(ctx(), events)).toContainEqual({ kind: 'frequentOverride', productId: 'p_sausage', suggested: 's_foodway', chosen: 's_panfood', times: 3 })
   })
 })

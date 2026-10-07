@@ -93,3 +93,28 @@ describe('audit log', () => {
     await assertFails(getDoc(doc(as(STAFF), 'auditLog', e.id)))
   })
 })
+
+// Receiving's supplier-resolution feedback (owner, 7 Oct 2026) rides on the same append-only log:
+// staff may file the override they made, nobody may change or remove it, and only an admin reads it.
+describe('audit log: supplier-resolution overrides', () => {
+  const override = () =>
+    entry(STAFF, 'staff', {
+      id: `${String(Date.now()).padStart(14, '0')}_ov1`,
+      action: 'supplierResolution.override',
+      entityType: 'product',
+      entityId: 'p_sausage',
+      before: { supplierId: 's_foodway', resolution: 'AUTO', evidence: 'product' },
+      after: { supplierId: 's_panfood', toLocationId: 'loc_main', invoiceNo: 'IV123', context: 'receive.manual' },
+    })
+  test('staff files an override; it cannot be edited or deleted, and staff cannot read it back', async () => {
+    const e = override()
+    await assertSucceeds(put(STAFF, e))
+    await assertFails(updateDoc(doc(as(STAFF), 'auditLog', e.id), { after: { supplierId: 's_foodway' } }))
+    await assertFails(deleteDoc(doc(as(ADMIN), 'auditLog', e.id)))
+    await assertFails(getDoc(doc(as(STAFF), 'auditLog', e.id)))
+    await assertSucceeds(getDoc(doc(as(ADMIN), 'auditLog', e.id)))
+  })
+  test('filed only in your own name', async () => {
+    await assertFails(put(STAFF, { ...override(), actorId: MANAGER, actorRole: 'manager' }))
+  })
+})

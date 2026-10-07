@@ -97,13 +97,32 @@ Full suite: **124 files, 1,511 tests, all passing.**
 products and locations (DataContext), the supplier list (`useSuppliers`, already used by this
 page), and the recent movements (DataContext). `supplierItems` is deliberately not read.
 
-## Owner decision needed
+## Override feedback: central, in the audit log (owner decision 5, 7 Oct)
 
-**Shared override feedback.** Repeated corrections should feed the Data Quality Center for
-everyone. That needs a small append-only collection, which is a rules change, so it is your
-call under rule 7. Until then, overrides are kept on the device that made them, and
-`supplierIssues()` turns 3 or more of the same correction into a "mapping may need review"
-item.
+Overrides are now filed in the **existing append-only `auditLog`**. **No new collection and no
+rules change**: the current `validAudit` already accepts the entry.
+
+| Field | Value |
+|---|---|
+| `action` | `supplierResolution.override` |
+| `entityType` / `entityId` | `product` / the product id |
+| `before` | `{ supplierId: suggested, resolution: AUTO\|SUGGEST, evidence }` |
+| `after` | `{ supplierId: selected, toLocationId?, invoiceNo?, receiptOperationId?, context: 'receive.manual' }` |
+| actor, `createdAt` | `actorId`, `actorRole`, `createdAt` set by `buildAuditEntry`, checked by the rules |
+| `operationId` | Shared by the entries of one override across several lines |
+
+- **No score field.** The resolution is a rule, not a probability.
+- **Append-only:** `update` and `delete` are `false` in the rules.
+- **Reads:** only an admin reads, a page of 50 at a time, never through a live listener.
+- **Write failures:** a failed write waits in the audit log's own device outbox, as every
+  audit entry does.
+- **Reading back:** `overridesFromAudit()` turns admin pages back into events for
+  `supplierIssues()`.
+- **Tests:**
+  - unit (the shape matches `validAudit`; no score; the round trip);
+  - rules emulator, in `tests/audit-log-rules.test.ts`: staff can file one; nobody can edit or
+    delete it; staff cannot read it; it can only be filed in your own name.
+- **Later:** the Supabase `supplier_resolution_feedback` table is derived from these entries.
 
 ## Exit gate
 
@@ -113,7 +132,7 @@ item.
 | PO receiving never asks for the supplier again | **Met** (locked as before; now labelled "จาก PO-…") |
 | Ambiguous multi-supplier products are not auto-selected | **Met** (tested) |
 | Conflicting products are detected | **Met** (tested and seen) |
-| Manual override works where allowed | **Met.** The person's choice is never replaced; the override is recorded. |
+| Manual override works where allowed | **Met.** The person's choice is never replaced; the override is filed in the audit log. |
 | Mappings stay grounded in real ids | **Met** (tested) |
 | Tests pass | **Met** |
 | No read-budget regression | **Met** (0 added reads) |
