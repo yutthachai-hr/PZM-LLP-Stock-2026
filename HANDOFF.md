@@ -692,7 +692,15 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 | G17 Laya | **ทำ harness แล้ว แต่ยังไม่ได้ประเมิน Laya** (`b8eabb7`): ยังไม่ได้รับ Laya / Kat / Reflex จากเจ้าของ arm B–G = NOT_RUN ดู `docs/evidence/phase-g17-laya.md` |
 | G18–G27 | **มีแค่รายงาน audit และแผน** (`933c3f4`): `docs/agent-safety/01-g18-g27-audit-and-plan.md` รออนุมัติชุดแรก |
 | Receiving supplier | **เสร็จ** (`7018770`): ระบบเลือกผู้ขายให้เอง ดู `docs/evidence/supplier-resolution.md` |
-| ปิดเฟส | **ยังไม่ freeze RC** รอเจ้าของสั่ง (ต้องรัน emulator gates ใน cloud ก่อน) |
+| Checkpoint | push แล้วที่ `2ae7bbb` (7 ต.ค. ตามเจ้าของสั่งข้อ 1 · ยังไม่ merge main) |
+| feat/outbox | **merge เข้า branch นี้แล้ว** (`49ec21f`) แต่ outbox จะเขียนก็ต่อเมื่อตั้ง `OUTBOX_ENABLED=true` (`e3df8db`) |
+| Supplier feedback | เก็บกลางใน `auditLog` แล้ว (`0731af0`) โดยไม่สร้าง collection ใหม่และไม่แก้ rules |
+| ชุดแรก G18/G19/G21/G25 | **เสร็จ** ดู `docs/evidence/phase-g-batch1.md` ส่วน UI ของ G19 ย้ายมาแค่บางส่วน |
+| ⚠ ก่อน deploy | rules ใหม่ของ G25 จะปฏิเสธการแก้ PO/สินค้าที่ไม่ขยับ `version` **ต้อง deploy แอปก่อน rules** (ดู batch1 §Deployment hazard) |
+| Upstream | ตรวจแล้วที่ `docs/agent-safety/02-upstream-verification.md` · laya.aay.sh เป็นคนละโปรเจกต์ · ยังไม่ได้ติดตั้งอะไร |
+| ปิดเฟส | **ยังไม่ freeze RC** ตามเจ้าของสั่งข้อ 6 รายการที่ยังขาดดูท้าย batch1 |
+
+**Emulator บนเครื่องนี้:** มี Java 21 แล้ว จึงรัน `npm run test:rules` ได้ในเครื่องเลย และ `npm run verify` ก็รันให้ด้วย
 
 **Rust บนเครื่อง Windows นี้:** ลง rustup แล้ว (เจ้าของอนุญาต 7 ต.ค.) และตั้ง GNU toolchain override เฉพาะ `crates/pzm-integrity` เพราะเครื่องนี้ไม่มี MSVC linker ให้รัน `cargo` จากในโฟลเดอร์ crate
 

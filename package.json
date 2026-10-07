@@ -32,7 +32,9 @@
     "integrity:vectors": "node scripts/integrity-vectors.mjs",
     "integrity:bench": "node --expose-gc scripts/integrity-bench.mjs",
     "verify": "node scripts/verify.mjs",
-    "laya:bench": "node scripts/laya-bench.mjs"
+    "laya:bench": "node scripts/laya-bench.mjs",
+    "integrity:diff": "node scripts/integrity-diff.mjs",
+    "mutation": "stryker run"
   },
   "dependencies": {
     "@line/liff": "^2.31.0",
@@ -55,11 +57,14 @@
     "@electric-sql/pglite": "^0.3.16",
     "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.63.0",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "fast-check": "^4.10.2",
     "firebase-tools": "^15.24.0",
     "oxlint": "^1.71.0",
     "postgres": "^3.4.9",

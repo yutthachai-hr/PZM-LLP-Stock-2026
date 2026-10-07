@@ -3,11 +3,34 @@
 //! Exit codes: 0 PASS, 1 WARNING, 2 FAIL, 3 unreadable input.
 //! `--bench N` runs the check N times on the same input and prints timings to stderr
 //! (G13's latency comparison with the TypeScript reference).
+//! `--batch` reads one snapshot per stdin line and writes one report per stdout line
+//! (G21's differential test against the TypeScript reference); a bad line answers
+//! `{"error":…}` and the batch goes on.
 use std::io::Read;
 use std::time::Instant;
 
+fn batch() {
+    let mut input = String::new();
+    if std::io::stdin().read_to_string(&mut input).is_err() {
+        std::process::exit(3);
+    }
+    let mut out = String::new();
+    for line in input.lines().filter(|l| !l.trim().is_empty()) {
+        match pzm_integrity::check_json(line) {
+            Ok(r) => out.push_str(&serde_json::to_string(&r).expect("report serialises")),
+            Err(e) => out.push_str(&serde_json::json!({ "error": e }).to_string()),
+        }
+        out.push('\n');
+    }
+    print!("{}", out);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--batch") {
+        batch();
+        return;
+    }
     let bench = args.iter().position(|a| a == "--bench").and_then(|i| args.get(i + 1)).and_then(|n| n.parse::<usize>().ok());
     let path = args.iter().enumerate().find(|(i, a)| !a.starts_with("--") && (*i == 0 || args[i - 1] != "--bench")).map(|(_, a)| a.clone());
     let input = match path.as_deref() {

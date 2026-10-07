@@ -62,3 +62,7 @@ playwright-report/
 # Local shadow PostgreSQL (npm run shadow) and its bundled SQL
 .shadow-db/
 supabase/dist/
+
+# G21 mutation testing (npm run mutation)
+.stryker-tmp/
+reports/

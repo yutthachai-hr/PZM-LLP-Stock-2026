@@ -43,6 +43,8 @@ const gates = [
   ['integrity vectors fresh', npm, ['run', '-s', 'integrity:vectors', '--', '--check']],
   ['safety bench (unsafe-allow = 0)', npm, ['run', '-s', 'safety:bench', '--', '--no-write']],
   cargo ? ['rust: cargo test', cargo, ['test', '--release', '--quiet'], 'crates/pzm-integrity'] : ['rust: cargo test', 'cargo not installed here — run on a machine with Rust (see pstack-workflow.md)'],
+  // G21: TS and Rust on fresh random snapshots (a new seed each run, printed); any disagreement fails.
+  cargo ? ['differential TS ↔ Rust', npm, ['run', '-s', 'integrity:diff']] : ['differential TS ↔ Rust', 'cargo not installed here'],
   // The rules suite needs the Firestore emulator, which needs Java.
   spawnSync('java', ['-version']).status === 0 ? ['rules (emulator)', npm, ['run', '-s', 'test:rules']] : ['rules (emulator)', 'no Java here — run npm run test:rules where the emulator can start'],
   ...(full ? [['build', npm, ['run', '-s', 'build']], ['bundle budget', npm, ['run', '-s', 'check:bundle']]] : []),
