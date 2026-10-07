@@ -3289,6 +3289,7 @@ export const EN: Record<string, string> = {
   'ตรวจบิลกับสินค้าก่อนเลือกผู้ขาย — ระบบไม่เลือกให้': 'Check the bill against the products before choosing — the app will not choose for you',
   '{product} ผูกกับ {mapped} แต่ใบรับนี้เป็นของ {supplier}': '{product} is mapped to {mapped}, but this receipt is for {supplier}',
   ผู้ขายอื่น: 'another supplier',
+  'มีคนแก้ข้อมูลนี้ไปแล้วหลังจากที่คุณเปิดดู — โหลดใหม่แล้วตรวจอีกครั้ง': 'Someone changed this after you opened it — reload and check again',
   'ตรวจผู้ขายอีกครั้ง หรือ': 'Review the supplier, or',
   แยกไปใบรับถัดไป: 'move to the next receipt',
   'แยก {n} รายการไปใบรับถัดไปแล้ว — รับใบนี้ก่อน แล้วกด "รับบิลถัดไป"': 'Moved {n} item(s) to the next receipt — receive this one first, then press "Next bill"',

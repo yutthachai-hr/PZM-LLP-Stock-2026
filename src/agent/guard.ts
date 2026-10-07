@@ -30,7 +30,11 @@ export interface RuleResult {
   evidence: Record<string, string | number>
 }
 
+export const SAFETY_DECISION_SCHEMA = 'safety-decision/1' as const
+
 export interface GuardResult {
+  /** Contract version (G25); always set by guard(), optional for hand-built results. */
+  schema?: typeof SAFETY_DECISION_SCHEMA
   decision: Decision
   results: RuleResult[]
 }
@@ -74,7 +78,7 @@ const norm = (s: string) => s.normalize('NFC').trim().replace(/\s+/g, ' ').toLow
 export function guard(raw: unknown, snap: GuardSnapshot): GuardResult {
   const results: RuleResult[] = []
   const add = (ruleId: string, outcome: Outcome, reason: string, evidence: Record<string, string | number> = {}) => void results.push({ ruleId, outcome, reason, evidence })
-  const done = () => ({ decision: decide(results), results })
+  const done = (): GuardResult => ({ schema: SAFETY_DECISION_SCHEMA, decision: decide(results), results })
   const lim = { ...DEFAULT_LIMITS, ...snap.limits }
 
   // ------------------------------------------------------------ shape: nothing else runs on a bad shape

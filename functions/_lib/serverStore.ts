@@ -69,6 +69,8 @@ export const SERVER_PO_FIELDS = [
   'supplierActivity',
   'expectedAt',
   'updatedAt',
+  // G25: every write moves the order's version (worked out from the copy read, under its updateTime).
+  'version',
 ] as const
 
 export const baseOf = (collection: string) => (collection.includes('__') ? collection.split('__')[1] : collection)

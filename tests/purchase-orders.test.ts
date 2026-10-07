@@ -1058,3 +1058,29 @@ describe('plan B5: goods refused at the door, and the over-receipt ceiling', () 
     expect(balance('p1')).toBe(15)
   })
 })
+
+// G25 (owner, 7 Oct 2026): an order's version moves with every write, and a revision made
+// from an old copy of the order — a stale tab, or anything computed from old data — is refused.
+describe('G25: order versions', () => {
+  const order = (id: string) => orders().find((o) => o.id === id)!
+  test('created at version 1; each change moves it by one', async () => {
+    const id = await placeOrder()
+    expect(order(id).version).toBe(1)
+    await setShareStatus(id, 'sent', ACTOR)
+    expect(order(id).version).toBe(2)
+  })
+  test('a revision from the copy on screen lands and reports the new version; from an older one it is refused', async () => {
+    const id = await placeOrder()
+    const next = await amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 12 }], reason: 'แก้จำนวน', products, actor: ACTOR, expectedVersion: 1 })
+    expect(next.version).toBe(2)
+    expect(order(id).version).toBe(2)
+    await expect(amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 99 }], reason: 'จากหน้าจอเก่า', products, actor: ACTOR, expectedVersion: 1 })).rejects.toThrow('มีคนแก้ข้อมูลนี้ไปแล้ว')
+    expect(order(id).lines.map((l) => l.orderedQty)).toEqual([12])
+    expect(order(id).revision).toBe(1)
+  })
+  test('without an expectation (system paths) the change still moves the version', async () => {
+    const id = await placeOrder()
+    await cancelPurchaseOrder({ id, reason: 'ไม่ใช้แล้ว', actor: ACTOR })
+    expect(order(id)).toMatchObject({ status: 'cancelled', version: 2 })
+  })
+})

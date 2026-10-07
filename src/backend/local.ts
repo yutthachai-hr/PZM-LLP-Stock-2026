@@ -1,4 +1,5 @@
-import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
+import { DELETE_FIELD, Increment, withInitialVersion, withVersionBump, type Backend, type SubscribeOptions, type TxContext } from './types'
+import { applyIncrement } from './tx'
 import { resolveCollection, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 
@@ -137,11 +138,13 @@ function applyPatch(
       const head = k.slice(0, dot)
       const inner = { ...((out[head] as Record<string, unknown> | undefined) ?? {}) }
       if (v === DELETE_FIELD) delete inner[k.slice(dot + 1)]
+      else if (v instanceof Increment) inner[k.slice(dot + 1)] = applyIncrement(inner[k.slice(dot + 1)], v)
       else inner[k.slice(dot + 1)] = clone(v)
       out[head] = inner
       continue
     }
     if (v === DELETE_FIELD) delete out[k]
+    else if (v instanceof Increment) out[k] = applyIncrement(out[k], v)
     else out[k] = clone(v)
   }
   return out
@@ -337,7 +340,7 @@ export function createLocalBackend(brand?: BrandId): Backend {
       return serialize(async () => {
         const id = genId()
         const map = loadMap(c)
-        map[id] = { ...data, id }
+        map[id] = { ...withInitialVersion(collection, data), id }
         commit(c, map)
         return id
       })
@@ -347,7 +350,7 @@ export function createLocalBackend(brand?: BrandId): Backend {
       const c = resolve(collection)
       return serialize(async () => {
         const map = loadMap(c)
-        map[id] = { ...data, id }
+        map[id] = { ...withInitialVersion(collection, data), id }
         commit(c, map)
       })
     },
@@ -357,7 +360,7 @@ export function createLocalBackend(brand?: BrandId): Backend {
       return serialize(async () => {
         const map = loadMap(c)
         const existing = Object.hasOwn(map, id) ? map[id] : { id }
-        map[id] = { ...applyPatch(existing, patch), id }
+        map[id] = { ...applyPatch(existing, withVersionBump(collection, patch)), id }
         commit(c, map)
       })
     },
@@ -397,14 +400,14 @@ export function createLocalBackend(brand?: BrandId): Backend {
           },
           set(col, id, data) {
             const c = resolve(col)
-            load(c)[id] = { ...clone(data), id }
+            load(c)[id] = { ...clone(withInitialVersion(col, data)), id }
             dirty.add(c)
           },
           update(col, id, patch) {
             const c = resolve(col)
             const m = load(c)
             const existing = Object.hasOwn(m, id) ? m[id] : { id }
-            m[id] = { ...applyPatch(existing, patch), id }
+            m[id] = { ...applyPatch(existing, withVersionBump(col, patch)), id }
             dirty.add(c)
           },
           delete(col, id) {

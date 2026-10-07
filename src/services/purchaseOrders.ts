@@ -12,6 +12,7 @@ import { orderCache } from '../data/orderCache'
 import { callCommand, filing, NOT_SENT } from './stock'
 import { hasOutstanding, receiptIdFor, receiveOrderInTx, type ReceiptLineInput } from '../commands/receivePO'
 import { genId } from '../lib/id'
+import { assertVersion, versionOf } from '../lib/concurrency'
 import {
   COL,
   type Product,
@@ -434,17 +435,24 @@ export { expectedDeliveryAt, CHASE_AFTER_DAYS } from '../lib/inventoryRules/purc
 async function changeOrder(
   id: string,
   fn: (order: PurchaseOrder, now: number) => { patch: Record<string, unknown>; next: PurchaseOrder },
+  /** G25: the version of the copy the change was made from; refused if the order moved on. */
+  expectedVersion?: number,
 ): Promise<PurchaseOrder> {
   const next = await scoped().transaction(async (tx) => {
     const raw = await tx.get<PurchaseOrder>(COL.purchaseOrders, id)
     if (!raw) throw new AppError('ไม่พบใบสั่งซื้อ')
+    assertVersion(raw, expectedVersion)
     const out = fn({ ...raw, id }, Date.now())
     tx.update(COL.purchaseOrders, id, out.patch)
-    return out.next
+    // The copy handed back carries the version the write will have (the backend adds the +1).
+    return { ...out.next, version: versionOf(raw) + 1 }
   })
   orderCache.patch(next)
   return next
 }
+
+/** changeOrder, checked against the version the edit was made from (G25). */
+const changeOrderAt = (expectedVersion: number | undefined) => (id: string, fn: Parameters<typeof changeOrder>[1]) => changeOrder(id, fn, expectedVersion)
 
 /**
  * What differs between an order as it stands and as it is about to be: the entries a
@@ -500,13 +508,15 @@ export async function amendPurchaseOrder(params: {
   reason: string
   products: readonly Product[]
   actor: { id: string; name: string }
+  /** G25: the version of the order the edit was made from. */
+  expectedVersion?: number
 }): Promise<PurchaseOrder> {
   const reason = params.reason.trim()
   if (!reason) throw new AppError('กรุณาระบุเหตุผลที่แก้ไข')
   if (params.expectedAt !== undefined) requireEpochMs(params.expectedAt)
   const lines = buildLines(params.lines, params.products)
   const note = params.note?.trim() || undefined
-  return changeOrder(params.id, (order, now) => {
+  return changeOrderAt(params.expectedVersion)(params.id, (order, now) => {
     if (order.status !== 'ordered') throw new AppError('แก้ไขได้เฉพาะใบที่สั่งแล้วและยังไม่รับของ')
     // Its lines carry what has arrived so far; rebuilding them would lose it.
     if (order.receipts?.length) throw new AppError('แก้ไขไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — รับส่วนที่เหลือ หรือปิดยอดค้าง')

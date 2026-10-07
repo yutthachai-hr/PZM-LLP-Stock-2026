@@ -45,6 +45,12 @@ export const MAX_COST_HISTORY = 100
 
 export interface Product {
   id: string
+  /**
+   * G25 optimistic concurrency (7 Oct 2026): moves by one on every write (the backends add it),
+   * starts at 1. Absent on a product not written since. An edit made from a loaded copy states
+   * the version it saw, and is refused if the product has moved on.
+   */
+  version?: number
   sku: string
   /**
    * The number printed on the box, when someone has scanned it in (owner, 22 Sep 2026).
@@ -467,6 +473,8 @@ export interface PoRevisionEntry {
  */
 export interface PurchaseOrder {
   id: string
+  /** G25 optimistic concurrency: see Product.version. Server writes move it too. */
+  version?: number
   /** PO-00001. The number people say out loud. */
   docNo: string
   supplierId: string

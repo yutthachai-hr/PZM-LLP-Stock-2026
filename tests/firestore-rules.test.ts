@@ -11,7 +11,16 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc as rawUpdateDoc, deleteDoc, getDocs, collection, increment, type DocumentReference, type UpdateData, type DocumentData } from 'firebase/firestore'
+
+// What the app's backends send on every update of a versioned entity (G25, src/backend/tx.ts):
+// an atomic +1 on `version`. Tests of what a client may write go through the same path, so
+// the version rule is exercised everywhere; the G25 block below tests the rule itself.
+const VERSIONED_COLLECTIONS = ['products', 'purchaseOrders']
+function updateDoc(ref: DocumentReference, data: UpdateData<DocumentData>) {
+  const coll = ref.path.split('/')[0].replace(/^lelapin__/, '')
+  return rawUpdateDoc(ref, VERSIONED_COLLECTIONS.includes(coll) && !('version' in data) ? { ...data, version: increment(1) } : data)
+}
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
 
@@ -1666,5 +1675,60 @@ describe('outbox', () => {
       await assertFails(deleteDoc(doc(as(uid), 'outbox/e1')))
       await assertFails(setDoc(doc(as(uid), 'lelapin__outbox/e3'), { eventId: 'e3' }))
     }
+  })
+})
+
+// G25 optimistic concurrency (owner, 7 Oct 2026): every non-admin update of an order or a
+// product moves its version by exactly one. A write from a stale copy states a version that
+// is no longer next and is refused here even if the app's own check were bypassed. An admin's
+// maintenance (a restore) may write any version.
+describe('G25: versions on orders and products', () => {
+  const placed = {
+    id: 'po1', docNo: 'PO-00001', supplierId: 'sup1', supplierName: 'OLIVA', status: 'ordered', locationId: 'loc1',
+    orderedAt: ts(), lines: [{ productId: 'p1', productName: 'X', unit: 'KG', orderedQty: 3 }],
+    createdBy: MANAGER, createdByName: 'Manager', createdAt: ts(), updatedAt: ts(), version: 3,
+  }
+  const po = (uid: string) => doc(as(uid), 'purchaseOrders', 'po1')
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'purchaseOrders/po1'), placed)
+      await setDoc(doc(ctx.firestore(), 'products/p1'), product('p1', { version: 5 }))
+    })
+  })
+
+  test('the next version lands; no bump, a repeat or a jump is refused', async () => {
+    await assertFails(rawUpdateDoc(po(MANAGER), { note: 'no bump', updatedAt: ts() }))
+    await assertFails(rawUpdateDoc(po(MANAGER), { note: 'stale', version: 3, updatedAt: ts() }))
+    await assertFails(rawUpdateDoc(po(MANAGER), { note: 'jump', version: 9, updatedAt: ts() }))
+    await assertSucceeds(rawUpdateDoc(po(MANAGER), { note: 'next', version: 4, updatedAt: ts() }))
+    // The tab that still holds version 3 now states 4, which is no longer next.
+    await assertFails(rawUpdateDoc(po(MANAGER), { note: 'stale tab', version: 4, updatedAt: ts() }))
+    await assertSucceeds(rawUpdateDoc(po(MANAGER), { note: 'atomic', version: increment(1), updatedAt: ts() }))
+  })
+
+  test('an order or product never versioned counts from 0', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const { version: _v, ...legacy } = placed
+      void _v
+      await setDoc(doc(ctx.firestore(), 'purchaseOrders/po2'), { ...legacy, id: 'po2' })
+    })
+    await assertFails(rawUpdateDoc(doc(as(MANAGER), 'purchaseOrders', 'po2'), { note: 'x', updatedAt: ts() }))
+    await assertSucceeds(rawUpdateDoc(doc(as(MANAGER), 'purchaseOrders', 'po2'), { note: 'x', version: 1, updatedAt: ts() }))
+  })
+
+  test('staff stating a unit rate moves the product version too', async () => {
+    const conv = { unitConversions: [{ label: 'Box', size: 10 }], updatedAt: ts() }
+    await assertFails(rawUpdateDoc(doc(as(STAFF), 'products', 'p1'), conv))
+    await assertSucceeds(rawUpdateDoc(doc(as(STAFF), 'products', 'p1'), { ...conv, version: 6 }))
+  })
+
+  test('an admin may write any version (maintenance, restores) — an admin edit is checked by the app (expectedVersion), not here', async () => {
+    await assertSucceeds(rawUpdateDoc(doc(as(ADMIN), 'products', 'p1'), { minStock: 3, version: 6, updatedAt: ts() }))
+    await assertSucceeds(rawUpdateDoc(doc(as(ADMIN), 'products', 'p1'), { minStock: 4, updatedAt: ts() }))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products', 'p1'), product('p1', { version: 2 })))
+  })
+
+  test('version must be a whole number', async () => {
+    await assertFails(rawUpdateDoc(doc(as(ADMIN), 'products', 'p1'), { version: 'six', updatedAt: ts() }))
   })
 })

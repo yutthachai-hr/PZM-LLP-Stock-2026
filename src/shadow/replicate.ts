@@ -1,5 +1,6 @@
 import { mapDoc, type Brand, type Entity } from './mapping'
 import { applyPlan, type SqlClient } from './writer'
+import { supported } from '../lib/concurrency'
 
 /**
  * The outbox consumer: Firestore commit → `outbox/{eventId}` (same transaction) → here.
@@ -58,6 +59,7 @@ interface Row {
   brand: Brand
   entity_type: Entity
   entity_id: string
+  schema_version: number
   payload: Record<string, unknown> | string
   attempt_count: number
 }
@@ -73,13 +75,16 @@ export async function applyPending(db: SqlClient, opts: { limit?: number; maxAtt
   const max = opts.maxAttempts ?? 5
   const report: ApplyReport = { applied: 0, stale: 0, failed: 0, dead: 0 }
   const pending = await db.query<Row>(
-    `select event_id, brand, entity_type, entity_id, payload, attempt_count from shadow.outbox_events
+    `select event_id, brand, entity_type, entity_id, schema_version, payload, attempt_count from shadow.outbox_events
       where replication_status in ('pending', 'failed') order by occurred_at, event_id limit $1`,
     [opts.limit ?? 500],
   )
   for (const ev of pending.rows) {
     const payload = typeof ev.payload === 'string' ? (JSON.parse(ev.payload) as Record<string, unknown>) : ev.payload
     try {
+      // G25: an event in a shape this consumer does not know is never applied — it fails,
+      // then sits dead and visible for a consumer that does (never silently misread).
+      if (!supported('OutboxEvent', { schemaVersion: Number(ev.schema_version) })) throw new Error(`unsupported outbox schema_version ${ev.schema_version}`)
       const status = await db.transaction(async (tx) => {
         let applied = true
         if (payload.deleted === true) {

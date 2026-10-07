@@ -1121,6 +1121,7 @@ function AmendOrderModal({
         reason,
         products,
         actor,
+        expectedVersion: order.version ?? 0,
       })
       onDone(next)
       toast.success(t('แก้ไขใบสั่งซื้อแล้ว (Rev.{n}) — อย่าลืมส่งใบใหม่ให้ผู้ขาย', { n: next.revision ?? 1 }))

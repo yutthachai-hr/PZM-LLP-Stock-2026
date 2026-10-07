@@ -2,6 +2,8 @@ import { backend } from '../backend'
 import { DELETE_FIELD, type TxContext } from '../backend/types'
 import { COL, type AppUser, type AuditEntityType, type AuditEntry, type Role } from '../types'
 
+import { assertVersion } from '../lib/concurrency'
+
 /**
  * B2 — the audit log (owner approved, 6 Oct 2026): one append-only record of every change
  * to the things that shape the stock rather than move it — products, locations, suppliers,
@@ -154,13 +156,17 @@ export async function auditedUpdate(
   collection: string,
   id: string,
   patch: Record<string, unknown>,
-  meta: Omit<AuditInput, 'entityId' | 'before' | 'after'> & { entityId?: string },
+  meta: Omit<AuditInput, 'entityId' | 'before' | 'after'> & { entityId?: string; expectedVersion?: number },
 ): Promise<void> {
   const keys = Object.keys(patch).filter((k) => k !== 'updatedAt' && k !== 'updatedBy')
   await backend.transaction(async (tx) => {
     const cur = await tx.get<Record<string, unknown>>(collection, id)
+    // G25: an edit made from a loaded copy is refused if the document has moved on since.
+    assertVersion(cur, meta.expectedVersion)
+    const { expectedVersion: _v, ...auditMeta } = meta
+    void _v
     tx.update(collection, id, patch)
-    auditInTx(tx, { ...meta, entityId: meta.entityId ?? id, before: snapshot(cur, keys), after: snapshot(patch, keys) })
+    auditInTx(tx, { ...auditMeta, entityId: meta.entityId ?? id, before: snapshot(cur, keys), after: snapshot(patch, keys) })
   })
   void flushAuditOutbox()
 }

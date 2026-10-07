@@ -11,21 +11,22 @@ import {
   runTransaction,
   where,
   deleteField,
+  increment as fsIncrement,
   orderBy,
   limit as fbLimit,
 } from 'firebase/firestore'
 import { getDb } from '../firebase/app'
-import { DELETE_FIELD, type Backend, type SubscribeOptions, type TxContext } from './types'
+import { DELETE_FIELD, Increment, withInitialVersion, withVersionBump, type Backend, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
 import { noteListen, noteRead } from '../data/readMeter'
 
 // Firestore implementation. Real-time across all devices, offline persistence enabled.
 // Collection names are brand-scoped via resolveCollection() so brands stay fully isolated.
 
-/** Turn our DELETE_FIELD marker into Firestore's own. */
+/** Turn our markers (DELETE_FIELD, Increment) into Firestore's own. */
 function toFirestorePatch(patch: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(patch)) out[k] = v === DELETE_FIELD ? deleteField() : v
+  for (const [k, v] of Object.entries(patch)) out[k] = v === DELETE_FIELD ? deleteField() : v instanceof Increment ? fsIncrement(v.by) : v
   return out
 }
 
@@ -160,12 +161,12 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
 
     async set(collection: string, id: string, data: Record<string, unknown>): Promise<void> {
       const db = getDb()
-      await setDoc(doc(db, resolve(collection), id), { ...data, id })
+      await setDoc(doc(db, resolve(collection), id), { ...withInitialVersion(collection, data), id })
     },
 
     async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
       const db = getDb()
-      await updateDoc(doc(db, resolve(collection), id), toFirestorePatch(patch))
+      await updateDoc(doc(db, resolve(collection), id), toFirestorePatch(withVersionBump(collection, patch)))
     },
 
     async remove(collection: string, id: string): Promise<void> {
@@ -185,13 +186,13 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
             return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
           },
           set(collection, id, data) {
-            t.set(doc(db, resolve(collection), id), { ...data, id })
+            t.set(doc(db, resolve(collection), id), { ...withInitialVersion(collection, data), id })
           },
           update(collection, id, patch) {
             // Same translation the non-transactional update does. Without it a DELETE_FIELD
             // marker reached Firestore as an opaque value, so clearing a field inside a
             // transaction — the only place the stock engine ever clears one — did nothing.
-            t.update(doc(db, resolve(collection), id), toFirestorePatch(patch))
+            t.update(doc(db, resolve(collection), id), toFirestorePatch(withVersionBump(collection, patch)))
           },
           delete(collection, id) {
             t.delete(doc(db, resolve(collection), id))

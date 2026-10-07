@@ -1,4 +1,4 @@
-import { DELETE_FIELD, type TxContext } from '../../src/backend/tx'
+import { DELETE_FIELD, VERSIONED, type TxContext } from '../../src/backend/tx'
 import { assertCommandWrite, baseOf, brandCollection, type ServerStore, type ServerWrite } from './serverStore'
 
 /**
@@ -110,6 +110,22 @@ export function outboxWrites(
   return out
 }
 
+/**
+ * G25: a versioned entity's write carries its next version, worked out from the copy this
+ * transaction read. Race-safe: the commit's precondition is that copy's updateTime, so a
+ * newer version landing in between makes the commit fail and the body run again. A
+ * versioned update that was not read first is a programming error, not a silent skip.
+ */
+export function versioned(w: ServerWrite, read: Record<string, unknown> | null | undefined, wasRead: boolean): ServerWrite {
+  if (w.op === 'verify' || !VERSIONED.has(baseOf(w.collection)) || 'version' in w.data) return w
+  if (!wasRead) {
+    if (w.op === 'set') return { ...w, data: { ...w.data, version: 1 } }
+    throw new Error(`${w.collection}/${w.id}: a versioned update must read the document first`)
+  }
+  const current = typeof read?.version === 'number' ? read.version : 0
+  return { ...w, data: { ...w.data, version: read ? current + 1 : 1 } }
+}
+
 export async function runServerTx<R>(
   store: ServerStore,
   brand: 'pizza' | 'lelapin',
@@ -156,7 +172,7 @@ export async function runServerTx<R>(
       const seen = reads.get(p)
       const precondition: ServerWrite['precondition'] =
         seen === undefined ? (w.op === 'set' ? { exists: false } : { exists: true }) : seen === null ? { exists: false } : { updateTime: seen }
-      return { ...w, precondition }
+      return { ...versioned(w, readDocs.get(p), seen !== undefined), precondition }
     })
     // The documents only read decided what was written too (a product, a location): the
     // commit verifies they are unchanged, the way the SDK does for a transaction's reads.

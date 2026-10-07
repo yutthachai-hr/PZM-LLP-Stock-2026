@@ -138,3 +138,31 @@ describe('reading', () => {
     expect(third.more).toBe(false)
   })
 })
+
+// G25 (owner, 7 Oct 2026): every product write moves its version, and an edit made from an
+// old copy is refused — the change and its audit entry both, because they are one transaction.
+describe('G25: product versions', () => {
+  const p1 = () => raw('products').find((p) => p.id === 'p1') as { version?: number; minStock: number }
+  test('a product never written since versions began starts counting from its first write', async () => {
+    expect(p1().version).toBeUndefined()
+    await updateProduct('p1', { minStock: 8 })
+    expect(p1().version).toBe(1)
+    await updateProduct('p1', { minStock: 9 })
+    expect(p1().version).toBe(2)
+  })
+  test('an edit from the copy it was made from lands; one from an older copy is refused, with nothing written', async () => {
+    await updateProduct('p1', { minStock: 8 }, { expectedVersion: 0 })
+    const entries = log().length
+    await expect(updateProduct('p1', { minStock: 50 }, { expectedVersion: 0 })).rejects.toThrow('มีคนแก้ข้อมูลนี้ไปแล้ว')
+    expect(p1().minStock).toBe(8)
+    expect(log()).toHaveLength(entries)
+    await updateProduct('p1', { minStock: 50 }, { expectedVersion: 1 })
+    expect(p1()).toMatchObject({ minStock: 50, version: 2 })
+  })
+  test('the audit entry does not record the version or the expectation', async () => {
+    await updateProduct('p1', { minStock: 8 }, { expectedVersion: 0 })
+    const [e] = log()
+    expect(JSON.stringify(e)).not.toContain('expectedVersion')
+    expect(e.after).toEqual({ minStock: 8 })
+  })
+})

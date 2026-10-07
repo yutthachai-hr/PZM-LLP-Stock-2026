@@ -226,7 +226,9 @@ export function ProductEditor({
         }
         const { cost: _cost, ...patch } = form
         void _cost
-        await updateProduct(id, patch)
+        // G25: refused if someone else saved this product since it was opened. A unit change
+        // just above moved the version itself, so the check applies only without one.
+        await updateProduct(id, patch, unitChanged || !product ? {} : { expectedVersion: product.version ?? 0 })
       } else {
         const { cost: _cost, ...input } = form
         void _cost

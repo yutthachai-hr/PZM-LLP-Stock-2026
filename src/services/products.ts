@@ -114,6 +114,8 @@ export async function createProduct(input: ProductInput): Promise<string> {
 export async function updateProduct(
   id: string,
   patch: Partial<ProductInput> & { active?: boolean },
+  /** G25: the version of the copy the edit was made from; the save is refused if the product moved on. */
+  opts: { expectedVersion?: number } = {},
 ): Promise<void> {
   checkNumbers(patch)
   // An empty cost box means "no cost recorded", which has to remove the field rather than
@@ -141,7 +143,7 @@ export async function updateProduct(
     write.unitConversions = conversions.length ? conversions : DELETE_FIELD
   }
   const action = patch.active === false ? 'product.deactivate' : patch.active === true ? 'product.activate' : 'product.update'
-  await auditedUpdate(COL.products, id, write, { action, entityType: 'product' })
+  await auditedUpdate(COL.products, id, write, { action, entityType: 'product', expectedVersion: opts.expectedVersion })
 }
 
 /**

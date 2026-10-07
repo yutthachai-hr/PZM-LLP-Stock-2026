@@ -307,8 +307,9 @@ service cloud.firestore {
           'id', 'sku', 'name', 'barcode', 'category', 'unit', 'unitType', 'minStock', 'cost',
           'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
           'trackLot', 'trackExpiry',
-          'hasImage', 'active', 'createdAt', 'updatedAt'
+          'hasImage', 'active', 'createdAt', 'updatedAt', 'version'
         ])
+        && (!('version' in d) || d.version is int)
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
         // The number on the box (22 Sep 2026). Uniqueness is checked by the app before it
         // writes — a rule cannot query the collection — so this only pins the shape.
@@ -579,7 +580,7 @@ service cloud.firestore {
           'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
-          'revision', 'revisions',
+          'revision', 'revisions', 'version',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ]);
     }
@@ -1040,9 +1041,20 @@ service cloud.firestore {
     //
     // Counters only ever go forwards, so a replayed or forged write cannot hand out a
     // document number that has already been used.
+    // G25 optimistic concurrency (owner, 7 Oct 2026): every update of a product or an order
+    // moves its version by exactly one — the app's backends add it, and a stale copy (an old
+    // tab, an AI proposal computed from old data) states a version that is no longer next, so
+    // its write is refused here even if the app's own check were bypassed. An admin's
+    // maintenance (restoring a backup) may write any version.
+    function versionMoved() {
+      return roleIsAdmin()
+        || request.resource.data.get('version', 0) == resource.data.get('version', 0) + 1;
+    }
+
     function editedHonestly(name) {
       let k = kind(name);
-      return k == 'purchaseOrders' ? orderEdit()
+      return k == 'purchaseOrders' ? orderEdit() && versionMoved()
+        : k == 'products' ? versionMoved()
         : k == 'purchaseBatches' ? batchEdit()
         : k == 'transfers' ? transferEdit()
         : k == 'purchaseRequests' ? requestEdit()
@@ -1078,7 +1090,7 @@ service cloud.firestore {
           'orderedAt', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
-          'revision', 'revisions',
+          'revision', 'revisions', 'version',
           'receipts', 'closedShortReason', 'closedShortBy', 'closedShortByName', 'closedShortAt'
         ])
         // The lines of a placed order move only as a revision or when a delivery is checked
@@ -1806,7 +1818,8 @@ service cloud.firestore {
       // first time somebody keys that unit (owner, 20 Sep 2026). Everything else about a
       // product stays with the admin.
       allow update: if active() && kind(collection) == 'products'
-        && editedKeys().hasOnly(['unitConversions', 'updatedAt'])
+        && editedKeys().hasOnly(['unitConversions', 'updatedAt', 'version'])
+        && versionMoved()
         && validShape(collection, docId, request.resource.data, false);
 
       allow delete: if active() && staffDeletable(collection);

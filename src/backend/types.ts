@@ -8,7 +8,7 @@ import type { BrandId } from '../brand/brand'
 // The transaction surface lives on its own so code that runs on the server too (the stock
 // commands, ADR-001) can use it without pulling in anything browser-only.
 import type { TxContext } from './tx'
-export { DELETE_FIELD, type TxContext } from './tx'
+export { DELETE_FIELD, Increment, increment, VERSIONED, withVersionBump, withInitialVersion, type TxContext } from './tx'
 
 /**
  * Restricts a subscription to documents whose numeric `field` is at or after `value`.

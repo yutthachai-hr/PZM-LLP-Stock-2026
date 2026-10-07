@@ -49,7 +49,10 @@ async function replace(uid: string, path: string, next: (cur: Record<string, unk
   await assertSucceeds(
     runTransaction(db, async (tx) => {
       const cur = (await tx.get(ref)).data()!
-      tx.set(ref, next(cur))
+      // As the app writes it (G25): a versioned entity's write carries the next version.
+      const out = next(cur)
+      const versioned = /^(lelapin__)?(products|purchaseOrders)\//.test(path)
+      tx.set(ref, versioned && !('version' in out && out.version !== cur.version) ? { ...out, version: ((cur.version as number | undefined) ?? 0) + 1 } : out)
     }),
   )
 }
