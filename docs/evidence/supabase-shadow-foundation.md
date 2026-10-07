@@ -89,7 +89,18 @@ Firestore's own cached-vs-ledger drift: 0     0
 
 **กติกายอดคงเหลือใน SQL** ตรงกับ `src/lib/levelKey.ts`: แถวที่มี entryUnit แต่ไม่มี entryQty นับเป็นยอดของหน่วยนั้น (`#Unit`) และแถวที่ void ไม่นับ ยืนยันด้วย parity 0 mismatches บนข้อมูลจริง
 
-## 4. Outbox (ออกแบบแล้ว ยังไม่ wire ฝั่ง Firestore)
+## 4. Outbox: wire แล้วบน `feat/outbox` (เจ้าของอนุมัติ collection `outbox` เมื่อ 7 ต.ค. 2569)
+
+**ทำแล้ว:**
+- `functions/_lib/serverTx.ts` `outboxWrites()`: ทุกเอกสารที่คำสั่งสต๊อกฝั่ง server เขียน (stockMovements, stockLevels, purchaseOrders, purchaseRequests, transfers) จะมี event เขียนลง `outbox/{uuid}` **ใน commit เดียวกัน** โดย payload คือเอกสารหลัง commit
+- **rules ไม่ต้องแก้:** `outbox` ไม่อยู่ใน list ใดของ rules จึงถูกปฏิเสธโดย default ทุก client รวมแอดมิน (ยืนยันด้วย rules test)
+- **Worker** `worker/src/shadowSync.ts` (cron `15,45 * * * *`):
+  - อ่าน outbox แล้ว scan collection ที่ client ยังเขียนเอง (catalogue, ผู้ขาย, PO, PR, โอน, ผู้ใช้)
+  - ส่งต่อให้ consumer แบบ idempotent แล้วลง Supabase
+  - เก็บ cursor, ลบ outbox ที่ replicate แล้วเกิน 7 วัน, เขียนสถานะ `meta/shadowStatus`
+- **เทส:** outbox 5 ข้อ (event อยู่ใน commit เดียวกัน, คำสั่งที่ถูกปฏิเสธหรือ replay ไม่มี event, replay ลง PostgreSQL ได้ตัวเลขเท่ากับ Firestore) และ shadow-sync 5 ข้อ
+
+### การออกแบบเดิม (คงไว้อ้างอิง)
 
 ```
 ธุรกรรมใน Firestore (เช่น receivePurchaseOrder ของ A1)
