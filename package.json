@@ -29,7 +29,8 @@
     "safety:dataset": "node scripts/safety-dataset.mjs",
     "safety:bench": "node scripts/safety-bench.mjs",
     "integrity:vectors": "node scripts/integrity-vectors.mjs",
-    "integrity:bench": "node --expose-gc scripts/integrity-bench.mjs"
+    "integrity:bench": "node --expose-gc scripts/integrity-bench.mjs",
+    "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.31.0",
