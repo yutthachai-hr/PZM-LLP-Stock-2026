@@ -5,7 +5,7 @@
 //                             freshness, safety bench, Rust (when cargo is installed)
 //   npm run verify -- --full  also the production build and the bundle budget
 //
-// Gates that need the Firebase emulator (rules, e2e, flaky runs) are listed, not run: they
+// The rules suite runs when Java is present (the Firestore emulator needs it). e2e and flaky runs are listed, not run: they
 // stay with CI / the release gate (docs/evidence/release-gate.md).
 //
 // Exits non-zero if any gate fails. A gate that cannot run here (no cargo) is SKIPPED and
@@ -43,6 +43,8 @@ const gates = [
   ['integrity vectors fresh', npm, ['run', '-s', 'integrity:vectors', '--', '--check']],
   ['safety bench (unsafe-allow = 0)', npm, ['run', '-s', 'safety:bench', '--', '--no-write']],
   cargo ? ['rust: cargo test', cargo, ['test', '--release', '--quiet'], 'crates/pzm-integrity'] : ['rust: cargo test', 'cargo not installed here — run on a machine with Rust (see pstack-workflow.md)'],
+  // The rules suite needs the Firestore emulator, which needs Java.
+  spawnSync('java', ['-version']).status === 0 ? ['rules (emulator)', npm, ['run', '-s', 'test:rules']] : ['rules (emulator)', 'no Java here — run npm run test:rules where the emulator can start'],
   ...(full ? [['build', npm, ['run', '-s', 'build']], ['bundle budget', npm, ['run', '-s', 'check:bundle']]] : []),
 ]
 
@@ -65,5 +67,5 @@ for (const [name, cmd, args, cwd] of gates) {
 
 console.log('\n─── verify ' + (full ? '(full) ' : '') + '───')
 for (const r of results) console.log(`${r.status.padEnd(7)} ${r.name.padEnd(34)} ${r.ms ? `${(r.ms / 1000).toFixed(1)}s` : ''}${r.note ? ` ${r.note}` : ''}`)
-console.log('Not run here (emulator): npm run test:rules · npm run test:e2e · flaky runs — see docs/evidence/release-gate.md')
+console.log('Not run here: npm run test:e2e · flaky runs — see docs/evidence/release-gate.md')
 if (results.some((r) => r.status === 'FAIL')) process.exitCode = 1
