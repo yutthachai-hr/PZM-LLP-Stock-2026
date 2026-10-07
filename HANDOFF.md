@@ -474,7 +474,7 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - `validPrefs` เพิ่ม `sound`
 - staff สร้างแจ้งเตือน `poSent` ได้
 
-## 13. PZM Operations OS: audit ทั้งระบบ + แก้ทีละเฟส (เริ่ม 6 ต.ค.) **← งานล่าสุด อ่านก่อน**
+## 13. PZM Operations OS: audit ทั้งระบบ + แก้ทีละเฟส (เริ่ม 6 ต.ค.)
 
 **แผนที่เจ้าของอนุมัติ:** `docs/PLAN-operations-os.md` มีครบ 20 หัวข้อ + Top 10 + exit criteria และความเห็นแก้ 9 ข้อของเจ้าของ
 
@@ -631,6 +631,43 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - e2e ต้องใช้ Java (ตัวเดียวกับ `test:rules`) และ `npx playwright install chromium`
 - ใน Claude Code cloud ห้าม `playwright install` ให้สร้าง config ชั่วคราว (ไม่ commit) ที่ใส่ `launchOptions.executablePath: '/opt/pw-browsers/chromium'` แล้วรัน `npx firebase emulators:exec --only firestore,auth --project demo-pzm-e2e "npx playwright test -c <config>"`
 
+## 14. Release hardening + Phase G (6–7 ต.ค.) — branch `claude/phase-a-ledger-continue-uzbbb5` **← งานล่าสุด อ่านก่อน**
+
+**สถานะ:** ทำครบแล้ว **ยังไม่ freeze RC ยังไม่ merge และยังไม่ deploy** ทุกอย่างรอเจ้าของสั่ง
+
+**หลักฐานแต่ละเรื่อง (`docs/evidence/`)**
+
+| เรื่อง | ไฟล์ | สรุป |
+|---|---|---|
+| Phase G (G1–G10) | `phase-g.md` | engine แนะนำอย่างเดียว · version · data confidence · shadow mode · backtest แบบไม่รั่วข้อมูลอนาคต (ยังเป็น synthetic) |
+| Firestore reads | `read-budget.md` | วัดบน emulator ขนาด production: ก่อนแก้ ≈ 201k/วัน → หลังแก้แอป ≈ 17.9k + Worker ≈ 5.9k ≈ **23.8k/วัน** |
+| B2 auditLog | `b2-audit-log.md` | append-only · admin อ่านทีละ 50 · ไม่มี listener |
+| E4 error reporting | `e4-error-reporting.md` | เขียนลง Workers log **ไม่ใช่ Firestore** · ตัดข้อมูลส่วนตัว/ธุรกิจออก · dedupe / rate limit / sampling |
+| D4′ | `d4-intake.md` | Excel / OCR / แนะนำ / กรอกเอง ทั้งหมดผ่านใบขอซื้อ · `/purchase/import` redirect · batch เดิมยังเปิดดูและทำต่อได้ |
+| Lot / expiry | `docs/adr/ADR-002-lot-expiry.md` | มีแค่ flag `trackLot` / `trackExpiry` (ค่าเริ่มต้น false) ยังไม่มีอะไรอ่านค่านี้ |
+| Release gate | `release-gate.md` | ผลเทสทั้งหมด · flaky runs · business flow · dry-run baseQty |
+
+**Bug จริงที่การรันซ้ำ (flaky runs) และ business flow เจอและแก้แล้ว**
+
+1. **กด "ลองใหม่" แล้วแถบแดงไม่หาย** (live-error พัง 3/20)
+   - listener ที่ถูกปฏิเสธ *หลัง* กดลองใหม่ไม่ถูกลองซ้ำ
+   - แก้ที่ `DataContext.retryLive` + `LiveFailure.startedAt`
+2. **ใบขอซื้อใหม่แสดงว่าง** หลังเพิ่มรายการแรก
+   - ErrorBoundary ใช้ path เป็น key ทำให้ทั้งหน้า remount ตอน URL เปลี่ยนจาก `/requests/new` เป็น `/requests/<id>`
+   - แก้ด้วย `resetKey` (ล้าง error โดยไม่ remount)
+
+**ขั้นที่เจ้าของต้องทำเอง (เครื่องนี้ทำไม่ได้)**
+
+1. dry-run baseQty บน backup จริง (ห้ามแก้ production):
+   `npm run backfill:po-baseqty -- "D:\AI Solution\pzm-stock-<brand>-20261006-1500.json" --json bq.json`
+   - รายงาน: valid / safe / ambiguous / invalid / closed / would-change
+   - รายการ ambiguous ต้องให้คนตรวจทุกรายการ
+2. backtest ของ Phase G บน backup จริง:
+   `npm run intel:backtest -- "<backup.json>"`
+3. อนุมัติ RC แล้ว deploy ตามลำดับ 0–10 ที่กำหนดไว้
+
+**ห้ามเริ่ม Phase H เอง**
+
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 
 บอก Claude session ใหม่ประมาณนี้:
@@ -640,7 +677,7 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 สิ่งที่ Claude ใหม่ควรทำเป็นอันดับแรกเมื่อรับงานต่อ:
 1. `git log --oneline -20` ดูว่าทำอะไรมาล่าสุด
 2. `git status` เช็คว่ามีอะไรค้าง uncommitted
-3. **งานล่าสุดคือหัวข้อ 13 (Operations OS)** — checkout `feat/phase-a-ledger` แล้วทำต่อที่ A6 ตาม `docs/PLAN-operations-os.md`
+3. **งานล่าสุดคือหัวข้อ 14** (release hardening บน `claude/phase-a-ledger-continue-uzbbb5`) — อ่าน `docs/evidence/release-gate.md` ก่อน
 4. ถ้าจะแก้ rules หรือ collection ใหม่ — ถามเจ้าของก่อนเสมอตามกติกาข้อ 7
 
 ---
