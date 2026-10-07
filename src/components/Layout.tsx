@@ -83,7 +83,7 @@ export function Layout({ children }: { children: ReactNode }) {
               its own white card on the canvas, so it gets no sheet — a card on a white sheet
               is white on white. Unconverted pages keep the sheet until their round. */}
           <div className="xl:min-h-full xl:rounded-2xl xl:border xl:border-line xl:bg-surface xl:p-6 xl:shadow-sm xl:has-[[data-frame]]:rounded-none xl:has-[[data-frame]]:border-0 xl:has-[[data-frame]]:bg-transparent xl:has-[[data-frame]]:p-0 xl:has-[[data-frame]]:shadow-none">
-            <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
+            <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>
           </div>
         </main>
       </div>

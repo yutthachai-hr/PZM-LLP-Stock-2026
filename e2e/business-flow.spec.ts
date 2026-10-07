@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { getDoc, listDocs, putDoc } from './emulator'
 import { seedStage } from './fixture'
-import { signedIn } from './app'
+import { open, signedIn } from './app'
 import { countDayOf } from '../src/lib/monthlyCount'
 import { auditIntegrity } from '../src/lib/integrityAudit'
 import { supplierAnswerDraft, toDoc } from '../src/lib/inventoryRules/notifications'
@@ -72,7 +72,7 @@ test('the whole business flow, end to end, leaves the books consistent', async (
   const poId = () => `po_${prId}_sup1`
   const manager = await signedIn(browser, 'manager', '/')
   await step('manager approves, order placed', async () => {
-    await manager.goto(`/requests/${prId}`)
+    await open(manager, `/requests/${prId}`)
     await manager.getByRole('button', { name: 'อนุมัติทั้งหมด' }).click()
     await manager.getByRole('dialog').getByRole('button', { name: 'อนุมัติ', exact: true }).click()
     await expect.poll(async () => (await getDoc(`purchaseRequests/${prId}`))?.status, { timeout: 20_000 }).toBe('approved')
@@ -84,8 +84,9 @@ test('the whole business flow, end to end, leaves the books consistent', async (
 
   // 3. The supplier moves the delivery date: the order's people get a popup and a sound.
   await step('supplier date change: popup and sound', async () => {
-    await manager.goto('/')
-    await manager.locator('main').click({ position: { x: 5, y: 5 } }) // a gesture, so the browser lets sound play
+    // No reload: an alert arrives while someone is using the app. (The first snapshot after
+    // opening it is the baseline and never pops — what was there before is not news.)
+    await manager.keyboard.press('Shift') // a gesture, so the browser lets sound play (keydown unlocks it)
     const po = { ...(await getDoc(`purchaseOrders/${poId()}`)), id: poId() } as unknown as PurchaseOrder
     const at = Date.now()
     const doc = toDoc(supplierAnswerDraft(po, 'supplierDateChanged', 'c1', at + 2 * DAY, 'Somchai'), at, 'worker', 'supplier-link')
@@ -135,7 +136,8 @@ test('the whole business flow, end to end, leaves the books consistent', async (
     await expect.poll(async () => (await getDoc(`purchaseOrders/${poId()}`))?.status, { timeout: 30_000 }).toBe('received')
     const po = await getDoc(`purchaseOrders/${poId()}`)
     expect((po?.receipts as unknown[]).length).toBe(2)
-    expect(await level('wh', 'flour')).toBe(27) // 10 + 12 + 5, once
+    // Refused goods stay owed, so the rest is 20 − 12 = 8: 10 + 12 + 8, filed once.
+    expect(await level('wh', 'flour')).toBe(30)
     await staff.context().close()
   })
 
@@ -143,22 +145,25 @@ test('the whole business flow, end to end, leaves the books consistent', async (
   //    approval must not move the stock a second time.
   let trId = ''
   await step('transfer request, approval, stale tab', async () => {
-    await manager.goto('/transfers/new')
+    await open(manager, '/transfers/new')
     await manager.getByLabel('จากคลัง / สาขา (ต้นทาง)').selectOption({ label: 'Main Warehouse' })
     await manager.getByLabel('ไปยังสาขา (ปลายทาง)').selectOption({ label: 'Branch One' })
     await manager.getByPlaceholder('ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)').fill('FLOUR')
     await manager.getByRole('button', { name: /FLOUR/ }).first().click()
-    await manager.getByRole('dialog').getByLabel('จำนวน').fill('5')
-    await manager.getByRole('dialog').getByRole('button', { name: 'เพิ่มรายการ' }).click()
+    // On a wide screen picking a product adds the line at 1; the quantity is set in the table.
+    const qty = manager.locator('main input[type=number]').first()
+    await expect(qty).toBeVisible()
+    await qty.fill('5')
+    await qty.press('Tab')
     await manager.getByRole('button', { name: /ส่งคำขอโอนสินค้า/ }).click()
     await expect.poll(async () => (await listDocs('transfers')).find((t) => t.status === 'pendingApproval')?.id, { timeout: 20_000 }).toBeTruthy()
     trId = (await listDocs('transfers')).find((t) => t.status === 'pendingApproval')!.id
 
     const stale = await manager.context().newPage()
-    await stale.goto(`/transfers/${trId}`)
+    await open(stale, `/transfers/${trId}`)
     await expect(stale.getByRole('button', { name: 'อนุมัติและตัดสต๊อกขนส่ง' })).toBeVisible({ timeout: 20_000 })
 
-    await manager.goto(`/transfers/${trId}`)
+    await open(manager, `/transfers/${trId}`)
     await manager.getByRole('button', { name: 'อนุมัติและตัดสต๊อกขนส่ง' }).click()
     await manager.getByRole('dialog').getByRole('button', { name: 'ยืนยันอนุมัติและตัดสต๊อก' }).click()
     await expect.poll(async () => (await getDoc(`transfers/${trId}`))?.status, { timeout: 20_000 }).toBe('inTransit')
@@ -172,20 +177,20 @@ test('the whole business flow, end to end, leaves the books consistent', async (
       await expect(stale.getByText(/เอกสารมีการแก้ไข กรุณาโหลดใหม่|เอกสารไม่ได้อยู่ในสถานะรออนุมัติ/).first()).toBeVisible({ timeout: 15_000 })
     }
     await stale.close()
-    expect(await level('wh', 'flour')).toBe(22)
+    expect(await level('wh', 'flour')).toBe(25)
     expect(await level('transit', 'flour')).toBe(5)
   })
 
   // 7. The branch receives it — the confirm pressed twice in a row files it once.
   await step('branch receives (double click)', async () => {
-    await manager.goto(`/transfers/${trId}/receive`)
-    await manager.getByRole('button', { name: 'รับครบตามใบส่ง' }).click()
-    await manager.getByRole('button', { name: /^ยืนยันรับสินค้า$/ }).first().dblclick()
-    const dialogOk = manager.getByRole('dialog').getByRole('button', { name: 'ยืนยันรับสินค้า' })
-    if (await dialogOk.isVisible().catch(() => false)) await dialogOk.dblclick()
+    await open(manager, `/transfers/${trId}/receive`)
+    // "รับครบตามใบส่ง" files the receipt in the same press — pressed twice in a row here.
+    await manager.getByRole('button', { name: 'รับครบตามใบส่ง' }).dblclick()
     await expect.poll(async () => (await getDoc(`transfers/${trId}`))?.status, { timeout: 20_000 }).toBe('completed')
     expect(await level('b1', 'flour')).toBe(5)
     expect(await level('transit', 'flour')).toBe(0)
+    const tr = await getDoc(`transfers/${trId}`)
+    expect(((tr?.legs ?? tr?.receipts ?? []) as unknown[]).length).toBeLessThanOrEqual(1)
   })
 
   // 8. Last month's count at the warehouse: 9 on the shelf against 10 on the books (10%),
@@ -197,12 +202,12 @@ test('the whole business flow, end to end, leaves the books consistent', async (
       lines: { flour: { qty: 9, by: stage.uid.staffA, byName: 'E2E Staff A', at } },
       createdBy: stage.uid.staffA, createdByName: 'E2E Staff A', createdAt: at, updatedAt: at,
     })
-    await manager.goto(`/counts/wh__${MONTH}`)
+    await open(manager, `/counts/wh__${MONTH}`)
     await manager.getByRole('button', { name: 'ยืนยันและปรับสต๊อก' }).first().click()
     await manager.getByRole('dialog').getByLabel(/ตรวจผลต่างมาก/).check()
     await manager.getByRole('dialog').getByRole('button', { name: 'ยืนยัน', exact: true }).click()
     await expect.poll(async () => (await getDoc(`monthlyCounts/wh__${MONTH}`))?.status, { timeout: 20_000 }).toBe('posted')
-    expect(await level('wh', 'flour')).toBe(21) // 9 counted + 17 received − 5 sent after the count day
+    expect(await level('wh', 'flour')).toBe(24) // 9 counted + 20 received − 5 sent after the count day
   })
 
   // 9. Everything the app wrote, checked against itself.

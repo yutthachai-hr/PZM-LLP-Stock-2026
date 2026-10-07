@@ -6,14 +6,23 @@ import { reportError } from '../services/errorReporter'
 
 /**
  * One page that throws while drawing shows a message and a way out, instead of a blank
- * screen with the menu gone (plan C1). Keyed on the path by the layout, so moving to
- * another page starts clean.
+ * screen with the menu gone (plan C1). Moving to another path clears a failure.
+ *
+ * Cleared, not remounted: it used to be keyed on the path, which rebuilt the page on
+ * every path change — including a page moving its own URL, as a new purchase request does
+ * from /requests/new to /requests/<id> when its first line creates it. The rebuilt page
+ * read the request again before that line was saved and showed it empty (found by the
+ * pre-production flow, 7 Oct 2026).
  */
-export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+export class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
 
   static getDerivedStateFromError(error: Error) {
     return { error }
+  }
+
+  componentDidUpdate(prev: { resetKey?: string }) {
+    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: null })
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
