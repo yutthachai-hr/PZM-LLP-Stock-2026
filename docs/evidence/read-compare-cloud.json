@@ -1,0 +1,101 @@
+{
+  "label": "cloud",
+  "at": "2026-10-07T10:56:30.347Z",
+  "backupCounts": {
+    "meta": 2,
+    "products": 336,
+    "productImages": 205,
+    "locations": 3,
+    "productMinOverrides": 0,
+    "suppliers": 86,
+    "supplierItems": 0,
+    "companyProfile": 0,
+    "productAliases": 11,
+    "stockEvents": 9,
+    "inventorySchedules": 2,
+    "notes": 0,
+    "stockMovements": 3173,
+    "movementImages": 1,
+    "purchaseOrders": 130,
+    "purchaseBatches": 1,
+    "purchaseRequests": 7,
+    "messages": 0,
+    "announcements": 1,
+    "transfers": 0,
+    "monthlyCounts": 2,
+    "stockLevels": 524,
+    "counters": 53
+  },
+  "results": {
+    "cold open (manager, new device)": {
+      "delivered": 1569,
+      "billed": null,
+      "server": 0
+    },
+    "reopen app (same device)": {
+      "delivered": 267,
+      "billed": null,
+      "server": 0
+    },
+    "dashboard": {
+      "delivered": 0,
+      "billed": null,
+      "server": 0
+    },
+    "products": {
+      "delivered": 40,
+      "billed": null,
+      "server": 0
+    },
+    "receiving": {
+      "delivered": 50,
+      "billed": null,
+      "server": 0
+    },
+    "purchase orders": {
+      "delivered": 6,
+      "billed": null,
+      "server": 0
+    },
+    "suppliers": {
+      "delivered": 174,
+      "billed": null,
+      "server": 0
+    },
+    "movements": {
+      "delivered": 0,
+      "billed": null,
+      "server": 0
+    },
+    "calendar": {
+      "delivered": 4,
+      "billed": null,
+      "server": 0
+    },
+    "switching screens x3": {
+      "delivered": 6,
+      "billed": null,
+      "server": 0
+    },
+    "notification arrives": {
+      "delivered": 13,
+      "billed": null,
+      "server": 0
+    },
+    "back after a long absence": {
+      "delivered": 0,
+      "billed": null,
+      "server": 0
+    },
+    "second tab": {
+      "delivered": 203,
+      "billed": null,
+      "server": 0
+    },
+    "cold open (staff, new device)": {
+      "delivered": 1343,
+      "billed": null,
+      "server": 0
+    }
+  }
+}

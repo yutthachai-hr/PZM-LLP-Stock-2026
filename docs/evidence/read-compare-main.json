@@ -1,0 +1,101 @@
+{
+  "label": "main",
+  "at": "2026-10-07T10:59:19.762Z",
+  "backupCounts": {
+    "meta": 2,
+    "products": 336,
+    "productImages": 205,
+    "locations": 3,
+    "productMinOverrides": 0,
+    "suppliers": 86,
+    "supplierItems": 0,
+    "companyProfile": 0,
+    "productAliases": 11,
+    "stockEvents": 9,
+    "inventorySchedules": 2,
+    "notes": 0,
+    "stockMovements": 3173,
+    "movementImages": 1,
+    "purchaseOrders": 130,
+    "purchaseBatches": 1,
+    "purchaseRequests": 7,
+    "messages": 0,
+    "announcements": 1,
+    "transfers": 0,
+    "monthlyCounts": 2,
+    "stockLevels": 524,
+    "counters": 53
+  },
+  "results": {
+    "cold open (manager, new device)": {
+      "delivered": 1333,
+      "billed": 1347,
+      "server": null
+    },
+    "reopen app (same device)": {
+      "delivered": 167,
+      "billed": 72,
+      "server": null
+    },
+    "dashboard": {
+      "delivered": 0,
+      "billed": 0,
+      "server": null
+    },
+    "products": {
+      "delivered": 80,
+      "billed": 80,
+      "server": null
+    },
+    "receiving": {
+      "delivered": 50,
+      "billed": 50,
+      "server": null
+    },
+    "purchase orders": {
+      "delivered": 0,
+      "billed": 0,
+      "server": null
+    },
+    "suppliers": {
+      "delivered": 1,
+      "billed": 3,
+      "server": null
+    },
+    "movements": {
+      "delivered": 0,
+      "billed": 0,
+      "server": null
+    },
+    "calendar": {
+      "delivered": 3,
+      "billed": 6,
+      "server": null
+    },
+    "switching screens x3": {
+      "delivered": 0,
+      "billed": 0,
+      "server": null
+    },
+    "notification arrives": {
+      "delivered": 2,
+      "billed": 4,
+      "server": null
+    },
+    "back after a long absence": {
+      "delivered": 161,
+      "billed": 83,
+      "server": null
+    },
+    "second tab": {
+      "delivered": 85,
+      "billed": 98,
+      "server": null
+    },
+    "cold open (staff, new device)": {
+      "delivered": 1184,
+      "billed": 1180,
+      "server": null
+    }
+  }
+}
