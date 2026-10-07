@@ -27,7 +27,9 @@
     "check:bundle": "node scripts/bundle-budget.mjs",
     "intel:backtest": "node scripts/intel-backtest.mjs",
     "safety:dataset": "node scripts/safety-dataset.mjs",
-    "safety:bench": "node scripts/safety-bench.mjs"
+    "safety:bench": "node scripts/safety-bench.mjs",
+    "integrity:vectors": "node scripts/integrity-vectors.mjs",
+    "integrity:bench": "node --expose-gc scripts/integrity-bench.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.31.0",

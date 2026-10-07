@@ -1,0 +1,622 @@
+{
+ "name": "random-17",
+ "input": {
+  "schema": "pzm-integrity/1",
+  "products": [
+   {
+    "id": "p_mozz",
+    "unitType": "KG",
+    "unitConversions": [
+     {
+      "label": "Bag",
+      "size": 2.5
+     },
+     {
+      "label": "กรัม",
+      "size": 0.001
+     }
+    ]
+   },
+   {
+    "id": "p_flour",
+    "unitType": "กก.",
+    "unitConversions": [
+     {
+      "label": "Sack",
+      "size": 25
+     },
+     {
+      "label": "Pallet",
+      "size": 40,
+      "of": "Sack"
+     }
+    ]
+   },
+   {
+    "id": "p_box",
+    "unitType": "EA",
+    "unitConversions": [
+     {
+      "label": "Pack",
+      "size": 25
+     },
+     {
+      "label": "Carton",
+      "size": 12,
+      "of": "Pack"
+     }
+    ]
+   },
+   {
+    "id": "p_oil",
+    "unitType": "L",
+    "unitConversions": [
+     {
+      "label": "Can",
+      "size": 18
+     },
+     {
+      "label": "EA",
+      "size": 2.72,
+      "per": 1
+     }
+    ]
+   }
+  ],
+  "locations": [
+   {
+    "id": "loc_suk"
+   },
+   {
+    "id": "loc_onnut"
+   }
+  ],
+  "levels": [
+   {
+    "id": "loc_ghost__p_box",
+    "qty": -3.956
+   },
+   {
+    "id": "loc_ghost__p_flour",
+    "qty": -3302
+   },
+   {
+    "id": "loc_ghost__p_ghost",
+    "qty": 316
+   },
+   {
+    "id": "loc_ghost__p_oil",
+    "qty": 50.75
+   },
+   {
+    "id": "loc_onnut__p_box",
+    "qty": 500,
+    "reserved": 23
+   },
+   {
+    "id": "loc_onnut__p_flour",
+    "qty": -968.75
+   },
+   {
+    "id": "loc_onnut__p_mozz",
+    "qty": 10
+   },
+   {
+    "id": "loc_suk__p_flour",
+    "qty": 329.75
+   },
+   {
+    "id": "loc_suk__p_ghost",
+    "qty": -232.25
+   },
+   {
+    "id": "loc_suk__p_mozz",
+    "qty": 27.5
+   },
+   {
+    "id": "loc_suk__p_oil",
+    "qty": 204.5,
+    "reserved": 1
+   },
+   {
+    "id": "transit__p_flour",
+    "qty": 993.75
+   },
+   {
+    "id": "transit__p_ghost",
+    "qty": -748.75
+   },
+   {
+    "id": "transit__p_oil",
+    "qty": -204.5,
+    "reserved": 29
+   }
+  ],
+  "movements": [
+   {
+    "id": "m01",
+    "productId": "p_mozz",
+    "qty": 50,
+    "toLocationId": "loc_suk",
+    "date": 1790823600000,
+    "createdAt": 1790823600000,
+    "poId": "po_1",
+    "operationId": "op_r1"
+   },
+   {
+    "id": "m02",
+    "productId": "p_flour",
+    "qty": 250,
+    "toLocationId": "loc_suk",
+    "date": 1790823600000,
+    "createdAt": 1790827200000,
+    "poId": "po_1",
+    "operationId": "op_r2"
+   },
+   {
+    "id": "m03",
+    "productId": "p_mozz",
+    "qty": 12.5,
+    "fromLocationId": "loc_suk",
+    "date": 1790910000000,
+    "createdAt": 1790910000000
+   },
+   {
+    "id": "m04",
+    "productId": "p_mozz",
+    "qty": 10,
+    "fromLocationId": "loc_suk",
+    "toLocationId": "transit",
+    "transferId": "tr_1",
+    "date": 1790913600000,
+    "createdAt": 1790913600000
+   },
+   {
+    "id": "m05",
+    "productId": "p_mozz",
+    "qty": 10,
+    "fromLocationId": "transit",
+    "toLocationId": "loc_onnut",
+    "transferId": "tr_1",
+    "date": 1790917200000,
+    "createdAt": 1790917200000
+   },
+   {
+    "id": "m06",
+    "productId": "p_flour",
+    "qty": 25,
+    "fromLocationId": "loc_suk",
+    "toLocationId": "transit",
+    "transferId": "tr_2",
+    "date": 1790920800000,
+    "createdAt": 1790920800000
+   },
+   {
+    "id": "m07",
+    "productId": "p_box",
+    "qty": 500,
+    "toLocationId": "loc_onnut",
+    "date": 1790823600000,
+    "createdAt": 1790823600000,
+    "poId": "po_2",
+    "operationId": "op_r3"
+   },
+   {
+    "id": "m08",
+    "productId": "p_box",
+    "qty": 999,
+    "toLocationId": "loc_onnut",
+    "date": 1790823600000,
+    "createdAt": 1790823600000,
+    "poId": "po_2",
+    "operationId": "op_r4",
+    "voided": true
+   },
+   {
+    "id": "r17_0",
+    "productId": "p_ghost",
+    "qty": 232.25,
+    "date": 1790240400000,
+    "createdAt": 1790845200000,
+    "fromLocationId": "loc_suk",
+    "operationId": "op_x3"
+   },
+   {
+    "id": "r17_1",
+    "productId": "p_box",
+    "qty": 3.956,
+    "date": 1790697600000,
+    "createdAt": 1790665200000,
+    "fromLocationId": "loc_ghost",
+    "lockOverride": "reason"
+   },
+   {
+    "id": "r17_2",
+    "productId": "p_flour",
+    "qty": 3302,
+    "date": 1789624800000,
+    "createdAt": 1790830800000,
+    "fromLocationId": "loc_ghost",
+    "operationId": "op_x2"
+   },
+   {
+    "id": "r17_3",
+    "productId": "p_flour",
+    "qty": 91.75,
+    "date": 1790712000000,
+    "createdAt": 1790971200000,
+    "fromLocationId": "loc_ghost",
+    "operationId": "op_x3",
+    "voided": true
+   },
+   {
+    "id": "r17_4",
+    "productId": "p_oil",
+    "qty": 872,
+    "date": 1789545600000,
+    "createdAt": 1790924400000,
+    "toLocationId": "loc_ghost"
+   },
+   {
+    "id": "r17_5",
+    "productId": "p_oil",
+    "qty": 821.25,
+    "date": 1790787600000,
+    "createdAt": 1790982000000,
+    "fromLocationId": "loc_ghost"
+   },
+   {
+    "id": "r17_6",
+    "productId": "p_ghost",
+    "qty": 432.75,
+    "date": 1790028000000,
+    "createdAt": 1790848800000,
+    "fromLocationId": "loc_ghost",
+    "operationId": "op_x4"
+   },
+   {
+    "id": "r17_7",
+    "productId": "p_mozz",
+    "qty": 164.25,
+    "date": 1790010000000,
+    "createdAt": 1790686800000,
+    "fromLocationId": "transit",
+    "toLocationId": "loc_onnut",
+    "transferId": "tr_1",
+    "poId": "po_1",
+    "voided": true
+   },
+   {
+    "id": "r17_8",
+    "productId": "p_flour",
+    "qty": 968.75,
+    "date": 1790391600000,
+    "createdAt": 1790960400000,
+    "fromLocationId": "loc_onnut",
+    "toLocationId": "transit",
+    "transferId": "tr_9"
+   },
+   {
+    "id": "r17_9",
+    "productId": "p_flour",
+    "qty": 104.75,
+    "date": 1789772400000,
+    "createdAt": 1790816400000,
+    "toLocationId": "loc_suk"
+   },
+   {
+    "id": "r17_10",
+    "productId": "p_ghost",
+    "qty": 748.75,
+    "date": 1790258400000,
+    "createdAt": 1790654400000,
+    "fromLocationId": "transit",
+    "toLocationId": "loc_ghost",
+    "transferId": "tr_9"
+   },
+   {
+    "id": "r17_11",
+    "productId": "p_oil",
+    "qty": 204.5,
+    "date": 1790038800000,
+    "createdAt": 1790870400000,
+    "fromLocationId": "transit",
+    "toLocationId": "loc_suk",
+    "transferId": "tr_1",
+    "poId": "po_1"
+   }
+  ],
+  "orders": [
+   {
+    "id": "po_1",
+    "status": "received",
+    "locationId": "loc_suk",
+    "lines": [
+     {
+      "productId": "p_mozz",
+      "receivedQty": 50
+     },
+     {
+      "productId": "p_flour",
+      "receivedQty": 250
+     }
+    ]
+   },
+   {
+    "id": "po_2",
+    "status": "received",
+    "locationId": "loc_onnut",
+    "lines": [
+     {
+      "productId": "p_box",
+      "receivedQty": 500
+     }
+    ]
+   }
+  ],
+  "transfers": [
+   {
+    "id": "tr_1",
+    "status": "completed",
+    "fromLocationId": "loc_suk",
+    "toLocationId": "loc_onnut"
+   },
+   {
+    "id": "tr_2",
+    "status": "draft",
+    "fromLocationId": "loc_suk",
+    "toLocationId": "loc_onnut"
+   }
+  ],
+  "closedPeriods": [
+   {
+    "locationId": "loc_suk",
+    "month": "2026-09",
+    "postedAt": 1790816400000
+   },
+   {
+    "locationId": "loc_suk",
+    "month": "2026-09",
+    "postedAt": 1790834400000
+   }
+  ]
+ },
+ "expected": {
+  "schema": "pzm-integrity/1",
+  "status": "FAIL",
+  "findings": [
+   {
+    "ruleId": "INV.NO_NEGATIVE_LEDGER",
+    "severity": "critical",
+    "entity": "loc_ghost__p_box",
+    "expected": "0",
+    "actual": "-3.956",
+    "reason": "ledger balance below zero"
+   },
+   {
+    "ruleId": "INV.NO_NEGATIVE_LEDGER",
+    "severity": "critical",
+    "entity": "loc_ghost__p_flour",
+    "expected": "0",
+    "actual": "-3302",
+    "reason": "ledger balance below zero"
+   },
+   {
+    "ruleId": "INV.NO_NEGATIVE_LEDGER",
+    "severity": "critical",
+    "entity": "loc_onnut__p_flour",
+    "expected": "0",
+    "actual": "-968.75",
+    "reason": "ledger balance below zero"
+   },
+   {
+    "ruleId": "INV.NO_NEGATIVE_LEDGER",
+    "severity": "critical",
+    "entity": "loc_suk__p_ghost",
+    "expected": "0",
+    "actual": "-232.25",
+    "reason": "ledger balance below zero"
+   },
+   {
+    "ruleId": "INV.NO_NEGATIVE_LEDGER",
+    "severity": "critical",
+    "entity": "transit__p_ghost",
+    "expected": "0",
+    "actual": "-748.75",
+    "reason": "ledger balance below zero"
+   },
+   {
+    "ruleId": "INV.NO_NEGATIVE_LEDGER",
+    "severity": "critical",
+    "entity": "transit__p_oil",
+    "expected": "0",
+    "actual": "-204.5",
+    "reason": "ledger balance below zero"
+   },
+   {
+    "ruleId": "INV.TRANSFER_CONSERVATION",
+    "severity": "critical",
+    "entity": "tr_1/p_oil",
+    "expected": ">=0",
+    "actual": "-204.5",
+    "reason": "more left transit than entered it"
+   },
+   {
+    "ruleId": "INV.TRANSFER_CONSERVATION",
+    "severity": "critical",
+    "entity": "tr_9/p_ghost",
+    "expected": ">=0",
+    "actual": "-748.75",
+    "reason": "more left transit than entered it"
+   },
+   {
+    "ruleId": "INV.TRANSIT_EQ_OPEN_TRANSFERS",
+    "severity": "critical",
+    "entity": "transit__p_flour",
+    "expected": "0",
+    "actual": "993.75",
+    "reason": "transit balance differs from open transfers"
+   },
+   {
+    "ruleId": "INV.TRANSIT_EQ_OPEN_TRANSFERS",
+    "severity": "critical",
+    "entity": "transit__p_ghost",
+    "expected": "0",
+    "actual": "-748.75",
+    "reason": "transit balance differs from open transfers"
+   },
+   {
+    "ruleId": "INV.TRANSIT_EQ_OPEN_TRANSFERS",
+    "severity": "critical",
+    "entity": "transit__p_oil",
+    "expected": "0",
+    "actual": "-204.5",
+    "reason": "transit balance differs from open transfers"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_0",
+    "expected": "product",
+    "actual": "p_ghost",
+    "reason": "movement names a missing product"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_1",
+    "expected": "location",
+    "actual": "loc_ghost",
+    "reason": "movement names a missing location"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_10",
+    "expected": "product",
+    "actual": "p_ghost",
+    "reason": "movement names a missing product"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_10",
+    "expected": "location",
+    "actual": "loc_ghost",
+    "reason": "movement names a missing location"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_2",
+    "expected": "location",
+    "actual": "loc_ghost",
+    "reason": "movement names a missing location"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_3",
+    "expected": "location",
+    "actual": "loc_ghost",
+    "reason": "movement names a missing location"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_4",
+    "expected": "location",
+    "actual": "loc_ghost",
+    "reason": "movement names a missing location"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_5",
+    "expected": "location",
+    "actual": "loc_ghost",
+    "reason": "movement names a missing location"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_6",
+    "expected": "product",
+    "actual": "p_ghost",
+    "reason": "movement names a missing product"
+   },
+   {
+    "ruleId": "INV.NO_ORPHAN_LEDGER",
+    "severity": "warning",
+    "entity": "r17_6",
+    "expected": "location",
+    "actual": "loc_ghost",
+    "reason": "movement names a missing location"
+   },
+   {
+    "ruleId": "INV.AVAILABLE_LE_ONHAND",
+    "severity": "critical",
+    "entity": "loc_ghost__p_box",
+    "expected": "0..-3.956",
+    "actual": "0",
+    "reason": "reserved is outside 0..on hand"
+   },
+   {
+    "ruleId": "INV.AVAILABLE_LE_ONHAND",
+    "severity": "critical",
+    "entity": "loc_ghost__p_flour",
+    "expected": "0..-3302",
+    "actual": "0",
+    "reason": "reserved is outside 0..on hand"
+   },
+   {
+    "ruleId": "INV.AVAILABLE_LE_ONHAND",
+    "severity": "critical",
+    "entity": "loc_onnut__p_flour",
+    "expected": "0..-968.75",
+    "actual": "0",
+    "reason": "reserved is outside 0..on hand"
+   },
+   {
+    "ruleId": "INV.AVAILABLE_LE_ONHAND",
+    "severity": "critical",
+    "entity": "loc_suk__p_ghost",
+    "expected": "0..-232.25",
+    "actual": "0",
+    "reason": "reserved is outside 0..on hand"
+   },
+   {
+    "ruleId": "INV.AVAILABLE_LE_ONHAND",
+    "severity": "critical",
+    "entity": "transit__p_ghost",
+    "expected": "0..-748.75",
+    "actual": "0",
+    "reason": "reserved is outside 0..on hand"
+   },
+   {
+    "ruleId": "INV.AVAILABLE_LE_ONHAND",
+    "severity": "critical",
+    "entity": "transit__p_oil",
+    "expected": "0..-204.5",
+    "actual": "29",
+    "reason": "reserved is outside 0..on hand"
+   },
+   {
+    "ruleId": "INV.PERIOD_LOCK_CONSISTENT",
+    "severity": "critical",
+    "entity": "r17_0@loc_suk",
+    "expected": "<=1790834400000",
+    "actual": "1790845200000",
+    "reason": "filed into 2026-09 after its count was posted"
+   },
+   {
+    "ruleId": "INV.PERIOD_LOCK_CONSISTENT",
+    "severity": "critical",
+    "entity": "r17_11@loc_suk",
+    "expected": "<=1790834400000",
+    "actual": "1790870400000",
+    "reason": "filed into 2026-09 after its count was posted"
+   }
+  ]
+ }
+}
