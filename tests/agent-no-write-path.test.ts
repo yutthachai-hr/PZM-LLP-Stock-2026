@@ -28,7 +28,8 @@ function resolveImport(from: string, spec: string): string | null {
   return null
 }
 
-const specifiers = (src: string) => [...src.matchAll(IMPORT_RE)].map((m) => m[1] ?? m[2] ?? m[3])
+const imports = (src: string) => [...src.matchAll(IMPORT_RE)].map((m) => ({ spec: m[1] ?? m[2] ?? m[3], typeOnly: /^\s*(import|export)\s+type\s/.test(m[0]) }))
+const specifiers = (src: string) => imports(src).map((i) => i.spec)
 
 /** Every file reachable from src/agent through relative imports, with any bad edge found. */
 function closure() {
@@ -41,7 +42,7 @@ function closure() {
     seen.add(file)
     const rel = relative(ROOT, file).split(sep).join('/')
     const src = readFileSync(file, 'utf8')
-    for (const spec of specifiers(src)) {
+    for (const { spec, typeOnly } of imports(src)) {
       if (!spec.startsWith('.')) {
         problems.push(`${rel} imports package ${spec}`)
         continue
@@ -53,7 +54,8 @@ function closure() {
       }
       const top = relative(join(ROOT, 'src'), target).split(sep)[0]
       if (FORBIDDEN_DIRS.includes(top)) problems.push(`${rel} imports ${relative(ROOT, target).split(sep).join('/')}`)
-      else queue.push(target)
+      // A type-only import is erased at build: its target never runs, so it is not followed.
+      else if (!typeOnly) queue.push(target)
     }
     if (/\bfetch\s*\(|XMLHttpRequest|WebSocket|indexedDB|localStorage|navigator\.sendBeacon/.test(src)) problems.push(`${rel} touches the network or storage`)
   }
