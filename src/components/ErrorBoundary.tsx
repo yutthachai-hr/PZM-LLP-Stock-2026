@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useT } from '../i18n/I18nContext'
 import { Icon } from './Icon'
 import { Button } from './ui'
+import { reportError } from '../services/errorReporter'
 
 /**
  * One page that throws while drawing shows a message and a way out, instead of a blank
@@ -17,6 +18,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[page] failed to draw', error, info.componentStack)
+    reportError(error, 'render')
   }
 
   render() {

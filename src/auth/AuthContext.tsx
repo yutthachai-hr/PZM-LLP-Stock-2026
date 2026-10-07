@@ -1,4 +1,5 @@
 import { flushAuditOutbox, setAuditActor } from '../services/auditLog'
+import { setReporterRole } from '../services/errorReporter'
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   signInWithEmailAndPassword,
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // B2: whoever is signed in is who the audit log names.
   useEffect(() => {
     setAuditActor(user)
+    setReporterRole(user?.role)
     if (user) void flushAuditOutbox()
   }, [user])
   const [loading, setLoading] = useState(true)

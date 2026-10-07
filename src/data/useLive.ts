@@ -1,3 +1,4 @@
+import { reportError } from '../services/errorReporter'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { backend } from '../backend'
 import { retryDelayMs } from '../auth/profileError'
@@ -64,6 +65,8 @@ export function useLive<T>(
     let timer: ReturnType<typeof setTimeout> | undefined
     const onError = (err: unknown) => {
       const kind = liveErrorKind(err)
+      // E4: a listener the database ended. Offline is the network, not a fault worth a report.
+      if (kind !== 'offline') reportError(Object.assign(new Error(`listener ${collection}`), { name: `listener.${kind}` }), 'listener')
       setError({ collection, kind })
       setLoading(false)
       if (retriesBySelf(kind)) timer = setTimeout(() => setAttempt((n) => n + 1), retryDelayMs(++failures.current))
