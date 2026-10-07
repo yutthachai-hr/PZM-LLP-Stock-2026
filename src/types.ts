@@ -899,6 +899,8 @@ export interface NotificationAudience {
  * stock, a late order — stays `active` until it clears, and comes back only after that.
  */
 export interface AppNotification {
+  /** G18: the workflow that caused it (32 hex), when there was one. */
+  traceId?: string
   id: string
   kind: NotificationKind
   category: NotificationCategory
@@ -1482,6 +1484,8 @@ export interface AuditEntry {
   reason?: string
   /** Shared by the entries one operation writes. */
   operationId: string
+  /** G18: the workflow this entry belongs to, when it was made inside one. */
+  traceId?: string
   createdAt: number
 }
 

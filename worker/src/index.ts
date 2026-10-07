@@ -4,6 +4,20 @@ import { CRONS, runJob, type JobKind } from './jobs'
 import postgres from 'postgres'
 import { postgresClient } from '../../src/shadow/postgres'
 import { shadowSync } from './shadowSync'
+import { emit, newRequestId, newTraceId } from '../../src/lib/trace'
+
+/** G18: one trace per cron invocation, one line per job — counts and outcome, never data. */
+async function traced(stage: 'worker.shadow' | 'worker.job', name: string, work: () => Promise<Record<string, unknown>>): Promise<void> {
+  const ctx = { traceId: newTraceId(), requestId: newRequestId() }
+  const started = Date.now()
+  try {
+    const r = await work()
+    const count = typeof r.applied === 'number' ? r.applied : typeof r.written === 'number' ? r.written : undefined
+    emit({ ...ctx, stage, name, outcome: r.error ? 'error' : r.configured === false ? 'skipped' : 'ok', ms: Date.now() - started, count })
+  } catch {
+    emit({ ...ctx, stage, name, outcome: 'error', ms: Date.now() - started })
+  }
+}
 
 /**
  * pzmstock-cron: the inventory calendar's background jobs, on Cloudflare's free cron.
@@ -66,12 +80,12 @@ export default {
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (env.WORKER_ENABLED === 'false') return
     if (event.cron === SHADOW_CRON) {
-      ctx.waitUntil(runShadow(env, event.scheduledTime))
+      ctx.waitUntil(traced('worker.shadow', 'shadowSync', () => runShadow(env, event.scheduledTime)))
       return
     }
     const kind = CRONS[event.cron]
     if (!kind) return
-    ctx.waitUntil(run(env, kind, event.scheduledTime))
+    ctx.waitUntil(traced('worker.job', kind, () => run(env, kind, event.scheduledTime)))
   },
 
   async fetch(req: Request, env: Env): Promise<Response> {

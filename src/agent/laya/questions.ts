@@ -64,6 +64,8 @@ export interface LayaAnswers {
 /** What the gate sends: the text as DATA, its origin, and no identifiers it does not need. */
 export interface LayaRequest {
   requestId: string
+  /** G18: the workflow this question belongs to (32 hex), when there is one. */
+  traceId?: string
   schemaVersion: typeof QUESTION_SCHEMA
   /** The message or document text. Never executed; only classified. */
   text: string

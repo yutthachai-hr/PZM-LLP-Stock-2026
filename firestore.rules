@@ -1684,7 +1684,9 @@ service cloud.firestore {
      */
     function validAudit(docId, d) {
       return d.keys().hasOnly(['id', 'actorId', 'actorName', 'actorRole', 'action', 'entityType', 'entityId',
-          'before', 'after', 'reason', 'operationId', 'createdAt'])
+          'before', 'after', 'reason', 'operationId', 'traceId', 'createdAt'])
+        // G18: the workflow it belongs to — an id, never free text.
+        && (!('traceId' in d) || (d.traceId is string && d.traceId.matches('^[0-9a-f]{32}$')))
         && d.id == docId && docId.matches('^[0-9]{14}_[a-z0-9]{1,12}$')
         && d.actorId == request.auth.uid && d.actorRole == profile().role
         && text(d.actorName, 120)
@@ -1743,7 +1745,8 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
           'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt'])
         && d.keys().hasOnly(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
-          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt', 'resolvedAt', 'locationId', 'productId', 'supplierId'])
+          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt', 'resolvedAt', 'locationId', 'productId', 'supplierId', 'traceId'])
+        && (!('traceId' in d) || (d.traceId is string && d.traceId.matches('^[0-9a-f]{32}$')))
         && d.id == docId && text(d.kind, 40) && docId.matches('^' + d.kind + '__.+')
         && d.category in ['task', 'inventory', 'purchasing', 'supplier', 'system']
         && d.priority in ['critical', 'high', 'medium', 'info']

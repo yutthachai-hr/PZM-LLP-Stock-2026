@@ -22,6 +22,7 @@ import { billReaderAvailable, readBillPhoto, readDocumentFile } from '../service
 import { ocrFill, type OcrFill } from './receive/ocrApply'
 import { conflictsWith, resolveReceipt, supplierRank, type Candidate, type Resolution } from '../lib/supplierResolution'
 import { overrideAudit } from '../lib/supplierFeedback'
+import { beginWorkflow, currentWorkflow, endWorkflow } from '../lib/trace'
 import { newOperationId, recordAudit } from '../services/auditLog'
 import { SupplierConflicts, SupplierHint, SupplierMismatch } from './receive/SupplierHint'
 import { shownUnit } from '../lib/ledger'
@@ -295,6 +296,8 @@ export function ReceivePage() {
     if (!kitchen) await checkDuplicate()
     // The name this receipt is filed under, kept until it is filed (plan A1).
     if (!d.operationId) setD((cur) => (cur.operationId ? cur : { ...cur, operationId: genId() }))
+    // G18: from here to "filed", every call and audit entry carries one traceId.
+    if (!currentWorkflow()) beginWorkflow()
     setCloseShort(false)
     setCloseReason('')
     setReviewing(true)
@@ -329,6 +332,7 @@ export function ReceivePage() {
         // Filed already — by the attempt whose answer never came back. Nothing new was filed.
         if (result.replayed) toast.success(t('ใบรับนี้บันทึกไปแล้ว ({docNo}) — ไม่ได้บันทึกซ้ำ', { docNo: result.docNo }))
         setDone({ docNo: result.docNo, facts, exceptions: exceptions.length, outstandingLines: result.outstandingLines })
+        endWorkflow()
       } else {
         const docNo = await receiveStock({
           lines: d.lines,
@@ -341,6 +345,7 @@ export function ReceivePage() {
           photoDataUrl: photo ?? undefined,
         })
         setDone({ docNo, facts, exceptions: 0 })
+        endWorkflow()
       }
       // Filed: the form empties at once, so pressing anything again cannot file it twice.
       linkRef.current = null

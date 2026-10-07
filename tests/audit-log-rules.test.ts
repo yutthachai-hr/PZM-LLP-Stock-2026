@@ -118,3 +118,13 @@ describe('audit log: supplier-resolution overrides', () => {
     await assertFails(put(STAFF, { ...override(), actorId: MANAGER, actorRole: 'manager' }))
   })
 })
+
+// G18: an audit entry may name the workflow it belongs to — as an id, never free text.
+describe('audit log: traceId', () => {
+  test('a 32-hex traceId is accepted; anything else is refused', async () => {
+    const base = () => entry(STAFF, 'staff', { id: `${String(Date.now()).padStart(14, '0')}_tr1`, action: 'unitConversion.set', entityType: 'unitConversion' })
+    await assertSucceeds(put(STAFF, { ...base(), traceId: '0123456789abcdef0123456789abcdef' }))
+    await assertFails(put(STAFF, { ...base(), id: `${String(Date.now()).padStart(14, '0')}_tr2`, traceId: 'invoice IV-123 for FLOUR' }))
+    await assertFails(put(STAFF, { ...base(), id: `${String(Date.now()).padStart(14, '0')}_tr3`, traceId: 42 }))
+  })
+})

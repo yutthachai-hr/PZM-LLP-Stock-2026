@@ -36,6 +36,8 @@ export interface OutboxOptions {
   now: () => number
   /** A UUID per event: the idempotency key all the way to Supabase. */
   eventId: () => string
+  /** G18: the workflow, the request and the business operation this commit belongs to. */
+  trace?: { traceId: string; requestId: string; operationId?: string }
 }
 
 export interface OutboxEventDoc {
@@ -50,6 +52,10 @@ export interface OutboxEventDoc {
   /** Order of events inside one commit (they share occurredAt). */
   seq: number
   schemaVersion: 1
+  /** G18 correlation ids — present when the command arrived with (or was given) a trace. */
+  traceId?: string
+  requestId?: string
+  operationId?: string
   /** The document as committed. */
   payload: Record<string, unknown>
   replicationStatus: 'pending'
@@ -101,6 +107,7 @@ export function outboxWrites(
       createdAt: now,
       seq: seq++,
       schemaVersion: 1,
+      ...(opts.trace ? { traceId: opts.trace.traceId, requestId: opts.trace.requestId, ...(opts.trace.operationId ? { operationId: opts.trace.operationId } : {}) } : {}),
       payload,
       replicationStatus: 'pending',
       attemptCount: 0,

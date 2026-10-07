@@ -3,6 +3,7 @@ import { DELETE_FIELD, type TxContext } from '../backend/types'
 import { COL, type AppUser, type AuditEntityType, type AuditEntry, type Role } from '../types'
 
 import { assertVersion } from '../lib/concurrency'
+import { currentWorkflow, isTraceId } from '../lib/trace'
 
 /**
  * B2 — the audit log (owner approved, 6 Oct 2026): one append-only record of every change
@@ -43,6 +44,8 @@ export interface AuditInput {
   reason?: string
   /** Ties together the entries one operation writes (a supplier delete and its products). */
   operationId?: string
+  /** G18: the workflow this change belongs to; defaults to the screen's active workflow. */
+  traceId?: string
 }
 
 /** One value as stored: big values are summarised, never stored whole (images, long lists). */
@@ -85,6 +88,7 @@ export function buildAuditEntry(input: AuditInput, who: AuditActor, now: number)
     after: input.after ?? null,
     ...(input.reason?.trim() ? { reason: input.reason.trim().slice(0, 500) } : {}),
     operationId: input.operationId ?? newOperationId(),
+    ...(isTraceId(input.traceId ?? currentWorkflow()) ? { traceId: (input.traceId ?? currentWorkflow()) as string } : {}),
     createdAt: now,
   }
 }

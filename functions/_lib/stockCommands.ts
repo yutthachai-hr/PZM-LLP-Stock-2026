@@ -5,6 +5,7 @@ import { STOCK_COMMANDS } from '../../src/commands/stockCommands'
 import { BadInput, type CommandReader, type CommandSpec } from '../../src/commands/spec'
 import { brandCollection, type ServerStore } from './serverStore'
 import { runServerTx, TxConflict } from './serverTx'
+import { emit, isOperationId, type TraceContext } from '../../src/lib/trace'
 
 /**
  * The trusted command boundary for stock (ADR-001, plan A3).
@@ -39,6 +40,12 @@ export interface Reply {
 const fail = (status: number, error: string, extra: Record<string, unknown> = {}): Reply => ({ status, body: { error, ...extra } })
 const isBrand = (b: unknown): b is 'pizza' | 'lelapin' => b === 'pizza' || b === 'lelapin'
 
+/** The command's own idempotency id, when it has one (receivePO), as the trace's operationId. */
+const opIdOf = (p: unknown): string | undefined => {
+  const v = (p as { operationId?: unknown } | null)?.operationId
+  return isOperationId(v) ? v : undefined
+}
+
 async function caller(deps: StockDeps, authorization: string | null): Promise<AppUser | null> {
   const uid = await deps.verifyUser(authorization)
   if (!uid) return null
@@ -47,7 +54,18 @@ async function caller(deps: StockDeps, authorization: string | null): Promise<Ap
   return user && user.active === true ? { ...user, id: uid } : null
 }
 
-export async function runStockCommand(deps: StockDeps, name: string, authorization: string | null, body: unknown): Promise<Reply> {
+export async function runStockCommand(deps: StockDeps, name: string, authorization: string | null, body: unknown, trace?: TraceContext): Promise<Reply> {
+  const started = deps.now()
+  const reply = await runCommand(deps, name, authorization, body, trace)
+  if (trace) {
+    // G18: one line per call — ids, outcome, time. Never the parameters or the result.
+    const outcome = reply.status === 200 ? 'ok' : reply.status === 409 ? 'conflict' : reply.status >= 500 ? 'error' : 'refused'
+    emit({ ...trace, stage: 'api.command', name, outcome, code: reply.status, ms: deps.now() - started, brand: isBrand((body as { brand?: unknown } | null)?.brand) ? (body as { brand: 'pizza' | 'lelapin' }).brand : undefined })
+  }
+  return reply
+}
+
+async function runCommand(deps: StockDeps, name: string, authorization: string | null, body: unknown, trace?: TraceContext): Promise<Reply> {
   const spec = (STOCK_COMMANDS as Record<string, CommandSpec<unknown, unknown, unknown>>)[name]
   if (!spec || !Object.hasOwn(STOCK_COMMANDS, name)) return fail(404, 'no_such_command')
   const user = await caller(deps, authorization)
@@ -76,7 +94,7 @@ export async function runStockCommand(deps: StockDeps, name: string, authorizati
     const result = await runServerTx(deps.store, brand, spec, (tx) =>
       spec.run(tx, (mv, given) => tx.set(COL.movements, given ?? deps.makeId(), mv as Record<string, unknown>), params, actor, ctx),
       5,
-      deps.eventId ? { now: deps.now, eventId: deps.eventId } : undefined,
+      deps.eventId ? { now: deps.now, eventId: deps.eventId, ...(trace ? { trace: { ...trace, ...(opIdOf(params) ? { operationId: opIdOf(params) } : {}) } } : {}) } : undefined,
     )
     return { status: 200, body: { result } }
   } catch (e) {

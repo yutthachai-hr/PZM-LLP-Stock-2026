@@ -1622,6 +1622,11 @@ describe('notifications', () => {
     await assertFails(setDoc(doc(as(STAFF), 'notifications/taskApproval__e4__1'), note('taskApproval__e4__1', { readBy: { [MANAGER]: 1 } })))
   })
 
+  test('G18: a notification may name the workflow that caused it — an id, never free text', async () => {
+    await assertSucceeds(setDoc(doc(as(STAFF), 'notifications/taskApproval__e5__1'), note('taskApproval__e5__1', { traceId: '0123456789abcdef0123456789abcdef' })))
+    await assertFails(setDoc(doc(as(STAFF), 'notifications/taskApproval__e6__1'), note('taskApproval__e6__1', { traceId: 'see invoice IV-1' })))
+  })
+
   test('staff record their own PO send (5 Oct 2026); managers write the risk alerts', async () => {
     await assertSucceeds(setDoc(doc(as(STAFF), 'notifications/poSent__po1__2'), note('poSent__po1__2', { category: 'purchasing', priority: 'info' })))
     await assertFails(setDoc(doc(as(STAFF), 'notifications/deliveryRisk__po1__HIGH'), note('deliveryRisk__po1__HIGH', { category: 'purchasing', priority: 'high' })))

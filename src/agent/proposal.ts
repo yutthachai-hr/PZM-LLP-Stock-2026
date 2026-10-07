@@ -69,6 +69,8 @@ export interface ActionProposal {
   unresolved?: { field: string; candidates?: string[] }[]
   createdAt: number
   inputsAsOf: number
+  /** G18: the workflow that produced it (32 hex). Optional and additive: older proposals stay valid. */
+  traceId?: string
   integrity: { alg: 'fnv1a-64'; hash: string }
 }
 
@@ -175,13 +177,14 @@ export function parseProposal(raw: unknown): ParseResult {
   // Own keys only: JSON.parse makes a "__proto__" key an own property, which this catches.
   if (hasBannedKey(raw)) return { ok: false, errors: ['prototype key'] }
   const r = raw as Record<string, unknown>
-  const allowed = ['schemaVersion', 'proposalId', 'operationIntentId', 'actor', 'proposedBy', 'actionType', 'entityIds', 'parameters', 'reason', 'evidence', 'untrusted', 'unresolved', 'createdAt', 'inputsAsOf', 'integrity']
+  const allowed = ['schemaVersion', 'proposalId', 'operationIntentId', 'actor', 'proposedBy', 'actionType', 'entityIds', 'parameters', 'reason', 'evidence', 'untrusted', 'unresolved', 'createdAt', 'inputsAsOf', 'traceId', 'integrity']
   for (const k of Object.keys(r)) if (!allowed.includes(k)) err(`unknown field ${k}`)
   if (r.schemaVersion !== PROPOSAL_SCHEMA) err('schemaVersion')
   if (typeof r.proposalId !== 'string' || !PID.test(r.proposalId)) err('proposalId')
   if (typeof r.operationIntentId !== 'string' || !PID.test(r.operationIntentId)) err('operationIntentId')
   const epoch = (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 4_102_444_800_000
   if (!epoch(r.createdAt)) err('createdAt')
+  if (r.traceId !== undefined && (typeof r.traceId !== 'string' || !/^[0-9a-f]{32}$/.test(r.traceId))) err('traceId')
   if (!epoch(r.inputsAsOf)) err('inputsAsOf')
   if (epoch(r.createdAt) && epoch(r.inputsAsOf) && (r.inputsAsOf as number) > (r.createdAt as number)) err('inputsAsOf after createdAt')
 

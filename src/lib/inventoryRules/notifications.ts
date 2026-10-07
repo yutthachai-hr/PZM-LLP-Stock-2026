@@ -626,7 +626,7 @@ export interface WritePlan {
   resolve: string[]
 }
 
-export function toDoc(d: NotificationDraft, now: number, source: AppNotification['source'], createdBy: string): AppNotification {
+export function toDoc(d: NotificationDraft, now: number, source: AppNotification['source'], createdBy: string, traceId?: string | null): AppNotification {
   const doc: AppNotification = {
     id: d.id,
     kind: d.kind,
@@ -646,6 +646,8 @@ export function toDoc(d: NotificationDraft, now: number, source: AppNotification
   if (d.locationId) doc.locationId = d.locationId
   if (d.productId) doc.productId = d.productId
   if (d.supplierId) doc.supplierId = d.supplierId
+  // G18: the workflow that caused it, when there was one (an id, checked by the rules too).
+  if (traceId && /^[0-9a-f]{32}$/.test(traceId)) doc.traceId = traceId
   return doc
 }
 

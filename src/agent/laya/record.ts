@@ -15,6 +15,8 @@ export const RECORD_SCHEMA = 'laya-decision/1' as const
 export interface LayaDecisionRecord {
   schema: typeof RECORD_SCHEMA
   requestId: string
+  /** G18: the workflow, when the request carried one. */
+  traceId?: string
   questionSchema: typeof QUESTION_SCHEMA
   model: { name: string; checkpoint: string } | null
   source: LayaRequest['source']
@@ -35,6 +37,7 @@ export function decisionRecord(req: LayaRequest, gate: GateResult, decision: Rou
   return {
     schema: RECORD_SCHEMA,
     requestId: req.requestId,
+    ...(req.traceId && /^[0-9a-f]{32}$/.test(req.traceId) ? { traceId: req.traceId } : {}),
     questionSchema: req.schemaVersion,
     model: gate.model ? { name: gate.model.name, checkpoint: gate.model.checkpoint } : null,
     source: req.source,

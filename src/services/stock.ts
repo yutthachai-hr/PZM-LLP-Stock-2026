@@ -41,6 +41,7 @@ import {
   type PlanReceiveParams,
 } from '../commands/ledgerTx'
 export * from '../commands/ledgerTx'
+import { activeTraceId, emit, newRequestId, traceHeaders } from '../lib/trace'
 import {
   QTY_STEP,
   requireQty,
@@ -135,11 +136,15 @@ export const NOT_SENT = Symbol('not-sent')
 export async function callCommand<R>(name: string, params: unknown, brand = getBrand()): Promise<R | typeof NOT_SENT> {
   if (BACKEND_MODE !== 'cloud' || !commandOn(name)) return NOT_SENT
   const { authHeader } = await import('./poImages')
+  // G18: the workflow this call belongs to (or a fresh one), and an id for this one call.
+  const trace = { traceId: activeTraceId(), requestId: newRequestId() }
+  const started = Date.now()
   const res = await fetch(`/api/stock/${name}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...(await authHeader()) },
+    headers: { 'content-type': 'application/json', ...(await authHeader()), ...traceHeaders(trace) },
     body: JSON.stringify({ brand, params }),
   })
+  emit({ ...trace, stage: 'app.call', name, outcome: res.ok ? 'ok' : res.status === 409 ? 'conflict' : res.status >= 500 ? 'error' : 'refused', code: res.status, ms: Date.now() - started, brand })
   if (res.status === 503) return NOT_SENT
   const out = (await res.json().catch(() => ({}))) as { result?: R; error?: string; key?: string; vars?: Record<string, string | number> }
   if (res.status === 422 && out.key) throw new AppError(out.key, out.vars)

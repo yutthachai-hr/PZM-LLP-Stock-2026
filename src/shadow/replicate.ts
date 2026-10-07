@@ -1,6 +1,7 @@
 import { mapDoc, type Brand, type Entity } from './mapping'
 import { applyPlan, type SqlClient } from './writer'
 import { supported } from '../lib/concurrency'
+import { isOperationId, isRequestId, isTraceId } from '../lib/trace'
 
 /**
  * The outbox consumer: Firestore commit → `outbox/{eventId}` (same transaction) → here.
@@ -24,6 +25,10 @@ export interface OutboxEvent {
   entityVersion?: number
   occurredAt: number
   schemaVersion?: number
+  /** G18 correlation ids, when the event came from a traced command. */
+  traceId?: string
+  requestId?: string
+  operationId?: string
   /** The document as committed, or `{ deleted: true }`. */
   payload: Record<string, unknown>
 }
@@ -32,10 +37,14 @@ export async function ingest(db: SqlClient, events: readonly OutboxEvent[]): Pro
   let added = 0
   for (const e of events) {
     const r = await db.query(
-      `insert into shadow.outbox_events (event_id, brand, event_type, entity_type, entity_id, entity_version, occurred_at, schema_version, payload)
-       values ($1, $2, $3, $4, $5, $6, to_timestamp($7 / 1000.0), $8, $9::jsonb)
+      `insert into shadow.outbox_events (event_id, brand, event_type, entity_type, entity_id, entity_version, occurred_at, schema_version, payload, trace_id, request_id, operation_id)
+       values ($1, $2, $3, $4, $5, $6, to_timestamp($7 / 1000.0), $8, $9::jsonb, $10, $11, $12)
        on conflict (event_id) do nothing returning 1 as ok`,
-      [e.eventId, e.brand, e.eventType, e.entityType, e.entityId, e.entityVersion ?? null, e.occurredAt, e.schemaVersion ?? 1, JSON.stringify(e.payload)],
+      [
+        e.eventId, e.brand, e.eventType, e.entityType, e.entityId, e.entityVersion ?? null, e.occurredAt, e.schemaVersion ?? 1, JSON.stringify(e.payload),
+        // An id that is not id-shaped is dropped, never stored (the table checks the shape too).
+        isTraceId(e.traceId) ? e.traceId : null, isRequestId(e.requestId) ? e.requestId : null, isOperationId(e.operationId) ? e.operationId : null,
+      ],
     )
     added += r.rows.length
   }

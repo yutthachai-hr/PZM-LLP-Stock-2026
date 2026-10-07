@@ -89,6 +89,10 @@ export async function shadowSync(store: Store, sql: SqlClient, now: number): Pro
         occurredAt: Number(e.occurredAt ?? (e as { createdAt?: number }).createdAt ?? now),
         schemaVersion: e.schemaVersion ?? 1,
         payload: e.payload,
+        // G18: the command's trace, carried to the shadow row.
+        ...(e.traceId ? { traceId: e.traceId } : {}),
+        ...(e.requestId ? { requestId: e.requestId } : {}),
+        ...(e.operationId ? { operationId: e.operationId } : {}),
       }))
     report.ingested += await ingest(sql, events)
     const newest = Math.max(since, ...outbox.map((e) => Number((e as { createdAt?: number }).createdAt ?? 0)))

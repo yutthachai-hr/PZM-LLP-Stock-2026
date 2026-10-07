@@ -3,6 +3,7 @@ import { backend } from '../backend'
 import { getBrand, onBrandChange } from '../brand/brand'
 import { toDoc, type NotificationDraft, type WritePlan } from '../lib/inventoryRules/notifications'
 import { COL, type AppNotification, type NotificationCategory, type NotificationPrefs, type NotificationPriority } from '../types'
+import { currentWorkflow } from '../lib/trace'
 
 /**
  * Notifications as the app writes them.
@@ -40,7 +41,7 @@ export async function deliver(draft: NotificationDraft, actor: { id: string }): 
   try {
     const db = scoped()
     if (await db.getOne(COL.notifications, draft.id)) return
-    await db.set(COL.notifications, draft.id, toDoc(draft, Date.now(), 'client', actor.id) as unknown as Record<string, unknown>)
+    await db.set(COL.notifications, draft.id, toDoc(draft, Date.now(), 'client', actor.id, currentWorkflow()) as unknown as Record<string, unknown>)
   } catch {
     // see above
   }
