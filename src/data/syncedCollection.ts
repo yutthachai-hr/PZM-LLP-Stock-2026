@@ -5,6 +5,17 @@ import { useLive } from './useLive'
 import { liveErrorKind, type LiveFailure } from './liveError'
 import { onReturnFromLongAbsence } from './readMeter'
 import { clearCopies, FULL_EVERY_MS, readCopy, SKEW_MS, writeCopy } from './deviceStore'
+import { noteSeed } from './readMeter'
+import { deltaStart, postgrestTransport, SEED_ENTITIES, seedConfig, seedFromShadow, seedMayReplaceFullRead, type SeedEntity } from './shadowSeed'
+
+/** The pilot's transport, built once (null = off: the default, and every build without it). */
+const seedCfg = seedConfig()
+const seedTransport = seedCfg
+  ? postgrestTransport(seedCfg, async () => {
+      const { getAuthInstance } = await import('../firebase/app')
+      return (await getAuthInstance().currentUser?.getIdToken()) ?? null
+    })
+  : null
 
 /**
  * A whole collection kept on this device, refreshed by what CHANGED since the last sync
@@ -170,6 +181,8 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
     const db = backend.forBrand(brand)
     const held = new Map<string, T>()
     let fullAt = 0
+    // Set after a seed from the shadow: the delta must start no later than the shadow's proof.
+    let seededThrough: number | null = null
     // A row whose window field has fallen behind the window (last week's ledger) is dropped.
     const keep = (d: T) => winField === undefined || Number((d as Record<string, unknown>)[winField] ?? 0) >= (winFrom ?? 0)
     const prune = () => {
@@ -195,31 +208,49 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
         emit()
         setLoading(false)
       } else {
-        try {
-          const all =
-            winField !== undefined
-              ? await db.getRange<T>(collection, winField, winFrom ?? 0, Number.MAX_SAFE_INTEGER, { label: `${label}.full` })
-              : await db.getAll<T>(collection, { label: `${label}.full` })
+        // P1 pilot: a device with no copy (or an old one) may take it from the shadow.
+        const entity = collection as SeedEntity
+        if (seedTransport && seedCfg?.brands.includes(brand) && winField === undefined && SEED_ENTITIES.includes(entity) && seedMayReplaceFullRead(snap, epoch)) {
+          const seeded = await seedFromShadow<T>(seedTransport, brand, entity, Date.now(), epoch)
           if (stopped) return
-          for (const d of all) held.set(d.id, d)
-          fullAt = Date.now()
-          emit()
-          persist()
-        } catch (err) {
-          // Offline or refused: what was held (nothing) stands; said on screen (C1).
-          fail(err)
+          noteSeed(`${label}.seed`, seeded.ok ? seeded.docs.length : 0, seeded.ok ? 'used' : seeded.reason)
+          if (seeded.ok) {
+            for (const d of seeded.docs) held.set(d.id, d)
+            seededThrough = seeded.completeThrough
+            fullAt = Date.now()
+            emit()
+            setLoading(false)
+            // Not persisted until Firestore's first delta has been folded in.
+          }
+        }
+        if (seededThrough === null) {
+          try {
+            const all =
+              winField !== undefined
+                ? await db.getRange<T>(collection, winField, winFrom ?? 0, Number.MAX_SAFE_INTEGER, { label: `${label}.full` })
+                : await db.getAll<T>(collection, { label: `${label}.full` })
+            if (stopped) return
+            for (const d of all) held.set(d.id, d)
+            fullAt = Date.now()
+            emit()
+            persist()
+          } catch (err) {
+            // Offline or refused: what was held (nothing) stands; said on screen (C1).
+            fail(err)
+          }
         }
         setLoading(false)
       }
       const listen = () => {
         for (const field of fields.split(',')) {
-          const since = Math.max(0, newestOf(held.values() as Iterable<Record<string, unknown>>, field) - SKEW_MS)
+          const since = deltaStart(newestOf(held.values() as Iterable<Record<string, unknown>>, field), seededThrough, SKEW_MS)
           let window = new Set<string>()
           unsubs.push(
             db.subscribe<T>(
               collection,
               (docs) => {
                 window = mergeDelta(held, window, docs)
+                seededThrough = null
                 prune()
                 emit()
                 persist()

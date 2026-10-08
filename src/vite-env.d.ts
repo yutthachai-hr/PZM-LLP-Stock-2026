@@ -33,4 +33,13 @@ interface ImportMetaEnv {
    * writes for good (Phase A-sec's last step).
    */
   readonly VITE_STOCK_COMMANDS?: string
+  /**
+   * Cold-start seed pilot (src/data/shadowSeed.ts). Off unless '1' AND a Supabase URL,
+   * a publishable key and at least one brand in VITE_SHADOW_SEED_BRANDS are set.
+   */
+  readonly VITE_SHADOW_SEED?: string
+  readonly VITE_SHADOW_SEED_BRANDS?: string
+  readonly VITE_SUPABASE_URL?: string
+  /** The project's PUBLISHABLE (anon) key — never the service role. */
+  readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string
 }

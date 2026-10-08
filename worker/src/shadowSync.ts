@@ -63,6 +63,27 @@ export async function stableEventId(key: string): Promise<string> {
 
 type Doc = Record<string, unknown> & { id: string }
 
+/** The collections a device may seed from the shadow (0008), and their shadow event entity. */
+export const SEEDABLE = ['products', 'stockLevels'] as const
+
+/** Write the completeness watermark of each seedable collection (see 0008_seed_watermarks.sql). */
+export async function recordWatermarks(sql: SqlClient, cursor: ShadowCursor): Promise<void> {
+  for (const { brand } of SHADOW_BRANDS) {
+    for (const entity of SEEDABLE) {
+      const at = cursor.at[`${brand}:${entity}`]
+      if (!at) continue
+      await sql.query(
+        `insert into shadow.sync_watermarks (brand, entity, complete_through, unresolved, synced_at)
+         values ($1, $2, $3, (select count(*) from shadow.outbox_events
+                              where brand = $1 and entity_type = $2 and replication_status in ('pending', 'failed', 'dead')), now())
+         on conflict (brand, entity) do update set complete_through = excluded.complete_through,
+           unresolved = excluded.unresolved, synced_at = excluded.synced_at`,
+        [brand, entity, Math.max(0, at - SKEW_MS)],
+      )
+    }
+  }
+}
+
 const stampOf = (d: Record<string, unknown>): number => (typeof d.updatedAt === 'number' ? d.updatedAt : typeof d.createdAt === 'number' ? d.createdAt : 0)
 
 export async function shadowSync(store: Store, sql: SqlClient, now: number): Promise<ShadowReport> {
@@ -149,6 +170,11 @@ export async function shadowSync(store: Store, sql: SqlClient, now: number): Pro
   report.stale = r.stale
   report.failed = r.failed
   report.dead = r.dead
+
+  // 4b. The seed pilot's proof (migration 0008): per brand and collection, everything stamped
+  //     before the cursor less the clock margin is in, and how many of its events are
+  //     unresolved. A device seeds only from a collection with 0 unresolved.
+  await recordWatermarks(sql, cursor)
 
   // 5. Remember where we are; forget what is long replicated.
   await store.write([
