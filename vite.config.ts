@@ -2,12 +2,18 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { buildTier } from './src/lib/deployTier.ts'
 
-// The `demo` branch on Cloudflare Pages is the public demo: browser storage only, never the
-// live Firebase project. Pages sets CF_PAGES_BRANCH while building and, with a
-// wrangler.toml present, takes no plain build variables from its dashboard — so the flag
-// is derived here. Locally `npm run demo` sets it through .env.demo instead.
-if (process.env.CF_PAGES_BRANCH === 'demo') process.env.VITE_DEMO_MODE = '1'
+// P0 preview isolation (owner, 8 Oct 2026): on Cloudflare Pages only the production branch
+// (`main`) builds against the live Firebase project. Every other branch — the public `demo`,
+// and every preview — builds in demo mode (browser storage only), and a Pages build that does
+// not say which branch it is fails instead of guessing (src/lib/deployTier.ts). Pages sets
+// CF_PAGES_BRANCH while building and, with a wrangler.toml present, takes no plain build
+// variables from its dashboard — so the flag is derived here. Locally `npm run demo` sets it
+// through .env.demo instead. The functions are guarded separately, by host (functions/_lib/previewGuard.ts).
+const tier = buildTier(process.env)
+if (tier === 'preview') process.env.VITE_DEMO_MODE = '1'
+process.env.VITE_DEPLOY_TIER = tier
 // The test-only emulator switch (.env.e2e) must never reach a Pages build.
 if (process.env.CF_PAGES && process.env.VITE_USE_EMULATOR) throw new Error('VITE_USE_EMULATOR is for the local Playwright tests only')
 
