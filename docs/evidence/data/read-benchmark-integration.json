@@ -1,0 +1,309 @@
+{
+ "label": "run",
+ "sizes": {
+  "products": 460,
+  "locations": 3,
+  "levels": 1400,
+  "overrides": 50,
+  "suppliers": 30,
+  "movementsPerDay": 60,
+  "days": 45,
+  "ordersPerDay": 1,
+  "notificationsPerDay": 40
+ },
+ "coldStart.dashboard": {
+  "client": 3007,
+  "server": 0,
+  "total": 3007,
+  "byCollection": {
+   "users": 1,
+   "inventorySchedules": 7,
+   "meta": 3,
+   "locations": 3,
+   "stockEvents": 3,
+   "messages": 2,
+   "notifications": 435,
+   "suppliers": 31,
+   "products": 471,
+   "stockLevels": 1399,
+   "stockMovements": 472,
+   "productMinOverrides": 51,
+   "transfers": 5,
+   "purchaseOrders": 122,
+   "purchaseRequests": 2
+  }
+ },
+ "warm./products": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "warm./receive": {
+  "client": 14,
+  "server": 0,
+  "total": 14,
+  "byCollection": {
+   "purchaseOrders": 14
+  }
+ },
+ "warm./orders": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "warm./movements": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "warm./suppliers/performance": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "warm./calendar": {
+  "client": 6,
+  "server": 0,
+  "total": 6,
+  "byCollection": {
+   "stockEvents": 1,
+   "purchaseOrders": 2,
+   "purchaseRequests": 3
+  }
+ },
+ "warm./inbox": {
+  "client": 24,
+  "server": 0,
+  "total": 24,
+  "byCollection": {
+   "purchaseOrders": 16,
+   "purchaseRequests": 2,
+   "transfers": 2,
+   "monthlyCounts": 4
+  }
+ },
+ "warm./products/p1/card": {
+  "client": 22,
+  "server": 0,
+  "total": 22,
+  "byCollection": {
+   "purchaseOrders": 16,
+   "purchaseRequests": 2,
+   "transfers": 2,
+   "stockMovements": 2
+  }
+ },
+ "routeSwitching.secondRound": {
+  "client": 61,
+  "server": 0,
+  "total": 61,
+  "byCollection": {
+   "transfers": 7,
+   "purchaseOrders": 46,
+   "purchaseRequests": 4,
+   "monthlyCounts": 4
+  }
+ },
+ "notifications.openBell": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "reconnect.inSession": {
+  "client": 0,
+  "server": 0,
+  "total": 0,
+  "byCollection": {}
+ },
+ "secondTab.dashboard": {
+  "client": 60,
+  "server": 0,
+  "total": 60,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "inventorySchedules": 7,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1,
+   "notifications": 11,
+   "transfers": 2
+  }
+ },
+ "cold./products": {
+  "client": 58,
+  "server": 0,
+  "total": 58,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "inventorySchedules": 7,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1
+  }
+ },
+ "cold./receive": {
+  "client": 72,
+  "server": 0,
+  "total": 72,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "inventorySchedules": 7,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1,
+   "purchaseOrders": 14
+  }
+ },
+ "cold./orders": {
+  "client": 59,
+  "server": 0,
+  "total": 59,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "inventorySchedules": 7,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1,
+   "purchaseOrders": 1
+  }
+ },
+ "cold./movements": {
+  "client": 58,
+  "server": 0,
+  "total": 58,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "inventorySchedules": 7,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1
+  }
+ },
+ "cold./suppliers/performance": {
+  "client": 59,
+  "server": 0,
+  "total": 59,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1,
+   "transfers": 1
+  }
+ },
+ "cold./calendar": {
+  "client": 61,
+  "server": 0,
+  "total": 61,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "inventorySchedules": 7,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "stockEvents": 3,
+   "messages": 2,
+   "suppliers": 1,
+   "purchaseRequests": 1
+  }
+ },
+ "cold./inbox": {
+  "client": 82,
+  "server": 0,
+  "total": 82,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "inventorySchedules": 7,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 2,
+   "productMinOverrides": 1,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1,
+   "purchaseOrders": 16,
+   "purchaseRequests": 2,
+   "transfers": 2,
+   "monthlyCounts": 4
+  }
+ },
+ "cold./products/p1/card": {
+  "client": 80,
+  "server": 0,
+  "total": 80,
+  "byCollection": {
+   "users": 1,
+   "meta": 1,
+   "locations": 3,
+   "notifications": 11,
+   "products": 9,
+   "stockLevels": 19,
+   "stockMovements": 4,
+   "productMinOverrides": 1,
+   "inventorySchedules": 7,
+   "stockEvents": 1,
+   "messages": 2,
+   "suppliers": 1,
+   "purchaseOrders": 16,
+   "purchaseRequests": 2,
+   "transfers": 2
+  }
+ },
+ "liveListenersOnSettings": {
+  "active": 9
+ }
+}

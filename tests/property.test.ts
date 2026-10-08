@@ -1,7 +1,10 @@
 // G21 — property-based tests: the invariants hold for generated inputs, not only the examples.
 // fast-check, seeded so a failure reproduces; each property runs NUM_RUNS cases.
 import fc from 'fast-check'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
+
+// 10,000 generated cases per property (G21) take longer than vitest's 5 s default.
+vi.setConfig({ testTimeout: 120_000 })
 import { balancesFromLedger } from '../src/lib/levelKey'
 import { checkIntegrity, INTEGRITY_SCHEMA, type IntegritySnapshot } from '../src/agent/integrityReference'
 import { canonicalJson, proposalHash, seal } from '../src/agent/proposal'
@@ -12,7 +15,7 @@ import { check, MACHINES, type Machine } from '../src/lib/workflow'
 import type { StockMovement } from '../src/types'
 
 const SEED = 20261007
-const NUM_RUNS = 2000
+const NUM_RUNS = 10_000
 const opts = { seed: SEED, numRuns: NUM_RUNS }
 
 // ---------------------------------------------------------------- the ledger ----
@@ -100,7 +103,7 @@ describe('business guard', () => {
         expect(b.decision).toBe(a.decision)
         expect(b.results.filter((r) => r.ruleId !== 'G.INTEGRITY.HASH')).toEqual(a.results.filter((r) => r.ruleId !== 'G.INTEGRITY.HASH'))
       }),
-      { ...opts, numRuns: 500 },
+      opts,
     )
   })
   test('monotone in quantity: once a transfer is refused for the source, more is refused too', () => {
@@ -110,7 +113,7 @@ describe('business guard', () => {
         const b = guard(JSON.parse(JSON.stringify(xfer(q + extra))), W)
         if (a.decision === 'DENY') expect(b.decision).toBe('DENY')
       }),
-      { ...opts, numRuns: 500 },
+      opts,
     )
   })
   test('the hash is the same whatever order the keys arrive in', () => {
@@ -172,7 +175,7 @@ describe('workflow machines', () => {
             expect(m.states).toContain(state)
           }
         }),
-        { ...opts, numRuns: 300 },
+        opts,
       )
     }
   })

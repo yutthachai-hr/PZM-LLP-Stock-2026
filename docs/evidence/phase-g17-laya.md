@@ -132,3 +132,33 @@ only cost.** The incremental value of Laya, Kat or Reflex has to come from:
    block on the production host. Prefer CPU if it meets the latency need.
 4. Run shadow only: record a `laya-decision/1` for every request, route nothing, and compare
    with the outcomes.
+
+## Update 8 Oct 2026
+
+- **Canonical sources:** see `docs/agent-safety/02-upstream-verification.md`.
+  - Laya is `NandhaKishorM/laya`. laya.aay.sh is a different project.
+  - Checkpoints are pinned by Hugging Face SHA.
+  - Nothing is installed yet.
+- **Status unchanged:** Laya is still **NOT EVALUATED**, and arms B–G are NOT_RUN. No numbers
+  have been produced for components that are not here.
+
+### laya-v2: collecting real traffic (the tool is ready; the data is the owner's)
+
+`npm run laya:collect -- --in <exports> --names <names.json outside the repo>`
+
+1. **Export.** Put LINE/chat logs (`line-*.txt`, `chat-*.txt`), OCR'd bills (`ocr-*.txt`,
+   `invoice-*.txt`, one document per blank-line block) and supplier notes
+   (`supplier_note-*.txt`) in a folder **outside the repo**.
+2. **Anonymise** (`src/agent/safety/anonymise.ts`, 7 tests). Replaced with typed placeholders:
+   phones, e-mails, LINE ids, national/tax ids, bank accounts, URLs, @mentions, money amounts,
+   and every person, supplier or branch name listed in `names.json`. Products, quantities,
+   units and SKUs stay, because they are the task. Only counts of what was replaced are
+   reported, never the values.
+3. **Review every row.** A name that is not listed is **not** caught by pattern. The tool
+   writes `datasets/agent-safety/laya-v2/unreviewed.jsonl` with `reviewed: false` and empty
+   labels, plus a first guess at language and input class.
+4. **Label** intent, completeness, risk, injection, route and escalation. Then move the row to
+   `labelled.jsonl` with `reviewed: true`. Only reviewed rows are benchmarked.
+5. **Target mix:** Thai, English, mixed, OCR noise, supplier terminology and ambiguous
+   instructions, a few hundred rows in total, with injections taken from real documents where
+   they exist.

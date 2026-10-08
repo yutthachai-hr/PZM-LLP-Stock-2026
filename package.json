@@ -34,7 +34,8 @@
     "verify": "node scripts/verify.mjs",
     "laya:bench": "node scripts/laya-bench.mjs",
     "integrity:diff": "node scripts/integrity-diff.mjs",
-    "mutation": "stryker run"
+    "mutation": "stryker run",
+    "laya:collect": "node scripts/laya-v2-collect.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.31.0",

@@ -233,5 +233,5 @@ export function markLongAbsence(): void {
 }
 
 if (typeof window !== 'undefined') {
-  ;(window as unknown as { __pzmReads?: unknown }).__pzmReads = { tally: readTally, reset: resetReadTally, markLongAbsence }
+  ;(window as unknown as { __pzmReads?: unknown }).__pzmReads = { tally: readTally, reset: resetReadTally, markLongAbsence, listeners: () => ({ active: state.active }) }
 }

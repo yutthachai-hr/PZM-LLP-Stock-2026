@@ -72,7 +72,7 @@ fn snap(v: &Value) -> Snapshot {
 
 #[test]
 fn caught_up_levels_never_drift() {
-    for seed in 1..=500u64 {
+    for seed in 1..=10_000u64 {
         let mut rng = Rng(seed * 0x9E37_79B9_7F4A_7C15);
         let v = consistent(&mut rng);
         let drift: Vec<_> = check(&snap(&v)).findings.into_iter().filter(|f| f.rule_id == "INV.LEVEL_EQ_LEDGER").collect();
@@ -82,7 +82,7 @@ fn caught_up_levels_never_drift() {
 
 #[test]
 fn one_changed_level_is_reported_exactly() {
-    for seed in 1..=500u64 {
+    for seed in 1..=10_000u64 {
         let mut rng = Rng(seed * 0xD1B5_4A32_D192_ED03);
         let mut v = consistent(&mut rng);
         let levels = v["levels"].as_array_mut().unwrap();
@@ -100,7 +100,7 @@ fn one_changed_level_is_reported_exactly() {
 
 #[test]
 fn movement_order_does_not_change_the_report() {
-    for seed in 1..=300u64 {
+    for seed in 1..=10_000u64 {
         let mut rng = Rng(seed * 0xA076_1D64_78BD_642F);
         let v = consistent(&mut rng);
         let mut w = v.clone();
@@ -115,7 +115,7 @@ fn movement_order_does_not_change_the_report() {
 
 #[test]
 fn never_panics_on_odd_but_well_formed_input() {
-    for seed in 1..=300u64 {
+    for seed in 1..=10_000u64 {
         let mut rng = Rng(seed * 0xE703_7ED1_A0B4_28DB);
         let mut v = consistent(&mut rng);
         // Odd shapes: a transit location, a missing product, NaN and zero rates, a lock.

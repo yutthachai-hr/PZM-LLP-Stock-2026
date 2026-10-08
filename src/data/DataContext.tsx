@@ -178,7 +178,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const live = new Set(liveMovements.map((m) => m.id))
     return overlayRecent([...older.filter((m) => !live.has(m.id)), ...liveMovements], recent)
   }, [older, liveMovements, recent])
-  const overridesLive = useLive<MinOverride>(COL.minOverrides, { label: 'minOverrides.bootstrap' })
+  // Written only by a restore, which bumps the epoch: kept on the device and read whole weekly or
+  // on a bump — not read in full on every cold open (+50 reads a page in the 8 Oct benchmark).
+  const overridesLive = useSynced<MinOverride>(COL.minOverrides, { label: 'minOverrides', fullEvery: 7 * DAY, epoch: ep('productMinOverrides') })
   const minOverrides = overridesLive.data
   const usersLive = useLive<AppUser>(COL.users, { enabled: isAdmin, label: 'users.bootstrap' })
   const users = usersLive.data

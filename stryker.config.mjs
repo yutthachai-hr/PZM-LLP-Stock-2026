@@ -5,7 +5,7 @@
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   testRunner: 'vitest',
-  vitest: { configFile: 'vitest.config.ts', related: true },
+  vitest: { configFile: 'vitest.mutation.config.ts', related: false },
   mutate: [
     'src/agent/guard.ts',
     'src/lib/concurrency.ts',
@@ -13,7 +13,8 @@ export default {
     'src/lib/supplierResolution.ts',
     'src/lib/trace.ts',
   ],
-  coverageAnalysis: 'perTest',
+  // Off: see vitest.mutation.config.ts for why per-test filtering is not used here.
+  coverageAnalysis: 'off',
   concurrency: 4,
   timeoutMS: 30000,
   reporters: ['clear-text', 'progress', 'json'],

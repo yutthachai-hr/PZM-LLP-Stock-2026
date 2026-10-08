@@ -1,5 +1,55 @@
 # Inventory Pzm — สรุปส่งต่องาน
 
+## 0. สถานะปัจจุบัน — อ่านส่วนนี้ก่อน (อัปเดต 8 ต.ค. 2569)
+
+> ส่วนนี้คือความจริง ณ ปัจจุบัน หัวข้ออื่นข้างล่าง (§1 เป็นต้นไป) เป็นประวัติ ซึ่งอาจล้าสมัยแล้ว ถ้าข้อมูลขัดกัน ให้เชื่อส่วนนี้
+
+| เรื่อง | ค่าปัจจุบัน |
+|---|---|
+| Repo หลัก | `github.com/yutthachai-hr/PZM-LLP-Stock-2026` ⚠ **public** บน GitHub (ข้อความใน §1 ที่ว่า private ล้าสมัยแล้ว) |
+| Branch ที่ใช้รวมงาน | **`integration/ops-os-rc1`** (สร้าง 8 ต.ค. จาก `claude/phase-a-ledger-continue-uzbbb5`) ยังอยู่ในเครื่องเท่านั้น **ยังไม่ push** (เหตุผลดูข้อ ⚠ preview ข้างล่าง) |
+| HEAD ของ integration | ดู `git log -1 integration/ops-os-rc1` ส่วน merge `main` คือ `ba753aa` |
+| Branch งานของ Claude | `claude/phase-a-ledger-continue-uzbbb5` · บน GitHub อยู่ที่ `2ae7bbb` · ในเครื่องอยู่ที่ `99ef7ea` (มี commit G25/G18/G19/G21 ที่ยังไม่ push) |
+| Production `main` | **`2a8d578`** (merge perf/firestore-read-budget, 6 ต.ค.) |
+| ที่ deploy แล้ว | เว็บ: Cloudflare Pages build `main` ให้อัตโนมัติไปที่ `https://pzmstock.pages.dev` (ถ้าอยู่บน `main` ถือว่า deploy แล้ว) |
+| ที่ยังไม่ยืนยัน | rules + indexes ของ `2a8d578` (`audienceKeys`, notification index) ซึ่งหลักฐานของ main กำหนดให้ deploy *ก่อน* merge **เจ้าของต้องยืนยันว่า deploy แล้ว** ถ้ายังไม่ได้ deploy กระดิ่งแจ้งเตือนจะ fallback ไปจำกัดที่ 60 รายการ |
+| ที่ยังไม่ deploy | ทุกอย่างบน integration: Phase G (G1–G17), G18/G19/G21/G25, outbox, Supabase shadow, rules ใหม่ (version / traceId) และ Worker shadow cron |
+| Supabase | มีแค่ **shadow** ยังไม่มี project จริงเชื่อมอยู่ outbox merge แล้วแต่ **ปิดอยู่** (`OUTBOX_ENABLED` ไม่ได้ตั้ง) Worker replicate ก็ต่อเมื่อมี `SUPABASE_DB_URL` Firestore ยังเป็น source of truth ไม่มี dual-write และไม่มี cutover |
+| Phase G | G1–G16 เสร็จพร้อมหลักฐาน (`docs/evidence/phase-g-agent-safety.md`) · **G17 Laya: NOT EVALUATED** มีแต่ harness ยังไม่ได้ artifact จริง (`phase-g17-laya.md`, `docs/agent-safety/02-upstream-verification.md`) · Kat/Reflex: NOT_RUN |
+| ชุดแรก G18–G27 | G25, G18-lite, G19, G21 มีบน integration แล้ว (`docs/evidence/phase-g-batch1.md`) ส่วน G20 และ G22–G27 ยังไม่ทำ |
+| CI | **ไม่มีเลย** ทั้ง workflow, branch protection และ ruleset ข้อเสนออยู่ที่ `docs/engineering/ci-proposal.md` (ยังไม่ได้เปิดใช้อะไร) |
+
+### ⚠ ข้อควรระวังก่อน push / deploy
+
+1. **Preview ต่อกับ production:** Cloudflare Pages build ทุก branch ที่ push เป็น preview และใช้ Firebase **ตัวจริง** (มีเฉพาะ branch `demo` ที่เป็น demo mode) ข้อเสนอให้แก้ 1 บรรทัดอยู่ใน `ci-proposal.md` ควรได้รับอนุมัติก่อน push integration
+2. **ลำดับ deploy ของ G25:** rules ใหม่จะปฏิเสธการแก้ PO หรือสินค้าที่ไม่ขยับ `version` **ต้อง deploy แอปก่อน rules** และ tab PWA เก่าจะเขียนไม่ผ่านจนกว่าจะ reload
+3. **ห้าม merge เข้า `main` เอง** เพราะ `main` deploy production อัตโนมัติ
+
+### Release blockers (RC ยังไม่ freeze)
+
+- [ ] เจ้าของอนุมัติการ push integration และการแก้ preview
+- [ ] e2e และ flaky runs ผ่านบน integration (cloud หรือ CI)
+- [ ] baseQty dry-run กับ backup จริง (เจ้าของทำ)
+- [ ] ตรวจ backtest Phase G กับ backup จริง (เจ้าของทำ)
+- [ ] Firestore read budget ไม่ถดถอย (รัน `e2e/read-budget.spec.ts` ของ main บน integration)
+- [ ] ไม่มี P0/P1 ค้าง
+- [ ] verify ผ่านจาก clean checkout
+- [ ] CI ตาม `ci-proposal.md` เปิดใช้และเขียว
+
+**ห้าม freeze RC จนกว่าทุกข้อข้างบนจะผ่าน แล้วต้องขออนุมัติเจ้าของก่อน**
+
+### เปิดงานต่อใน session ใหม่
+
+```bash
+cd pizza-stock-ledger            # worktree ของ integration/ops-os-rc1
+git status --short && git log --oneline -8
+npm ci && npm run verify -- --full   # 15 ด่าน รวม rules emulator (ต้องมี Java) และ Rust (ต้องมี cargo)
+```
+
+---
+
+## ประวัติ (historical — ดู §0 สำหรับสถานะปัจจุบัน)
+
 เอกสารนี้เขียนไว้ให้เปิดงานต่อได้จากศูนย์ ไม่ว่าจะเป็น Claude session ใหม่หรือ account ใหม่ — สรุปทุกอย่างที่ทำไปแล้ว อะไร deploy แล้วบ้าง อะไรค้างอยู่ และกติกาที่ต้องรู้ก่อนแตะโค้ดต่อ
 
 อัปเดตล่าสุด: **14 กันยายน 2569** — ดู `git log` สำหรับ commit ล่าสุด
