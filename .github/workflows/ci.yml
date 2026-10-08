@@ -121,7 +121,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       # Includes the read benchmark (read-benchmark.spec) and the seed-pilot read count.
-      - run: npm run -s test:e2e -- --retries=0
+      # No retries: playwright.config.ts sets retries: 0 (a flag here would go to firebase).
+      - run: npm run -s test:e2e
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with: { name: e2e-results, path: e2e-results, retention-days: 14 }
