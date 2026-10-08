@@ -5,6 +5,7 @@ import { matchOcrLines, type OcrLine } from '../../lib/billOcr'
 import { fmtQty } from '../../lib/format'
 import { buildMatchIndex } from '../../lib/productMatch'
 import { looseScore } from '../../lib/search'
+import { suggestProducts } from '../../lib/productSuggest'
 import { parseSheetLines, type SheetLine } from '../../lib/sheetLines'
 import { billReaderAvailable, readDocumentFile } from '../../services/billOcr'
 import type { Product } from '../../types'
@@ -40,12 +41,17 @@ interface Row {
   entryQty?: number
   unitUnknown?: string
   include: boolean
+  /** sure: SKU/alias/exact name; guess: the one clear suggestion; picked: chosen by hand. */
+  how: 'sure' | 'guess' | 'picked' | null
+  /** The closest products, for one-tap picking. */
+  suggestions: Product[]
 }
 
 type Step = 'pick' | 'reading' | 'review'
 
 function matchOne(read: Row['read'], index: ReturnType<typeof buildMatchIndex>) {
-  const tries = read.code ? [read.code, read.name] : [read.name]
+  const bare = read.name.replace(/[\s.,;:]+$/, '')
+  const tries = [...(read.code ? [read.code] : []), read.name, ...(bare !== read.name ? [bare] : [])]
   for (const name of tries) {
     const m = matchOcrLines({ lines: [{ name, qty: read.qty, unit: read.unit }] }, index).matched[0]
     if (m) return m
@@ -85,11 +91,20 @@ export function LineImportModal({
   const aiReady = documents && billReaderAvailable()
 
   function toRows(lines: Row['read'][]): Row[] {
-    return lines.map((read, key) => {
+    return lines.map((read, key): Row => {
       const m = matchOne(read, index)
-      return m
-        ? { key, read, product: m.product, qty: m.qty, entryUnit: m.entryUnit, entryQty: m.entryQty, unitUnknown: m.unitUnknown, include: !m.unitUnknown }
-        : { key, read, product: null, qty: read.qty, include: false }
+      if (m) {
+        return { key, read, product: m.product, qty: m.qty, entryUnit: m.entryUnit, entryQty: m.entryQty, unitUnknown: m.unitUnknown, include: !m.unitUnknown, how: 'sure', suggestions: [] }
+      }
+      // Not sure: the closest products as one-tap choices. One clear winner (every word
+      // found, and nothing else as close) is chosen for the person — marked as a guess.
+      const sug = suggestProducts(read.name, products, 4)
+      const clear = sug.length > 0 && sug[0].score === 1 && (sug.length === 1 || sug[1].score < 1)
+      if (clear) {
+        const c = convertFor(read, sug[0].product)
+        return { key, read, product: sug[0].product, ...c, include: !c.unitUnknown, how: 'guess', suggestions: sug.map((x) => x.product) }
+      }
+      return { key, read, product: null, qty: read.qty, include: false, how: null, suggestions: sug.map((x) => x.product) }
     })
   }
 
@@ -129,9 +144,9 @@ export function LineImportModal({
     setRows((cur) =>
       cur.map((r) => {
         if (r.key !== key) return r
-        if (!product) return { ...r, product: null, include: false }
+        if (!product) return { ...r, product: null, include: false, how: null }
         const c = convertFor(r.read, product)
-        return { ...r, product, qty: c.qty, entryUnit: c.entryUnit, entryQty: c.entryQty, unitUnknown: c.unitUnknown, include: true }
+        return { ...r, product, qty: c.qty, entryUnit: c.entryUnit, entryQty: c.entryQty, unitUnknown: c.unitUnknown, include: true, how: 'picked' }
       }),
     )
   }
@@ -201,59 +216,26 @@ export function LineImportModal({
 
       {step === 'review' && (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
-            <span className="font-medium text-ink">{source}</span>
-            <Badge color="green">{t('ตรงแน่นอน {n}', { n: rows.filter((r) => r.product && !r.unitUnknown).length })}</Badge>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="mr-auto truncate font-medium text-ink">{source}</span>
+            <Badge color="green">{t('ตรงแน่นอน {n}', { n: rows.filter((r) => r.how === 'sure').length })}</Badge>
+            <Badge color="blue">{t('ระบบเดา {n}', { n: rows.filter((r) => r.how === 'guess').length })}</Badge>
             <Badge color="amber">{t('ต้องเลือก {n}', { n: rows.filter((r) => !r.product).length })}</Badge>
           </div>
-          <div className="max-h-[55vh] overflow-auto rounded-lg border border-line">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="sticky top-0 bg-sunken text-left text-xs text-ink-soft">
-                <tr>
-                  <th className="w-10 px-2 py-2" />
-                  <th className="px-2 py-2 font-semibold">{t('ในไฟล์')}</th>
-                  <th className="px-2 py-2 text-right font-semibold">{t('จำนวน')}</th>
-                  <th className="px-2 py-2 font-semibold">{t('สินค้าในระบบ')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {rows.map((r) => (
-                  <tr key={r.key} className={r.include ? '' : 'opacity-70'}>
-                    <td className="px-2 py-2 text-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-brand"
-                        checked={r.include}
-                        disabled={!r.product}
-                        onChange={(e) => setRows((cur) => cur.map((x) => (x.key === r.key ? { ...x, include: e.target.checked } : x)))}
-                        aria-label={t('เพิ่มแถวนี้')}
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      <span className="text-ink">{r.read.name}</span>
-                      {r.read.code && r.read.code !== r.read.name && <span className="ml-1 text-xs text-ink-faint">{r.read.code}</span>}
-                    </td>
-                    <td className="num px-2 py-2 text-right">
-                      {fmtQty(r.read.qty)} <span className="text-ink-faint">{r.read.unit ?? ''}</span>
-                    </td>
-                    <td className="px-2 py-2">
-                      <ProductPick products={products} value={r.product} onChange={(p) => choose(r.key, p)} />
-                      {r.product && (
-                        <p className="mt-0.5 text-xs text-ink-faint">
-                          {r.entryUnit
-                            ? t('{q} {u} = {base} {unit}', { q: fmtQty(r.entryQty ?? 0), u: r.entryUnit, base: fmtQty(r.qty), unit: r.product.unitType })
-                            : `${fmtQty(r.qty)} ${r.product.unitType}`}
-                          {r.unitUnknown && <span className="ml-1 text-warn">{t('· หน่วย {u} ไม่รู้จัก — ใช้เป็นหน่วยหลัก ตรวจก่อนเพิ่ม', { u: r.unitUnknown })}</span>}
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="space-y-2">
+            {rows.map((r) => (
+              <ReviewRow
+                key={r.key}
+                row={r}
+                products={products}
+                onPick={(p) => choose(r.key, p)}
+                onInclude={(on) => setRows((cur) => cur.map((x) => (x.key === r.key ? { ...x, include: on } : x)))}
+              />
+            ))}
+          </ul>
           {error && <p className="rounded-lg bg-out-soft px-3 py-2 text-sm text-out">{error}</p>}
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="sticky bottom-0 -mx-1 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-1 pb-1 pt-3">
+            <span className="mr-auto text-xs text-ink-soft">{t('จะเพิ่ม {n} จาก {total} รายการ', { n: chosen.length, total: rows.length })}</span>
             <Button variant="secondary" onClick={() => setStep('pick')} disabled={busy}>
               {t('เลือกไฟล์อื่น')}
             </Button>
@@ -268,57 +250,152 @@ export function LineImportModal({
   )
 }
 
-/** A small product search: type, pick one of the closest names. */
-function ProductPick({ products, value, onChange }: { products: readonly Product[]; value: Product | null; onChange: (p: Product | null) => void }) {
+const HOW_UI: Record<'sure' | 'guess' | 'picked' | 'none', { label: string; tone: string }> = {
+  sure: { label: 'ตรงแน่นอน', tone: 'bg-in-soft text-in' }, // i18n-key
+  guess: { label: 'ระบบเดา — ตรวจด้วย', tone: 'bg-brand-soft text-brand' }, // i18n-key
+  picked: { label: 'เลือกเอง', tone: 'bg-in-soft text-in' }, // i18n-key
+  none: { label: 'ต้องเลือกสินค้า', tone: 'bg-warn-soft text-warn' }, // i18n-key
+}
+
+/**
+ * One line from the file as a card: what was read on the left, the product it becomes on
+ * the right — or one-tap choices of the closest products, and a search that lists its
+ * results inside the card (nothing floats over the next row).
+ */
+function ReviewRow({
+  row: r,
+  products,
+  onPick,
+  onInclude,
+}: {
+  row: Row
+  products: readonly Product[]
+  onPick: (p: Product | null) => void
+  onInclude: (on: boolean) => void
+}) {
+  const t = useT()
+  const [searching, setSearching] = useState(false)
+  const ui = HOW_UI[r.how ?? 'none']
+  const skipped = !!r.product && !r.include
+  const others = r.suggestions.filter((s) => s.id !== r.product?.id)
+  return (
+    <li className={`rounded-xl border p-3 ${skipped ? 'border-line bg-sunken' : r.product ? 'border-line bg-surface' : 'border-warn/40 bg-warn-soft/40'}`}>
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+        <input
+          type="checkbox"
+          className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-brand disabled:cursor-not-allowed"
+          checked={r.include}
+          disabled={!r.product}
+          onChange={(e) => onInclude(e.target.checked)}
+          aria-label={t('เพิ่มแถวนี้')}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-ink-faint">{t('ในไฟล์')}</p>
+          <p className="break-words font-medium text-ink">
+            {r.read.name}
+            {r.read.code && r.read.code !== r.read.name && <span className="ml-1 text-xs font-normal text-ink-faint">{r.read.code}</span>}
+          </p>
+          <p className="num text-sm text-ink-soft">
+            {fmtQty(r.read.qty)} {r.read.unit ?? ''}
+          </p>
+        </div>
+        <Icon name="arrowRight" size={16} className="mt-5 hidden shrink-0 text-ink-faint sm:block" />
+        <div className="min-w-0 basis-full sm:basis-[55%]">
+          <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${skipped ? 'bg-line text-ink-soft' : ui.tone}`}>
+            {skipped ? t('ไม่เพิ่ม') : t(ui.label)}
+          </span>
+          {r.product ? (
+            <div className="mt-1">
+              <p className="break-words font-semibold text-ink">{r.product.name}</p>
+              <p className="text-xs text-ink-soft">
+                {r.entryUnit
+                  ? t('{q} {u} = {base} {unit}', { q: fmtQty(r.entryQty ?? 0), u: r.entryUnit, base: fmtQty(r.qty), unit: r.product.unitType })
+                  : `${fmtQty(r.qty)} ${r.product.unitType}`}
+                <span className="ml-1 text-ink-faint">{r.product.sku}</span>
+              </p>
+              {r.unitUnknown && <p className="mt-0.5 text-xs text-warn">{t('หน่วย {u} ไม่รู้จัก — ใช้เป็นหน่วยหลัก ตรวจก่อนเพิ่ม', { u: r.unitUnknown })}</p>}
+              {!searching && (
+                <button type="button" className="mt-1 text-xs font-medium text-brand hover:underline" onClick={() => setSearching(true)}>
+                  {t('เปลี่ยนสินค้า')}
+                </button>
+              )}
+            </div>
+          ) : (
+            others.length > 0 && <p className="mt-1 text-xs text-ink-soft">{t('ใกล้เคียง — กดเลือก:')}</p>
+          )}
+          {(!r.product || searching) && others.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {others.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    onPick(s)
+                    setSearching(false)
+                  }}
+                  className="max-w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-left text-xs text-ink hover:border-brand hover:bg-brand-soft"
+                >
+                  <span className="block truncate font-medium">{s.name}</span>
+                  <span className="block text-[10px] text-ink-faint">{s.sku}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {(!r.product || searching) && (
+            <ProductSearch
+              products={products}
+              onPick={(p) => {
+                onPick(p)
+                setSearching(false)
+              }}
+              onCancel={r.product ? () => setSearching(false) : undefined}
+            />
+          )}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+/** Search the catalogue; results are listed inside the row, never floating over the next. */
+function ProductSearch({ products, onPick, onCancel }: { products: readonly Product[]; onPick: (p: Product) => void; onCancel?: () => void }) {
   const t = useT()
   const [q, setQ] = useState('')
-  const [open, setOpen] = useState(false)
   const hits = useMemo(() => {
     const needle = q.trim()
-    if (!needle) return []
-    return products
+    if (needle.length < 2) return []
+    const byWords = suggestProducts(needle, products, 6).map((x) => x.product)
+    const loose = products
+      .filter((p) => p.active !== false)
       .map((p) => ({ p, s: looseScore([p.name, p.sku, p.barcode], needle) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s)
-      .slice(0, 6)
       .map((x) => x.p)
+    return [...new Map([...byWords, ...loose].map((p) => [p.id, p])).values()].slice(0, 6)
   }, [products, q])
-
-  if (value && !open) {
-    return (
-      <span className="flex items-center gap-1.5">
-        <span className="font-medium text-ink">{value.name}</span>
-        <button className="text-xs text-brand hover:underline" onClick={() => setOpen(true)}>
-          {t('เปลี่ยน')}
-        </button>
-      </span>
-    )
-  }
   return (
-    <div className="relative">
-      <Input
-        value={q}
-        autoFocus={open}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder={t('ค้นหาสินค้าเพื่อจับคู่')}
-        className="min-h-9 py-1 text-sm"
-      />
-      {hits.length > 0 && (
-        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-line bg-surface shadow-md">
-          {hits.map((p) => (
-            <li key={p.id}>
-              <button
-                className="block w-full px-3 py-2 text-left text-sm hover:bg-sunken"
-                onClick={() => {
-                  onChange(p)
-                  setQ('')
-                  setOpen(false)
-                }}
-              >
-                {p.name} <span className="text-xs text-ink-faint">{p.sku}</span>
-              </button>
-            </li>
-          ))}
+    <div className="mt-2">
+      <div className="flex gap-2">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('ค้นหาสินค้าในระบบ (ชื่อ / รหัส)')} className="min-h-10 flex-1 py-1.5 text-sm" />
+        {onCancel && (
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            {t('ยกเลิก')}
+          </Button>
+        )}
+      </div>
+      {q.trim().length >= 2 && (
+        <ul className="mt-1 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
+          {hits.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-ink-faint">{t('ไม่พบสินค้า')}</li>
+          ) : (
+            hits.map((p) => (
+              <li key={p.id}>
+                <button type="button" className="block w-full px-3 py-2 text-left text-sm hover:bg-sunken" onClick={() => onPick(p)}>
+                  <span className="font-medium text-ink">{p.name}</span> <span className="text-xs text-ink-faint">{p.sku}</span>
+                </button>
+              </li>
+            ))
+          )}
         </ul>
       )}
     </div>
