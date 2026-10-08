@@ -103,7 +103,7 @@ Owner decisions of 7 Oct 2026. **Nothing was merged to main, deployed, or frozen
   - Seeds 1, 2 and 3 × 1,033 snapshots, about 82,000 findings in total: **0 disagreements**.
   - Mutation check: Rust rounding changed to `f64::round` gives **1 disagreement**, so the test
     can fail.
-- **Mutation testing** (`npm run mutation`, Stryker, pre-release only): see the section below.
+- **Mutation testing** (`npm run mutation`, Stryker, pre-release only): configured, but **no trustworthy score**. Stryker 10 does not apply mutants under this repo's Vitest 5; see `integration-ops-os-rc1.md`. The hand-run mutation checks above are the mutation evidence for now.
 
 ## Gates
 

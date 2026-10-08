@@ -102,6 +102,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci
+      # Not yet trustworthy: Stryker 10 does not apply mutants under Vitest 5 here
+      # (docs/evidence/integration-ops-os-rc1.md). Enable once the runner is fixed.
       - run: npm run mutation               # Stryker, scope in stryker.config.mjs
       - uses: actions/upload-artifact@v4
         with: { name: mutation-report, path: reports/mutation/ }

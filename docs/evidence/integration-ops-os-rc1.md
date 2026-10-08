@@ -87,3 +87,70 @@ production Firebase project**.
   safe failure, but unreleased code against live data.
 - **Recommendation:** approve the one-line preview-safety change first (`ci-proposal.md`),
   then push.
+
+## e2e on the integration branch (local emulator, 8 Oct)
+
+| Run | Passed | Failed | Skipped | Notes |
+|---|---|---|---|---|
+| 1 (after the main merge) | 31 | 2 | 1 | Real: `read-benchmark` (`__pzmReads.listeners` missing after the merge). Flake: `critical.spec:32` (toast) |
+| 2 (after the fixes, `99a8191`) | 32 | 1 | 1 | Flake: `intel.spec:12` |
+
+- **Skipped:** main's `read-budget.spec`, which needs a real backup file (an owner step).
+- **Flakes, not merge breaks:**
+  - each failed once in a full run (45–57 s, against about 9 s normally);
+  - each then passed repeatedly in isolation: the toast **6/6**, intel **4/4**;
+  - different tests in different runs.
+
+  **Not proven:** whether these flake the same way on the pre-merge branch. The nightly
+  flaky-run loop in `ci-proposal.md` is how to settle it.
+- **Fixed:** `read-benchmark` passes after exposing `listeners()` again.
+
+## Firestore read budget, same benchmark before and after the integration
+
+`e2e/read-benchmark.spec.ts`, production-sized fixture. Before: `read-benchmark-after.json`
+(this branch, 7 Oct). After: `read-benchmark-integration.json`.
+
+| Measure | Before | After |
+|---|---|---|
+| Cold page opens (8 pages) | 57–93 | 58–82 (±1; inbox −11) |
+| Warm route switching, second round | 82 | **61** |
+| Second tab | 72 | **60** |
+| **First-ever dashboard open** on an empty device | 2,851 | **3,007 (+5.5%)** |
+
+**Why the first-open figure rose:**
+- notifications +137: main's inbox pages in more on the first open;
+- stockMovements +45, stockLevels +19, products +9: main's `useSynced` re-delivers its 5-minute
+  skew window after the full read;
+- offset by purchaseOrders −46 and transfers −9 (main's gap-only range cache).
+
+This is **production's existing behaviour** (main), paid once per device, and the integration
+did not cause it. It is a candidate follow-up: trim the skew re-delivery and the inbox's first
+page.
+
+**A real regression the integration did cause, now fixed:** main reads `productMinOverrides` in
+full on every cold open (+50 reads per page). They now use main's own device copy plus the
+cache epoch.
+
+**Caveat:** the meter changed in the merge (main's estimate), so both columns are main's meter
+only for the "after" run. The per-collection breakdown is what makes the comparison
+trustworthy.
+
+## Mutation testing: no trustworthy score yet
+
+- Stryker 10 with the Vitest runner, on this repo's **Vitest 5**: mutants were not applied in
+  any configuration tried.
+- **Configurations tried:**
+  - per-test coverage (`testsCompleted: 0`);
+  - coverage off with a dedicated test set (dry run fine, 337 tests; most mutants "survive"
+    within milliseconds);
+  - a path without spaces;
+  - the `threads` pool.
+- The first-run score (37.5%) and the later ones (4%) are **tooling artefacts, not test
+  quality**.
+- **What does exist:** hand-run mutation checks. Rust rounding changed and epsilon changed were
+  each caught by the vectors and the differential run, and tampering was caught by the guard
+  tests.
+- **Next:** the nightly job stays in the CI proposal, with the runner fixed first (a Stryker
+  Vitest-runner release that supports Vitest 5, or the command runner).
+- **Local leftovers:** two junctions outside the repo, `C:\pzmrc1` (broken; removal was blocked
+  here) and `C:\pzmrc1b`. Both can be deleted by hand.
