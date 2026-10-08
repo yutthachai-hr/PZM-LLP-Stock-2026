@@ -11,7 +11,14 @@ import { open, signedIn } from './app'
 async function editorWithConfirm(page: Page, size?: { width: number; height: number }) {
   await open(page, '/products')
   const row = page.getByRole('row').filter({ hasText: 'FLOUR' }).first()
-  await row.getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' }).click()
+  // The row menu offers "แก้ไข" only once the admin's role has loaded (before that it says
+  // "ดูรายละเอียด", correctly): on a busy machine the first open can come too early. Reopen
+  // until the admin item is there (full suite, 8 Oct 2026: 2 of 3 runs hit this).
+  await expect(async () => {
+    await page.keyboard.press('Escape')
+    await row.getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' }).click()
+    await expect(page.getByRole('menuitem', { name: 'แก้ไข' })).toBeVisible({ timeout: 3000 })
+  }).toPass({ timeout: 45_000 })
   await page.getByRole('menuitem', { name: 'แก้ไข' }).click()
   const editor = page.getByRole('dialog', { name: 'แก้ไขสินค้า' })
   await expect(editor).toBeVisible()
