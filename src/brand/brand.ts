@@ -10,7 +10,7 @@ import type { LocationType } from '../types'
 //   - others    => `${brandId}__<collection>`   (a fresh, separate namespace)
 // ============================================================================
 
-export type BrandId = 'pizza' | 'lelapin'
+export type BrandId = 'pizza' | 'lelapin' | 'rnd'
 
 export interface BrandDef {
   id: BrandId
@@ -97,6 +97,22 @@ export const BRANDS: BrandDef[] = [
     ],
     sheetKey: 'LLP',
   },
+  {
+    id: 'rnd',
+    name: 'R&D (Research & Development)',
+    emoji: '🔬',
+    logo: '/brand/rnd-logo.svg',
+    website: '',
+    productIcon: '🧪',
+    accent: '#4338ca',
+    accentSoft: '#eef2ff',
+    accentVivid: '#6366f1',
+    defaultLocations: [
+      { name: 'R&D Kitchen', type: 'warehouse' },
+      { name: 'Test Kitchen', type: 'branch' },
+    ],
+    sheetKey: 'RND',
+  },
 ]
 
 export function brandDef(id: BrandId): BrandDef {
@@ -112,7 +128,7 @@ const LS_KEY = 'pmstock:v1:lastBrand'
 let current: BrandId = 'pizza'
 try {
   const saved = localStorage.getItem(LS_KEY)
-  if (saved === 'pizza' || saved === 'lelapin') current = saved
+  if (saved === 'pizza' || saved === 'lelapin' || saved === 'rnd') current = saved
 } catch {
   /* ignore */
 }

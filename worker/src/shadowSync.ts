@@ -26,6 +26,7 @@ import type { Store } from './store'
 export const SHADOW_BRANDS = [
   { brand: 'pizza', prefix: '' },
   { brand: 'lelapin', prefix: 'lelapin__' },
+  { brand: 'rnd', prefix: 'rnd__' },
 ] as const
 
 /** Client-written collections the scan covers, as shadow entities. The stock ledger and

@@ -87,8 +87,12 @@ export function assertServerWrite(collection: string, fields: Record<string, unk
   throw new Error(`may not ${kind} ${collection}`)
 }
 
+/** The brands the server serves (src/brand/brand.ts BrandId; the Worker cannot import that file). */
+export type ServerBrand = 'pizza' | 'lelapin' | 'rnd'
+export const SERVER_BRANDS: readonly ServerBrand[] = ['pizza', 'lelapin', 'rnd']
+
 /** A brand's collection name, as the app's resolveCollection names it. */
-export function brandCollection(brand: 'pizza' | 'lelapin', name: string): string {
+export function brandCollection(brand: ServerBrand, name: string): string {
   if (name === 'users' || name === 'meta' || name === 'revokedUsers' || brand === 'pizza') return name
   return `${brand}__${name}`
 }

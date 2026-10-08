@@ -23,7 +23,7 @@ export interface BackfillResult {
 }
 
 export function brandOf(backup: BackupLike): Brand {
-  if (backup.brand === 'pizza' || backup.brand === 'lelapin') return backup.brand
+  if (backup.brand === 'pizza' || backup.brand === 'lelapin' || backup.brand === 'rnd') return backup.brand
   throw new Error(`unknown brand in backup: ${backup.brand}`)
 }
 

@@ -1,5 +1,5 @@
 import { DELETE_FIELD, VERSIONED, type TxContext } from '../../src/backend/tx'
-import { assertCommandWrite, baseOf, brandCollection, type ServerStore, type ServerWrite } from './serverStore'
+import { assertCommandWrite, baseOf, brandCollection, type ServerBrand, type ServerStore, type ServerWrite } from './serverStore'
 
 /**
  * A Firestore-style transaction over the service-account store (ADR-001): the same
@@ -42,7 +42,7 @@ export interface OutboxOptions {
 
 export interface OutboxEventDoc {
   eventId: string
-  brand: 'pizza' | 'lelapin'
+  brand: ServerBrand
   eventType: string
   entityType: string
   entityId: string
@@ -80,7 +80,7 @@ function merged(before: Record<string, unknown> | null, patch: Record<string, un
 
 /** The outbox writes for a commit's writes. Pure, for the tests. */
 export function outboxWrites(
-  brand: 'pizza' | 'lelapin',
+  brand: ServerBrand,
   eventType: string,
   writes: readonly ServerWrite[],
   readDocs: ReadonlyMap<string, Record<string, unknown> | null>,
@@ -135,7 +135,7 @@ export function versioned(w: ServerWrite, read: Record<string, unknown> | null |
 
 export async function runServerTx<R>(
   store: ServerStore,
-  brand: 'pizza' | 'lelapin',
+  brand: ServerBrand,
   command: { name: string; writes: Readonly<Record<string, readonly string[]>> },
   body: (tx: TxContext) => Promise<R>,
   tries = 5,

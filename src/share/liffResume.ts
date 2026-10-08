@@ -61,7 +61,7 @@ export function brandToResume(): BrandId | null {
   const p = new URLSearchParams(location.search)
   if (!p.get(RESUME_PARAM) && !p.get(ANNOUNCE_PARAM) && !p.get(DIGEST_PARAM)) return null
   const b = p.get(RESUME_BRAND_PARAM)
-  return b === 'pizza' || b === 'lelapin' ? b : null
+  return b === 'pizza' || b === 'lelapin' || b === 'rnd' ? b : null
 }
 
 /**

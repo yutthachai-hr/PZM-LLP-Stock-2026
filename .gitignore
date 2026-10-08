@@ -41,6 +41,7 @@ auth-debug.log
 
 # Playwright output (reports, traces, screenshots)
 e2e-results/
+test-results/
 
 # Real company data staged for a local import run. Never commit.
 public/__demo-import.xlsx
@@ -66,3 +67,6 @@ supabase/dist/
 # G21 mutation testing (npm run mutation)
 .stryker-tmp/
 reports/
+
+# local wrangler state (pages dev, tail)
+.wrangler/

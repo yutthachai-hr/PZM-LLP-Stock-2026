@@ -87,7 +87,13 @@ service cloud.firestore {
         'lelapin__stockEvents', 'lelapin__purchaseOrders',
         'lelapin__purchaseBatches', 'lelapin__productAliases',
         'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements', 'lelapin__transfers',
-        'lelapin__recipes'
+        'lelapin__recipes',
+        'rnd__stockMovements', 'rnd__stockLevels', 'rnd__counters',
+        'rnd__movementImages', 'rnd__notes',
+        'rnd__stockEvents', 'rnd__purchaseOrders',
+        'rnd__purchaseBatches', 'rnd__productAliases',
+        'rnd__purchaseRequests', 'rnd__messages', 'rnd__announcements', 'rnd__transfers',
+        'rnd__recipes'
       ];
     }
 
@@ -98,7 +104,10 @@ service cloud.firestore {
         'suppliers', 'supplierItems', 'companyProfile',
         'lelapin__products', 'lelapin__productImages', 'lelapin__locations',
         'lelapin__productMinOverrides',
-        'lelapin__suppliers', 'lelapin__supplierItems', 'lelapin__companyProfile'
+        'lelapin__suppliers', 'lelapin__supplierItems', 'lelapin__companyProfile',
+        'rnd__products', 'rnd__productImages', 'rnd__locations',
+        'rnd__productMinOverrides',
+        'rnd__suppliers', 'rnd__supplierItems', 'rnd__companyProfile'
       ];
     }
 
@@ -114,7 +123,7 @@ service cloud.firestore {
     // every branch — a purchase request with a note (one more optional field to check)
     // went over the budget and was refused as "insufficient permissions" (17 Sep 2026).
     function kind(name) {
-      return name.matches('^lelapin__.*') ? name.split('__')[1] : name;
+      return name.matches('^(lelapin|rnd)__.*') ? name.split('__')[1] : name;
     }
 
     // The same brand's collection of another kind: `lelapin__stockMovements` → `lelapin__transfers`.
@@ -781,7 +790,7 @@ service cloud.firestore {
     }
 
     function announcementFrozen(d) {
-      return d.company in ['pizza', 'lelapin']
+      return d.company in ['pizza', 'lelapin', 'rnd']
         && text(d.publisherId, 200) && text(d.publisherName, 200)
         && text(d.createdBy, 200) && text(d.createdByName, 200)
         && epochMs(d.createdAt);
@@ -1639,6 +1648,13 @@ service cloud.firestore {
       allow delete: if admin() && resource.data.status in ['counting', 'recorded'];
     }
 
+    match /rnd__monthlyCounts/{docId} {
+      allow read: if active();
+      allow create: if active() && monthlyCountCreate(docId);
+      allow update: if active() && monthlyCountUpdate(docId);
+      allow delete: if admin() && resource.data.status in ['counting', 'recorded'];
+    }
+
     // ------------------------------------------------------------ intelligence shadow ----
 
     /**
@@ -1669,6 +1685,12 @@ service cloud.firestore {
     }
 
     match /lelapin__intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /rnd__intelShadow/{docId} {
       allow read: if manager();
       allow create: if manager() && validShadow(docId, request.resource.data);
       allow update, delete: if false;
@@ -1718,6 +1740,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /rnd__auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
     match /inventorySchedules/{docId} {
       allow read: if active();
       allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
@@ -1725,6 +1754,12 @@ service cloud.firestore {
     }
 
     match /lelapin__inventorySchedules/{docId} {
+      allow read: if active();
+      allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
+      allow delete: if active() && scheduleWriter(docId);
+    }
+
+    match /rnd__inventorySchedules/{docId} {
       allow read: if active();
       allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
       allow delete: if active() && scheduleWriter(docId);
@@ -1783,6 +1818,13 @@ service cloud.firestore {
     }
 
     match /lelapin__notifications/{docId} {
+      allow read: if active();
+      allow create: if active() && notificationCreate(docId);
+      allow update: if active() && notificationUpdate(docId);
+      allow delete: if admin();
+    }
+
+    match /rnd__notifications/{docId} {
       allow read: if active();
       allow create: if active() && notificationCreate(docId);
       allow update: if active() && notificationUpdate(docId);

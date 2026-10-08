@@ -9,7 +9,7 @@
  * Not imported by the app — this code runs in the cron Worker and in local tools only.
  */
 
-export type Brand = 'pizza' | 'lelapin'
+export type Brand = 'pizza' | 'lelapin' | 'rnd'
 type Doc = Record<string, unknown>
 
 /** One row to write. `versioned`: only when its version is not older than the stored one. */

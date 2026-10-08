@@ -51,6 +51,10 @@ const DEMO_LOCATION_NAMES: Record<BrandId, Record<string, string>> = {
     'Sarasin Branch': 'สาขาสารสิน',
     'Sukhumvit Branch': 'สาขาสุขุมวิท',
   },
+  rnd: {
+    'R&D Kitchen': 'ครัว R&D',
+    'Test Kitchen': 'ครัวทดลอง',
+  },
 }
 
 /**

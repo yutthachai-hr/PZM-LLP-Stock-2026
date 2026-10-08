@@ -409,7 +409,7 @@ export function parseBackup(text: string): BackupFile {
     throw new BackupFormatError('unsupported-version')
   }
   if (b.version > FORMAT_VERSION) throw new BackupFormatError('unsupported-version')
-  if (b.brand !== 'pizza' && b.brand !== 'lelapin') throw new BackupFormatError('unknown-brand')
+  if (b.brand !== 'pizza' && b.brand !== 'lelapin' && b.brand !== 'rnd') throw new BackupFormatError('unknown-brand')
   if (!b.data || typeof b.data !== 'object' || Array.isArray(b.data)) {
     throw new BackupFormatError('no-data')
   }

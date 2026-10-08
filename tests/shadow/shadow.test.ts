@@ -221,6 +221,13 @@ describe('row-level security (Firebase identity)', () => {
     await pg.close()
   }, 60_000)
 
+  test('the R&D brand (0007) is accepted by the shadow; an unknown brand still is not', async () => {
+    const { pg } = await loaded()
+    await pg.query(`insert into shadow.locations (brand, id, name, type, doc) values ('rnd', 'rnd-k', 'R&D Kitchen', 'warehouse', '{}')`)
+    await expect(pg.query(`insert into shadow.locations (brand, id, name, type, doc) values ('other', 'x', 'X', 'warehouse', '{}')`)).rejects.toThrow(/check/)
+    await pg.close()
+  }, 60_000)
+
   test('cross-brand and cross-location reads match Firestore today: an active person reads both brands and every site', async () => {
     const { pg } = await loaded()
     await pg.query(`insert into shadow.locations (brand, id, name, type, doc) values ('lelapin', 'll-wh', 'LL WH', 'warehouse', '{}')`)

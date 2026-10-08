@@ -3,7 +3,7 @@ import { AppError } from '../../src/i18n/AppError'
 import { COL } from '../../src/types'
 import { STOCK_COMMANDS } from '../../src/commands/stockCommands'
 import { BadInput, type CommandReader, type CommandSpec } from '../../src/commands/spec'
-import { brandCollection, type ServerStore } from './serverStore'
+import { brandCollection, SERVER_BRANDS, type ServerBrand, type ServerStore } from './serverStore'
 import { runServerTx, TxConflict } from './serverTx'
 import { emit, isOperationId, type TraceContext } from '../../src/lib/trace'
 
@@ -38,7 +38,7 @@ export interface Reply {
 }
 
 const fail = (status: number, error: string, extra: Record<string, unknown> = {}): Reply => ({ status, body: { error, ...extra } })
-const isBrand = (b: unknown): b is 'pizza' | 'lelapin' => b === 'pizza' || b === 'lelapin'
+const isBrand = (b: unknown): b is ServerBrand => SERVER_BRANDS.includes(b as ServerBrand)
 
 /** The command's own idempotency id, when it has one (receivePO), as the trace's operationId. */
 const opIdOf = (p: unknown): string | undefined => {
@@ -60,7 +60,7 @@ export async function runStockCommand(deps: StockDeps, name: string, authorizati
   if (trace) {
     // G18: one line per call — ids, outcome, time. Never the parameters or the result.
     const outcome = reply.status === 200 ? 'ok' : reply.status === 409 ? 'conflict' : reply.status >= 500 ? 'error' : 'refused'
-    emit({ ...trace, stage: 'api.command', name, outcome, code: reply.status, ms: deps.now() - started, brand: isBrand((body as { brand?: unknown } | null)?.brand) ? (body as { brand: 'pizza' | 'lelapin' }).brand : undefined })
+    emit({ ...trace, stage: 'api.command', name, outcome, code: reply.status, ms: deps.now() - started, brand: isBrand((body as { brand?: unknown } | null)?.brand) ? (body as { brand: ServerBrand }).brand : undefined })
   }
   return reply
 }

@@ -83,6 +83,26 @@ describe('who may call', () => {
   })
 })
 
+// main 4c74aaf (8 Oct 2026) added the R&D brand (`rnd__*`): the server commands must serve it
+// too, in its own collections, or R&D receiving is refused as a bad brand.
+describe('the R&D brand', () => {
+  test('a receipt for brand rnd is filed in the rnd__ collections, and nothing in the others', async () => {
+    const w = world()
+    const rnd = memoryServerStore({ users: w.users, revokedUsers: w.revokedUsers, rnd__products: w.products, rnd__locations: w.locations, rnd__purchaseOrders: w.purchaseOrders, rnd__stockLevels: w.stockLevels, rnd__counters: w.counters })
+    const d = deps(rnd)
+    const r = await receivePOCommand(d, 'Bearer mgr', full({ brand: 'rnd', lines: [{ productId: 'flour', receivedQty: 2, checked: true }, { productId: 'cheese', receivedQty: 0, checked: true }] }))
+    expect(r.status).toBe(200)
+    // The same receipt filed for Pizza Mania gives the same balance: only the namespace differs.
+    const p = deps()
+    await receivePOCommand(p, 'Bearer mgr', full({ lines: [{ productId: 'flour', receivedQty: 2, checked: true }, { productId: 'cheese', receivedQty: 0, checked: true }] }))
+    expect(doc(d, 'rnd__stockLevels', 'wh__flour')?.qty).toBe(doc(p, 'stockLevels', 'wh__flour')?.qty)
+    expect(doc(d, 'rnd__stockLevels', 'wh__flour')?.qty).toBeGreaterThan(3)
+    const keys = [...d.store.data.keys()]
+    expect(keys.filter((k) => k.startsWith('stockMovements/') || k.startsWith('lelapin__'))).toEqual([])
+    expect(keys.some((k) => k.startsWith('rnd__stockMovements/'))).toBe(true)
+  })
+})
+
 describe('the server works the numbers out', () => {
   test('balances, rows, counter and order — filed under the caller, whatever the body says', async () => {
     const d = deps()

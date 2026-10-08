@@ -473,3 +473,1831 @@ export const LLP_PRODUCTS: SeedProduct[] = [
   { sku: "OSF-LL-01-01-009", name: "MEDICAL GLOVES-BLACK # M (JJA 2013)", category: "Office Supply", unit: "หน่วย", unitType: "EA", minStock: 0 },
   { sku: "OSF-LL-01-01-010", name: "MEDICAL GLOVES-BLACK # L (JJA 2013)", category: "Office Supply", unit: "หน่วย", unitType: "EA", minStock: 0 },
 ]
+
+/** R&D (Research & Development) — 228 items */
+export const RND_PRODUCTS: SeedProduct[] = [
+  {
+    "sku": "VGT-02-01-001",
+    "name": "KASHMIRI SAFFRON (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-01-002",
+    "name": "FIG LEAVES (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-01-003",
+    "name": "THYME (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-01-004",
+    "name": "ROSEMARY (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-01-005",
+    "name": "CHIVE ROUND LEAF (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-01-006",
+    "name": "BAY LEAVES (FARANG FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-001",
+    "name": "ONION (DELISH FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-002",
+    "name": "ONION YELLOW DRY (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-003",
+    "name": "ONION YELLOW PEARL (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-004",
+    "name": "ONION RED DRY (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-005",
+    "name": "ROSCOFF ONION AOP (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-006",
+    "name": "ONION WHITE DRY 60/80  (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-007",
+    "name": "SHALLOT ECHALION/BANANA (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-02-008",
+    "name": "ONION WHITE (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-03-001",
+    "name": "CARROT (DELISH FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-03-002",
+    "name": "CARROT (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-04-001",
+    "name": "CELERY (DELISH FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-04-002",
+    "name": "CELERY (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-05-001",
+    "name": "TOMATO BEEF (DELISH FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-05-002",
+    "name": "TOMATO BEEF (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-06-001",
+    "name": "LEMON (DELISH FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-06-002",
+    "name": "LEMON (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-06-003",
+    "name": "LEMON YELLOW (NATURE FIRST)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-07-001",
+    "name": "POTATO (DELISH FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-07-002",
+    "name": "POTATO (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-07-003",
+    "name": "POTATO BRINE (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-07-004",
+    "name": "POTATO AGRIA (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-07-005",
+    "name": "POTATO RUSSET 110s (NATURE FIRST)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-08-001",
+    "name": "RADISH BLACK LONG (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-08-002",
+    "name": "RADISH GREEN MEAT (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-08-003",
+    "name": "RADISH WATERMELON (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-09-001",
+    "name": "BEETROOT RED (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-10-001",
+    "name": "SALSIFY (LES FARMIERS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-11-001",
+    "name": "GRALIC  (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-11-002",
+    "name": "GRALIC  PEEL (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-12-001",
+    "name": "EGGPLANT (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-13-001",
+    "name": "SAGE  (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-14-001",
+    "name": "BASIL BIG (YCUBE SOLUTIONS)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-14-002",
+    "name": "BASIL  (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-15-001",
+    "name": "APPLE GALA (MK)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-17-001",
+    "name": "FROZEN BLACK TRUFFLE WINTER (TRUFFL EAT)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-18-001",
+    "name": "CAPSICUM GREEN (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-18-002",
+    "name": "CAPSICUM RED (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-18-003",
+    "name": "CAPSICUM YELLOW (SRIMUMMANG)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-19-001",
+    "name": "SPINACH FOGLIA 2.5KG/BAG (PREMIUM FOOD)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "VGT-02-20-001",
+    "name": "VEGETABLE-(OTHER)",
+    "category": "Vegetable",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-001",
+    "name": "CABONNE COUNTRY BEEF CHEEK  (PREMIUM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-003",
+    "name": "VEAL FRENCH RACKS FROZEN  (PREMIUM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-004",
+    "name": "VEAL FRENCH RACKS DTM 6 RIBS (LES FARMIERS)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-005",
+    "name": "AU FZ A CUBE ROLL (SIAM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-006",
+    "name": "AU FZ A CHEEK MEAT BP TEYS (SIAM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-007",
+    "name": "OAK A GRASSFED NAVEL END BRISKET (FOOD PROJECT)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-008",
+    "name": "AU FZ GF TRIMMING 50CL RANGERS (SIAMFOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-009",
+    "name": "CHUCK EYE ROLL (OMNI INTERNATIONAL)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-010",
+    "name": "ANGUS CHUCK ROLL MB 1/3 (WORLD OF FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-011",
+    "name": "WAGYU RIBEYE 4/5 (OMNI INTERNATIONAL)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-012",
+    "name": "TENDERLOIN SIDE STRAP(OMNI INTERNATIONAL)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-013",
+    "name": "WAGYU CHUCK EYE ROLL 4/5  (OMNI INTERNATIONAL)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-014",
+    "name": "FZ AUS EBONY CHOICE GRAIN FED AUGUS (JAGOTA)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-015",
+    "name": "FZ AUS EBONY CHOICE GRAIN FED AUGUS BRISKET (JAGOTA)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-016",
+    "name": "BLACK OPAL WAGYU STRIPLOIN MB4/5 (CTI FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-017",
+    "name": "BLACK OPAL WAGYU  MB4/5 (CTI FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-018",
+    "name": "AUS.WAGYU TRIMMING 65CL.(CTI FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-019",
+    "name": "TEYS BLACK GRAINFED 150D CHUCK ROLL.(CTI FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-020",
+    "name": "AUS WAGYU BEEF MB4-5 FLANK STEAK (JAGOTA)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-021",
+    "name": "BRISKET PREMIUM เสือร้องไห้ (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-022",
+    "name": "OYSTER BLADE PREMIUM ใบพาย (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-01-023",
+    "name": "RIB FINGER PREMIUM ร่องซี่โครง  (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-02-001",
+    "name": "TURKEY HAM BLOCK  (LES FARMIERS)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-03-001",
+    "name": "FRESH MEDITERRANEAN SEABASS (THAMMACHART)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-03-002",
+    "name": "FRESH SPANISH BRONZINI SEABASS (THAMMACHART)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-03-003",
+    "name": "FARMED SEABASS450/600 (LES FARMIERS)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-03-004",
+    "name": "FRESH SALMON NONVEGIAN (JAGOTA)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-03-005",
+    "name": "SALMON ROE (FOOD WAY)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-001",
+    "name": "BONE SOUP  (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-002",
+    "name": "SCRAP MEAT  (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-003",
+    "name": "CHICKEN BONES (FLYING BOARD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-004",
+    "name": "MINCE BEEF 20 FAT (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-005",
+    "name": "BEEF CHEEK  (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-006",
+    "name": "CHICKEN THIGHS (BETAGRO)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-007",
+    "name": "CHICKEN MEAT (BETAGRO)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-008",
+    "name": "RUMP CAP (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-009",
+    "name": "ONGLEY อองเลย์ (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-010",
+    "name": "MINCE (WORLD OF FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-011",
+    "name": "CHICKEN BREAST อกไก่ (FOODWAY)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-012",
+    "name": "CHICKEN THIGHS สะโพกไก่ (FOODWAY)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-013",
+    "name": "CHICKEN HAM/KG (FIYING BOARD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-04-014",
+    "name": "MES-CHICKEN (OTHER)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-05-001",
+    "name": "EGG (SRIMUMMANG)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-06-001",
+    "name": "MORTADELLA-ODPI-MOR (OFFICINA DEL)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-07-001",
+    "name": "HERB CHIPOLATAS (FLYING BOARD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-07-002",
+    "name": "TOULOUSE SAUSAGE (FLYING BOARD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-08-001",
+    "name": "DUCK LIVER/FOIE GRAS WHOLE (PREMIUM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-09-001",
+    "name": "TUNA CANNED (7/11)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-001",
+    "name": "HONEY HAM SMOKED  (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-002",
+    "name": "BACON SMOKED  (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-003",
+    "name": "SMOKED BELLY 1/2   (LES FARMIERS)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-004",
+    "name": "PORK NECK สันคอหมู (BETAGRO)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-005",
+    "name": "PORK HIP สะโพกหมู (BETAGRO)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-006",
+    "name": "SMOKED PORKCHOPS (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-007",
+    "name": "BONE MARROW SMOKED (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-008",
+    "name": "STREAKY PORK หมูสามชั้น (B.C.BEEF)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-009",
+    "name": "LAMB SADDLE 3' KINROSS STATION  (PREMIUM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-010",
+    "name": "PORK RACK LBERICO EL DESCANSILLO  (PREMIUM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-10-011",
+    "name": "LAMB STRIPLOIN CAP ON MW VAC  (PREMIUM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-11-001",
+    "name": "SMOKED SALMON NORWAL SLICED (BLACK SALMON)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-11-002",
+    "name": "FRESH ATLANTIC WHOLE SALMON (SIAM FOOD)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-12-001",
+    "name": "PARIS HAM PRINCE DE PARIS (LES FARMIERS)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-12-002",
+    "name": "PARIS HAM (COPADELI)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-13-001",
+    "name": "MAKURO ITOKEZURI 40G ปลาโอแห้ง  (FOOD PROJECT)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-14-001",
+    "name": "ALIVE SHRIMP 51-60/500g  (FOOD PROJECT)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "MES-02-15-001",
+    "name": "MEAT-SEAFOOD-(OTHER)",
+    "category": "Meat & Seafood",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-001",
+    "name": "GRANA PADANO DOP WHOLE 16M (PREMIUM FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-002",
+    "name": "GRANA PADANO (OFFICINA DEL)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-003",
+    "name": "PARMESAN CHEESE 20M MIC  (OFFICINA DEL)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-004",
+    "name": "LATTERIA SORESINA GRANA PADANO  (GLOBAL FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-005",
+    "name": "PECORINO ROMANO DOP  (OFFICINA DEL)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-006",
+    "name": "CHEESE AFFUMICATA  (OFFICINA DEL)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-007",
+    "name": "CHEESE GUA  (OFFICINA DEL)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-008",
+    "name": "COMTE CHEESE AOP10-5/7MONTHS (LES FARMIERS)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-009",
+    "name": "COMTE CHEESE AOP 12M  (FARANG FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-01-010",
+    "name": "COMTE EXTRY  6/9 MONTHS (PREMIUM FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-02-001",
+    "name": "FIORDILATTE CHEESE ( I LOPAN)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-03-001",
+    "name": "MOZZARELLA FLORDILATTE  (OFFICINA DEL)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-03-002",
+    "name": "MOZZARELLA CHEESE 2/KG  (LES FARMIERS)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-04-001",
+    "name": "BUTTER BAL UNSALTED (FOOD PROJECT)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-04-002",
+    "name": "BUTTER BAL SALTED (FOOD PROJECT)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-04-003",
+    "name": "BELGIAN UNSALTED BUTTER82%(FARANG FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-05-001",
+    "name": "NORMANDY ALL PURPOSE CREAM35% (FARANG FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-05-002",
+    "name": "UHT WHIPPING&COOKING 26% (FARANG FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-05-003",
+    "name": "PAULS CULINARY CREAM 1L*12(GLOBAL FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-05-004",
+    "name": "PAULS THICKENED CREAM UHT 1L*12(GLOBAL FOOD)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-06-001",
+    "name": "LIEVITO SECCO CAN 100GR  (OFFICINA DEL)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-07-001",
+    "name": "MASCARPONE ESPRESSO CUP12x226G (FOODGALLERY)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CHS-02-08-001",
+    "name": "CHEESE & BUTTER-(OTHER)",
+    "category": "Cheese & Dairy",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CKO-02-01-001",
+    "name": "EXTER VIRGIN OIL&SANSA OIL (FARANG FOOD)",
+    "category": "Cooking Oil",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CKO-02-02-002",
+    "name": "EXTER VIRGIN OIL  (FARANG FOOD)",
+    "category": "Cooking Oil",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CKO-02-03-001",
+    "name": "TRUFFLE OIL 250ml  (LES FARMIERS)",
+    "category": "Cooking Oil",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CKO-02-02-004",
+    "name": "EXTER VIRGIN OIL&SUNFLOWER OIL (FARANG FOOD)",
+    "category": "Cooking Oil",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-01-001",
+    "name": "SALT PURE SEA FLAKES BUCKET (PREMIUM FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-02-001",
+    "name": "SALT PRUNG THIP (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-03-001",
+    "name": "PEPPER WHITE (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-001",
+    "name": "RED WINE VINEGAR 5/L (FARANG FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-002",
+    "name": "RONCO VINO ROSSO/RED 2LT (OFFICINA DEL)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-003",
+    "name": "VINEGAR SHERRY VINAIGRE DE JEREZ (PREMIUM FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-004",
+    "name": "APPELLATION CONBROLEE",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-005",
+    "name": "FINE RULOY (BOXT)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-006",
+    "name": "BARBETTO",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-007",
+    "name": "PORTO MARGUEZ",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-008",
+    "name": "BANDICOOT ESTATE",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-009",
+    "name": "COCKBURN'S FINE RUBY (VILLA)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-010",
+    "name": "CHATEAU LATAPIE",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-011",
+    "name": "COOKBURNS (PORT)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-012",
+    "name": "BADIA AL COLLE",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-013",
+    "name": "CHATEAL LATAPLE RESERUE",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-014",
+    "name": "VINEGER CHARDONNAY (PREMIUM FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-015",
+    "name": "VINEGER CABERNET SAUVIGNON 250ml (PREMIUM FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-016",
+    "name": "THE PALACE BLEND WHITE BT 250mL (CTI FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-017",
+    "name": "SUBLIME BLEND BLACK Bt 250ML (CTI FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-018",
+    "name": "VINEGAR BALSAMIC OF MODENA IGP (PREMIUM FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-019",
+    "name": "TEMPRANILLO GARNACHA VINOTINTO 3L (IDEAL)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-04-020",
+    "name": "AIREN VINO BLANCO 3L (IDEAL)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-05-001",
+    "name": "PEPPER BLACK (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-06-001",
+    "name": "FARMHOUSE BREADCRUMBS(MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-06-002",
+    "name": "LOBO BREADCRUMBS(MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-07-001",
+    "name": "PURE SUGAR (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-07-002",
+    "name": "SUGAR ICING 900G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-07-003",
+    "name": "BROWN SUGAR (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-08-001",
+    "name": "HONEY DOIKHAM (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-09-001",
+    "name": "MUTTI DOUBLE CONCENTRATED TOMATO PASTE(MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-10-001",
+    "name": "BAKING SODA (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-11-001",
+    "name": "WHOLE ALMOND WITH SKIN/KG  (FARANG FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-12-001",
+    "name": "BALSAMIC VINEGAR AGED'ANTICHI COLLI'500ML (FARANG FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-12-002",
+    "name": "BALSMICO DI MODENA VINEGAR 5L (EAST WEST TRADING)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-13-001",
+    "name": "LA MARNE DI JON MUSTARD 1KG (EAST WEST TRADING)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-13-002",
+    "name": "LA MARNE WHOLE GRAIN MUSTARD 1KG (EAST WEST TRADING)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-13-003",
+    "name": "MUSTARD BLACK 200G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-13-004",
+    "name": "MUSTARD YELLOW 200G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-13-005",
+    "name": "SAVORA MUSTARD 385g  (LES FARMIERS)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-14-001",
+    "name": "MUTTI POLPA FINELY CHOPPED TOMATO (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-15-001",
+    "name": "RAI THIP GROUND GARDENCHILI (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-16-001",
+    "name": "CINNAMON 200G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-17-001",
+    "name": "STAR ANISE โป๊ยกั๊ก (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-18-001",
+    "name": "KAO KEE เก๋า กี๋ (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-19-001",
+    "name": "PAPRIKA HAND BRAND (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-20-001",
+    "name": "TURMERIC POWDER ขมิ้นผง 200G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-20-002",
+    "name": "TURMERIC POWDER (FARANG FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-21-001",
+    "name": "CARDAMON ลูกกระวาน 100G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-22-001",
+    "name": "LIQUORICE ขมิ้นแผ่น 100 กรัม (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-23-001",
+    "name": "DEE PLY ดีปลี 250G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-24-001",
+    "name": "PADDY CANDLE เทียนข้าวเปลือก อินเดีย200G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-25-001",
+    "name": "CUMIN SEEDS เม็ดยี่หร่า 250G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-26-001",
+    "name": "LUK CHAN 250G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-27-001",
+    "name": "SODA POWDER MCGARRETT 300G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-28-001",
+    "name": "BAKING POWDER 1KG (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-29-001",
+    "name": "MALA SEEDS 50G (MK)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-30-001",
+    "name": "MILK CHOCOLATE COUVERTURE (FARANG FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-31-001",
+    "name": "DRY CHICKPEAS 7-8MM (PREMIUM FOOD)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-32-001",
+    "name": "MAR MISO JAPANESE 1KG เต้าเจี้ยว  (FOOD PROJECT)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-33-001",
+    "name": "WILDAIP MOON WATER 6x1.OL (FOODGALLERY)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-33-002",
+    "name": "WILDAIP NATURAL SPRING WATER 6x1.OL (FOODGALLERY)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "SEAS-02-34-001",
+    "name": "SEASONING-(OTHER)",
+    "category": "Seasoning",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "PZS-02-01-001",
+    "name": "CIRIO PEELED TOMATOES (EAST WEST)",
+    "category": "Pizza Sauce",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "PZS-02-01-002",
+    "name": "CIRIO CRUSHED TOMATOES (EAST WEST)",
+    "category": "Pizza Sauce",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "RIC-02-01-001",
+    "name": "CARNAROLI RICE (PREMIUM FOOD)",
+    "category": "Rice",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "RIC-02-01-002",
+    "name": "RISO GRAZIA CARNAROLI (I DEAL )",
+    "category": "Rice",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "RIC-02-01-003",
+    "name": "CARNAROLI INVECCHATO RISO SCOTTI (JAGOTA)",
+    "category": "Rice",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-01-001",
+    "name": "PIZZAERIA PIZZA FLOUR 25KG (EAST WEST)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-01-002",
+    "name": "SEMOLA RIMACINATA 5KG (EAST WEST)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-01-003",
+    "name": "FARINA ORO TIPO 10KG (OFFICINA DEL)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-01-004",
+    "name": "FARINA NAPOLETANA TIPO 25KG   (OFFICINA DEL)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-01-005",
+    "name": "KNORR CORN FLOUR (MK)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-01-006",
+    "name": "ALL PURPOSE FLOUR UFM 1KG (MK)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-01-007",
+    "name": "DOUGH PUFF 3KG (BREAD CONNECTION)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "FLO-02-02-001",
+    "name": "FRENCH WHEAT FLOUR TRADITION (FARANG FOOD)",
+    "category": "Flour",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-01-001",
+    "name": "PEAS EXTER FINE FROZEN 1KG/BAG  (PREMIUM FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-01-002",
+    "name": "TALLEY'S GARDEN PEAS (GLOBAL FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-02-001",
+    "name": "CAPERS BIG OIMEDA 370/G  (PREMIUM FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-02-002",
+    "name": "CAPERBERRIES MEDIUM''LUXEAPERS'' (PREMIUM FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-02-003",
+    "name": "NONPEREILLES CAPERS \"LUXEAPERS\" 900G (FARANG FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-02-004",
+    "name": "FRUTTI DAL CAPPERO 790 G (FOOD WAY)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-03-001",
+    "name": "PITTED BLACK OLIVES TAGGIASCA 900g (PREMIUM FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-04-001",
+    "name": "PINE NUTS/KG  (FARANG FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-04-002",
+    "name": "GREEN PISTACHIO NUTS/KG   (FARANG FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-05-001",
+    "name": "BLACK TRUFFLE OLI/250ML (FARANG FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-05-002",
+    "name": "WHITE TRUFFLE OLI/250ML (FARANG FOOD)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-05-003",
+    "name": "TARTI TRUFFLE ALENA 225G (LES FARMIERS)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  },
+  {
+    "sku": "CG-02-05-004",
+    "name": "TRUFFLE PASTE SAISA CON TARTUFO (FOODGALLERY)",
+    "category": "Canned Goods",
+    "unit": "",
+    "unitType": "",
+    "minStock": 0
+  }
+]

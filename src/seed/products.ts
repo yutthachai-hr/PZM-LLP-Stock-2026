@@ -4,7 +4,7 @@
 // "รหัสสินค้า" workbooks by scripts/import-items.mjs — edit the workbook and re-run the script,
 // never the generated file. SKUs must stay identical to the Cost of Goods workbooks.
 
-import { LLP_PRODUCTS, PZM_PRODUCTS, type SeedProduct } from './catalog.generated'
+import { LLP_PRODUCTS, PZM_PRODUCTS, RND_PRODUCTS, type SeedProduct } from './catalog.generated'
 import type { BrandId } from '../brand/brand'
 
 export type { SeedProduct }
@@ -12,6 +12,7 @@ export type { SeedProduct }
 const CATALOGS: Record<BrandId, SeedProduct[]> = {
   pizza: PZM_PRODUCTS,
   lelapin: LLP_PRODUCTS,
+  rnd: RND_PRODUCTS,
 }
 
 /** The official catalogue for a brand. */

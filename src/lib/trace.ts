@@ -84,7 +84,7 @@ export interface TraceFields extends Partial<TraceContext> {
   ms?: number
   /** An HTTP status or an error key, never a message with figures in it. */
   code?: string | number
-  brand?: 'pizza' | 'lelapin'
+  brand?: 'pizza' | 'lelapin' | 'rnd'
   /** Counts only (events applied, rows written). */
   count?: number
 }
