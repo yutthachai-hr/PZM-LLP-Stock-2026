@@ -51,13 +51,13 @@ function LabFlask() {
     <>
       <path
         d="M10 4v3l-5 8.5A2 2 0 0 0 6.7 18.5h10.6a2 2 0 0 0 1.7-3L14 7V4"
-        fill="#818cf8"
-        stroke="#4338ca"
+        fill="#93c5fd"
+        stroke="#003291"
         strokeWidth={1.2}
         strokeLinejoin="round"
       />
-      <path d="M7.5 14h9l1.5 2.5a1 1 0 0 1-.9 1.5H6.9a1 1 0 0 1-.9-1.5Z" fill="#4f46e5" />
-      <path d="M9 4h6" stroke="#4338ca" strokeWidth={1.5} strokeLinecap="round" />
+      <path d="M7.5 14h9l1.5 2.5a1 1 0 0 1-.9 1.5H6.9a1 1 0 0 1-.9-1.5Z" fill="#1d4ed8" />
+      <path d="M9 4h6" stroke="#003291" strokeWidth={1.5} strokeLinecap="round" />
     </>
   )
 }
