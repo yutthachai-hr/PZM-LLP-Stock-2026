@@ -1,163 +1,140 @@
-# Release blocker — Firestore read budget
+# Firestore Read Budget: หลักฐานและรายงานก่อน merge
 
-Production reported about **203k document reads a day** against the free plan's 50k. This
-document gives the measured cause, the fix, and before and after figures. Every number below
-is a count of documents delivered on the Firestore emulator. None of them is estimated from
-reading the code.
+Branch: `perf/firestore-read-budget` (แตกจาก `feat/integrity-auditor` เพราะต้องใช้ harness e2e + emulator)
+วันที่: 6 ต.ค. 2569 · เหตุการณ์: อ่าน ~203k ครั้งต่อวัน เทียบกับโควตาฟรี 50k
+**สถานะ: รอเจ้าของตรวจ ห้าม merge จนกว่าจะ deploy rules + indexes ก่อน (ขั้นตอนอยู่ท้ายไฟล์)**
 
-## How it is measured
+## วิธีวัด
 
-- **`e2e/read-benchmark.spec.ts`** seeds a brand the size of production (`e2e/bigFixture.ts`):
-  - 460 products;
-  - 1,400 balances;
-  - 50 per-branch minimums;
-  - 30 suppliers;
-  - 60 movements a day for 45 days;
-  - 120 POs;
-  - 280 notifications.
+- **มาตรวัดใหม่** `src/data/readMeter.ts` นับทุก primitive พร้อม label คงที่: listener bootstrap / update / resume, range, query, by, one, many, tx
+  - ประเมินค่าที่ถูกคิดเงินจริง: อ่านจาก cache ในเครื่องไม่คิด, query ว่างคิด 1, กลับมาหลังหายไปเกิน 30 นาทีคิดทั้งผลลัพธ์
+  - ไม่บันทึกเนื้อหาเอกสาร
+  - ดูได้ใน Settings › การอ่านข้อมูล และ `window.__pzmReads`
+- **Benchmark** `e2e/read-budget.spec.ts` โหลด backup ของจริง (Pizza Mania 6 ต.ค. 15:00: สินค้า 336, ยอดคงเหลือ 524, movements 3,173, PO 130) เข้า emulator
+  - วัดทีละ scenario โดยเปลี่ยนหน้าในแอปแบบไม่ reload
+  - มี warm-up ให้ job แจ้งเตือนรันจนนิ่งก่อนเริ่มวัด
+  - ไฟล์ผล: `read-budget-before.json`, `read-budget-after.json`
+- **ข้อจำกัด:**
+  - ตัวเลขคือ reads ต่อครั้งของ scenario บนข้อมูลจริง แต่ใน emulator
+  - เวลา "หายไปนาน" จำลองด้วย `markLongAbsence()`
 
-  The spec then opens each scenario and counts reads in two places:
-  - **In the app** (`src/data/readMeter.ts`): listeners (first snapshot = its size; later
-    snapshots = their changes), single-document reads, queries (an empty one counts 1),
-    transaction reads, and single-document listeners.
-  - **On the server**, for the stock commands (`e2e/command-server.mjs`, `/__reads`).
-- **The e2e hook** `window.__pzmReads` exists only in emulator builds.
-- **The data files:** `docs/evidence/data/read-benchmark-{before,preG,after}.json`.
-  - before = commit `e499e47` (all phases up to G10, with only the meter added);
-  - preG = `2f395c6` (before Phase G);
-  - after = this change.
-- **The Worker:** `tests/worker/worker-reads.test.ts` measures the cron Worker on the same
-  sizes, with Le Lapin at a quarter of them. Data file: `docs/evidence/data/worker-reads.json`.
+## 1. ผู้บริโภค reads อันดับต้น (ก่อนแก้)
 
-## Root cause
+| อันดับ | Label | ต่อครั้ง | เกิดเมื่อ |
+|---|---|---|---|
+| 1 | `stockLevels` listener | 524 | ทุก cold open, แท็บที่สอง, กลับมาหลัง >30 นาที |
+| 2 | `products` listener | 336 | เหมือนข้างบน |
+| 3 | `purchaseOrders.range` | 130–260 | ทุกครั้งที่เข้าหน้าใบสั่งซื้อ, ปฏิทิน, แดชบอร์ด (cache ไม่ช่วย) |
+| 4 | `notifications` (ทุกคน 7 วัน) | 135 + broadcast | ทุกเครื่องได้ทุกการเขียน/mark read ของทั้งบริษัท |
+| 5 | `notifications.one` ใน job | 134/รอบ | เครื่องหัวหน้าทุก 30 นาที (Worker ยังไม่ deploy) |
+| 6 | `suppliers.all` | 86–172 | ทุก cold open + หน้าผู้ขาย |
+| 7 | `movements` 7 วัน | 56 | ทุก bootstrap/resume |
+| 8 | `transfers.by.status` | 5–6 query ว่าง | ทุกครั้งที่ mount แดชบอร์ด |
+| 9 | "โหลดประวัติทั้งหมด" | 3,173 + resume | กลายเป็น listener ทั้ง collection ตลอด session |
+| 10 | Import (ยอดเปิด) | 3,173 × 2 | ต่อการเลือกไฟล์ (แอดมิน รายเดือน) |
 
-Every **cold open** read the whole working set again: products, balances, overrides, the
-ledger window, and a week of notifications. That is about 2,800 documents per open:
+**ตรวจสอบกับเหตุการณ์จริง:** ราว 1,300 reads ต่อการ bootstrap × (cold 1 + resume ~15 ครั้ง) × ~10 เครื่อง ≈ 208k ต่อวัน ใกล้กับ 203k ที่เกิดขึ้นจริง
 
-- a phone opening the app from its home screen;
-- a reload;
-- a second tab;
-- a listener that resumes after more than 30 minutes away.
+## 2–3. Reads ต่อ cold start และต่อ workflow (ก่อน → หลัง)
 
-Moving around inside the app was already cheap (0–60 per screen). About 70 opens a day
-across both brands reproduces the 203k (`tests/read-budget.test.ts`).
+| # | Scenario | ก่อน | หลัง | หมายเหตุ |
+|---|---|---|---|---|
+| 01 | cold open หัวหน้า (**เครื่องใหม่** / สำเนาหมดอายุ) | 1,555 | 1,426 | อ่านครบครั้งแรก + job sweep 134 (ราย 6 ชม.) |
+| 01b | **เปิดแอปซ้ำ เครื่องเดิม** | (≈1,300) | **12** | ภายใน 30 นาที; ถ้าหลายชั่วโมงดู #13 |
+| 16 | cold open พนักงาน (เครื่องใหม่) | 1,304 | 1,215 | อ่านครบครั้งแรกของเครื่อง |
+| 02 | แดชบอร์ด | 38 | **0** | |
+| 03 | สินค้า (ครั้งแรก) | 80 | 80 | รูปสินค้า; ครั้งต่อไป 0 (cache IDB เดิม) |
+| 04 | รับของ | 50 | 50 | `listOpenOrders` (ดูข้อ 6) |
+| 05 | ใบสั่งซื้อ | 260 | **0** | |
+| 06 | ผู้ขาย | 174 | **3** | |
+| 09 | ประวัติ | 0 | 0 | |
+| 11 | ปฏิทิน | 140 | **6** | |
+| 12 | สลับหน้า ×3 รอบ | 532 | **0–2** | |
+| 07 | แจ้งเตือนเข้า 1 รายการ | 13 | **4** | เฉพาะเครื่องของผู้รับ |
+| 08 | เปิด Notification Center | 0 | 0 | หน้าเก่ากว่าค่อยโหลดทีละ 30 |
+| 13 | **กลับมาหลังหายไป >30 นาที** | **1,055** | **24** | |
+| 14 | **แท็บที่สอง** | **1,437** | **39** | |
 
-## The fix
+## 4. แจ้งเตือน
 
-1. **A device cache with a delta listener** (`src/data/cachedLive.ts`, `localCache.ts`,
-   `useLive({ cache })`).
-   - The five big live sets are kept in IndexedDB.
-   - On open the app shows them from the cache. The listener then asks only for
-     `field >= min(newest seen, now) − 30 min`.
-   - It reads everything again when:
-     - there is no cache;
-     - the cache is more than 7 days old;
-     - the ledger window has widened;
-     - or the brand's **cache epoch** has moved.
-   - Missing or blocked storage simply means no cache, which behaves exactly as before.
-2. **The cache epoch** (`meta/cacheEpoch_<brand>`, `services/cacheEpoch.ts`).
-   - A change listener cannot see a deletion or a rewrite. So these admin actions bump the
-     epoch after they succeed: edit, void, recompute, product unit changes, a unit
-     migration or rebase, deleting a product or location, and a restore.
-   - Every device then reads the affected set once in full.
-   - Rules: any active user may read the epoch; only an admin may write it, and only number
-     fields for the five named sets (`tests/cache-epoch-rules.test.ts`).
-3. **Persisted range caches.** The order, transfer and request caches are kept on the
-   device. They refresh with a delta on `updatedAt`, and in full once every 24 hours. The
-   Orders page now uses the order cache.
-4. **Suppliers.** They are cached on the device, with a delta on `updatedAt` and a full
-   read every 24 hours.
-5. **Import** used to read the whole ledger. It now reads from the earliest imported date
-   minus one day. A test shows the plan is identical to the full-ledger plan.
-6. **Meter completeness.** `getOne`, `getBy`, `getRange`, `getAll`, transaction reads and
-   single-document listeners are now counted, and live listeners are counted up and down.
+**ก่อน:** ทุกเครื่องฟังแจ้งเตือน 7 วันของ**ทุกคน** (135) และทุกการเขียน/การกดอ่านถูกส่งไปทุกเครื่อง ส่วน job อ่านทีละ id (134 ต่อรอบ)
 
-### Per-branch minimums
+**หลัง:**
+- เพิ่ม `audienceKeys` (`all` / `role:x` / `uid:x`) ทุกเอกสาร
+- query `array-contains-any` คีย์ของผู้อ่าน: ครั้งแรก 30 ล่าสุด จากนั้นฟังเฉพาะที่ `updatedAt` เปลี่ยน (สูงสุด 60) พร้อมสำเนาในเครื่อง
+- กลับมาหลังหายไป = 1 read; แจ้งเตือนเข้า = เฉพาะผู้รับ
+- job ใช้ `getMany` (30 id/query) + sweep active ทุก 6 ชม. + เติม `audienceKeys` ให้เอกสารเก่าที่ยัง active
+- **NotificationHost ไม่สร้าง listener เพิ่ม** (ใช้ร่วมกับกระดิ่งผ่าน DataContext)
+- คงไว้ครบ: role, all-user, mute, read state, popup, เสียง, dedupe, burst, deep link (ทั้งหมดอยู่บนเอกสารเดิม)
 
-`productMinOverrides` carry no `updatedAt`, and no screen in the app writes them. They come
-only from a restore, which bumps the epoch. A delta query therefore returns nothing for them
-(Firestore leaves out documents without the field).
+## 5. Movements
 
-If an admin edits an override in the Firebase console, devices pick it up at the next 7-day
-refresh. Restore is the supported path.
+- **listener 7 วันไม่ขยายอีกแล้ว:** ประวัติเก่ากว่านั้นอ่านครั้งเดียวผ่าน `movementCache` (อ่านเฉพาะช่วงที่ขาด) ไม่มี listener ทั้ง collection อีก
+- **7 วันเก็บในเครื่อง:** refresh ด้วย `createdAt` / `updatedAt` ใหม่กว่า cursor ทำให้ resume 56 → ~10
+- **Import:** การตรวจบิลซ้ำเป็น equality query แบบ indexed อยู่แล้ว (`invoiceNo`, 2–4 reads)
+  - หน้า **นำเข้ายอดเปิด** ยังอ่าน ledger ทั้งหมด (`import.ledger`) เพราะต้องคำนวณยอด ณ วันนับ
+  - ข้อนี้กระทบตัวเลขสต๊อกโดยตรง จึงไม่แก้ในรอบนี้ (ดูข้อ 6)
 
-## Before and after (documents per scenario)
+## 6. ความเสี่ยงที่ยังเหลือ (Firestore)
 
-| Scenario | preG | before | **after** |
-|---|---:|---:|---:|
-| cold start, dashboard (first open on a device) | 2,848 | 2,848 | 2,851 |
-| second tab, dashboard | 2,835 | 2,835 | **72** |
-| cold /products | 2,651 | 2,651 | **57** |
-| cold /receive | 2,665 | 2,665 | **71** |
-| cold /orders | 2,713 | 2,713 | **60** |
-| cold /movements | 2,651 | 2,651 | **57** |
-| cold /suppliers/performance | 2,864 | 2,864 | **59** |
-| cold /calendar | 2,832 | 2,832 | **61** |
-| cold /inbox | 2,685 | 2,807 | **93** |
-| cold /products/p1/card | 2,673 | 2,795 | **81** |
-| warm /orders | 62 | 62 | **2** |
-| warm /receive · /calendar · /inbox · stock card | 14 · 4 · 34 · 22 | same | same |
-| route switching, second round | 142 | 142 | **82** |
-| open the bell | 0 | 0 | 0 |
-| reconnect in session | 0 | 0 | 0 |
+1. **เครื่องใหม่หรือสำเนาหมดอายุ ~1,200–1,400** ยอดคงเหลืออ่านครบวันละครั้ง สินค้าสัปดาห์ละครั้ง
+   - ลดต่อได้ด้วยการจำกัด stockLevels ตามสาขาของผู้ใช้ (`siteIds`) หรือยืดรอบ full เป็น 3 วัน
+   - ต้องให้เจ้าของตัดสินเรื่องความเสี่ยงนาฬิกาเครื่องเพี้ยนเกิน 5 นาที (ตอนนี้แก้ด้วยการอ่านครบรายวัน)
+2. **Job แจ้งเตือนยังรันในเบราว์เซอร์หัวหน้า** เพราะ Worker ไม่ได้ deploy: ~1k reads ต่อเครื่องหัวหน้าที่เปิดทั้งวัน
+   - Worker ฝั่ง server ก็ควรใช้ `getMany`/delta แบบเดียวกันก่อน deploy เพราะตอนนี้ query `active == true` ทุก 30 นาที ≈ 6k ต่อวัน
+3. **Import ยอดเปิด** อ่าน ledger 3,173 × 2 ต่อการนำเข้า (แอดมิน เดือนละครั้ง ≈ 6k) ทางแก้คือคำนวณจากยอดปัจจุบันลบ movement หลังวันนับ ซึ่งต้องมี e2e คุมก่อน
+4. **หน้ารับของ** `listOpenOrders` เรียกซ้ำ 2 query (50) ต่อการเข้าหน้า ย้ายไปใช้ `orderCache` ได้
+5. **การกดอ่าน** แก้ `readBy` บนเอกสาร ทำให้เครื่องอื่นในกลุ่มผู้รับได้ 1 read ต่อการกด ทางแก้คือเก็บ read state ต่อคน (ต้องแก้ rules)
+6. **หลายแท็บ** ยังมี listener ชุดละ 7 ต่อแท็บ แต่หลังแก้ เปิดแท็บที่สองเหลือ ~39 จึง**ไม่คุ้ม**ที่จะทำ leader election ตอนนี้
+7. **Persistent cache ของ Firestore** เปิดอยู่แล้ว (multi-tab) และ sign-out ล้างทั้ง cache ของ Firestore และสำเนาของแอป (`clearCopies`)
+   - บนเครื่องใช้ร่วม (shared device) สำเนาอยู่จนกว่าจะ sign-out
+   - ถ้าต้องการปิดบนเครื่องที่ไม่ไว้ใจ ต้องเพิ่ม option ใน Settings
 
-**Phase G's own cost:** about 122 documents, only on a cold open of the inbox or a stock card
-(compare preG with before). It is now covered by the cache like everything else.
+## 7. ประมาณการรายวัน (สมมติฐานระบุชัด)
 
-### Checks on the listeners
+**สมมติฐานวันปกติ:**
+- 10 เครื่อง (7 ผู้ใช้ บางคนมี 2 เครื่อง)
+- ต่อเครื่องต่อวัน: อ่านครบ 1 ครั้ง (~850 เพราะสินค้าอ่านครบรายสัปดาห์), กลับมาหลังหายไป 15 ครั้ง × 24, แท็บที่สอง 2 × 39, เปลี่ยนหน้า/รับของ ~150, แจ้งเตือน ~50
+- เครื่องหัวหน้าเปิดทั้งวัน 3 เครื่อง (job): ~1k ต่อเครื่อง
 
-| Check | Evidence |
+| | ก่อน | หลัง |
+|---|---|---|
+| ต่อเครื่องต่อวัน | ~20,800 | ~1,500 |
+| วันปกติ (10 เครื่อง + job) | **~208k** (ตรงกับ 203k จริง) | **~18k** (< 20k ปกติ) |
+| วันยุ่ง (15 เครื่อง, กลับมา 25 ครั้ง/เครื่อง) | ~400k | **~29k** (ช่วงเตือน 25–30k) |
+| ถ้า Worker ทำ delta แล้ว deploy (job ออกจากเบราว์เซอร์) | — | ~16k ปกติ / ~26k ยุ่ง |
+
+**เป้าหมาย:** ปกติ < 20k ✅ · เตือน 25–30k (วันยุ่งอยู่ในช่วงนี้) · เพดานภายใน 35k ✅ · โควตาจริง 50k ✅
+
+**ทางลดรอบต่อไป** (ทำให้วันยุ่งต่ำกว่า 25k): ข้อ 6.1 stockLevels ตามสาขา และข้อ 6.2 Worker delta
+
+## Exit gate
+
+| เกณฑ์ | ผล |
 |---|---|
-| Recipient-scoped notifications | Opening the bell reads 0. The notification listener is the one global listener (`useNotifications` context); NotificationHost adds none. |
-| No listener leaks | Live listeners on a quiet screen after visiting every route are the 8 global ones: users/one, meta/one, locations, products, stockLevels, stockMovements, productMinOverrides, notifications. |
-| No global movement listener beyond the windowed one | The ledger listener is windowed by `date` and cached by `createdAt`. |
-| Supplier intelligence fetched once | `SupplierIntelProvider` serves every consumer. |
-| Overlapping range reads coalesced | `rangeCache.gapsIn`. |
+| Notification listener เป็นแบบ recipient-scoped | ✅ (ต้อง deploy index; ถ้ายังไม่มี index จะ fallback แบบจำกัด 60) |
+| NotificationHost ไม่สร้าง listener ซ้ำ | ✅ |
+| ประวัติ movement มีขอบเขต / แบ่งหน้า | ✅ listener 7 วันคงที่, เก่ากว่าอ่านครั้งเดียว |
+| Import ไม่อ่าน movement ทั้ง collection เพื่อตรวจบิลซ้ำ | ✅ (indexed อยู่แล้ว); **นำเข้ายอดเปิดยังอ่านครบ** ดูข้อ 6.3 |
+| เลิกดึง supplier intelligence ซ้ำ | ✅ provider เดียว |
+| ลด range reads ที่ซ้อนกัน | ✅ อ่านเฉพาะช่วงที่ขาด + delta |
+| readMeter ครอบทุก primitive | ✅ |
+| ไม่มี regression | ✅ unit 1,165 · rules 217 · e2e 8 expected / 0 unexpected · lint 0 errors · i18n ครบ |
+| reconnect ไม่ทำให้ subscription งอก | ✅ listener คงที่ 7 ตัวตลอด benchmark |
+| subscription cleanup ถูกต้อง | ✅ (นับด้วย `noteListener`) |
+| benchmark ลดลงอย่างมีนัยสำคัญ | ✅ ดูข้อ 2–3 |
+| ประมาณการวันยุ่งมี headroom ต่ำกว่าโควตา | ✅ ~29k < 35k < 50k |
 
-## Daily budget (busy day, both brands)
+## ขั้นตอนเจ้าของ (ตามลำดับ ห้ามสลับ)
 
-The model in `tests/read-budget.test.ts` is calibrated so that the BEFORE figures reproduce
-production: 70 × (2,820 + 3 × 17.5) ≈ **201k**.
+1. **deploy rules + indexes ก่อน merge** (rules เพิ่ม `audienceKeys`, index สร้างเสร็จภายในไม่กี่นาที):
+   ```bash
+   npx firebase deploy --only firestore:rules,firestore:indexes --project pzm-stock-x5
+   ```
+2. merge `feat/integrity-auditor` แล้วตามด้วย `perf/firestore-read-budget` (ต้องสั่งเอง)
+3. วันแรกหลัง deploy เปิด Settings › การอ่านข้อมูล ดูตัวเลขจริงต่อเครื่อง
+4. (แนะนำ) แก้ Worker ให้ใช้ delta แล้ว deploy
 
-The same profile prices the AFTER code at **≈ 17.9k a day**:
+## 8–10. Supabase
 
-- 70 opens × (70 + 3 screens × 10);
-- 10 devices each rebuilding fully once every 7 days;
-- one admin epoch bump a day (every device re-reads the ledger window);
-- the daily full refresh of the range caches and suppliers.
-
-The cron Worker (`tests/worker/worker-reads.test.ts`) adds about **5.9k a day**:
-
-| Job | Reads per run |
-|---|---:|
-| half-hourly (×48) | 12 |
-| generate | 8 |
-| morning | 4,957 |
-| weekly (once a week) | 2,811 |
-
-**Total: about 23.8k a day**, below the 25k target and under half the 50k quota.
-
-- Doubling the opens (140 a day) stays under 40k; the test checks this.
-- The largest remaining cost is the Worker's morning job. It reads products, balances and
-  30 days of the ledger once a day. If more headroom is needed, that job could read a
-  stored daily summary instead. This is **not** done here; it is an option for the owner.
-
-## Gates run with this change
-
-| Gate | Result |
-|---|---|
-| unit | 1,297 passed (114 files) |
-| rules | 225 passed |
-| e2e | 30 of 30 (benchmark excluded); the benchmark passes on its own |
-| tsc | clean |
-| oxlint | 0 errors |
-| i18n | complete |
-| bundle | within budget (main 220 KB, initial 1,697 KB) |
-
-## What it cannot show here
-
-- These are emulator counts on a production-sized fixture, not production's billing console.
-- After deploy, step 2 ("verify the read budget") is to watch Usage → Firestore reads for 24
-  hours. Expected: under 25k on a busy day.
-- The first open on every device after deploy reads the full set once, since no cache
-  exists yet. Expect day one to be higher, around 10 devices × 2,850 more.
+ดู `docs/ARCH-supabase-hybrid.md`

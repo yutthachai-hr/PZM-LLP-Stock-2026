@@ -906,6 +906,12 @@ export interface AppNotification {
   category: NotificationCategory
   priority: NotificationPriority
   to: NotificationAudience
+  /**
+   * `to` as query keys (`all`, `role:x`, `uid:x`) — what the bell's recipient-scoped query
+   * matches (lib/inventoryRules/notifications.ts audienceKeysOf). Absent on documents
+   * written before 6 Oct 2026; the job adds it to the active ones it touches.
+   */
+  audienceKeys?: string[]
   /** Fills the {slots} of the Thai title and body for this kind (lib/inventoryRules/copy.ts). */
   params: Record<string, string | number>
   /** Where tapping it goes: an in-app path. */

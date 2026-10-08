@@ -86,8 +86,8 @@ export async function loadLedger(from?: number): Promise<StockMovement[]> {
   // count on — a count's day-end balance is then worked BACK from today's balance
   // (balanceAtDayEnd), which needs nothing older. The whole ledger grows forever, and
   // reading it on every import was a full collection scan.
-  if (from !== undefined) return (await db.getRange<StockMovement>(COL.movements, 'date', from, Number.MAX_SAFE_INTEGER)) ?? []
-  return (await db.getAll<StockMovement>(COL.movements)) ?? []
+  if (from !== undefined) return (await db.getRange<StockMovement>(COL.movements, 'date', from, Number.MAX_SAFE_INTEGER, { label: 'import.ledger.since' })) ?? []
+  return (await db.getAll<StockMovement>(COL.movements, { label: 'import.ledger' })) ?? []
 }
 
 /**

@@ -11,17 +11,68 @@ import {
   runTransaction,
   where,
   deleteField,
+  documentId,
   increment as fsIncrement,
-  orderBy,
+  orderBy as fbOrderBy,
   limit as fbLimit,
+  type QueryConstraint,
 } from 'firebase/firestore'
 import { getDb } from '../firebase/app'
-import { DELETE_FIELD, Increment, withInitialVersion, withVersionBump, type Backend, type SubscribeOptions, type TxContext } from './types'
+import { DELETE_FIELD, Increment, withInitialVersion, withVersionBump, type Backend, type QuerySpec, type ReadOptions, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
-import { noteListen, noteRead } from '../data/readMeter'
+import { currentResumeEpoch, isReturningFromAbsence, noteListener, noteReadOp, onReturnFromLongAbsence, RESUME_TOKEN_MS } from '../data/readMeter'
+
+/**
+ * When each listener last heard from the server, kept across reloads: a reload within 30
+ * minutes resumes from the offline copy and is billed only for what changed; after that it
+ * is billed as a new query. Keys are labels and filters, never document contents.
+ */
+const SEEN_KEY = 'pzm.reads.lastServer'
+function lastServerAt(key: string): number | null {
+  try {
+    const all = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}') as Record<string, number>
+    return all[key] ?? null
+  } catch {
+    return null
+  }
+}
+function markServer(key: string, at: number): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}') as Record<string, number>
+    all[key] = at
+    localStorage.setItem(SEEN_KEY, JSON.stringify(all))
+  } catch {
+    // no storage: the estimate is just less precise
+  }
+}
+const activeKeys = new Set<string>()
+// Back from more than 30 minutes away: no listener has been in touch with the server
+// since, whatever the marks say (a test can declare the absence without the time passing).
+onReturnFromLongAbsence(() => {
+  try {
+    localStorage.removeItem(SEEN_KEY)
+  } catch {
+    // no storage
+  }
+})
+if (typeof document !== 'undefined') {
+  // Still connected up to the moment the page is hidden: that is when the 30 minutes start.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') for (const k of activeKeys) markServer(k, Date.now())
+  })
+}
 
 // Firestore implementation. Real-time across all devices, offline persistence enabled.
 // Collection names are brand-scoped via resolveCollection() so brands stay fully isolated.
+
+/** The spec as Firestore query constraints. */
+function constraints(spec: QuerySpec | undefined): QueryConstraint[] {
+  if (!spec) return []
+  const out: QueryConstraint[] = (spec.filters ?? []).map((f) => where(f.field, f.op, f.value))
+  if (spec.orderBy) out.push(fbOrderBy(spec.orderBy.field, spec.orderBy.dir ?? 'asc'))
+  if (spec.limit !== undefined) out.push(fbLimit(spec.limit))
+  return out
+}
 
 /** Turn our markers (DELETE_FIELD, Increment) into Firestore's own. */
 function toFirestorePatch(patch: Record<string, unknown>): Record<string, unknown> {
@@ -45,30 +96,60 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       const ref = fbCollection(db, c)
       // A single-field range filter is served by Firestore's automatic index, so this
       // needs no composite index to be deployed alongside it.
-      const q = opts?.since ? query(ref, where(opts.since.field, '>=', opts.since.value)) : ref
-      // What the listener delivers is what Firestore bills for, so it is counted where it
-       // arrives (data/readMeter.ts). The first snapshot brings the whole window; after
-       // that only what changed, which is why a resumed listener is cheap and a cold start
-       // is not.
-      let first = true
+      const parts = [...(opts?.since ? [where(opts.since.field, '>=', opts.since.value)] : []), ...constraints(opts?.query)]
+      const q = parts.length ? query(ref, ...parts) : ref
+      const label = opts?.label ?? `${collection}.listen`
+      const key = `${c}|${label}|${opts?.since ? `${opts.since.field}>=${opts.since.value}` : '*'}|${opts?.query ? JSON.stringify(opts.query) : ''}`
+      // Every delivery is counted where it arrives (data/readMeter.ts): served from the
+      // device's copy (free), the first answer from the server (the whole result, unless
+      // resumed within 30 minutes), a return after a long absence (the whole result again),
+      // and the changes after that.
+      let delivered = false
+      let fromServer = false
+      let sawCache = false
+      let epoch = currentResumeEpoch()
+      noteListener(1)
+      activeKeys.add(key)
       const unsub = onSnapshot(
         q,
+        { includeMetadataChanges: true },
         (snap) => {
-          const docs = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
-          noteRead(c, first ? snap.size : snap.docChanges().length)
-          first = false
-          cb(docs)
+          const changes = snap.docChanges().length
+          const cached = snap.metadata.fromCache
+          if (cached) {
+            if (!delivered) {
+              sawCache = true
+              noteReadOp({ label, collection: c, kind: 'listen.bootstrap', docs: snap.size, fromCache: true })
+            }
+          } else if (!fromServer) {
+            const last = lastServerAt(key)
+            const resumed = sawCache && last !== null && Date.now() - last < RESUME_TOKEN_MS
+            noteReadOp({ label, collection: c, kind: 'listen.bootstrap', docs: snap.size, billed: resumed ? changes : Math.max(1, snap.size) })
+            fromServer = true
+            epoch = currentResumeEpoch()
+          } else if (currentResumeEpoch() !== epoch) {
+            noteReadOp({ label, collection: c, kind: 'listen.resume', docs: snap.size, billed: Math.max(1, snap.size) })
+            epoch = currentResumeEpoch()
+          } else if (changes > 0) {
+            noteReadOp({ label, collection: c, kind: 'listen.update', docs: changes })
+          }
+          if (!cached) markServer(key, Date.now())
+          // A change of metadata alone (cache → server with nothing new) is not news.
+          if (delivered && changes === 0) return
+          delivered = true
+          cb(snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T))
         },
         (err) => {
           console.error(`[firestore] subscribe ${c} failed`, err)
-          onError?.(err)
+          // Either form: the options' onError (perf/firestore-read-budget) or the fourth argument.
+          const tell = opts?.onError ?? onError
+          tell?.(err)
         },
       )
-      noteListen(c, 1)
-      let open = true
       return () => {
-        if (open) noteListen(c, -1)
-        open = false
+        noteListener(-1)
+        activeKeys.delete(key)
+        if (!isReturningFromAbsence()) markServer(key, Date.now())
         unsub()
       }
     },
@@ -81,12 +162,12 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
     ): () => void {
       const db = getDb()
       const c = resolve(collection)
-      noteListen(`${c}/one`, 1)
+      noteListener(1)
       let open = true
       const unsub = onSnapshot(
         doc(db, c, id),
         (snap) => {
-          noteRead(c, 1)
+          noteReadOp({ label: `${collection}.one.live`, collection: c, kind: 'listen.update', docs: 1, fromCache: snap.metadata.fromCache })
           cb(snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null)
         },
         (err) => {
@@ -95,7 +176,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
         },
       )
       return () => {
-        if (open) noteListen(`${c}/one`, -1)
+        if (open) noteListener(-1)
         open = false
         unsub()
       }
@@ -106,20 +187,21 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       field: string,
       from: number,
       to: number,
+      opts?: ReadOptions,
     ): Promise<T[]> {
       const c = resolve(collection)
       const snap = await getDocs(
         query(fbCollection(getDb(), c), where(field, '>=', from), where(field, '<=', to)),
       )
-      noteRead(c, Math.max(1, snap.size))
+      noteReadOp({ label: opts?.label ?? `${collection}.range`, collection: c, kind: 'range', docs: snap.size, fromCache: snap.metadata.fromCache })
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
-    async getAll<T>(collection: string): Promise<T[]> {
+    async getAll<T>(collection: string, opts?: ReadOptions): Promise<T[]> {
       const db = getDb()
       const c = resolve(collection)
       const snap = await getDocs(fbCollection(db, c))
-      noteRead(c, Math.max(1, snap.size))
+      noteReadOp({ label: opts?.label ?? `${collection}.all`, collection: c, kind: 'all', docs: snap.size, fromCache: snap.metadata.fromCache })
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
@@ -127,35 +209,55 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       collection: string,
       field: string,
       value: string | number | boolean,
+      opts?: ReadOptions,
     ): Promise<T[]> {
       const c = resolve(collection)
       const snap = await getDocs(query(fbCollection(getDb(), c), where(field, '==', value)))
-      // A query that finds nothing is still billed one read (plan D3': count what is paid).
-      noteRead(c, Math.max(1, snap.size))
+      noteReadOp({ label: opts?.label ?? `${collection}.by.${field}`, collection: c, kind: 'by', docs: snap.size, fromCache: snap.metadata.fromCache })
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
+    // B2 audit log: one page, newest first, never a listener (kept from the release-hardening branch).
     async page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]> {
       const c = resolve(collection)
-      const parts = [...(opts.before !== undefined ? [where(field, '<', opts.before)] : []), orderBy(field, 'desc'), fbLimit(opts.limit)]
+      const parts = [...(opts.before !== undefined ? [where(field, '<', opts.before)] : []), fbOrderBy(field, 'desc'), fbLimit(opts.limit)]
       const snap = await getDocs(query(fbCollection(getDb(), c), ...parts))
-      noteRead(c, Math.max(1, snap.size))
+      noteReadOp({ label: `${collection}.page`, collection: c, kind: 'range', docs: snap.size, fromCache: snap.metadata.fromCache })
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
-    async getOne<T>(collection: string, id: string): Promise<T | null> {
+    async getOne<T>(collection: string, id: string, opts?: ReadOptions): Promise<T | null> {
       const db = getDb()
       const c = resolve(collection)
       const snap = await getDoc(doc(db, c, id))
-      // One read, found or not (plan D3': the meter used to miss every single-document read).
-      noteRead(c, 1)
+      noteReadOp({ label: opts?.label ?? `${collection}.one`, collection: c, kind: 'one', docs: snap.exists() ? 1 : 0, fromCache: snap.metadata.fromCache })
       return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
+    },
+
+    async query<T>(collection: string, spec: QuerySpec, opts?: ReadOptions): Promise<T[]> {
+      const c = resolve(collection)
+      const snap = await getDocs(query(fbCollection(getDb(), c), ...constraints(spec)))
+      noteReadOp({ label: opts?.label ?? `${collection}.query`, collection: c, kind: 'page', docs: snap.size, fromCache: snap.metadata.fromCache })
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
+    },
+
+    async getMany<T>(collection: string, ids: readonly string[], opts?: ReadOptions): Promise<T[]> {
+      const c = resolve(collection)
+      const out: T[] = []
+      const unique = [...new Set(ids)]
+      for (let i = 0; i < unique.length; i += 30) {
+        const chunk = unique.slice(i, i + 30)
+        const snap = await getDocs(query(fbCollection(getDb(), c), where(documentId(), 'in', chunk)))
+        noteReadOp({ label: opts?.label ?? `${collection}.many`, collection: c, kind: 'by', docs: snap.size, fromCache: snap.metadata.fromCache })
+        for (const d of snap.docs) out.push({ ...d.data(), id: d.id } as T)
+      }
+      return out
     },
 
     async add(collection: string, data: Record<string, unknown>): Promise<string> {
       const db = getDb()
       const ref = doc(fbCollection(db, resolve(collection)))
-      await setDoc(ref, { ...data, id: ref.id })
+      await setDoc(ref, { ...withInitialVersion(collection, data), id: ref.id })
       return ref.id
     },
 
@@ -181,8 +283,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
           async get<T>(collection: string, id: string): Promise<T | null> {
             const c = resolve(collection)
             const snap = await t.get(doc(db, c, id))
-            // A transaction's read is billed like any other — and again on each retry.
-            noteRead(c, 1)
+            noteReadOp({ label: `${collection}.tx`, collection: c, kind: 'tx', docs: snap.exists() ? 1 : 0 })
             return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
           },
           set(collection, id, data) {

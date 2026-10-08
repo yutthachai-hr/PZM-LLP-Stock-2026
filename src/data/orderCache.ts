@@ -1,7 +1,7 @@
 import { listOrdersInRange } from '../services/purchaseOrders'
 import type { PurchaseOrder } from '../types'
 import { createRangeCache } from './rangeCache'
-import { persistRanges } from './persistKey'
+import { changedSince } from './changedSince'
 import { COL } from '../types'
 
 /**
@@ -11,6 +11,7 @@ import { COL } from '../types'
  */
 export const orderCache = createRangeCache<PurchaseOrder>({
   fetch: listOrdersInRange,
-  persist: persistRanges('orders', COL.purchaseOrders),
   atOf: (o) => o.orderedAt,
+  changedSince: changedSince<PurchaseOrder>(COL.purchaseOrders, 'purchaseOrders.delta'),
+  persist: COL.purchaseOrders,
 })

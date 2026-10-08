@@ -1,6 +1,7 @@
 import { DELETE_FIELD, Increment, withInitialVersion, withVersionBump } from '../../src/backend/types'
 import { applyIncrement } from '../../src/backend/tx'
-import type { Backend, SubscribeOptions, TxContext } from '../../src/backend/types'
+import type { Backend, QuerySpec, SubscribeOptions, TxContext } from '../../src/backend/types'
+import { applySpec } from '../../src/backend/querySpec'
 import { resolveCollection, type BrandId } from '../../src/brand/brand'
 
 // An in-memory stand-in for the Backend interface, so the stock engine can be tested
@@ -124,8 +125,8 @@ export function createMemoryBackend(brand?: BrandId): Backend {
 
   mode: 'local',
 
-  subscribe<T>(collection: string, cb: (docs: T[]) => void, _opts?: SubscribeOptions): () => void {
-    cb([...col_(collection).values()].map(clone) as T[])
+  subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void {
+    cb(applySpec([...col_(collection).values()].map(clone) as T[], opts?.query))
     return () => {}
   },
 
@@ -159,6 +160,14 @@ export function createMemoryBackend(brand?: BrandId): Backend {
 
   async getOne<T>(collection: string, id: string): Promise<T | null> {
     return (clone(col_(collection).get(id)) as T) ?? null
+  },
+
+  async query<T>(collection: string, spec: QuerySpec): Promise<T[]> {
+    return applySpec([...col_(collection).values()].map(clone) as T[], spec)
+  },
+
+  async getMany<T>(collection: string, ids: readonly string[]): Promise<T[]> {
+    return [...new Set(ids)].map((id) => col_(collection).get(id)).filter(Boolean).map((d) => clone(d)) as T[]
   },
 
   async add(collection: string, data: Record<string, unknown>): Promise<string> {

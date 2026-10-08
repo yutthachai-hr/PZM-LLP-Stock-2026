@@ -40,6 +40,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const todayCount = useTodayEventCount(!!user)
 
   return (
+    // Supplier intelligence is computed once for every screen, by the provider in App.tsx.
     <div className="flex min-h-screen bg-canvas">
       {/* New notifications as popups, on every page (5 Oct 2026). */}
       <NotificationHost />

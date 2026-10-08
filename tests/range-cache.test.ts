@@ -1,58 +1,82 @@
-// Plan D3': a window that partly overlaps what is held reads only the missing part.
-import { describe, expect, test, vi } from 'vitest'
-import { createRangeCache, gapsIn } from '../src/data/rangeCache'
+import { describe, expect, test } from 'vitest'
+import { addSpan, createRangeCache, gaps } from '../src/data/rangeCache'
 
-vi.mock('../src/brand/brand', () => ({ getBrand: () => 'pizza' }))
+/** perf/firestore-read-budget: overlapping windows read only what is missing. */
+type R = { id: string; at: number; updatedAt?: number }
 
-const rows = Array.from({ length: 60 }, (_, i) => ({ id: `r${i}`, at: i }))
-
-function cache() {
+function world(rows: R[]) {
   const calls: [number, number][] = []
-  const c = createRangeCache<{ id: string; at: number }>({
-    atOf: (r) => r.at,
+  const deltas: number[] = []
+  let clock = 1_000_000
+  const cache = createRangeCache<R>({
     fetch: async (from, to) => {
       calls.push([from, to])
       return rows.filter((r) => r.at >= from && r.at <= to)
     },
+    atOf: (r) => r.at,
+    changedSince: async (since) => {
+      deltas.push(since)
+      return rows.filter((r) => (r.updatedAt ?? 0) >= since)
+    },
+    now: () => clock,
   })
-  return { c, calls }
+  return { cache, calls, deltas, tick: (ms: number) => (clock += ms), rows }
 }
 
-describe('gaps in a window', () => {
-  test('what no held range covers, in order', () => {
-    expect(gapsIn(0, 30, [])).toEqual([{ from: 0, to: 30 }])
-    expect(gapsIn(0, 30, [{ from: 10, to: 20 }])).toEqual([{ from: 0, to: 9 }, { from: 21, to: 30 }])
-    expect(gapsIn(0, 30, [{ from: 0, to: 30 }])).toEqual([])
-    expect(gapsIn(10, 30, [{ from: 0, to: 15 }, { from: 25, to: 40 }])).toEqual([{ from: 16, to: 24 }])
+describe('range cache spans', () => {
+  test('gaps are what the held spans do not cover', () => {
+    expect(gaps([], 1, 10)).toEqual([[1, 10]])
+    expect(gaps([[3, 5]], 1, 10)).toEqual([[1, 2], [6, 10]])
+    expect(gaps([[1, 10]], 2, 9)).toEqual([])
+    expect(gaps([[1, 3], [7, 8]], 2, 9)).toEqual([[4, 6], [9, 9]])
+  })
+  test('spans merge when they touch or overlap', () => {
+    expect(addSpan([[1, 3]], [4, 6])).toEqual([[1, 6]])
+    expect(addSpan([[1, 3], [8, 9]], [2, 8])).toEqual([[1, 9]])
+    expect(addSpan([[5, 6]], [1, 2])).toEqual([[1, 2], [5, 6]])
   })
 })
 
-describe('the range cache', () => {
-  test('moving the window forward reads only the new part, and answers in full', async () => {
-    const { c, calls } = cache()
-    expect((await c.fetchRange(0, 29)).length).toBe(30)
-    const next = await c.fetchRange(10, 39)
-    expect(calls).toEqual([[0, 29], [30, 39]])
-    expect(next.map((r) => r.at)).toEqual(Array.from({ length: 30 }, (_, i) => i + 10))
-    // The pieces are now one range: anything inside 0–39 is free.
-    await c.fetchRange(5, 35)
-    expect(calls).toHaveLength(2)
-    expect(c.hasRange(0, 39)).toBe(true)
-  })
+describe('range cache reads', () => {
+  const rows: R[] = [1, 5, 10, 20, 30].map((at) => ({ id: `r${at}`, at }))
 
-  test('two held ranges with a hole between: only the hole is read', async () => {
-    const { c, calls } = cache()
-    await c.fetchRange(0, 9)
-    await c.fetchRange(20, 29)
-    const all = await c.fetchRange(0, 29)
-    expect(calls).toEqual([[0, 9], [20, 29], [10, 19]])
-    expect(all).toHaveLength(30)
+  test('an overlapping window reads only its uncovered part', async () => {
+    const w = world(rows)
+    expect((await w.cache.fetchRange(1, 10)).map((r) => r.at)).toEqual([1, 5, 10])
+    expect((await w.cache.fetchRange(5, 25)).map((r) => r.at)).toEqual([5, 10, 20])
+    expect(w.calls).toEqual([[1, 10], [11, 25]])
   })
-
-  test('force reads the whole window again', async () => {
-    const { c, calls } = cache()
-    await c.fetchRange(0, 9)
-    await c.fetchRange(0, 9, { force: true })
-    expect(calls).toEqual([[0, 9], [0, 9]])
+  test('a window already held reads nothing', async () => {
+    const w = world(rows)
+    await w.cache.fetchRange(1, 30)
+    await w.cache.fetchRange(5, 20)
+    expect(w.calls).toHaveLength(1)
+    expect(w.cache.peekRange(5, 20)?.map((r) => r.at)).toEqual([5, 10, 20])
+    expect(w.cache.peekRange(5, 40)).toBeUndefined()
+  })
+  test('two screens asking at once do not read the same gap twice', async () => {
+    const w = world(rows)
+    await Promise.all([w.cache.fetchRange(1, 30), w.cache.fetchRange(1, 30)])
+    expect(w.calls).toHaveLength(1)
+  })
+  test('changes elsewhere arrive through the cheap refresh, at most once a minute', async () => {
+    const w = world(rows.map((r) => ({ ...r })))
+    await w.cache.fetchRange(1, 30)
+    w.rows[1].updatedAt = 2_000_000
+    w.rows[1].at = 6
+    await w.cache.fetchRange(1, 30) // within the minute: nothing asked
+    expect(w.deltas).toHaveLength(0)
+    w.tick(61_000)
+    const got = await w.cache.fetchRange(1, 30)
+    expect(w.deltas).toHaveLength(1)
+    expect(got.find((r) => r.id === 'r5')?.at).toBe(6)
+    expect(w.calls).toHaveLength(1)
+  })
+  test('force re-reads the window and drops rows no longer in it', async () => {
+    const w = world(rows.map((r) => ({ ...r })))
+    await w.cache.fetchRange(1, 30)
+    w.rows.splice(0, 1)
+    const got = await w.cache.fetchRange(1, 30, { force: true })
+    expect(got.map((r) => r.at)).toEqual([5, 10, 20, 30])
   })
 })

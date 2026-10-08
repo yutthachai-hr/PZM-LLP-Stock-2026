@@ -35,6 +35,29 @@ export const MANAGERS: Role[] = ['manager', 'admin']
 export const NOTIFICATION_TTL_MS = 30 * DAY_MS
 /** The in-app list reads notifications created in the last this-many days. */
 export const NOTIFICATION_WINDOW_DAYS = 7
+
+/** How many of a person's newest notifications the bell holds live (perf/firestore-read-budget). */
+export const INBOX_LIMIT = 30
+
+/**
+ * Who a notification is for, as keys a query can match (perf/firestore-read-budget,
+ * 6 Oct 2026): `all`, `role:<role>`, `uid:<uid>`. The bell asks the server for documents
+ * carrying any of the reader's three keys, instead of receiving every recipient's
+ * notifications and throwing most away — and a write addressed to managers no longer
+ * costs a read on every staff phone.
+ */
+export function audienceKeysOf(to: NotificationAudience): string[] {
+  const keys: string[] = []
+  if (to.all) keys.push('all')
+  for (const r of to.roles ?? []) keys.push(`role:${r}`)
+  for (const u of to.uids ?? []) keys.push(`uid:${u}`)
+  return [...new Set(keys)]
+}
+
+/** The keys one reader matches. */
+export function readerKeys(user: Pick<AppUser, 'id' | 'role'>): string[] {
+  return ['all', `role:${user.role}`, `uid:${user.id}`]
+}
 /** The daily brief goes out from this time, Bangkok. */
 export const BRIEF_TIME = '07:00'
 export const WEEKLY_TIME = '07:30'
@@ -633,6 +656,7 @@ export function toDoc(d: NotificationDraft, now: number, source: AppNotification
     category: CATEGORY[d.kind],
     priority: d.priority,
     to: d.to,
+    audienceKeys: audienceKeysOf(d.to),
     params: d.params,
     link: d.link,
     active: true,

@@ -5,6 +5,7 @@ import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { useData } from '../data/DataContext'
 import { orderCache } from '../data/orderCache'
+import { bkkDayEnd, bkkDayStart } from '../lib/inventoryRules/time'
 import { ORDER_UPDATED } from '../data/useSupplierRefresh'
 import { useToast } from '../components/Toast'
 import { DataTable } from '../components/DataTable'
@@ -41,7 +42,6 @@ import {
   daysWaiting,
   expectedDeliveryAt,
   getPurchaseOrder,
-  listOrdersInRange,
   needsResend,
   overdueOrders,
   summariseBySupplier,
@@ -129,18 +129,15 @@ export function OrdersPage() {
   type StateFilter = '' | 'late' | 'sent' | 'unsent' | 'draft' | 'supplierWaiting' | 'datePending'
   const [stateFilter, setStateFilter] = useState<StateFilter>('')
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true)
     try {
-      const to = Date.now()
-      // Release hardening (Firestore reads): through the shared order cache — held for the
-      // session and on the device — and then only what changed since, so another device's
-      // answer or receipt still shows without the whole window being read on every visit.
-      const from = to - days * DAY
-      await orderCache.fetchRange(from, to + DAY)
-      await orderCache.refreshChanged()
-      const held = orderCache.peekRange(from, to + DAY)
-      setOrders(held ? [...held].sort((a, b) => b.orderedAt - a.orderedAt) : await listOrdersInRange(from, to + DAY))
+      // Through the session cache, on whole Bangkok days (perf/firestore-read-budget): a
+      // second visit reads only what changed since, instead of every order in the window
+      // again — 130 orders a visit in the 6 Oct measurement.
+      const now = Date.now()
+      const rows = await orderCache.fetchRange(bkkDayStart(now) - days * DAY, bkkDayEnd(now) + DAY, { force })
+      setOrders([...rows].sort((a, b) => b.orderedAt - a.orderedAt))
     } catch (e) {
       toast.error(errText(e, t))
     } finally {
@@ -638,7 +635,7 @@ export function OrdersPage() {
           actor={{ id: user.id, name: user.name }}
           asDraft={!isManager}
           onClose={() => setCreating(false)}
-          onDone={() => void load()}
+          onDone={() => void load(true)}
         />
       )}
       {viewing && (
