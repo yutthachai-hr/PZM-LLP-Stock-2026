@@ -74,7 +74,7 @@ OneDrive, `npm ci`, then the gates.
 
 | Item | State |
 |---|---|
-| `docs/engineering/workflows/ci.yml` | **Ready, NOT active.** Nine jobs: typecheck, lint-i18n, unit, agent-safety, rust (+ differential), rules (+ transition freshness), build-budget, e2e (incl. read benchmark), secrets (gitleaks + a `VITE_*SECRET` check, run locally: clean). |
+| `.github/workflows/ci.yml` | **Active since 9 Oct (owner decision 3)**, actions pinned to SHAs. Nine jobs: typecheck, lint-i18n, unit, agent-safety, rust (+ differential), rules (+ transition freshness), build-budget, e2e (incl. read benchmark), secrets (gitleaks + a `VITE_*SECRET` check, run locally: clean). |
 | `branch-protection.json` | Ready, **not applied**. Requires exactly those 9 checks and 1 approval; no force pushes or deletion. |
 | Validation | `tests/ci-proposal.test.ts`: every script exists; every verify gate has a job; required checks = jobs |
 | Not done | A real GitHub Actions run, which needs the files in `.github/` (owner) |

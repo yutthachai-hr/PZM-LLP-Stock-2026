@@ -1,13 +1,13 @@
-// The proposed CI (docs/engineering/workflows, NOT active) stays consistent with the repo:
+// The CI (.github/workflows/ci.yml, active since owner decision 3) stays consistent with the repo:
 // every npm script it calls exists, every gate scripts/verify.mjs runs has a job, and every
-// check branch protection would require is a job here. Owner turns it on (copy to .github).
+// check branch protection requires is a job here, and every action is pinned to a commit.
 //
 //   npm test
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
 import { parse } from 'yaml'
 
-const wf = parse(readFileSync('docs/engineering/workflows/ci.yml', 'utf8')) as {
+const wf = parse(readFileSync('.github/workflows/ci.yml', 'utf8')) as {
   on: Record<string, unknown>
   permissions: Record<string, string>
   jobs: Record<string, { 'runs-on': string; 'timeout-minutes': number; steps: { uses?: string; run?: string; 'working-directory'?: string }[] }>
@@ -16,9 +16,11 @@ const protection = JSON.parse(readFileSync('docs/engineering/workflows/branch-pr
 const scripts = (JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }).scripts
 const runs = Object.values(wf.jobs).flatMap((j) => j.steps.map((s) => s.run ?? '')).join('\n')
 
-describe('proposed CI', () => {
-  test('it is a proposal: nothing under .github/workflows yet', () => {
-    expect(() => readFileSync('.github/workflows/ci.yml')).toThrow()
+describe('CI', () => {
+  test('every third-party action is pinned to a full commit SHA, not a movable tag', () => {
+    const uses = Object.values(wf.jobs).flatMap((j) => j.steps.map((s) => s.uses).filter((u): u is string => !!u))
+    expect(uses.length).toBeGreaterThan(10)
+    for (const u of uses) expect(u, u).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/)
   })
   test('every job runs on a hosted runner with a timeout and read-only token', () => {
     expect(wf.permissions).toEqual({ contents: 'read' })
