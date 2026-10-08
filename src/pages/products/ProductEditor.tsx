@@ -305,6 +305,35 @@ export function ProductEditor({
 
   return (
     <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
+      {product?.review === 'pending' && (
+        <div className="mb-4 flex flex-wrap items-start gap-3 rounded-lg border border-warn/40 bg-warn-soft/40 p-3 text-sm">
+          <Icon name="info" size={18} className="mt-0.5 shrink-0 text-warn" />
+          <p className="min-w-0 flex-1 text-ink-soft">
+            {t('สินค้าใหม่ที่เสนอจากคำขอสั่งซื้อ (โดย {name}) — ตรวจชื่อ หน่วย และหมวดให้ถูกก่อนยืนยัน', { name: product.proposedByName ?? '' })}
+            {product.spec ? ` · ${product.spec}` : ''}
+          </p>
+          {canEdit && (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await updateProduct(product.id, { review: 'verified' }, { expectedVersion: product.version })
+                  toast.success(t('ยืนยันสินค้าแล้ว'))
+                  onClose()
+                } catch (e) {
+                  toast.error(errText(e, t))
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              {t('ยืนยันว่าตรวจแล้ว')}
+            </Button>
+          )}
+        </div>
+      )}
       {!canEdit && product && (
         <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-sunken/60 p-3 text-sm">
           <Icon name="info" size={18} className="mt-0.5 shrink-0 text-ink-faint" />

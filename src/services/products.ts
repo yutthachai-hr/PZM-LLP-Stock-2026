@@ -9,6 +9,8 @@ import { QTY_MAX } from '../lib/validate'
 import { normaliseConversions, sameUnit, type UnitConversion } from '../lib/units'
 
 export interface ProductInput {
+  /** Smart "Other" item: an admin marks a proposed product reviewed ('verified'). */
+  review?: 'pending' | 'verified'
   /** Who we buy it from. Empty means nobody has said yet. */
   supplierId?: string
   /** Other suppliers it can come from. See the field on Product. */

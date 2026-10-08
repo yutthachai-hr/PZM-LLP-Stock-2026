@@ -116,6 +116,18 @@ export interface Product {
    * entry screens ask for it once, and anyone may state it (see lib/uom.ts).
    */
   unitConversions?: { label: string; size: number; per?: number; of?: string }[]
+  /**
+   * Smart "Other" item (R&D, 8 Oct 2026): 'pending' while a product proposed from a request
+   * has not been reviewed by an admin. Absent = a reviewed catalogue product. A pending
+   * product is its own product (own id, own stock), never merged into another by itself.
+   */
+  review?: 'pending' | 'verified'
+  /** What the proposer wrote about it (size, grade, pack), compared when matching. */
+  spec?: string
+  /** normaliseName(name) at proposal, for review screens. */
+  nameKey?: string
+  proposedBy?: string
+  proposedByName?: string
   hasImage: boolean
   active: boolean
   createdAt: number

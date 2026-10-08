@@ -421,6 +421,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                               <div className="text-sm text-ink">{item.productName}</div>
                               <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                                 <span className="doc-no">{item.sku}</span>
+                                {p?.review === 'pending' && <Badge color="amber">{t('สินค้าใหม่ รอตรวจสอบ')}</Badge>}
                                 {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                                 {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}
                               </div>

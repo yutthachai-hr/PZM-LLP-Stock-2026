@@ -113,6 +113,7 @@ function noteChanged(mv: StockMovement, patch: Record<string, unknown>): void {
 export async function execute<P, R, C>(spec: CommandSpec<P, R, C>, params: P, actor: Actor): Promise<R> {
   // Pinned before anything is awaited: a brand switched mid-save must not split the work.
   const brand = getBrand()
+  if (spec.brands && !spec.brands.includes(brand)) throw new AppError('ไม่มีสิทธิ์ทำรายการนี้')
   const db = scoped()
   const remote = await callCommand<R>(spec.name, params, brand)
   if (remote !== NOT_SENT) return remote
@@ -133,8 +134,10 @@ export const NOT_SENT = Symbol('not-sent')
  * values) and are thrown as such. NOT_SENT when this build does not send the command, or
  * the server is not set up yet (503) — the client path then files it.
  */
-export async function callCommand<R>(name: string, params: unknown, brand = getBrand()): Promise<R | typeof NOT_SENT> {
-  if (BACKEND_MODE !== 'cloud' || !commandOn(name)) return NOT_SENT
+export async function callCommand<R>(name: string, params: unknown, brand = getBrand(), opts: { force?: boolean } = {}): Promise<R | typeof NOT_SENT> {
+  // `force`: a command that has no client path in the cloud (the rules forbid it), whatever
+  // VITE_STOCK_COMMANDS says — Smart Other's proposeItem.
+  if (BACKEND_MODE !== 'cloud' || (!opts.force && !commandOn(name))) return NOT_SENT
   const { authHeader } = await import('./poImages')
   // G18: the workflow this call belongs to (or a fresh one), and an id for this one call.
   const trace = { traceId: activeTraceId(), requestId: newRequestId() }

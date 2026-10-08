@@ -58,6 +58,13 @@ describe('the cache epoch', () => {
     await assertFails(deleteDoc(doc(as(ADMIN), 'meta', 'cacheEpoch_pizza')))
   })
 
+  test('every brand has one, the R&D brand included (8 Oct 2026: R&D devices could not read theirs)', async () => {
+    for (const b of ['lelapin', 'rnd']) {
+      await assertSucceeds(setDoc(doc(as(ADMIN), 'meta', `cacheEpoch_${b}`), { id: `cacheEpoch_${b}`, products: 1 }))
+      await assertSucceeds(getDoc(doc(as(STAFF), 'meta', `cacheEpoch_${b}`)))
+    }
+  })
+
   test('the generic meta match opens nothing else', async () => {
     await assertFails(getDoc(doc(as(STAFF), 'meta', 'anything')))
     await assertFails(setDoc(doc(as(ADMIN), 'meta', 'bootstrap'), { claimedBy: ADMIN }))

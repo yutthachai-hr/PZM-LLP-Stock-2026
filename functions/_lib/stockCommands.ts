@@ -73,6 +73,8 @@ async function runCommand(deps: StockDeps, name: string, authorization: string |
   if (!spec.roles.includes(user.role)) return fail(403, 'forbidden')
   const b = (body ?? {}) as Record<string, unknown>
   if (!isBrand(b.brand)) return fail(400, 'bad_request', { at: 'brand' })
+  // A command scoped to some brands (Smart Other item: R&D) is refused for the others.
+  if (spec.brands && !spec.brands.includes(b.brand)) return fail(403, 'forbidden')
   let params: unknown
   try {
     params = spec.parse(b.params)

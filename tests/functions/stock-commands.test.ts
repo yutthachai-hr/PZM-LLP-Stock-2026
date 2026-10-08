@@ -193,6 +193,8 @@ describe('what the commands may write (the service account is outside the rules)
       receiveTransfer: [{ ...L, transfers: ['set'] }, ['staff', 'manager', 'admin']],
       resolveDiscrepancy: [{ ...L, transfers: ['set'] }, ['manager', 'admin']],
       resolveMisroute: [{ ...L, transfers: ['set'] }, ['manager', 'admin']],
+      // Smart "Other" item (R&D only — STOCK_COMMANDS.proposeItem.brands): a product, its key claim, the code counter. Never stock.
+      proposeItem: [{ products: ['set'], productKeys: ['set'], counters: ['set'] }, ['staff', 'manager', 'admin']],
     })
   })
 

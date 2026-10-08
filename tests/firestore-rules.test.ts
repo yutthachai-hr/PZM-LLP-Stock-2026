@@ -185,6 +185,36 @@ function event(id: string, over: Record<string, unknown> = {}) {
 // the quantity box and never fed into a movement. The rules bound the list the same way an
 // order's lines are bounded: a size limit, not a check of every element, since the service
 // and the UI are what write it and the shape they write is fixed.
+// Smart "Other" item (R&D, 8 Oct 2026): a product proposed from a request is created by the
+// server (proposeItem) with review 'pending'; only an admin can mark it reviewed. Staff keep
+// the one product field they had (unit rates) and gain nothing else.
+describe('proposed products (Smart Other item)', () => {
+  const proposed = (over: Record<string, unknown> = {}) =>
+    product('p9', { sku: 'RND-000001', review: 'pending', spec: '500 g bag', nameKey: 'SUMAC POWDER', proposedBy: STAFF, proposedByName: 'Staff', ...over })
+
+  test('the proposed shape is a valid product; review is pending or verified, nothing else', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p9'), proposed()))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'products/p9'), proposed({ review: 'verified' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), proposed({ review: 'approved' })))
+    await assertFails(setDoc(doc(as(ADMIN), 'products/p9'), proposed({ spec: 'x'.repeat(301) })))
+  })
+
+  test('staff can neither create a product nor mark one reviewed; an admin can', async () => {
+    await assertFails(setDoc(doc(as(STAFF), 'products/p9'), proposed()))
+    await assertFails(setDoc(doc(as(MANAGER), 'products/p9'), proposed()))
+    await assertFails(updateDoc(doc(as(STAFF), 'products/p1'), { review: 'verified', updatedAt: ts() }))
+    await assertFails(updateDoc(doc(as(STAFF), 'products/p1'), { unitConversions: [], review: 'verified', updatedAt: ts() }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'products/p1'), { review: 'verified', updatedAt: ts() }))
+  })
+
+  test("the key claims are the server's alone; the code counter never goes back (no code is reused)", async () => {
+    await assertFails(setDoc(doc(as(ADMIN), 'productKeys/k1'), { productId: 'p9', sku: 'RND-000001' }))
+    await assertFails(getDoc(doc(as(STAFF), 'productKeys/k1')))
+    await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), 'counters/otherSku'), { value: 7 }))
+    await assertFails(rawUpdateDoc(doc(as(ADMIN), 'counters/otherSku'), { value: 3 }))
+  })
+})
+
 describe('product unit reference conversions', () => {
   test('a list of reference conversions is accepted', async () => {
     await assertSucceeds(

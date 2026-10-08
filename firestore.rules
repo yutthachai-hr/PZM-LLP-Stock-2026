@@ -316,9 +316,18 @@ service cloud.firestore {
           'id', 'sku', 'name', 'barcode', 'category', 'unit', 'unitType', 'minStock', 'cost',
           'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
           'trackLot', 'trackExpiry',
-          'hasImage', 'active', 'createdAt', 'updatedAt', 'version'
+          'hasImage', 'active', 'createdAt', 'updatedAt', 'version',
+          // Smart "Other" item (R&D, 8 Oct 2026): written by the server's proposeItem; an
+          // admin later sets review to 'verified'. Staff cannot (catalogue writes are the
+          // admin's, and the staff unit-rate path lists only unitConversions).
+          'review', 'spec', 'nameKey', 'proposedBy', 'proposedByName'
         ])
         && (!('version' in d) || d.version is int)
+        && (!('review' in d) || d.review in ['pending', 'verified'])
+        && (!('spec' in d) || text(d.spec, 300))
+        && (!('nameKey' in d) || text(d.nameKey, 300))
+        && (!('proposedBy' in d) || text(d.proposedBy, 200))
+        && (!('proposedByName' in d) || text(d.proposedByName, 200))
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
         // The number on the box (22 Sep 2026). Uniqueness is checked by the app before it
         // writes — a rule cannot query the collection — so this only pins the shape.
@@ -1474,8 +1483,8 @@ service cloud.firestore {
     // user's device reads it once per open; an admin action that deletes or rewrites
     // history bumps a collection's number so every device reads that collection in full.
     match /meta/{docId} {
-      allow get: if docId.matches('^cacheEpoch_(pizza|lelapin)$') && active();
-      allow create, update: if docId.matches('^cacheEpoch_(pizza|lelapin)$') && admin()
+      allow get: if docId.matches('^cacheEpoch_(pizza|lelapin|rnd)$') && active();
+      allow create, update: if docId.matches('^cacheEpoch_(pizza|lelapin|rnd)$') && admin()
         && request.resource.data.keys().hasOnly(['id', 'products', 'stockLevels', 'stockMovements', 'notifications', 'productMinOverrides'])
         && request.resource.data.id == docId
         && (!('products' in request.resource.data) || request.resource.data.products is number)

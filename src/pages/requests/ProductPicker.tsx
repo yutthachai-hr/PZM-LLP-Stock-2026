@@ -10,6 +10,9 @@ import { sameUnit } from '../../lib/units'
 import type { Product, Supplier } from '../../types'
 import type { UnitConversion } from '../../lib/units'
 import { looseMatch, looseScore } from '../../lib/search'
+import { getBrand } from '../../brand/brand'
+import { isOtherPlaceholder, otherItemOn, reviewOf } from '../../lib/otherItem'
+import { OtherItemPanel } from './OtherItemPanel'
 
 /**
  * Finding the thing to ask for, and how many.
@@ -136,6 +139,9 @@ function ByProduct({
   const results = useMemo(() => searchProducts(dq, products), [dq, products])
   const [cursor, setCursor] = useState(0)
   const [picked, setPicked] = useState<Product | null>(null)
+  // Smart "Other" item (R&D): the category's catch-all was picked — ask what it really is.
+  const [other, setOther] = useState<Product | null>(null)
+  const smartOther = otherItemOn(getBrand(), import.meta.env as Record<string, string | undefined>)
   const [supplierId, setSupplierId] = useState('')
   const [entryUnit, setEntryUnit] = useState('')
   const [qty, setQty] = useState('')
@@ -149,6 +155,10 @@ function ByProduct({
   const units = useMemo(() => (picked ? entryUnitsFor(picked.unitType, plainUnits, picked.unitConversions) : []), [picked, plainUnits])
 
   function pick(p: Product) {
+    if (smartOther && isOtherPlaceholder(p)) {
+      setOther(p)
+      return
+    }
     setPicked(p)
     setSupplierId(p.supplierId && suppliers.some((s) => s.id === p.supplierId) ? p.supplierId : '')
     setEntryUnit('')
@@ -187,6 +197,24 @@ function ByProduct({
   const listed = options.filter((o) => o.choice !== 'custom')
   const others = options.filter((o) => o.choice === 'custom')
   const chosen = options.find((o) => o.s.id === supplierId)
+
+  if (other) {
+    return (
+      <OtherItemPanel
+        placeholder={other}
+        products={products}
+        suppliers={suppliers}
+        onResolved={(p) => {
+          setOther(null)
+          pick(p)
+        }}
+        onCancel={() => {
+          setOther(null)
+          reset()
+        }}
+      />
+    )
+  }
 
   return (
     <div className="space-y-3">
@@ -230,6 +258,8 @@ function ByProduct({
                           <span className="doc-no">{p.sku}</span>
                           <span>{p.unitType}</span>
                           {supplierName ? <span>{supplierName} ({t('ผู้ขายประจำ')})</span> : <span className="text-warn">{t('ยังไม่มีผู้ขาย')}</span>}
+                          {smartOther && isOtherPlaceholder(p) && <span className="text-brand">{t('พิมพ์ชื่อสินค้าเองได้')}</span>}
+                          {reviewOf(p) === 'pending' && <Badge color="amber">{t('รอตรวจสอบ')}</Badge>}
                         </div>
                       </div>
                       {inCart.has(p.id) && <Badge color="blue">{t('อยู่ในรายการแล้ว')}</Badge>}
@@ -248,6 +278,8 @@ function ByProduct({
               <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                 <span className="doc-no">{picked.sku}</span>
                 <span>{t('หน่วย')}: {picked.unitType}</span>
+                {picked.spec && <span>{picked.spec}</span>}
+                {reviewOf(picked) === 'pending' && <Badge color="amber">{t('สินค้าใหม่ รอตรวจสอบ')}</Badge>}
               </div>
             </div>
             <button type="button" onClick={reset} className="text-xs text-brand">

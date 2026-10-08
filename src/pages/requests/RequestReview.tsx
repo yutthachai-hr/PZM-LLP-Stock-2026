@@ -79,6 +79,8 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
   const live = useMemo(() => liveItems(pr.items), [pr])
   const inCart = useMemo(() => new Set(live.map((i) => i.productId)), [live])
   const ctx = useMemo(() => ({ products, suppliers, locations }), [products, suppliers, locations])
+  // Smart "Other" item: products proposed from a request and not yet reviewed (R&D).
+  const pendingIds = useMemo(() => new Set(products.filter((p) => p.review === 'pending').map((p) => p.id)), [products])
 
   // The orders this request became, for the LINE wizard and the "sent" badges.
   useEffect(() => {
@@ -239,6 +241,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                         <div className="break-words font-medium text-ink">{item.productName}</div>
                         <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                           <span className="doc-no">{item.sku}</span>
+                          {pendingIds.has(item.productId) && <Badge color="amber">{t('สินค้าใหม่ รอตรวจสอบ')}</Badge>}
                           {item.managerAdded && <Badge color="blue">{t('หัวหน้าเพิ่ม')}</Badge>}
                           {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                           {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}
@@ -340,6 +343,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                           <div className="break-words text-ink">{item.productName}</div>
                           <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                             <span className="doc-no">{item.sku}</span>
+                          {pendingIds.has(item.productId) && <Badge color="amber">{t('สินค้าใหม่ รอตรวจสอบ')}</Badge>}
                             {item.managerAdded && <Badge color="blue">{t('หัวหน้าเพิ่ม')}</Badge>}
                             {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                             {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}

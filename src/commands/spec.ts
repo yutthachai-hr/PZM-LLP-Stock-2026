@@ -36,6 +36,8 @@ export interface CommandSpec<P = unknown, R = unknown, C = undefined> {
   name: string
   /** Who may run it through the server. */
   roles: readonly Role[]
+  /** Only for these brands, when set (Smart Other item: R&D first). Checked on both paths. */
+  brands?: readonly string[]
   /** Collection kind → the writes it may make there. */
   writes: Readonly<Record<string, readonly WriteOp[]>>
   /** The request body's `params`, checked. Throws BadInput. */
