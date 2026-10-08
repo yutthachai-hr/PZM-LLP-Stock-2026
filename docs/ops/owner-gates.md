@@ -15,9 +15,10 @@ executed.** Every command below is read-only unless it is marked **DELETE**.
 
 ### Facts established read-only on 8 Oct, about 14:50 ICT
 
-- **Production is now `aa6b85cb` = `476fa35`** (the owner's push today, 14:36). The two
-  production deployments before it are `25bd9341` (`4c74aaf`) and `dbee8792` (`2a8d578`).
-  **Never delete `aa6b85cb`.** Keep the previous one as a rollback target.
+- **Production, re-checked 8 Oct in the evening: `614fcc13` = `ad43971`** (the owner's two
+  pushes after 14:36). Before it: `0d00ae76` (`903c8db`), then `aa6b85cb` (`476fa35`).
+  **Never delete `614fcc13`.** Keep `0d00ae76` as the rollback target.
+- The re-check also found **24 of 24** pre-isolation previews still reachable.
 - **`wrangler pages deployment list` returns at most 25 rows** (one API page). The newest
   page holds 3 production and 22 preview deployments, so **older deployments exist beyond
   it**. The full inventory needs the paginated API call below.
@@ -87,8 +88,9 @@ for p in 1 2 3 4 5 6; do curl -s "https://api.cloudflare.com/client/v4/accounts/
 
 ### A.3 Deletion: the exact commands (DELETE: owner only)
 
-Run only after A.1. **Check that none of the ids is `aa6b85cb-abe5-458d-b75f-04d125110edb`
-(production) or the rollback target `25bd9341-135a-4919-a168-52745a5949e2`.**
+Run only after A.1. **Check that none of the ids is `614fcc13-e680-4a97-8662-3349c58360e6`
+(production) or the rollback target `0d00ae76-2965-4dc7-898b-410b543049b5`.** Re-list right
+before deleting: production moves with every push to `main`.
 
 ```bash
 # DELETE: one pre-isolation preview per line; repeat for the ids found in A.1 older pages

@@ -1,5 +1,7 @@
 # Release-candidate readiness: `integration/ops-os-rc1` (8 Oct 2026)
 
+> **Superseded by `docs/release/rc-candidate-report.md`** (8 Oct, night: branch `rc/ops-os-rc1-candidate`, clean-checkout gates). Kept for the afternoon record.
+
 **HEAD:** see `git log -1`. The branch includes production `main` up to `476fa35` (R&D
 brand). **Not merged to main, not deployed, RC not frozen.**
 

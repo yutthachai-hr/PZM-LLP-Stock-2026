@@ -1,4 +1,4 @@
-# Pre-isolation PREVIEW deployments (newest page, read 8 Oct 2026 ~14:50 ICT). Production aa6b85cb and rollback 25bd9341 are NOT here.
+# Pre-isolation PREVIEW deployments (newest page, read 8 Oct 2026 ~14:50 ICT; 24/24 still reachable on the evening re-check). Production 614fcc13 and rollback 0d00ae76 are NOT here — re-list before deleting.
 # Delete with: npx wrangler pages deployment delete <id> --project-name pzmstock --force
 6a06a8ef-d58f-4630-a0f2-40df37b11ba2
 91f2fc7d-efc5-474d-a2b6-c875c25ed9fb
