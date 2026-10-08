@@ -4,7 +4,7 @@ import { backfill, type BackupLike } from '../../src/shadow/backfill'
 import { checkParity } from '../../src/shadow/parity'
 import { pgliteClient } from '../../src/shadow/pglite'
 import { applyPending, ingest, type OutboxEvent } from '../../src/shadow/replicate'
-import { asUser, freshDb } from './pg'
+import { asUser, freshDb, TEST_FIREBASE_PROJECT } from './pg'
 
 /** Supabase shadow foundation (7 Oct 2026): backfill, replication, parity, RLS — on real PostgreSQL. */
 
@@ -196,6 +196,38 @@ describe('row-level security (Firebase identity)', () => {
     const { pg } = await loaded()
     await pg.query(`update shadow.app_users set revoked_at = now() where uid = 'u-mgr'`)
     await asUser(pg, 'u-mgr', async () => expect(await count(pg, `select count(*)::int as n from shadow.products`)).toBe(0))
+    await pg.close()
+  }, 60_000)
+
+  // 0006: Firebase signs every project's tokens with the same keys — only OUR project's count.
+  test("a validly signed token from another Firebase project reads nothing, even for a known uid", async () => {
+    const { pg } = await loaded()
+    await asUser(pg, 'u-admin', async () => {
+      for (const t of ['products', 'stock_movements', 'app_users', 'audit_log', 'notifications'])
+        expect(await count(pg, `select count(*)::int as n from shadow.${t}`), t).toBe(0)
+    }, 'someone-elses-project')
+    // Right issuer, wrong audience (or the reverse) is not ours either.
+    await pg.exec(`set role authenticated`)
+    await pg.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: 'u-admin', role: 'authenticated', iss: `https://securetoken.google.com/${TEST_FIREBASE_PROJECT}`, aud: 'other' })])
+    expect(await count(pg, `select count(*)::int as n from shadow.products`)).toBe(0)
+    await pg.exec(`reset role`)
+    await pg.close()
+  }, 60_000)
+
+  test('a database with no trusted project configured serves no browser at all (fails closed)', async () => {
+    const pg = await freshDb({ trustProject: null })
+    await backfill(pgliteClient(pg), stage(), { runId: 'r1' })
+    await asUser(pg, 'u-admin', async () => expect(await count(pg, `select count(*)::int as n from shadow.products`)).toBe(0))
+    await pg.close()
+  }, 60_000)
+
+  test('cross-brand and cross-location reads match Firestore today: an active person reads both brands and every site', async () => {
+    const { pg } = await loaded()
+    await pg.query(`insert into shadow.locations (brand, id, name, type, doc) values ('lelapin', 'll-wh', 'LL WH', 'warehouse', '{}')`)
+    await asUser(pg, 'u-staff', async () => {
+      expect(await count(pg, `select count(distinct brand)::int as n from shadow.locations`)).toBe(2)
+      expect(await count(pg, `select count(*)::int as n from shadow.stock_balances where location_id <> 'br1'`)).toBeGreaterThan(0)
+    })
     await pg.close()
   }, 60_000)
 

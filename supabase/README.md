@@ -89,6 +89,8 @@ npm run worker:deploy
 2. **Apply the schema:** run `npm run shadow -- bundle`, then paste `supabase/dist/shadow.sql` into the SQL editor.
    - Or `supabase db push` with these migrations. Same files, same order.
 3. **Authentication → Third-party auth → Firebase:** project `pzm-stock-x5`.
+   - Then, as the service role (SQL editor), name the project the database trusts. **Without this row no browser reads anything** (migration 0006; Firebase signs every project's tokens with the same keys):
+     `insert into shadow.auth_settings (firebase_project_id) values ('pzm-stock-x5');`
    - Supabase then accepts Firebase ID tokens as `auth.jwt()`, and `sub` is the Firebase uid. Nobody makes a new account.
    - Before any browser reads Supabase, every Firebase user also needs the custom claim `role: "authenticated"`. A one-off admin script with the service account does this. **Not needed while only the Worker reads/writes.**
 4. **Service role key** goes into the Cloudflare **Worker's** secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).

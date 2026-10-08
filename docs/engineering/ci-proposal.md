@@ -137,22 +137,21 @@ jobs:
 - Optional: **require linear history** (fits the fast-forward merges in HANDOFF's history).
 - Keep auto-merge **off**: a merge to `main` deploys production.
 
-## Proposed preview safety (a one-line code change, for the owner to approve)
+## Preview safety: done (P0, `0261c48`, 8 Oct 2026)
 
-In `vite.config.ts`, build every non-production Pages branch in demo mode:
+This is now implemented on `integration/ops-os-rc1`. It is stronger than the one-liner first
+proposed here:
 
-```ts
-// before: if (process.env.CF_PAGES_BRANCH === 'demo') process.env.VITE_DEMO_MODE = '1'
-if (process.env.CF_PAGES && process.env.CF_PAGES_BRANCH !== 'main') process.env.VITE_DEMO_MODE = '1'
-```
+- the build fails closed;
+- a production build refuses non-production hosts;
+- the Pages Functions refuse privileged routes by host.
 
-Then a pushed branch can never write production data through its preview URL. If a
-production-connected staging is wanted later, name it explicitly (for example `staging`) and
-allow-list it.
+Evidence, including the live preview, is in `docs/evidence/preview-isolation.md`. Risk 2 above
+remains for the **25 old previews** until they are deleted (an owner dashboard action).
 
 ## Order of operations (proposed)
 
-1. **Owner approves** the preview-safety change. Merge it first; it is tiny and protective.
+1. **Owner approves** the preview-isolation patch (`0261c48`) and deletes the old previews. Merge it first; it is protective.
 2. Add `verify.yml`. Watch it pass on the integration branch.
 3. Turn on protection for `main` with the two required checks.
 4. Add `nightly.yml`.

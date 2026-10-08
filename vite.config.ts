@@ -36,7 +36,14 @@ export default defineConfig(({ mode }) => ({
   // The Playwright tests (mode e2e) run the stock commands through e2e/command-server.mjs —
   // the real handler over the Firestore emulator — since Pages Functions are not served by
   // Vite. Nothing like this exists in any other mode.
-  ...(mode === 'e2e' ? { server: { proxy: { '/api/stock': 'http://127.0.0.1:5177' } } } : {}),
+  // Test and tool output is never source. Watching it is worse than useless here: the repo
+  // lives under OneDrive, which locks a file while it syncs, and a Playwright trace being
+  // written into e2e-results/ then threw EBUSY out of the watcher and killed the dev server
+  // mid-suite — every later test failing with ERR_CONNECTION_REFUSED (8 Oct 2026).
+  server: {
+    watch: { ignored: ['**/e2e-results/**', '**/test-results/**', '**/playwright-report/**', '**/.wrangler/**', '**/.shadow-db/**', '**/coverage/**', '**/reports/**'] },
+    ...(mode === 'e2e' ? { proxy: { '/api/stock': 'http://127.0.0.1:5177' } } : {}),
+  },
   plugins: [
     react(),
     tailwindcss(),
