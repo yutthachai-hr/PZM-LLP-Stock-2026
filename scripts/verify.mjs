@@ -41,6 +41,8 @@ const gates = [
   ['i18n', npm, ['run', '-s', 'i18n:check']],
   ['safety dataset fresh', npm, ['run', '-s', 'safety:dataset', '--', '--check']],
   ['integrity vectors fresh', npm, ['run', '-s', 'integrity:vectors', '--', '--check']],
+  // G25 rolling release: the one-release transition rules match the strict ones but for versionMoved().
+  ['transition rules fresh', process.execPath, ['scripts/rules-transition.mjs', '--check']],
   ['safety bench (unsafe-allow = 0)', npm, ['run', '-s', 'safety:bench', '--', '--no-write']],
   cargo ? ['rust: cargo test', cargo, ['test', '--release', '--quiet'], 'crates/pzm-integrity'] : ['rust: cargo test', 'cargo not installed here — run on a machine with Rust (see pstack-workflow.md)'],
   // G21: TS and Rust on fresh random snapshots (a new seed each run, printed); any disagreement fails.

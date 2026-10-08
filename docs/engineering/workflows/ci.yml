@@ -1,0 +1,143 @@
+# PROPOSAL — not active. Copying this file to .github/workflows/ci.yml is the step that turns
+# it on (owner approval). Validated by tests/ci-proposal.test.ts: every npm script it calls
+# exists, every required check in branch-protection.json is a job here.
+#
+# One job per gate, so branch protection can require each by name. Mirrors scripts/verify.mjs.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'integration/**', 'rc/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npx tsc -p tsconfig.app.json --noEmit
+      - run: npx tsc -p functions/tsconfig.json --noEmit
+      - run: npx tsc -p worker/tsconfig.json --noEmit
+      - run: npx tsc -p e2e/tsconfig.json --noEmit
+
+  lint-i18n:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npx oxlint
+      - run: npm run -s i18n:check
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npx vitest run
+
+  agent-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run -s safety:dataset -- --check
+      - run: npm run -s integrity:vectors -- --check
+      - run: npm run -s safety:bench -- --no-write
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: crates/pzm-integrity }
+      - run: npm ci
+      - run: cargo test --release --quiet
+        working-directory: crates/pzm-integrity
+      # G21: TS and Rust on fresh random snapshots; any disagreement fails.
+      - run: npm run -s integrity:diff
+
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: npm ci
+      # G25: the transition ruleset is generated from the strict one and must be current.
+      - run: node scripts/rules-transition.mjs --check
+      - run: npm run -s test:rules
+
+  build-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run -s build
+      - run: npm run -s check:bundle
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Includes the read benchmark (read-benchmark.spec) and the seed-pilot read count.
+      - run: npm run -s test:e2e -- --retries=0
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: e2e-results, path: e2e-results, retention-days: 7 }
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      # Credentials in the history or the change: service accounts, API keys, private keys.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The service-role key must never reach the browser bundle.
+      - run: |
+          if grep -rnE "VITE_[A-Z_]*(SERVICE|SECRET|PRIVATE)" --include='*.ts' --include='*.tsx' --include='*.env*' src .env* 2>/dev/null; then
+            echo "a VITE_ variable names a secret: it would ship to every browser"; exit 1
+          fi

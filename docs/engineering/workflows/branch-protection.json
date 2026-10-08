@@ -1,0 +1,17 @@
+{
+  "_comment": "PROPOSAL — not applied. Owner applies after ci.yml is active and green: gh api -X PUT repos/yutthachai-hr/PZM-LLP-Stock-2026/branches/main/protection --input docs/engineering/workflows/branch-protection.json (drop this _comment key first). Validated by tests/ci-proposal.test.ts.",
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["typecheck", "lint-i18n", "unit", "agent-safety", "rust", "rules", "build-budget", "e2e", "secrets"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1,
+    "dismiss_stale_reviews": true
+  },
+  "restrictions": null,
+  "required_linear_history": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true
+}
