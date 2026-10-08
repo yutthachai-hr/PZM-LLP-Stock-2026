@@ -158,8 +158,8 @@ OneDrive, `npm ci`, then the gates.
       firestore:rules,firestore:indexes` with the transition file set in `firebase.json`).
       Both old and new tabs keep working.
    2. Deploy the **app** (Pages builds `main`).
-   3. **Wait** until old PWA tabs have updated. The app shows an update prompt, so allow about
-      a working day, or until the read meter shows no old build.
+   3. **Prove** old PWA tabs have updated: zero stock commands without the new `build` in the
+      function logs (`docs/release/deployment-runbook.md` §6). A fixed wait is not proof.
    4. Deploy the **strict `firestore.rules`**.
 
    **How old tabs behave:**

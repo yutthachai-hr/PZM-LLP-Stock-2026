@@ -41,7 +41,7 @@ import {
   type PlanReceiveParams,
 } from '../commands/ledgerTx'
 export * from '../commands/ledgerTx'
-import { activeTraceId, emit, newRequestId, traceHeaders } from '../lib/trace'
+import { activeTraceId, emit, newRequestId, traceHeaders, BUILD_HEADER } from '../lib/trace'
 import {
   QTY_STEP,
   requireQty,
@@ -134,6 +134,8 @@ export const NOT_SENT = Symbol('not-sent')
  * values) and are thrown as such. NOT_SENT when this build does not send the command, or
  * the server is not set up yet (503) — the client path then files it.
  */
+declare const __BUILD_ID__: string
+
 export async function callCommand<R>(name: string, params: unknown, brand = getBrand(), opts: { force?: boolean } = {}): Promise<R | typeof NOT_SENT> {
   // `force`: a command that has no client path in the cloud (the rules forbid it), whatever
   // VITE_STOCK_COMMANDS says — Smart Other's proposeItem.
@@ -144,7 +146,8 @@ export async function callCommand<R>(name: string, params: unknown, brand = getB
   const started = Date.now()
   const res = await fetch(`/api/stock/${name}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...(await authHeader()), ...traceHeaders(trace) },
+    // The build travels too: the release runbook counts commands per build (old PWA tabs).
+    headers: { 'content-type': 'application/json', ...(await authHeader()), ...traceHeaders(trace), [BUILD_HEADER]: typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'unknown' },
     body: JSON.stringify({ brand, params }),
   })
   emit({ ...trace, stage: 'app.call', name, outcome: res.ok ? 'ok' : res.status === 409 ? 'conflict' : res.status >= 500 ? 'error' : 'refused', code: res.status, ms: Date.now() - started, brand })

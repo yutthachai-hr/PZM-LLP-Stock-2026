@@ -33,7 +33,17 @@ export interface TraceContext {
   traceId: string
   requestId: string
   operationId?: string
+  /**
+   * The app build that sent the call (vite's __BUILD_ID__: a commit prefix, or "dev"). The
+   * release runbook counts commands per build to see that old PWA tabs are gone before the
+   * strict G25 rules go live — without a single Firestore read.
+   */
+  build?: string
 }
+
+export const BUILD_HEADER = 'x-pzm-build'
+/** A build id as vite writes it: hex commit prefix or "dev"; anything else is dropped. */
+export const isBuildId = (v: unknown): v is string => typeof v === 'string' && /^([0-9a-f]{7,40}|dev|unknown)$/.test(v)
 
 /** The ids a hop arrives with, checked; anything malformed is replaced, never trusted or echoed. */
 export function fromHeaders(get: (name: string) => string | null, operationId?: unknown): TraceContext & { inherited: boolean } {
@@ -43,6 +53,7 @@ export function fromHeaders(get: (name: string) => string | null, operationId?: 
     traceId: isTraceId(t) ? t : newTraceId(),
     requestId: isRequestId(r) ? r : newRequestId(),
     ...(isOperationId(operationId) ? { operationId } : {}),
+    ...(isBuildId(get(BUILD_HEADER)) ? { build: get(BUILD_HEADER) as string } : {}),
     inherited: isTraceId(t),
   }
 }
@@ -87,9 +98,11 @@ export interface TraceFields extends Partial<TraceContext> {
   brand?: 'pizza' | 'lelapin' | 'rnd'
   /** Counts only (events applied, rows written). */
   count?: number
+  /** The calling app's build (see TraceContext.build). */
+  build?: string
 }
 
-const ALLOWED: readonly (keyof TraceFields)[] = ['traceId', 'requestId', 'operationId', 'stage', 'outcome', 'name', 'ms', 'code', 'brand', 'count']
+const ALLOWED: readonly (keyof TraceFields)[] = ['traceId', 'requestId', 'operationId', 'stage', 'outcome', 'name', 'ms', 'code', 'brand', 'count', 'build']
 
 /**
  * The one log line: `{"kind":"pzm.trace","at":…,…}`. Only allow-listed keys survive, strings are
@@ -103,6 +116,7 @@ export function traceLine(f: TraceFields, at = Date.now()): string {
     if (k === 'traceId' && !isTraceId(v)) continue
     if (k === 'requestId' && !isRequestId(v)) continue
     if (k === 'operationId' && !isOperationId(v)) continue
+    if (k === 'build' && !isBuildId(v)) continue
     if (typeof v === 'number') out[k] = Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null
     else if (typeof v === 'string') out[k] = v.slice(0, 80)
   }
