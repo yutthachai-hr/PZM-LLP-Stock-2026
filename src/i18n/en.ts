@@ -2968,6 +2968,7 @@ export const EN: Record<string, string> = {
   'รอผู้ขายยืนยัน': 'Waiting Supplier',
   'ผู้ขายยืนยันแล้ว': 'Supplier Confirmed',
   'ผู้ขายเปลี่ยนวันส่ง': 'Supplier Changed Date',
+  'ยอดคงเหลือจริงที่ {site}': 'Actual on hand at {site}',
   'รออนุมัติวันส่ง': 'Pending Date Approval',
   'ผู้ขายยืนยันวันส่ง: {supplier} ({docNo})': 'Supplier confirmed delivery: {supplier} ({docNo})',
   'ผู้ขายเปลี่ยนวันส่ง: {supplier} ({docNo})': 'Supplier changed delivery date: {supplier} ({docNo})',
