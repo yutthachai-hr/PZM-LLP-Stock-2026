@@ -1,0 +1,162 @@
+{
+ "at": "2026-10-08T17:32:51.763Z",
+ "url": "http://127.0.0.1:7331",
+ "health": {
+  "status": "ok",
+  "lanes": {
+   "modelless": "ready",
+   "raw": "ready",
+   "laya": "off"
+  },
+  "heads": {
+   "tetris": false,
+   "lanes": false,
+   "flappy": false
+  },
+  "corpus": {
+   "domains": [
+    "out_of_scope",
+    "po_unconfirmed",
+    "stock_lookup",
+    "stockout_risk",
+    "transfer_status",
+    "write_request"
+   ]
+  }
+ },
+ "latency": {
+  "n": 200,
+  "p50": 1.16,
+  "p95": 2.03,
+  "max": 3.6
+ },
+ "passed": 26,
+ "failed": 0,
+ "checks": [
+  {
+   "name": "healthz ok, modelless ready",
+   "ok": true,
+   "detail": "{\"modelless\":\"ready\",\"raw\":\"ready\",\"laya\":\"off\"}"
+  },
+  {
+   "name": "corpus is the PZM rulebook",
+   "ok": true,
+   "detail": "{\"domains\":[\"out_of_scope\",\"po_unconfirmed\",\"stock_lookup\",\"stockout_risk\",\"transfer_status\",\"write_request\"]}"
+  },
+  {
+   "name": "choice + score + noul answered in one call",
+   "ok": true,
+   "detail": "status 200"
+  },
+  {
+   "name": "response satisfies the decision wire",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "name": "routing discloses the modelless lane",
+   "ok": true,
+   "detail": "modelless corpus routing: out_of_scope=0 po_unconfirmed=0 stock_lookup=2 stockout_risk=0 transfer_status=0 write_request"
+  },
+  {
+   "name": "calibration disclosed (none = honest raw)",
+   "ok": true,
+   "detail": "{\"method\":\"none\",\"temperature\":1}"
+  },
+  {
+   "name": "off-corpus input abstains (outcome null)",
+   "ok": true,
+   "detail": "{\"question_id\":\"intent\",\"outcome\":null,\"probabilities\":[0.17253985,0.16632313,0.15840724,0.1382698,0.16494463,0.19951533],\"confidence\":0.003311038}"
+  },
+  {
+   "name": "deterministic (same request → same answer)",
+   "ok": true
+  },
+  {
+   "name": "malformed (not JSON) → 4xx",
+   "ok": true,
+   "detail": "status 400 {\"error\":\"key must be a string at line 1 column 2\"}"
+  },
+  {
+   "name": "malformed (missing questions) → 4xx",
+   "ok": true,
+   "detail": "status 400 {\"error\":\"missing field `questions` at line 1 column 13\"}"
+  },
+  {
+   "name": "malformed (unknown kind) → 4xx",
+   "ok": true,
+   "detail": "status 400 {\"error\":\"unknown variant `maybe`, expected one of `choice`, `score`, `noul` at "
+  },
+  {
+   "name": "malformed (wrong types) → 4xx",
+   "ok": true,
+   "detail": "status 400 {\"error\":\"invalid type: integer `5`, expected a string at line 1 column 29\"}"
+  },
+  {
+   "name": "invalid wire (noul with options) refused",
+   "ok": true,
+   "detail": "status 422 {\"error\":\"request invalid: decision_wire: noul question 0 must not carry options\"}"
+  },
+  {
+   "name": "invalid wire (one-option choice) refused",
+   "ok": true,
+   "detail": "status 422 {\"error\":\"request invalid: decision_wire: choice/score question 0 needs ≥2 options, got 1\"}"
+  },
+  {
+   "name": "invalid wire (duplicate ids) refused",
+   "ok": true,
+   "detail": "status 422 {\"error\":\"request invalid: decision_wire: duplicate question id at position 1\"}"
+  },
+  {
+   "name": "unknown lane header → 400",
+   "ok": true,
+   "detail": "{\"error\":\"unknown lane \\\"nope\\\" (supported: modelless, raw, laya, laya-ane)\"}"
+  },
+  {
+   "name": "oversized body (5 MiB) refused",
+   "ok": true,
+   "detail": "status 0"
+  },
+  {
+   "name": "unknown route → 404",
+   "ok": true
+  },
+  {
+   "name": "laya lane off → explicit 503-class refusal",
+   "ok": true,
+   "detail": "status 503 {\"error\":\"laya lane is not enabled — restart the engine with RIIR_REFLEX_LAYA=1\"}"
+  },
+  {
+   "name": "POST /feedback accepts {p, outcome}",
+   "ok": true,
+   "detail": "{\"refit\":false}"
+  },
+  {
+   "name": "malformed feedback → 400",
+   "ok": true
+  },
+  {
+   "name": "server answers while another client is stuck",
+   "ok": true,
+   "detail": "1 ms"
+  },
+  {
+   "name": "stuck client dropped by the read timeout (≤ 12 s)",
+   "ok": true,
+   "detail": "9999 ms"
+  },
+  {
+   "name": "64 concurrent requests all 200 + wire-valid",
+   "ok": true
+  },
+  {
+   "name": "concurrent answers identical (no shared-state race)",
+   "ok": true
+  },
+  {
+   "name": "latency p95 < 50 ms (single question, loopback)",
+   "ok": true,
+   "detail": "{\"n\":200,\"p50\":1.16,\"p95\":2.03,\"max\":3.6}"
+  }
+ ]
+}

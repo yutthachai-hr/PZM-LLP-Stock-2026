@@ -1,3 +1,6 @@
 # Hashed byte-for-byte (manifest sha256, Rust test vectors): never convert line endings.
 datasets/** -text
 crates/pzm-integrity/vectors/** -text
+# Node scripts with a shebang: a CRLF checkout (core.autocrlf on Windows) breaks the
+# shebang under vite/vitest SSR ("Invalid or unexpected token"). Keep them LF everywhere.
+*.mjs text eol=lf

@@ -1,0 +1,50 @@
+{
+  "_comment": "Every external component of the real stack, pinned. Checked by stack/scripts/verify-pins.mjs. Fetched 9 Oct 2026.",
+  "reflex": {
+    "release": "gist-rs/reflex v0.2.4",
+    "asset": "reflex-v0.2.4-x86_64-pc-windows-gnu.zip",
+    "sha256": "fc5a841b3dba1d17476bad64241f6b1698f2a238fd1bdfb5d790b71983591e7d",
+    "sha256Source": "release SHA256SUMS (asset digest 819aab92…)",
+    "version": "reflex 0.2.4; features: default laya-riir modelless nb-ridge nb-scope option-cond vessel-public-read",
+    "installDir": "C:/pzm/stack/reflex-v0.2.4/bin"
+  },
+  "sources": {
+    "gist-rs/riir-reflex": "ecaa427b2065eaa103e63d5468a51546968bc50f",
+    "katopz/katgpt-rs": "ee288399c0adf3bf2ceed6fc30fae875e8ef989d",
+    "gist-rs/riir-infer": "9ece0551f289e12b80b43a8ac7be34a0a1d64085",
+    "gist-rs/riir-reflexer": "59aad71e3256601cc300fc64b1099eefe3fff855",
+    "NandhaKishorM/laya": "3cf26cbcb18725dbc2d127bb8bb2c4c43243ae63",
+    "aardappel/goose": "35368105e3d50341b79a4cb873cc0261e82dfa42"
+  },
+  "laya": {
+    "runtime": "laya 0.4.0 from NandhaKishorM/laya@3cf26cb (pip install <checkout>[serve])",
+    "python": "3.14.6, venv C:/pzm/stack/laya-venv, CPU torch 2.14.1+cpu (lock: stack/laya/requirements.lock.txt)",
+    "checkpoints": {
+      "english": {
+        "repo": "convaiinnovations/laya",
+        "revision": "7b928d828b7b0e022f929d9bd2e44165aa270148",
+        "reviewedPinInRuntime": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+        "note": "weights, tokenizer and configs are byte-identical at both revisions; 7b928d8 only adds a root config.json",
+        "localDir": "C:/pzm/stack/models/laya-7b928d828b7b0e022f929d9bd2e44165aa270148",
+        "sha256": {
+          "model.safetensors": "891102d372688fc2a094dac56a384bc537b87c63f21f9f3dac0be2b7cbc8d86c"
+        },
+        "gitBlob": {
+          "config.json": "7b4305a11f6d6936882e99492abe8e34d8ae6e3a",
+          "encoder/config.json": "5881ba831f2db5ce0f606bbaa1f2668e1e6cb706",
+          "rl_agent_config.json": "3e4fcbf12cf36164ce18a1398aa9f35f58375ae0",
+          "tokenizer/tokenizer.json": "2f4d8583e507b7466d2490e2d6c045647a822698",
+          "tokenizer/tokenizer_config.json": "9fd800115c5c92353220aa66addfce67a9135f32"
+        }
+      },
+      "multilingual": {
+        "status": "PROPOSED ADDITION ONLY — not downloaded, not loaded; the owner selected english",
+        "repo": "convaiinnovations/laya",
+        "subfolder": "multilingual",
+        "revision": "7b928d828b7b0e022f929d9bd2e44165aa270148",
+        "sha256": { "multilingual/model.safetensors": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204" },
+        "sizeBytes": 643835514
+      }
+    }
+  }
+}
