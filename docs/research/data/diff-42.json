@@ -1,0 +1,12 @@
+{
+ "referenceRule": "golden vector report, else TS reference on the original object",
+ "seed": 42,
+ "cases": 1105,
+ "vectors": 58,
+ "findings": 28273,
+ "goldenMismatches": 0,
+ "tsVsRust": 0,
+ "tsVsGoose": 0,
+ "refusedByFlat": [],
+ "disagreements": []
+}

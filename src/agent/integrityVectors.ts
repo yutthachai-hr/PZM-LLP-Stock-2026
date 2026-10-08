@@ -85,6 +85,8 @@ export function handCases(): [string, Snap][] {
     ['transfer-unknown-to-file', edit((s) => { s.transfers = s.transfers.filter((t) => t.id !== 'tr_2') })],
     ['bad-conversion-zero', edit((s) => { s.products[0].unitConversions!.push({ label: 'Tub', size: 0 }) })],
     ['bad-conversion-per', edit((s) => { s.products[3].unitConversions!.push({ label: 'Drum', size: 200, per: -1 }) })],
+    // A NaN `per` travels as JSON null; the reference refuses it (Rust read it as absent until 8 Oct 2026).
+    ['bad-conversion-per-nan', edit((s) => { s.products[3].unitConversions!.push({ label: 'Keg', size: 2, per: Number.NaN }) })],
     ['conversion-cycle', edit((s) => { s.products[2].unitConversions = [{ label: 'Pack', size: 25, of: 'Carton' }, { label: 'Carton', size: 12, of: 'Pack' }] })],
     ['conversion-dead-end', edit((s) => { s.products[2].unitConversions!.push({ label: 'Lot', size: 3, of: 'Crate' }) })],
     ['conversion-standard-measure', edit((s) => { s.products[0].unitConversions!.push({ label: 'Kilo', size: 1000, of: 'g' }) })],

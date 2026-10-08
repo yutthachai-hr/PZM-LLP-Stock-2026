@@ -42,11 +42,19 @@ fn nan_if_null<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
     Ok(Option::<f64>::deserialize(d)?.unwrap_or(f64::NAN))
 }
 
+/// The same for an optional rate: absent stays None, but a PRESENT `null` is a NaN rate, which the
+/// reference refuses (`c.per !== undefined && !Number.isFinite(c.per)`). Read as None it passed
+/// silently — found by the Goose third implementation's differential (8 Oct 2026).
+fn nan_if_null_opt<'de, D: Deserializer<'de>>(d: D) -> Result<Option<f64>, D::Error> {
+    Ok(Some(Option::<f64>::deserialize(d)?.unwrap_or(f64::NAN)))
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Conversion {
     pub label: String,
     #[serde(deserialize_with = "nan_if_null")]
     pub size: f64,
+    #[serde(default, deserialize_with = "nan_if_null_opt")]
     pub per: Option<f64>,
     pub of: Option<String>,
 }
