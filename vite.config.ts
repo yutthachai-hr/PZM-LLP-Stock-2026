@@ -33,6 +33,11 @@ function buildId(): string {
 
 export default defineConfig(({ mode }) => ({
   define: { __BUILD_ID__: JSON.stringify(buildId()) },
+  // The dependency pre-bundle cache, outside the OneDrive-synced repo on Windows: OneDrive
+  // locks files as it syncs them, and Vite's re-optimise then failed to unlink one
+  // (EPERM on node_modules/.vite/deps) — the dev server would not start, and two full e2e
+  // runs never began (8 Oct 2026). Dev servers only; a production build does not use it.
+  ...(process.env.LOCALAPPDATA ? { cacheDir: process.env.LOCALAPPDATA.split(String.fromCharCode(92)).join("/") + "/pzm-vite-cache" } : {}),
   // The Playwright tests (mode e2e) run the stock commands through e2e/command-server.mjs —
   // the real handler over the Firestore emulator — since Pages Functions are not served by
   // Vite. Nothing like this exists in any other mode.

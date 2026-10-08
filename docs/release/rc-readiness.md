@@ -16,9 +16,10 @@ the owner.
 | Full verification `verify --full` | **PASS** 15/15: types ×4, lint, unit **1,729** (1 skipped), i18n, datasets, vectors, safety bench, **Rust cargo test**, **TS ↔ Rust differential**, **rules emulator 242**, build, bundle budget | `npm run verify -- --full` |
 | Firestore rules tests | **PASS** 242 (includes main's `rnd__*` and this branch's `rnd__auditLog` / `rnd__intelShadow`) | in verify |
 | Rust differential | **PASS** 0 disagreements; Rust NaN-`per` bug **fixed** (found by the Goose diff) + vector 017 | `docs/research/goose-benchmark.md` §1 |
-| Full e2e, 3 consecutive runs | **PASS** 38 passed, 0 failed, 0 flaky, ×3, no retries (the 1 skip is the real-backup benchmark). The first attempt had 2 failures from a race in the new dialog test (the admin menu was opened before the role had loaded): fixed in the test, then 3 clean runs | 8 Oct, 16:15–16:45 |
+| Full e2e, 3 consecutive runs | **PASS** after Smart Other (`e179dc5`): 39 passed, 0 failed, 0 flaky, ×3, no retries (the 1 skip is the real-backup benchmark). Earlier attempts lost runs to OneDrive locking files: a Playwright trace (fixed `514faa3`) and Vite's dependency cache (now outside the repo) | 8 Oct, evening |
 | Preview isolation (code) | **PASS** 20 unit tests; direct HTTP; browser network capture | `docs/evidence/preview-isolation.md` |
 | Preview isolation (live, `e2bd3503`) | **PASS**, re-checked 8 Oct afternoon: privileged routes `503 preview_isolated` | same |
+| Smart "Other" item (R&D) | **PASS** 12 matching + 6 server (concurrency) + 4 rules + 1 e2e request→PO→receive; 0 Firestore reads while typing | `docs/evidence/smart-other-item.md` |
 | Stacked dialogs (P2) | **PASS** desktop 1440 + phone 375: Escape and Tab act on the top dialog, focus restored, axe clean | `e2e/dialogs.spec.ts` |
 | Notification popup race | **PASS** (fixed; it was failing 3/3 full runs) | `514faa3` |
 | R&D brand on server commands, shadow and Worker sync | **PASS** (tests: rnd receipt files only in `rnd__*`; shadow accepts rnd) | `6eda5a9` |
