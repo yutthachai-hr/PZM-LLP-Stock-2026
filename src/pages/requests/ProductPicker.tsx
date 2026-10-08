@@ -12,6 +12,7 @@ import type { UnitConversion } from '../../lib/units'
 import { looseMatch, looseScore } from '../../lib/search'
 import { getBrand } from '../../brand/brand'
 import { isOtherPlaceholder, otherItemOn, reviewOf } from '../../lib/otherItem'
+import { lacksUnit } from '../../lib/importReview'
 import { OtherItemPanel } from './OtherItemPanel'
 
 /**
@@ -174,7 +175,8 @@ function ByProduct({
   }
 
   async function add() {
-    if (!picked || !supplierId) return
+    // No unit, no stock line (release hardening, 8 Oct 2026): receiving it would be refused.
+    if (!picked || !supplierId || lacksUnit(picked)) return
     const n = Number(qty)
     if (!(n > 0)) return
     const s = suppliers.find((x) => x.id === supplierId)!
@@ -342,8 +344,11 @@ function ByProduct({
               />
             </div>
           </div>
+          {lacksUnit(picked) && (
+            <p className="mt-3 rounded-lg bg-out-soft px-3 py-2 text-sm text-out">{t('สินค้านี้ยังไม่มีหน่วย — ให้ผู้ดูแลกำหนดหน่วยที่หน้าสินค้าก่อน จึงจะขอสั่งซื้อได้')}</p>
+          )}
           <div className="mt-3 flex justify-end">
-            <Button onClick={() => void add()} disabled={busy || !supplierId || !(Number(qty) > 0)}>
+            <Button onClick={() => void add()} disabled={busy || !supplierId || !(Number(qty) > 0) || lacksUnit(picked)}>
               <Icon name="plus" size={16} />
               {t('เพิ่มรายการ')}
             </Button>

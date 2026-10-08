@@ -83,6 +83,41 @@ describe('who may call', () => {
   })
 })
 
+// Release hardening (8 Oct 2026): the R&D catalogue arrived with NO unit on any product
+// (main 476fa35). A product without a unit cannot hold stock — every stock path refuses it,
+// on the server as in the app, and nothing is written. The unit is never guessed.
+describe('a product with no unit cannot hold stock', () => {
+  const noUnit = () => {
+    const w = world()
+    return memoryServerStore({ ...w, products: { ...w.products, flour: { ...w.products.flour, unit: '', unitType: '' } } })
+  }
+  const line = { productId: 'flour', productName: 'FLOUR', unit: '', qty: 2 }
+  const bodies: [string, string, Record<string, unknown>][] = [
+    ['receiveStock', 'staff', { lines: [line], toLocationId: 'wh', date: NOW, doc: { supplierName: 'MARKET', invoiceNo: 'B-1' } }],
+    ['issueStock', 'mgr', { lines: [line], fromLocationId: 'wh', toLocationId: 'br', date: NOW }],
+    ['consumeStock', 'staff', { lines: [line], fromLocationId: 'wh', date: NOW }],
+    ['adjustStock', 'staff', { lines: [{ ...line, direction: 'out', reason: 'broken' }], locationId: 'wh', date: NOW }],
+  ]
+  test.each(bodies)('%s is refused with the reason, nothing written', async (name, who, params) => {
+    const d = deps(noUnit())
+    const r = await runStockCommand(d, name, `Bearer ${who}`, { brand: 'pizza', params })
+    expect(r.status).toBe(422)
+    expect(String(r.body.key)).toContain('ยังไม่มีหน่วย')
+    expect(d.store.writes).toBe(0)
+  })
+  test('receiving an order for it is refused too', async () => {
+    const d = deps(noUnit())
+    const r = await receivePOCommand(d, 'Bearer staff', full({ lines: [{ productId: 'flour', receivedQty: 2, checked: true }, { productId: 'cheese', receivedQty: 0, checked: true }] }))
+    expect(r.status).toBe(422)
+    expect(d.store.writes).toBe(0)
+  })
+  test('a product WITH its unit is unaffected (the same receipt files)', async () => {
+    const d = deps()
+    const r = await runStockCommand(d, 'receiveStock', 'Bearer staff', { brand: 'pizza', params: bodies[0][2] })
+    expect(r.status).toBe(200)
+  })
+})
+
 // main 4c74aaf (8 Oct 2026) added the R&D brand (`rnd__*`): the server commands must serve it
 // too, in its own collections, or R&D receiving is refused as a bad brand.
 describe('the R&D brand', () => {

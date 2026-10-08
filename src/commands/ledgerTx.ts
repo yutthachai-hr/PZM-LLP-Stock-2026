@@ -179,6 +179,13 @@ export async function requireMasterData(
     if (p.active === false) {
       throw new AppError('สินค้า "{name}" ถูกปิดใช้งานแล้ว', { name: p.name || id })
     }
+    // A product with no unit of its own cannot hold stock: every balance, conversion and
+    // count would be in "nothing". The R&D catalogue arrived that way (main 476fa35, all
+    // 228 rows) — refused here, on every stock path, until an admin sets the unit. The unit
+    // is never guessed (release hardening, 8 Oct 2026).
+    if (!p.unitType || !String(p.unitType).trim()) {
+      throw new AppError('สินค้า "{name}" ยังไม่มีหน่วย — ให้ผู้ดูแลกำหนดหน่วยที่หน้าสินค้าก่อนทำรายการสต๊อก', { name: p.name || id })
+    }
   }
   for (const [id, l] of locations) {
     if (!l) throw new AppError('ไม่พบคลังในระบบแล้ว (อาจถูกลบไป) — โปรดเลือกใหม่')
