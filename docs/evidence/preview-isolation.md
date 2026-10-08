@@ -85,6 +85,17 @@ deployments.
 | Preview build (above) | a production config (`projectId: pzm-stock-x5`) | **0** of 50. No googleapis, firebase, identitytoolkit or gstatic. | Demo sign-up, with the demo banner |
 | `main` build served on `127.0.0.1` | the same | **0** of 50 | Local mode ("data stays in this browser") |
 
+### Live: the real Cloudflare preview of this branch (after the owner's push of `0261c48`)
+
+Host: `integration-ops-os-rc1.pzmstock.pages.dev`, built by Cloudflare from this branch.
+
+| Request | Result |
+|---|---|
+| `POST /api/stock/receivePO`, `POST /api/ocr-bill`, `GET /api/po-image`, `GET /api/supplier/abc`, `POST /api/supplier-po/decide`, `POST /api/supplier-po/link`, `GET /a/abc`, `GET /po/abc` | **503 `preview_isolated`**, `x-pzm-tier: preview` |
+| `POST /api/client-error` | 400 (allowed; the handler validates its input) |
+| `Host: pzmstock.pages.dev` sent to the preview URL | 405 (shown by the missing `preview_isolated` body), so the edge routed it elsewhere and the preview's handler was not reached |
+| Browser, with a production config saved in localStorage | **0** external requests of 50; local or demo sign-up screen |
+
 ### Fail closed
 
 `CF_PAGES=1` with no branch makes `vite build` exit 1, with the message "refusing to guess the
