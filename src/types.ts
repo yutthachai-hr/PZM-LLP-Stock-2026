@@ -1470,7 +1470,7 @@ export const MESSAGE_DAYS = 90
  * out here rather than imported because this file is also compiled into the cron Worker,
  * which has no browser, and brand.ts reads localStorage.
  */
-type BrandId = 'pizza' | 'lelapin'
+type BrandId = 'pizza' | 'lelapin' | 'rnd'
 
 /**
  * The company as its documents present it, one per brand (`companyProfile/main`).

@@ -40,6 +40,7 @@ auth-debug.log
 
 # Playwright output (reports, traces, screenshots)
 e2e-results/
+test-results/
 
 # Real company data staged for a local import run. Never commit.
 public/__demo-import.xlsx

@@ -108,7 +108,7 @@ export function cleanContent(c: AnnouncementContent): AnnouncementContent {
   if (body.length > ANNOUNCEMENT_BODY_MAX) throw new AppError('เนื้อหายาวเกิน {n} ตัวอักษร', { n: ANNOUNCEMENT_BODY_MAX })
   if (!Number.isFinite(c.announcementDate) || c.announcementDate <= 0) throw new AppError('กรุณาเลือกวันที่ประกาศ')
   if (c.format !== 'text' && c.format !== 'a5') throw new AppError('กรุณาเลือกรูปแบบ')
-  const scope = [...new Set(c.target.companyScope)].filter((b) => b === 'pizza' || b === 'lelapin')
+  const scope = [...new Set(c.target.companyScope)].filter((b) => b === 'pizza' || b === 'lelapin' || b === 'rnd')
   if (scope.length === 0) throw new AppError('กรุณาเลือกกลุ่มผู้ขาย')
   if (c.target.mode !== 'personal') throw new AppError('ยังไม่เปิดใช้การส่งอัตโนมัติผ่าน LINE OA')
   return { announcementDate: c.announcementDate, subject, body, format: c.format, target: { mode: 'personal', companyScope: scope } }

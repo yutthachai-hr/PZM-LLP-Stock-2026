@@ -93,7 +93,7 @@ describe('the half-hourly job', () => {
   test('stays inside a free-plan invocation: few queries per brand', async () => {
     await runJob(db.store, 'morning', MORNING)
     // 50 outgoing requests per invocation, one of which is the token; writes are batched.
-    expect(db.counts().queries).toBeLessThanOrEqual(24)
+    expect(db.counts().queries).toBeLessThanOrEqual(36)
   })
 })
 

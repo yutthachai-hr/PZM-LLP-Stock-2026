@@ -14,7 +14,7 @@ const SS_KEY = 'pmstock:v1:tabBrand'
 function tabBrand(): BrandId | null {
   try {
     const b = sessionStorage.getItem(SS_KEY)
-    if (b === 'pizza' || b === 'lelapin') {
+    if (b === 'pizza' || b === 'lelapin' || b === 'rnd') {
       setActiveBrand(b)
       return b
     }

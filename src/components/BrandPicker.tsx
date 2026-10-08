@@ -8,6 +8,7 @@ import { LangToggle } from '../i18n/LangToggle'
 const ART: Record<BrandId, string> = {
   pizza: '/brand/pizza-mania.jpg',
   lelapin: '/brand/le-lapin.jpg',
+  rnd: '/brand/rnd.svg',
 }
 
 /**
@@ -31,19 +32,19 @@ export function BrandPicker({ onPick }: { onPick: (b: BrandId) => void }) {
   // accent to use yet. The gradient is deliberately both brands at once — Pizza Mania
   // red into Le Lapin orange — rather than a token.
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 p-4">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 via-indigo-50/40 to-orange-50 p-4">
+      <div className="w-full max-w-lg sm:max-w-2xl lg:max-w-3xl">
         <LangToggle className="mx-auto mb-5 w-32" />
         <h1 className="text-center text-2xl font-bold text-ink">{t('เลือกแบรนด์')}</h1>
         <p className="mb-6 mt-1 text-center text-base text-ink-soft">{t('สวัสดี {name}', { name: user?.name ?? '' })}</p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-4 lg:gap-6">
           {BRANDS.map((b) => (
             <button
               key={b.id}
               type="button"
               onClick={() => pick(b.id)}
               aria-label={b.name}
-              className={`group relative aspect-[500/580] w-full cursor-pointer overflow-hidden rounded-3xl shadow-lg outline-none transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:shadow-xl focus-visible:ring-4 focus-visible:ring-brand/40 active:scale-95 ${
+              className={`group relative aspect-[500/580] w-full cursor-pointer overflow-hidden rounded-2xl sm:rounded-3xl shadow-lg outline-none transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:shadow-xl focus-visible:ring-4 focus-visible:ring-brand/40 active:scale-95 ${
                 pressed === b.id ? 'scale-95' : pressed ? 'scale-100 opacity-60' : ''
               } ${b.id === last ? 'ring-4 ring-white/80' : ''}`}
             >
@@ -54,7 +55,7 @@ export function BrandPicker({ onPick }: { onPick: (b: BrandId) => void }) {
                 draggable={false}
               />
               {b.id === last && (
-                <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-ink shadow">
+                <span className="absolute left-2 top-2 sm:left-3 sm:top-3 rounded-full bg-white/90 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-ink shadow">
                   {t('ล่าสุด')}
                 </span>
               )}

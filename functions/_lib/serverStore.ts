@@ -61,7 +61,7 @@ export function assertServerWrite(collection: string, fields: Record<string, unk
 }
 
 /** A brand's collection name, as the app's resolveCollection names it. */
-export function brandCollection(brand: 'pizza' | 'lelapin', name: string): string {
+export function brandCollection(brand: 'pizza' | 'lelapin' | 'rnd', name: string): string {
   if (name === 'users' || name === 'meta' || name === 'revokedUsers' || brand === 'pizza') return name
   return `${brand}__${name}`
 }

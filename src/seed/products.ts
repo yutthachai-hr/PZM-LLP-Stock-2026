@@ -12,6 +12,7 @@ export type { SeedProduct }
 const CATALOGS: Record<BrandId, SeedProduct[]> = {
   pizza: PZM_PRODUCTS,
   lelapin: LLP_PRODUCTS,
+  rnd: [],
 }
 
 /** The official catalogue for a brand. */

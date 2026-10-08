@@ -18,7 +18,7 @@ export function LogisticsSection() {
   const t = useT()
   const toast = useToast()
   const { user } = useAuth()
-  const [on, setOn] = useState<Record<BrandId, boolean | null>>({ pizza: null, lelapin: null })
+  const [on, setOn] = useState<Record<BrandId, boolean | null>>({ pizza: null, lelapin: null, rnd: null })
   const [busy, setBusy] = useState(false)
 
   async function check() {

@@ -52,6 +52,7 @@ export interface Reply {
 const COMPANY: Record<TokenBrand, string> = {
   pizza: 'Pizza Mania',
   lelapin: 'Le Lapin Sandwich Delivery',
+  rnd: 'R&D (Research & Development)',
 }
 
 const ok = (body: Record<string, unknown>): Reply => ({ status: 200, body })
@@ -59,7 +60,7 @@ const fail = (status: number, error: string, extra: Record<string, unknown> = {}
 /** Every link that is not ours, in any way, gets this same answer. */
 const NOT_FOUND = fail(404, 'not_found')
 
-const isBrand = (b: unknown): b is TokenBrand => b === 'pizza' || b === 'lelapin'
+const isBrand = (b: unknown): b is TokenBrand => b === 'pizza' || b === 'lelapin' || b === 'rnd'
 const isId = (s: unknown): s is string => typeof s === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(s)
 
 async function settingsOf(store: ServerStore, brand: TokenBrand): Promise<{ maxPostponeDays: number; ttlDays: number }> {

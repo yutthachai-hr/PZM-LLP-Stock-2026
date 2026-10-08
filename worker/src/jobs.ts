@@ -30,7 +30,7 @@ import type { Store, WriteOp } from './store'
  * for it, writes nothing the second time and spends no reads finding that out.
  */
 
-export const BRANDS = ['', 'lelapin__'] as const
+export const BRANDS = ['', 'lelapin__', 'rnd__'] as const
 export const WORKER_ACTOR = { id: 'worker', name: 'ระบบอัตโนมัติ' }
 
 export type JobKind = 'frequent' | 'morning' | 'generate' | 'weekly'

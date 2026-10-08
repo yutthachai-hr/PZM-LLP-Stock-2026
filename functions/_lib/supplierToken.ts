@@ -10,7 +10,7 @@
  * WebCrypto only: runs in a Pages Function and in the tests' Node alike.
  */
 
-export type TokenBrand = 'pizza' | 'lelapin'
+export type TokenBrand = 'pizza' | 'lelapin' | 'rnd'
 
 export interface SupplierClaims {
   brand: TokenBrand
@@ -22,7 +22,7 @@ export interface SupplierClaims {
 }
 
 interface Wire {
-  b: 'p' | 'l'
+  b: 'p' | 'l' | 'r'
   o: string
   s: string
   k: number
@@ -64,7 +64,7 @@ export const MIN_SECRET_LENGTH = 32
 
 export async function signSupplierToken(c: SupplierClaims, secret: string): Promise<string> {
   if (secret.length < MIN_SECRET_LENGTH) throw new Error('SUPPLIER_LINK_SECRET is too short')
-  const wire: Wire = { b: c.brand === 'lelapin' ? 'l' : 'p', o: c.poId, s: c.supplierId, k: c.version, e: Math.floor(c.expMs / 1000) }
+  const wire: Wire = { b: c.brand === 'lelapin' ? 'l' : c.brand === 'rnd' ? 'r' : 'p', o: c.poId, s: c.supplierId, k: c.version, e: Math.floor(c.expMs / 1000) }
   const payload = b64url(enc.encode(JSON.stringify(wire)))
   return `v1.${payload}.${b64url(await mac(secret, `v1.${payload}`))}`
 }
@@ -87,10 +87,10 @@ export async function verifySupplierToken(token: string, secret: string, now: nu
   } catch {
     return null
   }
-  if ((w.b !== 'p' && w.b !== 'l') || typeof w.o !== 'string' || typeof w.s !== 'string') return null
+  if ((w.b !== 'p' && w.b !== 'l' && w.b !== 'r') || typeof w.o !== 'string' || typeof w.s !== 'string') return null
   if (!Number.isInteger(w.k) || !Number.isInteger(w.e)) return null
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(w.o) || !/^[A-Za-z0-9_-]{1,64}$/.test(w.s)) return null
   const expMs = w.e * 1000
   if (now > expMs) return null
-  return { brand: w.b === 'l' ? 'lelapin' : 'pizza', poId: w.o, supplierId: w.s, version: w.k, expMs }
+  return { brand: w.b === 'l' ? 'lelapin' : w.b === 'r' ? 'rnd' : 'pizza', poId: w.o, supplierId: w.s, version: w.k, expMs }
 }
