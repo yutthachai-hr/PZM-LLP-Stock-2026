@@ -8,7 +8,7 @@ import { LangToggle } from '../i18n/LangToggle'
 const ART: Record<BrandId, string> = {
   pizza: '/brand/pizza-mania.jpg',
   lelapin: '/brand/le-lapin.jpg',
-  rnd: '/brand/rnd.svg',
+  rnd: '/brand/rnd.jpg',
 }
 
 /**
@@ -32,7 +32,7 @@ export function BrandPicker({ onPick }: { onPick: (b: BrandId) => void }) {
   // accent to use yet. The gradient is deliberately both brands at once — Pizza Mania
   // red into Le Lapin orange — rather than a token.
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 via-indigo-50/40 to-orange-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-red-50 via-blue-50/40 to-orange-50 p-4">
       <div className="w-full max-w-lg sm:max-w-2xl lg:max-w-3xl">
         <LangToggle className="mx-auto mb-5 w-32" />
         <h1 className="text-center text-2xl font-bold text-ink">{t('เลือกแบรนด์')}</h1>
