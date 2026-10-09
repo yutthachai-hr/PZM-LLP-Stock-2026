@@ -44,9 +44,10 @@ export function memoryServerStore(seed: Record<string, Record<string, Record<str
       store.writes++
       return true
     },
-    async query<T>(c: string, filters: readonly QueryFilter[]): Promise<T[]> {
+    async query<T>(c: string, filters: readonly QueryFilter[], limit?: number): Promise<T[]> {
       const out: T[] = []
       for (const [k, row] of data) {
+        if (limit && out.length >= limit) break
         if (!k.startsWith(`${c}/`) || k.slice(c.length + 1).includes('/')) continue
         const ok = filters.every((f) => {
           const v = row.doc[f.field] as string | number | boolean | undefined

@@ -69,7 +69,7 @@ const urlOf = (file: string) =>
 describe('every Pages Function is behind the guard', () => {
   const all = routes()
   test('the routes found on disk are the known privileged surface', () => {
-    expect(all.map(urlOf).sort()).toEqual(['/a/sample-token', '/api/client-error', '/api/ocr-bill', '/api/po-image', '/api/stock/sample-command', '/api/supplier-po/decide', '/api/supplier-po/link', '/api/supplier/sample-token', '/po/sample-token'])
+    expect(all.map(urlOf).sort()).toEqual(['/a/sample-token', '/api/ask', '/api/client-error', '/api/ocr-bill', '/api/po-image', '/api/stock/sample-command', '/api/supplier-po/decide', '/api/supplier-po/link', '/api/supplier/sample-token', '/po/sample-token'])
   })
   test('each route directory has a _middleware.ts that is the guard', async () => {
     const tops = new Set(all.map((f) => relative(join(ROOT, 'functions'), f).split(sep)[0]))

@@ -49,6 +49,9 @@ const TransferReceivePage = lazy(() => import('./pages/transfers/TransferReceive
 const TransfersTodayPage = lazy(() => import('./pages/transfers/TransfersTodayPage').then((m) => ({ default: m.TransfersTodayPage })))
 const RecipesPage = lazy(() => import('./pages/recipes/RecipesPage').then((m) => ({ default: m.RecipesPage })))
 const MorePage = lazy(() => import('./pages/More').then((m) => ({ default: m.MorePage })))
+// Ask PZM: staging builds only (VITE_ASK_PZM=on). Elsewhere the route does not exist at all.
+const ASK_PZM_ON = import.meta.env.VITE_ASK_PZM === 'on'
+const AskPzmPage = lazy(() => import('./pages/AskPzm').then((m) => ({ default: m.AskPzmPage })))
 
 function Gate() {
   const { user, loading } = useAuth()
@@ -132,6 +135,7 @@ function Gate() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/:section" element={<SettingsPage />} />
               <Route path="/more" element={<MorePage />} />
+              {ASK_PZM_ON && <Route path="/ask" element={<AskPzmPage />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

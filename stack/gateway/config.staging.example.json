@@ -1,0 +1,14 @@
+{
+  "_comment": "Copy to C:/pzm/stack/secrets/gateway.staging.json (outside Git). Secrets are FILE PATHS, never values.",
+  "port": 7350,
+  "auth": {
+    "mode": "access",
+    "teamDomain": "<team>.cloudflareaccess.com",
+    "aud": "<Access application AUD tag>"
+  },
+  "upstreams": {
+    "laya": { "url": "http://127.0.0.1:7340", "apiKeyFile": "C:/pzm/stack/secrets/laya.key" },
+    "reflex": { "url": "http://127.0.0.1:7331" }
+  },
+  "limits": { "maxConcurrent": 4, "upstreamTimeoutMs": 2000 }
+}

@@ -32,6 +32,8 @@ export interface ClientOptions {
   /** Below this a Laya answer is treated as an abstention. Reflex abstains on its own gates. */
   minConfidence?: number
   apiKey?: string
+  /** Laya only: which checkpoint this service runs. Default english, the owner's checkpoint. */
+  checkpoint?: 'english' | 'multilingual'
   clock?: () => number
 }
 
@@ -85,14 +87,15 @@ export class LayaPythonClient implements IntentClient {
     this.o = o
   }
   async classify(text: string): Promise<IntentVerdict> {
-    const model = 'laya-python/english'
-    // `model: "english"`: the owner's checkpoint, never the multilingual auto-route.
+    const ckpt = this.o.checkpoint ?? 'english'
+    const model = `laya-python/${ckpt}`
+    // The checkpoint is named on every request, never left to Laya's language auto-route.
     // State as the plain string: the exact input the Rust lane receives (Step 4 parity).
-    const r = await call(this.o, '/v1/systemone', { state: text, model: 'english', questions: LAYA_QUESTIONS }, this.o.apiKey ? { authorization: `Bearer ${this.o.apiKey}` } : {}, model)
+    const r = await call(this.o, '/v1/systemone', { state: text, model: ckpt, questions: LAYA_QUESTIONS }, this.o.apiKey ? { authorization: `Bearer ${this.o.apiKey}` } : {}, model)
     if (!r.ok) return r.verdict
     const a = readLaya(r.body)
     if (!a) return abstain(model, r.ms, 'MALFORMED')
-    if (a.checkpoint !== 'english') return abstain(model, r.ms, 'MALFORMED') // served by another checkpoint: refuse it
+    if (a.checkpoint !== ckpt) return abstain(model, r.ms, 'MALFORMED') // served by another checkpoint: refuse it
     const sure = a.confidence >= (this.o.minConfidence ?? 0)
     return { intent: sure ? a.intent : null, confidence: a.confidence, probabilities: a.probabilities, latencyMs: r.ms, model }
   }

@@ -85,7 +85,7 @@ export function currentWorkflow(): string | null {
 // ---------------------------------------------------------------- telemetry ----
 
 /** Where a line was written. */
-export type Stage = 'app.call' | 'api.command' | 'api.supplier' | 'tx.commit' | 'outbox.write' | 'worker.shadow' | 'worker.job' | 'ai.laya' | 'ai.guard' | 'notification' | 'audit'
+export type Stage = 'app.call' | 'api.command' | 'api.supplier' | 'tx.commit' | 'outbox.write' | 'worker.shadow' | 'worker.job' | 'ai.laya' | 'ai.guard' | 'api.ask' | 'notification' | 'audit'
 
 export interface TraceFields extends Partial<TraceContext> {
   stage: Stage

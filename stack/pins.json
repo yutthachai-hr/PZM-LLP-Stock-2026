@@ -38,11 +38,20 @@
         }
       },
       "multilingual": {
-        "status": "PROPOSED ADDITION ONLY — not downloaded, not loaded; the owner selected english",
+        "status": "ADDITIONAL model (owner approval 2, 9 Oct): own process, port 7341; never replaces english",
         "repo": "convaiinnovations/laya",
         "subfolder": "multilingual",
         "revision": "7b928d828b7b0e022f929d9bd2e44165aa270148",
-        "sha256": { "multilingual/model.safetensors": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204" },
+        "localDir": "C:/pzm/stack/models/laya-7b928d828b7b0e022f929d9bd2e44165aa270148/multilingual",
+        "sha256": {
+          "model.safetensors": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204",
+          "tokenizer/tokenizer.json": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f"
+        },
+        "gitBlob": {
+          "encoder/config.json": "0de0e2d30638873790cf962def52e2acf4db3eef",
+          "rl_agent_config.json": "00e35f88bb731bb9126a914666ab1cdac8a204c8",
+          "tokenizer/tokenizer_config.json": "c255ac0c8cb34a37d066cd0dafe313fd769d27ae"
+        },
         "sizeBytes": 643835514
       }
     }

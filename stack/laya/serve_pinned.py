@@ -20,7 +20,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PINS = json.loads((HERE.parent / "pins.json").read_text(encoding="utf-8"))
-EN = PINS["laya"]["checkpoints"]["english"]
+# english = the owner's checkpoint (default). multilingual = the owner-approved ADDITIONAL model,
+# served by its own process on its own port, never swapped in for english.
+CKPT = os.environ.get("PZM_LAYA_CHECKPOINT", "english")
+if CKPT not in ("english", "multilingual"):
+    sys.exit("PZM_LAYA_CHECKPOINT must be english or multilingual")
+EN = PINS["laya"]["checkpoints"][CKPT]
 DIR = Path(os.environ.get("PZM_LAYA_DIR", EN["localDir"]))
 
 
@@ -48,24 +53,24 @@ def main() -> None:
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["LAYA_API_KEY"] = key
     os.environ["LAYA_HOST"] = "127.0.0.1"
-    os.environ.setdefault("LAYA_PORT", "7340")
+    os.environ.setdefault("LAYA_PORT", "7340" if CKPT == "english" else "7341")
     os.environ.setdefault("LAYA_THREADS", "6")  # physical cores on the i5-10400
-    os.environ["LAYA_MODELS"] = "english"
+    os.environ["LAYA_MODELS"] = CKPT
 
     from laya import serve
     from laya.router import Router
 
-    class EnglishOnly(Router):
-        """The owner's checkpoint for every request; a caller cannot select another."""
+    class OneCheckpoint(Router):
+        """This process's checkpoint for every request; a caller cannot select another."""
 
         def predict(self, state, questions, *args, **kwargs):
-            kwargs["model"] = "english"
+            kwargs["model"] = CKPT
             return super().predict(state, questions, *args, **kwargs)
 
     def build():
         serve._apply_thread_limit()
-        r = EnglishOnly(models={"english": str(DIR)}, default="english", max_loaded=1, device="cpu")
-        r.preload(["english"])
+        r = OneCheckpoint(models={CKPT: str(DIR)}, default=CKPT, max_loaded=1, device="cpu")
+        r.preload([CKPT])
         return r
 
     serve.build_router = build
