@@ -253,3 +253,72 @@ production. Status stays **OPEN, narrowed**: the source class is identified, the
 - preview keys separated from production (owner, 9 Oct).
 
 **Still advised:** a Cloud Billing budget alert on Firestore reads at 40K/day.
+
+## 9. Forensics, 9 Oct (owner-approved, read-only except enabling the audit log) [live]
+
+**Service accounts** (IAM, `pzm-stock-x5`):
+
+| Account | Keys |
+|---|---|
+| `firebase-adminsdk-fbsvc@…` | none |
+| `pzmstock-functions@…` | **one key**, `fa49f26d…`, created 5 Oct. Used by the Pages Functions and the Worker. |
+
+**That key's authentications** (Cloud Monitoring `service_account/key/authn_events_count`,
+hourly, ICT):
+
+| When | Authentications |
+|---|---|
+| 5 Oct 16:00 / 23:00 | 1 / 1 |
+| 6 Oct 15:00 / 16:00 / 19:00 | 1 / 2 / 1 |
+| **6 Oct 20:00 → 7 Oct 09:00** | **none** |
+| 7 Oct 10:00 | 1 |
+| 8 Oct 12:00–19:00 | 2–8 per hour |
+
+**→ The key did not make the burst reads.** A token lives one hour, so a job using it would
+authenticate in every burst hour. This also clears every repository path to production
+(`functions/_lib/serverStore.ts`, `worker/src/firestore.ts`); both use this key.
+
+**Admin Activity audit log** (always on; 6 Oct 17:00 → 7 Oct 12:00 ICT), 7 entries, all
+`yutthachai@pizzamania.com`:
+
+| Time (ICT) | Entries |
+|---|---|
+| 6 Oct 23:40 | Firebase Rules `CreateRuleset` + `UpdateRelease`, and 4 × Firestore `CreateIndex` (notifications, both brands). That is a `firebase deploy` of rules and indexes. |
+| 7 Oct 09:56 | Cloud Billing `AssignResourceToBillingAccount` (the project linked to the current free-trial billing account) |
+
+There was **no** export, import or backup operation in the window.
+
+**Data Access audit logs** were **disabled** for Firestore, so no historical record names the
+reader. **Attribution: UNVERIFIED.**
+
+**Most consistent with the evidence, not proven:** a client using the owner's own Google login,
+which never uses the key and bypasses the rules:
+- the Firebase console's data viewer;
+- or a desktop or CLI Firestore tool signed in as the owner.
+
+**Changed today, with the owner's approval in chat:**
+- **Data Access audit logs ON for the Firestore/Datastore API** (Admin read, Data read, Data
+  write).
+- Estimated about 2 GB of logs a month at current traffic, within Cloud Logging's free
+  50 GiB/month.
+- Review after 30 days.
+
+**Not done (owner decisions):**
+- **Rotate the key:** not justified by evidence. It shows no anomalous use, and it is in active
+  use by production functions.
+- Disable accounts: none suggested.
+
+**Recommended:**
+1. Cloud Billing **budget alert** (Firestore reads, e.g. alert at 40K/day-equivalent spend).
+2. Narrow `pzmstock-functions` from `roles/datastore.user` to the least it needs. Today it reads
+   and writes everything.
+3. Avoid browsing large collections in the Firebase console data viewer: it reads every document
+   shown and is not rule-checked.
+4. If the pattern repeats, the Data Access log now names the principal and method within minutes.
+
+**8–9 Oct pattern:**
+- 8 Oct: 82K reads.
+- Rule evaluations held about 2K/h around the clock on 7–8 Oct, including night hours. Devices or
+  tabs stayed connected overnight.
+- From 9 Oct 00:00 the night rate fell to about 570/h.
+- Ordinary client traffic: about 2–3 reads per evaluation.
