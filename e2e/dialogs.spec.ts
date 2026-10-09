@@ -10,8 +10,13 @@ import { open, signedIn } from './app'
 async function editorWithConfirm(page: Page, size?: { width: number; height: number }) {
   await open(page, '/products')
   const row = page.getByRole('row').filter({ hasText: 'FLOUR' }).first()
-  await row.getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' }).click()
-  await page.getByRole('menuitem', { name: 'แก้ไข' }).click()
+  // The row menu closes on any scroll (components/frame/RowMenu.tsx), and the list may still be
+  // settling right after the page opens: open it again if it closed, as a person would.
+  await expect(async () => {
+    const edit = page.getByRole('menuitem', { name: 'แก้ไข' })
+    if (!(await edit.isVisible())) await row.getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' }).click()
+    await edit.click({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
   const editor = page.getByRole('dialog', { name: 'แก้ไขสินค้า' })
   await expect(editor).toBeVisible()
   // The list's row menu is a desktop control; the dialogs are what is under test, so a phone
