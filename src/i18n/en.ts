@@ -151,23 +151,19 @@ export const EN: Record<string, string> = {
 
   // ---- login / auth ------------------------------------------------------------
   เข้าสู่ระบบ: 'Sign in',
-  เข้าสู่ระบบบริหารสต๊อก: 'Sign in to stock management',
   อีเมล: 'Email',
   รหัสผ่าน: 'Password',
   แสดงรหัสผ่าน: 'Show password',
   ซ่อนรหัสผ่าน: 'Hide password',
   ชื่อผู้ดูแล: 'Administrator name',
-  'เช่น สมชาย': 'e.g. Somchai',
   'อย่างน้อย 6 ตัวอักษร': 'At least 6 characters',
   สร้างบัญชีผู้ดูแล: 'Create administrator account',
   ตั้งค่าผู้ดูแลระบบคนแรก: 'Set up the first administrator',
   'ขอสิทธิ์เข้าใช้งาน': 'Request access',
   'ชื่อของคุณ': 'Your name',
   'ส่งคำขอเข้าใช้งาน': 'Request access',
-  'ยังไม่มีบัญชี? ขอสิทธิ์เข้าใช้งาน': 'No account yet? Request access',
   'บัญชีใหม่จะยังเข้าใช้ข้อมูลไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ':
     'A new account cannot see any data until an administrator approves it',
-  'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ': 'Already have an account? Sign in',
   รูปแบบอีเมลไม่ถูกต้อง: 'That email address is not valid',
   'รหัสผ่านสั้นเกินไป (อย่างน้อย 6 ตัว)': 'Password is too short (at least 6 characters)',
   'แคตตาล็อกมีรหัสสินค้าซ้ำ: {sku} — แก้ไฟล์ต้นทางก่อนนำเข้า':
@@ -3032,4 +3028,17 @@ export const EN: Record<string, string> = {
   'วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน': 'This date is beyond the agreed range and needs purchasing approval first',
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
+  // ---- the sign-in page with the brand mascots (5 Oct 2026) ----
+  'โหมดในเครื่องส่งอีเมลไม่ได้ — ให้ผู้ดูแลระบบตั้งรหัสผ่านใหม่ให้': 'This local build cannot send mail — ask an admin to set a new password',
+  'ใส่อีเมลก่อน แล้วกด "ลืมรหัสผ่าน?" อีกครั้ง': 'Enter your email first, then press "Forgot password?" again',
+  'ถ้าอีเมลนี้มีบัญชีอยู่ ระบบส่งลิงก์ตั้งรหัสผ่านใหม่ไปแล้ว — เช็กกล่องจดหมาย (และโฟลเดอร์สแปม)': 'If this email has an account, a link to set a new password is on its way — check your inbox (and spam)',
+  'แบรนด์': 'Brand',
+  'ยินดีต้อนรับกลับสู่ {name} Stock': 'Welcome back to {name} Stock',
+  'ลืมรหัสผ่าน?': 'Forgot password?',
+  'มีบัญชีอยู่แล้ว?': 'Already have an account?',
+  'ยังไม่มีบัญชี?': 'Don\'t have an account yet?',
+  'จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่สะดุด': 'Manage your ingredients, track inventory and keep your kitchen running smoothly.',
+  'จัดการสต๊อก ติดตามวัตถุดิบ ให้ทุกสาขาเดินได้ราบรื่น': 'Manage your inventory, track ingredients and keep every branch running smoothly.',
+  'ทดลองสูตร พัฒนาเมนู และติดตามวัตถุดิบทดลองในที่เดียว': 'Test recipes, develop the menu and track trial ingredients in one place.',
+  'ลองหลายครั้งเกินไป — รอสักครู่แล้วลองใหม่': 'Too many attempts — wait a moment and try again',
 }
