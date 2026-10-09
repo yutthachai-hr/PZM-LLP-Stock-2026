@@ -1,0 +1,139 @@
+{
+  "at": "2026-10-09T07:17:09.901Z",
+  "base": "http://localhost:5177",
+  "runs": [
+    {
+      "font": "A-lineseed",
+      "viewport": "1440x900",
+      "clsOnLoad": 0,
+      "overflowX": false,
+      "fonts": [
+        {
+          "file": "LINESeedSansTH_W_Rg.woff2",
+          "kb": 29,
+          "ms": 16
+        },
+        {
+          "file": "PlusJakartaSans-Variable.woff2",
+          "kb": 27,
+          "ms": 16
+        },
+        {
+          "file": "Anuphan-Thai-Variable.woff2",
+          "kb": 18,
+          "ms": 16
+        }
+      ],
+      "faces": {
+        "h1": "\"LINE Seed Sans TH\", \"Noto Sans Thai\", \"Leelawadee UI\", system-ui, -apple-system, sans-serif",
+        "h2": "\"LINE Seed Sans TH\", \"Noto Sans Thai\", \"Leelawadee UI\", system-ui, -apple-system, sans-serif",
+        "btn": "\"LINE Seed Sans TH\", \"Noto Sans Thai\", \"Leelawadee UI\", system-ui, -apple-system, sans-serif",
+        "loaded": [
+          "LINE Seed Sans TH 400",
+          "LINE Seed Sans TH 700"
+        ]
+      }
+    },
+    {
+      "font": "A-lineseed",
+      "viewport": "390x844",
+      "clsOnLoad": 0,
+      "overflowX": false,
+      "fonts": [
+        {
+          "file": "LINESeedSansTH_W_Rg.woff2",
+          "kb": 29,
+          "ms": 15
+        },
+        {
+          "file": "PlusJakartaSans-Variable.woff2",
+          "kb": 27,
+          "ms": 15
+        },
+        {
+          "file": "Anuphan-Thai-Variable.woff2",
+          "kb": 18,
+          "ms": 15
+        }
+      ],
+      "faces": {
+        "h1": "\"LINE Seed Sans TH\", \"Noto Sans Thai\", \"Leelawadee UI\", system-ui, -apple-system, sans-serif",
+        "h2": "\"LINE Seed Sans TH\", \"Noto Sans Thai\", \"Leelawadee UI\", system-ui, -apple-system, sans-serif",
+        "btn": "\"LINE Seed Sans TH\", \"Noto Sans Thai\", \"Leelawadee UI\", system-ui, -apple-system, sans-serif",
+        "loaded": [
+          "LINE Seed Sans TH 400",
+          "LINE Seed Sans TH 700"
+        ]
+      }
+    },
+    {
+      "font": "B-jakarta-anuphan",
+      "viewport": "1440x900",
+      "clsOnLoad": 0.0001,
+      "overflowX": false,
+      "fonts": [
+        {
+          "file": "LINESeedSansTH_W_Rg.woff2",
+          "kb": 29,
+          "ms": 18
+        },
+        {
+          "file": "PlusJakartaSans-Variable.woff2",
+          "kb": 27,
+          "ms": 18
+        },
+        {
+          "file": "Anuphan-Thai-Variable.woff2",
+          "kb": 18,
+          "ms": 18
+        }
+      ],
+      "faces": {
+        "h1": "\"Plus Jakarta Sans\", Anuphan, \"LINE Seed Sans TH\", system-ui, sans-serif",
+        "h2": "Anuphan, \"LINE Seed Sans TH\", system-ui, sans-serif",
+        "btn": "Anuphan, \"LINE Seed Sans TH\", system-ui, sans-serif",
+        "loaded": [
+          "LINE Seed Sans TH 400",
+          "LINE Seed Sans TH 700",
+          "Plus Jakarta Sans 400 800",
+          "Anuphan 400 700"
+        ]
+      }
+    },
+    {
+      "font": "B-jakarta-anuphan",
+      "viewport": "390x844",
+      "clsOnLoad": 0,
+      "overflowX": false,
+      "fonts": [
+        {
+          "file": "LINESeedSansTH_W_Rg.woff2",
+          "kb": 29,
+          "ms": 16
+        },
+        {
+          "file": "PlusJakartaSans-Variable.woff2",
+          "kb": 27,
+          "ms": 16
+        },
+        {
+          "file": "Anuphan-Thai-Variable.woff2",
+          "kb": 18,
+          "ms": 16
+        }
+      ],
+      "faces": {
+        "h1": "\"Plus Jakarta Sans\", Anuphan, \"LINE Seed Sans TH\", system-ui, sans-serif",
+        "h2": "Anuphan, \"LINE Seed Sans TH\", system-ui, sans-serif",
+        "btn": "Anuphan, \"LINE Seed Sans TH\", system-ui, sans-serif",
+        "loaded": [
+          "LINE Seed Sans TH 400",
+          "LINE Seed Sans TH 700",
+          "Plus Jakarta Sans 400 800",
+          "Anuphan 400 700"
+        ]
+      }
+    }
+  ],
+  "firstAdminHeading": "ตั้งค่าผู้ดูแลระบบคนแรก"
+}
