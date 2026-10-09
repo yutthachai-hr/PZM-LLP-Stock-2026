@@ -695,7 +695,6 @@ export const EN: Record<string, string> = {
   'รีเซ็ตข้อมูลเดโมได้เฉพาะในโหมดสาธิตเท่านั้น': 'Demo data can only be reset in a demo build',
 
   // ---- shell: top bar, shared table ---------------------------------------------
-  'ค้นหาสินค้า หรือรหัสสินค้า…': 'Search a product or code…',
   'สินค้าใกล้หมด ({n} รายการ)': 'Low stock ({n} items)',
   'ตาราง {n} แถว': 'Table, {n} rows',
 
@@ -3060,4 +3059,13 @@ export const EN: Record<string, string> = {
   'ตรวจผู้ขายอีกครั้ง หรือ': 'Review the supplier, or',
   แยกไปใบรับถัดไป: 'move to the next receipt',
   'แยก {n} รายการไปใบรับถัดไปแล้ว — รับใบนี้ก่อน แล้วกด "รับบิลถัดไป"': 'Moved {n} item(s) to the next receipt — receive this one first, then press "Next bill"',
+
+  // ---- top bar: global search (early release, Phase 3) ---------------------------------
+  'ค้นหาสินค้า หน้า เอกสาร ผู้ขาย…': 'Search products, pages, documents, suppliers…',
+  ไม่พบในข้อมูลที่โหลดไว้: 'Nothing found in the loaded data',
+  แสดงบางส่วน: 'showing some',
+  'ค้นจากข้อมูลที่โหลดไว้ — เอกสารตั้งแต่ {date}': 'Searched the loaded data — documents since {date}',
+  ยังไม่ได้โหลดรายชื่อผู้ขาย: 'suppliers not loaded yet',
+  'ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:': 'Purchase requests and deliveries are searched on their pages:',
+  หน้า: 'Pages',
 }
