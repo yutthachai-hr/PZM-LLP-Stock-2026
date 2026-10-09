@@ -196,8 +196,6 @@ export const EN: Record<string, string> = {
     'The local data for “{collection}” is damaged and cannot be read — the app stopped rather than write over it (the damaged copy is kept at {key})',
   'โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้':
     'Local mode — data is stored in this browser only',
-  'โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์':
-    'Cloud mode — data syncs across devices in real time',
   'เชื่อมต่อ Cloud (ใช้หลายเครื่อง real-time)': 'Connect to Cloud (multi-device, real time)',
   'เชื่อมต่อ Cloud': 'Connect to Cloud',
   'จาก Firebase Console:': 'From the Firebase Console:',
