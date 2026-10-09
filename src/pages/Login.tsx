@@ -354,11 +354,8 @@ export function LoginPage() {
             </p>
           )}
 
-          <p className="mt-4 text-center text-[11px] text-ink-faint">
-            {mode === 'cloud'
-              ? t('โหมด Cloud — ข้อมูลซิงก์ทุกเครื่องแบบเรียลไทม์')
-              : t('โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้')}
-          </p>
+          {/* Only the local mode says where its data lives (owner, 9 Oct 2026: the cloud line is gone). */}
+          {mode !== 'cloud' && <p className="mt-4 text-center text-[11px] text-ink-faint">{t('โหมดในเครื่อง — ข้อมูลเก็บในเบราว์เซอร์นี้')}</p>}
 
           {/* Collapsible Demo mode panel for QA testing */}
           {isDemoMode() && <DemoSection />}
