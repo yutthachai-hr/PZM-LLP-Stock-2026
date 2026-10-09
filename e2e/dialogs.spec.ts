@@ -7,6 +7,13 @@ import { open, signedIn } from './app'
  * from the product editor) is a second dialog on top of the first. Escape, Tab and closing
  * must act on the TOP one only: the editor and its half-done form must survive the question.
  */
+// Each test signs in on its own browser context. Close them all afterwards: an app left running
+// sees the next test reset the emulator under it, and its own sign-in logic then races the
+// next test's (a vanished profile is re-requested as inactive staff).
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 async function editorWithConfirm(page: Page, size?: { width: number; height: number }) {
   await open(page, '/products')
   const row = page.getByRole('row').filter({ hasText: 'FLOUR' }).first()
