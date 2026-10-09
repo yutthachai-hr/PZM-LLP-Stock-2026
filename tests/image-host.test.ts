@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
+import { buildTier } from '../src/lib/deployTier'
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
@@ -41,7 +42,11 @@ describe('the Cloudflare configuration agrees with the app', () => {
     expect(read('functions/po/[token].ts')).toContain('/^[0-9a-f]{32}$/')
   })
 
+  // Since P0 preview isolation every non-main branch, demo included, builds in demo mode
+  // (tests/preview-isolation.test.ts holds the full matrix).
   test('the demo branch builds in demo mode from the Cloudflare branch name', () => {
-    expect(read('vite.config.ts')).toContain("process.env.CF_PAGES_BRANCH === 'demo'")
+    expect(buildTier({ CF_PAGES: '1', CF_PAGES_BRANCH: 'demo' })).toBe('preview')
+    expect(read('vite.config.ts')).toContain('const tier = buildTier(process.env)')
+    expect(read('vite.config.ts')).toContain("if (tier === 'preview') process.env.VITE_DEMO_MODE = '1'")
   })
 })
