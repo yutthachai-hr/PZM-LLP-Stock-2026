@@ -1,0 +1,148 @@
+# CI for the EARLY-RELEASE line built on production `main` (owner directive, 9 Oct 2026, Phase 0).
+# The same nine job names branch protection requires; actions pinned to commit SHAs (tag in the
+# comment), read-only token. Ported from rc/ops-os-rc1-candidate (owner decision 3) and narrowed
+# to what exists on this baseline:
+#   - agent-safety and rust: main has no src/agent safety datasets and no crates/pzm-integrity.
+#     The jobs RUN those checks the moment that code is on the branch; until then they say so in
+#     the log and verify the code is really absent. No check is faked: see the PR description.
+#   - rules: no G25 transition rules on this baseline (not introduced in this release).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'integration/**', 'rc/**', 'release/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npx tsc -p tsconfig.app.json --noEmit
+      - run: npx tsc -p functions/tsconfig.json --noEmit
+      - run: npx tsc -p worker/tsconfig.json --noEmit
+      - run: npx tsc -p e2e/tsconfig.json --noEmit
+
+  lint-i18n:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npx oxlint
+      - run: npm run -s i18n:check
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npx vitest run
+
+  agent-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - name: Agent safety gates (run when the agent code is on the branch)
+        run: |
+          if [ -d src/agent ] || node -e "process.exit(require('./package.json').scripts['safety:dataset'] ? 0 : 1)"; then
+            npm run -s safety:dataset -- --check
+            npm run -s integrity:vectors -- --check
+            npm run -s safety:bench -- --no-write
+          else
+            echo "NOT APPLICABLE on this baseline: no src/agent and no safety scripts (verified absent)."
+          fi
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Rust integrity engine (runs when the crate is on the branch)
+        run: |
+          if [ -d crates/pzm-integrity ]; then
+            echo "crate present: this baseline's job must be replaced by the RC rust job"; exit 1
+          else
+            echo "NOT APPLICABLE on this baseline: no crates/ directory (verified absent)."
+          fi
+
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: npm ci
+      - run: npm run -s test:rules
+
+  build-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run -s build
+      # No-regression budget for this line: production main measured 2,886 / 3,390 KB on 9 Oct
+      # 2026 (no code splitting yet). Early-release PRs may not make the first load heavier.
+      - run: npm run -s check:bundle
+        env: { BUNDLE_MAIN_KB: '2950', BUNDLE_TOTAL_KB: '3450' }
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # No retries: playwright.config.ts sets retries: 0.
+      - run: npm run -s test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: { name: e2e-results, path: e2e-results, retention-days: 14 }
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          if grep -rnE "VITE_[A-Z_]*(SERVICE|SECRET|PRIVATE)" --include='*.ts' --include='*.tsx' --include='*.env*' src .env* 2>/dev/null; then
+            echo "a VITE_ variable names a secret: it would ship to every browser"; exit 1
+          fi

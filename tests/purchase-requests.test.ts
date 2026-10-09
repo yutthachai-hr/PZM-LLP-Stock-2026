@@ -208,6 +208,14 @@ describe('building a request', () => {
     expect(next).toMatchObject({ locationId: 'loc-b', note: 'for Friday' })
     expect(next.history.map((h) => h.action)).toEqual(['created', 'warehouseChanged', 'noteChanged'])
   })
+
+  test('an item note can be set and updated while drafting', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2, note: 'initial note' }])
+    expect(pr.items[0].note).toBe('initial note')
+    const next = await S.setItemNote({ id: pr.id, idx: 0, note: 'updated note', actor: STAFF })
+    expect(next.items[0].note).toBe('updated note')
+    expect(next.history.at(-1)).toMatchObject({ action: 'itemNoteChanged', oldValue: 'initial note', newValue: 'updated note' })
+  })
 })
 
 describe('submitting', () => {
