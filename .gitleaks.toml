@@ -1,0 +1,12 @@
+# gitleaks (CI job `secrets`): the default rules, plus two test files whose "service account"
+# is a fake fixture (private_key "-----BEGIN PRIVATE KEY-----\nAA==\n…", project "demo").
+# Only these exact files; any other match anywhere still fails the job.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake service-account fixtures used by the server tests"
+paths = [
+  '''^tests/functions/stock-env\.test\.ts$''',
+  '''^tests/worker/worker\.test\.ts$''',
+]

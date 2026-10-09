@@ -9,6 +9,7 @@
     "demo": "vite --mode demo --port 5175 --strictPort",
     "dev:e2e": "vite --mode e2e --port 5176 --strictPort",
     "build": "tsc -b && tsc -p functions/tsconfig.json && tsc -p worker/tsconfig.json && tsc -p e2e/tsconfig.json && vite build",
+    "check:bundle": "node scripts/bundle-budget.mjs",
     "worker:dev": "npx wrangler dev -c worker/wrangler.toml --test-scheduled",
     "worker:deploy": "npx wrangler deploy -c worker/wrangler.toml",
     "lint": "oxlint",
