@@ -459,6 +459,23 @@ export function useSuppliers(): Supplier[] {
 }
 
 /**
+ * The suppliers only if a screen has already read them this session — never a read of its
+ * own. For what is mounted on every screen (the top bar's search), where fetching would add
+ * a read to every session. `null` = not read yet (or the read failed): not searched.
+ */
+export function useLoadedSuppliers(): Supplier[] | null {
+  const rows = useSyncExternalStore(
+    (fn) => {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
+    () => cached,
+    () => cached,
+  )
+  return rows && rows !== NONE ? rows : null
+}
+
+/**
  * Give every supplier without one a code, oldest first (owner, 22 Sep 2026: retrospectively,
  * for all of them). Safe to press twice: a supplier that already has a code is skipped, and
  * the counter is floored past the highest code in use, so no number is handed out twice.

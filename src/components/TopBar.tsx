@@ -5,16 +5,16 @@ import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { useData } from '../data/DataContext'
 import { useT } from '../i18n/I18nContext'
-import { fmtQty } from '../lib/format'
-import type { Product } from '../types'
-import { Icon } from './Icon'
+import { fmtQty, formatThaiDateShort } from '../lib/format'
+import { Icon, type IconName } from './Icon'
 import { LangButton } from './LangButton'
 import { NotificationBell } from './notifications/NotificationBell'
 import { MessagesButton } from './messages/MessagesButton'
 import { ProductThumb } from './ProductThumb'
 import { ProfileModal } from './ProfileModal'
-import { looseScore } from '../lib/search'
-import { searchFields } from '../lib/barcode'
+import { globalSearch, MIN_QUERY, type SearchGroup, type SearchHit } from '../lib/globalSearch'
+import { navFor } from './nav/navItems'
+import { useLoadedSuppliers } from '../services/suppliers'
 
 /**
  * The bar across the top of every screen: find a product, and see what is running out.
@@ -30,12 +30,29 @@ import { searchFields } from '../lib/barcode'
  * notification centre (components/notifications).
  */
 
-const MAX_RESULTS = 8
+const GROUP_LABEL: Record<SearchGroup, string> = {
+  pages: 'หน้า', // i18n-key
+  products: 'สินค้า', // i18n-key
+  documents: 'เอกสาร', // i18n-key
+  suppliers: 'ผู้ขาย', // i18n-key
+  locations: 'คลัง / สาขา', // i18n-key
+}
+
+const GROUP_ICON: Record<SearchGroup, IconName> = {
+  pages: 'menu',
+  products: 'package',
+  documents: 'fileSheet',
+  suppliers: 'users',
+  locations: 'mapPin',
+}
 
 export function TopBar({ title }: { title: string }) {
   const t = useT()
   const navigate = useNavigate()
-  const { products, locations, qtyAt, minFor, tracksProduct } = useData()
+  const { user } = useAuth()
+  const { products, locations, qtyAt, minFor, tracksProduct, movements, movementsFrom } = useData()
+  // Only if a screen has read them already: the bar is on every screen, so it never reads.
+  const suppliers = useLoadedSuppliers()
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -49,20 +66,15 @@ export function TopBar({ title }: { title: string }) {
     [products, locations, qtyAt, minFor, tracksProduct],
   )
 
-  const results = useMemo(() => {
-    const needle = q.trim()
-    if (needle.length < 2) return []
-    // Loose: "siam food" finds SIAMFOOD, words match in any order, best matches first.
-    // Hidden products are out of the catalogue's way; their history is still reachable
-    // from สินค้าคงคลัง with the "ที่ซ่อนไว้" filter.
-    return products
-      .filter((p) => p.active !== false)
-      .map((p) => ({ p, score: looseScore(searchFields(p), needle) }))
-      .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name))
-      .slice(0, MAX_RESULTS)
-      .map((x) => x.p)
-  }, [q, products])
+  // Pages, products, documents, suppliers and places, grouped, from memory only (lib/globalSearch).
+  // Loose: "siam food" finds SIAMFOOD, words match in any order, best matches first. Hidden
+  // products are out of the catalogue's way; their history is still reachable from
+  // สินค้าคงคลัง with the "ที่ซ่อนไว้" filter. The menu is the person's own (role-aware).
+  const found = useMemo(
+    () => globalSearch(q, { pages: navFor(user?.role), products, locations, suppliers, movements, label: t }),
+    [q, user?.role, products, locations, suppliers, movements, t],
+  )
+  const results = found.hits
 
   useEffect(() => setActive(0), [q])
 
@@ -91,18 +103,25 @@ export function TopBar({ title }: { title: string }) {
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
-  function choose(p: Product) {
+  function choose(to: string) {
     setOpen(false)
     setMobileSearch(false)
     setQ('')
-    // The stock card: what it is, where it is, and everything that moved it.
-    navigate(`/products/${encodeURIComponent(p.id)}/card`)
+    // A product opens its stock card: what it is, where it is, and everything that moved it.
+    navigate(to)
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
+      // The top layer only: a dialog underneath must not close along with the results.
+      e.stopPropagation()
+      if (open && q) {
+        setOpen(false)
+        return
+      }
       setOpen(false)
       setMobileSearch(false)
+      input.current?.blur()
       return
     }
     if (results.length === 0) return
@@ -114,7 +133,7 @@ export function TopBar({ title }: { title: string }) {
       setActive((i) => (i - 1 + results.length) % results.length)
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      choose(results[active])
+      choose(results[active].to)
     }
   }
 
@@ -137,7 +156,7 @@ export function TopBar({ title }: { title: string }) {
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        placeholder={t('ค้นหาสินค้า หรือรหัสสินค้า…')}
+        placeholder={t('ค้นหาสินค้า หน้า เอกสาร ผู้ขาย…')}
         className="w-full min-h-11 rounded-xl border border-line bg-sunken pl-10 pr-3 text-sm sm:pr-16 text-ink placeholder:text-ink-faint outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-brand focus-visible:bg-surface focus-visible:ring-2 focus-visible:ring-brand/25"
       />
       {!q && (
@@ -145,41 +164,77 @@ export function TopBar({ title }: { title: string }) {
           Ctrl K
         </kbd>
       )}
-      {open && q.trim().length >= 2 && (
+      {open && q.trim().length >= MIN_QUERY && (
         <div
           id="topbar-results"
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-96 overflow-auto rounded-xl border border-line bg-surface shadow-xl"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[70vh] overflow-auto rounded-xl border border-line bg-surface shadow-xl"
         >
           {results.length === 0 ? (
-            <p className="px-3 py-4 text-center text-sm text-ink-soft">{t('ไม่พบสินค้า')}</p>
+            <p className="px-3 py-4 text-center text-sm text-ink-soft">{t('ไม่พบในข้อมูลที่โหลดไว้')}</p>
           ) : (
-            results.map((p, i) => {
-              const total = locations.reduce((s, l) => s + qtyAt(l.id, p.id), 0)
+            results.map((hit: SearchHit, i) => {
+              const head = i === 0 || results[i - 1].group !== hit.group
+              const product = hit.productId ? products.find((p) => p.id === hit.productId) : undefined
+              const total = product ? locations.reduce((sum, l) => sum + qtyAt(l.id, product.id), 0) : 0
               return (
-                <button
-                  key={p.id}
-                  role="option"
-                  aria-selected={i === active}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => choose(p)}
-                  className={`flex w-full items-center gap-3 px-3 py-2 text-left ${
-                    i === active ? 'bg-brand-soft' : ''
-                  }`}
-                >
-                  <ProductThumb productId={p.id} hasImage={p.hasImage} size={32} zoom={false} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-ink">{p.name}</span>
-                    <span className="doc-no block truncate text-xs text-ink-faint">{p.sku}</span>
-                  </span>
-                  <span className="num shrink-0 text-right text-sm font-semibold text-ink">
-                    {fmtQty(total)}
-                    <span className="ml-1 text-xs font-normal text-ink-faint">{p.unitType}</span>
-                  </span>
-                </button>
+                <div key={hit.key} role="presentation">
+                  {head && (
+                    <div role="presentation" className="px-3 pb-1 pt-2.5 text-[11px] font-semibold tracking-wide text-ink-faint">
+                      {t(GROUP_LABEL[hit.group])}
+                      {found.capped.includes(hit.group) && <span className="ml-1 font-normal">· {t('แสดงบางส่วน')}</span>}
+                    </div>
+                  )}
+                  <button
+                    role="option"
+                    aria-selected={i === active}
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => choose(hit.to)}
+                    className={`flex w-full items-center gap-3 px-3 py-2 text-left ${i === active ? 'bg-brand-soft' : ''}`}
+                  >
+                    {product ? (
+                      <ProductThumb productId={product.id} hasImage={product.hasImage} size={32} zoom={false} />
+                    ) : (
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sunken text-ink-soft">
+                        <Icon name={GROUP_ICON[hit.group]} size={16} />
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-ink">{hit.label}</span>
+                      {hit.sub && <span className="doc-no block truncate text-xs text-ink-faint">{hit.sub}</span>}
+                    </span>
+                    {product && (
+                      <span className="num shrink-0 text-right text-sm font-semibold text-ink">
+                        {fmtQty(total)}
+                        <span className="ml-1 text-xs font-normal text-ink-faint">{product.unitType}</span>
+                      </span>
+                    )}
+                  </button>
+                </div>
               )
             })
           )}
+          {/* What was not searched, so a short or empty list never reads as "there is none". */}
+          <div role="presentation" className="border-t border-line px-3 py-2 text-xs text-ink-faint">
+            <p>
+              {t('ค้นจากข้อมูลที่โหลดไว้ — เอกสารตั้งแต่ {date}', { date: formatThaiDateShort(movementsFrom) })}
+              {!found.suppliersSearched && ` · ${t('ยังไม่ได้โหลดรายชื่อผู้ขาย')}`}
+            </p>
+            <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              {t('ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:')}
+              <button type="button" className="cursor-pointer text-brand hover:underline" onClick={() => choose('/requests')}>
+                {t('รายการขอสั่งซื้อ')}
+              </button>
+              <button type="button" className="cursor-pointer text-brand hover:underline" onClick={() => choose('/transfers')}>
+                {t('ระบบส่งสินค้า')}
+              </button>
+              {!found.suppliersSearched && (
+                <button type="button" className="cursor-pointer text-brand hover:underline" onClick={() => choose('/suppliers')}>
+                  {t('ผู้ขาย')}
+                </button>
+              )}
+            </p>
+          </div>
         </div>
       )}
     </div>
