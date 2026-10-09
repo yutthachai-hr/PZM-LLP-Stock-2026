@@ -1,4 +1,7 @@
-# Early Feature Release: PR review packet (9 Oct 2026)
+# Early Feature Release: PR review packet (9 Oct 2026, updated evening)
+
+> **Superseded figures:** see `docs/release/early-release-status.md` for the current SHAs,
+> the #6 merge and the combined regression. Tables below are the first version.
 
 **Nothing here is merged.** `main` deploys to Production, so every merge needs the owner's
 separate, explicit approval of one exact PR and SHA.
