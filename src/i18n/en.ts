@@ -3041,4 +3041,23 @@ export const EN: Record<string, string> = {
   'วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน': 'This date is beyond the agreed range and needs purchasing approval first',
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
+
+  // ---- receiving: smart supplier resolution (7 Oct 2026) -------------------------
+  จากผู้ขายประจำของสินค้า: "from the product's usual supplier",
+  จากผู้ขายสำรองที่ตั้งไว้ในสินค้า: "from the product's listed alternate",
+  จากชื่อผู้ขายบนบิล: 'from the supplier named on the bill',
+  จากประวัติการรับ: 'from receiving history',
+  'จาก {po}': 'From {po}',
+  เลือกให้อัตโนมัติจากสินค้าที่เลือก: 'Selected automatically from the chosen product',
+  'อ่านจากบิล — ตรวจให้ตรงก่อนรับ': 'Read from the bill — check it before receiving',
+  'แนะนำ: {name}': 'Suggested: {name}',
+  ใช้ผู้ขายนี้: 'Use this supplier',
+  'สินค้านี้ซื้อได้จากหลายผู้ขาย — เลือกเอง:': 'This can come from several suppliers — pick one:',
+  'ผู้ขายไม่ตรงกัน: บิลระบุ {ocr} แต่สินค้าผูกกับ {mapped}': 'Supplier mismatch: the bill says {ocr} but the products are mapped to {mapped}',
+  'ตรวจบิลกับสินค้าก่อนเลือกผู้ขาย — ระบบไม่เลือกให้': 'Check the bill against the products before choosing — the app will not choose for you',
+  '{product} ผูกกับ {mapped} แต่ใบรับนี้เป็นของ {supplier}': '{product} is mapped to {mapped}, but this receipt is for {supplier}',
+  ผู้ขายอื่น: 'another supplier',
+  'ตรวจผู้ขายอีกครั้ง หรือ': 'Review the supplier, or',
+  แยกไปใบรับถัดไป: 'move to the next receipt',
+  'แยก {n} รายการไปใบรับถัดไปแล้ว — รับใบนี้ก่อน แล้วกด "รับบิลถัดไป"': 'Moved {n} item(s) to the next receipt — receive this one first, then press "Next bill"',
 }

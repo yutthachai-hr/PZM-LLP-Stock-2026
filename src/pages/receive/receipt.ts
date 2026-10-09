@@ -141,6 +141,9 @@ export interface LegacyBill {
   lines: Line[]
 }
 
+export type SupplierPick = '' | 'auto' | 'ocr' | 'manual'
+const PICKS: readonly SupplierPick[] = ['', 'auto', 'ocr', 'manual']
+
 /** Everything the screen keeps across leaving it (lib/useDraft). The photo never is. */
 export interface ReceiptDraft {
   mode: Mode
@@ -151,6 +154,12 @@ export interface ReceiptDraft {
   docDateStr: string
   supplierId: string
   supplierName: string
+  /**
+   * How the supplier got there (owner, 7 Oct 2026): picked by the app from the products
+   * (`auto`), read off the bill (`ocr`), or chosen by the person (`manual`). Only a person's
+   * choice is never replaced; the app never switches a supplier it did not pick itself.
+   */
+  supplierPick: SupplierPick
   invoiceNo: string
   note: string
   lines: Line[]
@@ -161,7 +170,7 @@ export interface ReceiptDraft {
 export function emptyDraft(): ReceiptDraft {
   return {
     mode: 'po', poId: '', entries: {}, toLocationId: '', dateStr: '', docDateStr: '',
-    supplierId: '', supplierName: '', invoiceNo: '', note: '', lines: [], queue: [],
+    supplierId: '', supplierName: '', supplierPick: '', invoiceNo: '', note: '', lines: [], queue: [],
   }
 }
 
@@ -233,6 +242,8 @@ export function restoreReceipt(saved: unknown): ReceiptDraft {
       docDateStr: str(d.docDateStr),
       supplierId: str(d.supplierId),
       supplierName: str(d.supplierName),
+      // A draft saved before this field existed: a supplier on it was chosen by a person.
+      supplierPick: PICKS.includes(d.supplierPick as SupplierPick) ? (d.supplierPick as SupplierPick) : str(d.supplierId) ? 'manual' : '',
       invoiceNo: str(d.invoiceNo),
       note: str(d.note),
       lines: linesOf(d.lines),
