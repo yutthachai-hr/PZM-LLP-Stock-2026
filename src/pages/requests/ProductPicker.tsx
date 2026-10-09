@@ -361,6 +361,8 @@ function BySupplier({
   const [filter, setFilter] = useState('')
   const df = useDebounced(filter, DEBOUNCE_MS)
   const [qtys, setQtys] = useState<Record<string, string>>({})
+  // A note per row, as on the product tab (owner, 9 Oct 2026: a note for each item).
+  const [notes, setNotes] = useState<Record<string, string>>({})
   // The unit each row is keyed in ('' = the product's own), and a rate stated from a row
   // before the catalogue listener has caught up with it.
   const [units, setUnits] = useState<Record<string, string>>({})
@@ -382,6 +384,7 @@ function BySupplier({
     const n = Number(qtys[p.id])
     if (!(n > 0) || !supplier) return
     const entryUnit = units[p.id] ?? ''
+    const note = (notes[p.id] ?? '').trim()
     setBusy(p.id)
     try {
       await onAdd({
@@ -391,8 +394,10 @@ function BySupplier({
         supplierName: supplier.name,
         qty: n,
         ...(entryUnit && !sameUnit(entryUnit, p.unitType) ? { entryUnit } : {}),
+        ...(note ? { note } : {}),
       })
       setQtys((q) => ({ ...q, [p.id]: '' }))
+      setNotes((cur) => ({ ...cur, [p.id]: '' }))
     } finally {
       setBusy('')
     }
@@ -461,6 +466,23 @@ function BySupplier({
                 <Icon name="plus" size={14} />
                 {t('เพิ่ม')}
               </Button>
+              {/* Shown once a quantity is keyed, so a long supplier list stays one line a row. */}
+              {(qtys[p.id] ?? '') !== '' && (
+                <div className="basis-full">
+                  <Input
+                    value={notes[p.id] ?? ''}
+                    onChange={(e) => setNotes((cur) => ({ ...cur, [p.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void add(p)
+                      }
+                    }}
+                    placeholder={t('หมายเหตุ (ไม่บังคับ)')}
+                    aria-label={t('หมายเหตุของ "{name}"', { name: p.name })}
+                  />
+                </div>
+              )}
             </li>
           ))}
         </ul>
