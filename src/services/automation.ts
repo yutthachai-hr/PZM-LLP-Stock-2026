@@ -223,7 +223,7 @@ export async function runNotificationJobs(
     adjustmentsSince: today - 7 * DAY_MS,
   })
   const locationName = (id: string | undefined) => data.locations.find((l) => l.id === id)?.name ?? ''
-  const jobs: JobName[] = ['tasks', 'purchasing', 'inventory', 'brief', 'weekly', 'risk']
+  const jobs: JobName[] = ['tasks', 'purchasing', 'inventory', 'brief', 'weekly', 'risk', 'stalled']
   const risk = riskEngineInput({
     orders: riskOrders,
     transfers,
@@ -256,6 +256,7 @@ export async function runNotificationJobs(
     locationName,
     settings: config.settings,
     risk,
+    transfers,
   })
   // What is on file among the drafts and the live states. The bell's own list is now only
   // this person's newest (perf/firestore-read-budget), so the rest is looked up: the drafts

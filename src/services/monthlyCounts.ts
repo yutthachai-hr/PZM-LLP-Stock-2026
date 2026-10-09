@@ -1,9 +1,11 @@
 import { backend } from '../backend'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
-import { countDayOf, monthlyCountId } from '../lib/monthlyCount'
+import { countDayOf, monthlyCountId, postingPlan } from '../lib/monthlyCount'
 import { COL, type MonthlyCount, type MonthlyCountLine, type MonthlyCountQuestion, type MonthlyCountResult } from '../types'
-import { filing, planAdjust } from './stock'
+import { execute } from './stock'
+import { BOOKS_MOVED, postCountCommand } from '../commands/countPost'
+import { check, COUNT, transition } from '../lib/workflow'
 
 /**
  * Monthly stock-count sheets (owner, 29 Sep 2026): figures are keyed and saved without
@@ -31,8 +33,8 @@ export async function getMonthlyCount(id: string): Promise<MonthlyCount | null> 
 }
 
 /** The sheet for this location and month — opened if it exists, started if not. */
-export async function openMonthlyCount(params: { locationId: string; month: string; actor: Actor }): Promise<string> {
-  const { locationId, month, actor } = params
+export async function openMonthlyCount(params: { locationId: string; month: string; actor: Actor; blind?: boolean }): Promise<string> {
+  const { locationId, month, actor, blind } = params
   if (!locationId) throw new AppError('กรุณาเลือกคลัง')
   if (!/^\d{4}-\d{2}$/.test(month)) throw new AppError('กรุณาเลือกเดือน')
   const id = monthlyCountId(locationId, month)
@@ -47,6 +49,7 @@ export async function openMonthlyCount(params: { locationId: string; month: stri
       countDate: countDayOf(month),
       status: 'counting',
       lines: {},
+      ...(blind ? { blind: true } : {}),
       createdBy: actor.id,
       createdByName: actor.name,
       createdAt: now,
@@ -73,7 +76,7 @@ export async function saveCountLines(params: {
   return scoped().transaction(async (tx) => {
     const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
     if (!sheet) throw new AppError('ไม่พบใบนับนี้')
-    if (sheet.status !== 'counting') throw new AppError('ใบนับนี้ยืนยันแล้ว — แก้ยอดนับไม่ได้')
+    transition(COUNT, sheet.status, 'count')
     const now = Date.now()
     const lines: Record<string, MonthlyCountLine> = { ...sheet.lines }
     for (const [productId, c] of Object.entries(changes)) {
@@ -110,7 +113,7 @@ export async function recordMonthlyCount(params: {
   await scoped().transaction(async (tx) => {
     const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
     if (!sheet) throw new AppError('ไม่พบใบนับนี้')
-    if (sheet.status !== 'counting') throw new AppError('ใบนับนี้ยืนยันแล้ว')
+    transition(COUNT, sheet.status, 'record')
     if (Object.keys(sheet.questions ?? {}).length) throw new AppError('ยังมีคำถามจากไฟล์ที่ยังไม่ได้ตอบ — ตอบให้ครบก่อนยืนยัน')
     const now = Date.now()
     tx.update(COL.monthlyCounts, id, {
@@ -124,24 +127,26 @@ export async function recordMonthlyCount(params: {
   })
 }
 
-export interface CountAdjustment {
-  productId: string
-  productName: string
-  unit: string
-  diff: number
-}
+/** How many times the books may move under one confirm before the person is asked to retry. */
+const MAX_TRIES = 4
 
 /**
- * Confirm the count and file its differences on the month's last day, in parts
- * (lib/monthlyCount postingPlan). Each part is one transaction that files its adjustment
- * AND records on the sheet which products it covered, so a part that fails leaves the
- * sheet in `posting` with exactly the parts done — confirming again carries on from there
- * and never files a product twice.
+ * Confirm the count and file its differences on the month's last day (plan A10, 6 Oct 2026),
+ * through the postCount command (src/commands/countPost.ts; on the server when this build
+ * sends it there — ADR-001).
+ *
+ * The counted figures are the sheet's own, read inside each part's transaction; the
+ * difference is worked out there from the balance at that moment less what has moved since
+ * the count day. Every counted product is settled, not only the ones that showed a
+ * difference on screen. If a balance moved after the books were read, the part is refused
+ * with BOOKS_MOVED and this reads again and retries.
+ *
+ * Posted in parts (lib/monthlyCount postingPlan). Each part files its adjustment AND records
+ * which products it covered, so a part that fails leaves the sheet in `posting` with exactly
+ * the parts done — confirming again carries on and never files a product twice.
  */
 export async function postMonthlyCount(params: {
   id: string
-  parts: CountAdjustment[][]
-  results: Record<string, MonthlyCountResult>
   actor: Actor
   note: string
   /**
@@ -150,57 +155,31 @@ export async function postMonthlyCount(params: {
    * so it must not read as shrinkage in the reports (owner, 29 Sep 2026).
    */
   reason?: 'count' | 'opening'
+  /** The manager approves the big differences (plan E2); without it a big one refuses. */
+  approveBig?: boolean
 }): Promise<string[]> {
-  const { id, parts, results, actor, note, reason = 'count' } = params
+  const { id, actor, note, reason = 'count', approveBig } = params
   const db = scoped()
   const docNos: string[] = []
-  const finish = parts.length === 0 ? [[] as CountAdjustment[]] : parts
-  for (let i = 0; i < finish.length; i++) {
-    const part = finish[i]
-    const last = i === finish.length - 1
-    const docNo = await filing(db, async (tx, file) => {
-      const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
-      if (!sheet) throw new AppError('ไม่พบใบนับนี้')
-      if (sheet.status === 'posted') throw new AppError('ใบนับนี้ปรับสต๊อกไปแล้ว')
-      if (Object.keys(sheet.questions ?? {}).length) throw new AppError('ยังมีคำถามจากไฟล์ที่ยังไม่ได้ตอบ — ตอบให้ครบก่อนยืนยัน')
-      const done = new Set(sheet.postedIds ?? [])
-      const todo = part.filter((a) => !done.has(a.productId))
-      let filed: string | null = null
-      if (todo.length > 0) {
-        const planned = await planAdjust(
-          tx,
-          {
-            locationId: sheet.locationId,
-            date: sheet.countDate,
-            actor,
-            note,
-            lines: todo.map((a) => ({
-              productId: a.productId,
-              productName: a.productName,
-              unit: a.unit,
-              qty: Math.abs(a.diff),
-              direction: a.diff > 0 ? ('in' as const) : ('out' as const),
-              reason,
-            })),
-          },
-          file,
-        )
-        filed = planned.commit()
+  for (let attempt = 0; ; attempt++) {
+    const sheet = await db.getOne<MonthlyCount>(COL.monthlyCounts, id)
+    if (!sheet) throw new AppError('ไม่พบใบนับนี้')
+    if (!check(COUNT, sheet.status, 'post').ok) {
+      // Posted by an earlier attempt of this same call: done. Posted before it began: refused.
+      if (attempt === 0) transition(COUNT, sheet.status, 'post')
+      return docNos
+    }
+    const parts = postingPlan(Object.keys(sheet.lines).map((productId) => ({ productId })), sheet.postedIds)
+    const finish = parts.length === 0 ? [[]] : parts
+    try {
+      for (const part of finish) {
+        const docNo = await execute(postCountCommand, { id, productIds: part.map((r) => r.productId), note, reason, ...(approveBig ? { approveBig } : {}) }, actor)
+        if (docNo) docNos.push(docNo)
       }
-      const now = Date.now()
-      tx.update(COL.monthlyCounts, id, {
-        status: last ? 'posted' : 'posting',
-        results,
-        postedIds: [...done, ...todo.map((a) => a.productId)],
-        adjDocNos: [...(sheet.adjDocNos ?? []), ...(filed ? [filed] : [])],
-        confirmedBy: actor.id,
-        confirmedByName: actor.name,
-        confirmedAt: now,
-        updatedAt: now,
-      })
-      return filed
-    })
-    if (docNo) docNos.push(docNo)
+      return docNos
+    } catch (e) {
+      if (!(e instanceof AppError && e.key === BOOKS_MOVED)) throw e
+      if (attempt + 1 >= MAX_TRIES) throw new AppError('มีการบันทึกสต๊อกของคลังนี้ระหว่างยืนยันหลายครั้ง — กรุณากดยืนยันอีกครั้ง')
+    }
   }
-  return docNos
 }

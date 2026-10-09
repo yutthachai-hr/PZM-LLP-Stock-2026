@@ -226,7 +226,9 @@ export function ProductEditor({
         }
         const { cost: _cost, ...patch } = form
         void _cost
-        await updateProduct(id, patch)
+        // G25: refused if someone else saved this product since it was opened. A unit change
+        // just above moved the version itself, so the check applies only without one.
+        await updateProduct(id, patch, unitChanged || !product ? {} : { expectedVersion: product.version ?? 0 })
       } else {
         const { cost: _cost, ...input } = form
         void _cost
@@ -274,7 +276,7 @@ export function ProductEditor({
     if (!product) return
     const ok = await confirm({
       title: t("ลบสินค้า"),
-      message: t('ลบ "{name}" ? ประวัติการเคลื่อนไหวจะยังคงอยู่ แต่สินค้าจะหายจากรายการ', { name: product.name, }),
+      message: t('ลบ "{name}" ? ลบได้เฉพาะสินค้าที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน', { name: product.name }),
       danger: true,
       confirmText: t("ลบ"),
     })
@@ -303,6 +305,35 @@ export function ProductEditor({
 
   return (
     <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
+      {product?.review === 'pending' && (
+        <div className="mb-4 flex flex-wrap items-start gap-3 rounded-lg border border-warn/40 bg-warn-soft/40 p-3 text-sm">
+          <Icon name="info" size={18} className="mt-0.5 shrink-0 text-warn" />
+          <p className="min-w-0 flex-1 text-ink-soft">
+            {t('สินค้าใหม่ที่เสนอจากคำขอสั่งซื้อ (โดย {name}) — ตรวจชื่อ หน่วย และหมวดให้ถูกก่อนยืนยัน', { name: product.proposedByName ?? '' })}
+            {product.spec ? ` · ${product.spec}` : ''}
+          </p>
+          {canEdit && (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await updateProduct(product.id, { review: 'verified' }, { expectedVersion: product.version })
+                  toast.success(t('ยืนยันสินค้าแล้ว'))
+                  onClose()
+                } catch (e) {
+                  toast.error(errText(e, t))
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              {t('ยืนยันว่าตรวจแล้ว')}
+            </Button>
+          )}
+        </div>
+      )}
       {!canEdit && product && (
         <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-sunken/60 p-3 text-sm">
           <Icon name="info" size={18} className="mt-0.5 shrink-0 text-ink-faint" />
@@ -593,6 +624,7 @@ export function ProductEditor({
                   type="number"
                   step="any"
                   min={0}
+                  aria-label={t('ยอดคงเหลือจริงที่ {site}', { site: l.name })}
                   value={counts[l.id] ?? 0}
                   onWheel={blurOnWheel}
                   onChange={(e) => setCounts({ ...counts, [l.id]: Number(e.target.value) })}

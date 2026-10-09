@@ -61,6 +61,7 @@ const SOUND_CATEGORY: Partial<Record<NotificationKind, SoundCategory>> = {
   supplierDatePending: 'dateChanges',
   supplierDateRejected: 'dateChanges',
   poDelayed: 'deliveryRisks',
+  poPartial: 'deliveryRisks',
   deliveryRisk: 'deliveryRisks',
   stockoutRisk: 'stockoutRisks',
   supplierOpened: 'informational',

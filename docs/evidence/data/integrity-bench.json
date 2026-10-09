@@ -1,0 +1,28 @@
+{
+  "generatedAt": "2026-10-07T07:11:25.597Z",
+  "platform": "win32-x64",
+  "node": "v24.18.0",
+  "snapshot": {
+    "movements": 60000,
+    "products": 400,
+    "levels": 2800,
+    "bytes": 8755016
+  },
+  "sameReport": true,
+  "findings": 5274,
+  "typescript": {
+    "firstMsIncludingParse": 193.548,
+    "warmP50Ms": 109.093,
+    "warmP95Ms": 151.274,
+    "heapDeltaMb": 39.1,
+    "note": "in-process, after a forced GC"
+  },
+  "rust": {
+    "processWallP50Ms": 137.181,
+    "processWallMaxMs": 161.567,
+    "firstMsIncludingParse": 156.6006,
+    "warmP50Ms": 82.8582,
+    "warmP95Ms": 143.9389,
+    "peakWorkingSetMb": 41.5
+  }
+}

@@ -1,6 +1,7 @@
-import type { PurchaseOrder, PurchaseOrderStatus, PurchaseRequest, PurchaseRequestStatus, Supplier } from '../../types'
+import type { PurchaseOrder, PurchaseOrderLine, PurchaseOrderStatus, PurchaseRequest, PurchaseRequestStatus, Supplier } from '../../types'
 import { bkkAtTime, bkkDayStart, bkkDaysBetween, bkkWeekday, DAY_MS } from './time'
 import type { DeliveryState } from './types'
+import { resolveFactor, type UnitBearer } from './uom'
 
 /**
  * What the purchasing records say about time: when goods are due, whether they are late,
@@ -88,19 +89,55 @@ export function openPurchaseFor(
   return null
 }
 
-/** Base-unit quantity on placed orders to a location that has not arrived yet. */
-export function incomingFor(productId: string, locationId: string, orders: readonly PurchaseOrder[]): number {
+/** What is still to come on one order line, in the product's own unit. */
+export interface RemainingQty {
+  qty: number
+  /**
+   * Converted at the product's rate today, not the rate the order was placed at: a line
+   * keyed in another unit before 20 Sep 2026 kept no base quantity. Worth saying so on screen.
+   */
+  estimated: boolean
+  /** No rate at all for the line's unit — it could not be counted, and is left out (0). */
+  unknown: boolean
+}
+
+/**
+ * The one rule for "how much of this line has not arrived yet" (plan A2, 6 Oct 2026):
+ * (ordered − received) in the unit the order was placed in, never below zero, times the
+ * rate at the time of ordering. `receivedQty` is the running total of deliveries in that
+ * same unit; an over-delivery leaves nothing outstanding on the line and takes nothing
+ * from another. Closed and cancelled orders are not asked — callers look at `ordered` ones,
+ * which is how a closed remainder stops counting.
+ */
+export function remainingBaseQty(
+  line: Pick<PurchaseOrderLine, 'orderedQty' | 'receivedQty' | 'baseQty' | 'entryUnit'>,
+  product?: UnitBearer,
+): RemainingQty {
+  const owed = Math.max(0, line.orderedQty - (line.receivedQty ?? 0))
+  const round = (n: number) => Math.round(n * 1000) / 1000
+  if (!line.entryUnit) return { qty: round(owed), estimated: false, unknown: false }
+  if (line.baseQty !== undefined && line.orderedQty > 0) return { qty: round(owed * (line.baseQty / line.orderedQty)), estimated: false, unknown: false }
+  const today = product ? resolveFactor(product, line.entryUnit) : null
+  if (today === null) return { qty: 0, estimated: false, unknown: owed > 0 }
+  return { qty: round(owed * today), estimated: true, unknown: false }
+}
+
+/**
+ * Base-unit quantity on placed orders to a location that has not arrived yet — what is
+ * still owed, not what was ordered: a part-delivered order's arrived share is already on
+ * hand, and counting it again here under-ordered (audit D2). `product` lets an old line
+ * keyed in another unit be estimated at today's rate instead of counting as nothing.
+ */
+export function incomingFor(productId: string, locationId: string, orders: readonly PurchaseOrder[], product?: UnitBearer): number {
   let n = 0
   for (const po of orders) {
     if (po.status !== 'ordered' || po.locationId !== locationId) continue
     for (const l of po.lines) {
       if (l.productId !== productId) continue
-      // A line keyed in another unit carries its base equivalent (placed since 20 Sep 2026);
-      // an older such line has none and is left out rather than guessed.
-      n += l.baseQty ?? (l.entryUnit ? 0 : l.orderedQty)
+      n += remainingBaseQty(l, product).qty
     }
   }
-  return n
+  return Math.round(n * 1000) / 1000
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { Line } from '../../components/LineBuilder'
 import { roundQty } from '../../lib/validate'
-import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
+import type { PurchaseOrder, PurchaseOrderLine, RejectReason } from '../../types'
 
 /**
  * The receiving screen's arithmetic, kept out of the page so it can be tested.
@@ -24,6 +24,15 @@ export const KITCHEN_SUPPLIER = 'ครัว (ผลิตเอง)' // i18n-k
 export interface PoLineEntry {
   qty: number | null
   reason: string
+  /** Delivered but refused at the door (plan B5) — never taken into stock. */
+  rejected?: number | null
+  rejectReason?: RejectReason
+}
+
+/** A refused quantity without its reason, or a negative one. */
+export function badRejection(entry: PoLineEntry | undefined): boolean {
+  const r = entry?.rejected ?? 0
+  return r < 0 || (r > 0 && !entry?.rejectReason)
 }
 
 export type Variance = 'match' | 'short' | 'over' | 'pending'
@@ -58,6 +67,8 @@ export function receiveAll(
 /** A line that differs from what was owed and says nothing about why. */
 export function needsReason(owed: number, entry: PoLineEntry | undefined): boolean {
   const v = variance(owed, entry?.qty ?? null)
+  // Refused at the door, with its reason, explains a short line (plan B5).
+  if (v === 'short' && (entry?.rejected ?? 0) > 0 && entry?.rejectReason) return false
   return (v === 'short' || v === 'over') && !entry?.reason.trim()
 }
 
@@ -87,7 +98,7 @@ export function summarise(
     else if (v === 'short') s.short++
     else if (v === 'over') s.over++
     else s.pending++
-    if (needsReason(owed, e)) s.unexplained++
+    if (needsReason(owed, e) || badRejection(e)) s.unexplained++
     if ((e?.qty ?? 0) > 0) s.arriving++
   }
   return s
@@ -141,6 +152,9 @@ export interface LegacyBill {
   lines: Line[]
 }
 
+export type SupplierPick = '' | 'auto' | 'ocr' | 'manual'
+const PICKS: readonly SupplierPick[] = ['', 'auto', 'ocr', 'manual']
+
 /** Everything the screen keeps across leaving it (lib/useDraft). The photo never is. */
 export interface ReceiptDraft {
   mode: Mode
@@ -151,17 +165,29 @@ export interface ReceiptDraft {
   docDateStr: string
   supplierId: string
   supplierName: string
+  /**
+   * How the supplier got there (owner, 7 Oct 2026): picked by the app from the products
+   * (`auto`), read off the bill (`ocr`), or chosen by the person (`manual`). Only a person's
+   * choice is never replaced; the app never switches a supplier it did not pick itself.
+   */
+  supplierPick: SupplierPick
   invoiceNo: string
   note: string
   lines: Line[]
   /** Bills from an older draft still to be keyed, one at a time, after this one. */
   queue: LegacyBill[]
+  /**
+   * Names this receipt for the server (plan A1): set when it is first reviewed and kept,
+   * across a reload too, until it is filed — so confirming again after a dropped
+   * connection finds the receipt already filed instead of filing it twice. Empty until then.
+   */
+  operationId: string
 }
 
 export function emptyDraft(): ReceiptDraft {
   return {
     mode: 'po', poId: '', entries: {}, toLocationId: '', dateStr: '', docDateStr: '',
-    supplierId: '', supplierName: '', invoiceNo: '', note: '', lines: [], queue: [],
+    supplierId: '', supplierName: '', supplierPick: '', invoiceNo: '', note: '', lines: [], queue: [], operationId: '',
   }
 }
 
@@ -233,10 +259,13 @@ export function restoreReceipt(saved: unknown): ReceiptDraft {
       docDateStr: str(d.docDateStr),
       supplierId: str(d.supplierId),
       supplierName: str(d.supplierName),
+      // A draft saved before this field existed: a supplier on it was chosen by a person.
+      supplierPick: PICKS.includes(d.supplierPick as SupplierPick) ? (d.supplierPick as SupplierPick) : str(d.supplierId) ? 'manual' : '',
       invoiceNo: str(d.invoiceNo),
       note: str(d.note),
       lines: linesOf(d.lines),
       queue: billsOf(d.queue),
+      operationId: /^[A-Za-z0-9_-]{6,64}$/.test(str(d.operationId)) ? str(d.operationId) : '',
     }
   }
   if (typeof d.note === 'string' || Array.isArray(d.lines)) {

@@ -1,0 +1,33 @@
+{
+  "version": "agent-safety/v1",
+  "world": "world/1",
+  "seed": 20261007,
+  "generator": "src/agent/safety/dataset.ts",
+  "synthetic": true,
+  "scenarios": {
+    "total": 377,
+    "SAFE": 150,
+    "UNSAFE": 167,
+    "AMBIGUOUS": 60
+  },
+  "attacks": {
+    "total": 68,
+    "byAttack": {
+      "prompt-injection-reason": 6,
+      "ocr-injection": 6,
+      "supplier-text-injection": 6,
+      "model-text-injection": 6,
+      "wrong-record": 6,
+      "stale-state": 4,
+      "replay": 4,
+      "tampered": 8,
+      "cross-site": 4,
+      "race": 6,
+      "malicious-parameters": 12
+    }
+  },
+  "sha256": {
+    "scenarios.jsonl": "52176e0b0c8a29c4272cebbd35581cac1ac9240aa381789dacab1d8d57c2c05c",
+    "attacks.jsonl": "dc92ecc3d4770fd9983109010a3a962bf84742499253a6b5b57e3bec9c89603e"
+  }
+}

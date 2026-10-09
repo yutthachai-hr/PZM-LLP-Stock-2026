@@ -19,7 +19,10 @@ import { SideLive } from './nav/SideLive'
 import { SideNav } from './nav/SideNav'
 import { BottomTabBar } from './nav/BottomTabBar'
 import { NavRail } from './nav/NavRail'
-import { SupplierIntelProvider } from '../data/useSupplierIntel'
+import { LiveErrorBanner } from './LiveErrorBanner'
+import { OfflineBanner } from './OfflineBanner'
+import { CriticalBar } from './notifications/CriticalBar'
+import { ErrorBoundary } from './ErrorBoundary'
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout, mode } = useAuth()
@@ -37,8 +40,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const todayCount = useTodayEventCount(!!user)
 
   return (
-    // Supplier intelligence computed once for every screen that shows it (data/useSupplierIntel.ts).
-    <SupplierIntelProvider>
+    // Supplier intelligence is computed once for every screen, by the provider in App.tsx.
     <div className="flex min-h-screen bg-canvas">
       {/* New notifications as popups, on every page (5 Oct 2026). */}
       <NotificationHost />
@@ -63,6 +65,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar title={t(titleFor(location.pathname))} />
+        {/* Critical notifications stay here until acknowledged (plan C5). */}
+        <CriticalBar />
 
         {/* The page column is capped: a stock table stretched across a 27" monitor puts the
             product name and its quantity at opposite ends of the desk. */}
@@ -70,6 +74,8 @@ export function Layout({ children }: { children: ReactNode }) {
             much clear below its last row (the demo pill sits above the bar too). */}
         <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 [padding-bottom:calc(var(--tabbar-h)+1rem)] sm:p-5 sm:[padding-bottom:calc(var(--tabbar-h)+1.25rem)] md:[padding-bottom:1.25rem] lg:p-6 lg:[padding-bottom:1.5rem]">
           <InstallHint />
+          <OfflineBanner />
+          <LiveErrorBanner />
           {/* On a desktop the page sits on one white sheet over the canvas (the owner's
               mock-up, 21 Sep 2026): the screen reads as one document with its sections
               inside it, rather than as loose boxes floating on grey. On a phone there is
@@ -78,13 +84,12 @@ export function Layout({ children }: { children: ReactNode }) {
               its own white card on the canvas, so it gets no sheet — a card on a white sheet
               is white on white. Unconverted pages keep the sheet until their round. */}
           <div className="xl:min-h-full xl:rounded-2xl xl:border xl:border-line xl:bg-surface xl:p-6 xl:shadow-sm xl:has-[[data-frame]]:rounded-none xl:has-[[data-frame]]:border-0 xl:has-[[data-frame]]:bg-transparent xl:has-[[data-frame]]:p-0 xl:has-[[data-frame]]:shadow-none">
-            {children}
+            <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>
           </div>
         </main>
       </div>
       <BottomTabBar />
     </div>
-    </SupplierIntelProvider>
   )
 }
 

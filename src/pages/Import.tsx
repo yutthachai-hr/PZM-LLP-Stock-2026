@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { DAY_MS } from '../lib/inventoryRules/time'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
@@ -48,7 +49,7 @@ export function ImportPage() {
   const confirm = useConfirm()
   const { user } = useAuth()
   const { brand } = useBrand()
-  const { products, locations } = useData()
+  const { products, locations, qtyAt } = useData()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [fileName, setFileName] = useState('')
@@ -61,6 +62,9 @@ export function ImportPage() {
   const [byHeader, setByHeader] = useState<Record<string, string>>({})
   // Null until read: a plan built on an empty ledger would compare every count with zero.
   const [ledger, setLedger] = useState<StockMovement[] | null>(null)
+  // The day the ledger read starts from: the earliest count in the file (a day earlier for
+  // safety). An earlier date picked later reads again from there.
+  const [ledgerFrom, setLedgerFrom] = useState<number | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [open, setOpen] = useState<SkipReason | 'units' | 'already' | 'moved' | null>(null)
@@ -92,8 +96,8 @@ export function ImportPage() {
       const guess =
         parsed.sheets.find((s) => sheetMatchesBrand(s.name, def?.sheetKey)) ?? parsed.sheets[0]
       setLedger(null)
+      setLedgerFrom(null)
       selectSheet(guess)
-      setLedger(await loadLedger())
     } catch (err) {
       toast.error(errText(err, t))
     }
@@ -148,10 +152,31 @@ export function ImportPage() {
     }
   }, [sheet, dates, included, byHeader])
 
+  // Read the ledger from the earliest included count on (release hardening: no full scan).
+  const earliest = mapping ? Math.min(...mapping.snapshots.filter((s) => s.include && s.date).map((s) => s.date as number)) : Infinity
+  useEffect(() => {
+    if (!Number.isFinite(earliest)) return
+    if (ledgerFrom !== null && ledgerFrom <= earliest - DAY_MS) return
+    const from = earliest - DAY_MS
+    let live = true
+    setLedger(null)
+    loadLedger(from)
+      .then((rows) => {
+        if (!live) return
+        setLedger(rows)
+        setLedgerFrom(from)
+      })
+      .catch((err) => toast.error(errText(err, t)))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [earliest])
+
   const plan: ImportPlan | null = useMemo(() => {
     if (!sheet || !mapping) return null
-    return buildImportPlan(sheet, mapping, products, activeLocations, ledger ?? [])
-  }, [sheet, mapping, products, activeLocations, ledger])
+    return buildImportPlan(sheet, mapping, products, activeLocations, ledger ?? [], qtyAt)
+  }, [sheet, mapping, products, activeLocations, ledger, qtyAt])
 
   const mappedAny = headers.some((h) => byHeader[h])
   const canImport = !!plan && !!ledger && plan.postings.length > 0 && !progress
@@ -179,7 +204,7 @@ export function ImportPage() {
       // The plan just applied must not be applied again: nothing is importable until the
       // ledger is read back and the counts show up as already there.
       setLedger(null)
-      setLedger(await loadLedger())
+      setLedger(await loadLedger(ledgerFrom ?? undefined))
       if (res.failed.length === 0) {
         toast.success(t('นำเข้าสำเร็จ {n} รายการ', { n: res.posted }))
       } else {

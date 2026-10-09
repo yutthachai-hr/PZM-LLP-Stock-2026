@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { BACKEND_MODE } from '../backend'
 import { runNotificationJobs, runOnOpen, shouldRunNotifications } from '../services/automation'
 import type { Role } from '../types'
-import { useData } from './DataContext'
+import { useData, useNotifications } from './DataContext'
 
 /** Demo mode has no Worker at all, so it re-checks more often; live it is a fallback. */
 const EVERY_MS = BACKEND_MODE === 'local' ? 5 * 60_000 : 30 * 60_000
@@ -16,7 +16,9 @@ const EVERY_MS = BACKEND_MODE === 'local' ? 5 * 60_000 : 30 * 60_000
  */
 export function useAutomation(): void {
   const { user } = useAuth()
-  const data = useData()
+  const stock = useData()
+  const notifications = useNotifications()
+  const data = { ...stock, notifications }
   const latest = useRef(data)
   latest.current = data
   const ready = !data.loading && !!user

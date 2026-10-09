@@ -13,10 +13,11 @@ vi.mock('../src/backend', async () => {
   const m = await import('./helpers/memory-backend')
   return { backend: m.memoryBackend, BACKEND_MODE: 'local' }
 })
-const { resetMemory, raw, seed } = await import('./helpers/memory-backend')
+const { resetMemory, raw, seed, memoryBackend } = await import('./helpers/memory-backend')
 const S = await import('../src/services/purchaseRequests')
 const { canTransition, canEditItems, isReadyForOrder, liveItems } = await import('../src/lib/purchaseRequestStatus')
 const { setActiveBrand } = await import('../src/brand/brand')
+const { repairPlan } = await import('../src/lib/requestConversion')
 
 const STAFF = { id: 'u-staff', name: 'AA', role: 'staff' as const }
 const OTHER_STAFF = { id: 'u-other', name: 'BB', role: 'staff' as const }
@@ -392,8 +393,10 @@ describe('the acceptance scenario', () => {
     expect(thai.lines.map((l) => [l.productName, l.orderedQty, l.unit])).toEqual([['COKE CAN 325 ML 1X24', 5, 'Pack'], ['COKE ZERO CAN 325 ML 1X24', 5, 'Pack']])
     expect(pr.history.at(-1)).toMatchObject({ action: 'convertedToPo' })
 
-    // Once only
-    await expect(S.convertToOrders({ id: pr.id, products, actor: STAFF })).rejects.toThrow()
+    // Once only: a second press hands back the same orders and writes nothing (plan A6)
+    const again = await S.convertToOrders({ id: pr.id, products, actor: STAFF })
+    expect(again.orders).toEqual(pr.orders)
+    expect(again.history).toHaveLength(pr.history.length)
     expect(orders()).toHaveLength(2)
     expect(isReadyForOrder(pr)).toBe(false)
     expect(requests()).toHaveLength(1)
@@ -412,6 +415,94 @@ describe('the acceptance scenario', () => {
     pr = await S.convertToOrders({ id: pr.id, products, actor: MANAGER })
     expect(pr.orders!.map((o) => o.supplierName)).toEqual(['ACK'])
     expect(orders()).toHaveLength(1)
+  })
+})
+
+describe('idempotent conversion (plan A6, 6 Oct 2026)', () => {
+  async function approved(lines = [
+    { productId: 'p-redoak', supplierId: 's-ack', qty: 5 },
+    { productId: 'p-coke', supplierId: 's-thai', qty: 5 },
+  ]) {
+    const pr = await draftWith(lines)
+    await S.submitRequest({ id: pr.id, ctx, actor: STAFF })
+    return S.approveRequest({ id: pr.id, ctx, actor: MANAGER })
+  }
+
+  test('each supplier\'s order is filed under the request and the supplier, signed by the run', async () => {
+    const pr = await S.convertToOrders({ id: (await approved()).id, products, actor: STAFF })
+    expect(pr.orders!.map((o) => o.poId).sort()).toEqual([`po_${pr.id}_s-ack`, `po_${pr.id}_s-thai`])
+    expect(orders().map((o) => o.id).sort()).toEqual([`po_${pr.id}_s-ack`, `po_${pr.id}_s-thai`])
+    const last = pr.history.at(-1)!
+    expect(last).toMatchObject({ action: 'convertedToPo', by: STAFF.id })
+    expect(last.runId).toMatch(/\w+/)
+  })
+
+  test('the numbers continue each supplier\'s own counter', async () => {
+    seed('counters', [{ id: 'purchaseOrder__s-ack', value: 7 }])
+    const pr = await S.convertToOrders({ id: (await approved()).id, products, actor: STAFF })
+    expect(Object.fromEntries(pr.orders!.map((o) => [o.supplierId, o.docNo]))).toEqual({ 's-ack': 'PO-00008', 's-thai': 'PO-00001' })
+    expect((raw('counters') as { id: string; value: number }[]).find((c) => c.id === 'purchaseOrder__s-ack')?.value).toBe(8)
+  })
+
+  test('a line that cannot be ordered stops the whole conversion: no order, request still approved', async () => {
+    const pr = await approved()
+    // THAINAMTHIP's product has gone — from the screen's list and from the database.
+    await memoryBackend.forBrand('pizza').remove('products', 'p-coke')
+    await expect(S.convertToOrders({ id: pr.id, products: products.filter((p) => p.id !== 'p-coke'), actor: STAFF })).rejects.toThrow()
+    expect(orders()).toHaveLength(0)
+    expect(requests()[0].status).toBe('approved')
+    expect(raw('counters').filter((c) => String(c.id).startsWith('purchaseOrder__'))).toHaveLength(0)
+    // …and it converts cleanly once the product is back.
+    seed('products', products.filter((p) => p.id === 'p-coke') as unknown as Record<string, unknown>[])
+    const done = await S.convertToOrders({ id: pr.id, products, actor: STAFF })
+    expect(done.orders).toHaveLength(2)
+  })
+
+  test('an order left by an old half-finished conversion stops it, naming the order', async () => {
+    const pr = await approved()
+    seed('purchaseOrders', [{ id: 'legacy-1', docNo: 'PO-00003', supplierId: 's-ack', supplierName: 'ACK', status: 'ordered', requestId: pr.id, locationId: MAIN, lines: [], orderedAt: 1, createdAt: 1, updatedAt: 1 }])
+    await expect(S.convertToOrders({ id: pr.id, products, actor: MANAGER })).rejects.toThrow(/PO-00003/)
+    expect(orders()).toHaveLength(1)
+    // A cancelled leftover does not count.
+    seed('purchaseOrders', [{ id: 'legacy-1', docNo: 'PO-00003', supplierId: 's-ack', supplierName: 'ACK', status: 'cancelled', requestId: pr.id, locationId: MAIN, lines: [], orderedAt: 1, createdAt: 1, updatedAt: 1 }])
+    expect((await S.convertToOrders({ id: pr.id, products, actor: MANAGER })).status).toBe('poCreated')
+  })
+
+  test('the admin\'s repair takes over the leftover and creates only what is missing', async () => {
+    const pr = await approved()
+    seed('purchaseOrders', [{ id: 'legacy-1', docNo: 'PO-00003', supplierId: 's-ack', supplierName: 'ACK', status: 'ordered', requestId: pr.id, locationId: MAIN, lines: [], orderedAt: 1, createdAt: 1, updatedAt: 1 }])
+    const [stuck] = await S.listStuckConversions()
+    expect(stuck.request.id).toBe(pr.id)
+    const plan = repairPlan(stuck)
+    expect(plan).toMatchObject({ adopt: { 's-ack': 'legacy-1' }, blockers: [] })
+    expect(plan.missing.map((g) => g.supplierId)).toEqual(['s-thai'])
+
+    await expect(S.convertToOrders({ id: pr.id, products, actor: MANAGER, adopt: plan.adopt })).rejects.toThrow()
+    const done = await S.convertToOrders({ id: pr.id, products, actor: ADMIN, adopt: plan.adopt })
+    expect(done.orders!.map((o) => [o.supplierId, o.poId, o.docNo])).toEqual([
+      ['s-ack', 'legacy-1', 'PO-00003'],
+      ['s-thai', `po_${pr.id}_s-thai`, 'PO-00001'],
+    ])
+    expect(orders()).toHaveLength(2)
+    expect(done.history.at(-1)!.detail).toContain('(ใบเดิม)')
+    expect(await S.listStuckConversions()).toEqual([])
+  })
+
+  test('two leftovers for one supplier, or one for a supplier no longer on the request, must be cancelled first', () => {
+    const base = { status: 'ordered', requestId: 'r1', locationId: MAIN, lines: [], orderedAt: 1, createdAt: 1, updatedAt: 1 }
+    const request = { id: 'r1', status: 'approved', items: [{ idx: 0, productId: 'p-redoak', supplierId: 's-ack', supplierName: 'ACK', approvedQty: 3 }] } as unknown as PurchaseRequest
+    const plan = repairPlan({
+      request,
+      orders: [
+        { ...base, id: 'a', docNo: 'PO-00001', supplierId: 's-ack', supplierName: 'ACK' },
+        { ...base, id: 'b', docNo: 'PO-00002', supplierId: 's-ack', supplierName: 'ACK' },
+        { ...base, id: 'c', docNo: 'PO-00009', supplierId: 's-thai', supplierName: 'THAINAMTHIP' },
+      ] as unknown as PurchaseOrder[],
+    })
+    expect(plan.blockers).toEqual([
+      { kind: 'duplicate', supplierName: 'ACK', docNos: ['PO-00001', 'PO-00002'] },
+      { kind: 'notInRequest', supplierName: 'THAINAMTHIP', docNo: 'PO-00009' },
+    ])
   })
 })
 
@@ -483,5 +574,52 @@ describe('setting a request aside (owner, 25 Sep 2026)', () => {
     expect(canTransition('skipped', 'pendingApproval')).toBe(false)
     expect(canEditItems({ status: 'skipped', requestedBy: STAFF.id }, STAFF)).toBe(false)
     expect(canEditItems({ status: 'skipped', requestedBy: STAFF.id }, ADMIN)).toBe(false)
+  })
+})
+
+describe('converting before the catalogue has loaded (6 Oct 2026)', () => {
+  test('a product missing from the screen\'s list is read inside the conversion', async () => {
+    let pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2 }])
+    pr = await S.submitRequest({ id: pr.id, ctx, actor: STAFF })
+    pr = await S.approveRequest({ id: pr.id, ctx, actor: MANAGER })
+    const done = await S.convertToOrders({ id: pr.id, products: [], actor: STAFF })
+    expect(done.status).toBe('poCreated')
+    expect(orders()[0].lines.map((l) => [l.productName, l.orderedQty])).toEqual([['RED OAK SALAD', 2]])
+  })
+})
+
+describe('D4′: one workflow, several intake channels', () => {
+  const line = (productId: string, supplierId: string, qty = 2) => ({ productId, supplierId, qty })
+
+  test('each channel is recorded once, in first-use order; older requests without it read as manual', async () => {
+    let pr = await S.createRequest({ locationId: MAIN, actor: STAFF })
+    expect(pr.intake).toBeUndefined()
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack')], products, suppliers, actor: STAFF, source: 'order.xlsx · Sheet1' })
+    expect(pr.intake).toEqual(['excel'])
+    pr = await S.addItems({ id: pr.id, lines: [line('p-coke', 's-thai')], products, suppliers, actor: STAFF, source: 'bill.jpg · ACK', intake: 'ocr' })
+    pr = await S.addItem({ id: pr.id, line: line('p-zero', 's-thai'), products, suppliers, actor: STAFF })
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack', 1)], products, suppliers, actor: STAFF, source: 'order2.xlsx · Sheet1' })
+    expect(pr.intake).toEqual(['excel', 'ocr', 'manual'])
+    expect(requests()[0].intake).toEqual(['excel', 'ocr', 'manual'])
+    expect(pr.history.filter((h) => h.action === 'itemsImported').map((h) => h.detail)).toEqual(['order.xlsx · Sheet1 · 1', 'bill.jpg · ACK · 1', 'order2.xlsx · Sheet1 · 1'])
+  })
+
+  test('a system suggestion is a channel, not an approval: the request is still a draft for a person to send', async () => {
+    let pr = await S.createRequest({ locationId: MAIN, actor: STAFF, intake: 'suggestion' })
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack')], products, suppliers, actor: STAFF, intake: 'suggestion' })
+    expect(pr.intake).toEqual(['suggestion'])
+    expect(pr.status).toBe('draft')
+    expect(raw('purchaseOrders')).toHaveLength(0)
+  })
+
+  test('an Excel request goes through the same approval and orders as any other', async () => {
+    let pr = await S.createRequest({ locationId: MAIN, actor: STAFF })
+    pr = await S.addItems({ id: pr.id, lines: [line('p-redoak', 's-ack'), line('p-coke', 's-thai')], products, suppliers, actor: STAFF, source: 'order.xlsx · R1' })
+    await expect(S.approveRequest({ id: pr.id, ctx, actor: MANAGER })).rejects.toThrow()
+    await S.submitRequest({ id: pr.id, ctx, actor: STAFF })
+    await expect(S.approveRequest({ id: pr.id, ctx, actor: STAFF })).rejects.toThrow()
+    const done = await S.approveRequest({ id: pr.id, ctx, actor: MANAGER })
+    expect(done.intake).toEqual(['excel'])
+    expect(done.status === 'approved' || done.status === 'poCreated').toBe(true)
   })
 })

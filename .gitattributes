@@ -1,0 +1,3 @@
+# Hashed byte-for-byte (manifest sha256, Rust test vectors): never convert line endings.
+datasets/** -text
+crates/pzm-integrity/vectors/** -text

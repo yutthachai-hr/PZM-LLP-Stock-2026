@@ -4,8 +4,10 @@ import { Icon } from '../../components/Icon'
 import { fmtQty } from '../../lib/format'
 import { shownUnit } from '../../lib/ledger'
 import { useT } from '../../i18n/I18nContext'
-import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
-import { needsReason, outstanding, owedLines, receiveAll, variance, type PoLineEntry, type Variance } from './receipt'
+import { REJECT_REASONS, type PurchaseOrder, type PurchaseOrderLine, type RejectReason } from '../../types'
+import { useState } from 'react'
+import { Select } from '../../components/ui'
+import { badRejection, needsReason, outstanding, owedLines, receiveAll, variance, type PoLineEntry, type Variance } from './receipt'
 
 export function VarianceChip({ v, diff }: { v: Variance; diff: number }) {
   const t = useT()
@@ -109,6 +111,7 @@ export function PoLines({
                   <VarianceChip v={v} diff={Math.abs((qty ?? 0) - due)} />
                 </div>
               </div>
+              <Rejection entry={e} name={l.productName} unit={shownUnit(l)} onChange={(patch) => set(l.productId, patch)} />
               {(v === 'short' || v === 'over') && (
                 <Input
                   value={e?.reason ?? ''}
@@ -123,5 +126,70 @@ export function PoLines({
         })}
       </ul>
     </SectionCard>
+  )
+}
+
+const REJECT_LABEL: Record<RejectReason, string> = {
+  damaged: 'เสียหาย', // i18n-key
+  expired: 'หมดอายุ', // i18n-key
+  wrongItem: 'ส่งผิดรายการ', // i18n-key
+  quality: 'คุณภาพไม่ผ่าน', // i18n-key
+  other: 'อื่นๆ', // i18n-key
+}
+
+/**
+ * Goods that arrived but were refused at the door (plan B5): how many and why, kept on the
+ * receipt and never taken into stock — the line stays owed. Closed until asked for, so an
+ * ordinary delivery shows nothing extra.
+ */
+function Rejection({
+  entry,
+  name,
+  unit,
+  onChange,
+}: {
+  entry: PoLineEntry | undefined
+  name: string
+  unit: string
+  onChange: (patch: Partial<PoLineEntry>) => void
+}) {
+  const t = useT()
+  const [open, setOpen] = useState((entry?.rejected ?? 0) > 0)
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-1 cursor-pointer text-xs font-medium text-ink-soft hover:text-ink hover:underline">
+        {t('+ ตีกลับ / ไม่รับของบางส่วน')}
+      </button>
+    )
+  }
+  const bad = badRejection(entry)
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="text-xs text-ink-soft">{t('ตีกลับ (ไม่รับเข้าสต๊อก)')}</span>
+      <Input
+        type="number"
+        inputMode="decimal"
+        step="any"
+        min={0}
+        aria-label={t('จำนวนที่ตีกลับ: {name}', { name })}
+        value={entry?.rejected ?? ''}
+        onChange={(ev) => onChange({ rejected: ev.target.value === '' ? null : Number(ev.target.value) })}
+        className="num w-24 text-right"
+      />
+      <span className="text-xs text-ink-soft">{unit}</span>
+      <Select
+        aria-label={t('เหตุผลที่ตีกลับ: {name}', { name })}
+        value={entry?.rejectReason ?? ''}
+        onChange={(ev) => onChange({ rejectReason: (ev.target.value || undefined) as RejectReason | undefined })}
+        className={`w-auto ${bad ? 'border-danger bg-danger-soft' : ''}`}
+      >
+        <option value="">{t('เลือกเหตุผล')}</option>
+        {REJECT_REASONS.map((r) => (
+          <option key={r} value={r}>
+            {t(REJECT_LABEL[r])}
+          </option>
+        ))}
+      </Select>
+    </div>
   )
 }

@@ -1,18 +1,54 @@
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { buildTier } from './src/lib/deployTier.ts'
 
-// The `demo` branch on Cloudflare Pages is the public demo: browser storage only, never the
-// live Firebase project. Pages sets CF_PAGES_BRANCH while building and, with a
-// wrangler.toml present, takes no plain build variables from its dashboard — so the flag
-// is derived here. Locally `npm run demo` sets it through .env.demo instead.
-if (process.env.CF_PAGES_BRANCH === 'demo') process.env.VITE_DEMO_MODE = '1'
+// P0 preview isolation (owner, 8 Oct 2026): on Cloudflare Pages only the production branch
+// (`main`) builds against the live Firebase project. Every other branch — the public `demo`,
+// and every preview — builds in demo mode (browser storage only), and a Pages build that does
+// not say which branch it is fails instead of guessing (src/lib/deployTier.ts). Pages sets
+// CF_PAGES_BRANCH while building and, with a wrangler.toml present, takes no plain build
+// variables from its dashboard — so the flag is derived here. Locally `npm run demo` sets it
+// through .env.demo instead. The functions are guarded separately, by host (functions/_lib/previewGuard.ts).
+const tier = buildTier(process.env)
+if (tier === 'preview') process.env.VITE_DEMO_MODE = '1'
+process.env.VITE_DEPLOY_TIER = tier
 // The test-only emulator switch (.env.e2e) must never reach a Pages build.
 if (process.env.CF_PAGES && process.env.VITE_USE_EMULATOR) throw new Error('VITE_USE_EMULATOR is for the local Playwright tests only')
 
 // https://vite.dev/config/
-export default defineConfig({
+// E4: which build an error report came from. Cloudflare Pages sets the commit; a local
+// build uses git's, and failing both, 'dev'.
+function buildId(): string {
+  const sha = process.env.CF_PAGES_COMMIT_SHA
+  if (sha) return sha.slice(0, 12)
+  try {
+    return execSync('git rev-parse --short=12 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || 'dev'
+  } catch {
+    return 'dev'
+  }
+}
+
+export default defineConfig(({ mode }) => ({
+  define: { __BUILD_ID__: JSON.stringify(buildId()) },
+  // The dependency pre-bundle cache, outside the OneDrive-synced repo on Windows: OneDrive
+  // locks files as it syncs them, and Vite's re-optimise then failed to unlink one
+  // (EPERM on node_modules/.vite/deps) — the dev server would not start, and two full e2e
+  // runs never began (8 Oct 2026). Dev servers only; a production build does not use it.
+  ...(process.env.LOCALAPPDATA ? { cacheDir: process.env.LOCALAPPDATA.split(String.fromCharCode(92)).join("/") + "/pzm-vite-cache" } : {}),
+  // The Playwright tests (mode e2e) run the stock commands through e2e/command-server.mjs —
+  // the real handler over the Firestore emulator — since Pages Functions are not served by
+  // Vite. Nothing like this exists in any other mode.
+  // Test and tool output is never source. Watching it is worse than useless here: the repo
+  // lives under OneDrive, which locks a file while it syncs, and a Playwright trace being
+  // written into e2e-results/ then threw EBUSY out of the watcher and killed the dev server
+  // mid-suite — every later test failing with ERR_CONNECTION_REFUSED (8 Oct 2026).
+  server: {
+    watch: { ignored: ['**/e2e-results/**', '**/test-results/**', '**/playwright-report/**', '**/.wrangler/**', '**/.shadow-db/**', '**/coverage/**', '**/reports/**'] },
+    ...(mode === 'e2e' ? { proxy: { '/api/stock': 'http://127.0.0.1:5177' } } : {}),
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -73,4 +109,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

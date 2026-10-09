@@ -186,13 +186,17 @@ describe('the ledger rows of a transfer', () => {
     fromLocationId: 'main', toLocationId: 'transit', date: ts(), byUserId: by, byUserName: 'x', createdAt: ts(), ...over,
   })
 
-  test('staff move stock between sites only through a transfer; a manager may still do it directly', async () => {
+  test('from a client, transfer rows are an admin\'s alone, and only under a real transfer past approval (A4, ADR-001)', async () => {
+    // Staff and managers move stock through the server's commands; their tokens write no rows.
     await assertFails(setDoc(doc(as(WAREHOUSE), 'stockMovements/m1'), mv('m1', WAREHOUSE, { toLocationId: 'sarasin' })))
-    await assertSucceeds(setDoc(doc(as(WAREHOUSE), 'stockMovements/m2'), mv('m2', WAREHOUSE, { transferId: 't1' })))
-    await assertSucceeds(setDoc(doc(as(MANAGER), 'stockMovements/m3'), mv('m3', MANAGER, { toLocationId: 'sarasin' })))
-    // Using stock up at the counter (no destination) is still everyday work.
+    await seedDoc('transfers/t1', inTransit('t1'))
+    await assertFails(setDoc(doc(as(WAREHOUSE), 'stockMovements/m2'), mv('m2', WAREHOUSE, { transferId: 't1' })))
+    await assertFails(setDoc(doc(as(MANAGER), 'stockMovements/m3'), mv('m3', MANAGER, { toLocationId: 'sarasin' })))
     const { toLocationId: _to, ...used } = mv('m4', WAREHOUSE, { type: 'consume', fromLocationId: 'main' })
-    await assertSucceeds(setDoc(doc(as(WAREHOUSE), 'stockMovements/m4'), used))
+    await assertFails(setDoc(doc(as(WAREHOUSE), 'stockMovements/m4'), used))
+    // An admin: a transfer that does not exist is refused; a real one in transit is fine.
+    await assertFails(setDoc(doc(as(ADMIN), 'stockMovements/m5'), mv('m5', ADMIN, { transferId: 'nope' })))
+    await assertSucceeds(setDoc(doc(as(ADMIN), 'stockMovements/m6'), mv('m6', ADMIN, { transferId: 't1' })))
   })
 
   test('are never edited or voided in place, admins included', async () => {

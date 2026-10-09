@@ -7,23 +7,10 @@ import type { BrandId } from '../brand/brand'
 import type { QuerySpec } from './querySpec'
 export type { QueryFilter, QueryOp, QuerySpec } from './querySpec'
 
-/**
- * Marker for "remove this field", usable as a value in an update patch.
- *
- * Passing `undefined` does not do it: Firestore is initialised with
- * ignoreUndefinedProperties, so an undefined value is skipped and the old one survives —
- * clearing a product's cost saved successfully and left the cost exactly as it was. The
- * local backend, meanwhile, stored a literal undefined. One explicit marker, handled by
- * both, is the only way the two modes can agree on what clearing means.
- */
-export const DELETE_FIELD = Symbol('delete-field')
-
-export interface TxContext {
-  get<T = Record<string, unknown>>(collection: string, id: string): Promise<T | null>
-  set(collection: string, id: string, data: Record<string, unknown>): void
-  update(collection: string, id: string, patch: Record<string, unknown>): void
-  delete(collection: string, id: string): void
-}
+// The transaction surface lives on its own so code that runs on the server too (the stock
+// commands, ADR-001) can use it without pulling in anything browser-only.
+import type { TxContext } from './tx'
+export { DELETE_FIELD, Increment, increment, VERSIONED, withVersionBump, withInitialVersion, type TxContext } from './tx'
 
 /**
  * Restricts a subscription to documents whose numeric `field` is at or after `value`.
@@ -62,8 +49,12 @@ export interface Backend {
    * brand halfway through cannot split the work across two namespaces.
    */
   forBrand(brand: BrandId): Backend
-  /** Live subscription: fires immediately with current docs, then on every change. Returns unsubscribe. */
-  subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void
+  /**
+   * Live subscription: fires immediately with current docs, then on every change. Returns
+   * unsubscribe. `onError` hears a listener the database ended (refused by the rules, quota
+   * spent) — after that it delivers nothing more, and the caller must subscribe again.
+   */
+  subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions, onError?: (e: unknown) => void): () => void
   /**
    * Live subscription to ONE document, reporting null while it does not exist.
    *
@@ -99,6 +90,12 @@ export interface Backend {
    * is thousands of documents against a 50,000-a-day allowance shared by both companies.
    */
   getBy<T>(collection: string, field: string, value: string | number | boolean, opts?: ReadOptions): Promise<T[]>
+  /**
+   * One page of a collection, newest first by a number field, below `before` when given.
+   * For history that is only ever browsed a page at a time (the audit log): never a
+   * listener, never the whole collection. One field, so no composite index.
+   */
+  page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]>
   getOne<T>(collection: string, id: string, opts?: ReadOptions): Promise<T | null>
   /** A bounded query, once: filters, order and limit run by the server (querySpec.ts). */
   query<T>(collection: string, spec: QuerySpec, opts?: ReadOptions): Promise<T[]>

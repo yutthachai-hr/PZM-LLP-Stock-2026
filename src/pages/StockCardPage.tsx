@@ -24,6 +24,8 @@ import { balanceSeries } from '../lib/stats/balanceSeries'
 import type { MovementType, StockMovement } from '../types'
 import { STATE_LOOK, stockState } from './products/productStatus'
 import { movementNote } from '../lib/receiptLabel'
+import { SupplyPanel } from './products/SupplyPanel'
+import { IntelPanel } from './products/IntelPanel'
 
 /**
  * ประวัติ/Stock Card for one product (owner's mock-up 06, spec §2.7): what it is and where it
@@ -293,6 +295,9 @@ export function StockCardPage() {
         <StatTile icon="report" tone="blue" label={t('ยอดคงเหลือปัจจุบัน')} value={`${fmtQty(current)} ${unit}`} hint={t('ณ {date}', { date: formatThaiDateTime(Date.now()) })} />
       </StatRow>
 
+      <SupplyPanel product={product} locationId={locationId} />
+      <IntelPanel product={product} locationId={locationId} />
+
       <SectionCard
         icon="chart"
         title={t('แนวโน้มสต๊อกย้อนหลัง')}
@@ -363,6 +368,7 @@ export function StockCardPage() {
               rows={rows}
               columns={columns}
               rowKey={(r) => r.movement.id}
+              paged={{ size: 100, resetKey: card }}
               minWidth={900}
               maxHeight="calc(100vh - 220px)"
               rowClassName={(r) => (r.movement.voided ? 'opacity-50 line-through' : '')}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
-import { useData } from '../../data/DataContext'
+import { useNotifications } from '../../data/DataContext'
 import { useT } from '../../i18n/I18nContext'
 import { CATEGORY_LABEL, NOTIFICATION_BODY, NOTIFICATION_TITLE, tidyCopy } from '../../lib/inventoryRules/copy'
 import { isFor } from '../../lib/inventoryRules/notifications'
@@ -68,9 +68,10 @@ export function NotificationHost() {
 function Host({ uid, role }: { uid: string; role: Role }) {
   const t = useT()
   const navigate = useNavigate()
-  const { notifications } = useData()
+  const notifications = useNotifications()
   const prefs = useNotificationPrefs(uid)
-  const [state, dispatch] = useReducer(reducer, undefined, emptyQueue)
+  // Listening starts now: anything created after this moment is news, even in the first snapshot.
+  const [state, dispatch] = useReducer(reducer, undefined, () => emptyQueue(Date.now()))
   const [askSound, setAskSound] = useState(false)
   const byId = useRef(new Map<string, AppNotification>())
   const lastPlayed = useRef(new Set<string>())

@@ -93,7 +93,7 @@ export function inventoryInsights(input: InsightInput): Insights {
     for (const location of input.locations) {
       if (location.active === false || !input.tracksProduct(location.id, product.id)) continue
       const onHand = input.qtyAt(location.id, product.id)
-      const incoming = incomingFor(product.id, location.id, input.orders)
+      const incoming = incomingFor(product.id, location.id, input.orders, product)
       const avgDaily = usageAt(usage, location.id, product.id)?.avgDaily ?? null
       const min = input.minFor(product, location.id)
       const rec = recommend({

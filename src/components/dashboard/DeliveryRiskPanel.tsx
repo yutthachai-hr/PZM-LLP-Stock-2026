@@ -39,7 +39,7 @@ function rememberedOpen(): boolean {
 
 export function DeliveryRiskPanel() {
   const t = useT()
-  const { ready, risks, shortages } = useSupplierIntel()
+  const { ready, failed, retry, risks, shortages } = useSupplierIntel()
   const suppliers = useSuppliers()
   const [open, setOpen] = useState<string | null>(null)
   // Folded by default (owner, 6 Oct 2026): the counts say enough at a glance; the list opens
@@ -104,6 +104,16 @@ export function DeliveryRiskPanel() {
         </button>
       }
     >
+      {/* Plan C1: a read that failed is no verdict — never counts of zero. */}
+      {failed && (
+        <div role="alert" className="mx-4 mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger md:mx-5">
+          <span className="min-w-0 flex-1">{t('อ่านใบสั่งซื้อ/ใบโอนไม่สำเร็จ — ยังประเมินความเสี่ยงไม่ได้')}</span>
+          <button type="button" onClick={retry} className="min-h-9 rounded-lg px-2 font-semibold underline">
+            {t('ลองใหม่')}
+          </button>
+        </div>
+      )}
+      {!failed && (
       <div className="flex flex-wrap gap-2 px-4 pb-3 md:px-5" role="group" aria-label={t('เลือกระดับความเสี่ยง')}>
         <button
           type="button"
@@ -137,7 +147,8 @@ export function DeliveryRiskPanel() {
           </button>
         ))}
       </div>
-      {expanded &&
+      )}
+      {expanded && !failed &&
         (!ready ? (
           <p className="px-5 pb-5 text-sm text-ink-faint">{t('กำลังคำนวณ...')}</p>
         ) : !shown.length && !noOrder.length ? (

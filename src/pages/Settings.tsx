@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { UnitMigrationSection } from './settings/UnitMigrationSection'
 import { RebaseUnitSection } from './settings/RebaseUnitSection'
+import { StuckRequestsSection } from './settings/StuckRequestsSection'
+import { ShadowSection } from './settings/ShadowSection'
+import { AuditSection } from './settings/AuditSection'
 import { useData } from '../data/DataContext'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
@@ -84,8 +87,11 @@ type SectionKey =
   | 'maintenance'
   | 'unitMigration'
   | 'rebaseUnit'
+  | 'stuckRequests'
   | 'company'
   | 'logistics'
+  | 'shadow'
+  | 'audit'
 
 interface MenuItem {
   key: SectionKey | 'import'
@@ -153,6 +159,8 @@ export function SettingsPage() {
           { key: 'company', label: t('ข้อมูลบริษัท'), hint: t('โลโก้และตัวย่อเลขเอกสารที่ใช้ในประกาศบริษัท'), icon: 'building', show: isAdmin },
           { key: 'users', label: t('ผู้ใช้งาน'), hint: t('เพิ่มผู้ใช้ กำหนดสิทธิ์ ปิดการเข้าใช้'), icon: 'users', show: isAdmin },
           { key: 'automation', label: t('งานอัตโนมัติ'), hint: t('งานที่ระบบทำเองตามเวลา'), icon: 'clock', show: isManager },
+          { key: 'shadow', label: t('ผลเทียบการคาดการณ์'), hint: t('การคาดการณ์ที่เก็บไว้ เทียบกับสิ่งที่เกิดขึ้นจริง'), icon: 'chart', show: isManager },
+          { key: 'audit', label: t('ประวัติการแก้ไข'), hint: t('ใครแก้อะไร เมื่อไร ก่อนและหลัง — แก้หรือลบไม่ได้'), icon: 'history', show: isAdmin },
           { key: 'readUsage', label: t('การอ่านข้อมูล (โควตา)'), hint: t('แอปอ่านไปกี่รายการแล้ว และคอลเลกชันไหนมากที่สุด'), icon: 'cloud', show: isAdmin },
         ],
       },
@@ -164,6 +172,7 @@ export function SettingsPage() {
           { key: 'maintenance', label: t('ดูแลข้อมูล'), hint: t('ตรวจยอดคงเหลือให้ตรงกับประวัติ'), icon: 'refresh', show: isAdmin },
           { key: 'unitMigration', label: t('แปลงยอดแยกหน่วยเป็นหน่วยหลัก'), hint: t('รวมยอดที่เคยเก็บแยกหน่วย'), icon: 'adjust', show: isAdmin },
           { key: 'rebaseUnit', label: t('เปลี่ยนหน่วยหลักพร้อมคำนวณ'), hint: t('เปลี่ยนหน่วยหลักของสินค้าและคำนวณยอดใหม่'), icon: 'swap', show: isAdmin },
+          { key: 'stuckRequests', label: t('ซ่อมรายการขอสั่งซื้อที่ค้าง'), hint: t('รายการที่อนุมัติแล้วแต่มีใบสั่งซื้อค้างครึ่งทาง'), icon: 'warning', show: isAdmin },
         ],
       },
     ]
@@ -207,10 +216,16 @@ export function SettingsPage() {
         return actor && <UnitMigrationSection actor={actor} />
       case 'rebaseUnit':
         return actor && <RebaseUnitSection actor={actor} />
+      case 'stuckRequests':
+        return <StuckRequestsSection />
       case 'company':
         return <CompanyProfileSection />
       case 'logistics':
         return <LogisticsSection />
+      case 'shadow':
+        return <ShadowSection />
+      case 'audit':
+        return <AuditSection />
     }
   }
 
@@ -671,7 +686,7 @@ function LocationsSection() {
   async function remove(l: StockLocation) {
     const ok = await confirm({
       title: t("ลบคลัง"),
-      message: t('ลบ "{name}" ? ยอดคงเหลือของคลังนี้จะถูกลบด้วย (ประวัติยังอยู่)', { name: l.name, }),
+      message: t('ลบ "{name}" ? ลบได้เฉพาะคลังที่ยังไม่เคยมีการเคลื่อนไหว — ถ้ามีประวัติแล้วให้ปิดใช้งานแทน', { name: l.name }),
       danger: true,
       confirmText: t("ลบ"),
     })

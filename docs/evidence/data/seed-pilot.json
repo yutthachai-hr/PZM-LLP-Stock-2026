@@ -1,0 +1,115 @@
+{
+ "sizes": {
+  "products": 460,
+  "locations": 3,
+  "levels": 1400,
+  "overrides": 50,
+  "suppliers": 30,
+  "movementsPerDay": 60,
+  "days": 45,
+  "ordersPerDay": 1,
+  "notificationsPerDay": 40
+ },
+ "proofAgeMinutes": 30,
+ "cases": {
+  "run1": {
+   "off": {
+    "firestore": 3019,
+    "productsAndLevels": {
+     "stockLevels.full": 1380,
+     "products.full": 462,
+     "stockLevels.delta.updatedAt": 19,
+     "products.delta.updatedAt": 9
+    }
+   },
+   "on": {
+    "firestore": 1071,
+    "productsAndLevels": {
+     "stockLevels.delta.updatedAt": 19,
+     "products.delta.updatedAt": 9
+    },
+    "seeds": [
+     {
+      "label": "products.seed",
+      "rows": 462,
+      "outcome": "used"
+     },
+     {
+      "label": "stockLevels.seed",
+      "rows": 1380,
+      "outcome": "used"
+     }
+    ],
+    "shadowBytes": 230205,
+    "shadowRequests": 5
+   },
+   "saved": 1948
+  },
+  "run2": {
+   "off": {
+    "firestore": 2913,
+    "productsAndLevels": {
+     "stockLevels.full": 1380,
+     "products.full": 462,
+     "stockLevels.delta.updatedAt": 19,
+     "products.delta.updatedAt": 9
+    }
+   },
+   "on": {
+    "firestore": 1071,
+    "productsAndLevels": {
+     "stockLevels.delta.updatedAt": 19,
+     "products.delta.updatedAt": 9
+    },
+    "seeds": [
+     {
+      "label": "products.seed",
+      "rows": 462,
+      "outcome": "used"
+     },
+     {
+      "label": "stockLevels.seed",
+      "rows": 1380,
+      "outcome": "used"
+     }
+    ],
+    "shadowBytes": 230205,
+    "shadowRequests": 5
+   },
+   "saved": 1842
+  },
+  "run3": {
+   "off": {
+    "firestore": 2913,
+    "productsAndLevels": {
+     "stockLevels.full": 1380,
+     "products.full": 462,
+     "stockLevels.delta.updatedAt": 19,
+     "products.delta.updatedAt": 9
+    }
+   },
+   "on": {
+    "firestore": 1071,
+    "productsAndLevels": {
+     "stockLevels.delta.updatedAt": 19,
+     "products.delta.updatedAt": 9
+    },
+    "seeds": [
+     {
+      "label": "products.seed",
+      "rows": 462,
+      "outcome": "used"
+     },
+     {
+      "label": "stockLevels.seed",
+      "rows": 1380,
+      "outcome": "used"
+     }
+    ],
+    "shadowBytes": 230205,
+    "shadowRequests": 5
+   },
+   "saved": 1842
+  }
+ }
+}

@@ -20,6 +20,7 @@ dev-dist
 !.env.demo
 # The Playwright tests' emulator switch — not secret, committed so the suite runs from a clone.
 !.env.e2e
+!.env.production
 
 # Editor directories and files
 .vscode/*
@@ -54,3 +55,18 @@ dist-demo
 
 # Cloudflare local secrets (wrangler pages dev)
 .dev.vars
+
+# Playwright output
+test-results/
+playwright-report/
+
+# Local shadow PostgreSQL (npm run shadow) and its bundled SQL
+.shadow-db/
+supabase/dist/
+
+# G21 mutation testing (npm run mutation)
+.stryker-tmp/
+reports/
+
+# local wrangler state (pages dev, tail)
+.wrangler/

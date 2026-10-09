@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
-import { useData } from '../../data/DataContext'
+import { useNotifications, useOlderNotifications } from '../../data/DataContext'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { formatThaiDateTime } from '../../lib/format'
@@ -45,7 +45,8 @@ export function NotificationBell() {
   const toast = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { notifications, olderNotifications } = useData()
+  const notifications = useNotifications()
+  const olderNotifications = useOlderNotifications()
   const prefs = useNotificationPrefs(user?.id)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('all')

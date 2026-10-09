@@ -163,6 +163,21 @@ export function resetReadTally(): void {
   changed()
 }
 
+/**
+ * The cold-start seed pilot (data/shadowSeed): what came from the Supabase shadow instead of
+ * Firestore, and why a seed was refused. Not Firestore reads — kept apart so a benchmark can
+ * show both sides of the trade (rows moved to Supabase, reads left on Firestore).
+ */
+export interface SeedNote { label: string; rows: number; outcome: string }
+let seeds: SeedNote[] = []
+export function noteSeed(label: string, rows: number, outcome: string): void {
+  seeds.push({ label, rows, outcome })
+  if (seeds.length > 50) seeds = seeds.slice(-50)
+}
+export function seedNotes(): SeedNote[] {
+  return [...seeds]
+}
+
 export function subscribeReadTally(fn: () => void): () => void {
   listeners.add(fn)
   return () => listeners.delete(fn)
@@ -233,5 +248,5 @@ export function markLongAbsence(): void {
 }
 
 if (typeof window !== 'undefined') {
-  ;(window as unknown as { __pzmReads?: unknown }).__pzmReads = { tally: readTally, reset: resetReadTally, markLongAbsence }
+  ;(window as unknown as { __pzmReads?: unknown }).__pzmReads = { tally: readTally, reset: resetReadTally, markLongAbsence, listeners: () => ({ active: state.active }), seeds: seedNotes }
 }

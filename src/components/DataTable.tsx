@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
 import { useT } from '../i18n/I18nContext'
+import { usePaged } from '../lib/usePaged'
+import { useViewport } from '../lib/viewport'
+import { Pagination } from './ui'
 import { RowMenu, type RowMenuItem } from './frame/RowMenu'
 
 /**
@@ -57,6 +60,7 @@ export function DataTable<T>({
   rowClassName,
   selection,
   rowMenu,
+  paged,
 }: {
   rows: T[]
   columns: Column<T>[]
@@ -80,9 +84,20 @@ export function DataTable<T>({
   selection?: { selected: ReadonlySet<string>; onChange: (next: Set<string>) => void }
   /** The `⋮` menu at the end of each row (and at the top right of each phone card). */
   rowMenu?: (row: T) => RowMenuItem[]
+  /**
+   * Page a long list (plan D6'): `size` rows at a time, back to the first page whenever
+   * `resetKey` changes (a new filter). Pages on a desk, "load more" on a phone.
+   */
+  paged?: { size?: number; resetKey?: unknown }
 }) {
   const t = useT()
+  // One of the two layouts, not both hidden by CSS (plan D6'): a thousand-row ledger used
+  // to build a thousand cards and a thousand table rows on every render.
+  const phone = useViewport() === 'phone'
+  const { rows: pageRows, pager } = usePaged(rows, paged?.size ?? 50, paged?.resetKey ?? null)
   if (rows.length === 0) return <>{empty}</>
+  const allRows = rows
+  rows = paged ? pageRows : allRows
 
   const { title, value, meta } = cardParts(columns)
   const keys = rows.map(rowKey)
@@ -109,7 +124,8 @@ export function DataTable<T>({
   return (
     <>
       {/* Phone: one card per row. */}
-      <div className="divide-y divide-line md:hidden">
+      {phone && (
+      <div className="divide-y divide-line">
         {rows.map((row) => (
           <div
             key={rowKey(row)}
@@ -136,9 +152,12 @@ export function DataTable<T>({
         ))}
       </div>
 
+      )}
+
       {/* Tablet and up: the table. */}
+      {!phone && (
       <div
-        className="hidden overflow-auto md:block"
+        className="overflow-auto"
         style={maxHeight ? { maxHeight } : undefined}
       >
         <table className="w-full text-sm" style={{ minWidth }}>
@@ -210,8 +229,10 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
+      )}
 
-      <span className="sr-only">{t('ตาราง {n} แถว', { n: rows.length })}</span>
+      {paged && <Pagination {...pager} sizes={[paged.size ?? 50, (paged.size ?? 50) * 2, (paged.size ?? 50) * 4]} />}
+      <span className="sr-only">{t('ตาราง {n} แถว', { n: allRows.length })}</span>
     </>
   )
 }

@@ -1,5 +1,90 @@
 # Inventory Pzm — สรุปส่งต่องาน
 
+## 0. สถานะปัจจุบัน — อ่านส่วนนี้ก่อน (อัปเดต 8 ต.ค. 2569)
+
+> **อัปเดต 8 ต.ค. 2569 กลางคืน (ล่าสุด):**
+>
+> - **RC candidate:** branch `rc/ops-os-rc1-candidate`
+>   - ตัดจาก integration (`d73fbc6`) แล้ว merge `main` (`ad43971`) เข้ามาแล้ว
+>   - **ยังอยู่ในเครื่องเท่านั้น ยังไม่ได้ push**
+>   - รายงานฉบับเต็ม: `docs/release/rc-candidate-report.md`
+> - **ผลการทดสอบจาก clean checkout:** ผ่านทุก gate
+>   - unit 1,777 · rules 249
+>   - e2e ผ่าน 39/39 ติดกัน 3 รอบ
+> - **ที่แก้ใหม่:**
+>   - import: รายการที่ระบบเดาต้องให้คนยืนยันก่อนนำเข้า
+>   - หน่วยที่ไม่รู้จัก ถูกบล็อก
+>   - สินค้า R&D ทั้ง 228 รายการยังไม่มีหน่วย จึงทำรายการสต๊อกไม่ได้จนกว่าจะกำหนดหน่วย
+>   - G25 มี transition rules สำหรับการ deploy แบบที่แท็บเก่ายังเปิดอยู่
+>   - CI proposal (ยังไม่เปิดใช้)
+> - **Production ตอนนี้:** `614fcc13` = `ad43971` · rollback ได้ที่ `0d00ae76`
+>
+> ---
+>
+> **อัปเดตล่าสุด 8 ต.ค. 2569 ช่วงบ่าย:**
+>
+> - **สถานะ RC:** ดู `docs/release/rc-readiness.md` (ตารางแยก PASS / FAIL / BLOCKED / NOT RUN)
+> - **งานที่เจ้าของต้องทำบน cloud:** ดู `docs/ops/owner-gates.md`
+>   - A: ลบ preview เก่า
+>   - B: cron Worker ที่ deploy อยู่เป็นแค่ตัว placeholder จึงยังไม่เคยมี cron รันเลย
+>   - C: ส่งออก metric รายชั่วโมง (เหตุการณ์อ่านข้อมูลพุ่งวันที่ 6 ต.ค. ยัง**ไม่ปิด**)
+> - **Branch:**
+>   - `integration/ops-os-rc1` push ขึ้น GitHub แล้วที่ `0261c48` (เจ้าของ push เอง) ส่วน commit หลังจากนั้นยังอยู่ในเครื่อง
+>   - merge `main` ล่าสุด (`476fa35` แบรนด์ R&D) เข้ามาแล้ว
+>   - preview ของ branch นี้ถูกแยกจาก production แล้ว (`0261c48`) จึง push ได้อย่างปลอดภัย
+> - **Production ตอนนี้:** deployment `aa6b85cb` = `476fa35`
+> - **Goose:** สรุปผลเป็น RESEARCH ONLY (`docs/research/goose-adoption-decision.md`)
+>
+> ข้อความในตารางข้างล่างบางส่วนเขียนไว้ก่อนการอัปเดตนี้
+
+> ส่วนนี้คือความจริง ณ ปัจจุบัน หัวข้ออื่นข้างล่าง (§1 เป็นต้นไป) เป็นประวัติ ซึ่งอาจล้าสมัยแล้ว ถ้าข้อมูลขัดกัน ให้เชื่อส่วนนี้
+
+| เรื่อง | ค่าปัจจุบัน |
+|---|---|
+| Repo หลัก | `github.com/yutthachai-hr/PZM-LLP-Stock-2026` ⚠ **public** บน GitHub (ข้อความใน §1 ที่ว่า private ล้าสมัยแล้ว) |
+| Branch ที่ใช้รวมงาน | **`integration/ops-os-rc1`** (สร้าง 8 ต.ค. จาก `claude/phase-a-ledger-continue-uzbbb5`) ยังอยู่ในเครื่องเท่านั้น **ยังไม่ push** (เหตุผลดูข้อ ⚠ preview ข้างล่าง) |
+| HEAD ของ integration | ดู `git log -1 integration/ops-os-rc1` ส่วน merge `main` คือ `ba753aa` |
+| Branch งานของ Claude | `claude/phase-a-ledger-continue-uzbbb5` · บน GitHub อยู่ที่ `2ae7bbb` · ในเครื่องอยู่ที่ `99ef7ea` (มี commit G25/G18/G19/G21 ที่ยังไม่ push) |
+| Production `main` | **`2a8d578`** (merge perf/firestore-read-budget, 6 ต.ค.) |
+| ที่ deploy แล้ว | เว็บ: Cloudflare Pages build `main` ให้อัตโนมัติไปที่ `https://pzmstock.pages.dev` (ถ้าอยู่บน `main` ถือว่า deploy แล้ว) |
+| ที่ยังไม่ยืนยัน | rules + indexes ของ `2a8d578` (`audienceKeys`, notification index) ซึ่งหลักฐานของ main กำหนดให้ deploy *ก่อน* merge **เจ้าของต้องยืนยันว่า deploy แล้ว** ถ้ายังไม่ได้ deploy กระดิ่งแจ้งเตือนจะ fallback ไปจำกัดที่ 60 รายการ |
+| ที่ยังไม่ deploy | ทุกอย่างบน integration: Phase G (G1–G17), G18/G19/G21/G25, outbox, Supabase shadow, rules ใหม่ (version / traceId) และ Worker shadow cron |
+| Supabase | มีแค่ **shadow** ยังไม่มี project จริงเชื่อมอยู่ outbox merge แล้วแต่ **ปิดอยู่** (`OUTBOX_ENABLED` ไม่ได้ตั้ง) Worker replicate ก็ต่อเมื่อมี `SUPABASE_DB_URL` Firestore ยังเป็น source of truth ไม่มี dual-write และไม่มี cutover |
+| Phase G | G1–G16 เสร็จพร้อมหลักฐาน (`docs/evidence/phase-g-agent-safety.md`) · **G17 Laya: NOT EVALUATED** มีแต่ harness ยังไม่ได้ artifact จริง (`phase-g17-laya.md`, `docs/agent-safety/02-upstream-verification.md`) · Kat/Reflex: NOT_RUN |
+| ชุดแรก G18–G27 | G25, G18-lite, G19, G21 มีบน integration แล้ว (`docs/evidence/phase-g-batch1.md`) ส่วน G20 และ G22–G27 ยังไม่ทำ |
+| CI | **ไม่มีเลย** ทั้ง workflow, branch protection และ ruleset ข้อเสนออยู่ที่ `docs/engineering/ci-proposal.md` (ยังไม่ได้เปิดใช้อะไร) |
+
+### ⚠ ข้อควรระวังก่อน push / deploy
+
+1. **Preview ต่อกับ production:** Cloudflare Pages build ทุก branch ที่ push เป็น preview และใช้ Firebase **ตัวจริง** (มีเฉพาะ branch `demo` ที่เป็น demo mode) ข้อเสนอให้แก้ 1 บรรทัดอยู่ใน `ci-proposal.md` ควรได้รับอนุมัติก่อน push integration
+2. **ลำดับ deploy ของ G25:** rules ใหม่จะปฏิเสธการแก้ PO หรือสินค้าที่ไม่ขยับ `version` **ต้อง deploy แอปก่อน rules** และ tab PWA เก่าจะเขียนไม่ผ่านจนกว่าจะ reload
+3. **ห้าม merge เข้า `main` เอง** เพราะ `main` deploy production อัตโนมัติ
+
+### Release blockers (RC ยังไม่ freeze)
+
+- [ ] เจ้าของอนุมัติการ push integration และการแก้ preview
+- [ ] e2e และ flaky runs ผ่านบน integration (cloud หรือ CI)
+- [ ] baseQty dry-run กับ backup จริง (เจ้าของทำ)
+- [ ] ตรวจ backtest Phase G กับ backup จริง (เจ้าของทำ)
+- [ ] Firestore read budget ไม่ถดถอย (รัน `e2e/read-budget.spec.ts` ของ main บน integration)
+- [ ] ไม่มี P0/P1 ค้าง
+- [ ] verify ผ่านจาก clean checkout
+- [ ] CI ตาม `ci-proposal.md` เปิดใช้และเขียว
+
+**ห้าม freeze RC จนกว่าทุกข้อข้างบนจะผ่าน แล้วต้องขออนุมัติเจ้าของก่อน**
+
+### เปิดงานต่อใน session ใหม่
+
+```bash
+cd pizza-stock-ledger            # worktree ของ integration/ops-os-rc1
+git status --short && git log --oneline -8
+npm ci && npm run verify -- --full   # 15 ด่าน รวม rules emulator (ต้องมี Java) และ Rust (ต้องมี cargo)
+```
+
+---
+
+## ประวัติ (historical — ดู §0 สำหรับสถานะปัจจุบัน)
+
 เอกสารนี้เขียนไว้ให้เปิดงานต่อได้จากศูนย์ ไม่ว่าจะเป็น Claude session ใหม่หรือ account ใหม่ — สรุปทุกอย่างที่ทำไปแล้ว อะไร deploy แล้วบ้าง อะไรค้างอยู่ และกติกาที่ต้องรู้ก่อนแตะโค้ดต่อ
 
 อัปเดตล่าสุด: **14 กันยายน 2569** — ดู `git log` สำหรับ commit ล่าสุด
@@ -474,6 +559,266 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 - `validPrefs` เพิ่ม `sound`
 - staff สร้างแจ้งเตือน `poSent` ได้
 
+## 13. PZM Operations OS: audit ทั้งระบบ + แก้ทีละเฟส (เริ่ม 6 ต.ค.)
+
+**แผนที่เจ้าของอนุมัติ:** `docs/PLAN-operations-os.md` มีครบ 20 หัวข้อ + Top 10 + exit criteria และความเห็นแก้ 9 ข้อของเจ้าของ
+
+**ลำดับความสำคัญ:** DATA → WORKFLOW → EFFICIENCY → EXCEPTIONS → OBSERVABILITY → INTELLIGENCE → AUTOMATION
+**กติกาที่ต้องยึด:**
+- ห้ามวาง AI/automation บนข้อมูลที่ยังไม่น่าเชื่อถือ
+- **ห้าม merge เข้า main เอง** ต้องรอเจ้าของสั่ง
+- ทดสอบการเขียนข้อมูลบน demo/emulator เท่านั้น
+
+### เจ้าของตัดสินแล้ว (6 ต.ค.)
+- อนุญาตให้ใช้ Playwright และ emulator สำหรับเทส
+- ใช้ service account ตัวเดิมเขียนสต๊อกผ่าน Functions ได้ (ADR-001 ขยาย allowlist ทีละคำสั่ง)
+- popup วิกฤตยังหายใน 4 วินาที แต่ให้**ค้างเป็นแถบแดงที่กระดิ่งจนกดรับทราบ**
+- **พนักงานสร้าง PO สถานะ `ordered` เองไม่ได้แล้ว** ต้องให้หัวหน้า/แอดมินอนุมัติ (B4 ยังไม่ทำ)
+
+**ยังไม่ได้ถาม:** collection `auditLog`, ตัดปุ่มล้างแคตตาล็อก (hard delete ที่มีประวัติปิดแล้วใน B3), รวม Batch Excel เข้า PR, lot/วันหมดอายุ
+
+### Branch และสถานะ (ยังไม่มีอะไร merge เข้า main)
+| Branch | งาน | สถานะ |
+|---|---|---|
+| `fix/import-review` | หน้ารีวิวนำเข้าไฟล์แบบการ์ด + คำแนะนำสินค้า (`src/lib/productSuggest.ts`) | เสร็จ รอสั่ง merge |
+| `feat/integrity-auditor` | **Phase 0**: auditor + harness e2e + หลักฐาน | **PASS** รอสั่ง merge |
+| `feat/phase-a-ledger` (แตกจาก `feat/integrity-auditor`) | **Phase A**: A1 + A2 เสร็จ | กำลังทำ |
+| `claude/phase-a-ledger-continue-uzbbb5` (ต่อจาก `feat/phase-a-ledger`) | **Phase A**: A6 เสร็จ | กำลังทำ รอสั่ง merge กลับเข้า `feat/phase-a-ledger` |
+
+### Phase 0 (เสร็จ): `docs/evidence/phase-0.md`
+- **Auditor** `src/lib/integrityAudit.ts` อ่านอย่างเดียว ตรวจ 6 หมวด
+  ```bash
+  npm run audit:integrity -- <backup.json>
+  ```
+  ใช้ 0 reads
+- กติกาการคิด key ของยอดคงเหลือแยกไปที่ `src/lib/levelKey.ts` ตัว auditor และ engine จึงใช้ร่วมกัน
+- **Harness e2e**
+  ```bash
+  npm run test:e2e
+  ```
+  สั่ง `firebase emulators:exec` firestore+auth project `demo-pzm-e2e` ร่วมกับ Playwright และ `vite --mode e2e` port 5176
+  - เปิดโหมดนี้ด้วย `.env.e2e` (`VITE_USE_EMULATOR=1`)
+  - ใช้ได้บน localhost เท่านั้น และถูกตัดออกจาก build ของจริง (ตรวจแล้ว 0 hits ใน `main-*.js`)
+- **Baseline จาก backup ของจริง** (`D:\AI Solution\pzm-stock-*-20261006-1500.json`)
+  - ทั้งสองแบรนด์: 0 critical, ยอดคงเหลือ drift 0
+  - **ข้อค้นพบ 1 ข้อ รอเจ้าของตัดสิน:** สินค้าเก่า "SAUSAGE MIX DOLCE (FOOD WAY)" หน่วย EA ถูกลบไปแล้ว แต่ยังมีของ **20 EA ค้างที่คลังหลัก** (RC-00019) ซึ่งมองไม่เห็นในแอป
+- **ช่องโหว่ที่ยังเปิดอยู่** (เขียนเป็น `test.fail` ใน `e2e/hostile-client.spec.ts` วันที่ปิดได้ เทสจะแดง ให้ถอด marker ออก)
+  - S1: staff เขียน `stockLevels` ตรงได้
+  - S2: ใส่ `transferId` ปลอมได้
+  - S5: staff แก้ movement ได้
+  - B4: staff สร้าง PO `ordered` ได้
+
+### Phase A (กำลังทำ) — commit `7aad548` บน `feat/phase-a-ledger`
+- **A1 เสร็จ:** การรับของจาก PO ทำใน transaction เดียว (`receivePurchaseOrder` ใน `src/services/purchaseOrders.ts`)
+  - อ่าน PO ใน tx แล้วใช้ `settleDelivery()` (pure function)
+  - `planReceive()` (แยกออกมาจาก `receiveStock` ใน `stock.ts`) แล้ว commit movement + ยอดคงเหลือ + PO พร้อมกัน
+  - movement id = `rc_<poId>_<operationId>_<n>`, `PoReceipt.receiptId` ใหม่
+  - หน้า Receive เก็บ `operationId` ใน draft จนกว่าจะบันทึกสำเร็จ ถ้า retry จะได้ผลเดิมกลับมา (`replayed`) พร้อม toast
+  - เครื่องที่แพ้ race จะถูก rules ปฏิเสธ ระบบอ่าน PO ใหม่แล้วแสดงข้อความว่า "ใบสั่งซื้อนี้เพิ่งมีคนรับของไป…"
+  - e2e: สองเครื่องกดพร้อมกันแล้วสต๊อกเข้าครั้งเดียว (ก่อนแก้ได้ 20 แทน 10), คำตอบหายหลัง commit แล้วไม่บันทึกซ้ำ
+- **A2 เสร็จ:** `remainingBaseQty()` ใน `src/lib/inventoryRules/purchasing.ts` เป็นที่เดียวที่คิดยอดค้างรับ ใช้ทั้ง `incomingFor` (คำแนะนำสั่งซื้อ) และ `inventoryRisk`
+  - สูตร = (สั่ง − รับแล้ว) × อัตราแปลง ณ วันสั่ง
+  - บรรทัดเก่าที่ไม่มี baseQty ใช้อัตราวันนี้ พร้อมธง `estimated`
+  - เทสอยู่ใน `tests/incoming.test.ts`
+  - ข้อมูลจริงตอนนี้ไม่มี PO ที่รับบางส่วนค้างอยู่ จึงไม่มีตัวเลขไหนเปลี่ยน
+- **A6 เสร็จ (branch `claude/phase-a-ledger-continue-uzbbb5`):** แปลง PR → PO แบบ idempotent (`convertToOrders` ใน `src/services/purchaseRequests.ts`)
+  - ทั้งหมดอยู่ใน tx เดียว: อ่าน PR ใน tx (ต้อง `approved`) → `tx.get` PO ทุกใบตาม id `po_<prId>_<supplierId>` (`conversionOrderId` ใน `src/lib/requestConversion.ts`) → อ่าน counter ของผู้ขายใน tx → สร้าง PO + counter + PR `poCreated` พร้อม `orders` ในคราวเดียว ถ้าบรรทัดไหนสั่งไม่ได้ (เช่น ไม่มีอัตราแปลง) จะไม่มีอะไรถูกเขียนเลย
+  - PR ที่เป็น `poCreated` แล้ว → คืน `orders` เดิมโดยไม่เขียนอะไร (replay) กดซ้ำ/สองแท็บ/คำตอบหายหลัง commit ได้ PO ชุดเดียว เครื่องที่แพ้ race ถูก rules ปฏิเสธ (PO มีแล้ว กลายเป็น update) ระบบอ่าน PR ใหม่แล้วคืนผลของอีกเครื่อง ไม่มี error ขึ้นจอ
+  - `createPurchaseOrder` แยกเป็น `newOrderFields` (pure) + `counterSeeds` + `nextOrderSeq` + `writeNewOrder` ใน `purchaseOrders.ts` หน้าสร้าง PO เองและการแปลง PR ใช้ชุดเดียวกัน
+  - `conversionRunId` / `convertedAt` / `convertedBy` **ยังไม่ได้เป็น field บน PR** เพราะ rules ตอนนี้ (`requestEdit` hasOnly) จะปฏิเสธ จึงเก็บไว้ใน history entry `convertedToPo` (`runId`, `at`, `by`) แทน ส่วน field บนเอกสาร + rule `convertedBy == caller` ให้ทำพร้อม **A5 ใน A-rules**
+  - **PR ค้างครึ่งทางของเก่า:** การแปลงจะปฏิเสธพร้อมบอกเลข PO ที่ค้าง และส่งแอดมินไปที่ **ตั้งค่า › ซ่อมรายการขอสั่งซื้อที่ค้าง** (`src/pages/settings/StuckRequestsSection.tsx`) ซึ่งอ่านเมื่อกดปุ่มเท่านั้น แสดงทีละใบ ให้เลือก "ผูกใบเดิม" (`convertToOrders({ adopt })` รับ PO เดิมแล้วสร้างเฉพาะผู้ขายที่ขาดใน tx เดียว แอดมินเท่านั้น) หรือ "ยกเลิกใบนี้" พร้อมเหตุผล ถ้ามี PO ซ้ำของผู้ขายเดียวกันหรือ PO ของผู้ขายที่ไม่อยู่ใน PR แล้ว ต้องยกเลิกก่อนจึงผูกได้ (`repairPlan`) **ไม่ทำอัตโนมัติ**
+  - auditor ใช้ `stuckConversions()` ตัวเดียวกับเครื่องมือซ่อม
+  - เทส: `tests/purchase-requests.test.ts` (replay, เลขต่อ counter, ล้มกลางทางไม่เหลืออะไร, PO ค้างเก่าถูกปฏิเสธ, adopt, blockers) · e2e `e2e/convert-request.spec.ts` (กดครั้งเดียว, ดับเบิลคลิก, สองแท็บพร้อมกัน, คำตอบหายหลัง commit, ซ่อม PR ค้างผ่านหน้าจอแอดมิน) ทั้งหมดผ่านบน emulator ภายใต้ rules จริง
+- **ผลเทสล่าสุด (หลัง A6):** unit 1,175 ผ่าน · rules 217 ผ่าน · e2e 14/14 ตามคาด (รวม `test.fail` 4 ข้อของ hostile-client) · lint 0 errors · i18n ครบ · build ผ่าน
+- **A7 เสร็จ:** amend / cancel / closeRemainder อ่านและเขียน PO ใน tx (`changeOrder`) ยกเลิกแข่งกับรับของได้ผลอย่างใดอย่างหนึ่ง ไม่มี PO ยกเลิกที่มีของเข้า
+- **A8 เสร็จ (เลือก "ห้าม"):** แถวที่รับจาก PO แก้ได้เฉพาะหมายเหตุ ห้าม void ให้ปรับสต๊อกแทน เพราะ rules ไม่ให้ถอด receipt ออกจาก PO และไม่ให้ `received` กลับเป็น `ordered`
+- **A10 เสร็จ:** `postMonthlyCount` รับ "ยอดที่นับ" แล้วคำนวณผลต่างใน tx = นับได้ − (ยอดตอนนี้ − movement หลังวันนับ) ถ้ายอดขยับหลังอ่านจะอ่านใหม่และลองใหม่ (สูงสุด 4 ครั้ง) ตรวจทุกสินค้าที่นับ ไม่เฉพาะที่มีผลต่าง
+- **A2 backfill:** `npm run backfill:po-baseqty -- <backup.json>` เป็น dry-run อ่านอย่างเดียว **ยังไม่ได้รันบน backup จริง** (ไฟล์อยู่เครื่องเจ้าของ)
+- **หน้าสั่งซื้อ (6 ต.ค. ตามภาพ mock-up ของเจ้าของ):** กดแถวแล้วเปิดแผงขวา (`src/pages/orders/OrderPanel.tsx`) สถานะบรรทัดแรกเป็น สั่งแล้ว / ส่ง LINE / ยืนยัน (EN: Ordered / LINE sent / Approved) อยู่ใน `src/pages/orders/statusWords.ts` แยกจากพจนานุกรมเพราะ "ส่ง LINE" กับ "ยืนยัน" เป็นคำบนปุ่มอยู่แล้ว
+- **หลักฐาน Phase A:** `docs/evidence/phase-a.md` — PASS ทุกข้อ ยกเว้น dry-run บน backup จริงที่ต้องรันบนเครื่องเจ้าของ
+- **ผลเทสล่าสุด (จบ Phase A):** unit 1,187 · rules 217 · e2e 17 expected / 0 unexpected / 0 flaky · lint 0 errors · i18n ครบ · build ผ่าน
+- **ผลเทสล่าสุด (จบ A-sec):** unit 1,208 · rules 218 · e2e 20/0/0 ไม่มี `test.fail` เหลือ
+
+### Phase A-rules (เสร็จบน emulator — ยังไม่ deploy) → `docs/evidence/phase-a-rules.md`
+- **A4:** `transferId` ต้องเป็นเอกสารโอนจริงที่ผ่านอนุมัติแล้ว
+- **A5:** PR ที่อนุมัติแล้วแก้รายการไม่ได้ และ `poCreated` ต้องมี history ของผู้แปลง
+- **A9:** แก้ movement ได้เฉพาะแอดมิน และ void ต้องมี `voidReason`
+- **B7:** เหตุผล adjust ต้องอยู่ใน enum
+- **B4:** พนักงานสั่งเองได้แค่ร่าง ให้หัวหน้า/แอดมินกด "อนุมัติสั่งซื้อ"
+
+### Phase A-sec / ADR-001 (เสร็จสำหรับ staff + หัวหน้า — ยังไม่ deploy) → `docs/evidence/phase-a-sec.md`
+- คำสั่ง stock 11 ตัวรันผ่าน `POST /api/stock/<command>` บน service account
+- ใช้ตัว transaction เดียวกับแอป (`src/commands/*`)
+- rules ปิดการเขียน `stockLevels`/`stockMovements` จาก client ของ staff และหัวหน้าแล้ว (S1 ปิด)
+- แอดมินยังเขียนได้ เพราะเครื่องมือดูแลข้อมูลยังเป็นทาง client
+- **ลำดับ deploy ห้ามสลับ:**
+  1. ตั้ง `FIREBASE_SERVICE_ACCOUNT` ใน Pages
+  2. deploy แอป (`.env.production` → `VITE_STOCK_COMMANDS=all`)
+  3. ตรวจว่า `POST /api/stock/receivePO` ตอบ 200
+  4. deploy rules
+- e2e ใช้ `e2e/command-server.mjs` (handler ตัวจริงบน emulator) ผ่าน proxy ของ Vite mode e2e
+
+### Phase B (B1 B3 B5 B6 เสร็จ — B2 รอเจ้าของ) → `docs/evidence/phase-b.md`
+- **B1 period lock:** เดือนที่ post ยอดนับแล้วที่คลังนั้น บันทึกย้อนหลังเข้าไม่ได้ (`requireOpenPeriod` ใน `src/commands/ledgerTx.ts`) แอดมินแก้ได้แต่ต้องใส่เหตุผล
+- **B3:** ลบสินค้า/สถานที่ที่มี movement ไม่ได้ ให้ปิดใช้งานแทน
+- **B5:** ตีกลับตอนรับ (จำนวน + เหตุผล enum) ไม่เข้าสต๊อก + พนักงานรับเกินยอดค้างได้ไม่เกิน 10%
+- **B6:** `ocr-bill` / `po-image` เช็ค `active` + `revokedUsers`
+- **B2 (`auditLog`) ยังไม่ทำ** จึงยังไม่ผ่านเกณฑ์ Phase B ข้อ "ทุก action มีแถว audit"
+- ผลเทส: unit 1,223 · rules 218 · e2e 20/0/0
+
+### Phase C (C1–C5 เสร็จ) → `docs/evidence/phase-c.md`
+- **C1:** listener ที่ล้มแสดงแบนเนอร์พร้อมปุ่มลองใหม่, ErrorBoundary ต่อหน้า, intel อ่านล้มแล้วบอกว่าล้ม ไม่แสดงเป็น "ไม่มีความเสี่ยง"
+- **C2:** แจ้งเตือน `transferStuck` (≥ 2 วัน, ≥ 5 วัน = วิกฤต) และ `poPartial` (รับบางส่วนแล้วเงียบ ≥ 7 วัน)
+- **C3:** หน้า `/inbox` "งานรอตัดสินใจ" (หัวหน้า/แอดมิน)
+- **C4:** แบนเนอร์ออฟไลน์ + draft ของใบขอโอน
+- **C5:** แถบแดงวิกฤตค้างจนกด "รับทราบ", toast error ค้างจนปิด และไม่ทับ tab bar
+- axe 0 serious บน 5 หน้า (เพิ่ม devDependency `@axe-core/playwright`, `--color-danger` เปลี่ยนเป็น #cc1f1f)
+- **E4 รอเจ้าของ** (error reporting เขียนที่ไหน)
+- ผลเทส: unit 1,233 · rules 218 · e2e 28/0/0
+
+### Phase D (D1' D2' D3' D5' D6' เสร็จ — D4' รอเจ้าของ) → `docs/evidence/phase-d.md`
+- **D1':** lazy routes: main 1,209 KB → 218 KB, JS ตอนเปิดแอป 3.50 MB → 1.66 MB, ตรวจด้วย `npm run check:bundle`
+- **D2':** notifications เป็น context แยก + `SupplierIntelProvider`
+- **D3':** rangeCache อ่านเฉพาะช่วงที่ขาด + readMeter นับ getOne/getBy
+- **D5':** เปิด pinch-zoom + การ์ดมือถือ RequestReview / ผลงานผู้ขาย (ไม่ prefill จำนวนรับตามคำสั่งเจ้าของ 24 ก.ย.)
+- **D6':** DataTable render layout เดียว + `paged`
+- **Lighthouse ยังไม่ได้วัด** ต้องวัดในเครื่องเจ้าของ
+
+### Phase E (E1 E2 เสร็จ) → `docs/evidence/phase-e.md`
+- **E1:** Stock Card แสดง มี / จอง / พร้อมใช้ / กำลังมา / วางแผนเข้า
+  - จอง = 0 เพราะอนุมัติโอนแล้วของออกทันที
+  - PR approved และ PO ร่างนับเป็น "วางแผนเข้า" ไม่หักยอด
+- **E2:** ผลต่างนับมาก (เกิน 10% หรือ 500 บาท) ต้องหัวหน้าติ๊กอนุมัติ และเก็บชื่อผู้อนุมัติ
+- **E2:** blind count (rules เพิ่ม field `blind` **ยังไม่ deploy**)
+
+### Phase F (F1 แบบแนะนำเท่านั้น) → `docs/evidence/phase-f.md`
+- คำแนะนำทุกตัวแสดงที่มา
+- `tests/suggest-only.test.ts` กันไม่ให้งานเบื้องหลังเขียน PR/PO/สต๊อก
+- **ยังไม่เพิ่ม AI ใหม่** ต้องให้ Auditor 0 critical 14 วันบนข้อมูลจริงก่อน และ anomaly ต้องรอ B2
+- ผลเทสล่าสุด: unit 1,248 · rules 219 · e2e 29/0/0
+
+### ค้างที่ต้องให้เจ้าของตัดสิน/ทำ (รวมทุกเฟส)
+1. **B2:** collection `auditLog`
+2. **E4:** error reporting เขียนที่ไหน
+3. **D4':** รวม Batch Excel เข้า PR / ตัดโหมดโอนใน Issue
+4. lot/วันหมดอายุ
+5. **Deploy ตามลำดับ:** service account → แอป → ตรวจ `/api/stock/receivePO` → rules
+6. dry-run backfill baseQty และ Lighthouse บนเครื่องเจ้าของ
+7. **E3:** ใส่ key ให้ cron Worker
+8. Auditor 14 วันก่อนเปิด AI ตัวใหม่
+
+### กับดักของ harness
+- เอกสารที่ seed ต้องมี field `id` (rules อ่านค่านี้) ยกเว้น `users`
+- `counters` ต้องมี `id` ด้วย
+- การโหลดหน้าเต็มจะถามเลือกแบรนด์ใหม่ ใช้ `e2e/app.ts` `open()` ซึ่งจัดการให้
+- ถ้ามี `firebase emulators:start` ค้างอยู่ จะยึดพอร์ต 8080/9099 ต้องปิดก่อนรัน `test:e2e`
+- เครื่องที่แพ้ race ได้ `permission-denied` (rules `receipts.size == old+1`) ไม่ใช่ contention retry ข้อความ console นี้เป็นเรื่องปกติ
+- e2e ต้องใช้ Java (ตัวเดียวกับ `test:rules`) และ `npx playwright install chromium`
+- ใน Claude Code cloud ห้าม `playwright install` ให้สร้าง config ชั่วคราว (ไม่ commit) ที่ใส่ `launchOptions.executablePath: '/opt/pw-browsers/chromium'` แล้วรัน `npx firebase emulators:exec --only firestore,auth --project demo-pzm-e2e "npx playwright test -c <config>"`
+
+## 14. Release hardening + Phase G (6–7 ต.ค.) — branch `claude/phase-a-ledger-continue-uzbbb5` **← งานล่าสุด อ่านก่อน**
+
+**สถานะ:** ทำครบแล้ว **ยังไม่ freeze RC ยังไม่ merge และยังไม่ deploy** ทุกอย่างรอเจ้าของสั่ง
+
+**หลักฐานแต่ละเรื่อง (`docs/evidence/`)**
+
+| เรื่อง | ไฟล์ | สรุป |
+|---|---|---|
+| Phase G (G1–G10) | `phase-g.md` | engine แนะนำอย่างเดียว · version · data confidence · shadow mode · backtest แบบไม่รั่วข้อมูลอนาคต (ยังเป็น synthetic) |
+| Firestore reads | `read-budget.md` | วัดบน emulator ขนาด production: ก่อนแก้ ≈ 201k/วัน → หลังแก้แอป ≈ 17.9k + Worker ≈ 5.9k ≈ **23.8k/วัน** |
+| B2 auditLog | `b2-audit-log.md` | append-only · admin อ่านทีละ 50 · ไม่มี listener |
+| E4 error reporting | `e4-error-reporting.md` | เขียนลง Workers log **ไม่ใช่ Firestore** · ตัดข้อมูลส่วนตัว/ธุรกิจออก · dedupe / rate limit / sampling |
+| D4′ | `d4-intake.md` | Excel / OCR / แนะนำ / กรอกเอง ทั้งหมดผ่านใบขอซื้อ · `/purchase/import` redirect · batch เดิมยังเปิดดูและทำต่อได้ |
+| Lot / expiry | `docs/adr/ADR-002-lot-expiry.md` | มีแค่ flag `trackLot` / `trackExpiry` (ค่าเริ่มต้น false) ยังไม่มีอะไรอ่านค่านี้ |
+| Release gate | `release-gate.md` | ผลเทสทั้งหมด · flaky runs · business flow · dry-run baseQty |
+
+**Bug จริงที่การรันซ้ำ (flaky runs) และ business flow เจอและแก้แล้ว**
+
+1. **กด "ลองใหม่" แล้วแถบแดงไม่หาย** (live-error พัง 3/20)
+   - listener ที่ถูกปฏิเสธ *หลัง* กดลองใหม่ไม่ถูกลองซ้ำ
+   - แก้ที่ `DataContext.retryLive` + `LiveFailure.startedAt`
+2. **ใบขอซื้อใหม่แสดงว่าง** หลังเพิ่มรายการแรก
+   - ErrorBoundary ใช้ path เป็น key ทำให้ทั้งหน้า remount ตอน URL เปลี่ยนจาก `/requests/new` เป็น `/requests/<id>`
+   - แก้ด้วย `resetKey` (ล้าง error โดยไม่ remount)
+
+**ขั้นที่เจ้าของต้องทำเอง (เครื่องนี้ทำไม่ได้)**
+
+1. dry-run baseQty บน backup จริง (ห้ามแก้ production):
+   `npm run backfill:po-baseqty -- "D:\AI Solution\pzm-stock-<brand>-20261006-1500.json" --json bq.json`
+   - รายงาน: valid / safe / ambiguous / invalid / closed / would-change
+   - รายการ ambiguous ต้องให้คนตรวจทุกรายการ
+2. backtest ของ Phase G บน backup จริง:
+   `npm run intel:backtest -- "<backup.json>"`
+3. อนุมัติ RC แล้ว deploy ตามลำดับ 0–10 ที่กำหนดไว้
+
+**ห้ามเริ่ม Phase H เอง**
+
+### 14.1 ต่อจากนี้: Agent Safety Foundation G11–G16 (เจ้าของสั่ง 7 ต.ค.) — **หยุดพักกลางงาน G11**
+
+- **ข้อความสั่งงานฉบับเต็มของเจ้าของ:** ข้อความวันที่ 7 ต.ค. ที่กำหนด G11–G16 และ H1–H10
+- **สรุปสาระและการออกแบบ:** `docs/agent-safety/00-inspection-and-design.md` (อ่านไฟล์นี้ก่อน) มีครบ 16 ข้อที่เจ้าของขอ:
+  - โค้ดที่มีอยู่จริง: **ไม่มี** agent / KatGPT / Reflex / pstack / Rust และไม่มีเส้นทาง Agent → DB
+  - สัญญา ActionProposal
+  - กฎ Business Guard พร้อม ruleId
+  - ขอบเขต Rust crate
+  - การออกแบบ dataset และวิธี benchmark
+  - ไฟล์ที่จะสร้าง และความเสี่ยง
+- **RC ยังไม่ freeze:** gate เขียวที่ `69ed912` (`docs/evidence/release-gate.md`) แต่จะ freeze RC หลัง G16 เพราะ freeze แล้วแก้ได้แค่ bug
+
+**สถานะทีละขั้น (อัปเดต 7 ต.ค. — session ที่สอง)** สรุปหลักฐานรวมอยู่ที่ `docs/evidence/phase-g-agent-safety.md`
+
+| ขั้น | สถานะ |
+|---|---|
+| G11 | **เสร็จ** (`be36a9d`): เทสสัญญา proposal และเทส no-write-path ที่ไล่ import ต่อกันทั้งสาย |
+| G12 | **เสร็จ** (`9c9f29e`): `guard.ts` + `snapshot.ts` + `safety/world.ts` |
+| G13 | **เสร็จ** (`9abcee6`): `crates/pzm-integrity` + TS reference + 57 vectors (`npm run integrity:vectors`, `npm run integrity:bench`) |
+| G14 | **เสร็จ** (`858d2af`, `c6806c2`): `npm run verify` และ `docs/engineering/pstack-workflow.md` (ยังไม่มี pstack ตัวจริง) |
+| G15 / G16 | **เสร็จ** (`894e468`): `npm run safety:dataset` / `npm run safety:bench` — unsafe-allow 0/227 |
+| G17 Laya | **ทำ harness แล้ว แต่ยังไม่ได้ประเมิน Laya** (`b8eabb7`): ยังไม่ได้รับ Laya / Kat / Reflex จากเจ้าของ arm B–G = NOT_RUN ดู `docs/evidence/phase-g17-laya.md` |
+| G18–G27 | **มีแค่รายงาน audit และแผน** (`933c3f4`): `docs/agent-safety/01-g18-g27-audit-and-plan.md` รออนุมัติชุดแรก |
+| Receiving supplier | **เสร็จ** (`7018770`): ระบบเลือกผู้ขายให้เอง ดู `docs/evidence/supplier-resolution.md` |
+| Checkpoint | push แล้วที่ `2ae7bbb` (7 ต.ค. ตามเจ้าของสั่งข้อ 1 · ยังไม่ merge main) |
+| feat/outbox | **merge เข้า branch นี้แล้ว** (`49ec21f`) แต่ outbox จะเขียนก็ต่อเมื่อตั้ง `OUTBOX_ENABLED=true` (`e3df8db`) |
+| Supplier feedback | เก็บกลางใน `auditLog` แล้ว (`0731af0`) โดยไม่สร้าง collection ใหม่และไม่แก้ rules |
+| ชุดแรก G18/G19/G21/G25 | **เสร็จ** ดู `docs/evidence/phase-g-batch1.md` ส่วน UI ของ G19 ย้ายมาแค่บางส่วน |
+| ⚠ ก่อน deploy | rules ใหม่ของ G25 จะปฏิเสธการแก้ PO/สินค้าที่ไม่ขยับ `version` **ต้อง deploy แอปก่อน rules** (ดู batch1 §Deployment hazard) |
+| Upstream | ตรวจแล้วที่ `docs/agent-safety/02-upstream-verification.md` · laya.aay.sh เป็นคนละโปรเจกต์ · ยังไม่ได้ติดตั้งอะไร |
+| ปิดเฟส | **ยังไม่ freeze RC** ตามเจ้าของสั่งข้อ 6 รายการที่ยังขาดดูท้าย batch1 |
+
+**Emulator บนเครื่องนี้:** มี Java 21 แล้ว จึงรัน `npm run test:rules` ได้ในเครื่องเลย และ `npm run verify` ก็รันให้ด้วย
+
+**Rust บนเครื่อง Windows นี้:** ลง rustup แล้ว (เจ้าของอนุญาต 7 ต.ค.) และตั้ง GNU toolchain override เฉพาะ `crates/pzm-integrity` เพราะเครื่องนี้ไม่มี MSVC linker ให้รัน `cargo` จากในโฟลเดอร์ crate
+
+**รายละเอียดของงานที่ยังไม่ทำ**
+
+- **G12 guard**
+  - เป็น pure function: `guard(proposal, snapshot)` คืน `ALLOW` / `DENY` / `NEEDS_HUMAN` พร้อม `{ruleId, reason, evidence}`
+  - `combine()`: model ทำได้แค่ให้ผลเข้มขึ้น
+    - guard DENY ต้องเป็น DENY เสมอ
+    - ALLOW + model REJECT = DENY
+    - ALLOW + ABSTAIN = NEEDS_HUMAN
+  - period lock ใช้กติกาเดียวกับ `closedPeriod` ใน `src/services/stock.ts` (plan B1)
+  - ส่วนแปลงหน่วยใช้ `resolveFactor` จาก `src/lib/inventoryRules/uom.ts`
+  - floor ของต้นทางใช้ตรรกะเดียวกับ `src/intel/transfer.ts` (`SOURCE_KEEP_DAYS = 3`)
+- **G13 Rust**
+  - เครื่องนี้มี `cargo 1.97` และเข้าถึง crates.io ได้ ยังไม่มี target wasm32
+  - ให้ TS สร้าง test vector ใน `crates/pzm-integrity/vectors/` แล้วให้ `cargo test` ได้ผลตรงกัน
+  - ยังไม่ใส่ใน request path
+  - วัด latency และ memory ของ CLI เทียบกับ TS
+- **G14:** ไม่พบ pstack ใน repo หรือ environment นี้ ต้องขอตัวเครื่องมือหรือ source จากเจ้าของ ระหว่างนี้เขียน workflow ไว้และทำ gate ที่เป็นงานกลไกให้อัตโนมัติ
+- **G15 / G16**
+  - ใช้ generator แบบ seeded ให้ได้ไฟล์ซ้ำ byte ต่อ byte
+  - อย่างน้อยหลายร้อย scenario แบ่งเป็น SAFE / UNSAFE / AMBIGUOUS และ attacks.jsonl
+  - เทส invariance: ข้อความที่ถูกฉีดเข้ามาต้องไม่เปลี่ยนการตัดสิน
+  - benchmark: unsafe-allow rate (ตัวหลัก), false reject, abstain, p50/p95
+
+**กติกา**
+- ห้าม AI เขียน DB โดยตรง
+- ห้ามเริ่ม H1 ก่อนเจ้าของอนุมัติ
+- ห้าม merge / deploy เอง
+
+**วิธีรัน e2e ในเครื่อง cloud:** `PW_CHROMIUM=/opt/pw-browsers/chromium FLAKY_LABEL=x npx firebase emulators:exec --only firestore,auth --project demo-pzm-e2e "npx playwright test -c playwright.flaky.config.ts <spec>"`
+
 ## 9. เริ่มงานต่อใน session ใหม่ยังไง
 
 บอก Claude session ใหม่ประมาณนี้:
@@ -483,7 +828,7 @@ npm run i18n:check    # ครบทุกข้อความ (0 warnings)
 สิ่งที่ Claude ใหม่ควรทำเป็นอันดับแรกเมื่อรับงานต่อ:
 1. `git log --oneline -20` ดูว่าทำอะไรมาล่าสุด
 2. `git status` เช็คว่ามีอะไรค้าง uncommitted
-3. เช็คหัวข้อ **"6. ค้างอยู่"** และ **"10. ปฏิทินคลัง"** (Phase A–B เสร็จแล้ว ต่อ Phase C) — branch งานคือ `feat/inventory-calendar`
+3. **งานล่าสุดคือหัวข้อ 14** (release hardening บน `claude/phase-a-ledger-continue-uzbbb5`) — อ่าน `docs/evidence/release-gate.md` ก่อน
 4. ถ้าจะแก้ rules หรือ collection ใหม่ — ถามเจ้าของก่อนเสมอตามกติกาข้อ 7
 
 ---

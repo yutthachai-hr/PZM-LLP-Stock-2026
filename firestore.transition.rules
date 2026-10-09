@@ -1,0 +1,1898 @@
+// GENERATED from firestore.rules by scripts/rules-transition.mjs — the G25 one-release transition ruleset.
+// Do not edit; edit firestore.rules and regenerate.
+rules_version = '2';
+
+// Server-enforced access control for the stock database.
+//
+// The app also checks roles in the UI, but that only hides buttons: anyone can call the
+// REST API with their own token. These rules are the part an attacker cannot skip, so they
+// re-state every restriction rather than trusting the client.
+//
+// Deploy:  firebase deploy --only firestore:rules
+// Test:    npm run test:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- identity ----
+
+    function authed() {
+      return request.auth != null;
+    }
+
+    function profilePath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    // A tombstone that outlives the profile. Removing someone deletes their profile, but
+    // their Firebase Auth login still exists and could sign in again; this is what makes
+    // the removal stick. Only an admin can lift it.
+    function revoked(uid) {
+      return exists(/databases/$(database)/documents/revokedUsers/$(uid));
+    }
+
+    // A signed-in account with no profile document has no access. Deleting a user relies
+    // on that, and it is also the state a brand-new self-signed-up account sits in.
+    // A revoked account is treated as having no profile even if the document is still there,
+    // so revocation takes effect on the next request rather than on the next cleanup.
+    function hasProfile() {
+      return authed() && !revoked(request.auth.uid) && exists(profilePath());
+    }
+
+    function profile() {
+      return get(profilePath()).data;
+    }
+
+    // Staff are created inactive and stay locked out until an admin approves them.
+    function active() {
+      return hasProfile() && profile().active == true;
+    }
+
+    function admin() {
+      return active() && profile().role == 'admin';
+    }
+
+    // A หัวหน้า: reviews and approves purchase requests. Everything an admin may do to a
+    // request a manager may do too; the catalogue and the roster stay admin-only.
+    function manager() {
+      return active() && profile().role in ['admin', 'manager'];
+    }
+
+    // The same two questions asked from inside an edit rule, where writer() has already
+    // proved the caller active. Re-proving it costs a profile lookup and a few dozen of the
+    // 1,000 expressions a request may evaluate, which the widest documents cannot spare.
+    // Only for use under `allow update`, after writer().
+    function roleIsAdmin() {
+      return profile().role == 'admin';
+    }
+
+    function roleIsManager() {
+      return profile().role in ['admin', 'manager'];
+    }
+
+    // ---------------------------------------------------------------- brands ----
+
+    // Each brand owns a namespace: "products" for Pizza Mania, "lelapin__products" for
+    // Le Lapin. Permissions are per collection kind, so both spellings are listed here in
+    // full. They used to be derived by splitting the name on "__", which quietly let
+    // "lelapin__stockLevels__unregistered" read as "stockLevels" and inherit everything
+    // staff may do to a balance. A new brand has to be added to both lists.
+
+    // Recording stock is the everyday job, so any active user may write these.
+    function staffWritable(name) {
+      return name in [
+        'stockMovements', 'stockLevels', 'counters', 'movementImages', 'notes',
+        'stockEvents', 'purchaseOrders', 'purchaseBatches', 'productAliases',
+        'purchaseRequests', 'messages', 'announcements', 'transfers', 'recipes',
+        'lelapin__stockMovements', 'lelapin__stockLevels', 'lelapin__counters',
+        'lelapin__movementImages', 'lelapin__notes',
+        'lelapin__stockEvents', 'lelapin__purchaseOrders',
+        'lelapin__purchaseBatches', 'lelapin__productAliases',
+        'lelapin__purchaseRequests', 'lelapin__messages', 'lelapin__announcements', 'lelapin__transfers',
+        'lelapin__recipes',
+        'rnd__stockMovements', 'rnd__stockLevels', 'rnd__counters',
+        'rnd__movementImages', 'rnd__notes',
+        'rnd__stockEvents', 'rnd__purchaseOrders',
+        'rnd__purchaseBatches', 'rnd__productAliases',
+        'rnd__purchaseRequests', 'rnd__messages', 'rnd__announcements', 'rnd__transfers',
+        'rnd__recipes'
+      ];
+    }
+
+    // The catalogue and the shape of the warehouse are admin decisions.
+    function adminWritable(name) {
+      return name in [
+        'products', 'productImages', 'locations', 'productMinOverrides',
+        'suppliers', 'supplierItems', 'companyProfile',
+        'lelapin__products', 'lelapin__productImages', 'lelapin__locations',
+        'lelapin__productMinOverrides',
+        'lelapin__suppliers', 'lelapin__supplierItems', 'lelapin__companyProfile',
+        'rnd__products', 'rnd__productImages', 'rnd__locations',
+        'rnd__productMinOverrides',
+        'rnd__suppliers', 'rnd__supplierItems', 'rnd__companyProfile'
+      ];
+    }
+
+    function brandData(name) {
+      return staffWritable(name) || adminWritable(name);
+    }
+
+    // Which kind of record this is, brand aside. Only ever reached for a name that already
+    // matched one of the exact lists above, so the split cannot be used to invent a kind.
+    //
+    // Call it once per function and bind the result with `let`: a rules request may evaluate
+    // at most 1,000 expressions, and the dispatchers below used to re-run this regex for
+    // every branch — a purchase request with a note (one more optional field to check)
+    // went over the budget and was refused as "insufficient permissions" (17 Sep 2026).
+    function kind(name) {
+      return name.matches('^(lelapin|rnd)__.*') ? name.split('__')[1] : name;
+    }
+
+    // The same brand's collection of another kind: `lelapin__stockMovements` → `lelapin__transfers`.
+    function sibling(name, other) {
+      return name.matches('^lelapin__.*') ? 'lelapin__' + other : other;
+    }
+
+    // A transfer that really exists and has left the approval stage, as it stands at the end
+    // of this write (plan A4, 6 Oct 2026). Stock moves between sites only under such a
+    // document; naming a transfer that does not exist, or one still being drafted, is refused.
+    function realTransfer(name, id) {
+      let path = /databases/$(database)/documents/$(sibling(name, 'transfers'))/$(id);
+      return existsAfter(path)
+        && getAfter(path).data.status in ['inTransit', 'receiving', 'completed', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved'];
+    }
+
+    // An order placed from a request is placed by the request's conversion: the request
+    // is poCreated at the end of the same write (plan B4 with A6).
+    function convertedRequest(name, id) {
+      let path = /databases/$(database)/documents/$(sibling(name, 'purchaseRequests'))/$(id);
+      return existsAfter(path) && getAfter(path).data.status == 'poCreated';
+    }
+
+    // Movements are the ledger every balance is rebuilt from, so they are append-only for
+    // everyone, admins included. Voiding and editing are updates that keep the original
+    // row, and nothing in the app deletes one.
+    function ledger(name) {
+      return kind(name) == 'stockMovements';
+    }
+
+    // Notes are the only thing staff throw away. Clearing balances and images happens
+    // when an admin deletes a product or a location.
+    /**
+     * An order whose goods reached the books.
+     *
+     * It is the paperwork behind a stock receipt, and nobody can delete a receipt. Deleting
+     * the order would leave that movement with nothing explaining where it came from, so it
+     * is as permanent as the movement it produced — admins included.
+     */
+    function receivedOrder(name) {
+      return kind(name) == 'purchaseOrders' && resource.data.status == 'received';
+    }
+
+    /**
+     * A note on the board (22 Sep 2026): written once, never edited, and taken down only by
+     * the person who wrote it or an admin (the owner's choice). A manager may pin one.
+     */
+    function messageShape(d) {
+      return d.keys().hasAll(['id', 'body', 'byUserId', 'byUserName', 'createdAt'])
+        && d.keys().hasOnly(['id', 'body', 'byUserId', 'byUserName', 'createdAt', 'pinned'])
+        && d.body is string && d.body.size() > 0 && d.body.size() <= 1000
+        && text(d.byUserName, 100) && text(d.byUserId, 200)
+        && epochMs(d.createdAt)
+        && (!('pinned' in d) || d.pinned is bool);
+    }
+
+    // Posting: in your own name. Pinning (the only change allowed) is a manager's, and
+    // the author of an old note is not the person pinning it — so this is the create rule.
+    function validMessage(d) {
+      return messageShape(d) && d.byUserId == request.auth.uid;
+    }
+
+    // Only the pin may change, and only a manager may change it: a message that could be
+    // edited after the fact would not be a record of what was said.
+    function messageEdit() {
+      return roleIsManager()
+        && editedKeys().hasOnly(['pinned'])
+        && request.resource.data.byUserId == resource.data.byUserId
+        && request.resource.data.body == resource.data.body;
+    }
+
+    function staffDeletable(name) {
+      // A placed order is never deleted, only cancelled: every number stays on the books
+      // with who cancelled it and why. (Until 18 Sep 2026 any unreceived order could go.)
+      return kind(name) == 'notes'
+        // Your own note on the board, taken down. Anyone else's is an admin's to remove
+        // (owner, 22 Sep 2026).
+        || (kind(name) == 'messages' && resource.data.byUserId == request.auth.uid)
+        // A confirmed spelling that turns out wrong is unlearned by deleting it.
+        || kind(name) == 'productAliases'
+        // A draft is a proposal the import screen rebuilds; nothing placed is ever deleted.
+        || (kind(name) == 'purchaseOrders' && resource.data.status == 'draft')
+        // A manager clears a task they set, or one the schedule set.
+        || (kind(name) == 'stockEvents' && roleIsManager()
+            && (resource.data.createdBy == request.auth.uid || resource.data.get('sourceType', '') == 'schedule'));
+    }
+
+    // ---------------------------------------------------------------- values ----
+
+    // Firestore stores NaN and Infinity as ordinary doubles, so `is number` lets both
+    // through. Every comparison with NaN is false and Infinity fails any finite upper
+    // bound, so a bounded range is what actually rejects them.
+    function positive(v, hi) {
+      return v is number && v > 0 && v <= hi;
+    }
+
+    function nonneg(v, hi) {
+      return v is number && v >= 0 && v <= hi;
+    }
+
+    // A plausible ms epoch: 1970 to 2100. Keeps a typo or a bad import out of the dates
+    // that reports and the ledger window sort by.
+    function epochMs(v) {
+      return nonneg(v, 4102444800000);
+    }
+
+    function text(v, maxLen) {
+      return v is string && v.size() <= maxLen;
+    }
+
+    // ---------------------------------------------------------------- schemas ----
+
+    function movementCore(d) {
+      return d.keys().hasAll([
+          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'qty',
+          'date', 'byUserId', 'byUserName', 'createdAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'type', 'productId', 'productName', 'unit', 'entryUnit', 'entryQty', 'qty',
+          'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
+          'supplierId', 'supplierName', 'invoiceNo', 'docDate', 'poId', 'poDocNo',
+          'date', 'byUserId', 'byUserName', 'createdAt',
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'voidReason', 'transferId'
+        ])
+        && d.type in ['receive', 'issue', 'adjust', 'consume']
+        && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
+        && text(d.unit, 40) && text(d.byUserId, 200) && text(d.byUserName, 200)
+        && positive(d.qty, 1000000000)
+        && epochMs(d.date) && epochMs(d.createdAt)
+        // Present only when the person keyed a unit other than the product's own. Since
+        // 20 Sep 2026 `qty` is the base quantity and `entryQty` is what was keyed; a row
+        // with entryUnit and no entryQty is one filed under the old rule, on its own balance.
+        && (!('entryUnit' in d) || text(d.entryUnit, 20))
+        && (!('entryQty' in d) || positive(d.entryQty, 1000000000))
+        // Appended by editMovement, one entry per correction. Rules cannot look inside a
+        // list's maps, so the guarantees that matter are made on update: see appendedOwnEdit.
+        && (!('edits' in d) || (d.edits is list && d.edits.size() <= 200))
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('reason' in d) || text(d.reason, 60))
+        && (!('hasPhoto' in d) || d.hasPhoto is bool)
+        // A receipt's paperwork as fields (24 Sep 2026) — who it came from, the number on
+        // their document and its date, the order it checks in. Written once with the row:
+        // movementEdit does not list them, so no correction can rewrite whose bill it was.
+        && (!('supplierId' in d) || text(d.supplierId, 200))
+        && (!('supplierName' in d) || text(d.supplierName, 200))
+        && (!('invoiceNo' in d) || text(d.invoiceNo, 100))
+        && (!('docDate' in d) || epochMs(d.docDate))
+        && (!('poId' in d) || text(d.poId, 200))
+        && (!('poDocNo' in d) || text(d.poDocNo, 40))
+        && (!('voided' in d) || d.voided is bool)
+        && (!('voidReason' in d) || text(d.voidReason, 500))
+        && (!('transferId' in d) || text(d.transferId, 200))
+        && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
+        && (!('toLocationId' in d) || text(d.toLocationId, 200))
+        && (!('updatedBy' in d) || text(d.updatedBy, 200))
+        && (!('updatedByName' in d) || text(d.updatedByName, 200))
+        && (!('updatedAt' in d) || epochMs(d.updatedAt));
+    }
+
+    function validLevel(d) {
+      return d.keys().hasAll(['id', 'productId', 'locationId', 'qty', 'updatedAt', 'updatedBy'])
+        // `unit` is present only on a balance counted in something other than the product's
+        // own unit, so rows written before units were selectable still validate unchanged.
+        && d.keys().hasOnly(['id', 'productId', 'locationId', 'unit', 'qty', 'updatedAt', 'updatedBy'])
+        && (!('unit' in d) || text(d.unit, 20))
+        && text(d.productId, 200) && text(d.locationId, 200)
+        && nonneg(d.qty, 1000000000)
+        && epochMs(d.updatedAt)
+        // Balances are the one thing these rules cannot prove correct. That needs a trusted
+        // server checking each write against the ledger, and the free plan has no room for
+        // one. What they can do is make every balance write carry the name of whoever made
+        // it, so drift the integrity check finds has an author instead of a shrug.
+        && d.updatedBy == request.auth.uid;
+    }
+
+    function validCounter(d) {
+      return d.keys().hasAll(['id', 'value'])
+        && d.keys().hasOnly(['id', 'value'])
+        && d.value is int
+        && d.value >= 0
+        && d.value <= 100000000;
+    }
+
+    function validProduct(d) {
+      return d.keys().hasAll([
+          'id', 'sku', 'name', 'category', 'unit', 'unitType', 'minStock',
+          'hasImage', 'active', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'sku', 'name', 'barcode', 'category', 'unit', 'unitType', 'minStock', 'cost',
+          'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
+          'trackLot', 'trackExpiry',
+          'hasImage', 'active', 'createdAt', 'updatedAt', 'version',
+          // Smart "Other" item (R&D, 8 Oct 2026): written by the server's proposeItem; an
+          // admin later sets review to 'verified'. Staff cannot (catalogue writes are the
+          // admin's, and the staff unit-rate path lists only unitConversions).
+          'review', 'spec', 'nameKey', 'proposedBy', 'proposedByName'
+        ])
+        && (!('version' in d) || d.version is int)
+        && (!('review' in d) || d.review in ['pending', 'verified'])
+        && (!('spec' in d) || text(d.spec, 300))
+        && (!('nameKey' in d) || text(d.nameKey, 300))
+        && (!('proposedBy' in d) || text(d.proposedBy, 200))
+        && (!('proposedByName' in d) || text(d.proposedByName, 200))
+        && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
+        // The number on the box (22 Sep 2026). Uniqueness is checked by the app before it
+        // writes — a rule cannot query the collection — so this only pins the shape.
+        && (!('barcode' in d) || text(d.barcode, 64))
+        && text(d.unit, 60) && text(d.unitType, 20)
+        && nonneg(d.minStock, 1000000000)
+        && (!('cost' in d) || nonneg(d.cost, 1000000000))
+        // Every price ever stated for it (22 Sep 2026), newest applying as `cost`. Bounded
+        // like the other lists and not validated element by element.
+        && (!('costHistory' in d) || (d.costHistory is list && d.costHistory.size() <= 100))
+        // Who we buy it from. Absent on a product whose name never named anyone.
+        && (!('supplierId' in d) || text(d.supplierId, 200))
+        // The rates this product is keyed at ("1 Carton = 500 EA") — since 20 Sep 2026
+        // the ledger converts with these. Bounded like every other list in this file; not
+        // validated element by element, the same as an order's lines.
+        && (!('unitConversions' in d) || (d.unitConversions is list && d.unitConversions.size() <= 20))
+        // Other suppliers it can come from, for a person to pick when the usual one is out.
+        // The automatic order never chooses one of these by itself.
+        && (!('alternateSupplierIds' in d)
+            || (d.alternateSupplierIds is list && d.alternateSupplierIds.size() <= 10))
+        // Lot / expiry, schema only (6 Oct 2026, deferred): flags, nothing reads them yet.
+        && (!('trackLot' in d) || d.trackLot is bool)
+        && (!('trackExpiry' in d) || d.trackExpiry is bool)
+        && d.hasImage is bool && d.active is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    function validLocation(d) {
+      return d.keys().hasAll(['id', 'name', 'type', 'active', 'createdAt'])
+        && d.keys().hasOnly(['id', 'name', 'nameEn', 'type', 'active', 'createdAt'])
+        && text(d.name, 200)
+        && (!('nameEn' in d) || text(d.nameEn, 200))
+        && d.type in ['warehouse', 'branch']
+        && d.active is bool
+        && epochMs(d.createdAt);
+    }
+
+    function validNote(d) {
+      return d.keys().hasAll(['id', 'title', 'body', 'byUserName', 'pinned', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'title', 'body', 'byUserName', 'pinned', 'createdAt', 'updatedAt'])
+        && text(d.title, 300) && text(d.body, 20000) && text(d.byUserName, 200)
+        && d.pinned is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    // Photos live in Firestore as base64 because Cloud Storage left the free plan in
+    // February 2026. A document is capped at 1 MiB, so an oversized one fails on write
+    // anyway; stating the limit makes it deliberate rather than incidental.
+    function validImage(d) {
+      return d.keys().hasAll(['id', 'dataUrl'])
+        && d.keys().hasOnly(['id', 'dataUrl'])
+        && d.dataUrl is string
+        && d.dataUrl.size() <= 900000;
+    }
+
+    function validMinOverride(d) {
+      return d.keys().hasAll(['id', 'productId', 'locationId', 'minStock'])
+        && d.keys().hasOnly(['id', 'productId', 'locationId', 'minStock'])
+        && text(d.productId, 200) && text(d.locationId, 200)
+        && nonneg(d.minStock, 1000000000);
+    }
+
+    // Who we buy from. What they sell us is supplierItems, not a field here — the same
+    // supplier sells several things, and one product per supplier cannot say that.
+    function validSupplier(d) {
+      return d.keys().hasAll(['id', 'name', 'contactNumber', 'email', 'type', 'active',
+          'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'name', 'code', 'contactNumber', 'email', 'type', 'note',
+          'contactName', 'phone2', 'address', 'taxId', 'paymentTerms', 'category', 'lineGroup', 'links',
+          'defaultLocationId', 'leadTimeDays', 'orderDays', 'cutoffTime',
+          'active', 'createdAt', 'updatedAt'])
+        && text(d.name, 200)
+        && d.contactNumber is string && d.contactNumber.size() <= 40
+        && d.email is string && d.email.size() <= 200
+        && d.type in ['takingReturn', 'notTakingReturn']
+        && d.active is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && (!('note' in d) || d.note is string && d.note.size() <= 2000)
+        // Where this supplier's goods usually land, and how many days they take. Both are
+        // defaults the automatic order offers; neither is a rule it enforces.
+        && (!('defaultLocationId' in d) || text(d.defaultLocationId, 200))
+        && (!('leadTimeDays' in d) || nonneg(d.leadTimeDays, 365))
+        // Which weekdays (0 = Sunday) an order may be placed, and the time of day it has to
+        // be in by. The calendar shows them as cut-offs; nothing refuses an order after one.
+        && (!('orderDays' in d) || (d.orderDays is list && d.orderDays.size() <= 7))
+        && (!('cutoffTime' in d) || text(d.cutoffTime, 5))
+        // The supplier's own details (owner's mock-up 10, 22 Sep 2026). All optional, all
+        // free text: a payment term is what the company calls it, not a number to compute
+        // with. `links` point at papers kept in Drive — nothing is uploaded here.
+        && (!('code' in d) || text(d.code, 20))
+        && (!('contactName' in d) || text(d.contactName, 200))
+        && (!('phone2' in d) || text(d.phone2, 40))
+        && (!('address' in d) || text(d.address, 500))
+        && (!('taxId' in d) || text(d.taxId, 30))
+        && (!('paymentTerms' in d) || text(d.paymentTerms, 100))
+        && (!('category' in d) || text(d.category, 100))
+        // The LINE group their orders go to, as LINE shows its name (2 Oct 2026).
+        && (!('lineGroup' in d) || text(d.lineGroup, 100))
+        && (!('links' in d) || (d.links is list && d.links.size() <= 20));
+    }
+
+    // A planned piece of work: a count, an audit, an expected delivery, a task.
+    //
+    // Low stock is deliberately NOT one of these. It is already derived for free from
+    // balances the app holds in memory, and one document per low product per location
+    // would be over a thousand documents that then have to be cleared again.
+    /**
+     * A task on the calendar. Split the way orders and requests are: what it IS is checked
+     * when it is filed and frozen by eventEdit(); what may move is checked on every write —
+     * the expression budget again (see validShape).
+     */
+    function validEvent(d) {
+      return eventFrozen(d) && eventLive(d)
+        && d.keys().hasAll(['id', 'title', 'type', 'startAt', 'status', 'priority',
+          'createdBy', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'title', 'type', 'locationId', 'startAt', 'dueAt',
+          'status', 'priority', 'assignedTo', 'assignedToAll', 'assignedToName', 'note',
+          'productId', 'supplierId', 'sourceType', 'sourceId', 'scheduleId', 'refKey',
+          'requiresApproval', 'history', 'rescheduledFrom',
+          'startedBy', 'startedByName', 'startedAt', 'completedBy', 'completedByName', 'completedAt',
+          'approvedBy', 'approvedByName', 'approvedAt', 'cancelReason',
+          'createdBy', 'createdAt', 'updatedAt']);
+    }
+
+    function eventFrozen(d) {
+      return d.type in ['stockCount', 'audit', 'delivery', 'transfer', 'inventoryTask', 'other']
+        && text(d.createdBy, 200) && epochMs(d.createdAt)
+        && (!('productId' in d) || text(d.productId, 200))
+        && (!('supplierId' in d) || text(d.supplierId, 200))
+        // A generated task says which schedule made it; its id doubles as the dedup key.
+        && (!('sourceType' in d) || d.sourceType in ['manual', 'schedule'])
+        && (!('sourceId' in d) || text(d.sourceId, 200))
+        && (!('scheduleId' in d) || text(d.scheduleId, 200))
+        && (!('refKey' in d) || (text(d.refKey, 200) && d.refKey == d.id));
+    }
+
+    function eventLive(d) {
+      return text(d.title, 300)
+        && d.status in ['upcoming', 'inProgress', 'waitingApproval', 'completed', 'cancelled']
+        && d.priority in ['normal', 'high', 'critical']
+        && epochMs(d.startAt) && epochMs(d.updatedAt)
+        && (!('locationId' in d) || text(d.locationId, 200))
+        && (!('dueAt' in d) || epochMs(d.dueAt) && d.dueAt >= d.startAt)
+        // Who it is for: a list of uids, or — for events written before the list — one uid
+        // as a string. Everyone is the flag, not a list of every uid.
+        && (!('assignedTo' in d) || text(d.assignedTo, 200)
+            || (d.assignedTo is list && d.assignedTo.size() >= 1 && d.assignedTo.size() <= 50))
+        && (!('assignedToAll' in d) || d.assignedToAll is bool)
+        && (!('assignedToName' in d) || text(d.assignedToName, 1000))
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('requiresApproval' in d) || d.requiresApproval is bool)
+        && (!('history' in d) || (d.history is list && d.history.size() <= 100))
+        && (!('rescheduledFrom' in d) || epochMs(d.rescheduledFrom))
+        && (!('startedBy' in d) || text(d.startedBy, 200))
+        && (!('completedBy' in d) || text(d.completedBy, 200))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        // A signed-off task names who signed it.
+        && (d.status != 'completed' || !('requiresApproval' in d) || d.requiresApproval == false || 'approvedBy' in d);
+    }
+
+    // Staff may move an event along and nothing else. Without this the catch-all lets any
+    // active user replace a whole document via set(), rewriting who created it and when.
+    /**
+     * What may change on a task, and by whom.
+     *
+     * A manager may change everything that is not what the task IS (its type, origin and
+     * author). Staff may only move a task assigned to them (or to everyone, or to nobody)
+     * forward — start it, finish it, hand it in for approval — signing in their own name and
+     * adding to the history; they cannot move it back, re-date it or approve it.
+     */
+    function eventEdit() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.createdBy == old.createdBy
+        && historyKept(d, old)
+        && (roleIsManager()
+          ? editedKeys().hasOnly(['title', 'status', 'priority', 'startAt', 'dueAt', 'locationId',
+              'assignedTo', 'assignedToAll', 'assignedToName', 'note', 'requiresApproval',
+              'history', 'rescheduledFrom', 'startedBy', 'startedByName', 'startedAt',
+              'completedBy', 'completedByName', 'completedAt', 'approvedBy', 'approvedByName', 'approvedAt',
+              'cancelReason', 'updatedAt'])
+            && (!('approvedBy' in editedKeys()) || d.approvedBy == request.auth.uid)
+          : editedKeys().hasOnly(['status', 'updatedAt', 'history', 'startedBy', 'startedByName', 'startedAt',
+              'completedBy', 'completedByName', 'completedAt'])
+            && d.status in ['inProgress', 'waitingApproval', 'completed']
+            // Forward only: a task handed in or closed is the manager's to reopen.
+            && old.status in ['upcoming', 'inProgress']
+            && (!('startedBy' in editedKeys()) || d.startedBy == request.auth.uid)
+            && (!('completedBy' in editedKeys()) || d.completedBy == request.auth.uid)
+            && assignedToMe(old));
+    }
+
+    /**
+     * The history only grows, each new line is signed by whoever is writing, and a move
+     * along the workflow or to another time always writes one — so "who moved this and why"
+     * cannot be skipped. (At the 100-entry cap the app drops the oldest after the first,
+     * so the size holds rather than grows.) Same limit as appendedOwnEdit(): earlier lines
+     * are not compared one by one.
+     */
+    function historyKept(d, old) {
+      let next = d.get('history', null);
+      return (!editedKeys().hasAny(['status', 'startAt']) || 'history' in editedKeys())
+        && (!('history' in editedKeys())
+          || (next is list && next.size() >= 1
+              && next.size() >= old.get('history', []).size()
+              && next[next.size() - 1].by == request.auth.uid));
+    }
+
+    /** The task is for this person: named, or for everyone, or for nobody in particular. */
+    function assignedToMe(old) {
+      return old.get('assignedToAll', false) == true
+        || !('assignedTo' in old)
+        || (old.assignedTo is list && request.auth.uid in old.assignedTo)
+        || old.assignedTo == request.auth.uid;
+    }
+
+    // One product a supplier sells us. buyingPrice is optional: it is not always known,
+    // and a zero would read as free rather than as unknown.
+    function validSupplierItem(d) {
+      return d.keys().hasAll(['id', 'supplierId', 'productId', 'active', 'createdAt',
+          'updatedAt'])
+        && d.keys().hasOnly(['id', 'supplierId', 'productId', 'buyingPrice', 'minOrderQty',
+          'active', 'createdAt', 'updatedAt'])
+        && text(d.supplierId, 200) && text(d.productId, 200)
+        && d.active is bool
+        && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && (!('buyingPrice' in d) || nonneg(d.buyingPrice, 1000000000))
+        // The least the supplier will sell at once. A warning on the order review, not a
+        // block: the person may know the supplier is making an exception.
+        && (!('minOrderQty' in d) || positive(d.minOrderQty, 1000000000));
+    }
+
+    // Rules cannot walk a list, so each name's own length is enforced by the service and by
+    // the editor's maxLength. What is pinned here is what protects the database: the exact
+    // key set, the id, and a bound on how many names a single write may add.
+    function validUnitList(d) {
+      return d.keys().hasOnly(['id', 'names', 'updatedAt'])
+        && d.id == 'entryUnits'
+        && d.names is list
+        && d.names.size() > 0
+        && d.names.size() <= 40
+        && d.updatedAt is number;
+    }
+
+    /**
+     * An order placed with a supplier.
+     *
+     * Staff place and receive orders, which is why this is in the staff list — ordering is
+     * the everyday job, same as recording stock. What staff cannot do is make the stock move
+     * without a receipt: taking an order into stock writes an ordinary stockMovement, and
+     * that document is validated by the same rules as any other.
+     *
+     * The lines are a list, and rules cannot look inside one, so what is pinned here is the
+     * shape around them and a bound on how many. The quantities inside are checked by the
+     * service and, where it matters, by the movement the receipt produces.
+     */
+    function validPurchaseOrder(d) {
+      return orderFrozen(d) && orderLive(d, d.keys()) && d.keys().hasAll([
+          'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
+          'orderedAt', 'lines', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'supplierId', 'supplierName', 'status', 'locationId',
+          'orderedAt', 'expectedAt', 'lines', 'invoiceNo', 'receivedAt', 'receivedBy', 'receivedByName',
+          'movementDocNo', 'eventId', 'note',
+          'receipts', 'closedShortReason', 'closedShortBy', 'closedShortByName', 'closedShortAt',
+          'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
+          'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
+          'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
+          'revision', 'revisions', 'version',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    /** What an order IS — checked when it is placed; orderEdit() keeps it from moving. */
+    function orderFrozen(d) {
+      return text(d.docNo, 40) && text(d.supplierId, 200) && text(d.supplierName, 300)
+        && text(d.locationId, 200)
+        && text(d.createdBy, 200) && text(d.createdByName, 200) && epochMs(d.createdAt)
+        // Where it came from: the calendar event, the imported list, the request.
+        && (!('eventId' in d) || text(d.eventId, 200))
+        && (!('batchId' in d) || text(d.batchId, 200))
+        && (!('requestId' in d) || text(d.requestId, 200));
+    }
+
+    /**
+     * What may still change — checked on every write, and the whole check on update (see
+     * validShape: a received order that came through a request and went out by LINE
+     * carries every optional field, and checking all of them again went over the
+     * expression budget).
+     *
+     * `e` is the set of fields this write puts there: every key on create, and on update
+     * only those added or changed (orderWritten). An optional field the write leaves alone
+     * was checked when it was written, so it is not checked again — a partly received order
+     * carrying every field was ~20 expressions from the 1,000 wall (24 Sep 2026). The
+     * fields every order must have, and the rules across fields, are checked every time.
+     */
+    function orderLive(d, e) {
+      return d.status in ['draft', 'ordered', 'received', 'cancelled']
+        && epochMs(d.orderedAt) && epochMs(d.updatedAt)
+        // When the supplier is to deliver — the day the order asked for, or the lead time
+        // counted from the order. The calendar's receiving entries hang off it.
+        && (!('expectedAt' in e) || epochMs(d.expectedAt))
+        && d.lines is list && d.lines.size() > 0 && d.lines.size() <= 200
+        && (!('invoiceNo' in e) || text(d.invoiceNo, 100))
+        && (!('note' in e) || text(d.note, 2000))
+        && (!('movementDocNo' in e) || text(d.movementDocNo, 40))
+        && (!('receivedAt' in e) || epochMs(d.receivedAt))
+        && (!('receivedBy' in e) || text(d.receivedBy, 200))
+        && (!('receivedByName' in e) || text(d.receivedByName, 200))
+        // From an imported list or a request: a draft until approved, and the approval is signed.
+        && (!('approvedBy' in e) || text(d.approvedBy, 200))
+        && (!('approvedByName' in e) || text(d.approvedByName, 200))
+        && (!('approvedAt' in e) || epochMs(d.approvedAt))
+        // Where the sheet has got to on its way to the supplier. `sent` is what LINE
+        // reported, not what the supplier has read — see the type's comment.
+        && (!('shareStatus' in e) || d.shareStatus in ['shareOpened', 'sent', 'skipped', 'failed'])
+        && (!('shareOpenedAt' in e) || epochMs(d.shareOpenedAt))
+        && (!('sentAt' in e) || epochMs(d.sentAt))
+        && (!('sentBy' in e) || text(d.sentBy, 200))
+        && (!('sentByName' in e) || text(d.sentByName, 200))
+        && (!('imageVersion' in e) || nonneg(d.imageVersion, 1000000))
+        // A cancelled order stays on the books, signed and with its reason — the number
+        // is never reused and the record is never removed (owner's rule, 18 Sep 2026).
+        && (!('cancelReason' in e) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in e) || text(d.cancelledBy, 200))
+        && (!('cancelledByName' in e) || text(d.cancelledByName, 200))
+        && (!('cancelledAt' in e) || epochMs(d.cancelledAt))
+        // Each delivery checked in against the order (24 Sep 2026: a short delivery keeps it
+        // open). Rules cannot read inside a list's maps; the size is the guarantee here, and
+        // orderEdit makes sure the list only ever grows.
+        && (!('receipts' in e) || (d.receipts is list && d.receipts.size() <= 50))
+        && (!('closedShortReason' in e) || text(d.closedShortReason, 2000))
+        && (!('closedShortBy' in e) || text(d.closedShortBy, 200))
+        && (!('closedShortByName' in e) || text(d.closedShortByName, 200))
+        && (!('closedShortAt' in e) || epochMs(d.closedShortAt))
+        && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d))
+        // Once any delivery is on the books the order is closed, never cancelled.
+        && (d.status != 'cancelled' || d.get('receipts', []).size() == 0)
+        // A placed order changed after the fact is a revision: numbered, signed, explained.
+        && (!('revision' in e) || nonneg(d.revision, 1000))
+        && (!('revisions' in e) || (d.revisions is list && d.revisions.size() <= 50))
+        // An order that reached the books names the paper it came with. Without this the
+        // invoice number is a habit the form could be talked out of.
+        && (d.status != 'received' || ('invoiceNo' in d && 'movementDocNo' in d));
+    }
+
+    /**
+     * One import of the order workbook. The rows and groups are lists the rules cannot walk,
+     * so what is pinned is the shape around them and a bound on how many; what each row says
+     * is checked by the service and, in the end, by the order it becomes — which is validated
+     * like any other order.
+     */
+    function validBatch(d) {
+      return d.keys().hasAll([
+          'id', 'batchNo', 'locationId', 'sourceFileName', 'fileHash', 'sheetName',
+          'blockLabel', 'status', 'rows', 'groups', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'batchNo', 'locationId', 'sourceFileName', 'fileHash', 'sheetName',
+          'blockLabel', 'blockDate', 'mapping', 'status', 'rows', 'groups', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && text(d.batchNo, 40) && text(d.locationId, 200) && text(d.sourceFileName, 200)
+        && text(d.fileHash, 128) && text(d.sheetName, 200) && text(d.blockLabel, 200)
+        && d.status in ['draft', 'needsReview', 'ready', 'approved', 'sending', 'completed', 'cancelled']
+        && d.rows is list && d.rows.size() > 0 && d.rows.size() <= 300
+        && d.groups is list && d.groups.size() <= 60
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 500
+        && (!('blockDate' in d) || epochMs(d.blockDate))
+        && (!('mapping' in d) || d.mapping is map)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    /**
+     * A purchase request: what was asked for, what the หัวหน้า approved, and the orders it
+     * became. Lines and history are lists the rules cannot walk; the service checks what
+     * each line says, and the orders a request turns into are validated as orders.
+     */
+    function validRequest(d) {
+      return requestFrozen(d) && requestLive(d) && d.keys().hasAll([
+          'id', 'docNo', 'status', 'revision', 'locationId', 'items', 'requestedBy',
+          'requestedByName', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'status', 'revision', 'locationId', 'note', 'items',
+          'requestedBy', 'requestedByName', 'submittedAt',
+          'returnReason', 'rejectReason', 'approvalNote',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'rejectedBy', 'rejectedByName', 'rejectedAt',
+          'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
+          'orders', 'intake', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    /** The part of a request an edit may not touch — checked when it is filed. */
+    function requestFrozen(d) {
+      return text(d.docNo, 40)
+        && text(d.requestedBy, 200) && text(d.requestedByName, 200)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt);
+    }
+
+    /**
+     * The part an edit may change — checked on every write. On update this is the whole
+     * check (see validShape); requestEdit() is what keeps the frozen part frozen and the
+     * key set closed, so hasAll/hasOnly need not be paid for again.
+     */
+    function validRequestEdit(d) {
+      return requestLive(d);
+    }
+
+    function requestLive(d) {
+      return text(d.locationId, 200)
+        && d.status in ['draft', 'pendingApproval', 'returned', 'approved', 'rejected', 'poCreated', 'skipped']
+        && d.revision is int && d.revision >= 1 && d.revision <= 1000
+        && d.items is list && d.items.size() <= 200
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 500
+        && (!('orders' in d) || (d.orders is list && d.orders.size() <= 60))
+        // D4′: the channels its lines came through.
+        && (!('intake' in d) || (d.intake is list && d.intake.size() <= 4
+            && d.intake.hasOnly(['manual', 'excel', 'ocr', 'suggestion'])))
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('submittedAt' in d) || epochMs(d.submittedAt))
+        && (!('returnReason' in d) || text(d.returnReason, 2000))
+        && (!('rejectReason' in d) || text(d.rejectReason, 2000))
+        && (!('approvalNote' in d) || text(d.approvalNote, 2000))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('approvedByName' in d) || text(d.approvedByName, 200))
+        && (!('approvedAt' in d) || epochMs(d.approvedAt))
+        && (!('rejectedBy' in d) || text(d.rejectedBy, 200))
+        && (!('rejectedByName' in d) || text(d.rejectedByName, 200))
+        && (!('rejectedAt' in d) || epochMs(d.rejectedAt))
+        // Set aside before review, with a reason (25 Sep 2026).
+        && (!('skipReason' in d) || text(d.skipReason, 2000))
+        && (!('skippedBy' in d) || text(d.skippedBy, 200))
+        && (!('skippedByName' in d) || text(d.skippedByName, 200))
+        && (!('skippedAt' in d) || epochMs(d.skippedAt))
+        && epochMs(d.updatedAt)
+        // What a status means is pinned to who signed it.
+        && (d.status != 'approved' || 'approvedBy' in d)
+        && (d.status != 'rejected' || 'rejectedBy' in d)
+        && (d.status != 'poCreated' || ('orders' in d && d.orders.size() > 0))
+        && (d.status != 'skipped' || ('skippedBy' in d && 'skipReason' in d));
+    }
+
+    /**
+     * A company announcement (24 Sep 2026). Written by a หัวหน้า or admin, numbered when it
+     * is published, and kept: after that its words, number and files are what was sent,
+     * and only the send log and the status move. Lists and maps (the target, the snapshot,
+     * the files, the sends, the history) are bounded, not walked.
+     */
+    function validAnnouncement(d) {
+      return announcementFrozen(d) && announcementLive(d)
+        && d.keys().hasAll([
+          'id', 'status', 'company', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'publisherId', 'publisherName', 'sends', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'id', 'docNo', 'status', 'company', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'publisherId', 'publisherName', 'publishedAt', 'publishedBy', 'snapshot', 'files', 'sends',
+          'cancelReason', 'cancelledBy', 'cancelledAt', 'history',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function announcementFrozen(d) {
+      return d.company in ['pizza', 'lelapin', 'rnd']
+        && text(d.publisherId, 200) && text(d.publisherName, 200)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt);
+    }
+
+    function announcementLive(d) {
+      return d.status in ['draft', 'ready', 'published', 'partiallySent', 'sent', 'cancelled']
+        && epochMs(d.announcementDate)
+        && text(d.subject, 200) && d.subject.size() > 0
+        && text(d.body, 3000)
+        && d.format in ['text', 'a5']
+        && d.target is map
+        && d.sends is list && d.sends.size() <= 200
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 300
+        && (!('docNo' in d) || text(d.docNo, 60))
+        && (!('publishedAt' in d) || epochMs(d.publishedAt))
+        && (!('publishedBy' in d) || text(d.publishedBy, 200))
+        && (!('snapshot' in d) || d.snapshot is map)
+        && (!('files' in d) || d.files is map)
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
+        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && epochMs(d.updatedAt)
+        // Past ready, a status means a number and a snapshot of what was said.
+        && (d.status in ['draft', 'ready', 'cancelled'] || ('docNo' in d && 'snapshot' in d))
+        && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d));
+    }
+
+    /**
+     * A transfer between the company's own sites (24 Sep 2026). Lines, history and legs are
+     * lists the rules bound but cannot walk; the service works out every quantity, and the
+     * stock it moves is validated movement by movement like any other.
+     */
+    function validTransfer(d) {
+      return transferFrozen(d) && transferLive(d) && d.keys().hasAll([
+          'id', 'docNo', 'status', 'revision', 'fromLocationId', 'toLocationId',
+          'dispatchDate', 'items', 'requestedBy', 'requestedByName', 'history',
+          'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly(transferKeys());
+    }
+
+    function transferKeys() {
+      return [
+        'id', 'docNo', 'status', 'revision', 'fromLocationId', 'toLocationId',
+        'dispatchDate', 'note', 'legKind', 'parentId', 'childIds',
+        'dispatchMovementDocNo', 'receiveMovementDocNo', 'items',
+        'requestedBy', 'requestedByName', 'submittedAt',
+        'returnReason', 'rejectReason',
+        'approvedBy', 'approvedByName', 'approvedAt',
+        'receivedBy', 'receivedByName', 'receivedAt',
+        'cancelReason', 'cancelledBy', 'cancelledAt',
+        'history', 'createdAt', 'updatedAt'
+      ];
+    }
+
+    function transferFrozen(d) {
+      return text(d.docNo, 40)
+        && text(d.requestedBy, 200) && text(d.requestedByName, 200)
+        && epochMs(d.createdAt)
+        && d.fromLocationId != d.toLocationId
+        && (!('legKind' in d) || d.legKind in ['forward', 'return', 'replacement'])
+        && (!('parentId' in d) || text(d.parentId, 200));
+    }
+
+    function validTransferEdit(d) {
+      return transferLive(d);
+    }
+
+    function transferLive(d) {
+      return text(d.fromLocationId, 200) && text(d.toLocationId, 200)
+        && d.status in ['draft', 'pendingApproval', 'returned', 'rejected', 'inTransit', 'receiving',
+                        'discrepancy', 'pendingDiscrepancyApproval', 'resolved', 'completed', 'cancelled']
+        && d.revision is int && d.revision >= 1 && d.revision <= 1000
+        && epochMs(d.dispatchDate)
+        // A draft is created empty and filled in; everything past draft has lines.
+        && d.items is list && d.items.size() <= 200 && (d.status in ['draft', 'cancelled'] || d.items.size() > 0)
+        && d.history is list && d.history.size() > 0 && d.history.size() <= 500
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('childIds' in d) || (d.childIds is list && d.childIds.size() <= 50))
+        && (!('submittedAt' in d) || epochMs(d.submittedAt))
+        && (!('returnReason' in d) || text(d.returnReason, 2000))
+        && (!('rejectReason' in d) || text(d.rejectReason, 2000))
+        && (!('dispatchMovementDocNo' in d) || text(d.dispatchMovementDocNo, 40))
+        && (!('receiveMovementDocNo' in d) || text(d.receiveMovementDocNo, 40))
+        && (!('approvedBy' in d) || text(d.approvedBy, 200))
+        && (!('approvedByName' in d) || text(d.approvedByName, 200))
+        && (!('approvedAt' in d) || epochMs(d.approvedAt))
+        && (!('receivedBy' in d) || text(d.receivedBy, 200))
+        && (!('receivedByName' in d) || text(d.receivedByName, 200))
+        && (!('receivedAt' in d) || epochMs(d.receivedAt))
+        && (!('cancelReason' in d) || text(d.cancelReason, 2000))
+        && (!('cancelledBy' in d) || text(d.cancelledBy, 200))
+        && (!('cancelledAt' in d) || epochMs(d.cancelledAt))
+        && epochMs(d.updatedAt)
+        // What a status means is pinned to who signed it.
+        && (!(d.status in ['inTransit', 'receiving', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved', 'completed'])
+            || 'approvedBy' in d)
+        && (d.status != 'cancelled' || ('cancelReason' in d && 'cancelledBy' in d));
+    }
+
+    /** The company as its documents present it: one document per brand, `main`. */
+    function validCompanyProfile(docId, d) {
+      return docId == 'main'
+        && d.keys().hasAll(['id', 'docPrefix', 'announcementCode'])
+        && d.keys().hasOnly([
+          'id', 'docPrefix', 'announcementCode', 'displayName', 'nameEn',
+          'logoDataUrl', 'logoVersion', 'updatedBy', 'updatedAt'
+        ])
+        && d.docPrefix is string && d.docPrefix.matches('^[A-Z0-9]{1,10}$')
+        && d.announcementCode is string && d.announcementCode.matches('^[A-Z0-9]{1,10}$')
+        && (!('displayName' in d) || text(d.displayName, 200))
+        && (!('nameEn' in d) || text(d.nameEn, 200))
+        // A data URL, as product photos are; under Firestore's 1 MiB per document.
+        && (!('logoDataUrl' in d) || (d.logoDataUrl is string && d.logoDataUrl.size() <= 900000))
+        && (!('logoVersion' in d) || nonneg(d.logoVersion, 1000000))
+        && (!('updatedBy' in d) || d.updatedBy == request.auth.uid)
+        && (!('updatedAt' in d) || epochMs(d.updatedAt));
+    }
+
+    /** A workbook spelling somebody confirmed as one product. */
+    function validAlias(d) {
+      return d.keys().hasAll(['id', 'key', 'productId', 'sourceName', 'createdBy', 'createdByName', 'createdAt'])
+        && d.keys().hasOnly(['id', 'key', 'productId', 'sourceName', 'createdBy', 'createdByName', 'createdAt'])
+        && text(d.key, 300) && text(d.productId, 200) && text(d.sourceName, 300)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt);
+    }
+
+    // A document whose `id` field disagrees with its key makes the UI act on one row while
+    // writing to another, so the two are pinned together here rather than hoped for.
+    //
+    // `fresh` is true on create. A purchase request is the widest document here — some
+    // forty typed fields — and checking all of them on every update, on top of the edit
+    // rules, ran past Firestore's budget of 1,000 evaluated expressions per request; the
+    // write was refused as "insufficient permissions" (17 Sep 2026). On update only the
+    // fields an edit may touch are re-checked; the frozen ones were checked at birth and
+    // requestEdit() keeps them frozen. The heavy documents also sit early in the chain,
+    // because every comparison walked past costs a few expressions.
+    function validShape(name, docId, d, fresh) {
+      let k = kind(name);
+      return d.id == docId && (
+        k == 'stockMovements' ? movementCore(d)
+        : k == 'stockLevels' ? validLevel(d)
+        : k == 'transfers' ? (fresh ? validTransfer(d) : validTransferEdit(d))
+        : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
+        : k == 'purchaseOrders' ? (fresh ? validPurchaseOrder(d) : orderLive(d, orderWritten()))
+        : k == 'messages' ? (fresh ? validMessage(d) : messageShape(d))
+        : k == 'announcements' ? (fresh ? validAnnouncement(d) : announcementLive(d))
+        : k == 'recipes' ? validRecipe(d)
+        : k == 'companyProfile' ? validCompanyProfile(docId, d)
+        : k == 'counters' ? validCounter(d)
+        : k == 'products' ? validProduct(d)
+        : k == 'locations' ? validLocation(d)
+        : k == 'notes' ? validNote(d)
+        : k == 'productMinOverrides' ? validMinOverride(d)
+        : k == 'stockEvents' ? (fresh ? validEvent(d) : eventLive(d))
+        : k == 'suppliers' ? validSupplier(d)
+        : k == 'supplierItems' ? validSupplierItem(d)
+        : k == 'purchaseBatches' ? validBatch(d)
+        : k == 'productAliases' ? validAlias(d)
+        : validImage(d)
+      );
+    }
+
+    function writer(name) {
+      return (active() && staffWritable(name)) || (admin() && adminWritable(name));
+    }
+
+    // The ledger and the balances are written by the trusted stock commands (ADR-001,
+    // functions/api/stock/*), which work every number out on the server. From a client,
+    // only an admin's maintenance tools still write them (corrections, unit tools, recompute,
+    // restore) — staff and managers cannot, whatever their token says (audit S1).
+    function clientStockWrite(name) {
+      let k = kind(name);
+      return !(k in ['stockLevels', 'stockMovements']) || roleIsAdmin();
+    }
+
+    function editedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // The fields an update puts on the document: added or changed, not removed.
+    function orderWritten() {
+      let dd = request.resource.data.diff(resource.data);
+      return dd.addedKeys().union(dd.changedKeys());
+    }
+
+    // A new movement is filed under whoever is filing it, and is not born already voided
+    // or already corrected. Without the first check, staff can record stock in a
+    // colleague's name and the ledger's "who" column means nothing.
+    function createdHonestly(name) {
+      let k = kind(name);
+      return k == 'recipes'
+        ? manager() && request.resource.data.createdBy == request.auth.uid
+        : k == 'stockEvents'
+        ? manager() && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status == 'upcoming'
+        // An order is filed by whoever placed it. Ordering is everyday work, so staff may do
+        // it, but not in a colleague's name — the dashboard's "who ordered this" has to mean
+        // something when the goods do not turn up.
+        : k == 'purchaseOrders'
+        ? request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status != 'received'
+          // Staff do not place an order on their own (owner, 6 Oct 2026, plan B4): theirs
+          // is a draft until a หัวหน้า or admin approves it — unless it comes from a request
+          // a manager already approved, converted in this same write.
+          && (request.resource.data.status != 'ordered' || roleIsManager()
+              || ('requestId' in request.resource.data && convertedRequest(name, request.resource.data.requestId)))
+        // An import is filed by whoever imported it, and is not born approved or sent.
+        : k == 'purchaseBatches'
+        ? request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status in ['draft', 'needsReview', 'ready']
+        : k == 'productAliases'
+        ? request.resource.data.createdBy == request.auth.uid
+        // An announcement is written by a หัวหน้า or admin, in their own name, as a draft —
+        // never born numbered.
+        : k == 'announcements'
+        ? manager() && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.publisherId == request.auth.uid
+          && request.resource.data.status == 'draft'
+          && !('docNo' in request.resource.data)
+        // A transfer is filed by whoever is asking, as an empty draft. The one exception is
+        // a leg a manager creates when settling goods found at the wrong branch: it names its
+        // parent and starts in transit, because the goods already are.
+        : k == 'transfers'
+        ? request.resource.data.requestedBy == request.auth.uid
+          && (request.resource.data.status == 'draft'
+              || (request.resource.data.status == 'inTransit' && 'parentId' in request.resource.data
+                  && request.resource.data.approvedBy == request.auth.uid && roleIsManager()))
+        // A request is filed by whoever is asking, as a draft.
+        : k == 'purchaseRequests'
+        ? request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.requestedBy == request.auth.uid
+          && request.resource.data.status == 'draft'
+        : k != 'stockMovements' || (
+          request.resource.data.byUserId == request.auth.uid
+          && !('voided' in request.resource.data)
+          && !('updatedBy' in request.resource.data)
+          // Moving stock between two sites in one step is a manager's (owner, 24 Sep 2026);
+          // staff move it through a transfer, whose rows name it.
+          && (request.resource.data.type != 'issue' || !('toLocationId' in request.resource.data)
+              || 'transferId' in request.resource.data || roleIsManager())
+          // The transfer it names must be real and past approval (plan A4).
+          && (!('transferId' in request.resource.data) || realTransfer(name, request.resource.data.transferId))
+          // An adjustment says why, in the words the reports group by (plan B7).
+          && (request.resource.data.type != 'adjust'
+              || request.resource.data.get('reason', '') in ['lost', 'broken', 'expired', 'damage', 'found', 'count', 'opening'])
+        );
+    }
+
+    // Editing a movement means correcting the quantity, the business date or the note —
+    // the things a person genuinely gets wrong. What the movement WAS stays put: its kind,
+    // product, locations, document number, author, and the moment it was recorded. Listing
+    // the fields that may move is what makes replacing the whole row with setDoc equivalent
+    // to editing it, instead of a way around the freeze.
+    //
+    // Counters only ever go forwards, so a replayed or forged write cannot hand out a
+    // document number that has already been used.
+    // G25 optimistic concurrency (owner, 7 Oct 2026): every update of a product or an order
+    // moves its version by exactly one — the app's backends add it, and a stale copy (an old
+    // tab, an AI proposal computed from old data) states a version that is no longer next, so
+    // its write is refused here even if the app's own check were bypassed. An admin's
+    // maintenance (restoring a backup) may write any version.
+    // TRANSITION (generated by scripts/rules-transition.mjs — do not edit): an old app tab
+    // leaves the version as it was; a new one moves it by 1. Both are accepted for one release.
+    function versionMoved() {
+      return roleIsAdmin()
+        || request.resource.data.get('version', 0) == resource.data.get('version', 0) + 1
+        || request.resource.data.get('version', 0) == resource.data.get('version', 0);
+    }
+
+    function editedHonestly(name) {
+      let k = kind(name);
+      return k == 'purchaseOrders' ? orderEdit() && versionMoved()
+        : k == 'products' ? versionMoved()
+        : k == 'purchaseBatches' ? batchEdit()
+        : k == 'transfers' ? transferEdit()
+        : k == 'purchaseRequests' ? requestEdit()
+        // Confirming a spelling again replaces the whole alias, signed by whoever did it.
+        : k == 'productAliases'
+        ? request.resource.data.createdBy == request.auth.uid
+        : k == 'stockMovements' ? movementEdit()
+        : k == 'messages' ? messageEdit()
+        : k == 'announcements' ? announcementEdit()
+        : k == 'recipes' ? recipeEdit()
+        : k == 'stockEvents' ? eventEdit()
+        : k == 'counters' ? request.resource.data.value > resource.data.value
+        : true;
+    }
+
+    /**
+     * What may change on an order after it is placed.
+     *
+     * Not who placed it, not its number, not the supplier or the destination — those are what
+     * the order IS, and an order whose supplier can be swapped after the fact is not evidence
+     * of anything. Receiving fills in the arrival fields and rewrites the lines with what
+     * actually turned up; both are the same edit and both are listed here.
+     */
+    function orderEdit() {
+      // Bound once: each call re-diffs the whole order, and the widest orders (200 lines,
+      // 50 receipts) cannot afford that eight times over.
+      let e = editedKeys();
+      return e.hasOnly([
+          'status', 'lines', 'invoiceNo', 'note', 'docNo', 'expectedAt',
+          'receivedAt', 'receivedBy', 'receivedByName', 'movementDocNo', 'updatedAt',
+          // Approving a draft resets the order date and signs it; sending records where
+          // the sheet got to. Neither may be signed in someone else's name.
+          'orderedAt', 'approvedBy', 'approvedByName', 'approvedAt',
+          'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
+          'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
+          'revision', 'revisions', 'version',
+          'receipts', 'closedShortReason', 'closedShortBy', 'closedShortByName', 'closedShortAt'
+        ])
+        // The lines of a placed order move only as a revision or when a delivery is checked
+        // in, never quietly; a draft is still being written. A delivery either closes the
+        // order or — since 24 Sep 2026 — appends exactly one entry to its receipts.
+        && (!e.hasAny(['lines', 'expectedAt']) || resource.data.status == 'draft'
+            || 'revisions' in e || request.resource.data.status == 'received'
+            || 'receipts' in e)
+        // Deliveries are added one at a time, and one that happened is never taken off.
+        && (!('receipts' in e)
+            || request.resource.data.receipts.size() == resource.data.get('receipts', []).size() + 1)
+        // Closing the rest of an order is signed by whoever did it.
+        && (!('closedShortBy' in e) || request.resource.data.closedShortBy == request.auth.uid)
+        && (!('revisions' in e) || !('revisions' in resource.data)
+            || request.resource.data.revisions.size() > resource.data.revisions.size())
+        // The order date only moves when a draft is placed.
+        && (!('orderedAt' in e) || resource.data.status == 'draft')
+        // Placing a draft is a หัวหน้า's or admin's word (plan B4).
+        && (resource.data.status != 'draft' || request.resource.data.status != 'ordered' || roleIsManager())
+        // Cancelling is signed by the caller, and a cancelled order is closed for good —
+        // only an admin putting numbers right may still touch it.
+        && (!('cancelledBy' in request.resource.data) || request.resource.data.cancelledBy == request.auth.uid)
+        && (resource.data.status != 'cancelled' || roleIsAdmin())
+        && (resource.data.status != 'received' || request.resource.data.status == 'received')
+        && (!('approvedBy' in request.resource.data)
+            || request.resource.data.approvedBy == request.auth.uid
+            || request.resource.data.approvedBy == resource.data.approvedBy)
+        && (!('sentBy' in request.resource.data)
+            || request.resource.data.sentBy == request.auth.uid
+            || request.resource.data.sentBy == resource.data.sentBy)
+        && request.resource.data.createdBy == resource.data.createdBy
+        // A number is frozen for everyone but an admin putting the sequence right — the
+        // owner's rule is that each supplier's orders count 1, 2, 3 in their own order,
+        // and the orders numbered under the old shared counter had to be corrected.
+        && (request.resource.data.docNo == resource.data.docNo || roleIsAdmin())
+        && request.resource.data.supplierId == resource.data.supplierId
+        && request.resource.data.locationId == resource.data.locationId
+        // Whoever checked the delivery in signs for it. Once signed it stays as it is, and
+        // the order may still be touched by others — an admin putting the numbers right,
+        // say. (Until 17 Sep 2026 this read "receivedBy must be the caller" outright, which
+        // locked every received order to the person who received it.)
+        && (!('receivedBy' in request.resource.data)
+            || request.resource.data.receivedBy == resource.data.receivedBy
+            || request.resource.data.receivedBy == request.auth.uid);
+    }
+
+    /**
+     * What may change on an import after it is filed: the rows as people settle them, the
+     * groups and status as that happens, and the history — which only ever grows. Where it
+     * came from and who filed it are what the batch IS.
+     */
+    function batchEdit() {
+      return editedKeys().hasOnly(['rows', 'groups', 'history', 'status', 'updatedAt'])
+        && request.resource.data.history.size() >= resource.data.history.size();
+    }
+
+    /**
+     * What may change on a request, and who may change it.
+     *
+     * Its number, who asked, and when it was filed are what the request IS. The history
+     * only grows. The lines may be rewritten by anyone who may write at all — a token
+     * holder could forge a line either way, and what protects the business is that the
+     * words that make a request an order (approved / rejected / returned / poCreated) may
+     * only be spoken by a manager, in their own name, and a manager may not un-say them:
+     * leaving approved or rejected takes an admin.
+     */
+    /**
+     * A recipe (Automation Plan Phase 3, 25 Sep 2026): a POS menu code and what one sale of
+     * it takes from stock. The lines are a list the rules cannot walk; the size is bounded
+     * and the service builds each line from the catalogue.
+     */
+    function validRecipe(d) {
+      return d.keys().hasAll(['id', 'code', 'name', 'lines', 'active', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly([
+          'id', 'code', 'name', 'aliases', 'lines', 'active',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'
+        ])
+        && text(d.code, 40) && d.code.size() > 0 && text(d.name, 200) && d.name.size() > 0
+        && d.lines is list && d.lines.size() <= 60
+        && (!('aliases' in d) || (d.aliases is list && d.aliases.size() <= 10))
+        && d.active is bool
+        && text(d.createdBy, 200) && text(d.createdByName, 200) && epochMs(d.createdAt) && epochMs(d.updatedAt)
+        && (!('updatedBy' in d) || text(d.updatedBy, 200))
+        && (!('updatedByName' in d) || text(d.updatedByName, 200));
+    }
+
+    /** A หัวหน้า or admin changes a recipe, in their own name; who made it stays. */
+    function recipeEdit() {
+      return roleIsManager()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.get('updatedBy', request.auth.uid) == request.auth.uid;
+    }
+
+    function requestEdit() {
+      return editedKeys().hasOnly([
+          'status', 'revision', 'locationId', 'note', 'items', 'submittedAt',
+          'returnReason', 'rejectReason', 'approvalNote',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'rejectedBy', 'rejectedByName', 'rejectedAt',
+          'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
+          'orders', 'intake', 'history', 'updatedAt'
+        ])
+        // A skipped request is final: nobody edits it, admins included (owner, 25 Sep 2026).
+        && resource.data.status != 'skipped'
+        && request.resource.data.history.size() >= resource.data.history.size()
+        && (request.resource.data.status == resource.data.status || requestMove())
+        // What a manager approved is what gets ordered (plan A5): the lines are frozen once
+        // a request is approved, until an admin reopens it.
+        && (!('items' in editedKeys()) || !(resource.data.status in ['approved', 'poCreated']))
+        && (!('approvedBy' in request.resource.data)
+            || request.resource.data.approvedBy == resource.data.approvedBy
+            || request.resource.data.approvedBy == request.auth.uid)
+        && (!('rejectedBy' in request.resource.data)
+            || request.resource.data.rejectedBy == resource.data.rejectedBy
+            || request.resource.data.rejectedBy == request.auth.uid);
+    }
+
+    function convertedByCaller() {
+      let h = request.resource.data.history;
+      return h[h.size() - 1].by == request.auth.uid && h[h.size() - 1].action == 'convertedToPo';
+    }
+
+    function requestMove() {
+      let from = resource.data.status;
+      let to = request.resource.data.status;
+      return (
+        // submit / resubmit: the requester or a manager
+        (to == 'pendingApproval' && from in ['draft', 'returned']
+          && (resource.data.requestedBy == request.auth.uid || roleIsManager()))
+        // the manager's three words
+        || (to in ['returned', 'approved', 'rejected'] && from == 'pendingApproval' && roleIsManager())
+        // turning an approved request into orders: anyone who may place an order, in their
+        // own name — the conversion's history entry names the caller (plan A5)
+        || (to == 'poCreated' && from == 'approved' && convertedByCaller())
+        // reopening a decision: admin only
+        || (to == 'pendingApproval' && from in ['approved', 'rejected'] && roleIsAdmin())
+        // setting it aside before review: the requester or a manager, in their own name
+        || (to == 'skipped' && from in ['draft', 'returned']
+          && (resource.data.requestedBy == request.auth.uid || roleIsManager())
+          && request.resource.data.skippedBy == request.auth.uid)
+      );
+    }
+
+    /**
+     * What may change on an announcement, and who may change it: a หัวหน้า or admin.
+     *
+     * Before it is numbered the words may change freely. The number is issued only by
+     * publishing a ready announcement, and from then on the number, the words and the
+     * snapshot are frozen; the files are written once; the send log and the history only
+     * grow. Publishing and cancelling are signed by the caller.
+     */
+    function announcementEdit() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return roleIsManager()
+        && editedKeys().hasOnly([
+          'status', 'announcementDate', 'subject', 'body', 'format', 'target',
+          'docNo', 'publishedAt', 'publishedBy', 'snapshot', 'files', 'sends',
+          'cancelReason', 'cancelledBy', 'cancelledAt', 'history', 'updatedAt'
+        ])
+        && d.history.size() >= old.history.size()
+        && d.sends.size() >= old.sends.size()
+        && (d.status == old.status || announcementMove(old.status, d.status))
+        && (('docNo' in old)
+            ? (d.docNo == old.docNo && d.subject == old.subject && d.body == old.body
+               && d.announcementDate == old.announcementDate && d.format == old.format
+               && d.snapshot == old.snapshot && d.publishedBy == old.publishedBy)
+            : (!('docNo' in d) || (old.status == 'ready' && d.status == 'published'
+                                   && d.publishedBy == request.auth.uid)))
+        && (!('files' in old) || d.files == old.files)
+        && (!('cancelledBy' in d) || d.cancelledBy == request.auth.uid
+            || d.cancelledBy == old.get('cancelledBy', ''));
+    }
+
+    function announcementMove(from, to) {
+      return (from == 'draft' && to in ['ready', 'cancelled'])
+        || (from == 'ready' && to in ['draft', 'published', 'cancelled'])
+        || (from == 'published' && to in ['sent', 'partiallySent', 'cancelled'])
+        || (from == 'partiallySent' && to == 'sent');
+    }
+
+    /**
+     * What may change on a transfer, and who may move it on.
+     *
+     * Its number, who asked, where it is from and where it goes are what the transfer IS;
+     * the route may be set only while it is still a draft. The history only grows. The
+     * words that move stock — approve — are a manager's, signed in their own name; receipt
+     * belongs to the people of the destination (or anyone with no sites assigned, the
+     * owner's rule); settling a problem is a manager's again.
+     */
+    function transferEdit() {
+      let d = request.resource.data;
+      let old = resource.data;
+      return editedKeys().hasOnly([
+          'status', 'revision', 'fromLocationId', 'toLocationId', 'dispatchDate', 'note', 'items', 'childIds',
+          'submittedAt', 'returnReason', 'rejectReason',
+          'dispatchMovementDocNo', 'receiveMovementDocNo',
+          'approvedBy', 'approvedByName', 'approvedAt',
+          'receivedBy', 'receivedByName', 'receivedAt',
+          'cancelReason', 'cancelledBy', 'cancelledAt',
+          'history', 'updatedAt'
+        ])
+        && d.history.size() >= old.history.size()
+        && (!editedKeys().hasAny(['fromLocationId', 'toLocationId']) || old.status in ['draft', 'returned'])
+        && (d.status == old.status || transferMove(old, d))
+        && (!('approvedBy' in d) || d.approvedBy == old.get('approvedBy', '') || d.approvedBy == request.auth.uid)
+        && (!('receivedBy' in d) || d.receivedBy == old.get('receivedBy', '') || d.receivedBy == request.auth.uid)
+        && (!('cancelledBy' in d) || d.cancelledBy == old.get('cancelledBy', '') || d.cancelledBy == request.auth.uid);
+    }
+
+    /** Someone who works at `loc` — or a manager, or anyone with no sites assigned. */
+    function atSite(loc) {
+      return roleIsManager() || profile().get('siteIds', []).size() == 0 || loc in profile().siteIds;
+    }
+
+    function transferMove(old, d) {
+      let from = old.status;
+      let to = d.status;
+      return (
+        // submit / resubmit: the requester or a manager; an admin reopens a rejection
+        (to == 'pendingApproval' && from in ['draft', 'returned']
+          && (old.requestedBy == request.auth.uid || roleIsManager()))
+        || (to == 'pendingApproval' && from == 'rejected' && roleIsAdmin())
+        // the manager's three words
+        || (to in ['returned', 'rejected', 'inTransit'] && from == 'pendingApproval' && roleIsManager())
+        // withdrawing before any stock moved
+        || (to == 'cancelled' && from in ['draft', 'returned', 'pendingApproval']
+          && (old.requestedBy == request.auth.uid || roleIsManager()))
+        // receipt, by the destination
+        || (to in ['receiving', 'completed', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved']
+          && from in ['inTransit', 'receiving'] && atSite(old.toLocationId))
+        // a problem goes to the manager — the receiver sends it, or the branch that found
+        // the goods reports them
+        || (to == 'pendingDiscrepancyApproval' && from == 'discrepancy')
+        // settling it is the manager's
+        || (to in ['resolved', 'completed', 'pendingDiscrepancyApproval']
+          && from in ['discrepancy', 'pendingDiscrepancyApproval', 'resolved'] && roleIsManager())
+        // the last leg arriving closes its parent, whoever received the leg
+        || (to == 'completed' && from == 'resolved')
+      );
+    }
+
+    function movementEdit() {
+      // A transfer's rows are corrected through the transfer (a resolution), never in place:
+      // the document's quantities are what explain them.
+      return !('transferId' in resource.data) && editedKeys().hasOnly([
+          'qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'voidReason'
+        ])
+        // Voiding is an admin's, and says why (plan A9).
+        && (!editedKeys().hasAny(['voided', 'voidReason'])
+            || (roleIsAdmin() && request.resource.data.get('voidReason', '').size() > 0))
+        && (!('updatedBy' in request.resource.data)
+            || request.resource.data.updatedBy == request.auth.uid)
+        // Changing what a row says is an admin's (plan A9), and means appending to its
+        // history in their own name. `unit` is here because correcting a product's unit
+        // restamps every row filed under the old one, and that is an edit like any other.
+        && (!editedKeys().hasAny(['qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit',
+                                  'fromLocationId', 'toLocationId'])
+            || (roleIsAdmin() && appendedOwnEdit()));
+    }
+
+    /**
+     * The edit history grew by exactly one entry, and that entry names the caller.
+     *
+     * This is the anti-fraud control the owner asked for, and it is worth being plain about
+     * its edge: rules cannot compare two lists element by element, so what is proved here is
+     * that an edit cannot be filed under a colleague's name and cannot quietly shrink the
+     * history. A determined admin calling the database directly could still rewrite earlier
+     * entries; catching that needs a trusted server comparing writes, which the free plan has
+     * no room for. The same limit already applies to balances, and for the same reason.
+     */
+    function appendedOwnEdit() {
+      // Read with a default: a write that omits the history entirely must be refused, not
+      // crash the rule. Omitting it is exactly how someone would try to edit anonymously.
+      let next = request.resource.data.get('edits', null);
+      let prev = resource.data.get('edits', []);
+      return next is list
+        && next.size() == prev.size() + 1
+        && next.size() <= 200
+        && next[next.size() - 1].by == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------------- users ----
+
+    match /users/{uid} {
+      // Everyone loads their own profile on sign-in; only admins can see the roster.
+      allow get: if authed() && (uid == request.auth.uid || admin());
+      allow list: if admin();
+
+      // Two legitimate ways a profile appears:
+      //  - an admin adds someone, with any role, active straight away;
+      //  - a person signs themselves up, which must produce an INACTIVE STAFF account.
+      // Self-signup can NEVER produce an admin, and never resurrects a revoked account.
+      // There is deliberately no "first caller becomes the owner" path: on an empty
+      // database nobody can create a profile, and the owner is provisioned out of band
+      // (Firebase console) where rules do not apply. Whoever holds the public API key is
+      // not evidence of ownership.
+      // A revoked uid gets no profile from anyone, admin included, until the revocation is
+      // lifted first. Otherwise an admin could re-add someone and hand them a profile that
+      // the revocation check still silently blocks.
+      allow create: if !revoked(uid) && (
+        admin()
+        || (uid == request.auth.uid
+            && request.resource.data.role == 'staff'
+            && request.resource.data.active == false)
+      );
+
+      // role and active ARE the access model — only an admin may change a profile, and an
+      // admin may not change their own, so the last admin cannot lock the database's only
+      // way back in.
+      //
+      // Renaming yourself needs none of that: `name` decides nothing the access model
+      // depends on, so any active account may change its own (22 Sep 2026, "edit profile") —
+      // and only that field; role, active, email and everything else stay exactly as they
+      // were, changeable only through the admin branch above.
+      allow update: if (
+        admin() && (
+          uid != request.auth.uid
+          || (request.resource.data.role == resource.data.role
+              && request.resource.data.active == resource.data.active)
+        )
+      ) || (
+        active() && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'messagesReadAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        // When this person last opened the message board — what the unread badge counts from.
+        && (!('messagesReadAt' in request.resource.data) || epochMs(request.resource.data.messagesReadAt))
+      );
+
+      // Deleting your own profile would lock you out of your own database. The tombstone
+      // has to exist first, so a removal can never be a profile deletion on its own — the
+      // auth account behind it would just sign up again.
+      allow delete: if admin() && uid != request.auth.uid && revoked(uid);
+    }
+
+    // ---------------------------------------------------------------- bootstrap ----
+
+    // Marker saying this database has been provisioned. The app reads it to tell "nobody
+    // has set this up yet" apart from "your account is waiting for approval". No client
+    // may write it: it is created alongside the first admin from the Firebase console.
+    match /meta/bootstrap {
+      allow get: if authed();
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- entry units ----
+
+    // The words a quantity may be keyed in — Lot, Pack, Carton — maintained by an admin in
+    // Settings. One shared document rather than a collection: the list is a dozen short
+    // words, and a collection would be charged one read per name every time anyone opened
+    // a receiving screen. Shared across brands because a carton is a carton in either.
+    //
+    // These are labels, not conversions, so nothing here can change a recorded quantity: a
+    // movement stores a number in the product's own unit and never this string. The worst a
+    // bad list can do is put a silly word in a dropdown.
+    match /meta/entryUnits {
+      allow get: if active();
+      allow create, update: if admin() && validUnitList(request.resource.data);
+      // Emptying the dropdown is not an edit anyone needs; shortening it is.
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------- automation ----
+
+    // Written only by the cron Worker (service account, outside these rules). Screens read
+    // it to say when the automation last ran.
+    // The devices' cache epoch per brand (release hardening: Firestore reads). Every active
+    // user's device reads it once per open; an admin action that deletes or rewrites
+    // history bumps a collection's number so every device reads that collection in full.
+    match /meta/{docId} {
+      allow get: if docId.matches('^cacheEpoch_(pizza|lelapin|rnd)$') && active();
+      allow create, update: if docId.matches('^cacheEpoch_(pizza|lelapin|rnd)$') && admin()
+        && request.resource.data.keys().hasOnly(['id', 'products', 'stockLevels', 'stockMovements', 'notifications', 'productMinOverrides'])
+        && request.resource.data.id == docId
+        && (!('products' in request.resource.data) || request.resource.data.products is number)
+        && (!('stockLevels' in request.resource.data) || request.resource.data.stockLevels is number)
+        && (!('stockMovements' in request.resource.data) || request.resource.data.stockMovements is number)
+        && (!('notifications' in request.resource.data) || request.resource.data.notifications is number)
+        && (!('productMinOverrides' in request.resource.data) || request.resource.data.productMinOverrides is number);
+    }
+
+    match /meta/cronStatus {
+      allow get: if active();
+      allow write: if false;
+    }
+
+    /**
+     * How the calendar is configured, per brand: stock-count schedules and thresholds
+     * (admin), each person's notification preferences (their own), and reorder snoozes
+     * (anyone active). The document id says which, so who may write is decided from the
+     * id before the document is looked at. Not in brandData on purpose — the catch-all
+     * below must not also answer for it.
+     */
+    function scheduleWriter(docId) {
+      return docId.matches('^prefs__.*') ? docId == 'prefs__' + request.auth.uid
+        : docId.matches('^snooze__.*') ? true
+        : roleIsAdmin();
+    }
+
+    function validScheduleDoc(docId, d) {
+      return d.id == docId && (
+        d.kind == 'stockCount' ? validStockCountSchedule(d)
+        : d.kind == 'settings' ? validInventorySettings(d)
+        : d.kind == 'prefs' ? validPrefs(d)
+        : d.kind == 'snooze' ? validSnooze(d)
+        : false
+      );
+    }
+
+    function validStockCountSchedule(d) {
+      return d.keys().hasAll(['id', 'kind', 'name', 'locationId', 'frequency', 'startTime', 'priority',
+          'enabled', 'createdBy', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'kind', 'name', 'locationId', 'frequency', 'daysOfWeek', 'dayOfMonth',
+          'intervalDays', 'anchorDay', 'startTime', 'durationMin', 'assignedTo', 'assignedToAll',
+          'assignedToName', 'requiresApproval', 'priority', 'enabled', 'note',
+          'createdBy', 'createdAt', 'updatedAt'])
+        && text(d.name, 200) && text(d.locationId, 200)
+        && d.frequency in ['daily', 'weekly', 'biweekly', 'monthly', 'custom']
+        && text(d.startTime, 5)
+        && d.priority in ['normal', 'high', 'critical']
+        && d.enabled is bool
+        && (!('daysOfWeek' in d) || (d.daysOfWeek is list && d.daysOfWeek.size() <= 7))
+        && (!('dayOfMonth' in d) || (d.dayOfMonth is int && d.dayOfMonth >= 1 && d.dayOfMonth <= 31))
+        && (!('intervalDays' in d) || (d.intervalDays is int && d.intervalDays >= 1 && d.intervalDays <= 365))
+        && (!('anchorDay' in d) || epochMs(d.anchorDay))
+        && (!('durationMin' in d) || nonneg(d.durationMin, 1440))
+        && (!('assignedTo' in d) || (d.assignedTo is list && d.assignedTo.size() <= 50))
+        && (!('assignedToAll' in d) || d.assignedToAll is bool)
+        && (!('assignedToName' in d) || text(d.assignedToName, 1000))
+        && (!('requiresApproval' in d) || d.requiresApproval is bool)
+        && (!('note' in d) || text(d.note, 2000))
+        && text(d.createdBy, 200) && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    function validInventorySettings(d) {
+      return d.keys().hasOnly(['id', 'kind', 'adjustValueBaht', 'adjustPct', 'wasteValueBaht', 'coverDays',
+          'reminderBeforeMin', 'escalateAfterHours', 'usageWindowDays',
+          'supplierMaxPostponeDays', 'supplierLinkTtlDays', 'updatedBy', 'updatedAt'])
+        && d.id == 'settings'
+        && nonneg(d.adjustValueBaht, 100000000) && nonneg(d.adjustPct, 100) && nonneg(d.wasteValueBaht, 100000000)
+        && nonneg(d.coverDays, 365) && nonneg(d.reminderBeforeMin, 10080) && nonneg(d.escalateAfterHours, 720)
+        && nonneg(d.usageWindowDays, 365) && epochMs(d.updatedAt)
+        // The supplier link (5 Oct 2026): how much later a supplier may move a delivery on
+        // their own, and the longest a link lives. Optional — older settings lack them.
+        && (!('supplierMaxPostponeDays' in d) || nonneg(d.supplierMaxPostponeDays, 60))
+        && (!('supplierLinkTtlDays' in d) || nonneg(d.supplierLinkTtlDays, 90));
+    }
+
+    function validPrefs(d) {
+      return d.keys().hasOnly(['id', 'kind', 'userId', 'mute', 'sound', 'updatedAt'])
+        && d.userId == request.auth.uid && d.mute is map && epochMs(d.updatedAt)
+        // Popup sound and mute (5 Oct 2026).
+        && (!('sound' in d) || (d.sound is map
+          && d.sound.keys().hasOnly(['enabled', 'volume', 'off', 'mutedUntil', 'allowCritical'])
+          && d.sound.enabled is bool && nonneg(d.sound.volume, 1)
+          && (!('off' in d.sound) || (d.sound.off is list && d.sound.off.size() <= 10))
+          && (!('mutedUntil' in d.sound) || epochMs(d.sound.mutedUntil))
+          && (!('allowCritical' in d.sound) || d.sound.allowCritical is bool)));
+    }
+
+    function validSnooze(d) {
+      return d.keys().hasOnly(['id', 'kind', 'until', 'by', 'byName', 'reason', 'createdAt'])
+        && epochMs(d.until) && d.by == request.auth.uid && text(d.byName, 200) && epochMs(d.createdAt)
+        && (!('reason' in d) || text(d.reason, 2000));
+    }
+
+    // ---------------------------------------------------------- monthly count ----
+
+    /**
+     * Monthly stock-count sheets (29 Sep 2026, services/monthlyCounts.ts). Counting is
+     * everyone's job; what the count does to the books is a manager's decision, signed.
+     *
+     *  - created empty, `counting`, in the creator's name, at the id its location and month
+     *    give — one sheet per location per month;
+     *  - while `counting`, any active user may change the counted figures and nothing else;
+     *  - a manager or admin confirms it: `recorded` (kept, stock untouched) or `posting` /
+     *    `posted` (differences filed as adjustments, part by part); the sheet's lines are
+     *    frozen from then on;
+     *  - `posted` is final. An admin may delete a sheet that has not touched the books.
+     *
+     * Not in brandData: this block alone answers for it, and the counted lines are a map
+     * checked only for size, so a sheet of hundreds of products stays inside the budget of
+     * 1,000 evaluated expressions.
+     */
+    function validMonthlyCount(docId, d) {
+      return d.keys().hasAll(['id', 'locationId', 'month', 'countDate', 'status', 'lines',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['id', 'locationId', 'month', 'countDate', 'status', 'lines', 'questions',
+          'results', 'postedIds', 'adjDocNos', 'note', 'blind', 'createdBy', 'createdByName', 'createdAt',
+          'updatedAt', 'updatedBy', 'updatedByName', 'confirmedBy', 'confirmedByName', 'confirmedAt'])
+        && d.id == docId && docId == d.locationId + '__' + d.month
+        && text(d.locationId, 200) && d.month.matches('^[0-9]{4}-[0-9]{2}$') && epochMs(d.countDate)
+        && d.status in ['counting', 'recorded', 'posting', 'posted']
+        && d.lines is map && d.lines.size() <= 3000
+        && (!('questions' in d) || (d.questions is map && d.questions.size() <= 3000))
+        && (!('results' in d) || (d.results is map && d.results.size() <= 3000))
+        && (!('postedIds' in d) || (d.postedIds is list && d.postedIds.size() <= 3000))
+        && (!('adjDocNos' in d) || (d.adjDocNos is list && d.adjDocNos.size() <= 50))
+        && (!('note' in d) || text(d.note, 2000))
+        && (!('blind' in d) || d.blind is bool)
+        && text(d.createdBy, 200) && text(d.createdByName, 200)
+        && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    function monthlyCountCreate(docId) {
+      let d = request.resource.data;
+      return validMonthlyCount(docId, d) && d.status == 'counting' && d.lines.size() == 0
+        && d.createdBy == request.auth.uid
+        && !('questions' in d) && !('results' in d) && !('postedIds' in d) && !('adjDocNos' in d) && !('confirmedBy' in d);
+    }
+
+    function monthlyCountUpdate(docId) {
+      let d = request.resource.data;
+      let o = resource.data;
+      let e = d.diff(o).affectedKeys();
+      return validMonthlyCount(docId, d)
+        && !e.hasAny(['id', 'locationId', 'month', 'countDate', 'blind', 'createdBy', 'createdByName', 'createdAt'])
+        && (
+          (o.status == 'counting' && d.status == 'counting'
+            && e.hasOnly(['lines', 'questions', 'updatedAt', 'updatedBy', 'updatedByName'])
+            && d.updatedBy == request.auth.uid)
+          || (o.status in ['counting', 'recorded', 'posting'] && d.status in ['recorded', 'posting', 'posted']
+            && !(o.status != 'counting' && d.status == 'recorded')
+            && !e.hasAny(['lines', 'questions'])
+            // Every row of an imported file decided first (owner, 29 Sep 2026).
+            && (!('questions' in d) || d.questions.size() == 0)
+            && roleIsManager() && d.confirmedBy == request.auth.uid && epochMs(d.confirmedAt))
+        );
+    }
+
+    match /monthlyCounts/{docId} {
+      allow read: if active();
+      allow create: if active() && monthlyCountCreate(docId);
+      allow update: if active() && monthlyCountUpdate(docId);
+      allow delete: if admin() && resource.data.status in ['counting', 'recorded'];
+    }
+
+    match /lelapin__monthlyCounts/{docId} {
+      allow read: if active();
+      allow create: if active() && monthlyCountCreate(docId);
+      allow update: if active() && monthlyCountUpdate(docId);
+      allow delete: if admin() && resource.data.status in ['counting', 'recorded'];
+    }
+
+    match /rnd__monthlyCounts/{docId} {
+      allow read: if active();
+      allow create: if active() && monthlyCountCreate(docId);
+      allow update: if active() && monthlyCountUpdate(docId);
+      allow delete: if admin() && resource.data.status in ['counting', 'recorded'];
+    }
+
+    // ------------------------------------------------------------ intelligence shadow ----
+
+    /**
+     * Phase G9 (6 Oct 2026): what the intelligence predicted, kept to compare with what
+     * happened. Written by a manager's or admin's device, in their name; immutable — no one
+     * may change or delete a prediction after the fact, or the comparison means nothing.
+     * Read by managers and admins, on demand (the evaluation screen), never subscribed.
+     */
+    function validShadow(docId, d) {
+      return d.keys().hasOnly(['id', 'kind', 'engineVersion', 'createdAt', 'inputsAsOf', 'createdBy',
+          'poId', 'supplierId', 'dueDate', 'score', 'level', 'dataConfidence', 'reasons', 'day', 'items'])
+        && d.id == docId && d.createdBy == request.auth.uid
+        && text(d.engineVersion, 40) && epochMs(d.createdAt) && epochMs(d.inputsAsOf)
+        && (
+          (d.kind == 'deliveryRisk' && docId.matches('^dr__.{1,200}$') && text(d.poId, 200) && docId == 'dr__' + d.poId
+            && d.score is number && d.score >= 0 && d.score <= 100
+            && d.level in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+            && d.reasons is list && d.reasons.size() <= 12)
+          || (d.kind == 'stockout' && docId.matches('^so__[0-9]{8}$') && epochMs(d.day)
+            && d.items is list && d.items.size() <= 300)
+        );
+    }
+
+    match /intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /lelapin__intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /rnd__intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------- audit log (B2) ----
+
+    /**
+     * Append-only. Anyone active may add an entry in their OWN name and role; nobody —
+     * an admin included — may change or delete one. Only an admin reads them, and only a
+     * page at a time (a query must say limit <= 50), so the history cannot become a broad
+     * listener that costs a read per entry on every open.
+     */
+    function validAudit(docId, d) {
+      return d.keys().hasOnly(['id', 'actorId', 'actorName', 'actorRole', 'action', 'entityType', 'entityId',
+          'before', 'after', 'reason', 'operationId', 'traceId', 'createdAt'])
+        // G18: the workflow it belongs to — an id, never free text.
+        && (!('traceId' in d) || (d.traceId is string && d.traceId.matches('^[0-9a-f]{32}$')))
+        && d.id == docId && docId.matches('^[0-9]{14}_[a-z0-9]{1,12}$')
+        && d.actorId == request.auth.uid && d.actorRole == profile().role
+        && text(d.actorName, 120)
+        && d.action is string && d.action.matches('^[a-zA-Z]{1,30}[.][a-zA-Z]{1,40}$')
+        && d.entityType in ['product', 'location', 'supplier', 'supplierItem', 'unitConversion', 'user', 'settings',
+            'schedule', 'companyProfile', 'maintenance', 'movement', 'purchaseOrder', 'backup']
+        && text(d.entityId, 200) && d.entityId.size() > 0
+        && (d.before == null || (d.before is map && d.before.size() <= 40))
+        && (d.after == null || (d.after is map && d.after.size() <= 40))
+        && (!('reason' in d) || text(d.reason, 500))
+        && text(d.operationId, 40)
+        && epochMs(d.createdAt)
+        // Written now, or from the device's outbox within the week; never dated ahead.
+        && d.createdAt <= request.time.toMillis() + 300000
+        && d.createdAt >= request.time.toMillis() - 604800000;
+    }
+
+    match /auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /lelapin__auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /rnd__auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /inventorySchedules/{docId} {
+      allow read: if active();
+      allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
+      allow delete: if active() && scheduleWriter(docId);
+    }
+
+    match /lelapin__inventorySchedules/{docId} {
+      allow read: if active();
+      allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
+      allow delete: if active() && scheduleWriter(docId);
+    }
+
+    match /rnd__inventorySchedules/{docId} {
+      allow read: if active();
+      allow create, update: if active() && scheduleWriter(docId) && validScheduleDoc(docId, request.resource.data);
+      allow delete: if active() && scheduleWriter(docId);
+    }
+
+    // ---------------------------------------------------------------- notifications ----
+
+    /**
+     * One notification per document, under the id that makes it unique (`<kind>__…`), so
+     * the Worker and the app announcing the same thing write the same document. The Worker
+     * writes as a service account, outside these rules; what is here is the app's share.
+     *
+     * Anyone may create what their own action causes — a task handed in, a request sent, a
+     * big adjustment — in their own name; a manager may write any kind (the app stands in
+     * for the Worker when it is late). Reading one marks only your own key in `readBy`.
+     */
+    function validNotification(docId, d) {
+      return d.keys().hasAll(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
+          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt'])
+        && d.keys().hasOnly(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
+          'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt', 'resolvedAt', 'locationId', 'productId', 'supplierId',
+          'audienceKeys', 'traceId'])
+        && (!('traceId' in d) || (d.traceId is string && d.traceId.matches('^[0-9a-f]{32}$')))
+        && d.id == docId && text(d.kind, 40) && docId.matches('^' + d.kind + '__.+')
+        && d.category in ['task', 'inventory', 'purchasing', 'supplier', 'system']
+        && d.priority in ['critical', 'high', 'medium', 'info']
+        && d.to is map && d.params is map && d.params.size() <= 20 && text(d.link, 300)
+        && d.active is bool && d.readBy is map && d.source in ['worker', 'client']
+        && text(d.createdBy, 200) && epochMs(d.createdAt) && epochMs(d.updatedAt) && epochMs(d.expiresAt)
+        && (!('resolvedAt' in d) || epochMs(d.resolvedAt))
+        // The recipients as query keys (6 Oct 2026): what the bell's indexed query matches.
+        && (!('audienceKeys' in d) || (d.audienceKeys is list && d.audienceKeys.size() <= 40));
+    }
+
+    function notificationCreate(docId) {
+      let d = request.resource.data;
+      return validNotification(docId, d) && d.source == 'client' && d.createdBy == request.auth.uid
+        && d.readBy.size() == 0 && d.active == true
+        && (manager() || d.kind in ['taskApproval', 'prSubmitted', 'adjustment', 'waste', 'transferArriving', 'transferIssue', 'transferSubmitted', 'transferDiscrepancy', 'poSent']);
+    }
+
+    function notificationUpdate(docId) {
+      let d = request.resource.data;
+      let old = resource.data;
+      return d.id == old.id && d.kind == old.kind && (
+        (d.diff(old).affectedKeys().hasOnly(['readBy', 'updatedAt']) && d.readBy is map
+          && d.readBy.diff(old.readBy).affectedKeys().hasOnly([request.auth.uid]))
+        || (roleIsManager() && validNotification(docId, d)));
+    }
+
+    match /notifications/{docId} {
+      allow read: if active();
+      allow create: if active() && notificationCreate(docId);
+      allow update: if active() && notificationUpdate(docId);
+      allow delete: if admin();
+    }
+
+    match /lelapin__notifications/{docId} {
+      allow read: if active();
+      allow create: if active() && notificationCreate(docId);
+      allow update: if active() && notificationUpdate(docId);
+      allow delete: if admin();
+    }
+
+    match /rnd__notifications/{docId} {
+      allow read: if active();
+      allow create: if active() && notificationCreate(docId);
+      allow update: if active() && notificationUpdate(docId);
+      allow delete: if admin();
+    }
+
+    // ---------------------------------------------------------------- revocation ----
+
+    // One document per removed account, keyed by uid. Admins add and (to re-hire someone)
+    // remove them; nobody can lift their own.
+    match /revokedUsers/{uid} {
+      allow read: if admin();
+      allow create, delete: if admin() && uid != request.auth.uid;
+      allow update: if false;
+    }
+
+    // ---------------------------------------------------------------- brand data ----
+
+    // One block for every brand-scoped collection. Anything not named by the functions
+    // above — including /meta and any collection a client invents — falls through to
+    // Firestore's default deny.
+    match /{collection}/{docId} {
+      allow read: if active() && brandData(collection);
+
+      // Who may write, and separately, what a written document is allowed to look like.
+      // Type and range checks belong here as well as in the services, because the services
+      // are client code: a caller holding a token skips them entirely.
+      allow create: if writer(collection)
+        && clientStockWrite(collection)
+        && validShape(collection, docId, request.resource.data, true)
+        && createdHonestly(collection);
+
+      allow update: if writer(collection)
+        && clientStockWrite(collection)
+        && validShape(collection, docId, request.resource.data, false)
+        && editedHonestly(collection);
+
+      // The one catalogue field staff may set: a unit's rate for this product, stated the
+      // first time somebody keys that unit (owner, 20 Sep 2026). Everything else about a
+      // product stays with the admin.
+      allow update: if active() && kind(collection) == 'products'
+        && editedKeys().hasOnly(['unitConversions', 'updatedAt', 'version'])
+        && versionMoved()
+        && validShape(collection, docId, request.resource.data, false);
+
+      allow delete: if active() && staffDeletable(collection);
+      // An announcement is never deleted, only cancelled — the send log is the record of
+      // what the company told its suppliers.
+      allow delete: if admin() && brandData(collection) && !ledger(collection)
+        && !receivedOrder(collection) && kind(collection) != 'announcements'
+        // A recipe is switched off, not deleted: past POS imports name it.
+        && kind(collection) != 'recipes'
+        // A skipped request stays, with why — the gap in the PR numbers is explained.
+        && !(kind(collection) == 'purchaseRequests' && resource.data.status == 'skipped');
+    }
+  }
+}

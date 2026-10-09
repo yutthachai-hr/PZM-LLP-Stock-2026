@@ -1,16 +1,24 @@
-import { backend } from '../backend'
+import { recordAudit, snapshot } from './auditLog'
+import { backend, BACKEND_MODE } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
+import { commandOn } from '../lib/stockCommands'
+import type { CommandReader, CommandSpec } from '../commands/spec'
+import {
+  adjustStockCommand,
+  consumeStockCommand,
+  fileCountCommand,
+  issueStockCommand,
+  receiveStockCommand,
+} from '../commands/stockCommands'
 import { noteWritten } from '../data/recentWrites'
 import { DELETE_FIELD, type Backend, type TxContext } from '../backend/types'
 import { AppError } from '../i18n/AppError'
 import {
   COL,
-  ADJUST_REASONS,
   type StockMovement,
-  type MovementType,
   type Product,
   type AppUser,
   type StockLevel,
-  type StockLocation,
   type MovementEdit,
   type MovementEditField,
 } from '../types'
@@ -18,14 +26,27 @@ import { genId } from '../lib/id'
 import { getBrand } from '../brand/brand'
 import { sameUnit } from '../lib/units'
 import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
-import { balancesFromLedger, filedUnit, levelId, levelRef, parseLevelId } from '../lib/levelKey'
+import { balancesFromLedger, levelRef, parseLevelId } from '../lib/levelKey'
 export { balancesFromLedger, parseLevelId } from '../lib/levelKey'
+import {
+  closedPeriod,
+  type ConsumeParams,
+  keyedUnit,
+  levelDoc,
+  requireMasterData,
+  type Actor,
+  type FileMovement,
+  type PlanAdjustParams,
+  type PlanIssueParams,
+  type PlanReceiveParams,
+} from '../commands/ledgerTx'
+export * from '../commands/ledgerTx'
+import { activeTraceId, emit, newRequestId, traceHeaders, BUILD_HEADER } from '../lib/trace'
 import {
   QTY_STEP,
   requireQty,
   requireCountQty,
   requireEpochMs,
-  requireOneOf,
   requireId,
   roundQty,
 } from '../lib/validate'
@@ -44,91 +65,6 @@ import {
 //     reading the current brand at each step would split one document across two brands.
 // ============================================================================
 
-export interface MovementLine {
-  productId: string
-  productName: string
-  /** The product's own unit. */
-  unit: string
-  /** What the person picked in the unit box, when it is not the product's own. */
-  entryUnit?: string
-  /**
-   * As keyed, in `entryUnit`. Required whenever `entryUnit` is given: the caller converted
-   * with the product's rate (see lib/uom.ts `entryFor`) and `qty` below is already the
-   * product's own unit.
-   */
-  entryQty?: number
-  /** In the product's own unit. */
-  qty: number
-  note?: string
-}
-
-interface Actor {
-  id: string
-  name: string
-}
-
-const PREFIX: Record<MovementType, string> = {
-  receive: 'RC',
-  issue: 'IS',
-  adjust: 'ADJ',
-  consume: 'CS',
-}
-
-/** The unit keyed, when it differs from the product's own — what the movement records. */
-function keyedUnit(x: { unit: string; entryUnit?: string }): string | undefined {
-  const u = (x.entryUnit ?? '').trim()
-  return u && !sameUnit(u, x.unit) ? u : undefined
-}
-
-/** The entryUnit/entryQty pair to write on a movement, or nothing for a base-unit row. */
-function keyedFields(x: { unit: string; entryUnit?: string; entryQty?: number }): { entryUnit: string; entryQty: number } | Record<string, never> {
-  const u = keyedUnit(x)
-  return u && x.entryQty !== undefined ? { entryUnit: u, entryQty: x.entryQty } : {}
-}
-
-/** "สต๊อกไม่พอ" with the base balance, and what was keyed when that differs. */
-function shortMessage(l: MovementLine, avail: number): AppError {
-  const keyed = keyedUnit(l)
-  if (keyed && l.entryQty !== undefined) {
-    return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit}) — {entryQty} {entryUnit} = {need} {unit}', {
-      name: l.productName, qty: avail, unit: l.unit, entryQty: l.entryQty, entryUnit: keyed, need: l.qty,
-    })
-  }
-  return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
-}
-
-/**
- * The cached balance document.
- *
- * `updatedBy` is not decoration: the security rules require it to equal the caller's uid.
- * Balances are the one thing the rules cannot prove correct — that needs a trusted server
- * comparing every write against the ledger, and the free plan has no room for one — so the
- * next best thing is that every balance in the database names whoever last wrote it.
- */
-export function levelDoc(
-  locationId: string,
-  productId: string,
-  qty: number,
-  actor: Actor,
-  now: number,
-  unit?: string,
-): Record<string, unknown> {
-  return {
-    productId,
-    locationId,
-    // Omitted for the product's own unit, so rows written before units were selectable keep
-    // exactly the shape they have.
-    ...(unit ? { unit } : {}),
-    qty: roundQty(qty),
-    updatedAt: now,
-    updatedBy: actor.id,
-  }
-}
-
-export function makeDocNo(type: MovementType, seq: number): string {
-  return `${PREFIX[type]}-${String(seq).padStart(5, '0')}`
-}
-
 /** The backend for the brand this operation belongs to, fixed for its whole lifetime. */
 function scoped(): Backend {
   return backend.forBrand(getBrand())
@@ -140,16 +76,18 @@ function scoped(): Backend {
  * reaches the ledger unnoted. The sink is reset on every attempt: Firestore re-runs the
  * callback on contention, and rows from an attempt that never committed must not show.
  */
+
+
 export async function filing<R>(
   db: Backend | undefined,
-  run: (tx: TxContext, file: (mv: Omit<StockMovement, 'id'>) => void) => Promise<R>,
+  run: (tx: TxContext, file: FileMovement) => Promise<R>,
 ): Promise<R> {
   const targetDb = db ?? scoped()
   let sink: StockMovement[] = []
   const result = await targetDb.transaction(async (tx) => {
     sink = []
-    return run(tx, (mv) => {
-      const id = genId()
+    return run(tx, (mv, given) => {
+      const id = given ?? genId()
       tx.set(COL.movements, id, mv as Record<string, unknown>)
       sink.push({ ...mv, id } as StockMovement)
     })
@@ -169,297 +107,70 @@ function noteChanged(mv: StockMovement, patch: Record<string, unknown>): void {
 }
 
 /**
- * Collapse a document's lines to one entry per product, validating as it goes.
- *
- * Two lines for the same product used to be two independent reads of the same balance and
- * two writes of it, so the second overwrote the first: receiving 2 and 3 of one product
- * left a balance of 3, and issuing 7 and 7 against a balance of 10 passed the availability
- * check twice. The UI's line builder happens to prevent duplicates; that is not where this
- * belongs.
+ * Run a stock command (ADR-001): on the server when this build sends it there, otherwise
+ * here, through `filing`. The same transaction body either way (src/commands).
  */
-function mergeLines(lines: MovementLine[]): MovementLine[] {
-  if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
-  const byProduct = new Map<string, MovementLine>()
-  for (const raw of lines) {
-    requireId(raw.productId, raw.productName || 'productId')
-    const qty = requireQty(raw.qty, raw.productName)
-    // A line keyed in another unit says how many of that unit: the caller converted it
-    // (lib/uom.ts) and `qty` is already the product's own unit. A line without that is
-    // not a converted line, and the old per-unit filing is not offered to new rows.
-    const keyed = keyedUnit(raw)
-    if (keyed && !(raw.entryQty !== undefined && raw.entryQty > 0)) {
-      throw new AppError('รายการ "{name}" คีย์เป็น {unit} แต่ไม่ได้ระบุจำนวนที่คีย์', { name: raw.productName, unit: keyed })
-    }
-    const l: MovementLine = keyed ? { ...raw, qty, entryUnit: keyed } : { ...raw, qty, entryUnit: undefined, entryQty: undefined }
-    const existing = byProduct.get(l.productId)
-    if (!existing) {
-      byProduct.set(l.productId, l)
-      continue
-    }
-    const notes = [existing.note, l.note].filter(Boolean)
-    existing.qty = requireQty(existing.qty + qty, l.productName)
-    // Two lines in the same keyed unit add up in it; in different units the merged line is
-    // simply so many of the product's own unit, which is always true.
-    if (existing.entryUnit && l.entryUnit && sameUnit(existing.entryUnit, l.entryUnit)) {
-      existing.entryQty = roundQty((existing.entryQty ?? 0) + (l.entryQty ?? 0))
-    } else {
-      delete existing.entryUnit
-      delete existing.entryQty
-    }
-    existing.note = notes.length > 0 ? [...new Set(notes)].join('; ') : undefined
-  }
-  return [...byProduct.values()]
-}
-
-/**
- * Read the master data a document refers to, inside the transaction, and refuse anything
- * pointing at a product or location that is gone or retired.
- *
- * A form held open while someone else deletes a location keeps the old id in its state, so
- * without this the movement and the balance are written against master data that no longer
- * exists — they show up in reports with a blank name and cannot be corrected from the UI.
- *
- * It costs one read per product plus one per location. That is the price of the movement
- * being about something real.
- */
-async function requireMasterData(
-  tx: TxContext,
-  productIds: string[],
-  locationIds: string[],
-): Promise<void> {
-  const products = await Promise.all(
-    productIds.map((id) => tx.get<Product>(COL.products, id).then((p) => [id, p] as const)),
-  )
-  const locations = await Promise.all(
-    locationIds.map((id) => tx.get<StockLocation>(COL.locations, id).then((l) => [id, l] as const)),
-  )
-  for (const [id, p] of products) {
-    if (!p) throw new AppError('ไม่พบสินค้าในระบบแล้ว (อาจถูกลบไป) — โปรดเลือกใหม่')
-    if (p.active === false) {
-      throw new AppError('สินค้า "{name}" ถูกปิดใช้งานแล้ว', { name: p.name || id })
-    }
-  }
-  for (const [id, l] of locations) {
-    if (!l) throw new AppError('ไม่พบคลังในระบบแล้ว (อาจถูกลบไป) — โปรดเลือกใหม่')
-    if (l.active === false) {
-      throw new AppError('คลัง "{name}" ถูกปิดใช้งานแล้ว', { name: l.name || id })
-    }
-  }
-}
-
-/** Receive goods into a location (usually the main warehouse). Adds stock. */
-/**
- * A receipt's paperwork, kept as fields (owner, 24 Sep 2026) instead of one free-text note:
- * who it came from, the number printed on their document and its date, and the order it
- * checks in. Every field is optional so a receipt keyed the old way still files.
- */
-export interface ReceiptDoc {
-  supplierId?: string
-  supplierName?: string
-  invoiceNo?: string
-  docDate?: number
-  poId?: string
-  poDocNo?: string
-}
-
-/** Only the fields that carry something — Firestore stores no empty strings for us. */
-function docFields(doc: ReceiptDoc | undefined): Partial<StockMovement> {
-  if (!doc) return {}
-  const out: Partial<StockMovement> = {}
-  const text = (v: string | undefined) => (v && v.trim() ? v.trim() : undefined)
-  const supplierId = text(doc.supplierId)
-  const supplierName = text(doc.supplierName)
-  const invoiceNo = text(doc.invoiceNo)
-  const poId = text(doc.poId)
-  const poDocNo = text(doc.poDocNo)
-  if (supplierId) out.supplierId = supplierId
-  if (supplierName) out.supplierName = supplierName
-  if (invoiceNo) out.invoiceNo = invoiceNo
-  if (doc.docDate !== undefined) {
-    requireEpochMs(doc.docDate)
-    out.docDate = doc.docDate
-  }
-  if (poId) out.poId = poId
-  if (poDocNo) out.poDocNo = poDocNo
-  return out
-}
-
-export async function receiveStock(params: {
-  lines: MovementLine[]
-  toLocationId: string
-  date: number
-  actor: Actor
-  note?: string
-  /** The receipt's paperwork, stamped on every row it files. */
-  doc?: ReceiptDoc
-  /**
-   * A photo of the supplier's document, in the same commit as the stock — the rule
-   * `consumeStock` learnt the hard way: a photo written afterwards can fail with the
-   * stock already moved, and saving again moves it twice.
-   */
-  photoDataUrl?: string
-}): Promise<string> {
-  const { toLocationId, date, actor, note, photoDataUrl } = params
-  const lines = mergeLines(params.lines)
-  requireEpochMs(date)
-  requireId(toLocationId, 'toLocationId')
-  const paperwork = docFields(params.doc)
+export async function execute<P, R, C>(spec: CommandSpec<P, R, C>, params: P, actor: Actor): Promise<R> {
+  // Pinned before anything is awaited: a brand switched mid-save must not split the work.
+  const brand = getBrand()
+  if (spec.brands && !spec.brands.includes(brand)) throw new AppError('ไม่มีสิทธิ์ทำรายการนี้')
   const db = scoped()
-
-  return filing(db, async (tx, file) => {
-    // ---- reads ----
-    await requireMasterData(
-      tx,
-      lines.map((l) => l.productId),
-      [toLocationId],
-    )
-    const counter = await tx.get<{ value: number }>(COL.counters, 'receive')
-    const seq = (counter?.value ?? 0) + 1
-    const levels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
-    )
-    // ---- writes ----
-    const docNo = makeDocNo('receive', seq)
-    tx.set(COL.counters, 'receive', { value: seq })
-    const now = Date.now()
-    if (photoDataUrl) {
-      tx.set(COL.movementImages, docNo, { dataUrl: photoDataUrl })
-    }
-    lines.forEach((l, i) => {
-      const cur = levels[i]?.qty ?? 0
-      tx.set(
-        COL.stockLevels,
-        levelRef(toLocationId, l).id,
-        levelDoc(toLocationId, l.productId, cur + l.qty, actor, now, levelRef(toLocationId, l).unit),
-      )
-      const mv: Omit<StockMovement, 'id'> = {
-        docNo,
-        type: 'receive',
-        productId: l.productId,
-        productName: l.productName,
-        unit: l.unit,
-        ...keyedFields(l),
-        qty: l.qty,
-        toLocationId,
-        ...(l.note ?? note ? { note: l.note ?? note } : {}),
-        ...paperwork,
-        ...(photoDataUrl ? { hasPhoto: true } : {}),
-        date,
-        byUserId: actor.id,
-        byUserName: actor.name,
-        createdAt: now,
-      }
-      file(mv)
-    })
-    return docNo
-  })
+  const remote = await callCommand<R>(spec.name, params, brand)
+  if (remote !== NOT_SENT) return remote
+  const read: CommandReader = {
+    get: (c, id) => db.getOne(c, id),
+    getBy: (c, field, value) => db.getBy(c, field, value),
+    getRange: async (c, field, from, to) => (await db.getRange(c, field, from, to)) ?? [],
+  }
+  const ctx = (spec.prepare ? await spec.prepare(read, params) : undefined) as C
+  return filing(db, (tx, file) => spec.run(tx, file, params, actor, ctx))
 }
 
-export interface PlanIssueParams {
-  lines: MovementLine[]
-  fromLocationId: string
-  toLocationId: string
-  date: number
-  actor: Actor
-  note?: string
-  transferId?: string
-}
-
-export interface PlannedIssue {
-  docNo: string
-  lines: MovementLine[]
-  commit: () => string
-}
+/** What callCommand returns when the command stays on the client path. */
+export const NOT_SENT = Symbol('not-sent')
 
 /**
- * Plan an issue (branch transfer) inside a transaction.
- * Reads master data, counters, and stock levels; validates quantities; returns a commit writer.
- * Used by issueStock and orchestrated transfer approval/receipt.
+ * POST /api/stock/<name>. The server's refusals come back as the app's own words (key +
+ * values) and are thrown as such. NOT_SENT when this build does not send the command, or
+ * the server is not set up yet (503) — the client path then files it.
  */
-export async function planIssue(
-  tx: TxContext,
-  params: PlanIssueParams,
-  file: (mv: Omit<StockMovement, 'id'>) => void,
-): Promise<PlannedIssue> {
-  const { fromLocationId, toLocationId, date, actor, note, transferId } = params
-  if (fromLocationId === toLocationId) throw new AppError('ต้นทางและปลายทางต้องต่างกัน')
-  const lines = mergeLines(params.lines)
-  requireEpochMs(date)
-  requireId(fromLocationId, 'fromLocationId')
-  requireId(toLocationId, 'toLocationId')
+declare const __BUILD_ID__: string
 
-  // ---- reads ----
-  await requireMasterData(
-    tx,
-    lines.map((l) => l.productId),
-    [fromLocationId, toLocationId],
-  )
-  const counter = await tx.get<{ value: number }>(COL.counters, 'issue')
-  const seq = (counter?.value ?? 0) + 1
-  const fromLevels = await Promise.all(
-    lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
-  )
-  const toLevels = await Promise.all(
-    lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
-  )
-  // validate availability — one line per product, so this is the whole demand for it
-  lines.forEach((l, i) => {
-    const avail = fromLevels[i]?.qty ?? 0
-    if (l.qty > avail) throw shortMessage(l, avail)
+export async function callCommand<R>(name: string, params: unknown, brand = getBrand(), opts: { force?: boolean } = {}): Promise<R | typeof NOT_SENT> {
+  // `force`: a command that has no client path in the cloud (the rules forbid it), whatever
+  // VITE_STOCK_COMMANDS says — Smart Other's proposeItem.
+  if (BACKEND_MODE !== 'cloud' || (!opts.force && !commandOn(name))) return NOT_SENT
+  const { authHeader } = await import('./poImages')
+  // G18: the workflow this call belongs to (or a fresh one), and an id for this one call.
+  const trace = { traceId: activeTraceId(), requestId: newRequestId() }
+  const started = Date.now()
+  const res = await fetch(`/api/stock/${name}`, {
+    method: 'POST',
+    // The build travels too: the release runbook counts commands per build (old PWA tabs).
+    headers: { 'content-type': 'application/json', ...(await authHeader()), ...traceHeaders(trace), [BUILD_HEADER]: typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'unknown' },
+    body: JSON.stringify({ brand, params }),
   })
+  emit({ ...trace, stage: 'app.call', name, outcome: res.ok ? 'ok' : res.status === 409 ? 'conflict' : res.status >= 500 ? 'error' : 'refused', code: res.status, ms: Date.now() - started, brand })
+  if (res.status === 503) return NOT_SENT
+  const out = (await res.json().catch(() => ({}))) as { result?: R; error?: string; key?: string; vars?: Record<string, string | number> }
+  if (res.status === 422 && out.key) throw new AppError(out.key, out.vars)
+  if (res.status === 409) throw new AppError('ข้อมูลเพิ่งเปลี่ยนระหว่างบันทึก กรุณาลองอีกครั้ง')
+  if (res.status === 401) throw new AppError('กรุณาเข้าสู่ระบบใหม่')
+  if (res.status === 403) throw new AppError('ไม่มีสิทธิ์ทำรายการนี้')
+  if (!res.ok || !('result' in out)) throw new AppError('บันทึกไม่สำเร็จ ลองอีกครั้ง')
+  return out.result as R
+}
 
-  // ---- writes ----
-  const docNo = makeDocNo('issue', seq)
-  return {
-    docNo,
-    lines,
-    commit: () => {
-      tx.set(COL.counters, 'issue', { value: seq })
-      const now = Date.now()
-      lines.forEach((l, i) => {
-        const fromCur = fromLevels[i]?.qty ?? 0
-        const toCur = toLevels[i]?.qty ?? 0
-        tx.set(
-          COL.stockLevels,
-          levelRef(fromLocationId, l).id,
-          levelDoc(fromLocationId, l.productId, fromCur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
-        )
-        tx.set(
-          COL.stockLevels,
-          levelRef(toLocationId, l).id,
-          levelDoc(toLocationId, l.productId, toCur + l.qty, actor, now, levelRef(toLocationId, l).unit),
-        )
-        const mv: Omit<StockMovement, 'id'> = {
-          docNo,
-          type: 'issue',
-          productId: l.productId,
-          productName: l.productName,
-          unit: l.unit,
-          ...keyedFields(l),
-          qty: l.qty,
-          fromLocationId,
-          toLocationId,
-          note: l.note ?? note,
-          ...(transferId ? { transferId } : {}),
-          date,
-          byUserId: actor.id,
-          byUserName: actor.name,
-          createdAt: now,
-        }
-        file(mv)
-      })
-      return docNo
-    },
-  }
+export async function receiveStock(params: PlanReceiveParams): Promise<string> {
+  const { actor, ...rest } = params
+  return execute(receiveStockCommand, rest, actor)
 }
 
 /** Issue / transfer goods from one location to another (main -> branch). Moves stock. */
 export async function issueStock(params: PlanIssueParams): Promise<string> {
-  const db = scoped()
-  return filing(db, async (tx, file) => {
-    const planned = await planIssue(tx, params, file)
-    return planned.commit()
-  })
+  const { actor, transferId, ...rest } = params
+  if (transferId) throw new AppError('รายการโอนบันทึกผ่านเอกสารโอนเท่านั้น')
+  return execute(issueStockCommand, rest, actor)
 }
 
 /**
@@ -472,70 +183,9 @@ export async function issueStock(params: PlanIssueParams): Promise<string> {
  * pressing save again deducted it a second time. It is an ordinary Firestore document
  * (base64, since Cloud Storage left the free plan), so it belongs in the same commit.
  */
-export async function consumeStock(params: {
-  lines: MovementLine[]
-  fromLocationId: string
-  date: number
-  actor: Actor
-  note?: string
-  photoDataUrl?: string
-}): Promise<string> {
-  const { fromLocationId, date, actor, note, photoDataUrl } = params
-  const lines = mergeLines(params.lines)
-  requireEpochMs(date)
-  requireId(fromLocationId, 'fromLocationId')
-  const db = scoped()
-
-  return filing(db, async (tx, file) => {
-    // ---- reads ----
-    await requireMasterData(
-      tx,
-      lines.map((l) => l.productId),
-      [fromLocationId],
-    )
-    const counter = await tx.get<{ value: number }>(COL.counters, 'consume')
-    const seq = (counter?.value ?? 0) + 1
-    const levels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(fromLocationId, l).id)),
-    )
-    lines.forEach((l, i) => {
-      const avail = levels[i]?.qty ?? 0
-      if (l.qty > avail) throw shortMessage(l, avail)
-    })
-    // ---- writes ----
-    const doc = makeDocNo('consume', seq)
-    tx.set(COL.counters, 'consume', { value: seq })
-    const now = Date.now()
-    if (photoDataUrl) {
-      tx.set(COL.movementImages, doc, { dataUrl: photoDataUrl })
-    }
-    lines.forEach((l, i) => {
-      const cur = levels[i]?.qty ?? 0
-      tx.set(
-        COL.stockLevels,
-        levelRef(fromLocationId, l).id,
-        levelDoc(fromLocationId, l.productId, cur - l.qty, actor, now, levelRef(fromLocationId, l).unit),
-      )
-      const mv: Omit<StockMovement, 'id'> = {
-        docNo: doc,
-        type: 'consume',
-        productId: l.productId,
-        productName: l.productName,
-        unit: l.unit,
-        ...keyedFields(l),
-        qty: l.qty,
-        fromLocationId,
-        note: l.note ?? note,
-        hasPhoto: !!photoDataUrl,
-        date,
-        byUserId: actor.id,
-        byUserName: actor.name,
-        createdAt: now,
-      }
-      file(mv)
-    })
-    return doc
-  })
+export async function consumeStock(params: ConsumeParams): Promise<string> {
+  const { actor, ...rest } = params
+  return execute(consumeStockCommand, rest, actor)
 }
 
 /**
@@ -587,173 +237,30 @@ export async function adjustStock(params: {
   actor: Actor
   note?: string
 }): Promise<string> {
+  // One line of adjustStockLines: the same command, the same checks.
   const { productId, productName, unit, locationId, actor, note } = params
-  const [line] = mergeLines([{ productId, productName, unit, entryUnit: params.entryUnit, entryQty: params.entryQty, qty: params.qty }])
-  const ref = levelRef(locationId, line)
-  const qty = line.qty
-  const direction = requireOneOf(params.direction, ['in', 'out'] as const)
-  const reason = requireOneOf(
-    params.reason,
-    ADJUST_REASONS.map((r) => r.value) as readonly string[],
-  )
-  const date = requireEpochMs(params.date)
-  requireId(productId, 'productId')
-  requireId(locationId, 'locationId')
-  const db = scoped()
-
-  return filing(db, async (tx, file) => {
-    await requireMasterData(tx, [productId], [locationId])
-    const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
-    const seq = (counter?.value ?? 0) + 1
-    const level = await tx.get<StockLevel>(COL.stockLevels, ref.id)
-    const cur = level?.qty ?? 0
-    const delta = direction === 'in' ? qty : -qty
-    const next = roundQty(cur + delta)
-    if (next < 0) throw shortMessage(line, cur)
-
-    const docNo = makeDocNo('adjust', seq)
-    tx.set(COL.counters, 'adjust', { value: seq })
-    const now = Date.now()
-    tx.set(
-      COL.stockLevels,
-      ref.id,
-      levelDoc(locationId, productId, next, actor, now, ref.unit),
-    )
-    const mv: Omit<StockMovement, 'id'> = {
-      docNo,
-      type: 'adjust',
+  return adjustStockLines({
+    lines: [{
       productId,
       productName,
       unit,
-      ...keyedFields(line),
-      qty,
-      ...(direction === 'in' ? { toLocationId: locationId } : { fromLocationId: locationId }),
-      reason,
-      note,
-      date,
-      byUserId: actor.id,
-      byUserName: actor.name,
-      createdAt: now,
-    }
-    file(mv)
-    return docNo
+      ...(params.entryUnit !== undefined ? { entryUnit: params.entryUnit } : {}),
+      ...(params.entryQty !== undefined ? { entryQty: params.entryQty } : {}),
+      qty: params.qty,
+      direction: params.direction,
+      reason: params.reason,
+    }],
+    locationId,
+    date: params.date,
+    actor,
+    ...(note !== undefined ? { note } : {}),
   })
-}
-
-/** One line of a multi-line adjustment: which way, how much (product's own unit), and why. */
-export interface AdjustLine extends MovementLine {
-  direction: 'in' | 'out'
-  reason: string
-}
-
-/**
- * Adjust several products at one location under ONE document number (spec §2.5).
- *
- * The owner's mock-up counts a shelf and corrects every product on it in one go. Each line
- * is still an ordinary `adjust` movement with its own direction and reason — the rules, the
- * reports and voiding treat it exactly like one filed by `adjustStock` — they simply share a
- * docNo, the way a receipt's lines do.
- *
- * All or nothing: a line that would take a balance below zero refuses the whole document.
- * The same product twice is refused rather than netted, because "2 out for damage, 1 in
- * found" is two statements about the shelf that a single net line would lose.
- */
-export interface PlanAdjustParams {
-  lines: AdjustLine[]
-  locationId: string
-  date: number
-  actor: Actor
-  note?: string
-  transferId?: string
-}
-
-export interface PlannedAdjust {
-  docNo: string
-  commit: () => string
-}
-
-export async function planAdjust(
-  tx: TxContext,
-  params: PlanAdjustParams,
-  file: (mv: Omit<StockMovement, 'id'>) => void,
-): Promise<PlannedAdjust> {
-  const { locationId, actor, note, transferId } = params
-  if (params.lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
-  const reasons = ADJUST_REASONS.map((r) => r.value) as readonly string[]
-  const seen = new Set<string>()
-  const lines = params.lines.map((raw) => {
-    if (seen.has(raw.productId)) {
-      throw new AppError('สินค้า "{name}" อยู่ในใบนี้มากกว่า 1 บรรทัด', { name: raw.productName })
-    }
-    seen.add(raw.productId)
-    const [line] = mergeLines([raw])
-    return {
-      line,
-      direction: requireOneOf(raw.direction, ['in', 'out'] as const),
-      reason: requireOneOf(raw.reason, reasons),
-    }
-  })
-  const date = requireEpochMs(params.date)
-  requireId(locationId, 'locationId')
-
-  // ---- reads ----
-  await requireMasterData(
-    tx,
-    lines.map((x) => x.line.productId),
-    [locationId],
-  )
-  const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
-  const seq = (counter?.value ?? 0) + 1
-  const levels = await Promise.all(
-    lines.map((x) => tx.get<StockLevel>(COL.stockLevels, levelRef(locationId, x.line).id)),
-  )
-  const next = lines.map((x, i) => {
-    const cur = levels[i]?.qty ?? 0
-    const value = roundQty(cur + (x.direction === 'in' ? x.line.qty : -x.line.qty))
-    if (value < 0) throw shortMessage(x.line, cur)
-    return value
-  })
-
-  // ---- writes ----
-  const docNo = makeDocNo('adjust', seq)
-  return {
-    docNo,
-    commit: () => {
-      tx.set(COL.counters, 'adjust', { value: seq })
-      const now = Date.now()
-      lines.forEach(({ line, direction, reason }, i) => {
-        const ref = levelRef(locationId, line)
-        tx.set(COL.stockLevels, ref.id, levelDoc(locationId, line.productId, next[i], actor, now, ref.unit))
-        const mv: Omit<StockMovement, 'id'> = {
-          docNo,
-          type: 'adjust',
-          productId: line.productId,
-          productName: line.productName,
-          unit: line.unit,
-          ...keyedFields(line),
-          qty: line.qty,
-          ...(direction === 'in' ? { toLocationId: locationId } : { fromLocationId: locationId }),
-          reason,
-          note: line.note ?? note,
-          ...(transferId ? { transferId } : {}),
-          date,
-          byUserId: actor.id,
-          byUserName: actor.name,
-          createdAt: now,
-        }
-        file(mv)
-      })
-      return docNo
-    },
-  }
 }
 
 export async function adjustStockLines(params: PlanAdjustParams): Promise<string> {
-  const db = scoped()
-  return filing(db, async (tx, file) => {
-    const planned = await planAdjust(tx, params, file)
-    return planned.commit()
-  })
+  const { actor, transferId, ...rest } = params
+  if (transferId) throw new AppError('รายการโอนบันทึกผ่านเอกสารโอนเท่านั้น')
+  return execute(adjustStockCommand, rest, actor)
 }
 
 /**
@@ -776,8 +283,9 @@ export async function setStockCount(params: {
   note?: string
   date?: number
 }): Promise<boolean> {
-  const targetQty = requireCountQty(params.targetQty)
-  return fileCount(params, (cur) => roundQty(targetQty - cur))
+  requireCountQty(params.targetQty)
+  const { actor, ...rest } = params
+  return execute(fileCountCommand, rest, actor)
 }
 
 /**
@@ -804,69 +312,17 @@ export async function postCountAsOf(params: {
 }): Promise<boolean> {
   const delta = roundQty(requireCountQty(params.countedQty) - params.asOfQty)
   if (!Number.isFinite(delta)) throw new AppError('ค่าไม่ถูกต้อง: {value}', { value: String(params.asOfQty) })
-  return fileCount(params, () => delta)
-}
-
-/** The write both counts share: one `opening` adjustment on the product's own row. */
-async function fileCount(
-  params: {
-    productId: string
-    productName: string
-    unit: string
-    locationId: string
-    actor: Actor
-    note?: string
-    date?: number
-  },
-  deltaFrom: (current: number) => number,
-): Promise<boolean> {
-  const { productId, productName, unit, locationId, actor, note } = params
-  requireId(productId, 'productId')
-  requireId(locationId, 'locationId')
-  const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
-  const db = scoped()
-
-  return filing(db, async (tx, file) => {
-    await requireMasterData(tx, [productId], [locationId])
-    // A count is someone standing in front of the shelf reconciling the product's own
-    // balance, so it always lands on that row — there is no unit box on that screen.
-    const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
-    const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
-    const cur = level?.qty ?? 0
-    const delta = deltaFrom(cur)
-    if (delta === 0) return false
-    const next = roundQty(cur + delta)
-    if (next < 0) throw shortMessage({ productId, productName, unit, qty: Math.abs(delta) }, cur)
-
-    const seq = (counter?.value ?? 0) + 1
-    const now = Date.now()
-    tx.set(COL.counters, 'adjust', { value: seq })
-    tx.set(
-      COL.stockLevels,
-      levelId(locationId, productId),
-      levelDoc(locationId, productId, next, actor, now),
-    )
-    const mv: Omit<StockMovement, 'id'> = {
-      docNo: makeDocNo('adjust', seq),
-      type: 'adjust',
-      productId,
-      productName,
-      unit,
-      qty: Math.abs(delta),
-      ...(delta > 0 ? { toLocationId: locationId } : { fromLocationId: locationId }),
-      reason: 'opening',
-      note: note ?? 'ตั้งยอดคงเหลือ',
-      date,
-      byUserId: actor.id,
-      byUserName: actor.name,
-      createdAt: now,
-    }
-    file(mv)
-    return true
-  })
+  const { actor, ...rest } = params
+  return execute(fileCountCommand, rest, actor)
 }
 
 /** Edit the quantity/date/note of an existing movement, re-applying the balance delta atomically. */
+/** Why a row received against an order cannot be changed in place (plan A8). */
+/** An admin's correction reaching into a closed month (plan B1). */
+const PERIOD_CLOSED_EDIT = 'เดือน {month} ปิดยอดนับแล้ว — ระบุเหตุผลการแก้ไขย้อนหลัง' // i18n-key
+
+const ORDER_LOCKED = 'รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน' // i18n-key
+
 /** How many edits one row will carry before the history itself becomes the problem. */
 const MAX_EDITS = 200
 
@@ -881,6 +337,11 @@ export interface MovementPatch {
   entryUnit?: string
   fromLocationId?: string
   toLocationId?: string
+  /**
+   * Why a row in a month whose count is posted is being changed (plan B1). Required then,
+   * and kept on the row's edit history; ignored otherwise.
+   */
+  overrideReason?: string
 }
 
 /**
@@ -898,7 +359,7 @@ export interface MovementPatch {
  * Every edit appends to `edits` — never replaces it. `updatedBy` names only the last person,
  * which is precisely what a second edit would hide.
  */
-export async function editMovement(params: {
+async function editMovementUnbumped(params: {
   movementId: string
   patch: MovementPatch
   actor: Actor
@@ -929,6 +390,13 @@ export async function editMovement(params: {
     }
     if (from && to && from === to) throw new AppError('คลังต้นทางและปลายทางต้องต่างกัน')
     await requireMasterData(tx, [], [from, to].filter((x): x is string => !!x))
+    // The period lock (plan B1): a row in a closed month, or moved into one, changes only
+    // with a reason, which stays on the row.
+    const closed =
+      (await closedPeriod(tx, [mv.fromLocationId, mv.toLocationId], mv.date)) ??
+      (await closedPeriod(tx, [from, to], patch.date ?? mv.date))
+    const overrideReason = patch.overrideReason?.trim()
+    if (closed && !overrideReason) throw new AppError(PERIOD_CLOSED_EDIT, { month: closed })
 
     // What the row is keyed in after the edit, and how many of that.
     //
@@ -974,6 +442,22 @@ export async function editMovement(params: {
     }
     requireQty(qty, mv.productName)
     const stillLegacy = legacy && entryQty === undefined && !!keyedNext
+
+    // A row received against a purchase order is half of a pair: the order's lines and
+    // receipts say the same thing, and the rules never let a receipt come off an order
+    // (plan A8, 6 Oct 2026). Changing the quantity, unit, place or day here would leave
+    // the two disagreeing, so only the note may change; a wrong count is put right with
+    // an adjustment, which leaves both records true.
+    if (mv.poId) {
+      const moved =
+        qty !== mv.qty ||
+        entryQty !== mv.entryQty ||
+        unitChanged ||
+        from !== mv.fromLocationId ||
+        to !== mv.toLocationId ||
+        (patch.date !== undefined && patch.date !== mv.date)
+      if (moved) throw new AppError(ORDER_LOCKED, { docNo: mv.poDocNo ?? '' })
+    }
 
     const before = { productId: mv.productId, unit: mv.unit, entryUnit: mv.entryUnit, entryQty: mv.entryQty }
     const after = { productId: mv.productId, unit: mv.unit, entryUnit: keyedNext || undefined, entryQty }
@@ -1055,7 +539,7 @@ export async function editMovement(params: {
       // Appended, never replaced. The rules check it grew by exactly one and that the new
       // entry names the caller, so an edit cannot be filed under somebody else. The old and
       // new values ride along so the activity log can say what the row used to say.
-      edits: [...(mv.edits ?? []), { by: actor.id, byName: actor.name, at: now, changed, changes }],
+      edits: [...(mv.edits ?? []), { by: actor.id, byName: actor.name, at: now, changed, changes, ...(closed && overrideReason ? { periodOverride: overrideReason } : {}) }],
       updatedBy: actor.id,
       updatedByName: actor.name,
       updatedAt: now,
@@ -1082,7 +566,7 @@ const MAX_RELABEL = 1000
  * So every movement for this product is restamped, and each one carries an entry in its own
  * edit history naming who did it. Nothing is deleted and no quantity moves.
  */
-export async function changeProductUnit(params: {
+async function changeProductUnitUnbumped(params: {
   productId: string
   unitType: string
   unit: string
@@ -1160,7 +644,7 @@ export async function changeProductUnit(params: {
  * cannot be deleted — the rules keep them). Shared by the unit change and the unit
  * migration. Refuses a ledger that sums below zero anywhere, like recomputeLevels.
  */
-export async function rebuildProductLevels(
+async function rebuildProductLevelsUnbumped(
   db: Backend,
   productId: string,
   movements: readonly StockMovement[],
@@ -1195,7 +679,10 @@ export async function rebuildProductLevels(
  * already been consumed downstream needs a correcting adjustment, not a quiet deletion of the
  * history that explains the stock.
  */
-export async function voidMovement(movementId: string, actor: Actor): Promise<void> {
+async function voidMovementUnbumped(movementId: string, actor: Actor, reason: string): Promise<void> {
+  // An admin's decision, with why (plan A9): the rules refuse a void without one.
+  const why = reason.trim()
+  if (!why) throw new AppError('กรุณาระบุเหตุผลที่ยกเลิก')
   const db = scoped()
   let noted = () => {}
   await db.transaction(async (tx) => {
@@ -1204,6 +691,8 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
     if (!mv) throw new AppError('ไม่พบรายการ')
     if (mv.voided) return
     if (mv.transferId) throw new AppError('รายการนี้มาจากเอกสารส่งสินค้า — แก้ไขผ่านเอกสารนั้น')
+    // The order it was received against still counts it (plan A8): see editMovement.
+    if (mv.poId) throw new AppError(ORDER_LOCKED, { docNo: mv.poDocNo ?? '' })
 
     const fromLevel = mv.fromLocationId
       ? await tx.get<StockLevel>(COL.stockLevels, levelRef(mv.fromLocationId, mv).id)
@@ -1237,7 +726,7 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
         levelDoc(mv.toLocationId, mv.productId, next, actor, now, levelRef(mv.toLocationId, mv).unit),
       )
     }
-    const patchDoc = { voided: true, updatedBy: actor.id, updatedByName: actor.name, updatedAt: now }
+    const patchDoc = { voided: true, voidReason: why, updatedBy: actor.id, updatedByName: actor.name, updatedAt: now }
     tx.update(COL.movements, movementId, patchDoc)
     noted = () => noteChanged(mv, patchDoc)
   })
@@ -1334,7 +823,7 @@ export async function movementsChangedSince(db: Backend, since: number): Promise
  * fingerprinted before and after, and the rebuild is abandoned rather than applied if it
  * moved. Run it when nobody else is recording.
  */
-export async function recomputeLevels(actor: Actor): Promise<void> {
+async function recomputeLevelsUnbumped(actor: Actor): Promise<void> {
   const db = scoped()
   const readAt = Date.now()
   const movements = await db.getAll<StockMovement>(COL.movements)
@@ -1380,3 +869,45 @@ export async function recomputeLevels(actor: Actor): Promise<void> {
 
 // re-export for convenience
 export type { Product, AppUser }
+
+/** editMovement, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function editMovement(...args: Parameters<typeof editMovementUnbumped>): ReturnType<typeof editMovementUnbumped> {
+  const result = await editMovementUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels'])
+  const [{ movementId, patch }] = args
+  await recordAudit({ action: 'movement.edit', entityType: 'movement', entityId: movementId, after: snapshot(patch as Record<string, unknown>) })
+  return result
+}
+
+/** changeProductUnit, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function changeProductUnit(...args: Parameters<typeof changeProductUnitUnbumped>): ReturnType<typeof changeProductUnitUnbumped> {
+  const result = await changeProductUnitUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels', 'products'])
+  const [{ productId, unit, unitType }] = args
+  await recordAudit({ action: 'unitConversion.changeUnit', entityType: 'unitConversion', entityId: productId, after: { unit, unitType, rows: result } })
+  return result
+}
+
+/** rebuildProductLevels, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function rebuildProductLevels(...args: Parameters<typeof rebuildProductLevelsUnbumped>): ReturnType<typeof rebuildProductLevelsUnbumped> {
+  const result = await rebuildProductLevelsUnbumped(...args)
+  await bumpCacheEpoch(['stockLevels'])
+  await recordAudit({ action: 'maintenance.rebuildProductLevels', entityType: 'maintenance', entityId: args[1] })
+  return result
+}
+
+/** voidMovement, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function voidMovement(...args: Parameters<typeof voidMovementUnbumped>): ReturnType<typeof voidMovementUnbumped> {
+  const result = await voidMovementUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels'])
+  await recordAudit({ action: 'movement.void', entityType: 'movement', entityId: args[0], reason: args[2] })
+  return result
+}
+
+/** recomputeLevels, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function recomputeLevels(...args: Parameters<typeof recomputeLevelsUnbumped>): ReturnType<typeof recomputeLevelsUnbumped> {
+  const result = await recomputeLevelsUnbumped(...args)
+  await bumpCacheEpoch(['stockLevels'])
+  await recordAudit({ action: 'maintenance.recomputeLevels', entityType: 'maintenance', entityId: 'stockLevels' })
+  return result
+}

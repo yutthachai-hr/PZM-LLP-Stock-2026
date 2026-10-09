@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
+import { can, COUNT } from '../../lib/workflow'
 import { DataTable, type Column } from '../../components/DataTable'
 import { DraftNotice } from '../../components/DraftNotice'
 import { ChipRow, FramePage, PageHero, SectionCard, StatRow, StatTile } from '../../components/frame'
@@ -16,7 +17,7 @@ import { exportExcel } from '../../lib/export'
 import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import { balanceAtDayEnd } from '../../lib/ledger'
-import { countRows, monthBefore, monthlyCountId, postingPlan, resultsOf, type CountRow } from '../../lib/monthlyCount'
+import { countRows, monthBefore, monthlyCountId, resultsOf, type CountRow } from '../../lib/monthlyCount'
 import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
@@ -56,6 +57,8 @@ export function MonthlyCountSheet() {
   const [importing, setImporting] = useState(false)
   const [photoImport, setPhotoImport] = useState(false)
   const [asOpening, setAsOpening] = useState(false)
+  // Plan E2: the manager says they looked at the big differences before they are filed.
+  const [bigOk, setBigOk] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -121,6 +124,13 @@ export function MonthlyCountSheet() {
   )
 
   const counting = sheet?.status === 'counting'
+  // G19: the buttons come from the count's state machine, not from comparing statuses here.
+  const actor = user ? { role: user.role } : null
+  const mayCount = !!sheet && !!actor && can(COUNT, sheet.status, 'count', actor)
+  const mayRecord = !!sheet && !!actor && can(COUNT, sheet.status, 'record', actor)
+  const mayPost = !!sheet && !!actor && can(COUNT, sheet.status, 'post', actor)
+  // Plan E2: on a blind sheet the counter sees only what they count; a manager reviews.
+  const blind = !!sheet?.blind && counting && !isManager
   const lines = useMemo(() => {
     const out = { ...(sheet?.lines ?? {}) }
     for (const [pid, v] of Object.entries(edits)) {
@@ -239,20 +249,13 @@ export function MonthlyCountSheet() {
         await recordMonthlyCount({ id, results, actor })
         toast.success(t('บันทึกผลนับไว้แล้ว — สต๊อกไม่ถูกปรับ'))
       } else {
-        const parts = postingPlan(now, sheet.postedIds).map((part) =>
-          part.map((r) => ({
-            productId: r.productId,
-            productName: byId.get(r.productId)?.name ?? r.productId,
-            unit: byId.get(r.productId)?.unitType ?? '',
-            diff: r.diff ?? 0,
-          })),
-        )
+        // The sheet's own figures are posted; each difference is worked out again inside its
+        // transaction from the books as they are then (plan A10, src/commands/countPost.ts).
         const docs = await postMonthlyCount({
           id,
-          parts,
-          results,
           actor,
           reason: asOpening ? 'opening' : 'count',
+          approveBig: bigOk,
           note: asOpening
             ? t('ตั้งยอดเริ่มต้นระบบจากยอดนับ {month}', { month: sheet.month })
             : t('นับสต๊อกประจำเดือน {month}', { month: sheet.month }),
@@ -270,7 +273,7 @@ export function MonthlyCountSheet() {
   }
 
   const columns: Column<CountRow>[] = useMemo(
-    () => [
+    () => ([
       {
         key: 'product',
         header: t('สินค้า'),
@@ -343,8 +346,8 @@ export function MonthlyCountSheet() {
         align: 'right',
         cell: (r) => <span className="num text-ink-faint">{r.lastDiff === undefined ? '—' : `${r.lastDiff > 0 ? '+' : ''}${fmtQty(r.lastDiff)}`}</span>,
       },
-    ],
-    [t, byId, counting, setCount],
+    ] satisfies Column<CountRow>[]).filter((c) => !blind || c.key === 'product' || c.key === 'counted'),
+    [t, byId, counting, setCount, blind],
   )
 
   if (sheet === undefined) return <p className="p-6 text-sm text-ink-faint">{t('กำลังโหลด...')}</p>
@@ -369,11 +372,9 @@ export function MonthlyCountSheet() {
         SKU: p?.sku ?? '',
         [t('สินค้า')]: p?.name ?? r.productId,
         [t('หน่วย')]: p?.unitType ?? '',
-        [t('ระบบ ณ สิ้นเดือน')]: r.systemQty,
+        ...(blind ? {} : { [t('ระบบ ณ สิ้นเดือน')]: r.systemQty }),
         [t('นับได้')]: r.countedQty ?? '',
-        [t('ผลต่าง')]: r.diff ?? '',
-        [t('มูลค่า')]: r.value ?? '',
-        [t('เดือนก่อน')]: r.lastDiff ?? '',
+        ...(blind ? {} : { [t('ผลต่าง')]: r.diff ?? '', [t('มูลค่า')]: r.value ?? '', [t('เดือนก่อน')]: r.lastDiff ?? '' }),
       }
     }))
   }
@@ -416,7 +417,11 @@ export function MonthlyCountSheet() {
 
       {restored && counting && <DraftNotice onDiscard={() => { setEdits({}); clearDraft() }} />}
 
-      {counting ? (
+      {blind ? (
+        <AlertBanner tone="info" icon="info">
+          {t('นับแบบไม่เห็นยอด — ใส่จำนวนที่นับได้จริงทุกช่อง ช่องที่เว้นว่าง = ยังไม่นับ หัวหน้าจะเทียบกับยอดในระบบตอนตรวจ')}
+        </AlertBanner>
+      ) : counting ? (
         <AlertBanner tone="info" icon="info">
           {t('ยอดที่คีย์ยังไม่ปรับสต๊อก — ผลต่างเทียบกับยอดในระบบ ณ สิ้นวัน {date} ช่องที่เว้นว่าง = ยังไม่นับ (ไม่ถูกปรับ) ใส่ 0 ถ้านับแล้วไม่มีของ', { date: dayLabel })}
         </AlertBanner>
@@ -437,7 +442,12 @@ export function MonthlyCountSheet() {
         </AlertBanner>
       )}
 
-      {summary && (
+      {summary && blind && (
+        <StatRow columns={4}>
+          <StatTile icon="clipboardList" label={t('นับแล้ว')} value={`${summary.counted} / ${summary.total}`} />
+        </StatRow>
+      )}
+      {summary && !blind && (
         <StatRow columns={4}>
           <StatTile icon="clipboardList" label={t('นับแล้ว')} value={`${summary.counted} / ${summary.total}`} />
           <StatTile icon="adjust" label={t('มีผลต่าง')} value={summary.withDiff} tone="amber" />
@@ -466,11 +476,11 @@ export function MonthlyCountSheet() {
             value={filter}
             onChange={setFilter}
             chips={[
-              { key: 'all', label: t('ทั้งหมด'), count: summary?.total },
-              { key: 'diff', label: t('มีผลต่าง'), count: summary?.withDiff },
-              { key: 'big', label: t('ต่างมาก'), count: summary?.big },
-              { key: 'uncounted', label: t('ยังไม่นับ'), count: summary ? summary.total - summary.counted : undefined },
-            ]}
+              { key: 'all' as Filter, label: t('ทั้งหมด'), count: summary?.total },
+              { key: 'diff' as Filter, label: t('มีผลต่าง'), count: summary?.withDiff },
+              { key: 'big' as Filter, label: t('ต่างมาก'), count: summary?.big },
+              { key: 'uncounted' as Filter, label: t('ยังไม่นับ'), count: summary ? summary.total - summary.counted : undefined },
+            ].filter((c) => !blind || c.key === 'all' || c.key === 'uncounted')}
           />
           <SearchInput value={query} onChange={setQuery} placeholder={t('ค้นหาสินค้า...')} className="w-full sm:ml-auto sm:w-72" />
         </div>
@@ -483,9 +493,9 @@ export function MonthlyCountSheet() {
 
       {/* A manager's two decisions: beside the save button from a tablet up; on a phone,
           stacked under the list, where each label has the full width to be read. */}
-      {isManager && sheet.status !== 'posted' && (
+      {mayPost && (
         <div className="grid gap-2 md:hidden">
-          {counting && (
+          {mayRecord && (
             <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
               {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
             </Button>
@@ -496,17 +506,17 @@ export function MonthlyCountSheet() {
           </Button>
         </div>
       )}
-      {(counting || (isManager && sheet.status !== 'posted')) && (
+      {(mayCount || (mayPost)) && (
         <SubmitBar hasDraft={pending > 0}>
-          {counting && (
+          {mayCount && (
             <Button variant={isManager ? 'secondary' : 'primary'} onClick={() => void save()} disabled={busy || !pending}>
               <Icon name="check" size={16} />
               {t('บันทึกยอดนับ ({n})', { n: pending })}
             </Button>
           )}
-          {isManager && sheet.status !== 'posted' && (
+          {mayPost && (
             <span className="hidden gap-2 md:flex">
-              {counting && (
+              {mayRecord && (
                 <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
                   {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
                 </Button>
@@ -533,6 +543,17 @@ export function MonthlyCountSheet() {
               <p>
                 {t('ระบบจะปรับ {n} รายการที่มีผลต่าง เป็นใบปรับสต๊อกลงวันที่ {date} เหตุผล "ปรับตามการนับ" — รายการรับ/เบิก/โอนหลังวันนั้นอยู่ครบ รายการที่ยังไม่นับจะไม่ถูกปรับ', { n: toPost, date: dayLabel })}
               </p>
+              {!asOpening && (summary?.big ?? 0) > 0 && (
+                <label className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2">
+                  <input type="checkbox" className="mt-1" checked={bigOk} onChange={(e) => setBigOk(e.target.checked)} />
+                  <span>
+                    <b>{t('ตรวจผลต่างมาก {n} รายการแล้ว อนุมัติให้ปรับ', { n: summary?.big ?? 0 })}</b>
+                    <span className="block text-xs text-ink-soft">
+                      {t('ผลต่างเกิน 10% ของยอดในระบบ หรือเกิน 500 บาท — ดูได้จากตัวกรอง "ต่างมาก" ชื่อผู้อนุมัติจะถูกบันทึกไว้กับผลนับ')}
+                    </span>
+                  </span>
+                </label>
+              )}
               <label className="flex items-start gap-2 rounded-lg border border-line bg-sunken px-3 py-2">
                 <input type="checkbox" className="mt-1" checked={asOpening} onChange={(e) => setAsOpening(e.target.checked)} />
                 <span>
@@ -555,7 +576,7 @@ export function MonthlyCountSheet() {
             <Button variant="secondary" onClick={() => setAsking(null)} disabled={busy}>
               {t('ยกเลิก')}
             </Button>
-            <Button onClick={() => asking && void confirm(asking)} disabled={busy}>
+            <Button onClick={() => asking && void confirm(asking)} disabled={busy || (asking === 'post' && !asOpening && (summary?.big ?? 0) > 0 && !bigOk)}>
               {busy ? t('กำลังบันทึก...') : t('ยืนยัน')}
             </Button>
           </div>

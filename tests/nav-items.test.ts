@@ -30,12 +30,18 @@ describe('navigation', () => {
   test('the menu reads in the sections and order the owner gave (25 Sep 2026)', () => {
     const sections = navSections(navFor('admin')).map((s) => [s.group ?? '-', s.items.map((n) => n.to)])
     expect(sections).toEqual([
-      ['-', ['/']],
+      // The Exception Inbox (plan C3) sits under the overview, for managers and admins.
+      ['-', ['/', '/inbox']],
       ['inventory', ['/products', '/receive', '/issue', '/adjust', '/counts', '/movements', '/reports']],
       ['procurement', ['/requests', '/orders', '/suppliers', '/suppliers/performance']],
       ['delivery', ['/transfers', '/transfers/today']],
       ['-', ['/calendar', '/announcements', '/settings']],
     ])
+  })
+
+  test('the inbox is for managers and admins only (plan C3)', () => {
+    expect(navFor('staff').some((n) => n.to === '/inbox')).toBe(false)
+    expect(navFor('manager').some((n) => n.to === '/inbox')).toBe(true)
   })
 
   test('pages reached from "more" light the more tab; keying pages light nothing', () => {

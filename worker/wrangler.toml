@@ -1,9 +1,12 @@
 # pzmstock-cron — the inventory calendar's background jobs (worker/src/index.ts, HANDOFF §10).
 # Deploy:  npm run worker:deploy          Logs:  npx wrangler tail -c worker/wrangler.toml
 # Secret:  npx wrangler secret put FIREBASE_SERVICE_ACCOUNT -c worker/wrangler.toml
+# Secret:  npx wrangler secret put SUPABASE_DB_URL -c worker/wrangler.toml   (Supabase shadow; optional)
 name = "pzmstock-cron"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
+# The Supabase shadow replicator connects with the `postgres` driver (TCP sockets).
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [vars]
@@ -12,4 +15,6 @@ WORKER_ENABLED = "true"
 
 # UTC. Bangkok is UTC+7: 07:00, 00:05 and Monday 07:30 Bangkok. Must match CRONS in src/jobs.ts.
 [triggers]
-crons = ["*/30 * * * *", "0 0 * * *", "5 17 * * *", "30 0 * * 1"]
+# The fifth, "15,45 * * * *", is the Supabase shadow replicator (SHADOW_CRON in src/index.ts) —
+# it does nothing until the SUPABASE_DB_URL secret is set.
+crons = ["*/30 * * * *", "0 0 * * *", "5 17 * * *", "30 0 * * 1", "15,45 * * * *"]

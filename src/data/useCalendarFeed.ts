@@ -12,6 +12,7 @@ import { useData } from './DataContext'
 import * as events from './eventCache'
 import { orderCache } from './orderCache'
 import { requestCache } from './requestCache'
+import { AppError } from '../i18n/AppError'
 
 /**
  * The calendar's items for a window, and the reads behind them.
@@ -171,8 +172,12 @@ export function useCalendarFeed(range: { from: number; to: number }, now: number
     requests: rows?.requests ?? [],
     insights,
     loading: loading && !rows,
-    error,
-    reload: () => load(true),
+    // Plan C1: delivery risk that could not be read is said, not left out of the feed.
+    error: error ?? (intel.failed ? new AppError('อ่านความเสี่ยงการส่งของไม่สำเร็จ') : null),
+    reload: () => {
+      intel.retry()
+      return load(true)
+    },
     patchTask: events.patchEvent,
     removeTask: events.removeEvent,
     patchOrder: orderCache.patch,

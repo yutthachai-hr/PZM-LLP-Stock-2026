@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { createAccount, putDoc, putMany, resetEmulators } from './emulator'
+import { createAccount, putDoc, putPaths, resetEmulators } from './emulator'
 import { PASSWORD, PEOPLE, type Person } from './fixture'
 
 /**
@@ -19,7 +19,7 @@ export async function seedFromBackup(file: string): Promise<{ uid: Record<Person
   await resetEmulators()
   const backup = JSON.parse(readFileSync(file, 'utf8')) as { brand: string; data: Record<string, Record<string, unknown>[]> }
   // The brand's collection prefix: Pizza Mania is unprefixed, Le Lapin `lelapin__`.
-  const prefix = backup.brand === 'lelapin' ? 'lelapin__' : ''
+  const prefix = backup.brand === 'lelapin' || backup.brand === 'rnd' ? `${backup.brand}__` : ''
   const docs: { path: string; data: Record<string, unknown> }[] = []
   const counts: Record<string, number> = {}
   for (const [name, rows] of Object.entries(backup.data)) {
@@ -33,7 +33,7 @@ export async function seedFromBackup(file: string): Promise<{ uid: Record<Person
     }
     counts[name] = rows.length
   }
-  await putMany(docs)
+  await putPaths(docs)
   const uid = {} as Record<Person, string>
   const now = Date.now()
   for (const [key, p] of Object.entries(PEOPLE) as [Person, (typeof PEOPLE)[Person]][]) {

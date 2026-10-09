@@ -178,13 +178,14 @@ export function DailySuggestions() {
     if (bad) return toast.error(bad.line.supplierId ? t('จำนวนของ "{name}" ต้องมากกว่า 0', { name: bad.line.product.name }) : t('"{name}" ยังไม่มีผู้ขาย — เอาออก หรือกำหนดผู้ขายที่หน้าสินค้าก่อน', { name: bad.line.product.name }))
     setBusy(`pr-${location.id}`)
     try {
-      const pr = await PR.createRequest({ locationId: location.id, note: SUGGESTED_NOTE, actor })
+      const pr = await PR.createRequest({ locationId: location.id, note: SUGGESTED_NOTE, actor, intake: 'suggestion' })
       const filled = await PR.addItems({
         id: pr.id,
         lines: picked.map((p) => ({ productId: p.line.product.id, supplierId: p.line.supplierId!, qty: p.qty })),
         products: data.products,
         suppliers,
         actor,
+        intake: 'suggestion',
       })
       requestCache.patch(filled)
       toast.success(t('สร้างร่าง {docNo} แล้ว ({n} รายการ)', { docNo: filled.docNo, n: filled.items.length }))
@@ -281,6 +282,15 @@ export function DailySuggestions() {
                     {l.basis === 'usage' && l.avgDaily ? t('ใช้วันละ {n}', { n: fmtQty(l.avgDaily) }) : t('ตามขั้นต่ำ')}
                     {/* On a phone the on-hand column is not there; say it here. */}
                     <span className="md:hidden"> · {t('มี {n} {unit}', { n: fmtQty(l.onHand), unit: l.product.unitType })}</span>
+                  </div>
+                  {/* Plan F1: the figures the quantity came from, on every line. */}
+                  <div className="text-[11px] text-ink-faint">
+                    {t('ที่มา: ค้างรับ {inc} · ของมาถึงใน {lead} วัน · สำรอง {cover} วัน', {
+                      inc: fmtQty(l.evidence.incoming),
+                      lead: l.evidence.leadTimeDays,
+                      cover: l.evidence.coverDays,
+                    })}
+                    {l.evidence.daysLeft !== null && <> · {t('ของที่มีพอ {d} วัน', { d: fmtQty(Math.round(l.evidence.daysLeft * 10) / 10) })}</>}
                   </div>
                 </div>
                 <div className="num hidden text-right text-xs text-ink-soft md:block">

@@ -1,4 +1,5 @@
-import { DELETE_FIELD } from '../../src/backend/types'
+import { DELETE_FIELD, Increment, withInitialVersion, withVersionBump } from '../../src/backend/types'
+import { applyIncrement } from '../../src/backend/tx'
 import type { Backend, QuerySpec, SubscribeOptions, TxContext } from '../../src/backend/types'
 import { applySpec } from '../../src/backend/querySpec'
 import { resolveCollection, type BrandId } from '../../src/brand/brand'
@@ -60,11 +61,13 @@ function applyPatch_(
       const head = k.slice(0, dot)
       const inner = { ...((out[head] as Record<string, unknown> | undefined) ?? {}) }
       if (v === DELETE_FIELD) delete inner[k.slice(dot + 1)]
+      else if (v instanceof Increment) inner[k.slice(dot + 1)] = applyIncrement(inner[k.slice(dot + 1)], v)
       else inner[k.slice(dot + 1)] = clone(v)
       out[head] = inner
       continue
     }
     if (v === DELETE_FIELD) delete out[k]
+    else if (v instanceof Increment) out[k] = applyIncrement(out[k], v)
     else out[k] = clone(v)
   }
   return out
@@ -143,6 +146,14 @@ export function createMemoryBackend(brand?: BrandId): Backend {
     })
   },
 
+  async page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]> {
+    const num = (d: unknown) => (d as Record<string, unknown>)[field] as number
+    return ([...col_(collection).values()].map(clone) as T[])
+      .filter((d) => typeof num(d) === 'number' && (opts.before === undefined || num(d) < opts.before))
+      .sort((a, b) => num(b) - num(a))
+      .slice(0, opts.limit)
+  },
+
   async getBy<T>(c: string, field: string, value: string | number | boolean): Promise<T[]> {
     return [...col_(c).values()].map((d) => clone(d)).filter((d) => d[field] === value) as T[]
   },
@@ -162,21 +173,21 @@ export function createMemoryBackend(brand?: BrandId): Backend {
   async add(collection: string, data: Record<string, unknown>): Promise<string> {
     const id = `gen-${++seq}`
     guard_(collection, id)
-    col_(collection).set(id, { ...clone(data), id })
+    col_(collection).set(id, { ...clone(withInitialVersion(collection, data)), id })
     bump(resolve(collection), id)
     return id
   },
 
   async set(collection: string, id: string, data: Record<string, unknown>): Promise<void> {
     guard_(collection, id)
-    col_(collection).set(id, { ...clone(data), id })
+    col_(collection).set(id, { ...clone(withInitialVersion(collection, data)), id })
     bump(resolve(collection), id)
   },
 
   async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
     guard_(collection, id)
     const m = col_(collection)
-    m.set(id, { ...applyPatch_(m.get(id) ?? { id }, patch), id })
+    m.set(id, { ...applyPatch_(m.get(id) ?? { id }, withVersionBump(collection, patch)), id })
     bump(resolve(collection), id)
   },
 
@@ -210,13 +221,13 @@ export function createMemoryBackend(brand?: BrandId): Backend {
         return (clone(col_(c).get(id)) as T) ?? null
       },
       set(c, id, data) {
-        writes.push([resolve(c), id, { ...clone(data), id }])
+        writes.push([resolve(c), id, { ...clone(withInitialVersion(c, data)), id }])
       },
       update(c, id, patch) {
         // Not clone(patch): a JSON round-trip drops a Symbol-valued key outright, so the
         // DELETE_FIELD marker disappeared and the field it should have removed survived.
         const cur = col_(c).get(id) ?? { id }
-        writes.push([resolve(c), id, { ...applyPatch_(cur, patch), id }])
+        writes.push([resolve(c), id, { ...applyPatch_(cur, withVersionBump(c, patch)), id }])
       },
       delete(c, id) {
         writes.push([resolve(c), id, null])

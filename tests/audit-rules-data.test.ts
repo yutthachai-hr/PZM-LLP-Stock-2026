@@ -97,9 +97,9 @@ describe('F06 — only the collections the model actually declares', () => {
     await assertFails(setDoc(doc(as(STAFF), 'stockLevels__extra', 'x'), level({ id: 'x' })))
   })
 
-  test('the real Le Lapin namespace still works', async () => {
+  test('the real Le Lapin namespace still works (an admin: staff write balances only through the server)', async () => {
     await assertSucceeds(
-      setDoc(doc(as(STAFF), 'lelapin__stockLevels', 'loc1__p1'), level()),
+      setDoc(doc(as(ADMIN), 'lelapin__stockLevels', 'loc1__p1'), level({ updatedBy: ADMIN })),
     )
   })
 })
@@ -111,9 +111,9 @@ describe('F02 — the ledger records who, and keeps it', () => {
     )
   })
 
-  test('a movement filed under yourself is fine', async () => {
+  test('a movement filed under yourself is fine (an admin; staff file through the server)', async () => {
     await assertSucceeds(
-      setDoc(doc(as(STAFF), 'stockMovements', 'mv2'), movement({ id: 'mv2' })),
+      setDoc(doc(as(ADMIN), 'stockMovements', 'mv2'), movement({ id: 'mv2', byUserId: ADMIN })),
     )
   })
 
@@ -148,18 +148,18 @@ describe('F02 — the ledger records who, and keeps it', () => {
     )
   })
 
-  test('correcting the quantity, date and note is still allowed', async () => {
-    await assertSucceeds(
-      updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), {
-        qty: 7,
-        date: now(),
-        note: 'corrected',
-        edits: [{ by: STAFF, byName: 'Staff', at: now(), changed: ['qty'] }],
-        updatedBy: STAFF,
-        updatedByName: 'Staff',
-        updatedAt: now(),
-      }),
-    )
+  test('correcting the quantity, date and note is an admin\'s, signed (plan A9)', async () => {
+    const fix = (uid: string) => ({
+      qty: 7,
+      date: now(),
+      note: 'corrected',
+      edits: [{ by: uid, byName: uid, at: now(), changed: ['qty'] }],
+      updatedBy: uid,
+      updatedByName: uid,
+      updatedAt: now(),
+    })
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), fix(STAFF)))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), fix(ADMIN)))
   })
 
   test('a correction that leaves no trace is refused', async () => {
@@ -181,8 +181,9 @@ describe('F02 — the ledger records who, and keeps it', () => {
   })
 
   test('voiding is an admin decision, whatever the UI shows', async () => {
-    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), { voided: true }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true }))
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), { voided: true, voidReason: 'x' }))
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true, voidReason: 'keyed twice' }))
   })
 
   test('a movement still cannot be deleted by anyone', async () => {
@@ -234,8 +235,15 @@ describe('F01 — a forged balance is at least shaped like a balance, and signed
     await assertFails(
       setDoc(doc(as(STAFF), 'stockLevels', 'loc1__p1'), level({ qty: 999999, updatedBy: OTHER })),
     )
-    await assertSucceeds(
+    // Since ADR-001 a staff member cannot write one at all; an admin's write is signed.
+    await assertFails(
       setDoc(doc(as(STAFF), 'stockLevels', 'loc1__p1'), level({ qty: 999999 })),
+    )
+    await assertFails(
+      setDoc(doc(as(ADMIN), 'stockLevels', 'loc1__p1'), level({ qty: 999999 })),
+    )
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), 'stockLevels', 'loc1__p1'), level({ qty: 999999, updatedBy: ADMIN })),
     )
   })
 })

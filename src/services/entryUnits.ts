@@ -1,3 +1,4 @@
+import { recordAudit } from './auditLog'
 import { useEffect, useSyncExternalStore } from 'react'
 import { backend } from '../backend'
 import { AppError } from '../i18n/AppError'
@@ -128,11 +129,13 @@ export async function loadEntryUnits(): Promise<string[]> {
 export async function saveEntryUnits(names: readonly string[]): Promise<string[]> {
   const clean = normaliseUnits(names)
   if (clean.length === 0) throw new AppError('ต้องมีอย่างน้อย 1 หน่วย')
+  const before = cached
   await backend.set(COL.meta, DOC_ID, {
     id: DOC_ID,
     names: clean,
     updatedAt: Date.now(),
   })
+  await recordAudit({ action: 'settings.entryUnits', entityType: 'settings', entityId: DOC_ID, before: before ? { names: before } : null, after: { names: clean } })
   // Update in place rather than re-reading: the write already told us what it says now.
   cached = clean
   announce()

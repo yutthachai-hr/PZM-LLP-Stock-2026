@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { BrandProvider, useBrand } from './brand/BrandContext'
 import { DataProvider } from './data/DataContext'
+import { SupplierIntelProvider } from './data/useSupplierIntel'
 import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/Confirm'
 import { I18nProvider, useT } from './i18n/I18nContext'
@@ -14,35 +15,40 @@ import { BrandPicker } from './components/BrandPicker'
 import { brandToResume } from './share/liffResume'
 import { LoginPage } from './pages/Login'
 import { DashboardPage } from './pages/Dashboard'
-import { ProductsPage } from './pages/Products'
-import { StockCardPage } from './pages/StockCardPage'
-import { ReceivePage } from './pages/Receive'
-import { IssuePage } from './pages/Issue'
-import { AdjustPage } from './pages/Adjust'
-import { MonthlyCountsPage } from './pages/counts/MonthlyCountsPage'
-import { MonthlyCountSheet } from './pages/counts/MonthlyCountSheet'
-import { MovementsPage } from './pages/Movements'
-import { ReportsPage } from './pages/Reports'
-import { ImportPage } from './pages/Import'
-import { SuppliersPage } from './pages/Suppliers'
-import { SupplierPerformancePage } from './pages/suppliers/SupplierPerformance'
-import { OrdersPage } from './pages/Orders'
-import { PurchaseBatchesPage } from './pages/purchase/PurchaseBatches'
-import { PurchaseImportPage } from './pages/purchase/PurchaseImport'
-import { PurchaseBatchReviewPage } from './pages/purchase/PurchaseBatchReview'
-import { PurchaseRequestsPage } from './pages/requests/PurchaseRequests'
-import { RequestPage } from './pages/requests/RequestPage'
-import { CalendarPage } from './pages/calendar/CalendarPage'
-import { SettingsPage } from './pages/Settings'
-import { AnnouncementsPage } from './pages/announcements/AnnouncementsPage'
-import { AnnouncementPage } from './pages/announcements/AnnouncementPage'
-import { TransfersPage } from './pages/transfers/TransfersPage'
-import { TransferDetailPage } from './pages/transfers/TransferDetailPage'
-import { TransferReceivePage } from './pages/transfers/TransferReceivePage'
-import { TransfersTodayPage } from './pages/transfers/TransfersTodayPage'
-import { RecipesPage } from './pages/recipes/RecipesPage'
-import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
+
+// Every page but the two a session starts on loads when first opened (plan D1'): the
+// first paint no longer carries Excel, PDF, charts and thirty screens nobody has asked for.
+// A chunk that fails to load (a deploy replaced it) is caught by the page's ErrorBoundary,
+// which offers a reload.
+const ProductsPage = lazy(() => import('./pages/Products').then((m) => ({ default: m.ProductsPage })))
+const StockCardPage = lazy(() => import('./pages/StockCardPage').then((m) => ({ default: m.StockCardPage })))
+const ReceivePage = lazy(() => import('./pages/Receive').then((m) => ({ default: m.ReceivePage })))
+const IssuePage = lazy(() => import('./pages/Issue').then((m) => ({ default: m.IssuePage })))
+const AdjustPage = lazy(() => import('./pages/Adjust').then((m) => ({ default: m.AdjustPage })))
+const MonthlyCountsPage = lazy(() => import('./pages/counts/MonthlyCountsPage').then((m) => ({ default: m.MonthlyCountsPage })))
+const MonthlyCountSheet = lazy(() => import('./pages/counts/MonthlyCountSheet').then((m) => ({ default: m.MonthlyCountSheet })))
+const MovementsPage = lazy(() => import('./pages/Movements').then((m) => ({ default: m.MovementsPage })))
+const ReportsPage = lazy(() => import('./pages/Reports').then((m) => ({ default: m.ReportsPage })))
+const ImportPage = lazy(() => import('./pages/Import').then((m) => ({ default: m.ImportPage })))
+const SuppliersPage = lazy(() => import('./pages/Suppliers').then((m) => ({ default: m.SuppliersPage })))
+const SupplierPerformancePage = lazy(() => import('./pages/suppliers/SupplierPerformance').then((m) => ({ default: m.SupplierPerformancePage })))
+const OrdersPage = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrdersPage })))
+const InboxPage = lazy(() => import('./pages/Inbox').then((m) => ({ default: m.InboxPage })))
+const PurchaseBatchesPage = lazy(() => import('./pages/purchase/PurchaseBatches').then((m) => ({ default: m.PurchaseBatchesPage })))
+const PurchaseBatchReviewPage = lazy(() => import('./pages/purchase/PurchaseBatchReview').then((m) => ({ default: m.PurchaseBatchReviewPage })))
+const PurchaseRequestsPage = lazy(() => import('./pages/requests/PurchaseRequests').then((m) => ({ default: m.PurchaseRequestsPage })))
+const RequestPage = lazy(() => import('./pages/requests/RequestPage').then((m) => ({ default: m.RequestPage })))
+const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })))
+const SettingsPage = lazy(() => import('./pages/Settings').then((m) => ({ default: m.SettingsPage })))
+const AnnouncementsPage = lazy(() => import('./pages/announcements/AnnouncementsPage').then((m) => ({ default: m.AnnouncementsPage })))
+const AnnouncementPage = lazy(() => import('./pages/announcements/AnnouncementPage').then((m) => ({ default: m.AnnouncementPage })))
+const TransfersPage = lazy(() => import('./pages/transfers/TransfersPage').then((m) => ({ default: m.TransfersPage })))
+const TransferDetailPage = lazy(() => import('./pages/transfers/TransferDetailPage').then((m) => ({ default: m.TransferDetailPage })))
+const TransferReceivePage = lazy(() => import('./pages/transfers/TransferReceivePage').then((m) => ({ default: m.TransferReceivePage })))
+const TransfersTodayPage = lazy(() => import('./pages/transfers/TransfersTodayPage').then((m) => ({ default: m.TransfersTodayPage })))
+const RecipesPage = lazy(() => import('./pages/recipes/RecipesPage').then((m) => ({ default: m.RecipesPage })))
+const MorePage = lazy(() => import('./pages/More').then((m) => ({ default: m.MorePage })))
 
 function Gate() {
   const { user, loading } = useAuth()
@@ -88,43 +94,49 @@ function Gate() {
 
   return (
     <DataProvider key={brand}>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/products/:id/card" element={<StockCardPage />} />
-          <Route path="/receive" element={<ReceivePage />} />
-          <Route path="/issue" element={<IssuePage />} />
-          <Route path="/recipes" element={<RecipesPage />} />
-          <Route path="/transfers" element={<TransfersPage />} />
-          <Route path="/transfers/today" element={<TransfersTodayPage />} />
-          <Route path="/transfers/new" element={<TransferDetailPage />} />
-          <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
-          <Route path="/transfers/:id" element={<TransferDetailPage />} />
-          <Route path="/adjust" element={<AdjustPage />} />
-          <Route path="/counts" element={<MonthlyCountsPage />} />
-          <Route path="/counts/:id" element={<MonthlyCountSheet />} />
-          <Route path="/movements" element={<MovementsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/import" element={<ImportPage />} />
-          <Route path="/suppliers" element={<SuppliersPage />} />
-          <Route path="/suppliers/performance" element={<SupplierPerformancePage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/requests" element={<PurchaseRequestsPage />} />
-          <Route path="/requests/:id" element={<RequestPage />} />
-          <Route path="/purchase" element={<PurchaseBatchesPage />} />
-          <Route path="/purchase/import" element={<PurchaseImportPage />} />
-          <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/announcements" element={<AnnouncementsPage />} />
-          <Route path="/announcements/new" element={<AnnouncementPage />} />
-          <Route path="/announcements/:company/:id" element={<AnnouncementPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/:section" element={<SettingsPage />} />
-          <Route path="/more" element={<MorePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <SupplierIntelProvider>
+        <Layout>
+          <Suspense fallback={<Spinner />}>
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/:id/card" element={<StockCardPage />} />
+              <Route path="/receive" element={<ReceivePage />} />
+              <Route path="/issue" element={<IssuePage />} />
+              <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/transfers" element={<TransfersPage />} />
+              <Route path="/transfers/today" element={<TransfersTodayPage />} />
+              <Route path="/transfers/new" element={<TransferDetailPage />} />
+              <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
+              <Route path="/transfers/:id" element={<TransferDetailPage />} />
+              <Route path="/adjust" element={<AdjustPage />} />
+              <Route path="/counts" element={<MonthlyCountsPage />} />
+              <Route path="/counts/:id" element={<MonthlyCountSheet />} />
+              <Route path="/movements" element={<MovementsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/import" element={<ImportPage />} />
+              <Route path="/suppliers" element={<SuppliersPage />} />
+              <Route path="/suppliers/performance" element={<SupplierPerformancePage />} />
+              <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/inbox" element={<InboxPage />} />
+              <Route path="/requests" element={<PurchaseRequestsPage />} />
+              <Route path="/requests/:id" element={<RequestPage />} />
+              <Route path="/purchase" element={<PurchaseBatchesPage />} />
+              {/* D4′: Excel purchasing is a purchase-request intake now, not a batch of its own. */}
+              <Route path="/purchase/import" element={<Navigate to="/requests/new?import=1" replace />} />
+              <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/announcements" element={<AnnouncementsPage />} />
+              <Route path="/announcements/new" element={<AnnouncementPage />} />
+              <Route path="/announcements/:company/:id" element={<AnnouncementPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/:section" element={<SettingsPage />} />
+              <Route path="/more" element={<MorePage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </Layout>
+      </SupplierIntelProvider>
     </DataProvider>
   )
 }

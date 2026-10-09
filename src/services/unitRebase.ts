@@ -1,4 +1,6 @@
+import { recordAudit } from './auditLog'
 import { backend } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
 import { DELETE_FIELD } from '../backend/types'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
@@ -150,7 +152,7 @@ export async function previewRebase(params: { productId: string; to: string; mod
  * recount mode, and in rate mode wherever the converted balance is not a whole number of
  * a counting unit (the screen insists). Returns what was written.
  */
-export async function rebaseProductUnit(params: {
+async function rebaseProductUnitUnbumped(params: {
   productId: string
   to: string
   mode: RebaseMode
@@ -329,4 +331,13 @@ export async function rebaseProductUnit(params: {
     if (changed) counted++
   }
   return { movements: touched, counted, closed }
+}
+
+/** rebaseProductUnit, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function rebaseProductUnit(...args: Parameters<typeof rebaseProductUnitUnbumped>): ReturnType<typeof rebaseProductUnitUnbumped> {
+  const result = await rebaseProductUnitUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels', 'products'])
+  const [{ productId, to, mode, factor }] = args
+  await recordAudit({ action: 'unitConversion.rebase', entityType: 'unitConversion', entityId: productId, after: { to, mode, ...(factor !== undefined ? { factor } : {}), ...result } })
+  return result
 }

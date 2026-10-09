@@ -69,7 +69,7 @@ describe('the stock engine notes what it files', () => {
     const id = seen.at(-1)![0].id
     await editMovement({ movementId: id, patch: { qty: 4 }, actor: ACTOR })
     expect(seen.at(-1)![0]).toMatchObject({ id, qty: 4, updatedBy: ACTOR.id })
-    await voidMovement(id, ACTOR)
+    await voidMovement(id, ACTOR, 'keyed twice')
     expect(seen.at(-1)![0]).toMatchObject({ id, voided: true })
   })
 

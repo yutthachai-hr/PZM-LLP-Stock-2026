@@ -1,4 +1,4 @@
-import { assertServerWrite, type ServerStore, type Versioned } from './serverStore'
+import { assertServerWrite, type QueryFilter, type ServerStore, type Versioned } from './serverStore'
 
 /**
  * The ServerStore in memory: the tests' database, and the local preview's
@@ -42,6 +42,40 @@ export function memoryServerStore(seed: Record<string, Record<string, Record<str
       if (data.has(key(c, id))) return false
       data.set(key(c, id), { doc: { ...structuredClone(doc), id }, updateTime: stamp() })
       store.writes++
+      return true
+    },
+    async query<T>(c: string, filters: readonly QueryFilter[]): Promise<T[]> {
+      const out: T[] = []
+      for (const [k, row] of data) {
+        if (!k.startsWith(`${c}/`) || k.slice(c.length + 1).includes('/')) continue
+        const ok = filters.every((f) => {
+          const v = row.doc[f.field] as string | number | boolean | undefined
+          if (v === undefined) return false
+          return f.op === '==' ? v === f.value : f.op === '>=' ? v >= f.value : v <= f.value
+        })
+        if (ok) out.push(structuredClone(row.doc) as T)
+      }
+      return out
+    },
+    async commit(writes) {
+      // All preconditions first, then all writes: atomic, like Firestore's commit.
+      for (const w of writes) {
+        const row = data.get(key(w.collection, w.id))
+        const p = w.precondition
+        if (p && 'updateTime' in p && row?.updateTime !== p.updateTime) return false
+        if (p && 'exists' in p && !!row !== p.exists) return false
+      }
+      for (const w of writes) {
+        if (w.op === 'verify') continue
+        const row = data.get(key(w.collection, w.id))
+        const next: Record<string, unknown> = w.op === 'set' ? { id: w.id } : { ...(row?.doc ?? {}) }
+        for (const [k, v] of Object.entries(w.data)) {
+          if (v === null) delete next[k]
+          else if (v !== undefined) next[k] = structuredClone(v)
+        }
+        data.set(key(w.collection, w.id), { doc: next, updateTime: stamp() })
+        store.writes++
+      }
       return true
     },
     touch(c, id, fields) {

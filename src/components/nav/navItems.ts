@@ -11,6 +11,8 @@ export interface NavItem {
   label: string
   icon: IconName
   adminOnly?: boolean
+  /** Managers and admins only. */
+  managerOnly?: boolean
   /** The menu section it sits in; none = a page of its own. */
   group?: NavGroup
   /** Opened from the settings page, not the menu — still here for the top bar's title. */
@@ -33,6 +35,7 @@ export const NAV_GROUPS: Record<NavGroup, { label: string; icon: IconName }> = {
 
 export const NAV: NavItem[] = [
   { to: '/', label: 'ภาพรวม', icon: 'dashboard' }, // i18n-key
+  { to: '/inbox', label: 'งานรอตัดสินใจ', icon: 'inbox', managerOnly: true }, // i18n-key
   { to: '/products', label: 'ทะเบียนสินค้า', icon: 'boxes', group: 'inventory' }, // i18n-key
   { to: '/receive', label: 'รับสินค้าเข้า', icon: 'receive', group: 'inventory' }, // i18n-key
   { to: '/issue', label: 'เบิก/โอนสาขา', icon: 'send', group: 'inventory' }, // i18n-key
@@ -88,7 +91,7 @@ export function navMatches(pathname: string, to: string): boolean {
 
 /** The menu for a role — without what lives inside settings (Excel import, since 25 Sep 2026). */
 export function navFor(role: Role | undefined): NavItem[] {
-  return NAV.filter((n) => !n.inSettings && (!n.adminOnly || role === 'admin'))
+  return NAV.filter((n) => !n.inSettings && (!n.adminOnly || role === 'admin') && (!n.managerOnly || role === 'admin' || role === 'manager'))
 }
 
 /** Phone tab bar, left to right; the "+" sits between stock and history. */

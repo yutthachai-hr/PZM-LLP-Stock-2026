@@ -50,11 +50,16 @@ export interface PopupCard {
 export interface QueueState {
   /** Null until the first snapshot is in. */
   seen: Set<string> | null
+  /**
+   * When this person's app began listening. Only what was created before it is the
+   * baseline; anything newer is news even if it rides in on the first snapshot.
+   */
+  openedAt?: number
   visible: PopupCard[]
   waiting: PopupCard[]
 }
 
-export const emptyQueue = (): QueueState => ({ seen: null, visible: [], waiting: [] })
+export const emptyQueue = (openedAt?: number): QueueState => ({ seen: null, visible: [], waiting: [], ...(openedAt === undefined ? {} : { openedAt }) })
 
 /**
  * The listener delivered `incoming` (the whole current list, already filtered to this
@@ -66,9 +71,16 @@ export function receive(
   now: number,
 ): { state: QueueState; fresh: PopupCard[] } {
   if (state.seen === null) {
-    return { state: { ...state, seen: new Set(incoming.map((i) => i.presented.occurrence)) }, fresh: [] }
+    // The first snapshot is the baseline: what was there before is not news. But only what
+    // was there BEFORE the app opened — the first snapshot can take seconds on a slow start,
+    // and an alert written meanwhile used to be swallowed into the baseline, never popping
+    // or sounding (found by e2e business-flow, 8 Oct 2026: the supplier's date change).
+    const since = state.openedAt
+    const before = since === undefined ? incoming : incoming.filter((i) => i.presented.createdAt < since)
+    state = { ...state, seen: new Set(before.map((i) => i.presented.occurrence)) }
+    if (before.length === incoming.length) return { state, fresh: [] }
   }
-  const seen = new Set(state.seen)
+  const seen = new Set(state.seen ?? [])
   const arrivals: typeof incoming[number][] = []
   for (const i of incoming) {
     if (seen.has(i.presented.occurrence)) continue

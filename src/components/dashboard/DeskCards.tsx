@@ -290,7 +290,7 @@ const IMPORT_TARGETS: { to: string; label: string; hint: string; icon: IconName;
   { to: '/receive?import=1', label: 'รับสินค้าเข้า', hint: 'บิล / ใบส่งของ — Excel, รูป หรือ PDF', icon: 'receive' }, // i18n-key
   { to: '/requests/new?fileImport=1', label: 'ขอสั่งซื้อ', hint: 'รายการที่ต้องการ — Excel, รูป หรือ PDF', icon: 'note' }, // i18n-key
   { to: '/requests/new?import=1', label: 'ขอสั่งซื้อจากใบสั่งของบริษัท', hint: 'ไฟล์ Excel ใบสั่งของแบบหลายวัน', icon: 'fileSheet' }, // i18n-key
-  { to: '/purchase/import', label: 'สร้างใบสั่งซื้อจาก Excel', hint: 'ใบสั่งของบริษัท → ร่างใบสั่งซื้อแยกผู้ขาย', icon: 'cart', manager: true }, // i18n-key
+  { to: '/requests/new?import=1', label: 'ขอสั่งซื้อจาก Excel', hint: 'ใบสั่งของบริษัท → ใบขอซื้อ → หัวหน้าอนุมัติ → ใบสั่งซื้อแยกผู้ขาย', icon: 'cart', manager: true }, // i18n-key
   { to: '/issue?import=1', label: 'โอน / เบิกสินค้า', hint: 'ใบโอน / ใบเบิก — Excel, รูป หรือ PDF', icon: 'swap' }, // i18n-key
   { to: '/issue?mode=pos', label: 'ตัดสต๊อกจากยอดขาย POS', hint: 'ไฟล์ยอดขายจากเครื่อง POS', icon: 'store' }, // i18n-key
   { to: '/adjust?import=1', label: 'ปรับสต๊อก', hint: 'ใบนับ / ยอดที่นับได้ — Excel, รูป หรือ PDF', icon: 'adjust' }, // i18n-key
@@ -319,7 +319,7 @@ export function QuickMenuCard() {
               className={`flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center text-xs font-semibold outline-none transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-brand/40 ${toneIcon[q.tone]}`}
             >
               <Icon name={q.icon} size={22} />
-              <span className="leading-tight">{t(q.label)}</span>
+              <span className="leading-tight text-ink">{t(q.label)}</span>
             </button>
           ) : (
           <Link
@@ -328,7 +328,7 @@ export function QuickMenuCard() {
             className={`flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center text-xs font-semibold outline-none transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-brand/40 ${toneIcon[q.tone]}`}
           >
             <Icon name={q.icon} size={22} />
-            <span className="leading-tight">{t(q.label)}</span>
+            <span className="leading-tight text-ink">{t(q.label)}</span>
           </Link>
           ),
         )}

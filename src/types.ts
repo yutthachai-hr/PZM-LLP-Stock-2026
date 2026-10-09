@@ -45,6 +45,12 @@ export const MAX_COST_HISTORY = 100
 
 export interface Product {
   id: string
+  /**
+   * G25 optimistic concurrency (7 Oct 2026): moves by one on every write (the backends add it),
+   * starts at 1. Absent on a product not written since. An edit made from a loaded copy states
+   * the version it saw, and is refused if the product has moved on.
+   */
+  version?: number
   sku: string
   /**
    * The number printed on the box, when someone has scanned it in (owner, 22 Sep 2026).
@@ -79,6 +85,13 @@ export interface Product {
    */
   alternateSupplierIds?: string[]
   /**
+   * Lot / expiry — schema only (owner, 6 Oct 2026: "YES but DEFER"). Absent or false means
+   * the product is tracked as today: one balance per location, no lots, no dates. Nothing
+   * reads these yet; docs/adr/ADR-002-lot-expiry.md is the design they reserve room for.
+   */
+  trackLot?: boolean
+  trackExpiry?: boolean
+  /**
    * Cost per one of the product's own unit (EA, KG…), for the stock valuation. Always the
    * latest entry of `costHistory` once one exists; the two are written together by
    * services/productCost.ts. Nothing else writes it — the price of a carton keyed here by
@@ -103,6 +116,18 @@ export interface Product {
    * entry screens ask for it once, and anyone may state it (see lib/uom.ts).
    */
   unitConversions?: { label: string; size: number; per?: number; of?: string }[]
+  /**
+   * Smart "Other" item (R&D, 8 Oct 2026): 'pending' while a product proposed from a request
+   * has not been reviewed by an admin. Absent = a reviewed catalogue product. A pending
+   * product is its own product (own id, own stock), never merged into another by itself.
+   */
+  review?: 'pending' | 'verified'
+  /** What the proposer wrote about it (size, grade, pack), compared when matching. */
+  spec?: string
+  /** normaliseName(name) at proposal, for review screens. */
+  nameKey?: string
+  proposedBy?: string
+  proposedByName?: string
   hasImage: boolean
   active: boolean
   createdAt: number
@@ -219,6 +244,8 @@ export interface StockMovement {
    */
   edits?: MovementEdit[]
   voided?: boolean
+  /** Why an admin voided it (plan A9, 6 Oct 2026). Absent on rows voided before. */
+  voidReason?: string
   /** When this movement came from a branch transfer (transfers/{id}). */
   transferId?: string
 }
@@ -365,15 +392,31 @@ export type StockEventPriority = 'normal' | 'high' | 'critical'
 export type PurchaseOrderStatus = 'draft' | 'ordered' | 'received' | 'cancelled'
 
 /** One delivery checked in against an order: the stock receipt it became, and what came. */
+/** Why goods that arrived were refused at the door (plan B5, 6 Oct 2026). */
+export const REJECT_REASONS = ['damaged', 'expired', 'wrongItem', 'quality', 'other'] as const
+export type RejectReason = (typeof REJECT_REASONS)[number]
+
 export interface PoReceipt {
   docNo: string
+  /**
+   * The id its stock rows are filed under (`rc_<order>_<operation>`, rows `_0`, `_1`…), so
+   * a retried confirm finds this receipt instead of filing another. Since 6 Oct 2026.
+   */
+  receiptId?: string
   /** The delivery's date — the one the stock receipt is filed under. */
   date: number
   invoiceNo: string
   byId: string
   byName: string
   /** What arrived on this delivery, in the order line's own unit (as `orderedQty`). */
-  lines: { productId: string; qty: number; note?: string }[]
+  lines: {
+    productId: string
+    qty: number
+    note?: string
+    /** Delivered but refused at the door (plan B5): not taken into stock, still owed. */
+    rejectedQty?: number
+    rejectReason?: RejectReason
+  }[]
 }
 
 /** One product on an order, as ordered and as it actually turned up. */
@@ -442,6 +485,8 @@ export interface PoRevisionEntry {
  */
 export interface PurchaseOrder {
   id: string
+  /** G25 optimistic concurrency: see Product.version. Server writes move it too. */
+  version?: number
   /** PO-00001. The number people say out loud. */
   docNo: string
   supplierId: string
@@ -842,6 +887,8 @@ export type NotificationKind =
   | 'transferSubmitted' // a branch transfer waiting for approval
   | 'transferArriving' // stock in transit arriving today
   | 'transferIssue' // transfer discrepancy or misroute reported
+  | 'transferStuck' // goods dispatched days ago and still not received (plan C2)
+  | 'poPartial' // an order part-received, the rest still owed long after (plan C2)
   | 'lowStock'
   | 'outOfStock'
   | 'stockoutSoon' // at the current rate of use, gone before the next delivery could land
@@ -864,6 +911,8 @@ export interface NotificationAudience {
  * stock, a late order — stays `active` until it clears, and comes back only after that.
  */
 export interface AppNotification {
+  /** G18: the workflow that caused it (32 hex), when there was one. */
+  traceId?: string
   id: string
   kind: NotificationKind
   category: NotificationCategory
@@ -1141,6 +1190,8 @@ export interface PurchaseRequestHistoryEntry {
   itemIdx?: number
   oldValue?: string
   newValue?: string
+  /** The conversion that wrote this entry (plan A6): one id per press of the button. */
+  runId?: string
 }
 
 /**
@@ -1149,6 +1200,13 @@ export interface PurchaseRequestHistoryEntry {
  * approved and converted, and the conversion goes through the same createPurchaseOrder
  * as the manual screen.
  */
+/**
+ * D4′: how a request's lines came in. Every channel ends in the same request, the same
+ * approval and the same orders — Excel is no longer a separate batch workflow.
+ */
+export type RequestIntake = 'manual' | 'excel' | 'ocr' | 'suggestion'
+export const REQUEST_INTAKES: readonly RequestIntake[] = ['manual', 'excel', 'ocr', 'suggestion']
+
 export interface PurchaseRequest {
   id: string
   /** PR-00001. One sequence per brand. */
@@ -1179,6 +1237,8 @@ export interface PurchaseRequest {
   skippedAt?: number
   /** The orders it became, one per supplier. Written once; a request converts once. */
   orders?: { supplierId: string; supplierName: string; poId: string; docNo: string }[]
+  /** D4′: every channel its lines came through, in the order first used. Absent on older requests (= manual). */
+  intake?: RequestIntake[]
   history: PurchaseRequestHistoryEntry[]
   createdBy: string
   createdByName: string
@@ -1409,6 +1469,44 @@ export interface Recipe {
   updatedByName?: string
 }
 
+/** B2: what an audit entry is about. */
+export type AuditEntityType =
+  | 'product'
+  | 'location'
+  | 'supplier'
+  | 'supplierItem'
+  | 'unitConversion'
+  | 'user'
+  | 'settings'
+  | 'schedule'
+  | 'companyProfile'
+  | 'maintenance'
+  | 'movement'
+  | 'purchaseOrder'
+  | 'backup'
+
+/** B2: one entry of the append-only audit log (services/auditLog.ts). */
+export interface AuditEntry {
+  id: string
+  actorId: string
+  actorName: string
+  actorRole: Role
+  /** What was done, e.g. `product.update`, `user.deactivate`, `backup.restore`. */
+  action: string
+  entityType: AuditEntityType
+  entityId: string
+  /** The changed fields as they were (null for a create), large values summarised. */
+  before: Record<string, unknown> | null
+  /** The changed fields as they are now (null for a delete). */
+  after: Record<string, unknown> | null
+  reason?: string
+  /** Shared by the entries one operation writes. */
+  operationId: string
+  /** G18: the workflow this entry belongs to, when it was made inside one. */
+  traceId?: string
+  createdAt: number
+}
+
 export const COL = {
   users: 'users',
   messages: 'messages',
@@ -1432,6 +1530,10 @@ export const COL = {
   transfers: 'transfers',
   /** Monthly stock-count sheets: counted first, confirmed later (29 Sep 2026). */
   monthlyCounts: 'monthlyCounts',
+  /** Phase G9: intelligence predictions kept to compare with what happened. Create-only. */
+  intelShadow: 'intelShadow',
+  /** B2: append-only record of catalogue, settings, user and maintenance changes. */
+  auditLog: 'auditLog',
   productAliases: 'productAliases',
   announcements: 'announcements',
   recipes: 'recipes',
@@ -1638,6 +1740,8 @@ export interface MonthlyCountResult {
   countedQty: number
   diff: number
   value: number
+  /** A big difference (lib/monthlyCount isBig) a manager looked at and approved (plan E2). */
+  bigApprovedBy?: string
 }
 
 export interface MonthlyCount {
@@ -1649,6 +1753,12 @@ export interface MonthlyCount {
   /** The business date of the month's last day: where a difference is filed. */
   countDate: number
   status: MonthlyCountStatus
+  /**
+   * A blind count (plan E2): while counting, staff see no book figures — only what they
+   * count. Managers still see them to review. Set when the sheet is opened, never changed.
+   * A screen setting, not a secret: the balances themselves stay readable as always.
+   */
+  blind?: boolean
   /** productId → the count. A product not in here was not counted and is not adjusted. */
   lines: Record<string, MonthlyCountLine>
   /** Imported rows awaiting a decision, keyed by source and row. Must be empty to confirm. */

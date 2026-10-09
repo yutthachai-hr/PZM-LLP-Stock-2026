@@ -1,0 +1,51 @@
+{
+ "at": "2026-10-08T08:31:51.598Z",
+ "node": "v24.18.0",
+ "runs": 5,
+ "results": [
+  {
+   "movements": 1000000,
+   "jsonBytes": 144314152,
+   "flatBytes": 91745927,
+   "findings": 28036,
+   "sameReport": {
+    "rust": true,
+    "goose": true
+   },
+   "ts": {
+    "parseMs": 1821.43,
+    "firstCheckMs": 2260.03,
+    "warmP50": 2221.925,
+    "warmP95": 2244.203
+   },
+   "rust": {
+    "inProcess": {
+     "firstMs": 2926.9738,
+     "runs": 5,
+     "p50Ms": 2052.043,
+     "p95Ms": 2583.5521
+    },
+    "processWallP50": 4445.545,
+    "peak": {
+     "peakMb": 686.7,
+     "wallMs": 4480.9832,
+     "cpuMs": 4062.5
+    }
+   },
+   "goose": {
+    "flattenMs": 6456.65,
+    "inProcess": {
+     "runs": 5,
+     "p50_ms": 1700.887,
+     "p95_ms": 1928.121
+    },
+    "processWallP50": 2126.922,
+    "peak": {
+     "peakMb": 396.1,
+     "wallMs": 1588.9036,
+     "cpuMs": 1406.25
+    }
+   }
+  }
+ ]
+}

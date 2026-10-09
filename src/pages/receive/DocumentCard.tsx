@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { SectionCard } from '../../components/frame'
 import { AlertBanner, Button, Field, Input, Select, bannerAction } from '../../components/ui'
@@ -50,6 +50,7 @@ export function DocumentCard({
   supplierId,
   supplierName,
   onSupplier,
+  supplierHint,
   invoiceNo,
   onInvoice,
   onInvoiceBlur,
@@ -71,6 +72,8 @@ export function DocumentCard({
   supplierId: string
   supplierName: string
   onSupplier: (id: string, name: string) => void
+  /** One line under the field: where the supplier came from, or what is suggested. */
+  supplierHint?: ReactNode
   invoiceNo: string
   onInvoice: (v: string) => void
   onInvoiceBlur: () => void
@@ -100,7 +103,10 @@ export function DocumentCard({
         <div className="grid gap-3 md:grid-cols-2 md:gap-4">
           <Field label={t('ผู้ขาย (Supplier)')} required>
             {locked !== undefined ? (
-              <Input value={locked} disabled />
+              <div className="space-y-1">
+                <Input value={locked} disabled />
+                {supplierHint}
+              </div>
             ) : (
               <div className="space-y-2">
                 <Select
@@ -127,6 +133,7 @@ export function DocumentCard({
                     autoFocus
                   />
                 )}
+                {supplierHint}
               </div>
             )}
           </Field>

@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { test, type Page } from '@playwright/test'
 import { backupPath, seedFromBackup } from './backupStage'
-import { listDocs, putDoc, putMany } from './emulator'
+import { listDocs, putDoc, putPaths } from './emulator'
 import { open, signedIn } from './app'
 import type { Person } from './fixture'
 
@@ -89,7 +89,7 @@ test('read budget: everyday workflows on real data', async ({ browser }) => {
     path: `notifications/${n.id}`,
     data: { ...n, createdAt: Number(n.createdAt) - 2 * 3_600_000, updatedAt: Number(n.updatedAt) - 2 * 3_600_000 } as Record<string, unknown>,
   }))
-  await putMany(aged)
+  await putPaths(aged)
 
   // 1, 15. Cold open as a manager — includes the background jobs a manager's browser runs.
   const manager = await signedIn(browser, 'manager')

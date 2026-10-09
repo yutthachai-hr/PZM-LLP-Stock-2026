@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { worstFailure, type LiveFailure } from './liveError'
+import { useCacheEpoch } from './cacheEpoch'
 import { useLive } from './useLive'
 import { useSynced } from './syncedCollection'
 import { movementCache } from './movementCache'
@@ -33,13 +35,10 @@ interface DataState {
   movements: StockMovement[]
   minOverrides: MinOverride[]
   users: AppUser[]
-  /**
-   * Notifications created in the last week, every recipient's — the bell filters them to
-   * the signed-in person. The seventh listener (it took the slot `notes` had).
-   */
-  notifications: AppNotification[]
-  /** Older pages of the bell, on request — never a standing listener. */
-  olderNotifications: Pick<Inbox, 'hasOlder' | 'olderLoading' | 'loadOlder'>
+  /** The worst listener the database ended (plan C1), or null when all are live. */
+  liveError: LiveFailure | null
+  /** Subscribe again every listener that failed. */
+  retryLive: () => void
   loading: boolean
 
   /** Business date of the oldest movement currently subscribed to. */
@@ -107,8 +106,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // be rejected, and the only screen that reads `users` is the admin section of Settings.
   const isAdmin = user?.role === 'admin'
 
-  const { data: products, loading: pLoading } = useSynced<Product>(COL.products, { label: 'products', fullEvery: 7 * DAY })
-  const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations, { label: 'locations.bootstrap' })
+  // An admin's restore, delete or correction bumps the brand's cache epoch (services/cacheEpoch):
+  // the device copies below are then read whole again, since a deleted or restored row moves
+  // no timestamp the change listeners could follow. null while the epoch is still arriving.
+  const cacheEpoch = useCacheEpoch(!!user)
+  const ep = (c: string): number | null => (cacheEpoch === undefined ? null : (cacheEpoch[c] ?? 0))
+  const productsLive = useSynced<Product>(COL.products, { label: 'products', fullEvery: 7 * DAY, epoch: ep('products') })
+  const { data: products, loading: pLoading } = productsLive
+  const locationsLive = useLive<StockLocation>(COL.locations, { label: 'locations.bootstrap' })
+  const { data: rawLocations, loading: lLoading } = locationsLive
   const { lang } = useI18n()
   const transitLocation = useMemo(
     () => rawLocations.find((l) => l.type === 'transit' || l.id === TRANSIT_LOCATION_ID),
@@ -124,7 +130,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     () => (lang === 'en' ? regularLocations.map((l) => (l.nameEn ? { ...l, name: l.nameEn } : l)) : regularLocations),
     [regularLocations, lang],
   )
-  const { data: levels, loading: sLoading } = useSynced<StockLevel>(COL.stockLevels, { label: 'stockLevels' })
+  const levelsLive = useSynced<StockLevel>(COL.stockLevels, { label: 'stockLevels', epoch: ep('stockLevels') })
+  const { data: levels, loading: sLoading } = levelsLive
   // The live listener covers the last week and never widens (perf/firestore-read-budget):
   // a screen that wants older rows gets them once, through the session's movement cache,
   // instead of re-subscribing — which made "load all history" a standing listener over the
@@ -157,11 +164,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // The week kept on the device too, refreshed by rows created or corrected since the last
   // sync — a return after hours costs the rows keyed in those hours, not the week again.
-  const { data: liveMovements, loading: mLoading } = useSynced<StockMovement>(COL.movements, {
+  const movementsLive = useSynced<StockMovement>(COL.movements, {
     label: 'movements.recent',
     fields: ['createdAt', 'updatedAt'],
     window: { field: 'date', from: recentFrom },
+    epoch: ep('stockMovements'),
   })
+  const { data: liveMovements, loading: mLoading } = movementsLive
   // Rows this device just wrote, shown until the listener confirms them (recentWrites.ts).
   const [recent, setRecent] = useState<StockMovement[]>([])
   useEffect(() => subscribeRecentWrites(setRecent), [])
@@ -169,11 +178,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const live = new Set(liveMovements.map((m) => m.id))
     return overlayRecent([...older.filter((m) => !live.has(m.id)), ...liveMovements], recent)
   }, [older, liveMovements, recent])
-  const { data: minOverrides } = useLive<MinOverride>(COL.minOverrides, { label: 'minOverrides.bootstrap' })
-  const { data: users } = useLive<AppUser>(COL.users, { enabled: isAdmin, label: 'users.bootstrap' })
+  // Written only by a restore, which bumps the epoch: kept on the device and read whole weekly or
+  // on a bump — not read in full on every cold open (+50 reads a page in the 8 Oct benchmark).
+  const overridesLive = useSynced<MinOverride>(COL.minOverrides, { label: 'minOverrides', fullEvery: 7 * DAY, epoch: ep('productMinOverrides') })
+  const minOverrides = overridesLive.data
+  const usersLive = useLive<AppUser>(COL.users, { enabled: isAdmin, label: 'users.bootstrap' })
+  const users = usersLive.data
   // This person's newest notifications only, filtered by the server (data/notificationInbox.ts).
   const inbox = useNotificationInbox(user ? { id: user.id, role: user.role } : null)
   const notifications = inbox.notifications
+  const notificationsValue = useMemo<NotificationsState>(
+    () => ({ notifications, olderNotifications: { hasOlder: inbox.hasOlder, olderLoading: inbox.olderLoading, loadOlder: inbox.loadOlder } }),
+    [notifications, inbox.hasOlder, inbox.olderLoading, inbox.loadOlder],
+  )
+
+  // Plan C1: a listener the database ended is said on screen, with a retry — never shown
+  // as an empty warehouse. Covers the device-synced sets (useSynced) and the plain listeners.
+  const lives = [productsLive, locationsLive, levelsLive, movementsLive, overridesLive, usersLive]
+  const liveError = worstFailure(lives.map((l) => l.error))
+  // Only the failed ones: subscribing a healthy listener again re-reads all it holds.
+  // A retry covers every listener already on its way when it was pressed: one that was
+  // subscribed before the cause was fixed may be refused a moment AFTER the press, and
+  // would otherwise leave the banner up although the next attempt would succeed. Each
+  // such late refusal is retried once — its new subscription starts after the press, so
+  // this cannot loop.
+  const retryAt = useRef(0)
+  /** Failures (collection + subscription start) a retry has already been sent for. */
+  const retried = useRef(new Set<string>())
+  const failureKey = (e: LiveFailure) => `${e.collection}:${e.startedAt ?? ''}`
+  const livesRef = useRef(lives)
+  livesRef.current = lives
+  const retryLive = useCallback(() => {
+    retryAt.current = Date.now()
+    for (const l of livesRef.current) {
+      if (!l.error) continue
+      retried.current.add(failureKey(l.error))
+      l.retry()
+    }
+  }, [])
+  useEffect(() => {
+    for (const l of lives) {
+      if (!l.error || (l.error.startedAt ?? Infinity) >= retryAt.current) continue
+      const key = failureKey(l.error)
+      if (retried.current.has(key)) continue
+      retried.current.add(key)
+      l.retry()
+    }
+  })
 
   const value = useMemo<DataState>(() => {
     const productMap = new Map(products.map((p) => [p.id, p]))
@@ -205,8 +256,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       movements,
       minOverrides,
       users,
-      notifications,
-      olderNotifications: { hasOlder: inbox.hasOlder, olderLoading: inbox.olderLoading, loadOlder: inbox.loadOlder },
+      liveError,
+      retryLive,
       loading: pLoading || lLoading || sLoading || mLoading,
       movementsFrom,
       ensureMovementsFrom,
@@ -227,10 +278,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     movements,
     minOverrides,
     users,
-    notifications,
-    inbox.hasOlder,
-    inbox.olderLoading,
-    inbox.loadOlder,
+    liveError,
+    retryLive,
     pLoading,
     lLoading,
     sLoading,
@@ -239,7 +288,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ensureMovementsFrom,
   ])
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+  return (
+    <Ctx.Provider value={value}>
+      <NotificationsCtx.Provider value={notificationsValue}>{children}</NotificationsCtx.Provider>
+    </Ctx.Provider>
+  )
+}
+
+/**
+ * This person's notifications (data/notificationInbox) in a context of their own (plan D2'):
+ * a notification arriving re-renders the bell and the popups, not every screen that reads stock.
+ */
+interface NotificationsState {
+  notifications: AppNotification[]
+  /** Older pages of the bell, on request — never a standing listener. */
+  olderNotifications: Pick<Inbox, 'hasOlder' | 'olderLoading' | 'loadOlder'>
+}
+const NotificationsCtx = createContext<NotificationsState>({ notifications: [], olderNotifications: { hasOlder: false, olderLoading: false, loadOlder: () => Promise.resolve() } })
+
+/** The notifications the app holds for the signed-in person. */
+export function useNotifications(): AppNotification[] {
+  return useContext(NotificationsCtx).notifications
+}
+/** The bell's "older" pages. */
+export function useOlderNotifications(): NotificationsState['olderNotifications'] {
+  return useContext(NotificationsCtx).olderNotifications
 }
 
 export function useData(): DataState {

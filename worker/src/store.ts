@@ -30,7 +30,8 @@ export interface Store {
 }
 
 /** The allow-list the tests pin: the Worker writes these collections and no others. */
-export const WRITABLE = ['stockEvents', 'notifications', 'meta', 'messages'] as const
+// `outbox`: only deleting events replicated to the Supabase shadow a week ago (shadowSync.ts).
+export const WRITABLE = ['stockEvents', 'notifications', 'meta', 'messages', 'outbox'] as const
 
 export function assertWritable(collection: string): void {
   const base = collection.includes('__') ? collection.split('__')[1] : collection

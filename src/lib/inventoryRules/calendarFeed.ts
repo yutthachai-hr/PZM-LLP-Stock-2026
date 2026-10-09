@@ -281,6 +281,7 @@ export function buildFeed(input: FeedInput): CalendarItem[] {
           recommendedQty: r.recommendedQty,
           supplier: r.supplier,
           basis: r.basis,
+          leadTimeDays: r.leadTimeDays,
         },
         persisted: false,
       })
@@ -321,7 +322,7 @@ export function buildFeed(input: FeedInput): CalendarItem[] {
       productId: m.productId,
       priority: 'high',
       status: 'info',
-      meta: { kind: a.kind, movement: m, product: a.product, value: a.value ?? 0 },
+      meta: { kind: a.kind, movement: m, product: a.product, value: a.value ?? 0, pct: a.pct },
       persisted: false,
     })
   }

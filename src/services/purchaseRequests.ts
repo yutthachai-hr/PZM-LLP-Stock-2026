@@ -6,10 +6,12 @@ import { AppError } from '../i18n/AppError'
 import { canEditItems, canSkip, canTransition, isManager, liveItems } from '../lib/purchaseRequestStatus'
 import { sameUnit } from '../lib/units'
 import { requireQty, roundQty } from '../lib/validate'
-import { createPurchaseOrder } from './purchaseOrders'
+import { counterSeeds, newOrderFields, nextOrderSeq, writeNewOrder } from './purchaseOrders'
+import { conversionOrderId, orderGroups, stuckConversions, type OrderGroup, type StuckConversion } from '../lib/requestConversion'
+import { genId } from '../lib/id'
 import { deliver } from './notifications'
 import { prReturnedDraft, prSubmittedDraft } from '../lib/inventoryRules/notifications'
-import {
+import { type RequestIntake,
   COL,
   type Product,
   type PurchaseOrder,
@@ -172,6 +174,8 @@ export async function createRequest(params: {
   locationId: string
   note?: string
   actor: Actor
+  /** D4′: where the first lines will come from. */
+  intake?: RequestIntake
 }): Promise<PurchaseRequest> {
   if (!params.locationId) throw new AppError('กรุณาเลือกคลังปลายทาง')
   const db = scoped()
@@ -189,6 +193,7 @@ export async function createRequest(params: {
       locationId: params.locationId,
       ...(params.note?.trim() ? { note: params.note.trim() } : {}),
       items: [],
+      ...(params.intake ? { intake: [params.intake] } : {}),
       requestedBy: params.actor.id,
       requestedByName: params.actor.name,
       history: [entry(params.actor, 'created')],
@@ -237,6 +242,12 @@ function placeItem(
   return { items: [...pr.items, stored], stored }
 }
 
+/** D4′: the request with this channel on its intake list (once, in first-use order). */
+export function withIntake(pr: PurchaseRequest, channel: RequestIntake): PurchaseRequest {
+  const cur = pr.intake ?? []
+  return cur.includes(channel) ? pr : { ...pr, intake: [...cur, channel] }
+}
+
 /** Add a line. A manager adding one during review marks it so; its requested quantity is none. */
 export async function addItem(params: {
   id: string
@@ -245,7 +256,7 @@ export async function addItem(params: {
   suppliers: readonly Supplier[]
   actor: Actor
 }): Promise<PurchaseRequest> {
-  return mutate(params.id, (pr) => withLine(pr, params))
+  return mutate(params.id, (pr) => withIntake(withLine(pr, params), 'manual'))
 }
 
 /**
@@ -266,20 +277,26 @@ export async function addItems(params: {
   actor: Actor
   /** Where the lines came from — the file and its order round — for the history. */
   source?: string
+  /** D4′: the channel. Defaults to excel with a source, manual without. */
+  intake?: RequestIntake
 }): Promise<PurchaseRequest> {
   if (params.lines.length === 0) throw new AppError('ยังไม่มีรายการสินค้า')
+  const channel = params.intake ?? (params.source ? 'excel' : 'manual')
   return mutate(params.id, (pr) => {
-    if (!params.source) return params.lines.reduce((cur, line) => withLine(cur, { ...params, line }), pr)
+    if (!params.source) return withIntake(params.lines.reduce((cur, line) => withLine(cur, { ...params, line }), pr), channel)
     requireEditable(pr, params.actor)
     let cur = pr
     for (const line of params.lines) cur = { ...cur, items: placeItem(cur, line, params.products, params.suppliers).items }
     if (liveItems(cur.items).length > MAX_ITEMS) {
       throw new AppError('ขอได้สูงสุด {max} รายการต่อใบ', { max: MAX_ITEMS })
     }
-    return {
-      ...cur,
-      history: [...pr.history, entry(params.actor, 'itemsImported', { detail: `${params.source} · ${params.lines.length}` })],
-    }
+    return withIntake(
+      {
+        ...cur,
+        history: [...pr.history, entry(params.actor, 'itemsImported', { detail: `${params.source} · ${params.lines.length}` })],
+      },
+      channel,
+    )
   })
 }
 
@@ -711,23 +728,25 @@ export async function reopenRequest(params: { id: string; reason: string; actor:
 
 // ---------------------------------------------------------------- conversion ----
 
-/** The lines an approved request would turn into orders, grouped by supplier. */
-export function orderGroups(pr: PurchaseRequest): { supplierId: string; supplierName: string; items: PurchaseRequestItem[] }[] {
-  const by = new Map<string, { supplierId: string; supplierName: string; items: PurchaseRequestItem[] }>()
-  for (const i of liveItems(pr.items)) {
-    if (!((i.approvedQty ?? 0) > 0)) continue
-    const g = by.get(i.supplierId) ?? { supplierId: i.supplierId, supplierName: i.supplierName, items: [] }
-    g.items.push(i)
-    by.set(i.supplierId, g)
-  }
-  return [...by.values()]
-}
+export { orderGroups }
 
 /**
- * Turn an approved request into placed orders, one per supplier, through the same
- * `createPurchaseOrder` the manual screen uses. A request converts once: the first thing
- * checked, and re-checked inside the final transaction, is that it has no orders yet, so
- * two people pressing the button together cannot make two sets.
+ * Turn an approved request into placed orders, one per supplier (plan A6, 6 Oct 2026).
+ *
+ * One transaction: the request is read inside it and must still be approved, each
+ * supplier's order is filed under `po_<request>_<supplier>` (conversionOrderId) and only
+ * created if it is not there yet, the numbers come from the suppliers' counters read in
+ * the same transaction, and the request becomes poCreated with the orders written on it.
+ * Either all of that lands or none of it does, so there is no half-converted request to
+ * leave behind any more (audit D4).
+ *
+ * Idempotent: a request that is already poCreated hands back the orders it has, writing
+ * nothing — a second press, a second tab, or a retry after a lost reply gets the same
+ * orders, never a second set.
+ *
+ * `adopt` is the admin's repair (Settings › ซ่อมรายการขอสั่งซื้อที่ค้าง): orders a
+ * conversion before A6 left behind, by supplier id, taken over as that supplier's order
+ * instead of creating another. Without it, such orders stop the conversion.
  */
 export async function convertToOrders(params: {
   id: string
@@ -735,47 +754,136 @@ export async function convertToOrders(params: {
   actor: Actor
   /** The day each supplier is to deliver, by supplier id. Omitted: the lead time decides. */
   expectedAt?: Readonly<Record<string, number>>
+  adopt?: Readonly<Record<string, string>>
 }): Promise<PurchaseRequest> {
   const db = scoped()
+  const adopt = params.adopt ?? {}
+  if (Object.keys(adopt).length > 0 && params.actor.role !== 'admin') throw new AppError('ต้องเป็นผู้ดูแลระบบ')
   const pr = await getRequest(params.id)
   if (!pr) throw new AppError('ไม่พบรายการขอสั่งซื้อ')
-  if (pr.status !== 'approved' || (pr.orders && pr.orders.length > 0)) {
-    throw new AppError('สร้างใบสั่งซื้อได้เฉพาะรายการที่อนุมัติแล้วและยังไม่เคยสร้าง')
-  }
+  if (pr.status === 'poCreated') return pr
+  if (pr.status !== 'approved') throw new AppError('สร้างใบสั่งซื้อได้เฉพาะรายการที่อนุมัติแล้วและยังไม่เคยสร้าง')
   const groups = orderGroups(pr)
   if (groups.length === 0) throw new AppError('ไม่มีรายการที่อนุมัติจำนวนมากกว่า 0')
 
-  // Refuse if any order already points at this request — a half-finished earlier attempt.
-  const already = await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'requestId', pr.id)
-  if (already.length > 0) {
-    throw new AppError('มีใบสั่งซื้อจากรายการนี้อยู่แล้ว: {list}', { list: already.map((o) => o.docNo).join(', ') })
-  }
-
-  const orders: NonNullable<PurchaseRequest['orders']> = []
-  for (const g of groups) {
-    const poId = await createPurchaseOrder({
-      supplier: { id: g.supplierId, name: g.supplierName },
-      locationId: pr.locationId,
-      lines: g.items.map((i) => ({ productId: i.productId, qty: i.approvedQty!, ...(i.entryUnit ? { entryUnit: i.entryUnit } : {}) })),
-      products: params.products,
-      actor: { id: params.actor.id, name: params.actor.name },
-      requestId: pr.id,
-      ...(params.expectedAt?.[g.supplierId] !== undefined ? { expectedAt: params.expectedAt[g.supplierId] } : {}),
+  // Orders a conversion before A6 left behind (random ids). A query cannot run inside a
+  // transaction, so this is read first; the ones the admin chose to take over are read
+  // again inside it.
+  const ours = new Set(groups.map((g) => conversionOrderId(pr.id, g.supplierId)))
+  const adopted = new Set(Object.values(adopt))
+  const left = (await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'requestId', pr.id)).filter(
+    (o) => o.status !== 'cancelled' && !ours.has(o.id) && !adopted.has(o.id),
+  )
+  if (left.length > 0) {
+    throw new AppError('มีใบสั่งซื้อจากรายการนี้ค้างอยู่แล้ว: {list} — ให้ผู้ดูแลระบบจัดการที่ ตั้งค่า › ซ่อมรายการขอสั่งซื้อที่ค้าง', {
+      list: left.map((o) => o.docNo).join(', '),
     })
-    const created = await db.getOne<PurchaseOrder>(COL.purchaseOrders, poId)
-    orders.push({ supplierId: g.supplierId, supplierName: g.supplierName, poId, docNo: created?.docNo ?? '' })
   }
+  const seeds = await counterSeeds(groups.filter((g) => !adopt[g.supplierId]).map((g) => g.supplierId))
+  const runId = genId()
 
-  return mutate(pr.id, (cur) => {
-    if (cur.orders && cur.orders.length > 0) throw new AppError('มีใบสั่งซื้อจากรายการนี้อยู่แล้ว: {list}', { list: cur.orders.map((o) => o.docNo).join(', ') })
-    const status: PurchaseRequestStatus = 'poCreated'
-    return {
-      ...cur,
-      status,
-      orders,
-      history: [...cur.history, entry(params.actor, 'convertedToPo', { detail: orders.map((o) => `${o.supplierName}: ${o.docNo}`).join(', ') })],
+  try {
+    return await placeConversion(params, pr.id, adopt, seeds, runId)
+  } catch (e) {
+    // Two people pressing at once: the one who lost finds the orders already there and the
+    // rules refuse its write. The request now reads poCreated — hand back what the other
+    // person made, the same answer a second press gets.
+    const now = await getRequest(pr.id).catch(() => null)
+    if (now?.status === 'poCreated') return now
+    throw e
+  }
+}
+
+async function placeConversion(
+  params: { products: readonly Product[]; actor: Actor; expectedAt?: Readonly<Record<string, number>> },
+  requestId: string,
+  adopt: Readonly<Record<string, string>>,
+  seeds: ReadonlyMap<string, number>,
+  runId: string,
+): Promise<PurchaseRequest> {
+  const db = scoped()
+  return db.transaction(async (tx) => {
+    const raw = await tx.get<PurchaseRequest>(COL.purchaseRequests, requestId)
+    if (!raw) throw new AppError('ไม่พบรายการขอสั่งซื้อ')
+    const cur: PurchaseRequest = { ...raw, id: requestId }
+    if (cur.status === 'poCreated') return cur // someone else converted it a moment ago
+    if (cur.status !== 'approved') throw new AppError('สร้างใบสั่งซื้อได้เฉพาะรายการที่อนุมัติแล้วและยังไม่เคยสร้าง')
+    const now = Date.now()
+
+    // Every read before any write: each supplier's order, then the counters still needed.
+    const plan: { g: OrderGroup; id: string; found: PurchaseOrder | null; adopted: boolean }[] = []
+    for (const g of orderGroups(cur)) {
+      const adoptId = adopt[g.supplierId]
+      const id = adoptId ?? conversionOrderId(cur.id, g.supplierId)
+      const found = await tx.get<PurchaseOrder>(COL.purchaseOrders, id)
+      if (found && (found.requestId !== cur.id || found.supplierId !== g.supplierId || found.status === 'cancelled')) {
+        throw new AppError('ใบสั่งซื้อ {docNo} ไม่ได้มาจากรายการนี้หรือถูกยกเลิกแล้ว', { docNo: found.docNo })
+      }
+      if (adoptId && !found) throw new AppError('ไม่พบใบสั่งซื้อ')
+      plan.push({ g, id, found: found ? { ...found, id } : null, adopted: !!adoptId })
     }
+    if (plan.length === 0) throw new AppError('ไม่มีรายการที่อนุมัติจำนวนมากกว่า 0')
+    const seqs = new Map<string, number>()
+    for (const p of plan) if (!p.found) seqs.set(p.g.supplierId, await nextOrderSeq(tx, p.g.supplierId, seeds))
+    // The catalogue the screen had may not have loaded yet (a fast tap on a slow phone): any
+    // product it lacks is read here, so the order never fails for want of a list.
+    const known = new Map(params.products.map((x) => [x.id, x]))
+    for (const p of plan) {
+      if (p.found) continue
+      for (const i of p.g.items) {
+        if (known.has(i.productId)) continue
+        const got = await tx.get<Product>(COL.products, i.productId)
+        if (got) known.set(i.productId, { ...got, id: i.productId })
+      }
+    }
+    const catalogue = [...known.values()]
+
+    const orders: NonNullable<PurchaseRequest['orders']> = []
+    const notes: string[] = []
+    for (const p of plan) {
+      let docNo = p.found?.docNo ?? ''
+      if (!p.found) {
+        const fields = newOrderFields(
+          {
+            supplier: { id: p.g.supplierId, name: p.g.supplierName },
+            locationId: cur.locationId,
+            lines: p.g.items.map((i) => ({ productId: i.productId, qty: i.approvedQty!, ...(i.entryUnit ? { entryUnit: i.entryUnit } : {}) })),
+            products: catalogue,
+            actor: { id: params.actor.id, name: params.actor.name },
+            requestId: cur.id,
+            ...(params.expectedAt?.[p.g.supplierId] !== undefined ? { expectedAt: params.expectedAt[p.g.supplierId] } : {}),
+          },
+          now,
+        )
+        docNo = writeNewOrder(tx, p.id, seqs.get(p.g.supplierId)!, fields)
+      }
+      orders.push({ supplierId: p.g.supplierId, supplierName: p.g.supplierName, poId: p.id, docNo })
+      notes.push(`${p.g.supplierName}: ${docNo}${p.adopted ? ' (ใบเดิม)' : ''}`)
+    }
+
+    const next: PurchaseRequest = {
+      ...cur,
+      status: 'poCreated' satisfies PurchaseRequestStatus,
+      orders,
+      history: [...cur.history, entry(params.actor, 'convertedToPo', { detail: notes.join(', '), runId })].slice(-MAX_HISTORY),
+      updatedAt: now,
+    }
+    const { id: docId, ...data } = next
+    tx.set(COL.purchaseRequests, docId, data)
+    return next
   })
+}
+
+/**
+ * Requests a conversion before A6 left halfway: approved, with orders already pointing at
+ * them. Read for the admin's repair tool — the approved requests, then each one's orders.
+ */
+export async function listStuckConversions(): Promise<StuckConversion[]> {
+  const db = scoped()
+  const approved = (await db.getBy<PurchaseRequest>(COL.purchaseRequests, 'status', 'approved')).filter((r) => r.status === 'approved')
+  const orders: PurchaseOrder[] = []
+  for (const r of approved) orders.push(...(await db.getBy<PurchaseOrder>(COL.purchaseOrders, 'requestId', r.id)))
+  return stuckConversions(approved, orders)
 }
 
 /** Note an export, so the history shows who took the list out and when. */

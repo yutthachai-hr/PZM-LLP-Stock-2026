@@ -1,4 +1,6 @@
+import { auditedUpdate, recordAudit, snapshot } from './auditLog'
 import { backend } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
 import { getBrand } from '../brand/brand'
 import { DELETE_FIELD } from '../backend/types'
 import { AppError } from '../i18n/AppError'
@@ -7,6 +9,8 @@ import { QTY_MAX } from '../lib/validate'
 import { normaliseConversions, sameUnit, type UnitConversion } from '../lib/units'
 
 export interface ProductInput {
+  /** Smart "Other" item: an admin marks a proposed product reviewed ('verified'). */
+  review?: 'pending' | 'verified'
   /** Who we buy it from. Empty means nobody has said yet. */
   supplierId?: string
   /** Other suppliers it can come from. See the field on Product. */
@@ -94,7 +98,7 @@ export async function createProduct(input: ProductInput): Promise<string> {
   void _typed
   const conversions = unitConversions ? normaliseConversions(unitConversions, input.unitType) : []
   const alternates = normaliseAlternates(alternateSupplierIds, supplierId)
-  return backend.add(COL.products, {
+  const id = await backend.add(COL.products, {
     ...rest,
     ...(barcode ? { barcode } : {}),
     ...(conversions.length ? { unitConversions: conversions } : {}),
@@ -105,11 +109,15 @@ export async function createProduct(input: ProductInput): Promise<string> {
     createdAt: now,
     updatedAt: now,
   })
+  await recordAudit({ action: 'product.create', entityType: 'product', entityId: id, after: snapshot({ ...input }) })
+  return id
 }
 
 export async function updateProduct(
   id: string,
   patch: Partial<ProductInput> & { active?: boolean },
+  /** G25: the version of the copy the edit was made from; the save is refused if the product moved on. */
+  opts: { expectedVersion?: number } = {},
 ): Promise<void> {
   checkNumbers(patch)
   // An empty cost box means "no cost recorded", which has to remove the field rather than
@@ -136,7 +144,8 @@ export async function updateProduct(
     const conversions = unitConversions ? normaliseConversions(unitConversions, patch.unitType) : []
     write.unitConversions = conversions.length ? conversions : DELETE_FIELD
   }
-  await backend.update(COL.products, id, write)
+  const action = patch.active === false ? 'product.deactivate' : patch.active === true ? 'product.activate' : 'product.update'
+  await auditedUpdate(COL.products, id, write, { action, entityType: 'product', expectedVersion: opts.expectedVersion })
 }
 
 /**
@@ -161,12 +170,17 @@ export async function addConversion(
   const row: UnitConversion = { label: clean, size, ...(opts.per !== undefined ? { per: opts.per } : {}), ...(opts.of ? { of: opts.of } : {}) }
   const next = normaliseConversions([...kept, row], product.unitType)
   if (!next.some((c) => sameUnit(c.label, clean))) throw new AppError('อัตรานี้อ้างอิงหน่วยที่ยังไม่มีอัตรา — กำหนดหน่วยนั้นก่อน')
-  await backend.update(COL.products, product.id, { unitConversions: next, updatedAt: Date.now() })
+  await auditedUpdate(COL.products, product.id, { unitConversions: next, updatedAt: Date.now() }, { action: 'unitConversion.set', entityType: 'unitConversion' })
   return next
 }
 
-export async function deleteProduct(id: string): Promise<void> {
-  // Remove product + image + cached balances. Movements keep denormalised names for history.
+async function deleteProductUnbumped(id: string): Promise<void> {
+  // A product with history is switched off, never deleted (plan B3, 6 Oct 2026): deleting
+  // one used to take its balances with it while its rows stayed, which is how stock went
+  // missing from the screens (the Phase 0 audit's SAUSAGE MIX, 20 EA nobody could see).
+  const used = await backend.getBy<{ id: string }>(COL.movements, 'productId', id)
+  if (used.length > 0) throw new AppError('สินค้านี้มีประวัติการเคลื่อนไหวแล้ว — ลบไม่ได้ ให้ปิดใช้งานแทน')
+  // Nothing ever moved: the product, its image and any empty balance rows go.
   const levels = await backend.getAll<StockLevel>(COL.stockLevels)
   await Promise.all(
     levels.filter((l) => l.productId === id).map((l) => backend.remove(COL.stockLevels, l.id)),
@@ -188,4 +202,13 @@ export async function removeProductImage(id: string): Promise<void> {
 export async function getProductImage(id: string): Promise<string | null> {
   const img = await backend.getOne<ProductImage>(COL.productImages, id)
   return img?.dataUrl ?? null
+}
+
+/** deleteProduct, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function deleteProduct(...args: Parameters<typeof deleteProductUnbumped>): ReturnType<typeof deleteProductUnbumped> {
+  const before = await backend.getOne<Record<string, unknown>>(COL.products, args[0])
+  const result = await deleteProductUnbumped(...args)
+  await bumpCacheEpoch(['products', 'stockLevels'])
+  await recordAudit({ action: 'product.delete', entityType: 'product', entityId: args[0], before: snapshot(before) })
+  return result
 }

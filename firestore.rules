@@ -126,6 +126,27 @@ service cloud.firestore {
       return name.matches('^(lelapin|rnd)__.*') ? name.split('__')[1] : name;
     }
 
+    // The same brand's collection of another kind: `lelapin__stockMovements` → `lelapin__transfers`.
+    function sibling(name, other) {
+      return name.matches('^lelapin__.*') ? 'lelapin__' + other : other;
+    }
+
+    // A transfer that really exists and has left the approval stage, as it stands at the end
+    // of this write (plan A4, 6 Oct 2026). Stock moves between sites only under such a
+    // document; naming a transfer that does not exist, or one still being drafted, is refused.
+    function realTransfer(name, id) {
+      let path = /databases/$(database)/documents/$(sibling(name, 'transfers'))/$(id);
+      return existsAfter(path)
+        && getAfter(path).data.status in ['inTransit', 'receiving', 'completed', 'discrepancy', 'pendingDiscrepancyApproval', 'resolved'];
+    }
+
+    // An order placed from a request is placed by the request's conversion: the request
+    // is poCreated at the end of the same write (plan B4 with A6).
+    function convertedRequest(name, id) {
+      let path = /databases/$(database)/documents/$(sibling(name, 'purchaseRequests'))/$(id);
+      return existsAfter(path) && getAfter(path).data.status == 'poCreated';
+    }
+
     // Movements are the ledger every balance is rebuilt from, so they are append-only for
     // everyone, admins included. Voiding and editing are updates that keep the original
     // row, and nothing in the app deletes one.
@@ -225,7 +246,7 @@ service cloud.firestore {
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'supplierId', 'supplierName', 'invoiceNo', 'docDate', 'poId', 'poDocNo',
           'date', 'byUserId', 'byUserName', 'createdAt',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'transferId'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'voidReason', 'transferId'
         ])
         && d.type in ['receive', 'issue', 'adjust', 'consume']
         && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
@@ -253,6 +274,7 @@ service cloud.firestore {
         && (!('poId' in d) || text(d.poId, 200))
         && (!('poDocNo' in d) || text(d.poDocNo, 40))
         && (!('voided' in d) || d.voided is bool)
+        && (!('voidReason' in d) || text(d.voidReason, 500))
         && (!('transferId' in d) || text(d.transferId, 200))
         && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
         && (!('toLocationId' in d) || text(d.toLocationId, 200))
@@ -293,8 +315,19 @@ service cloud.firestore {
         && d.keys().hasOnly([
           'id', 'sku', 'name', 'barcode', 'category', 'unit', 'unitType', 'minStock', 'cost',
           'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
-          'hasImage', 'active', 'createdAt', 'updatedAt'
+          'trackLot', 'trackExpiry',
+          'hasImage', 'active', 'createdAt', 'updatedAt', 'version',
+          // Smart "Other" item (R&D, 8 Oct 2026): written by the server's proposeItem; an
+          // admin later sets review to 'verified'. Staff cannot (catalogue writes are the
+          // admin's, and the staff unit-rate path lists only unitConversions).
+          'review', 'spec', 'nameKey', 'proposedBy', 'proposedByName'
         ])
+        && (!('version' in d) || d.version is int)
+        && (!('review' in d) || d.review in ['pending', 'verified'])
+        && (!('spec' in d) || text(d.spec, 300))
+        && (!('nameKey' in d) || text(d.nameKey, 300))
+        && (!('proposedBy' in d) || text(d.proposedBy, 200))
+        && (!('proposedByName' in d) || text(d.proposedByName, 200))
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
         // The number on the box (22 Sep 2026). Uniqueness is checked by the app before it
         // writes — a rule cannot query the collection — so this only pins the shape.
@@ -315,6 +348,9 @@ service cloud.firestore {
         // The automatic order never chooses one of these by itself.
         && (!('alternateSupplierIds' in d)
             || (d.alternateSupplierIds is list && d.alternateSupplierIds.size() <= 10))
+        // Lot / expiry, schema only (6 Oct 2026, deferred): flags, nothing reads them yet.
+        && (!('trackLot' in d) || d.trackLot is bool)
+        && (!('trackExpiry' in d) || d.trackExpiry is bool)
         && d.hasImage is bool && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }
@@ -562,7 +598,7 @@ service cloud.firestore {
           'batchId', 'requestId', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
-          'revision', 'revisions',
+          'revision', 'revisions', 'version',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ]);
     }
@@ -686,7 +722,7 @@ service cloud.firestore {
           'approvedBy', 'approvedByName', 'approvedAt',
           'rejectedBy', 'rejectedByName', 'rejectedAt',
           'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
-          'orders', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
+          'orders', 'intake', 'history', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'
         ]);
     }
 
@@ -714,6 +750,9 @@ service cloud.firestore {
         && d.items is list && d.items.size() <= 200
         && d.history is list && d.history.size() > 0 && d.history.size() <= 500
         && (!('orders' in d) || (d.orders is list && d.orders.size() <= 60))
+        // D4′: the channels its lines came through.
+        && (!('intake' in d) || (d.intake is list && d.intake.size() <= 4
+            && d.intake.hasOnly(['manual', 'excel', 'ocr', 'suggestion'])))
         && (!('note' in d) || text(d.note, 2000))
         && (!('submittedAt' in d) || epochMs(d.submittedAt))
         && (!('returnReason' in d) || text(d.returnReason, 2000))
@@ -930,6 +969,15 @@ service cloud.firestore {
       return (active() && staffWritable(name)) || (admin() && adminWritable(name));
     }
 
+    // The ledger and the balances are written by the trusted stock commands (ADR-001,
+    // functions/api/stock/*), which work every number out on the server. From a client,
+    // only an admin's maintenance tools still write them (corrections, unit tools, recompute,
+    // restore) — staff and managers cannot, whatever their token says (audit S1).
+    function clientStockWrite(name) {
+      let k = kind(name);
+      return !(k in ['stockLevels', 'stockMovements']) || roleIsAdmin();
+    }
+
     function editedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -956,6 +1004,11 @@ service cloud.firestore {
         : k == 'purchaseOrders'
         ? request.resource.data.createdBy == request.auth.uid
           && request.resource.data.status != 'received'
+          // Staff do not place an order on their own (owner, 6 Oct 2026, plan B4): theirs
+          // is a draft until a หัวหน้า or admin approves it — unless it comes from a request
+          // a manager already approved, converted in this same write.
+          && (request.resource.data.status != 'ordered' || roleIsManager()
+              || ('requestId' in request.resource.data && convertedRequest(name, request.resource.data.requestId)))
         // An import is filed by whoever imported it, and is not born approved or sent.
         : k == 'purchaseBatches'
         ? request.resource.data.createdBy == request.auth.uid
@@ -990,6 +1043,11 @@ service cloud.firestore {
           // staff move it through a transfer, whose rows name it.
           && (request.resource.data.type != 'issue' || !('toLocationId' in request.resource.data)
               || 'transferId' in request.resource.data || roleIsManager())
+          // The transfer it names must be real and past approval (plan A4).
+          && (!('transferId' in request.resource.data) || realTransfer(name, request.resource.data.transferId))
+          // An adjustment says why, in the words the reports group by (plan B7).
+          && (request.resource.data.type != 'adjust'
+              || request.resource.data.get('reason', '') in ['lost', 'broken', 'expired', 'damage', 'found', 'count', 'opening'])
         );
     }
 
@@ -1001,9 +1059,20 @@ service cloud.firestore {
     //
     // Counters only ever go forwards, so a replayed or forged write cannot hand out a
     // document number that has already been used.
+    // G25 optimistic concurrency (owner, 7 Oct 2026): every update of a product or an order
+    // moves its version by exactly one — the app's backends add it, and a stale copy (an old
+    // tab, an AI proposal computed from old data) states a version that is no longer next, so
+    // its write is refused here even if the app's own check were bypassed. An admin's
+    // maintenance (restoring a backup) may write any version.
+    function versionMoved() {
+      return roleIsAdmin()
+        || request.resource.data.get('version', 0) == resource.data.get('version', 0) + 1;
+    }
+
     function editedHonestly(name) {
       let k = kind(name);
-      return k == 'purchaseOrders' ? orderEdit()
+      return k == 'purchaseOrders' ? orderEdit() && versionMoved()
+        : k == 'products' ? versionMoved()
         : k == 'purchaseBatches' ? batchEdit()
         : k == 'transfers' ? transferEdit()
         : k == 'purchaseRequests' ? requestEdit()
@@ -1039,7 +1108,7 @@ service cloud.firestore {
           'orderedAt', 'approvedBy', 'approvedByName', 'approvedAt',
           'shareStatus', 'shareOpenedAt', 'sentAt', 'sentBy', 'sentByName', 'imageVersion',
           'cancelReason', 'cancelledBy', 'cancelledByName', 'cancelledAt',
-          'revision', 'revisions',
+          'revision', 'revisions', 'version',
           'receipts', 'closedShortReason', 'closedShortBy', 'closedShortByName', 'closedShortAt'
         ])
         // The lines of a placed order move only as a revision or when a delivery is checked
@@ -1057,6 +1126,8 @@ service cloud.firestore {
             || request.resource.data.revisions.size() > resource.data.revisions.size())
         // The order date only moves when a draft is placed.
         && (!('orderedAt' in e) || resource.data.status == 'draft')
+        // Placing a draft is a หัวหน้า's or admin's word (plan B4).
+        && (resource.data.status != 'draft' || request.resource.data.status != 'ordered' || roleIsManager())
         // Cancelling is signed by the caller, and a cancelled order is closed for good —
         // only an admin putting numbers right may still touch it.
         && (!('cancelledBy' in request.resource.data) || request.resource.data.cancelledBy == request.auth.uid)
@@ -1139,18 +1210,26 @@ service cloud.firestore {
           'approvedBy', 'approvedByName', 'approvedAt',
           'rejectedBy', 'rejectedByName', 'rejectedAt',
           'skipReason', 'skippedBy', 'skippedByName', 'skippedAt',
-          'orders', 'history', 'updatedAt'
+          'orders', 'intake', 'history', 'updatedAt'
         ])
         // A skipped request is final: nobody edits it, admins included (owner, 25 Sep 2026).
         && resource.data.status != 'skipped'
         && request.resource.data.history.size() >= resource.data.history.size()
         && (request.resource.data.status == resource.data.status || requestMove())
+        // What a manager approved is what gets ordered (plan A5): the lines are frozen once
+        // a request is approved, until an admin reopens it.
+        && (!('items' in editedKeys()) || !(resource.data.status in ['approved', 'poCreated']))
         && (!('approvedBy' in request.resource.data)
             || request.resource.data.approvedBy == resource.data.approvedBy
             || request.resource.data.approvedBy == request.auth.uid)
         && (!('rejectedBy' in request.resource.data)
             || request.resource.data.rejectedBy == resource.data.rejectedBy
             || request.resource.data.rejectedBy == request.auth.uid);
+    }
+
+    function convertedByCaller() {
+      let h = request.resource.data.history;
+      return h[h.size() - 1].by == request.auth.uid && h[h.size() - 1].action == 'convertedToPo';
     }
 
     function requestMove() {
@@ -1162,8 +1241,9 @@ service cloud.firestore {
           && (resource.data.requestedBy == request.auth.uid || roleIsManager()))
         // the manager's three words
         || (to in ['returned', 'approved', 'rejected'] && from == 'pendingApproval' && roleIsManager())
-        // turning an approved request into orders: anyone who may place an order
-        || (to == 'poCreated' && from == 'approved')
+        // turning an approved request into orders: anyone who may place an order, in their
+        // own name — the conversion's history entry names the caller (plan A5)
+        || (to == 'poCreated' && from == 'approved' && convertedByCaller())
         // reopening a decision: admin only
         || (to == 'pendingApproval' && from in ['approved', 'rejected'] && roleIsAdmin())
         // setting it aside before review: the requester or a manager, in their own name
@@ -1277,17 +1357,19 @@ service cloud.firestore {
       // the document's quantities are what explain them.
       return !('transferId' in resource.data) && editedKeys().hasOnly([
           'qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'voidReason'
         ])
-        && (!editedKeys().hasAny(['voided']) || roleIsAdmin())
+        // Voiding is an admin's, and says why (plan A9).
+        && (!editedKeys().hasAny(['voided', 'voidReason'])
+            || (roleIsAdmin() && request.resource.data.get('voidReason', '').size() > 0))
         && (!('updatedBy' in request.resource.data)
             || request.resource.data.updatedBy == request.auth.uid)
-        // Changing what a row says means appending to its history, in the caller's own name.
-        // `unit` is here because correcting a product's unit restamps every row filed under
-        // the old one, and that is an edit like any other: it signs itself.
+        // Changing what a row says is an admin's (plan A9), and means appending to its
+        // history in their own name. `unit` is here because correcting a product's unit
+        // restamps every row filed under the old one, and that is an edit like any other.
         && (!editedKeys().hasAny(['qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit',
                                   'fromLocationId', 'toLocationId'])
-            || appendedOwnEdit());
+            || (roleIsAdmin() && appendedOwnEdit()));
     }
 
     /**
@@ -1397,6 +1479,21 @@ service cloud.firestore {
 
     // Written only by the cron Worker (service account, outside these rules). Screens read
     // it to say when the automation last ran.
+    // The devices' cache epoch per brand (release hardening: Firestore reads). Every active
+    // user's device reads it once per open; an admin action that deletes or rewrites
+    // history bumps a collection's number so every device reads that collection in full.
+    match /meta/{docId} {
+      allow get: if docId.matches('^cacheEpoch_(pizza|lelapin|rnd)$') && active();
+      allow create, update: if docId.matches('^cacheEpoch_(pizza|lelapin|rnd)$') && admin()
+        && request.resource.data.keys().hasOnly(['id', 'products', 'stockLevels', 'stockMovements', 'notifications', 'productMinOverrides'])
+        && request.resource.data.id == docId
+        && (!('products' in request.resource.data) || request.resource.data.products is number)
+        && (!('stockLevels' in request.resource.data) || request.resource.data.stockLevels is number)
+        && (!('stockMovements' in request.resource.data) || request.resource.data.stockMovements is number)
+        && (!('notifications' in request.resource.data) || request.resource.data.notifications is number)
+        && (!('productMinOverrides' in request.resource.data) || request.resource.data.productMinOverrides is number);
+    }
+
     match /meta/cronStatus {
       allow get: if active();
       allow write: if false;
@@ -1504,7 +1601,7 @@ service cloud.firestore {
       return d.keys().hasAll(['id', 'locationId', 'month', 'countDate', 'status', 'lines',
           'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
         && d.keys().hasOnly(['id', 'locationId', 'month', 'countDate', 'status', 'lines', 'questions',
-          'results', 'postedIds', 'adjDocNos', 'note', 'createdBy', 'createdByName', 'createdAt',
+          'results', 'postedIds', 'adjDocNos', 'note', 'blind', 'createdBy', 'createdByName', 'createdAt',
           'updatedAt', 'updatedBy', 'updatedByName', 'confirmedBy', 'confirmedByName', 'confirmedAt'])
         && d.id == docId && docId == d.locationId + '__' + d.month
         && text(d.locationId, 200) && d.month.matches('^[0-9]{4}-[0-9]{2}$') && epochMs(d.countDate)
@@ -1515,6 +1612,7 @@ service cloud.firestore {
         && (!('postedIds' in d) || (d.postedIds is list && d.postedIds.size() <= 3000))
         && (!('adjDocNos' in d) || (d.adjDocNos is list && d.adjDocNos.size() <= 50))
         && (!('note' in d) || text(d.note, 2000))
+        && (!('blind' in d) || d.blind is bool)
         && text(d.createdBy, 200) && text(d.createdByName, 200)
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }
@@ -1531,7 +1629,7 @@ service cloud.firestore {
       let o = resource.data;
       let e = d.diff(o).affectedKeys();
       return validMonthlyCount(docId, d)
-        && !e.hasAny(['id', 'locationId', 'month', 'countDate', 'createdBy', 'createdByName', 'createdAt'])
+        && !e.hasAny(['id', 'locationId', 'month', 'countDate', 'blind', 'createdBy', 'createdByName', 'createdAt'])
         && (
           (o.status == 'counting' && d.status == 'counting'
             && e.hasOnly(['lines', 'questions', 'updatedAt', 'updatedBy', 'updatedByName'])
@@ -1564,6 +1662,98 @@ service cloud.firestore {
       allow create: if active() && monthlyCountCreate(docId);
       allow update: if active() && monthlyCountUpdate(docId);
       allow delete: if admin() && resource.data.status in ['counting', 'recorded'];
+    }
+
+    // ------------------------------------------------------------ intelligence shadow ----
+
+    /**
+     * Phase G9 (6 Oct 2026): what the intelligence predicted, kept to compare with what
+     * happened. Written by a manager's or admin's device, in their name; immutable — no one
+     * may change or delete a prediction after the fact, or the comparison means nothing.
+     * Read by managers and admins, on demand (the evaluation screen), never subscribed.
+     */
+    function validShadow(docId, d) {
+      return d.keys().hasOnly(['id', 'kind', 'engineVersion', 'createdAt', 'inputsAsOf', 'createdBy',
+          'poId', 'supplierId', 'dueDate', 'score', 'level', 'dataConfidence', 'reasons', 'day', 'items'])
+        && d.id == docId && d.createdBy == request.auth.uid
+        && text(d.engineVersion, 40) && epochMs(d.createdAt) && epochMs(d.inputsAsOf)
+        && (
+          (d.kind == 'deliveryRisk' && docId.matches('^dr__.{1,200}$') && text(d.poId, 200) && docId == 'dr__' + d.poId
+            && d.score is number && d.score >= 0 && d.score <= 100
+            && d.level in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+            && d.reasons is list && d.reasons.size() <= 12)
+          || (d.kind == 'stockout' && docId.matches('^so__[0-9]{8}$') && epochMs(d.day)
+            && d.items is list && d.items.size() <= 300)
+        );
+    }
+
+    match /intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /lelapin__intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /rnd__intelShadow/{docId} {
+      allow read: if manager();
+      allow create: if manager() && validShadow(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------- audit log (B2) ----
+
+    /**
+     * Append-only. Anyone active may add an entry in their OWN name and role; nobody —
+     * an admin included — may change or delete one. Only an admin reads them, and only a
+     * page at a time (a query must say limit <= 50), so the history cannot become a broad
+     * listener that costs a read per entry on every open.
+     */
+    function validAudit(docId, d) {
+      return d.keys().hasOnly(['id', 'actorId', 'actorName', 'actorRole', 'action', 'entityType', 'entityId',
+          'before', 'after', 'reason', 'operationId', 'traceId', 'createdAt'])
+        // G18: the workflow it belongs to — an id, never free text.
+        && (!('traceId' in d) || (d.traceId is string && d.traceId.matches('^[0-9a-f]{32}$')))
+        && d.id == docId && docId.matches('^[0-9]{14}_[a-z0-9]{1,12}$')
+        && d.actorId == request.auth.uid && d.actorRole == profile().role
+        && text(d.actorName, 120)
+        && d.action is string && d.action.matches('^[a-zA-Z]{1,30}[.][a-zA-Z]{1,40}$')
+        && d.entityType in ['product', 'location', 'supplier', 'supplierItem', 'unitConversion', 'user', 'settings',
+            'schedule', 'companyProfile', 'maintenance', 'movement', 'purchaseOrder', 'backup']
+        && text(d.entityId, 200) && d.entityId.size() > 0
+        && (d.before == null || (d.before is map && d.before.size() <= 40))
+        && (d.after == null || (d.after is map && d.after.size() <= 40))
+        && (!('reason' in d) || text(d.reason, 500))
+        && text(d.operationId, 40)
+        && epochMs(d.createdAt)
+        // Written now, or from the device's outbox within the week; never dated ahead.
+        && d.createdAt <= request.time.toMillis() + 300000
+        && d.createdAt >= request.time.toMillis() - 604800000;
+    }
+
+    match /auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /lelapin__auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /rnd__auditLog/{docId} {
+      allow get: if admin();
+      allow list: if admin() && request.query.limit <= 50;
+      allow create: if active() && validAudit(docId, request.resource.data);
+      allow update, delete: if false;
     }
 
     match /inventorySchedules/{docId} {
@@ -1600,7 +1790,8 @@ service cloud.firestore {
           'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt'])
         && d.keys().hasOnly(['id', 'kind', 'category', 'priority', 'to', 'params', 'link', 'active', 'readBy',
           'source', 'createdBy', 'createdAt', 'updatedAt', 'expiresAt', 'resolvedAt', 'locationId', 'productId', 'supplierId',
-          'audienceKeys'])
+          'audienceKeys', 'traceId'])
+        && (!('traceId' in d) || (d.traceId is string && d.traceId.matches('^[0-9a-f]{32}$')))
         && d.id == docId && text(d.kind, 40) && docId.matches('^' + d.kind + '__.+')
         && d.category in ['task', 'inventory', 'purchasing', 'supplier', 'system']
         && d.priority in ['critical', 'high', 'medium', 'info']
@@ -1671,10 +1862,12 @@ service cloud.firestore {
       // Type and range checks belong here as well as in the services, because the services
       // are client code: a caller holding a token skips them entirely.
       allow create: if writer(collection)
+        && clientStockWrite(collection)
         && validShape(collection, docId, request.resource.data, true)
         && createdHonestly(collection);
 
       allow update: if writer(collection)
+        && clientStockWrite(collection)
         && validShape(collection, docId, request.resource.data, false)
         && editedHonestly(collection);
 
@@ -1682,7 +1875,8 @@ service cloud.firestore {
       // first time somebody keys that unit (owner, 20 Sep 2026). Everything else about a
       // product stays with the admin.
       allow update: if active() && kind(collection) == 'products'
-        && editedKeys().hasOnly(['unitConversions', 'updatedAt'])
+        && editedKeys().hasOnly(['unitConversions', 'updatedAt', 'version'])
+        && versionMoved()
         && validShape(collection, docId, request.resource.data, false);
 
       allow delete: if active() && staffDeletable(collection);

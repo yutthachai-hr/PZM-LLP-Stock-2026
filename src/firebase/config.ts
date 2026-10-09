@@ -29,6 +29,8 @@ const BUILT_IN: FirebaseConfig | null = {
   appId: '1:789071579161:web:58df8f34e911cd7218c288',
 }
 
+import { hostTier } from '../lib/deployTier'
+
 const LS_KEY = 'pmstock:firebaseConfig'
 
 /**
@@ -75,6 +77,10 @@ export function getFirebaseConfig(): FirebaseConfig | null {
   // connected to the real project must not quietly reconnect to it.
   if (isDemoMode()) return null
   if (import.meta.env.VITE_USE_EMULATOR === '1') return isEmulatorMode() ? EMULATOR_CONFIG : null
+  // P0 preview isolation: a production build opened anywhere but the production host (a
+  // deployment's own hash URL, a copied bundle) gets no project at all — not BUILT_IN, not a
+  // config saved in this browser. Belt and braces: preview builds are demo builds already.
+  if (import.meta.env.VITE_DEPLOY_TIER === 'production' && typeof location !== 'undefined' && hostTier(location.hostname) !== 'production') return null
   try {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) {

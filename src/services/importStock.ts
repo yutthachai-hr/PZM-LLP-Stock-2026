@@ -3,7 +3,7 @@ import { getBrand } from '../brand/brand'
 import type { ParsedSheet, SheetColumn } from '../lib/stockSheet'
 import { COL, type Product, type StockLocation, type StockMovement } from '../types'
 import { QTY_MAX, roundQty } from '../lib/validate'
-import { balanceBefore } from '../lib/ledger'
+import { balanceAtDayEnd, balanceBefore } from '../lib/ledger'
 import { bkkDayStart, DAY_MS } from '../lib/inventoryRules/time'
 import { postCountAsOf } from './stock'
 
@@ -80,8 +80,13 @@ export interface LastCount {
  * top of the corrected figure. (Until 25 Sep 2026 a count set the balance to its figure
  * NOW, so any later movement had to block it — which blocked exactly the busiest items.)
  */
-export async function loadLedger(): Promise<StockMovement[]> {
+export async function loadLedger(from?: number): Promise<StockMovement[]> {
   const db = backend.forBrand(getBrand())
+  // Release hardening (Firestore reads): with `from`, only rows dated from the earliest
+  // count on — a count's day-end balance is then worked BACK from today's balance
+  // (balanceAtDayEnd), which needs nothing older. The whole ledger grows forever, and
+  // reading it on every import was a full collection scan.
+  if (from !== undefined) return (await db.getRange<StockMovement>(COL.movements, 'date', from, Number.MAX_SAFE_INTEGER, { label: 'import.ledger.since' })) ?? []
   return (await db.getAll<StockMovement>(COL.movements, { label: 'import.ledger' })) ?? []
 }
 
@@ -223,6 +228,11 @@ export function buildImportPlan(
   products: Product[],
   locations: StockLocation[],
   ledger: readonly StockMovement[] = [],
+  /**
+   * When the ledger holds only rows from some day on (loadLedger(from)): today's balance,
+   * so a count's day-end figure is worked back from it instead of summed from the start.
+   */
+  balanceNow?: (locationId: string, productId: string) => number,
 ): ImportPlan {
   const bySku = new Map<string, Product>()
   for (const p of products) {
@@ -398,7 +408,8 @@ export function buildImportPlan(
     const scope = { productId: p.productId, locationId: p.locationId }
     const here = rows.get(key) ?? []
     const earlier = (planned.get(key) ?? []).reduce((s, x) => (x.date < end ? s + x.delta : s), 0)
-    const asOfQty = roundQty(balanceBefore(here, scope, end) + earlier)
+    const base = balanceNow ? balanceAtDayEnd(balanceNow(p.locationId, p.productId), here, scope, end) : balanceBefore(here, scope, end)
+    const asOfQty = roundQty(base + earlier)
     if (asOfQty === p.targetQty) {
       unchanged.push({ ...p, asOfQty })
       continue

@@ -130,7 +130,7 @@ describe('F18 — voiding something already used up', () => {
     const receipt = (raw('stockMovements') as Record<string, unknown>[]).find(
       (m) => m.type === 'receive',
     )!
-    await expect(voidMovement(receipt.id as string, ACTOR)).rejects.toThrow()
+    await expect(voidMovement(receipt.id as string, ACTOR, 'keyed twice')).rejects.toThrow()
 
     // Nothing moved, and the cache still agrees with the ledger.
     expect(balance(MAIN, 'p1')).toBe(2)
@@ -141,7 +141,7 @@ describe('F18 — voiding something already used up', () => {
   test('voiding a receipt whose goods are untouched still works', async () => {
     await receiveStock({ lines: [line('p1', 10)], toLocationId: MAIN, date: Date.now(), actor: ACTOR })
     const receipt = (raw('stockMovements') as Record<string, unknown>[])[0]
-    await voidMovement(receipt.id as string, ACTOR)
+    await voidMovement(receipt.id as string, ACTOR, 'keyed twice')
     expect(balance(MAIN, 'p1')).toBe(0)
     expect(await findLevelDrift()).toEqual([])
   })

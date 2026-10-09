@@ -28,6 +28,8 @@ export const NOTIFICATION_TITLE: Record<NotificationKind, string> = {
   transferSubmitted: 'คำขอโอนสินค้ารออนุมัติ {docNo}', // i18n-key
   transferArriving: 'สินค้ากำลังมาส่ง: {docNo}', // i18n-key
   transferIssue: 'แจ้งผลต่าง/ปัญหาสินค้าโอน: {docNo}', // i18n-key
+  transferStuck: 'สินค้าโอนค้างในทาง {days} วัน: {docNo}', // i18n-key
+  poPartial: 'ใบสั่งซื้อรับไม่ครบค้างนาน: {supplier} ({docNo})', // i18n-key
   lowStock: 'ใกล้หมด: {product}', // i18n-key
   outOfStock: 'หมดแล้ว: {product}', // i18n-key
   stockoutSoon: 'คาดว่าจะหมดใน {days} วัน: {product}', // i18n-key
@@ -60,6 +62,8 @@ export const NOTIFICATION_BODY: Record<NotificationKind, string> = {
   transferSubmitted: '{by} · จาก {from} ไป {to} · {n} รายการ', // i18n-key
   transferArriving: 'จาก {from} มา {to} · {n} รายการ', // i18n-key
   transferIssue: '{by} รายงานปัญหาการรับของที่ {to}', // i18n-key
+  transferStuck: 'จาก {from} ไป {to} — ปลายทางยังไม่กดรับ', // i18n-key
+  poPartial: 'ยังค้างรับ {n} รายการ · ส่งครั้งล่าสุด {days} วันก่อน · {location}', // i18n-key
   lowStock: '{location} เหลือ {qty} {unit} (ขั้นต่ำ {min})', // i18n-key
   outOfStock: '{location} เหลือ {qty} {unit}', // i18n-key
   stockoutSoon: '{location} — ตามอัตราการใช้ช่วงนี้', // i18n-key

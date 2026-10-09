@@ -1,3 +1,4 @@
+import { stillActive } from '../_lib/activeUser'
 import {
   DOC_KINDS,
   DOC_MAX_BYTES,
@@ -18,6 +19,8 @@ import {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const uid = (await verifyFirebaseToken(request.headers.get('authorization'))) ?? (demoKeyOk(request, env) ? 'demo' : null)
   if (!uid) return json(401, { error: 'unauthorized' })
+  // A switched-off or revoked account keeps a valid token for up to an hour (plan B6).
+  if (uid !== 'demo' && !(await stillActive(env, uid))) return json(403, { error: 'inactive' })
 
   const url = new URL(request.url)
   const requested = url.searchParams.get('kind') ?? ''

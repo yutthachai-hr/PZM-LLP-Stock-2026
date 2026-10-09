@@ -49,7 +49,10 @@ async function replace(uid: string, path: string, next: (cur: Record<string, unk
   await assertSucceeds(
     runTransaction(db, async (tx) => {
       const cur = (await tx.get(ref)).data()!
-      tx.set(ref, next(cur))
+      // As the app writes it (G25): a versioned entity's write carries the next version.
+      const out = next(cur)
+      const versioned = /^(lelapin__)?(products|purchaseOrders)\//.test(path)
+      tx.set(ref, versioned && !('version' in out && out.version !== cur.version) ? { ...out, version: ((cur.version as number | undefined) ?? 0) + 1 } : out)
     }),
   )
 }
@@ -64,6 +67,7 @@ test('a manager and an admin can approve the widest purchase request', async () 
     items: Array.from({ length: 200 }, (_, i) => item(i)),
     requestedBy: STAFF, requestedByName: 'AA', submittedAt: ts(),
     returnReason: 'r', rejectReason: 'x', approvalNote: 'n', rejectedBy: 'u', rejectedByName: 'n', rejectedAt: ts(), orders: [],
+    intake: ['excel', 'ocr', 'manual', 'suggestion'],
     history: Array.from({ length: 499 }, (_, i) => ({ at: ts(), by: STAFF, byName: 'AA', action: i ? 'itemAdded' : 'created', detail: 'x', itemIdx: i, oldValue: 'a', newValue: 'b' })),
     createdBy: STAFF, createdByName: 'AA', createdAt: ts(), updatedAt: ts(),
   }
@@ -74,6 +78,21 @@ test('a manager and an admin can approve the widest purchase request', async () 
       history: [...(cur.history as unknown[]), { at: ts(), by: uid, byName: 'M', action: 'approved', newValue: 'ok' }], updatedAt: ts(),
     }))
   }
+})
+
+test('D4′: a draft records its intake channels; an unknown channel or a fifth one is refused', async () => {
+  const pr = {
+    id: 'pr2', docNo: 'PR-00002', status: 'draft', revision: 1, locationId: 'loc', items: [],
+    requestedBy: STAFF, requestedByName: 'AA', history: [{ at: ts(), by: STAFF, byName: 'AA', action: 'created' }],
+    createdBy: STAFF, createdByName: 'AA', createdAt: ts(), updatedAt: ts(),
+  }
+  await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), 'purchaseRequests/pr2'), pr))
+  const db = env.authenticatedContext(STAFF).firestore()
+  await assertSucceeds(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['excel'], updatedAt: ts() }))
+  await assertSucceeds(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['excel', 'ocr', 'manual', 'suggestion'], updatedAt: ts() }))
+  await assertFails(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['batch'], updatedAt: ts() }))
+  await assertFails(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: 'excel', updatedAt: ts() }))
+  await assertFails(updateDoc(doc(db, 'purchaseRequests/pr2'), { intake: ['excel', 'ocr', 'manual', 'suggestion', 'excel'], updatedAt: ts() }))
 })
 
 test('an admin can reopen the widest approved request (the dearest transition)', async () => {
@@ -156,13 +175,13 @@ test('staff can check in one more delivery on the widest partly received order (
   }
 })
 
-test('staff can file the widest receipt row with all its paperwork', async () => {
-  const db = env.authenticatedContext(STAFF).firestore()
+test('an admin can file the widest receipt row with all its paperwork (staff file through the server)', async () => {
+  const db = env.authenticatedContext(ADMIN).firestore()
   const row = (i: number) => ({
     id: 'm' + i, docNo: 'RC-00001', type: 'receive', productId: 'p' + i, productName: 'X'.repeat(300), unit: 'KG', entryUnit: 'Carton', entryQty: 2, qty: 48,
     toLocationId: 'loc', note: 'n'.repeat(2000), hasPhoto: true,
     supplierId: 's'.repeat(200), supplierName: 'S'.repeat(200), invoiceNo: 'I'.repeat(100), docDate: ts(), poId: 'p'.repeat(200), poDocNo: 'PO-00001',
-    date: ts(), byUserId: STAFF, byUserName: 'AA', createdAt: ts(),
+    date: ts(), byUserId: ADMIN, byUserName: 'AA', createdAt: ts(),
   })
   await assertSucceeds(runTransaction(db, async (tx) => {
     for (let i = 0; i < 40; i++) tx.set(doc(db, 'stockMovements/m' + i), row(i))

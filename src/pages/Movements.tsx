@@ -7,7 +7,6 @@ import { movementCache } from '../data/movementCache'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { useConfirm } from '../components/Confirm'
 import {
   Badge,
   Button,
@@ -22,6 +21,7 @@ import { FramePage, PageHero } from '../components/frame'
 import { DataTable, type Column } from '../components/DataTable'
 import { voidMovement, getMovementImage, readProductLedger } from '../services/stock'
 import { EditMovementModal } from '../components/movements/EditMovementModal'
+import { ReasonModal } from './requests/ReasonModal'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { fmtQty, formatThaiDate, dateInputToMs, dayRange } from '../lib/format'
@@ -39,7 +39,6 @@ export function MovementsPage() {
   const [historyFrom, setHistoryFrom] = useState<number | null>(null)
   const { user } = useAuth()
   const toast = useToast() // i18n-key
-  const confirm = useConfirm()
   const isAdmin = user?.role === 'admin'
 
   // Arriving from the top-bar search or a low-stock link: the point of that link is the
@@ -166,17 +165,16 @@ export function MovementsPage() {
     [rows, voidedRows, docFilter],
   )
 
-  async function doVoid(m: StockMovement) {
-    const ok = await confirm({
-      title: t("ยกเลิกรายการ"),
-      message: t('ยกเลิกรายการ {docNo} ({name})? ระบบจะคืนยอดสต๊อกกลับ', { docNo: m.docNo, name: m.productName, }),
-      danger: true,
-      confirmText: t("ยกเลิกรายการ"),
-    })
-    if (!ok) return
+  // Voiding asks why (plan A9): the reason is kept on the row, and the rules require it.
+  const [voiding, setVoiding] = useState<StockMovement | null>(null)
+  function doVoid(m: StockMovement) {
+    setVoiding(m)
+  }
+  async function confirmVoid(m: StockMovement, reason: string) {
     try {
-      await voidMovement(m.id, { id: user!.id, name: user!.name })
+      await voidMovement(m.id, { id: user!.id, name: user!.name }, reason)
       toast.success(t("ยกเลิกรายการแล้ว (คืนสต๊อก)"))
+      setVoiding(null)
     } catch (e) {
       toast.error(t("ทำรายการไม่สำเร็จ:") + ' ' + errText(e, t))
     }
@@ -320,10 +318,12 @@ export function MovementsPage() {
         cell: (m) =>
           m.voided ? null : (
             <div className="flex justify-end gap-1">
-              <Button variant="ghost" onClick={() => setEditing(m)}>
-                {t('แก้ไข')}
-              </Button>
               {isAdmin && (
+                <Button variant="ghost" onClick={() => setEditing(m)}>
+                  {t('แก้ไข')}
+                </Button>
+              )}
+              {isAdmin && !m.poId && (
                 <button
                   onClick={() => doVoid(m)}
                   className="rounded px-2 text-xs font-medium text-danger hover:bg-danger-soft"
@@ -336,7 +336,7 @@ export function MovementsPage() {
       },
     )
     return list
-    // doVoid closes over the toast/confirm helpers, which are stable for the page's life.
+    // doVoid only opens the reason dialog; it is stable for the page's life.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, locationId, stockCardMode, balances, isAdmin, productById])
 
@@ -409,6 +409,7 @@ export function MovementsPage() {
           rows={filtered}
           columns={columns}
           rowKey={(m) => m.id}
+          paged={{ size: 50, resetKey: `${productId}|${locationId}|${typeFilter}|${fromStr}|${toStr}|${docFilter}` }}
           minWidth={stockCardMode ? 820 : 720}
           maxHeight="calc(100vh - 260px)"
           rowClassName={(m) => (m.voided ? 'bg-sunken text-ink-faint' : '')}
@@ -416,10 +417,12 @@ export function MovementsPage() {
           cardActions={(m) =>
             m.voided ? null : (
               <>
-                <Button variant="secondary" onClick={() => setEditing(m)}>
-                  {t('แก้ไข')}
-                </Button>
                 {isAdmin && (
+                  <Button variant="secondary" onClick={() => setEditing(m)}>
+                    {t('แก้ไข')}
+                  </Button>
+                )}
+                {isAdmin && !m.poId && (
                   <Button variant="danger" onClick={() => doVoid(m)}>
                     {t('ยกเลิก')}
                   </Button>
@@ -431,6 +434,16 @@ export function MovementsPage() {
       </Card>
 
       {editing && <EditMovementModal movement={editing} onClose={() => setEditing(null)} />}
+      {voiding && (
+        <ReasonModal
+          title={t('ยกเลิกรายการ')}
+          message={t('ยกเลิกรายการ {docNo} ({name})? ระบบจะคืนยอดสต๊อกกลับ', { docNo: voiding.docNo, name: voiding.productName })}
+          confirmText={t('ยกเลิกรายการ')}
+          danger
+          onClose={() => setVoiding(null)}
+          onConfirm={(reason) => confirmVoid(voiding, reason)}
+        />
+      )}
       {photoDoc && <PhotoModal docNo={photoDoc} onClose={() => setPhotoDoc(null)} />}
     </FramePage>
   )

@@ -79,15 +79,15 @@ export function PurchaseBatchesPage() {
       <PageHero
         icon="truck"
         title={t('สั่งซื้ออัตโนมัติ')}
-        subtitle={t('นำเข้ารายการสั่งของจาก Excel → ระบบจัดกลุ่มตามผู้ขาย → อนุมัติ → ส่ง LINE ทีละราย')}
+        subtitle={t('ประวัติการนำเข้า Excel แบบเดิม — ใบที่ค้างอยู่ยังเปิดทำต่อได้ ส่วน Excel ใหม่ให้ทำผ่านใบขอซื้อ')}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => navigate('/orders')}>
               {t('สั่งเอง (ทีละผู้ขาย)')}
             </Button>
-            <Button onClick={() => navigate('/purchase/import')}>
+            <Button onClick={() => navigate('/requests/new?import=1')}>
               <Icon name="upload" size={16} />
-              {t('นำเข้า Excel')}
+              {t('ขอสั่งซื้อจาก Excel')}
             </Button>
           </div>
         }

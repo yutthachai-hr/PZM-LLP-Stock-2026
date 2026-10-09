@@ -4,7 +4,7 @@ vi.mock('../src/backend', async () => {
   const m = await import('./helpers/memory-backend')
   return { backend: m.memoryBackend, BACKEND_MODE: 'local' }
 })
-const { mergeDelta, newestStamp } = await import('../src/data/syncedCollection')
+const { mergeDelta, newestStamp, copyIsCurrent } = await import('../src/data/syncedCollection')
 
 /** The delta merge behind useSynced (products, stock balances): perf/firestore-read-budget. */
 type D = { id: string; updatedAt?: number; qty?: number }
@@ -31,5 +31,25 @@ describe('synced collection merge', () => {
   test('the cursor is the newest stamp held; unstamped documents do not move it', () => {
     expect(newestStamp([{ id: 'a', updatedAt: 4 }, { id: 'b' }, { id: 'c', updatedAt: 9 }])).toBe(9)
     expect(newestStamp([])).toBe(0)
+  })
+})
+
+// Integration (8 Oct 2026): main's device copies follow the brand's cache epoch, so an admin's
+// restore, delete or correction (which moves no timestamp) is read whole again everywhere.
+describe('device copy: when it may be used as it is', () => {
+  const DAYMS = 86_400_000
+  test('fresh enough and no epoch followed: used', () => {
+    expect(copyIsCurrent({ fullAt: 1000 }, 1000 + DAYMS - 1, DAYMS, undefined)).toBe(true)
+  })
+  test('too old: read whole', () => {
+    expect(copyIsCurrent({ fullAt: 1000 }, 1000 + DAYMS, DAYMS, undefined)).toBe(false)
+  })
+  test('no copy: read whole', () => {
+    expect(copyIsCurrent(null, 1, DAYMS, undefined)).toBe(false)
+  })
+  test('read under another epoch (an admin restored or deleted since): read whole', () => {
+    expect(copyIsCurrent({ fullAt: 1000, epoch: 3 }, 2000, DAYMS, 4)).toBe(false)
+    expect(copyIsCurrent({ fullAt: 1000 }, 2000, DAYMS, 0)).toBe(false)
+    expect(copyIsCurrent({ fullAt: 1000, epoch: 4 }, 2000, DAYMS, 4)).toBe(true)
   })
 })

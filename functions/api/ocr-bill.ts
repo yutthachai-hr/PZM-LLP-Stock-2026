@@ -1,3 +1,4 @@
+import { stillActive } from '../_lib/activeUser'
 import { demoKeyOk, json, verifyFirebaseToken, type Env } from '../_poImage'
 import { pickReaderModel, type ListedModel } from '../_lib/geminiModel'
 
@@ -46,6 +47,8 @@ const PROMPT = [
 export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => {
   const uid = (await verifyFirebaseToken(request.headers.get('authorization'))) ?? (demoKeyOk(request, env) ? 'demo' : null)
   if (!uid) return json(401, { error: 'unauthorized' })
+  // A switched-off or revoked account keeps a valid token for up to an hour (plan B6).
+  if (uid !== 'demo' && !(await stillActive(env, uid))) return json(403, { error: 'inactive' })
   const key = (env.GEMINI_API_KEY ?? '').trim()
   if (!key) return json(503, { error: 'not_configured' })
 

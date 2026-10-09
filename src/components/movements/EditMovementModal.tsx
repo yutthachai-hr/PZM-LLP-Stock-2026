@@ -14,7 +14,7 @@ import { entryUnitsFor } from '../QtyInput'
 import { DefineConversionModal } from '../DefineConversionModal'
 import type { StockMovement } from '../../types'
 import { useT } from '../../i18n/I18nContext'
-import { errText } from '../../i18n/AppError'
+import { AppError, errText } from '../../i18n/AppError'
 import { describeEditChange, TYPE_LABEL } from './labels'
 
 /** Correct one row of the ledger. The balances it touched follow; the edit is signed and kept. */
@@ -36,6 +36,9 @@ export function EditMovementModal({
   const [qty, setQty] = useState(movement.entryQty ?? movement.qty)
   const [dateStr, setDateStr] = useState(msToDateInput(movement.date))
   const [note, setNote] = useState(movement.note ?? '')
+  // Asked for only when the row's month is closed by a posted count (plan B1).
+  const [overrideReason, setOverrideReason] = useState('')
+  const [needsReason, setNeedsReason] = useState(false)
   const [entryUnit, setEntryUnit] = useState(keyed)
   const [fromId, setFromId] = useState(movement.fromLocationId ?? '')
   const [toId, setToId] = useState(movement.toLocationId ?? '')
@@ -71,6 +74,8 @@ export function EditMovementModal({
   }
 
   const active = useMemo(() => locations.filter((l) => l.active !== false), [locations])
+  // Received against a purchase order: only the note may change (plan A8).
+  const fromOrder = !!movement.poId
 
   async function save() {
     if (!(qty > 0)) return toast.error(t("จำนวนต้องมากกว่า 0"))
@@ -78,7 +83,8 @@ export function EditMovementModal({
     try {
       await editMovement({
         movementId: movement.id,
-        patch: {
+        patch: fromOrder ? { note, ...(overrideReason.trim() ? { overrideReason } : {}) } : {
+          ...(overrideReason.trim() ? { overrideReason } : {}),
           // A row keyed in the product's own unit is edited by qty; any other by entryQty.
           ...(isBase ? { qty } : { entryQty: qty }),
           date: dateInputToMs(dateStr),
@@ -93,6 +99,7 @@ export function EditMovementModal({
       toast.success(t("แก้ไขรายการแล้ว (ปรับยอดสต๊อกให้อัตโนมัติ)"))
       onClose()
     } catch (e) {
+      if (e instanceof AppError && e.key === 'เดือน {month} ปิดยอดนับแล้ว — ระบุเหตุผลการแก้ไขย้อนหลัง') setNeedsReason(true) // i18n-key
       toast.error(t("แก้ไขไม่สำเร็จ:") + ' ' + errText(e, t))
     } finally {
       setBusy(false)
@@ -106,6 +113,12 @@ export function EditMovementModal({
           <span className="font-medium">{movement.productName}</span>
           <span className="text-ink-soft"> — {t(TYPE_LABEL[movement.type])}</span>
         </div>
+        {fromOrder && (
+          <p className="rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-warn">
+            {t('รายการนี้รับเข้าจากใบสั่งซื้อ {docNo} — แก้ได้เฉพาะหมายเหตุ ถ้าจำนวนหรือรายละเอียดผิดให้บันทึกการปรับสต๊อกแทน', { docNo: movement.poDocNo ?? '' })}
+          </p>
+        )}
+        <fieldset disabled={fromOrder} className="contents">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("จำนวน")} required hint={preview !== null && !isBase ? `= ${fmtQty(preview)} ${baseUnit}` : undefined}>
             <Input
@@ -151,9 +164,15 @@ export function EditMovementModal({
         <Field label={t("วันที่")}>
           <Input type="date" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
         </Field>
+        </fieldset>
         <Field label={t("หมายเหตุ")}>
           <Input value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
+        {needsReason && (
+          <Field label={t('เหตุผลการแก้ไขย้อนหลัง (เดือนที่ปิดยอดแล้ว)')} required>
+            <Input value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} autoFocus />
+          </Field>
+        )}
         {/* Who has already changed this row. Shown here, not only in the report, so the next
             person editing it can see they are not the first. */}
         {movement.edits && movement.edits.length > 0 && (

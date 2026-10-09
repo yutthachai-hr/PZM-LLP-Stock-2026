@@ -97,7 +97,10 @@ async function writeOrder<R>(
     const r = compute(got.doc)
     if ('status' in r && 'body' in r) return r
     if (!r.patch) return { order: got.doc, reply: r.reply }
-    if (await deps.store.patchIf(col, id, r.patch, got.updateTime)) return { order: applyPatch(got.doc, r.patch), reply: r.reply }
+    // G25: the supplier's answer moves the order's version like any other write (race-safe:
+    // the patch only lands on the exact copy read, by its updateTime).
+    const patch = { ...r.patch, version: (typeof got.doc.version === 'number' ? got.doc.version : 0) + 1 }
+    if (await deps.store.patchIf(col, id, patch, got.updateTime)) return { order: applyPatch(got.doc, patch), reply: r.reply }
   }
   return fail(409, 'busy')
 }

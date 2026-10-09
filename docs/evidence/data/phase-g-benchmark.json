@@ -1,0 +1,270 @@
+{
+ "delivery.atPlacement.MEDIUM": {
+  "point": "atPlacement",
+  "threshold": "MEDIUM",
+  "metrics": {
+   "n": 97,
+   "covered": 84,
+   "coverage": 0.866,
+   "tp": 27,
+   "fp": 12,
+   "fn": 9,
+   "tn": 36,
+   "precision": 0.692,
+   "recall": 0.75,
+   "falseWarningRate": 0.25,
+   "missRate": 0.25
+  },
+  "rocAuc": 0.772,
+  "prAuc": 0.647,
+  "brierUncalibrated": 0.19,
+  "calibrationUncalibrated": [
+   {
+    "from": 0,
+    "to": 0.2,
+    "n": 53,
+    "meanP": 0.031,
+    "observed": 0.189
+   },
+   {
+    "from": 0.2,
+    "to": 0.4,
+    "n": 5,
+    "meanP": 0.25,
+    "observed": 0
+   },
+   {
+    "from": 0.4,
+    "to": 0.6,
+    "n": 7,
+    "meanP": 0.421,
+    "observed": 0.571
+   },
+   {
+    "from": 0.6,
+    "to": 0.8,
+    "n": 32,
+    "meanP": 0.6,
+    "observed": 0.719
+   },
+   {
+    "from": 0.8,
+    "to": 1,
+    "n": 0,
+    "meanP": null,
+    "observed": null
+   }
+  ]
+ },
+ "delivery.atPlacement.HIGH": {
+  "point": "atPlacement",
+  "threshold": "HIGH",
+  "metrics": {
+   "n": 97,
+   "covered": 84,
+   "coverage": 0.866,
+   "tp": 23,
+   "fp": 9,
+   "fn": 13,
+   "tn": 39,
+   "precision": 0.719,
+   "recall": 0.639,
+   "falseWarningRate": 0.188,
+   "missRate": 0.361
+  },
+  "rocAuc": 0.772,
+  "prAuc": 0.647,
+  "brierUncalibrated": 0.19,
+  "calibrationUncalibrated": [
+   {
+    "from": 0,
+    "to": 0.2,
+    "n": 53,
+    "meanP": 0.031,
+    "observed": 0.189
+   },
+   {
+    "from": 0.2,
+    "to": 0.4,
+    "n": 5,
+    "meanP": 0.25,
+    "observed": 0
+   },
+   {
+    "from": 0.4,
+    "to": 0.6,
+    "n": 7,
+    "meanP": 0.421,
+    "observed": 0.571
+   },
+   {
+    "from": 0.6,
+    "to": 0.8,
+    "n": 32,
+    "meanP": 0.6,
+    "observed": 0.719
+   },
+   {
+    "from": 0.8,
+    "to": 1,
+    "n": 0,
+    "meanP": null,
+    "observed": null
+   }
+  ]
+ },
+ "delivery.dayBeforeDue.MEDIUM": {
+  "point": "dayBeforeDue",
+  "threshold": "MEDIUM",
+  "metrics": {
+   "n": 97,
+   "covered": 84,
+   "coverage": 0.866,
+   "tp": 27,
+   "fp": 12,
+   "fn": 9,
+   "tn": 36,
+   "precision": 0.692,
+   "recall": 0.75,
+   "falseWarningRate": 0.25,
+   "missRate": 0.25
+  },
+  "rocAuc": 0.768,
+  "prAuc": 0.64,
+  "brierUncalibrated": 0.19,
+  "calibrationUncalibrated": [
+   {
+    "from": 0,
+    "to": 0.2,
+    "n": 53,
+    "meanP": 0.035,
+    "observed": 0.189
+   },
+   {
+    "from": 0.2,
+    "to": 0.4,
+    "n": 5,
+    "meanP": 0.25,
+    "observed": 0
+   },
+   {
+    "from": 0.4,
+    "to": 0.6,
+    "n": 7,
+    "meanP": 0.421,
+    "observed": 0.571
+   },
+   {
+    "from": 0.6,
+    "to": 0.8,
+    "n": 32,
+    "meanP": 0.6,
+    "observed": 0.719
+   },
+   {
+    "from": 0.8,
+    "to": 1,
+    "n": 0,
+    "meanP": null,
+    "observed": null
+   }
+  ]
+ },
+ "delivery.dayBeforeDue.HIGH": {
+  "point": "dayBeforeDue",
+  "threshold": "HIGH",
+  "metrics": {
+   "n": 97,
+   "covered": 84,
+   "coverage": 0.866,
+   "tp": 23,
+   "fp": 9,
+   "fn": 13,
+   "tn": 39,
+   "precision": 0.719,
+   "recall": 0.639,
+   "falseWarningRate": 0.188,
+   "missRate": 0.361
+  },
+  "rocAuc": 0.768,
+  "prAuc": 0.64,
+  "brierUncalibrated": 0.19,
+  "calibrationUncalibrated": [
+   {
+    "from": 0,
+    "to": 0.2,
+    "n": 53,
+    "meanP": 0.035,
+    "observed": 0.189
+   },
+   {
+    "from": 0.2,
+    "to": 0.4,
+    "n": 5,
+    "meanP": 0.25,
+    "observed": 0
+   },
+   {
+    "from": 0.4,
+    "to": 0.6,
+    "n": 7,
+    "meanP": 0.421,
+    "observed": 0.571
+   },
+   {
+    "from": 0.6,
+    "to": 0.8,
+    "n": 32,
+    "meanP": 0.6,
+    "observed": 0.719
+   },
+   {
+    "from": 0.8,
+    "to": 1,
+    "n": 0,
+    "meanP": null,
+    "observed": null
+   }
+  ]
+ },
+ "stockout": {
+  "windowDays": 7,
+  "metrics": {
+   "n": 825,
+   "covered": 825,
+   "coverage": 1,
+   "tp": 34,
+   "fp": 79,
+   "fn": 45,
+   "tn": 667,
+   "precision": 0.301,
+   "recall": 0.43,
+   "falseWarningRate": 0.106,
+   "missRate": 0.57
+  },
+  "quantity": {
+   "n": 113,
+   "mae": 10.376,
+   "bias": 0.068,
+   "within25": 0.867
+  },
+  "transferSafety": {
+   "n": 163,
+   "violations": 0,
+   "violationRate": 0
+  }
+ },
+ "deterioration": {
+  "n": 47,
+  "covered": 14,
+  "coverage": 0.298,
+  "tp": 2,
+  "fp": 1,
+  "fn": 10,
+  "tn": 1,
+  "precision": 0.667,
+  "recall": 0.167,
+  "falseWarningRate": 0.5,
+  "missRate": 0.833
+ }
+}

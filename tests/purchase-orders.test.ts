@@ -39,6 +39,7 @@ const {
   summariseBySupplier,
 } = await import('../src/services/purchaseOrders')
 const { setActiveBrand } = await import('../src/brand/brand')
+const { editMovement, voidMovement } = await import('../src/services/stock')
 import type { Product, PurchaseOrder } from '../src/types'
 
 const ACTOR = { id: 'uid-staff', name: 'Staff' }
@@ -857,5 +858,229 @@ describe('an order delivered in more than one go', () => {
     await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-2', actor: ACTOR, lines: [{ productId: 'p1', receivedQty: 0, checked: true }] })
     expect(balance('p1')).toBe(6)
     expect(movements().map((m) => [m.entryQty, m.qty])).toEqual([[1, 2], [2, 4]])
+  })
+})
+
+describe('a receipt is filed once, whatever happens to the confirm press (plan A1)', () => {
+  const all = (op?: string) =>
+    ({
+      invoiceNo: 'IV-7001',
+      lines: [
+        { productId: 'p1', receivedQty: 0, checked: true },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+      ...(op ? { operationId: op } : {}),
+    }) as const
+
+  test('the same operation again is the same receipt: returned, not filed twice', async () => {
+    const id = await placeOrder()
+    const first = await receivePurchaseOrder({ orderId: id, ...all('op-retry-1') })
+    const again = await receivePurchaseOrder({ orderId: id, ...all('op-retry-1') })
+    expect(again).toMatchObject({ docNo: first.docNo, replayed: true, status: 'received' })
+    expect(balance('p1')).toBe(10)
+    expect(movements()).toHaveLength(2)
+    expect(orders()[0].receipts).toHaveLength(1)
+  })
+
+  test('stock rows are filed under the receipt id, and the order records it', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, ...all('op-ids-1') })
+    expect(movements().map((m) => m.id).sort()).toEqual([`rc_${id}_op-ids-1_0`, `rc_${id}_op-ids-1_1`])
+    expect(orders()[0].receipts?.[0].receiptId).toBe(`rc_${id}_op-ids-1`)
+  })
+
+  test('a second device confirming the same delivery is refused against the order as it now stands', async () => {
+    const id = await placeOrder()
+    const results = await Promise.allSettled([
+      receivePurchaseOrder({ orderId: id, ...all('device-a-1') }),
+      receivePurchaseOrder({ orderId: id, ...all('device-b-1') }),
+    ])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(balance('p1')).toBe(10)
+    expect(movements()).toHaveLength(2)
+    expect(orders()[0].receipts).toHaveLength(1)
+  })
+
+  test('a part delivery from one device and the rest from another add up, nothing twice', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({
+      orderId: id,
+      invoiceNo: 'IV-7002',
+      lines: [
+        { productId: 'p1', receivedQty: 4, checked: false, note: 'rest tomorrow' },
+        { productId: 'p2', receivedQty: 0, checked: true },
+      ],
+      actor: ACTOR,
+      operationId: 'part-one-1',
+    })
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-7003', lines: [{ productId: 'p1', receivedQty: 0, checked: true }], actor: ACTOR, operationId: 'part-two-1' })
+    expect(balance('p1')).toBe(10)
+    expect(orders()[0]).toMatchObject({ status: 'received' })
+    expect(orders()[0].receipts).toHaveLength(2)
+  })
+
+  test('nothing is written when the order cannot take the delivery', async () => {
+    const id = await placeOrder()
+    await cancelPurchaseOrder({ id, reason: 'supplier closed', actor: ACTOR })
+    await expect(receivePurchaseOrder({ orderId: id, ...all('cancelled-1') })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+    expect(raw('stockLevels')).toHaveLength(0)
+  })
+
+  test('an operation id that is not a plain token is refused before anything is read', async () => {
+    const id = await placeOrder()
+    await expect(receivePurchaseOrder({ orderId: id, ...all('../../x') })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+  })
+})
+
+describe('changing a placed order is one transaction (plan A7)', () => {
+  const full = { invoiceNo: 'IV-A7', lines: [{ productId: 'p1', receivedQty: 0, checked: true }, { productId: 'p2', receivedQty: 0, checked: true }], actor: ACTOR }
+
+  test('cancel and receive at once: the order and the ledger tell one story', async () => {
+    const id = await placeOrder()
+    await Promise.allSettled([
+      receivePurchaseOrder({ orderId: id, ...full, operationId: 'race-a7' }),
+      cancelPurchaseOrder({ id, reason: 'ผู้ขายแจ้งของหมด', actor: ACTOR }),
+    ])
+    const o = orders()[0]
+    if (o.status === 'cancelled') {
+      expect(movements()).toHaveLength(0)
+      expect(balance('p1')).toBe(0)
+    } else {
+      expect(o.status).toBe('received')
+      expect(o.cancelledAt).toBeUndefined()
+      expect(balance('p1')).toBe(10)
+    }
+  })
+
+  test('an amendment racing a receipt never rewrites the lines a delivery was filed against', async () => {
+    const id = await placeOrder()
+    await Promise.allSettled([
+      receivePurchaseOrder({ orderId: id, ...full, operationId: 'race-a7-amend' }),
+      amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 3 }], reason: 'ลดจำนวน', products, actor: ACTOR }),
+    ])
+    // Either order of events is fine; what must hold is that the stock filed is exactly
+    // what the order says arrived, against the lines as they stood at that moment.
+    const o = orders()[0]
+    const p1 = o.lines.find((l) => l.productId === 'p1')
+    expect(balance('p1')).toBe(p1?.receivedQty ?? 0)
+    if (o.revision) expect(p1?.orderedQty).toBe(3)
+  })
+})
+
+describe('a row received against an order changes only with the order (plan A8)', () => {
+  async function received() {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-A8', lines: [{ productId: 'p1', receivedQty: 0, checked: true }, { productId: 'p2', receivedQty: 0, checked: true }], actor: ACTOR, operationId: 'op-a8-1' })
+    return movements().find((m) => m.productId === 'p1')!.id as string
+  }
+
+  test('its quantity, date or place cannot be edited; the order and the ledger stay equal', async () => {
+    const mv = await received()
+    await expect(editMovement({ movementId: mv, patch: { qty: 7 }, actor: ACTOR })).rejects.toThrow(/PO-0000\d/)
+    await expect(editMovement({ movementId: mv, patch: { date: Date.UTC(2026, 0, 1) }, actor: ACTOR })).rejects.toThrow()
+    expect(balance('p1')).toBe(10)
+    expect(orders()[0].lines.find((l) => l.productId === 'p1')?.receivedQty).toBe(10)
+  })
+
+  test('its note can still be corrected', async () => {
+    const mv = await received()
+    await editMovement({ movementId: mv, patch: { note: 'กล่องบุบ 1 กล่อง' }, actor: ACTOR })
+    expect(movements().find((m) => m.id === mv)?.note).toBe('กล่องบุบ 1 กล่อง')
+  })
+
+  test('it cannot be voided: a wrong delivery is put right with an adjustment', async () => {
+    const mv = await received()
+    await expect(voidMovement(mv, ACTOR, 'keyed twice')).rejects.toThrow()
+    expect(movements().find((m) => m.id === mv)?.voided).toBeUndefined()
+    expect(balance('p1')).toBe(10)
+  })
+})
+
+describe('exit gate A: the same operation retried five times is one receipt', () => {
+  test('retry ×5 with one operation id: stock once, one receipt, every answer the same', async () => {
+    const id = await placeOrder()
+    const press = () =>
+      receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-X5', lines: [{ productId: 'p1', receivedQty: 0, checked: true }, { productId: 'p2', receivedQty: 0, checked: true }], actor: ACTOR, operationId: 'op-retry-x5' })
+    const answers = [await press(), ...(await Promise.all([press(), press(), press(), press()]))]
+    expect(new Set(answers.map((a) => a.docNo)).size).toBe(1)
+    expect(balance('p1')).toBe(10)
+    expect(movements()).toHaveLength(2)
+    expect(orders()[0].receipts).toHaveLength(1)
+  })
+})
+
+describe('plan B5: goods refused at the door, and the over-receipt ceiling', () => {
+  const both = (p1: Record<string, unknown>) => [{ productId: 'p1', receivedQty: 0, checked: false, ...p1 }, { productId: 'p2', receivedQty: 0, checked: true }]
+
+  test('a refused quantity is kept on the receipt, never stocked, and the line stays owed', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R1', lines: both({ receivedQty: 7, rejectedQty: 3, rejectReason: 'damaged' }), actor: ACTOR })
+    expect(balance('p1')).toBe(7)
+    const po = orders()[0]
+    expect(po.lines[0].receivedQty).toBe(7)
+    expect(po.status).not.toBe('received')
+    expect(po.receipts?.[0].lines.find((l) => l.productId === 'p1')).toMatchObject({ rejectedQty: 3, rejectReason: 'damaged' })
+    expect(String(movements().find((m) => m.productId === 'p1')?.note)).toMatch(/ตีกลับ 3/)
+  })
+
+  test('a refusal needs its reason, and cannot be negative', async () => {
+    const id = await placeOrder()
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R2', lines: both({ receivedQty: 7, rejectedQty: 3 }), actor: ACTOR })).rejects.toThrow()
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R2', lines: both({ receivedQty: 7, note: 'x', rejectedQty: -1, rejectReason: 'other' }), actor: ACTOR })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+  })
+
+  test('a delivery refused in full files nothing', async () => {
+    const id = await placeOrder()
+    const lines = [
+      { productId: 'p1', receivedQty: 0, checked: false, rejectedQty: 10, rejectReason: 'expired' as const },
+      { productId: 'p2', receivedQty: 0, checked: false, note: 'not sent' },
+    ]
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R3', lines, actor: ACTOR })).rejects.toThrow()
+    expect(movements()).toHaveLength(0)
+  })
+
+  test('more than 10% over what is owed needs a manager or admin', async () => {
+    const id = await placeOrder()
+    const over = both({ receivedQty: 12, note: 'supplier sent extra' })
+    await expect(receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R4', lines: over, actor: { ...ACTOR, role: 'staff' } })).rejects.toThrow(/10%/)
+    // Within the tolerance a staff member may take it in.
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R4', lines: both({ receivedQty: 11, note: 'one extra' }), actor: { ...ACTOR, role: 'staff' } })
+    expect(balance('p1')).toBe(11)
+  })
+
+  test('a manager may take in more than the tolerance', async () => {
+    const id = await placeOrder()
+    await receivePurchaseOrder({ orderId: id, invoiceNo: 'IV-R5', lines: both({ receivedQty: 15, note: 'bulk deal' }), actor: { ...ACTOR, role: 'manager' } })
+    expect(balance('p1')).toBe(15)
+  })
+})
+
+// G25 (owner, 7 Oct 2026): an order's version moves with every write, and a revision made
+// from an old copy of the order — a stale tab, or anything computed from old data — is refused.
+describe('G25: order versions', () => {
+  const order = (id: string) => orders().find((o) => o.id === id)!
+  test('created at version 1; each change moves it by one', async () => {
+    const id = await placeOrder()
+    expect(order(id).version).toBe(1)
+    await setShareStatus(id, 'sent', ACTOR)
+    expect(order(id).version).toBe(2)
+  })
+  test('a revision from the copy on screen lands and reports the new version; from an older one it is refused', async () => {
+    const id = await placeOrder()
+    const next = await amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 12 }], reason: 'แก้จำนวน', products, actor: ACTOR, expectedVersion: 1 })
+    expect(next.version).toBe(2)
+    expect(order(id).version).toBe(2)
+    await expect(amendPurchaseOrder({ id, lines: [{ productId: 'p1', qty: 99 }], reason: 'จากหน้าจอเก่า', products, actor: ACTOR, expectedVersion: 1 })).rejects.toThrow('มีคนแก้ข้อมูลนี้ไปแล้ว')
+    expect(order(id).lines.map((l) => l.orderedQty)).toEqual([12])
+    expect(order(id).revision).toBe(1)
+  })
+  test('without an expectation (system paths) the change still moves the version', async () => {
+    const id = await placeOrder()
+    await cancelPurchaseOrder({ id, reason: 'ไม่ใช้แล้ว', actor: ACTOR })
+    expect(order(id)).toMatchObject({ status: 'cancelled', version: 2 })
   })
 })

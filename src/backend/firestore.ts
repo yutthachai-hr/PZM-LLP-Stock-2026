@@ -12,12 +12,13 @@ import {
   where,
   deleteField,
   documentId,
+  increment as fsIncrement,
   orderBy as fbOrderBy,
   limit as fbLimit,
   type QueryConstraint,
 } from 'firebase/firestore'
 import { getDb } from '../firebase/app'
-import { DELETE_FIELD, type Backend, type QuerySpec, type ReadOptions, type SubscribeOptions, type TxContext } from './types'
+import { DELETE_FIELD, Increment, withInitialVersion, withVersionBump, type Backend, type QuerySpec, type ReadOptions, type SubscribeOptions, type TxContext } from './types'
 import { resolveCollection, type BrandId } from '../brand/brand'
 import { currentResumeEpoch, isReturningFromAbsence, noteListener, noteReadOp, onReturnFromLongAbsence, RESUME_TOKEN_MS } from '../data/readMeter'
 
@@ -73,10 +74,10 @@ function constraints(spec: QuerySpec | undefined): QueryConstraint[] {
   return out
 }
 
-/** Turn our DELETE_FIELD marker into Firestore's own. */
+/** Turn our markers (DELETE_FIELD, Increment) into Firestore's own. */
 function toFirestorePatch(patch: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(patch)) out[k] = v === DELETE_FIELD ? deleteField() : v
+  for (const [k, v] of Object.entries(patch)) out[k] = v === DELETE_FIELD ? deleteField() : v instanceof Increment ? fsIncrement(v.by) : v
   return out
 }
 
@@ -89,7 +90,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
 
     mode: 'cloud',
 
-    subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions): () => void {
+    subscribe<T>(collection: string, cb: (docs: T[]) => void, opts?: SubscribeOptions, onError?: (e: unknown) => void): () => void {
       const db = getDb()
       const c = resolve(collection)
       const ref = fbCollection(db, c)
@@ -140,7 +141,9 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
         },
         (err) => {
           console.error(`[firestore] subscribe ${c} failed`, err)
-          opts?.onError?.(err)
+          // Either form: the options' onError (perf/firestore-read-budget) or the fourth argument.
+          const tell = opts?.onError ?? onError
+          tell?.(err)
         },
       )
       return () => {
@@ -159,14 +162,24 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
     ): () => void {
       const db = getDb()
       const c = resolve(collection)
-      return onSnapshot(
+      noteListener(1)
+      let open = true
+      const unsub = onSnapshot(
         doc(db, c, id),
-        (snap) => cb(snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null),
+        (snap) => {
+          noteReadOp({ label: `${collection}.one.live`, collection: c, kind: 'listen.update', docs: 1, fromCache: snap.metadata.fromCache })
+          cb(snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null)
+        },
         (err) => {
           console.error(`[firestore] subscribeOne ${c}/${id} failed`, err)
           onError?.(err)
         },
       )
+      return () => {
+        if (open) noteListener(-1)
+        open = false
+        unsub()
+      }
     },
 
     async getRange<T>(
@@ -204,6 +217,15 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
 
+    // B2 audit log: one page, newest first, never a listener (kept from the release-hardening branch).
+    async page<T>(collection: string, field: string, opts: { limit: number; before?: number }): Promise<T[]> {
+      const c = resolve(collection)
+      const parts = [...(opts.before !== undefined ? [where(field, '<', opts.before)] : []), fbOrderBy(field, 'desc'), fbLimit(opts.limit)]
+      const snap = await getDocs(query(fbCollection(getDb(), c), ...parts))
+      noteReadOp({ label: `${collection}.page`, collection: c, kind: 'range', docs: snap.size, fromCache: snap.metadata.fromCache })
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
+    },
+
     async getOne<T>(collection: string, id: string, opts?: ReadOptions): Promise<T | null> {
       const db = getDb()
       const c = resolve(collection)
@@ -235,18 +257,18 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
     async add(collection: string, data: Record<string, unknown>): Promise<string> {
       const db = getDb()
       const ref = doc(fbCollection(db, resolve(collection)))
-      await setDoc(ref, { ...data, id: ref.id })
+      await setDoc(ref, { ...withInitialVersion(collection, data), id: ref.id })
       return ref.id
     },
 
     async set(collection: string, id: string, data: Record<string, unknown>): Promise<void> {
       const db = getDb()
-      await setDoc(doc(db, resolve(collection), id), { ...data, id })
+      await setDoc(doc(db, resolve(collection), id), { ...withInitialVersion(collection, data), id })
     },
 
     async update(collection: string, id: string, patch: Record<string, unknown>): Promise<void> {
       const db = getDb()
-      await updateDoc(doc(db, resolve(collection), id), toFirestorePatch(patch))
+      await updateDoc(doc(db, resolve(collection), id), toFirestorePatch(withVersionBump(collection, patch)))
     },
 
     async remove(collection: string, id: string): Promise<void> {
@@ -265,13 +287,13 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
             return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
           },
           set(collection, id, data) {
-            t.set(doc(db, resolve(collection), id), { ...data, id })
+            t.set(doc(db, resolve(collection), id), { ...withInitialVersion(collection, data), id })
           },
           update(collection, id, patch) {
             // Same translation the non-transactional update does. Without it a DELETE_FIELD
             // marker reached Firestore as an opaque value, so clearing a field inside a
             // transaction — the only place the stock engine ever clears one — did nothing.
-            t.update(doc(db, resolve(collection), id), toFirestorePatch(patch))
+            t.update(doc(db, resolve(collection), id), toFirestorePatch(withVersionBump(collection, patch)))
           },
           delete(collection, id) {
             t.delete(doc(db, resolve(collection), id))

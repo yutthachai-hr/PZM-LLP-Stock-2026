@@ -91,7 +91,8 @@ describe('F54 — a backup you can actually sign in to afterwards', () => {
     expect(raw('users')).toHaveLength(1)
     // No client may write meta/bootstrap — that is what stops whoever arrives first at an
     // unprovisioned database from claiming it. Restoring skips it and says so.
-    expect(raw('meta')).toHaveLength(0)
+    // Only the devices' cache epoch is written there (release hardening): never the provisioning marker.
+    expect(raw('meta').map((d) => d.id)).toEqual(['cacheEpoch_pizza'])
     expect(r.skipped).toBe(1)
   })
 })

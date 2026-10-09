@@ -1,3 +1,4 @@
+import { INTAKE_LABEL } from './intake'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { siteTones } from '../../lib/siteTone'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -78,6 +79,8 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
   const live = useMemo(() => liveItems(pr.items), [pr])
   const inCart = useMemo(() => new Set(live.map((i) => i.productId)), [live])
   const ctx = useMemo(() => ({ products, suppliers, locations }), [products, suppliers, locations])
+  // Smart "Other" item: products proposed from a request and not yet reviewed (R&D).
+  const pendingIds = useMemo(() => new Set(products.filter((p) => p.review === 'pending').map((p) => p.id)), [products])
 
   // The orders this request became, for the LINE wizard and the "sent" badges.
   useEffect(() => {
@@ -162,7 +165,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
       <PageHero
         icon="note"
         title={t('รายการขอสั่งซื้อ {docNo}', { docNo: pr.docNo })}
-        subtitle={`${formatThaiDate(pr.createdAt)} · ${locationName} · ${t('ผู้ขอ')}: ${pr.requestedByName}`}
+        subtitle={`${formatThaiDate(pr.createdAt)} · ${locationName} · ${t('ผู้ขอ')}: ${pr.requestedByName} · ${t('ที่มา')}: ${(pr.intake ?? ['manual']).map((c) => t(INTAKE_LABEL[c])).join(', ')}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Badge color={prBadgeColor(pr.status)}>{t(PR_STATUS_KEYS[pr.status])}</Badge>
@@ -226,7 +229,88 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                 <span className="min-w-0 flex-1 truncate font-semibold">{g.supplierName}</span>
                 <span className="shrink-0 text-xs font-medium text-brand/80">{t('{count} รายการ', { count: g.items.length })}</span>
               </div>
-              <div className="overflow-x-auto">
+              {/* On a phone each line is a card (plan D5'): the table needs 720–1080px and was
+                  read by scrolling sideways past the figures it was meant to compare. */}
+              <ul className="divide-y divide-line md:hidden">
+                {g.items.map((item) => {
+                  const here = item.stockAtSubmit === undefined ? qtyAt(pr.locationId, item.productId) : item.stockAtSubmit
+                  const unit = item.entryUnit ?? item.unit
+                  return (
+                    <li key={item.idx} className="space-y-2 px-4 py-3">
+                      <div>
+                        <div className="break-words font-medium text-ink">{item.productName}</div>
+                        <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
+                          <span className="doc-no">{item.sku}</span>
+                          {pendingIds.has(item.productId) && <Badge color="amber">{t('สินค้าใหม่ รอตรวจสอบ')}</Badge>}
+                          {item.managerAdded && <Badge color="blue">{t('หัวหน้าเพิ่ม')}</Badge>}
+                          {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
+                          {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}
+                          {!reviewing && (item.urgency ?? 'normal') !== 'normal' && <UrgencyChip value={item.urgency} />}
+                        </div>
+                      </div>
+                      <dl className="grid grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <dt className="text-xs text-ink-soft">{t('คงเหลือ')}</dt>
+                          <dd className={`num font-semibold ${here !== undefined && here <= 0 ? 'text-out' : 'text-ink'}`}>{here === undefined ? '—' : fmtQty(here)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-ink-soft">{t('ขอ')}</dt>
+                          <dd className="num text-ink-soft">
+                            {item.requestedQty === null ? '—' : fmtQty(item.requestedQty)} <span className="text-xs">{unit}</span>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-ink-soft">{t('อนุมัติ')}</dt>
+                          <dd>
+                            {reviewing ? (
+                              <Input
+                                key={`${item.idx}:${item.approvedQty ?? ''}`}
+                                type="number"
+                                min={0}
+                                step="any"
+                                inputMode="decimal"
+                                defaultValue={item.approvedQty ?? ''}
+                                onBlur={(e) => void setApproved(item, Number(e.target.value))}
+                                className="text-right"
+                                aria-label={t('จำนวนที่อนุมัติ: {name}', { name: item.productName })}
+                              />
+                            ) : (
+                              <span className={`num font-semibold ${item.requestedQty !== null && item.approvedQty !== item.requestedQty ? 'text-warn' : 'text-ink'}`}>
+                                {item.approvedQty === undefined ? '—' : fmtQty(item.approvedQty)} <span className="text-xs font-normal">{unit}</span>
+                              </span>
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
+                      {reviewing ? (
+                        <div className="grid grid-cols-1 gap-2">
+                          <UrgencySelect
+                            value={item.urgency}
+                            onChange={(u) => void setUrgency(item, u)}
+                            disabled={!!busy}
+                            label={t('ความเร่งด่วนของ "{name}"', { name: item.productName })}
+                          />
+                          <Select value={item.supplierId} onChange={(e) => void changeSupplier(item, e.target.value)} aria-label={t('ผู้ขาย')}>
+                            {supplierOptions(item).map(({ s, listed, primary }) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                                {primary ? ` (${t('ผู้ขายประจำ')})` : listed ? ` (${t('สำรอง')})` : ''}
+                              </option>
+                            ))}
+                          </Select>
+                          <Input defaultValue={item.note ?? ''} onBlur={(e) => void setNote(item, e.target.value)} placeholder={t('หมายเหตุ')} />
+                          <button type="button" onClick={() => setAsk({ remove: item })} className="min-h-11 justify-self-start text-sm text-danger" disabled={!!busy}>
+                            {t('นำออก')}
+                          </button>
+                        </div>
+                      ) : (
+                        item.note && <p className="text-xs text-ink-soft">{item.note}</p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
                 <table className={`w-full table-fixed text-sm ${reviewing ? 'min-w-[1080px]' : 'min-w-[720px]'}`}>
                   {/* One table per supplier, so the widths are pinned here or every table
                       sizes its own columns and the numbers zigzag down the page. */}
@@ -259,6 +343,7 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                           <div className="break-words text-ink">{item.productName}</div>
                           <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                             <span className="doc-no">{item.sku}</span>
+                          {pendingIds.has(item.productId) && <Badge color="amber">{t('สินค้าใหม่ รอตรวจสอบ')}</Badge>}
                             {item.managerAdded && <Badge color="blue">{t('หัวหน้าเพิ่ม')}</Badge>}
                             {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                             {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}

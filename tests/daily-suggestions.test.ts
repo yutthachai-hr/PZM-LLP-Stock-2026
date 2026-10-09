@@ -176,3 +176,18 @@ describe('drafting the request in one write', () => {
     await expect(S.addItems({ id: pr.id, lines: [], products, suppliers: [S1, S2], actor: ACTOR })).rejects.toThrow()
   })
 })
+
+describe('plan F1: no suggestion without its evidence', () => {
+  test('every line carries what its quantity came from', () => {
+    const cheese = product('cheese')
+    stock['wh:cheese'] = 100
+    const out = dailySuggestions({
+      reorders: [reorder(cheese, WH, { incoming: 3, leadTimeDays: 4 }), reorder(cheese, SARASIN, { leadTimeDays: 5 })],
+      locations, qtyAt, minFor, coverDays: 7, openTransfers: [],
+    })
+    expect(out.purchase[0].lines[0].evidence).toEqual({ incoming: 3, leadTimeDays: 4, coverDays: 7, daysLeft: 0.5 })
+    // A branch is sized on the warehouse's one-day wait, and says so.
+    expect(out.transfers[0].lines[0].evidence).toMatchObject({ leadTimeDays: TRANSFER_LEAD_DAYS, coverDays: 7, daysLeft: 0.5 })
+    for (const l of [...out.purchase.flatMap((p) => p.lines), ...out.transfers.flatMap((t) => t.lines)]) expect(l.evidence).toBeDefined()
+  })
+})

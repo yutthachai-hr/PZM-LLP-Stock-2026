@@ -1,4 +1,6 @@
+import { recordAudit } from './auditLog'
 import { backend } from '../backend'
+import { bumpCacheEpoch } from './cacheEpoch'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { describeQty, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
@@ -72,7 +74,7 @@ export async function listUnitMigration(): Promise<UnitMigrationCandidate[]> {
 }
 
 /** Convert one product's legacy rows and rebuild its balances. Returns how many rows moved. */
-export async function migrateProductUnits(params: { productId: string; actor: { id: string; name: string } }): Promise<{ converted: number }> {
+async function migrateProductUnitsUnbumped(params: { productId: string; actor: { id: string; name: string } }): Promise<{ converted: number }> {
   const { productId, actor } = params
   const db = scoped()
   const product = await db.getOne<Product>(COL.products, productId)
@@ -119,4 +121,12 @@ export async function migrateProductUnits(params: { productId: string; actor: { 
 
   await rebuildProductLevels(db, productId, converted, actor, now)
   return { converted: legacy.length }
+}
+
+/** migrateProductUnits, then the devices' caches told to read again (release hardening: services/cacheEpoch). */
+export async function migrateProductUnits(...args: Parameters<typeof migrateProductUnitsUnbumped>): ReturnType<typeof migrateProductUnitsUnbumped> {
+  const result = await migrateProductUnitsUnbumped(...args)
+  await bumpCacheEpoch(['stockMovements', 'stockLevels', 'products'])
+  await recordAudit({ action: 'unitConversion.migrate', entityType: 'unitConversion', entityId: args[0].productId, after: { ...result } })
+  return result
 }

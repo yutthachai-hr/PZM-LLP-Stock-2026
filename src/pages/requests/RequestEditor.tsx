@@ -145,11 +145,11 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
     })
   }
 
-  async function addFromExcel(lines: S.LineInput[], source: string): Promise<boolean> {
+  async function addFromExcel(lines: S.LineInput[], source: string, intake: 'excel' | 'ocr' = 'excel'): Promise<boolean> {
     if (!actor) return false
     const done = await run('import', async () => {
       const cur = await ensure()
-      const next = await S.addItems({ id: cur.id, lines, products, suppliers, actor, source })
+      const next = await S.addItems({ id: cur.id, lines, products, suppliers, actor, source, intake })
       setPr(next)
       toast.success(t('เพิ่ม {n} รายการจาก Excel แล้ว', { n: lines.length }))
       return true
@@ -256,7 +256,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
         <LineImportModal
           products={products}
           onClose={() => setFileImport(false)}
-          onImport={async (imported, source) => {
+          onImport={async (imported, source, kind) => {
             // A line goes to the product's own supplier; one with none waits to be added by hand.
             const lines: S.LineInput[] = []
             const noSupplier: string[] = []
@@ -274,7 +274,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
               })
             }
             if (noSupplier.length) toast.error(t('ยังไม่ได้เพิ่ม {n} รายการที่ไม่มีผู้ขายหลัก: {names}', { n: noSupplier.length, names: noSupplier.slice(0, 3).join(', ') }))
-            if (lines.length) await addFromExcel(lines, source)
+            if (lines.length) await addFromExcel(lines, source, kind)
           }}
         />
       )}
@@ -421,6 +421,7 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                               <div className="text-sm text-ink">{item.productName}</div>
                               <div className="flex flex-wrap gap-2 text-xs text-ink-faint">
                                 <span className="doc-no">{item.sku}</span>
+                                {p?.review === 'pending' && <Badge color="amber">{t('สินค้าใหม่ รอตรวจสอบ')}</Badge>}
                                 {item.supplierChoice === 'custom' && <Badge color="amber">{t('เลือกผู้ขายเอง')}</Badge>}
                                 {item.supplierChoice === 'alternate' && <Badge>{t('ผู้ขายสำรอง')}</Badge>}
                               </div>

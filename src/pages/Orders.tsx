@@ -29,17 +29,19 @@ import {
   bannerAction,
   type StatusTabItem,
 } from '../components/ui'
-import { ChipRow, FilterBar, FilterField, FramePage, ItemCell, PageHero, frameCard, type Tone } from '../components/frame'
+import { ChipRow, FilterBar, FilterField, FramePage, ItemCell, PageHero, frameCard } from '../components/frame'
 import type { Column } from '../components/DataTable'
 import { usePaged } from '../lib/usePaged'
 import {
   CHASE_AFTER_DAYS,
   amendPurchaseOrder,
+  approvePurchaseOrder,
   cancelPurchaseOrder,
   closeOrderRemainder,
   createPurchaseOrder,
   daysWaiting,
   expectedDeliveryAt,
+  getPurchaseOrder,
   needsResend,
   overdueOrders,
   summariseBySupplier,
@@ -52,6 +54,8 @@ import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { SendWizard } from './purchase/SendWizard'
 import { LineImportModal } from '../components/import/LineImportModal'
 import { DeliveryRiskCard, SupplierConfirmationPanel } from './purchase/SupplierConfirmationPanel'
+import { OrderPanel, avatarTone } from './orders/OrderPanel'
+import { statusWord } from './orders/statusWords'
 import { confirmationBadge, requestedOf } from '../lib/supplierConfirmation'
 import { RESUME_PARAM } from '../share/liffResume'
 import { useDraft } from '../lib/useDraft'
@@ -90,6 +94,7 @@ export function OrdersPage() {
   const t = useT()
   const toast = useToast()
   const { user } = useAuth()
+  const isManager = user?.role === 'admin' || user?.role === 'manager'
   const { brand } = useBrand()
   const { products, locations, locationById } = useData()
   const navigate = useNavigate()
@@ -108,6 +113,9 @@ export function OrdersPage() {
   // Closing what is left of a partly delivered order: the rest is not coming.
   const [closing, setClosing] = useState<PurchaseOrder | null>(null)
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null)
+  // The order open in the side panel (owner's mock-up, 6 Oct 2026). Kept as an id so the
+  // panel always shows the order as the list now has it.
+  const [panelId, setPanelId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState<PurchaseOrder | null>(null)
   const [amending, setAmending] = useState<PurchaseOrder | null>(null)
   // One order sent to LINE from this list — the same wizard the batch and request
@@ -169,7 +177,10 @@ export function OrdersPage() {
       return
     }
     const hit = orders.find((o) => o.id === (po ?? send))
-    if (hit) (po ? setViewing : setSending)(hit)
+    if (hit) {
+      if (po) setPanelId(hit.id)
+      else setSending(hit)
+    }
     setParams({}, { replace: true })
   }, [loading, orders, params, setParams, navigate])
 
@@ -215,6 +226,9 @@ export function OrdersPage() {
     for (const o of orders) m.set(o.supplierId, o.supplierName)
     return [...m].sort((a, b) => a[1].localeCompare(b[1]))
   }, [orders])
+  const panelOrder = panelId ? (orders.find((o) => o.id === panelId) ?? null) : null
+  const panelIndex = panelOrder ? filtered.findIndex((o) => o.id === panelOrder.id) : -1
+
   const toSend = useMemo(() => orders.filter((o) => selected.has(o.id) && o.status === 'ordered'), [orders, selected])
   const filtersOn = !!(search.trim() || supplierFilter || stateFilter || lateOnly)
 
@@ -225,6 +239,20 @@ export function OrdersPage() {
       setOrders((cur) => cur.map((o) => (o.id === order.id ? next : o)))
       setClosing(null)
       toast.success(t('ปิดยอดค้างของ {docNo} แล้ว', { docNo: order.docNo }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
+
+  // A manager or admin places a draft (plan B4): staff orders and imported lists wait for this.
+  async function approve(order: PurchaseOrder) {
+    if (!user) return
+    try {
+      await approvePurchaseOrder(order.id, { id: user.id, name: user.name })
+      const next = (await getPurchaseOrder(order.id)) ?? order
+      setOrders((cur) => cur.map((o) => (o.id === order.id ? next : o)))
+      orderCache.patch(next)
+      toast.success(t('อนุมัติ {docNo} แล้ว — สั่งซื้อได้', { docNo: order.docNo }))
     } catch (e) {
       toast.error(errText(e, t))
     }
@@ -323,12 +351,13 @@ export function OrdersPage() {
 
   function actionsFor(o: PurchaseOrder) {
     return {
-      onOpen: () => setViewing(o),
+      onOpen: () => setPanelId(o.id),
       onSend: () => setSending(o),
       onReceive: () => navigate(`/receive?po=${encodeURIComponent(o.id)}`),
       onAmend: () => setAmending(o),
       onCancel: () => setCancelling(o),
       onCloseShort: () => setClosing(o),
+      ...(isManager && o.status === 'draft' ? { onApprove: () => void approve(o) } : {}),
     }
   }
 
@@ -350,7 +379,7 @@ export function OrdersPage() {
             <span className="doc-no">{o.docNo}</span>
             {o.revision ? <Badge color="amber">Rev.{o.revision}</Badge> : null}
             {o.requestId && (
-              <Link to={`/requests/${o.requestId}`} className="text-brand hover:underline">
+              <Link to={`/requests/${o.requestId}`} onClick={(e) => e.stopPropagation()} className="text-brand hover:underline">
                 {t('จากรายการขอสั่งซื้อ')}
               </Link>
             )}
@@ -415,18 +444,20 @@ export function OrdersPage() {
   ]
 
   return (
+    <div className="lg:flex lg:items-start lg:gap-4">
+    <div className="min-w-0 flex-1">
     <FramePage>
       <PageHero
         icon="cart"
         title={t('สั่งซื้อ')}
         subtitle={t('สั่งของกับผู้ขาย ตรวจรับ แล้วเข้าคลังในขั้นตอนเดียว')}
         actions={
-          // Two ways in, same orders underneath: the list from Excel, or one supplier by
-          // hand. The manual screen stays exactly as it was for the days it is the right tool.
+          // Two ways in, same orders underneath: the list from Excel goes through a purchase
+          // request and its approval (D4′), or one supplier by hand.
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => navigate('/purchase')}>
+            <Button variant="secondary" onClick={() => navigate('/requests/new?import=1')}>
               <Icon name="upload" size={16} />
-              {t('นำเข้า Excel (ทางเลือก)')}
+              {t('ขอสั่งซื้อจาก Excel')}
             </Button>
             <Button onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} />
@@ -558,12 +589,12 @@ export function OrdersPage() {
         <div>
           <Card className="overflow-hidden">
             {tab === 'cancelled' ? (
-              <CancelledTable rows={paged.rows} onOpen={setViewing} />
+              <CancelledTable rows={paged.rows} onOpen={(o) => setPanelId(o.id)} activeId={panelId} />
             ) : (
               <DataTable
                 rows={paged.rows}
                 rowKey={(o) => o.id}
-                minWidth={960}
+                minWidth={panelId ? 680 : 960}
                 selection={tab === 'open' ? { selected, onChange: setSelected } : undefined}
                 empty={
                   <EmptyState
@@ -571,7 +602,11 @@ export function OrdersPage() {
                     title={search.trim() ? t('ไม่พบใบสั่งซื้อที่ตรงกับคำค้น') : t('ไม่มีใบสั่งซื้อในช่วงนี้')}
                   />
                 }
-                columns={orderColumns}
+                // With the panel open its buttons are the row's actions, and the list has
+                // less room: the column steps aside so the table needs no sideways scroll.
+                columns={panelId ? orderColumns.filter((c) => c.key !== 'actions' && c.key !== 'lines') : orderColumns}
+                onRowClick={(o) => setPanelId(o.id)}
+                rowClassName={(o) => (o.id === panelId ? 'bg-brand-soft/60' : '')}
                 cardActions={(o) => <OrderActions order={o} {...actionsFor(o)} />}
               />
             )}
@@ -598,6 +633,7 @@ export function OrdersPage() {
           products={products}
           locations={locations}
           actor={{ id: user.id, name: user.name }}
+          asDraft={!isManager}
           onClose={() => setCreating(false)}
           onDone={() => void load(true)}
         />
@@ -662,19 +698,40 @@ export function OrdersPage() {
         />
       )}
     </FramePage>
+    </div>
+    {panelOrder && (
+      <aside
+        aria-label={t('ใบสั่งซื้อ {docNo}', { docNo: panelOrder.docNo })}
+        className="fixed inset-0 z-40 lg:sticky lg:top-20 lg:z-auto lg:h-[calc(100vh-6rem)] lg:w-[420px] lg:shrink-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-line lg:shadow-sm xl:w-[460px]"
+      >
+        <OrderPanel
+          order={panelOrder}
+          supplier={suppliers.find((x) => x.id === panelOrder.supplierId)}
+          late={lateIds.has(panelOrder.id)}
+          expectedAt={expectedDeliveryAt(panelOrder, leadTimeOf(panelOrder.supplierId))}
+          position={{ index: Math.max(panelIndex, 0), total: panelIndex >= 0 ? filtered.length : 1 }}
+          onPrev={panelIndex > 0 ? () => setPanelId(filtered[panelIndex - 1].id) : undefined}
+          onNext={panelIndex >= 0 && panelIndex < filtered.length - 1 ? () => setPanelId(filtered[panelIndex + 1].id) : undefined}
+          onClose={() => setPanelId(null)}
+          onChanged={(next) => setOrders((cur) => cur.map((o) => (o.id === next.id ? next : o)))}
+          actions={{
+            onSend: () => setSending(panelOrder),
+            onReceive: () => navigate(`/receive?po=${encodeURIComponent(panelOrder.id)}`),
+            onAmend: () => setAmending(panelOrder),
+            onCancel: () => setCancelling(panelOrder),
+            onCloseShort: () => setClosing(panelOrder),
+            onSheet: () => setViewing(panelOrder),
+            ...(isManager && panelOrder.status === 'draft' ? { onApprove: () => void approve(panelOrder) } : {}),
+          }}
+        />
+      </aside>
+    )}
+    </div>
   )
 }
 
-/** A steady colour per supplier, from its name, for the initials circle. */
-const AVATAR_TONES: Tone[] = ['red', 'blue', 'green', 'amber', 'purple']
-function avatarTone(name: string): Tone {
-  let h = 0
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0
-  return AVATAR_TONES[h % AVATAR_TONES.length]
-}
-
 /** The orders called off, as a table: the trail an audit reads. */
-function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: PurchaseOrder) => void }) {
+function CancelledTable({ rows, onOpen, activeId }: { rows: PurchaseOrder[]; onOpen: (o: PurchaseOrder) => void; activeId?: string | null }) {
   const t = useT()
   return (
     <div>
@@ -682,6 +739,7 @@ function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: P
         rows={rows}
         rowKey={(o) => o.id}
         onRowClick={onOpen}
+        rowClassName={(o) => (o.id === activeId ? 'bg-brand-soft/60' : '')}
         empty={<EmptyState icon="x" title={t('ไม่มีใบสั่งซื้อที่ยกเลิกในช่วงนี้')} />}
         columns={[
           { key: 'docNo', header: t('เลขที่ (รันแยกตามผู้ขาย)'), primary: true, cell: (o) => <span className="doc-no">{o.docNo}</span> },
@@ -698,39 +756,55 @@ function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: P
   )
 }
 
-/** The order's state as badges: where it is, and anything about it that needs a person. */
+/**
+ * The order's state as badges: where it is, and anything about it that needs a person.
+ *
+ * The first line is the order's progress in three short words — สั่งแล้ว · ส่ง LINE · ยืนยัน
+ * (Ordered · LINE sent · Approved) — kept on one line in both languages (owner, 6 Oct 2026).
+ * What needs someone's attention (sheet changed since sending, supplier not answered,
+ * part-delivered, late) goes on a second line, so the first never wraps into a jumble.
+ */
 function OrderStatus({ order, late }: { order: PurchaseOrder; late: boolean }) {
   const t = useT()
+  const { lang } = useI18n()
   const done = order.status === 'received'
   // A draft is a proposal from an imported list that nobody has approved yet. It is
   // shown so the person knows it exists, but it is not waiting for goods and cannot be
   // received — approving happens on the batch screen it came from.
   const draft = order.status === 'draft'
+  const resend = needsResend(order)
+  const sent = order.shareStatus === 'sent' && !resend
+  const answer = order.supplierConfirmationStatus
+  const approved = order.status === 'ordered' && (answer === 'confirmed' || answer === 'changed')
+  // The supplier's other answers (waiting, a date waiting for approval) are exceptions.
+  const other = !approved ? confirmationBadge(order) : null
+  const partial = !done ? partialLabel(order, t) : ''
+  const flags = resend || other || partial || late
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {done ? (
-        order.closedShortAt ? (
-          <Badge color="amber">{t('ปิดยอดค้าง — รับไม่ครบ')}</Badge>
+    <div className="space-y-1">
+      <div className="flex flex-nowrap items-center gap-1.5">
+        {done ? (
+          order.closedShortAt ? (
+            <Badge color="amber">{t('ปิดยอดค้าง — รับไม่ครบ')}</Badge>
+          ) : (
+            <Badge color="green">{t('รับของแล้ว')}</Badge>
+          )
+        ) : draft ? (
+          <Badge color="slate">{t('ร่าง — รออนุมัติ')}</Badge>
         ) : (
-          <Badge color="green">{t('รับของแล้ว')}</Badge>
-        )
-      ) : draft ? (
-        <Badge color="slate">{t('ร่าง — รออนุมัติ')}</Badge>
-      ) : (
-        <Badge color={late ? 'red' : 'blue'}>{t('สั่งแล้ว')}</Badge>
+          <Badge color={late ? 'red' : 'blue'}>{statusWord('ordered', lang)}</Badge>
+        )}
+        {sent && <Badge color="green">{statusWord('lineSent', lang)}</Badge>}
+        {approved && <Badge color="green">{statusWord('confirmed', lang)}</Badge>}
+      </div>
+      {flags && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {resend && <Badge color="red">{t('แก้ไขแล้ว — ยังไม่ส่งใหม่')}</Badge>}
+          {other && <Badge color={other.color}>{t(other.label)}</Badge>}
+          {partial && <Badge color="amber">{partial}</Badge>}
+          {late && <Badge color="red">{t('รอมา {days} วัน', { days: daysWaiting(order) })}</Badge>}
+        </div>
       )}
-      {needsResend(order) ? (
-        <Badge color="red">{t('แก้ไขแล้ว — ยังไม่ส่งใหม่')}</Badge>
-      ) : (
-        order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>
-      )}
-      {(() => {
-        // The supplier's answer to the delivery date (5 Oct 2026); none on orders never linked.
-        const b = confirmationBadge(order)
-        return b && <Badge color={b.color}>{t(b.label)}</Badge>
-      })()}
-      {!done && partialLabel(order, t) && <Badge color="amber">{partialLabel(order, t)}</Badge>}
-      {late && <Badge color="red">{t('รอมา {days} วัน', { days: daysWaiting(order) })}</Badge>}
     </div>
   )
 }
@@ -796,6 +870,7 @@ function OrderActions({
   onCancel,
   onCloseShort,
   onSend,
+  onApprove,
 }: {
   order: PurchaseOrder
   /** Table row on a desktop: smaller buttons, one line. */
@@ -806,6 +881,8 @@ function OrderActions({
   onCancel: () => void
   onCloseShort: () => void
   onSend: () => void
+  // Offered to a manager or admin on a draft (plan B4).
+  onApprove?: () => void
 }) {
   const t = useT()
   const live = order.status === 'ordered'
@@ -818,7 +895,8 @@ function OrderActions({
   // scrolling sideways. Receiving keeps its label: it is the action the list exists for.
   const label = compact ? 'hidden 2xl:inline' : ''
   return (
-    <div className={`flex items-center gap-2 ${compact ? 'flex-nowrap' : 'flex-wrap'}`}>
+    // A button in a row is not a click on the row (which opens the side panel).
+    <div className={`flex items-center gap-2 ${compact ? 'flex-nowrap' : 'flex-wrap'}`} onClick={(e) => e.stopPropagation()}>
       <Button variant="outline" size={size} onClick={onOpen} title={t('ดูใบสั่ง')} aria-label={t('ดูใบสั่ง')}>
         <Icon name="eye" size={16} />
         <span className={label}>{t('ดูใบสั่ง')}</span>
@@ -833,6 +911,12 @@ function OrderActions({
         <Button variant="outline" size={size} onClick={onSend} title={t('ส่ง LINE')} aria-label={t('ส่ง LINE')}>
           <Icon name="share" size={16} />
           <span className={label}>{t('ส่ง LINE')}</span>
+        </Button>
+      )}
+      {onApprove && (
+        <Button size={size} variant="success" onClick={onApprove}>
+          <Icon name="check" size={16} />
+          {t('อนุมัติสั่งซื้อ')}
         </Button>
       )}
       {live && (
@@ -1034,6 +1118,7 @@ function AmendOrderModal({
         reason,
         products,
         actor,
+        expectedVersion: order.version ?? 0,
       })
       onDone(next)
       toast.success(t('แก้ไขใบสั่งซื้อแล้ว (Rev.{n}) — อย่าลืมส่งใบใหม่ให้ผู้ขาย', { n: next.revision ?? 1 }))
@@ -1128,6 +1213,7 @@ function NewOrderModal({
   products,
   locations,
   actor,
+  asDraft,
   onClose,
   onDone,
 }: {
@@ -1135,6 +1221,8 @@ function NewOrderModal({
   products: Product[]
   locations: { id: string; name: string; active?: boolean }[]
   actor: { id: string; name: string }
+  // Staff: the order waits for a manager or admin to approve it (plan B4).
+  asDraft?: boolean
   onClose: () => void
   onDone: () => void
 }) {
@@ -1197,9 +1285,10 @@ function NewOrderModal({
         lines: chosen.map(([productId, l]) => ({ productId, qty: l.qty, entryUnit: l.unit })),
         products,
         actor,
+        ...(asDraft ? { asDraft: true } : {}),
         ...(expected ? { expectedAt: dateInputToMs(expected) } : {}),
       })
-      toast.success(t('สั่งของแล้ว'))
+      toast.success(asDraft ? t('บันทึกเป็นร่างแล้ว — รอหัวหน้าอนุมัติก่อนสั่ง') : t('สั่งของแล้ว'))
       clearDraft()
       onDone()
       onClose()
