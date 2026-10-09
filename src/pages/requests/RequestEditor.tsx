@@ -168,6 +168,13 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
     await run(`rm-${item.idx}`, async () => setPr(await S.removeItem({ id: pr.id, idx: item.idx, actor })))
   }
 
+  async function setItemNote(item: PurchaseRequestItem, note: string) {
+    if (!pr || !actor) return
+    const trimmed = note.trim()
+    if (trimmed === (item.note ?? '')) return
+    await run(`note-${item.idx}`, async () => setPr(await S.setItemNote({ id: pr.id, idx: item.idx, note: trimmed, actor })))
+  }
+
   async function setUrgency(item: PurchaseRequestItem, urgency: RequestUrgency) {
     if (!pr || !actor) return
     await run(`urg-${item.idx}`, async () => setPr(await S.setItemUrgency({ id: pr.id, idx: item.idx, urgency, actor })))
@@ -472,6 +479,15 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
                                 </option>
                               ))}
                             </Select>
+                          </div>
+                          <div className="mt-2">
+                            <Input
+                              key={`${item.idx}:note:${item.note ?? ''}`}
+                              defaultValue={item.note ?? ''}
+                              onBlur={(e) => void setItemNote(item, e.target.value)}
+                              placeholder={t('หมายเหตุ (ไม่บังคับ)')}
+                              aria-label={t('หมายเหตุของ "{name}"', { name: item.productName })}
+                            />
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-ink-faint">
                             <UrgencySelect
