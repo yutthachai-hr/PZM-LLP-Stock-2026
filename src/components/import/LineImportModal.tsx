@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
-import { matchOcrLines, type OcrLine } from '../../lib/billOcr'
+import { type OcrLine } from '../../lib/billOcr'
+import { blockedReason, choose as chooseRow, importable, planRows, setInclude } from '../../lib/importReview'
 import { fmtQty } from '../../lib/format'
 import { buildMatchIndex } from '../../lib/productMatch'
 import { looseScore } from '../../lib/search'
@@ -49,22 +50,6 @@ interface Row {
 
 type Step = 'pick' | 'reading' | 'review'
 
-function matchOne(read: Row['read'], index: ReturnType<typeof buildMatchIndex>) {
-  const bare = read.name.replace(/[\s.,;:]+$/, '')
-  const tries = [...(read.code ? [read.code] : []), read.name, ...(bare !== read.name ? [bare] : [])]
-  for (const name of tries) {
-    const m = matchOcrLines({ lines: [{ name, qty: read.qty, unit: read.unit }] }, index).matched[0]
-    if (m) return m
-  }
-  return undefined
-}
-
-/** Convert a line read for a chosen product, by matching on that product alone. */
-function convertFor(read: Row['read'], product: Product) {
-  const m = matchOcrLines({ lines: [{ name: product.name, qty: read.qty, unit: read.unit }] }, buildMatchIndex([product], [])).matched[0]
-  return m ? { qty: m.qty, entryUnit: m.entryUnit, entryQty: m.entryQty, unitUnknown: m.unitUnknown } : { qty: read.qty }
-}
-
 export function LineImportModal({
   products,
   onImport,
@@ -90,23 +75,8 @@ export function LineImportModal({
   const index = useMemo(() => buildMatchIndex(products as Product[], []), [products])
   const aiReady = documents && billReaderAvailable()
 
-  function toRows(lines: Row['read'][]): Row[] {
-    return lines.map((read, key): Row => {
-      const m = matchOne(read, index)
-      if (m) {
-        return { key, read, product: m.product, qty: m.qty, entryUnit: m.entryUnit, entryQty: m.entryQty, unitUnknown: m.unitUnknown, include: !m.unitUnknown, how: 'sure', suggestions: [] }
-      }
-      // Not sure: the closest products as one-tap choices. One clear winner (every word
-      // found, and nothing else as close) is chosen for the person — marked as a guess.
-      const sug = suggestProducts(read.name, products, 4)
-      const clear = sug.length > 0 && sug[0].score === 1 && (sug.length === 1 || sug[1].score < 1)
-      if (clear) {
-        const c = convertFor(read, sug[0].product)
-        return { key, read, product: sug[0].product, ...c, include: !c.unitUnknown, how: 'guess', suggestions: sug.map((x) => x.product) }
-      }
-      return { key, read, product: null, qty: read.qty, include: false, how: null, suggestions: sug.map((x) => x.product) }
-    })
-  }
+  // Rows decided by lib/importReview: a sure match is ticked; a guess is offered, never ticked.
+  const toRows = (lines: Row['read'][]): Row[] => planRows(lines, products, index) as Row[]
 
   async function pickSheet(file: File | undefined) {
     if (!file) return
@@ -141,17 +111,11 @@ export function LineImportModal({
   }
 
   function choose(key: number, product: Product | null) {
-    setRows((cur) =>
-      cur.map((r) => {
-        if (r.key !== key) return r
-        if (!product) return { ...r, product: null, include: false, how: null }
-        const c = convertFor(r.read, product)
-        return { ...r, product, qty: c.qty, entryUnit: c.entryUnit, entryQty: c.entryQty, unitUnknown: c.unitUnknown, include: true, how: 'picked' }
-      }),
-    )
+    setRows((cur) => cur.map((r) => (r.key === key ? (chooseRow(r, product) as Row) : r)))
   }
 
-  const chosen = rows.filter((r) => r.include && r.product)
+  // Only ticked, confirmed, unblocked rows leave (never a bare guess).
+  const chosen = importable(rows) as Row[]
 
   async function confirm() {
     if (!chosen.length) return
@@ -229,7 +193,7 @@ export function LineImportModal({
                 row={r}
                 products={products}
                 onPick={(p) => choose(r.key, p)}
-                onInclude={(on) => setRows((cur) => cur.map((x) => (x.key === r.key ? { ...x, include: on } : x)))}
+                onInclude={(on) => setRows((cur) => cur.map((x) => (x.key === r.key ? (setInclude(x, on) as Row) : x)))}
               />
             ))}
           </ul>
@@ -276,7 +240,9 @@ function ReviewRow({
   const t = useT()
   const [searching, setSearching] = useState(false)
   const ui = HOW_UI[r.how ?? 'none']
-  const skipped = !!r.product && !r.include
+  const blocked = blockedReason(r)
+  const awaiting = r.how === 'guess' && !r.include
+  const skipped = !!r.product && !r.include && !awaiting && blocked === null
   const others = r.suggestions.filter((s) => s.id !== r.product?.id)
   return (
     <li className={`rounded-xl border p-3 ${skipped ? 'border-line bg-sunken' : r.product ? 'border-line bg-surface' : 'border-warn/40 bg-warn-soft/40'}`}>
@@ -285,7 +251,7 @@ function ReviewRow({
           type="checkbox"
           className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-brand disabled:cursor-not-allowed"
           checked={r.include}
-          disabled={!r.product}
+          disabled={blocked !== null}
           onChange={(e) => onInclude(e.target.checked)}
           aria-label={t('เพิ่มแถวนี้')}
         />
@@ -313,7 +279,14 @@ function ReviewRow({
                   : `${fmtQty(r.qty)} ${r.product.unitType}`}
                 <span className="ml-1 text-ink-faint">{r.product.sku}</span>
               </p>
-              {r.unitUnknown && <p className="mt-0.5 text-xs text-warn">{t('หน่วย {u} ไม่รู้จัก — ใช้เป็นหน่วยหลัก ตรวจก่อนเพิ่ม', { u: r.unitUnknown })}</p>}
+              {blocked === 'product-has-no-unit' && <p className="mt-0.5 text-xs text-out">{t('สินค้านี้ยังไม่มีหน่วย — ให้ผู้ดูแลกำหนดหน่วยที่หน้าสินค้าก่อน จึงจะนำเข้าได้')}</p>}
+              {blocked === 'unit-unknown' && <p className="mt-0.5 text-xs text-out">{t('หน่วย {u} ยังไม่มีอัตราแปลงของสินค้านี้ — กำหนดอัตราที่หน้าสินค้าก่อน แล้วนำเข้าใหม่', { u: r.unitUnknown ?? '' })}</p>}
+              {blocked === 'bad-qty' && <p className="mt-0.5 text-xs text-out">{t('จำนวนในไฟล์ใช้ไม่ได้')}</p>}
+              {awaiting && blocked === null && (
+                <button type="button" className="mt-1 mr-3 rounded-lg bg-brand px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90" onClick={() => onInclude(true)}>
+                  {t('ยืนยันว่าเป็นสินค้านี้')}
+                </button>
+              )}
               {!searching && (
                 <button type="button" className="mt-1 text-xs font-medium text-brand hover:underline" onClick={() => setSearching(true)}>
                   {t('เปลี่ยนสินค้า')}

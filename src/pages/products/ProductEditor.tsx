@@ -593,6 +593,7 @@ export function ProductEditor({
                   type="number"
                   step="any"
                   min={0}
+                  aria-label={t('ยอดคงเหลือจริงที่ {site}', { site: l.name })}
                   value={counts[l.id] ?? 0}
                   onWheel={blurOnWheel}
                   onChange={(e) => setCounts({ ...counts, [l.id]: Number(e.target.value) })}
