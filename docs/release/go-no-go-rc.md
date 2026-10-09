@@ -1,79 +1,87 @@
-# RC RELEASE: GO / NO-GO (9 Oct 2026)
+# PRODUCTION RC: GO / NO-GO (9 Oct 2026, evening)
 
-**Candidate:** `rc/ops-os-rc1-candidate`, Draft PR #1 → `main`.
+**Candidate:** `rc/ops-os-rc1-candidate`, Draft PR #1. **Verified head: `e3287fb`.**
 
-**Verdict: NO-GO to merge today.** The code is ready; the release is not. Three things decide it:
-1. **Restore drill:** BLOCKED.
-2. **Firestore incident:** OPEN. Its source class is now "admin or service-account reads that
-   bypass the rules", and that is a security question before it is a cost one.
-3. **Final-SHA gates:** NOT RUN on the head that will be merged.
+**Verdict: NO-GO to merge.**
+- Restore and integrity now pass.
+- Still not done: the live G25 transition-rules rehearsal, compatibility checked against live
+  clients, e2e ×3 on the exact final SHA, and the owner's separate approval of the
+  transition-rules deploy.
+- The read incident's source is **UNVERIFIED**; it cannot be proven with the logs that existed.
 
-Passing tests are not authorisation to deploy.
+Green checks do not authorise a merge. Merging `main` deploys production.
 
-Statuses: **PASS / FAIL / BLOCKED / NOT RUN**.
+Statuses: **PASS / FAIL / BLOCKED / NOT_RUN**.
 
 ## 1. Identity
 
 | Item | Value |
 |---|---|
-| Production now | `614fcc13` = `ad43971`. Rollback `0d00ae76` = `903c8db`. |
-| Candidate head | The commit carrying this report. The last fully CI-green head is `430e1c9`. |
-| Runtimes | Node 24.18, React 19, Vite 8, Tailwind 4, firebase-tools 15.24, wrangler 4.148, Rust stable (GNU on Windows), Java 21 for the emulator |
+| Production | `614fcc13` = `ad43971`; rollback `0d00ae76` = `903c8db` |
+| Candidate | `e3287fb` (pushed, no force) |
+| Runtimes | Node 24.18, React 19, Vite 8, firebase-tools 15.24, wrangler 4.148, Java 21 (emulator), Rust stable |
 
 ## 2. Gates
 
 | # | Gate | Status | Evidence |
 |---|---|---|---|
-| 1 | GitHub CI, 9 required checks | **PASS** on `430e1c9`; to re-run on the final head | Actions run 37814596198: typecheck, lint-i18n, unit, agent-safety, rust, rules, build-budget, e2e, secrets |
-| 2 | Branch protection on `main` | **PASS** (verified by API 9 Oct) | PR required, the 9 checks strict, admins enforced, 0 approvals (single owner account), no force push or deletion, conversations resolved |
-| 3 | Unit / rules / Rust / differential | **PASS** | `npm run verify`: 1,7xx unit, 249 rules; vectors and safety bench fresh |
-| 4 | e2e ×3 consecutive, no retries, **on the final SHA** | **NOT RUN** (×3 PASS on `44554aa`; CI ×1 PASS on `430e1c9`) | `docs/release/rc-candidate-report.md` §5 |
-| 5 | Preview isolation | **PASS** | Code guard (`preview_isolated`) + Cloudflare Access on `*.pzmstock.pages.dev` (9 Oct): every old and new preview 302 → login; production 200 |
-| 6 | Production credentials not exposed in previews | **PASS** (owner separated preview keys 9 Oct; no preview answers without Access) | `docs/evidence/preview-cleanup.md` |
-| 7 | Backups, all three brands, integrity PASS | **BLOCKED** (owner runs Settings › Backup) | — |
-| 8 | Restore drill into an isolated project | **BLOCKED** (no isolated Firebase project) | — |
-| 9 | Transition rules (G25), backward-compatible | **PASS** on the emulator; live deploy **NOT RUN** (checklist §B, before the merge) | `tests/rules-transition.test.ts` |
-| 10 | Old-client detection | **PASS** (code): `x-pzm-build` on every stock command, logged without reads | `tests/trace-build.test.ts` |
-| 11 | Rollback plan | **PASS** (documented); rehearsal **NOT RUN** | runbook §9, checklist §E |
-| 12 | R&D units | **BLOCKED** (owner data). The code guard means R&D cannot hold stock without a unit, so it is **safe to release restricted**. | `tests/stock-commands.test.ts`; template now limited to KG / EA / Pack / Carton |
-| 13 | Firestore incident (5–8 Oct) | **OPEN, narrowed** | `docs/evidence/firestore-read-investigation.md` §8 |
-| 14 | Cron Worker | **NOT RUN** (stays OFF, by decision) | — |
-| 15 | Supabase | **BLOCKED** (credentials); not part of this release | `docs/release/supabase-readiness.md` |
+| 1 | GitHub CI, 9 required checks, on `e3287fb` | **PASS** | typecheck, lint-i18n, unit, agent-safety, rust, rules, build-budget, e2e, secrets: all pass |
+| 2 | Branch protection on `main` | **PASS** | Verified by API: PR required, 9 strict checks, admins enforced, 0 approvals, no force push or delete, conversations resolved |
+| 3 | Local gates (verify) | **PASS** | unit (RC suite), rules 249, Rust, differential |
+| 4 | e2e ×3 consecutive on **the exact final SHA** | **NOT_RUN** | ×3 on `44554aa`; CI ×1 on `e3287fb` |
+| 5 | Backups, all three brands | **PASS** | Taken 9 Oct 10:41–10:43 by Claude at the owner's request (`docs/evidence/restore-rehearsal-2026-10-09.md`) |
+| 6 | Restore rehearsal, isolated, 3 brands | **PASS** | App restore → re-export → identical records, ledger stamp identical, drift 0; wrong-brand restore refused |
+| 7 | Restore integrity checks | **PASS** (app auditor: 0 critical) / **known limit** (TS+Rust reference agree; their `PO_RECEIVED_EQ_RECEIPTS` rule misreads legacy receipts and entry units) | same doc §3 |
+| 8 | Restore into a real isolated Firebase project | **NOT_RUN** | Needs a separate project (owner) |
+| 9 | G25 transition rules, emulator | **PASS** | `tests/rules-transition.test.ts` |
+| 10 | G25 transition rules, **actual rehearsal** against a project | **NOT_RUN** | Needs the owner's separate approval to deploy rules (checklist §B) |
+| 11 | Compatibility with existing production clients | **NOT_RUN** live; **PASS** on the emulator (old client, version unchanged, accepted) | — |
+| 12 | Old-client detection | **PASS** (code) | `x-pzm-build` on stock commands |
+| 13 | Rollback validation | **PASS** documented; **NOT_RUN** live | runbook §9 |
+| 14 | Preview isolation | **PASS** | Code guard + Cloudflare Access on `*.pzmstock.pages.dev` (re-probed: every preview 302 to login; production 200) |
+| 15 | Read incident | **OPEN: attribution UNVERIFIED** | `docs/evidence/firestore-read-investigation.md` §8–9 |
+| 16 | R&D units | **BLOCKED** (owner data); release is safe with R&D restricted | Template: KG / EA / Pack / Carton; 17 suggestions, none applied |
+| 17 | Cron Worker | **NOT_RUN** (OFF by decision) | — |
 
-## 3. Firestore cost impact of this release
+## 3. Security findings
 
-| Area | Effect |
-|---|---|
-| New reads added by the RC | **None at rest.** New features are off by default: seed pilot, Smart Other switch, outbox, Ask PZM (staging-only code). The build header costs no reads. |
-| Read-budget fixes | Already on `main` (`2a8d578`): modelled 203K → about 24K per day for normal use |
-| Measured 4–9 Oct | Ordinary hours 1.7–4K/h. 8 Oct 82K; 9 Oct so far very low. |
-| The incident window | About 630K reads, **rule-bypassing**: not the app's users |
-| Pricing | Above the 50K/day free quota, about US$0.03–0.06 per 100K reads (region dependent). The incident cost was in the order of **US$0.2–0.4**: small money, but a large signal. |
-
-## 4. Security risks
-
-| Risk | Severity | State |
+| Finding | Severity | State |
 |---|---|---|
-| Unknown admin or service-account reader of production (incident §8) | **High until named** | Owner to check service-account key "last used" and, if enabled, Data Access audit logs. Rotate any key not accounted for. |
-| Public demo preview now behind Access | Low | Owner decides whether the demo needs a Bypass |
-| Single-account repository: no second reviewer | Medium | Protection enforces CI and PR; human review is self-review |
+| About 630K rule-bypassing reads, 6 Oct 20:00 → 7 Oct 10:00 ICT | **High until explained** | The only service-account key was **not used** in the window. Admin Activity shows no export. Data Access logs were **off**, so attribution is **UNVERIFIED**. **Now ON** for Firestore. |
+| Service account `pzmstock-functions` holds `roles/datastore.user` (read and write everything) | Medium | Recommend least privilege; not changed |
+| Key rotation | — | **Not justified** by evidence; not done |
+| Public demo preview now behind Access | Low | Owner may add a Bypass for that hostname |
 | Old previews | Closed | Access + guard |
+| Single-account repository | Medium | CI and PR enforced; review is self-review |
 
-## 5. Resource use
+## 4. Read budget and cost
 
-No new runtime on the release path. The bundle is within budget (CI `build-budget`).
+- **The RC adds no reads at rest.** All new features are flagged off.
+- Normal traffic: 1.7–4K reads per hour. Since 9 Oct 00:00 nights run about 570 per hour.
+- Incident cost: about US$0.2–0.4 at list price.
+- Projected monthly Firestore cost at normal traffic (about 30–60K reads a day): **≈ US$0–1**,
+  mostly inside the free quota.
 
-## 6. Rollback
+## 5. Rollback
 
-Runbook §9:
-- the app via Pages rollback to `614fcc13`;
-- rules via `rules.prod.bak`, after the app;
-- data via the backup restore, drilled first in isolation.
+| Area | How |
+|---|---|
+| App | Pages rollback to `614fcc13` |
+| Rules | `rules.prod.bak` (after the app) |
+| Data | The 9 Oct backups, rehearsed in isolation today |
 
-## 7. What turns this into GO (owner)
+## 6. Remaining owner actions, in order
 
-1. Name or close the rule-bypassing reader (incident §8), and rotate keys if needed.
-2. Take the three backups; provide an isolated project and run the restore drill.
-3. Approve the final SHA. CI 9/9 and e2e ×3 run on it.
-4. Approve the transition-rules deploy (checklist §B) and validate it **before** the merge.
-5. Then the explicit merge approval.
+1. Approve the **transition-rules deploy** as a separate step (checklist §B), then rehearse and
+   validate it against live clients.
+2. Name the final SHA. Claude runs e2e ×3 on it.
+3. Optionally provide an isolated Firebase project for a full restore into Firestore.
+4. Watch the Firestore Data Access log for 1–2 weeks. Decide on least privilege for
+   `pzmstock-functions` and on a billing budget alert.
+5. Then the explicit merge approval for that SHA.
+
+## 7. Next deployment sequence
+
+Backup (done today, repeat on the day) → transition rules (approval) → validate old clients →
+merge (approval) → workflows check → old clients gone by evidence (`x-pzm-build`) → strict rules
+→ 3-day monitoring.
