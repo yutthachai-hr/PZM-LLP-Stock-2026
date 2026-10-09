@@ -32,6 +32,8 @@ async function session(viewport, lang) {
 // Desktop, Thai: Ctrl+K from anywhere, a product query, a page query, keyboard + Escape.
 {
   const { ctx, page, errors } = await session({ width: 1440, height: 900 }, 'th')
+  await page.getByRole('combobox').waitFor()
+  await page.locator('main').click({ position: { x: 5, y: 5 } })
   await page.keyboard.press('Control+k')
   const box = page.getByRole('combobox')
   result.ctrlKFocuses = await box.evaluate((el) => el === document.activeElement)
