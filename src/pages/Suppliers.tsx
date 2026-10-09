@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
@@ -26,7 +26,6 @@ import {
   StatRow,
   StatTile,
   StatusChip,
-  WithSidePanel,
   type RowMenuItem,
   type Tone,
 } from '../components/frame'
@@ -56,6 +55,8 @@ import {
 } from '../services/suppliers'
 import type { Product, Supplier, SupplierItem, SupplierLink, SupplierType } from '../types'
 import { looseMatch } from '../lib/search'
+import { useViewport } from '../lib/viewport'
+import { focusRing } from '../components/frame/tones'
 
 // Sunday first, matching Date#getDay(). i18n-key
 const ORDER_DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] // i18n-key
@@ -124,6 +125,13 @@ export function SuppliersPage() {
   const [terms, setTerms] = useState('')
   // ?id=<supplier> opens its detail — the link a notification's "ดูผู้ขาย" button carries.
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(location.search).get('id'))
+  // Master–detail (owner, 9 Oct 2026). From 1280px the details sit beside the list and stay
+  // on screen while it scrolls; below that a pick opens them in a drawer over the list, which
+  // keeps its place. A deep link (?id=) opens the drawer too.
+  const viewport = useViewport()
+  const desktop = viewport === 'desktop'
+  const [sheetOpen, setSheetOpen] = useState(() => !!new URLSearchParams(location.search).get('id'))
+  const lastPicked = useRef<string | null>(null)
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [issuing, setIssuing] = useState(false)
   const filterCount =
@@ -210,6 +218,41 @@ export function SuppliersPage() {
   const categories = useMemo(() => [...new Set(suppliers.map((s) => s.category).filter(Boolean) as string[])].sort(), [suppliers])
   const termsList = useMemo(() => [...new Set(suppliers.map((s) => s.paymentTerms).filter(Boolean) as string[])].sort(), [suppliers])
   const selected = suppliers.find((s) => s.id === selectedId) ?? null
+
+  /**
+   * Show one supplier's details. Nothing here scrolls the page or the list: on a desktop the
+   * panel is already in view (it is sticky), and below that it opens over the list.
+   */
+  const select = useCallback((id: string) => {
+    lastPicked.current = id
+    setSelectedId(id)
+    setSheetOpen(true)
+  }, [])
+
+  // Back to the row the drawer was opened from, without scrolling the list to find it.
+  function closeSheet() {
+    setSheetOpen(false)
+    const id = lastPicked.current
+    if (!id) return
+    requestAnimationFrame(() => {
+      const target = [...document.querySelectorAll<HTMLElement>('[data-supplier-select]')].find(
+        (el) => el.dataset.supplierSelect === id && el.offsetParent !== null,
+      )
+      target?.focus({ preventScroll: true })
+    })
+  }
+
+  // The page behind an open drawer stays still (and keeps its scroll position).
+  const drawerShown = !desktop && sheetOpen && !!selected
+  useEffect(() => {
+    if (!drawerShown) return
+    const root = document.documentElement
+    const before = root.style.overflow
+    root.style.overflow = 'hidden'
+    return () => {
+      root.style.overflow = before
+    }
+  }, [drawerShown])
   const noCode = suppliers.filter((s) => !s.code).length
 
   async function issueCodes() {
@@ -226,7 +269,7 @@ export function SuppliersPage() {
   }
 
   function menuFor(sup: Supplier): RowMenuItem[] {
-    const items: RowMenuItem[] = [{ key: 'view', label: t('ดูรายละเอียด'), icon: 'eye', onSelect: () => setSelectedId(sup.id) }]
+    const items: RowMenuItem[] = [{ key: 'view', label: t('ดูรายละเอียด'), icon: 'eye', onSelect: () => select(sup.id) }]
     if (isAdmin) {
       items.push(
         { key: 'edit', label: t('แก้ไข'), icon: 'pencil', onSelect: () => setEditing(sup) },
@@ -295,18 +338,30 @@ export function SuppliersPage() {
         primary: true,
         className: 'md:max-w-[240px]',
         cell: (r) => (
-          <ItemCell
+          <button
+            type="button"
+            data-supplier-select={r.supplier.id}
+            aria-pressed={r.supplier.id === selectedId}
             title={r.supplier.name}
-            avatar={r.supplier.name}
-            tone={avatarTone(r.supplier.name)}
-            sub={
-              <>
-                <span className="doc-no">{r.supplier.code ?? '—'}</span>
-                {r.supplier.contactNumber ? ` · ${r.supplier.contactNumber}` : ''}
-                {r.supplier.email ? ` · ${r.supplier.email}` : ''}
-              </>
-            }
-          />
+            onClick={(e) => {
+              e.stopPropagation()
+              select(r.supplier.id)
+            }}
+            className={`block w-full min-w-0 cursor-pointer rounded-lg text-left ${focusRing}`}
+          >
+            <ItemCell
+              title={r.supplier.name}
+              avatar={r.supplier.name}
+              tone={avatarTone(r.supplier.name)}
+              sub={
+                <>
+                  <span className="doc-no">{r.supplier.code ?? '—'}</span>
+                  {r.supplier.contactNumber ? ` · ${r.supplier.contactNumber}` : ''}
+                  {r.supplier.email ? ` · ${r.supplier.email}` : ''}
+                </>
+              }
+            />
+          </button>
         ),
       },
       {
@@ -367,7 +422,7 @@ export function SuppliersPage() {
     // ordersOf and the handlers close over state that changes with every load; the table is
     // cheap to rebuild and this keeps them pointing at current data.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, isAdmin, items, suppliers, products, ordersOf],
+    [t, isAdmin, items, suppliers, products, ordersOf, selectedId, select],
   )
 
   if (loading) return <Spinner label={t('กำลังโหลดผู้ขาย...')} />
@@ -460,63 +515,96 @@ export function SuppliersPage() {
         </FilterField>
       </FilterBar>
 
-      <WithSidePanel
-        sideLabel={t('รายละเอียดผู้ขาย')}
-        side={
-          selected ? (
-            <SupplierDetail
-              supplier={selected}
-              products={products.filter((p) => p.supplierId === selected.id).sort((a2, b2) => a2.name.localeCompare(b2.name))}
-              orders={ordersOf(selected.id)}
-              priceOf={(productId) => priceOf.get(`${selected.id}/${productId}`)}
-              onUnlink={isAdmin ? unlink : undefined}
-              canEdit={isAdmin}
-              onEdit={() => setEditing(selected)}
-              onAddProduct={() => setAddingTo(selected)}
-              onClose={() => setSelectedId(null)}
-            />
-          ) : (
-            <SectionCard icon="users" title={t('รายละเอียดผู้ขาย')}>
-              <p className="py-6 text-center text-sm text-ink-faint">{t('เลือกผู้ขายจากรายการเพื่อดูรายละเอียด')}</p>
-            </SectionCard>
-          )
-        }
-      >
-        <SectionCard
-          icon="list"
-          title={t('รายชื่อผู้ขาย')}
-          count={t('({n} ราย)', { n: rows.length })}
-          flush
-          actions={
-            <label className="flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft">
-              {t('เรียงตาม')}
-              <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="w-auto">
-                <option value="name">{t('ชื่อ ก–ฮ / A–Z')}</option>
-                <option value="products">{t('จำนวนสินค้า มาก→น้อย')}</option>
-              </Select>
-            </label>
-          }
-        >
-          <div className="pb-2 md:px-5 md:pb-5">
-            <DataTable
-              rows={rows}
-              columns={columns}
-              rowKey={(r) => r.supplier.id}
-              rowClassName={(r) => `${r.supplier.active === false ? 'opacity-60' : ''} ${r.supplier.id === selectedId ? 'bg-brand-soft/60' : ''}`}
-              minWidth={820}
-              onRowClick={(r) => setSelectedId(r.supplier.id)}
-              rowMenu={(r) => menuFor(r.supplier)}
-              empty={
-                <EmptyState
-                  icon="users"
-                  title={t('ยังไม่มีผู้ขาย')}
-                  hint={isAdmin ? t('กด "เพิ่มผู้ขาย" เพื่อเริ่ม') : t('ผู้ดูแลระบบเป็นผู้เพิ่มรายชื่อผู้ขาย')}
-                />
-              }
+      {/* The list, and beside it from 1280px the chosen supplier — held in view under the top
+          bar however far down the list it was picked (the grid row is as tall as the list, so
+          the sticky column has the room to travel). */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-5 2xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="min-w-0">
+          <SectionCard
+            icon="list"
+            title={t('รายชื่อผู้ขาย')}
+            count={t('({n} ราย)', { n: rows.length })}
+            flush
+            actions={
+              <label className="flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft">
+                {t('เรียงตาม')}
+                <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="w-auto">
+                  <option value="name">{t('ชื่อ ก–ฮ / A–Z')}</option>
+                  <option value="products">{t('จำนวนสินค้า มาก→น้อย')}</option>
+                </Select>
+              </label>
+            }
+          >
+            <div className="pb-2 md:px-5 md:pb-5">
+              <DataTable
+                rows={rows}
+                columns={columns}
+                rowKey={(r) => r.supplier.id}
+                rowClassName={(r) => `${r.supplier.active === false ? 'opacity-60' : ''} ${r.supplier.id === selectedId ? 'bg-brand-soft/60' : ''}`}
+                minWidth={820}
+                onRowClick={(r) => select(r.supplier.id)}
+                rowMenu={(r) => menuFor(r.supplier)}
+                empty={
+                  <EmptyState
+                    icon="users"
+                    title={t('ยังไม่มีผู้ขาย')}
+                    hint={isAdmin ? t('กด "เพิ่มผู้ขาย" เพื่อเริ่ม') : t('ผู้ดูแลระบบเป็นผู้เพิ่มรายชื่อผู้ขาย')}
+                  />
+                }
+              />
+            </div>
+          </SectionCard>
+        </div>
+        <aside className="hidden min-w-0 xl:block">
+          <div
+            data-supplier-panel
+            className="sticky top-[calc(var(--topbar-h)+1rem)] flex max-h-[calc(100dvh-var(--topbar-h)-2rem)] flex-col"
+          >
+            {selected ? (
+                <SupplierDetail
+                  key={selected.id}
+                  supplier={selected}
+                  products={products.filter((p) => p.supplierId === selected.id).sort((a2, b2) => a2.name.localeCompare(b2.name))}
+                  orders={ordersOf(selected.id)}
+                  priceOf={(productId) => priceOf.get(`${selected.id}/${productId}`)}
+                  onUnlink={isAdmin ? unlink : undefined}
+                  canEdit={isAdmin}
+                  onEdit={() => setEditing(selected)}
+                  onAddProduct={() => setAddingTo(selected)}
+                  onClose={() => setSelectedId(null)}
+              />
+            ) : (
+              <SectionCard icon="users" title={t('รายละเอียดผู้ขาย')}>
+                <p className="py-6 text-center text-sm text-ink-faint">
+                  {selectedId && !loading ? t('ไม่พบผู้ขายรายนี้แล้ว') : t('เลือกผู้ขายจากรายการเพื่อดูรายละเอียด')}
+                </p>
+              </SectionCard>
+            )}
+          </div>
+        </aside>
+      </div>
+
+      {/* Below 1280px: the same details in a drawer over the list (from the right on a tablet,
+          from the bottom on a phone). Escape or ✕ closes it and focus returns to the row. */}
+      {!desktop && selected && (
+        <Modal open={sheetOpen} onClose={closeSheet} title={t('รายละเอียดผู้ขาย')} sheet>
+          <div className="px-5 py-4">
+                <SupplierDetail
+                  key={selected.id}
+                  supplier={selected}
+                  products={products.filter((p) => p.supplierId === selected.id).sort((a2, b2) => a2.name.localeCompare(b2.name))}
+                  orders={ordersOf(selected.id)}
+                  priceOf={(productId) => priceOf.get(`${selected.id}/${productId}`)}
+                  onUnlink={isAdmin ? unlink : undefined}
+                  canEdit={isAdmin}
+                  onEdit={() => setEditing(selected)}
+                  onAddProduct={() => setAddingTo(selected)}
+                  onClose={closeSheet}
+              variant="sheet"
             />
           </div>
-        </SectionCard>
-      </WithSidePanel>
+        </Modal>
+      )}
 
       {(creating || editing) && (
         <SupplierEditor

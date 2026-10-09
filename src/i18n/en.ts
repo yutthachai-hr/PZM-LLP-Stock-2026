@@ -3032,4 +3032,8 @@ export const EN: Record<string, string> = {
   'วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน': 'This date is beyond the agreed range and needs purchasing approval first',
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
+
+  // ---- suppliers: master–detail (9 Oct 2026) -----------------------------------------
+  'ปลด {name} ออกจากผู้ขายนี้': 'Unlink {name} from this supplier',
+  ไม่พบผู้ขายรายนี้แล้ว: 'This supplier is no longer on file',
 }
