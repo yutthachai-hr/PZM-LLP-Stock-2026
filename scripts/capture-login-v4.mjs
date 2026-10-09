@@ -8,7 +8,7 @@ fs.mkdirSync(OUT_DIR, { recursive: true })
 async function run() {
   const browser = await chromium.launch()
 
-  // 1. Desktop 1440x900 capture & video
+  // 1. Desktop 1440x900 capture & video (Version A: Clean background)
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     recordVideo: { dir: OUT_DIR, size: { width: 1440, height: 900 } },
@@ -50,17 +50,39 @@ async function run() {
   await page.waitForTimeout(300)
   await page.screenshot({ path: path.join(OUT_DIR, 'v4-form-preserved.png') })
 
+  // Test expanded demo panel
+  const summary = page.locator('summary')
+  if (await summary.count() > 0) {
+    await summary.click()
+    await page.waitForTimeout(200)
+    await page.screenshot({ path: path.join(OUT_DIR, 'v4-demo-expanded.png') })
+    await summary.click()
+  }
+
   await context.close()
 
-  // 2. Desktop 1920x1080 (Full HD)
+  // 2. Desktop 1440x900: Version B (Ambient Background Experiment)
+  const ambContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const ambPage = await ambContext.newPage()
+  await ambPage.goto('http://localhost:5175?ambient=1')
+  await ambPage.waitForLoadState('networkidle')
+  await ambPage.waitForTimeout(300)
+  await ambPage.screenshot({ path: path.join(OUT_DIR, 'v4-ambient-1440x900-pizza.png') })
+
+  await ambPage.getByRole('radio', { name: /Le Lapin/i }).click()
+  await ambPage.waitForTimeout(300)
+  await ambPage.screenshot({ path: path.join(OUT_DIR, 'v4-ambient-1440x900-lelapin.png') })
+
+  await ambPage.getByRole('radio', { name: /R&D/i }).click()
+  await ambPage.waitForTimeout(300)
+  await ambPage.screenshot({ path: path.join(OUT_DIR, 'v4-ambient-1440x900-rnd.png') })
+  await ambContext.close()
+
+  // 3. Desktop 1920x1080 (Full HD)
   const fhdContext = await browser.newContext({ viewport: { width: 1920, height: 1080 } })
   const fhdPage = await fhdContext.newPage()
   await fhdPage.goto('http://localhost:5175')
   await fhdPage.waitForLoadState('networkidle')
-  await fhdPage.evaluate(() => localStorage.removeItem('pmstock:v1:session'))
-  await fhdPage.reload()
-  await fhdPage.waitForLoadState('networkidle')
-
   await fhdPage.screenshot({ path: path.join(OUT_DIR, 'v4-1920x1080-pizza.png') })
   await fhdPage.getByRole('radio', { name: /Le Lapin/i }).click()
   await fhdPage.waitForTimeout(300)
@@ -70,7 +92,7 @@ async function run() {
   await fhdPage.screenshot({ path: path.join(OUT_DIR, 'v4-1920x1080-rnd.png') })
   await fhdContext.close()
 
-  // 3. Short Desktop Viewports: 1366x768 & 1366x650
+  // 4. Short Desktop Viewports: 1366x768 & 1366x650
   const shortContext = await browser.newContext({ viewport: { width: 1366, height: 650 } })
   const shortPage = await shortContext.newPage()
   await shortPage.goto('http://localhost:5175')
@@ -91,7 +113,7 @@ async function run() {
   await laptopPage.screenshot({ path: path.join(OUT_DIR, 'v4-1366x768-rnd.png') })
   await laptopContext.close()
 
-  // 4. Tablet: 768x1024 & 1024x768
+  // 5. Tablet: 768x1024
   const tabContext = await browser.newContext({ viewport: { width: 768, height: 1024 } })
   const tabPage = await tabContext.newPage()
   await tabPage.goto('http://localhost:5175')
@@ -102,7 +124,7 @@ async function run() {
   await tabPage.screenshot({ path: path.join(OUT_DIR, 'v4-768x1024-rnd.png') })
   await tabContext.close()
 
-  // 5. Mobile: 375x812 & 390x844
+  // 6. Mobile: 375x812 & 390x844
   const m375Context = await browser.newContext({ viewport: { width: 375, height: 812 } })
   const m375Page = await m375Context.newPage()
   await m375Page.goto('http://localhost:5175')
@@ -124,7 +146,7 @@ async function run() {
   await m390Context.close()
 
   await browser.close()
-  console.log('Successfully captured all Login V4 screenshots and video.')
+  console.log('Successfully captured all Login V4 refinement screenshots and video.')
 }
 
 run().catch(console.error)

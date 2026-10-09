@@ -13,29 +13,44 @@ import { useT } from '../i18n/I18nContext'
 import { LangMenu } from '../i18n/LangMenu'
 
 /**
- * Brand-specific copy, short names, and static mascot artwork.
- * Static artwork cut from official designs (owner directive, 9 Oct 2026).
- * No animations, no rigs, no floating loops.
+ * Brand-specific copy, short names, and the static scene behind each brand: the mascot in
+ * front of its own shop (Pizza Mania, Le Lapin) or test kitchen (R&D), cut from the owner's
+ * approved mock-ups (9 Oct 2026, afternoon). Still pictures: no animation, no rigs, no loops.
+ * `focus` keeps the mascot in frame when a narrow screen crops the scene.
  */
-const LOOK: Record<BrandId, { short: string; tagline: string; art: string; artClass: string }> = {
+const LOOK: Record<BrandId, { short: string; tagline: string; scene: string; w: number; h: number; focus: string }> = {
   pizza: {
     short: 'Pizza Mania',
     tagline: 'จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่สะดุด', // i18n-key
-    art: '/login/pizza-mania.webp',
-    artClass: 'lg:max-w-[310px]',
+    scene: '/login/scene-pizza.webp',
+    w: 961,
+    h: 565,
+    focus: '62% 40%',
   },
   lelapin: {
     short: 'Le Lapin',
     tagline: 'จัดการสต๊อก ติดตามวัตถุดิบ ให้ทุกสาขาเดินได้ราบรื่น', // i18n-key
-    art: '/login/le-lapin.webp',
-    artClass: 'lg:max-w-[420px]',
+    scene: '/login/scene-lelapin.webp',
+    w: 961,
+    h: 593,
+    focus: '66% 55%',
   },
   rnd: {
     short: 'R&D',
     tagline: 'คิดค้นสูตร ทดลองวัตถุดิบ และติดตามต้นทุนของทุกการทดลอง', // i18n-key
-    art: '/login/rnd.webp',
-    artClass: 'lg:max-w-[310px]',
+    scene: '/login/scene-rnd.webp',
+    w: 961,
+    h: 593,
+    focus: '55% 40%',
   },
+}
+
+/** The scene melts into the page on its right and bottom edges, as in the mock-ups. */
+const SCENE_MASK: CSSProperties = {
+  maskImage: 'linear-gradient(to right, #000 80%, transparent 100%), linear-gradient(to bottom, #000 84%, transparent 100%)',
+  maskComposite: 'intersect',
+  WebkitMaskImage: 'linear-gradient(to right, #000 80%, transparent 100%), linear-gradient(to bottom, #000 84%, transparent 100%)',
+  WebkitMaskComposite: 'source-in',
 }
 
 export function LoginPage() {
@@ -112,10 +127,15 @@ export function LoginPage() {
     '--color-brand': def.accent,
     '--color-brand-soft': def.accentSoft,
     '--color-brand-vivid': def.accentVivid,
+    '--tabbar-h': '0px',
   } as CSSProperties
 
+  const ambient = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ambient') === '1'
+  const legacyFont = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('font') === 'legacy'
+
+  // ponytail: font-login scoped to login container; upgrade to shared design system token if app-wide typography updates.
   return (
-    <div style={vars} className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#fffdfc] text-ink antialiased">
+    <div style={vars} className={`${legacyFont ? 'font-sans' : 'font-login'} relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#fffdfc] text-ink antialiased`}>
       {/* ---- Header: Platform identity + compact theme switcher + Globe language ---- */}
       <header className="mx-auto flex w-full max-w-[1400px] shrink-0 items-center justify-between px-5 pt-4 sm:px-8 lg:px-12 lg:pt-6">
         <div className="flex items-center gap-3 sm:gap-5">
@@ -125,9 +145,9 @@ export function LoginPage() {
               alt=""
               width={34}
               height={34}
-              className="h-8.5 w-8.5 rounded-xl object-cover shadow-xs"
+              className="h-8.5 w-8.5 rounded-xl object-cover shadow-xs lg:h-10 lg:w-10"
             />
-            <span className="text-base font-bold tracking-tight text-ink sm:text-lg">Inventory OS</span>
+            <span className={`${legacyFont ? '' : 'font-display'} text-base font-bold tracking-tight text-ink sm:text-lg lg:text-xl`}>Inventory OS</span>
           </div>
 
           <span className="hidden h-6 w-px bg-line/80 sm:block" aria-hidden="true" />
@@ -149,60 +169,57 @@ export function LoginPage() {
         <BrandSwitch brand={brand} onChange={setBrand} />
       </div>
 
-      {/* ---- Main content: Hero & Login Card (vertically centered in remaining viewport height) ---- */}
-      <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col justify-center px-5 py-6 sm:px-8 lg:px-12 lg:py-8">
-        <div className="grid w-full items-center gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(420px,460px)] lg:gap-12 xl:gap-16">
+      {/* ---- Main content: Hero & Login Card (vertically centered on desktop, naturally stacked on mobile) ---- */}
+      <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col justify-start sm:justify-center px-4 py-2 sm:px-8 sm:py-6 sm:pb-8 lg:px-12 lg:py-8">
+        <div className="grid w-full items-center gap-3.5 sm:gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(420px,460px)] lg:gap-12 xl:gap-16">
           {/* Left: Brand Hero */}
-          <section className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-6 lg:block">
+          <section className="min-w-0">
             <div className="min-w-0">
-              <div
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                style={{ backgroundColor: def.accentSoft, color: def.accent }}
-              >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: def.accentVivid }} />
-                {look.short}
-              </div>
-
-              <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl lg:text-5xl xl:text-6xl lg:leading-[1.1]">
+              <h1 className={`${legacyFont ? 'font-extrabold' : 'font-display font-bold xl:font-extrabold'} text-[1.75rem] tracking-[-0.02em] text-ink sm:text-4xl lg:text-5xl xl:text-[4.25rem] leading-[1.08] text-balance`}>
                 <span style={{ color: def.accent }}>{look.short}</span> Stock
               </h1>
 
-              <p className="mt-1.5 max-w-lg text-xs leading-relaxed text-ink-soft sm:text-sm lg:mt-3 lg:text-base xl:text-lg">
+              <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-ink-soft sm:text-base lg:mt-3 lg:text-lg xl:text-xl text-pretty">
                 {t(look.tagline)}
               </p>
             </div>
 
-            {/* Mascot: small side-by-side thumbnail on mobile, large centered/anchored below on lg+ */}
-            <div className="shrink-0 lg:mt-8 lg:flex lg:justify-start">
-              <div className="relative max-w-[120px] sm:max-w-[160px] lg:max-w-none">
-                <img
-                  key={brand}
-                  src={look.art}
-                  alt={look.short}
-                  draggable={false}
-                  className={`brand-art-fade pointer-events-none w-auto select-none object-contain ${
-                    brand === 'lelapin'
-                      ? 'max-h-[120px] sm:max-h-[160px] lg:max-h-none lg:h-[320px] xl:h-[380px]'
-                      : 'max-h-[135px] sm:max-h-[180px] lg:max-h-none lg:h-[380px] xl:h-[440px]'
-                  }`}
+            {/* The brand's scene: a short strip on phones (mascot kept in frame), the full picture
+                under the heading on wide screens, reaching out to the page's left edge. */}
+            <div className="relative mt-2.5 sm:mt-4 lg:-ml-12 lg:mt-5 xl:mt-6">
+              {ambient && (
+                <div
+                  className="pointer-events-none absolute -inset-8 -z-10 rounded-full blur-3xl opacity-25"
+                  style={{ background: `radial-gradient(circle, ${def.accentVivid} 0%, transparent 68%)` }}
+                  aria-hidden="true"
                 />
-              </div>
+              )}
+              <img
+                key={brand}
+                src={look.scene}
+                alt={look.short}
+                width={look.w}
+                height={look.h}
+                draggable={false}
+                style={{ ...SCENE_MASK, objectPosition: look.focus }}
+                className="brand-art-fade pointer-events-none block h-[150px] w-full select-none rounded-2xl object-cover sm:h-[240px] lg:h-auto lg:max-h-[58dvh] lg:rounded-none lg:object-contain lg:object-left-bottom"
+              />
             </div>
           </section>
 
           {/* Right: Login Card */}
-          <section className="w-full max-w-[460px] justify-self-center rounded-3xl border border-line/80 bg-surface p-6 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.12)] sm:p-9 lg:justify-self-end">
-          <h2 className="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
-            {!bootstrap ? t('เข้าสู่ระบบ') : firstAdmin ? t('ตั้งค่าผู้ดูแลระบบคนแรก') : t('ขอสิทธิ์เข้าใช้งาน')}
-          </h2>
-          <p className="mt-1 text-xs text-ink-soft sm:text-sm">
-            {t('ยินดีต้อนรับกลับสู่ {name} Stock', { name: look.short })}
-          </p>
+          <section className="w-full max-w-[450px] justify-self-center rounded-3xl border border-line/75 bg-surface p-4 shadow-[0_16px_40px_-16px_rgb(0_0_0/0.08),0_2px_8px_-2px_rgb(0_0_0/0.04)] sm:p-8 lg:p-9 lg:justify-self-end">
+            <h2 className="text-xl font-bold tracking-normal text-ink sm:text-2xl lg:text-3xl leading-snug sm:leading-tight">
+              {!bootstrap ? t('เข้าสู่ระบบ') : firstAdmin ? t('ตั้งค่าผู้ดูแลระบบคนแรก') : t('ขอสิทธิ์เข้าใช้งาน')}
+            </h2>
+            <p className="mt-1 text-xs leading-normal text-ink-soft sm:text-sm">
+              {t('ยินดีต้อนรับกลับสู่ {name} Stock', { name: look.short })}
+            </p>
 
-          <form onSubmit={submit} className="mt-6 space-y-4">
+            <form onSubmit={submit} className="mt-4 space-y-3 sm:mt-6 sm:space-y-4">
             {bootstrap && (
               <div>
-                <label htmlFor="login-name" className="mb-1 block text-xs font-semibold text-ink-soft">
+                <label htmlFor="login-name" className="mb-1 block text-xs font-semibold leading-normal text-ink-soft sm:mb-1.5">
                   {firstAdmin ? t('ชื่อผู้ดูแล') : t('ชื่อของคุณ')}
                 </label>
                 <div className="relative flex items-center">
@@ -214,14 +231,14 @@ export function LoginPage() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder={firstAdmin ? t('ชื่อผู้ดูแล') : t('ชื่อของคุณ')}
                     required
-                    className="h-12 w-full rounded-xl border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-ink-faint"
+                    className="h-11 w-full rounded-xl border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none transition-all focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-ink-faint sm:h-12"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label htmlFor="login-email" className="mb-1 block text-xs font-semibold text-ink-soft">
+              <label htmlFor="login-email" className="mb-1 block text-xs font-semibold leading-normal text-ink-soft sm:mb-1.5">
                 {t('อีเมล')}
               </label>
               <div className="relative flex items-center">
@@ -234,14 +251,14 @@ export function LoginPage() {
                   placeholder={t('อีเมล')}
                   autoComplete="username"
                   required
-                  className="h-12 w-full rounded-xl border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-ink-faint"
+                  className="h-11 w-full rounded-xl border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none transition-all focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-ink-faint sm:h-12"
                 />
               </div>
             </div>
 
             <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label htmlFor="login-password" className="text-xs font-semibold text-ink-soft">
+              <div className="mb-1 flex items-center justify-between sm:mb-1.5">
+                <label htmlFor="login-password" className="text-xs font-semibold leading-normal text-ink-soft">
                   {t('รหัสผ่าน')}
                 </label>
                 {!bootstrap && (
@@ -249,7 +266,7 @@ export function LoginPage() {
                     type="button"
                     onClick={() => void forgot()}
                     disabled={busy}
-                    className="cursor-pointer text-xs font-medium text-brand hover:underline"
+                    className="cursor-pointer text-xs font-medium leading-normal text-brand hover:underline"
                   >
                     {t('ลืมรหัสผ่าน?')}
                   </button>
@@ -266,7 +283,7 @@ export function LoginPage() {
                   autoComplete={bootstrap ? 'new-password' : 'current-password'}
                   minLength={6}
                   required
-                  className="h-12 w-full rounded-xl border border-line bg-surface pl-10 pr-11 text-sm text-ink outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-ink-faint"
+                  className="h-11 w-full rounded-xl border border-line bg-surface pl-10 pr-11 text-sm text-ink outline-none transition-all focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-ink-faint sm:h-12"
                 />
                 <button
                   type="button"
@@ -280,31 +297,35 @@ export function LoginPage() {
               </div>
             </div>
 
-            {bootstrap && <p className="text-xs text-ink-faint">{t('อย่างน้อย 6 ตัวอักษร')}</p>}
+            {bootstrap && <p className="text-xs leading-normal text-ink-faint">{t('อย่างน้อย 6 ตัวอักษร')}</p>}
 
             {bootstrap && !firstAdmin && (
-              <p className="rounded-lg bg-sunken px-3 py-2 text-xs text-ink-soft">
+              <p className="rounded-lg bg-sunken px-3 py-2 text-xs leading-relaxed text-ink-soft">
                 {t('บัญชีใหม่จะยังเข้าใช้ข้อมูลไม่ได้จนกว่าผู้ดูแลระบบจะอนุมัติ')}
               </p>
             )}
 
             {notice && !error && (
-              <div role="status" className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+              <div role="status" className="rounded-lg bg-warn-soft px-3 py-2 text-xs leading-normal text-warn">
                 {t(notice)}
               </div>
             )}
             {info && !error && (
-              <div role="status" className="rounded-lg bg-in-soft px-3 py-2 text-xs text-in">
+              <div role="status" className="rounded-lg bg-in-soft px-3 py-2 text-xs leading-normal text-in">
                 {info}
               </div>
             )}
             {error && (
-              <div role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-xs font-medium text-danger">
+              <div role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-xs font-medium leading-normal text-danger">
                 {t(error)}
               </div>
             )}
 
-            <Button type="submit" disabled={busy} className="!h-12 w-full !rounded-xl !text-sm !font-bold">
+            <Button
+              type="submit"
+              disabled={busy}
+              className={`!h-11 w-full !rounded-xl !text-sm ${legacyFont ? '!font-bold' : '!font-semibold'} leading-normal shadow-xs hover:shadow-sm active:scale-[0.99] transition-all sm:!h-12`}
+            >
               {busy
                 ? t('กำลังดำเนินการ...')
                 : !bootstrap
@@ -384,7 +405,7 @@ export function LoginPage() {
       </main>
 
       {/* ---- Footer: Clean framing at bottom of full-height layout ---- */}
-      <footer className="mx-auto flex w-full max-w-[1400px] shrink-0 items-center justify-between px-5 py-3 text-[11px] text-ink-faint sm:px-8 sm:pr-40 lg:px-12 lg:pr-44">
+      <footer className="mx-auto flex w-full max-w-[1400px] shrink-0 items-center justify-between px-5 py-3 text-[11px] text-ink-faint sm:px-8 sm:pr-64 lg:px-12 lg:pr-64">
         <div>© 2026 Inventory OS</div>
         <div className="flex items-center gap-2">
           <span>{look.short}</span>
@@ -447,7 +468,7 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
                 ? `0 0 0 2.5px #fff, 0 0 0 5px ${b.accentVivid}, 0 8px 18px -4px ${b.accentVivid}66`
                 : undefined,
             }}
-            className={`group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white p-0.5 outline-none transition-all duration-200 motion-reduce:transition-none sm:h-12 sm:w-12 ${
+            className={`group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white p-0.5 outline-none transition-all duration-200 motion-reduce:transition-none sm:h-12 sm:w-12 lg:h-14 lg:w-14 ${
               active
                 ? '-translate-y-1 scale-105 shadow-md motion-reduce:translate-y-0 motion-reduce:scale-100'
                 : 'opacity-70 saturate-[0.6] shadow-xs hover:-translate-y-0.5 hover:scale-105 hover:opacity-100 hover:saturate-100 hover:shadow-md motion-reduce:translate-y-0 motion-reduce:scale-100'

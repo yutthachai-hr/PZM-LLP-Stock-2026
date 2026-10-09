@@ -1,17 +1,13 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   Typeface: LINE Seed Sans TH (SIL OFL 1.1, see public/fonts/OFL.txt)
-
-   The app used to name 'Sarabun' in font-family without ever loading it, so
-   every device picked something different out of its own fallback list — Windows
-   showed Leelawadee UI, phones showed their system face, and the same stock
-   report looked different depending on who opened it.
+   Typefaces:
+   - App Global: LINE Seed Sans TH (SIL OFL 1.1, see public/fonts/OFL.txt)
+   - Login Display: Plus Jakarta Sans (Variable 400..800, Tokotype, SIL OFL 1.1)
+   - Login UI & Thai: Anuphan (Variable 400..700, Cadson Demak, SIL OFL 1.1)
 
    Self-hosted rather than pulled from a CDN: the site ships a Content-Security
-   -Policy of `font-src 'self'`, and a CDN would mean widening that. Two weights
-   only, 29 KB each, and the Thai release already carries Latin, Thai digits, ฿
-   and real typographic punctuation (… “ ” — ), so nothing falls back mid-sentence.
+   -Policy of `font-src 'self'`, and a CDN would mean widening that.
 --------------------------------------------------------------------------- */
 
 @font-face {
@@ -30,6 +26,56 @@
   font-display: swap;
 }
 
+/* Plus Jakarta Sans (Variable 400..800, Latin) */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-Variable.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Plus Jakarta Sans (Variable 400..800, Latin-Ext) */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-Ext-Variable.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Anuphan (Variable 400..700, Thai) */
+@font-face {
+  font-family: 'Anuphan';
+  src: url('/fonts/Anuphan-Thai-Variable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+
+/* Anuphan (Variable 400..700, Latin) */
+@font-face {
+  font-family: 'Anuphan';
+  src: url('/fonts/Anuphan-Latin-Variable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Anuphan (Variable 400..700, Latin-Ext) */
+@font-face {
+  font-family: 'Anuphan';
+  src: url('/fonts/Anuphan-Ext-Variable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ---------------------------------------------------------------------------
    Design tokens.
 
@@ -44,6 +90,9 @@
   --tabbar-h: 4.5rem;
   --font-sans: 'LINE Seed Sans TH', 'Noto Sans Thai', 'Leelawadee UI', system-ui,
     -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Anuphan', 'LINE Seed Sans TH', system-ui,
+    sans-serif;
+  --font-login: 'Anuphan', 'LINE Seed Sans TH', system-ui, sans-serif;
 
   /* Surfaces and text. Industrial slate: quiet, so the numbers carry the page. */
   --color-canvas: #f1f5f9;
