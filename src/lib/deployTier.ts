@@ -68,30 +68,58 @@ export interface FunctionEnv {
   FIREBASE_SERVICE_ACCOUNT?: string
 }
 
-function serviceAccountProject(json: string | undefined): string | null {
+/**
+ * The project a service account belongs to — only for a key that looks like a real one:
+ * `type: service_account`, a `project_id`, a `client_email` of that same project
+ * (`…@<project>.iam.gserviceaccount.com`) and a private key. Anything else is null.
+ */
+export function serviceAccountProject(json: string | undefined): string | null {
   if (!json) return null
+  let sa: Record<string, unknown>
   try {
-    const p = (JSON.parse(json) as { project_id?: unknown }).project_id
-    return typeof p === 'string' ? p : null
+    const parsed: unknown = JSON.parse(json)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    sa = parsed as Record<string, unknown>
   } catch {
     return null
   }
+  const project = typeof sa.project_id === 'string' ? sa.project_id.trim() : ''
+  const email = typeof sa.client_email === 'string' ? sa.client_email.trim().toLowerCase() : ''
+  const key = typeof sa.private_key === 'string' ? sa.private_key : ''
+  if (sa.type !== 'service_account' || !project || !key.includes('PRIVATE KEY')) return null
+  if (!email.endsWith(`@${project.toLowerCase()}.iam.gserviceaccount.com`)) return null
+  return project
 }
 
 /**
- * What a Pages Function may do. Production only on a production host. Staging only when it
- * is declared AND every project it names is not the production one. Everything else —
- * preview aliases, hash URLs, `wrangler pages dev` on localhost — is preview.
+ * Whether these Functions may run as a staging integration environment (owner, 9 Oct 2026:
+ * every condition, or none). DEPLOY_TIER is `staging`; FIREBASE_PROJECT_ID is set; the service
+ * account is a well-formed key whose project is EXACTLY that id; that id is not the production
+ * project; and no production-only setting (PRODUCTION_HOSTS) is present. Missing, malformed,
+ * mismatched or production identifiers fail closed (preview: privileged functions refused).
+ *
+ * Bindings (KV, AI) cannot be identified from inside a Function, so a staging deployment must
+ * also be a separate Pages project with its own bindings — documented in
+ * docs/evidence/preview-isolation.md; this check is the part code can enforce.
+ */
+export function stagingAllowed(env: FunctionEnv): boolean {
+  if ((env.DEPLOY_TIER ?? '').trim() !== 'staging') return false
+  if ((env.PRODUCTION_HOSTS ?? '').trim()) return false
+  const project = (env.FIREBASE_PROJECT_ID ?? '').trim()
+  if (!project || project === PRODUCTION_PROJECT) return false
+  const saProject = serviceAccountProject(env.FIREBASE_SERVICE_ACCOUNT)
+  if (!saProject || saProject === PRODUCTION_PROJECT) return false
+  return saProject === project
+}
+
+/**
+ * What a Pages Function may do. Production only on a production host. Staging only when
+ * stagingAllowed() holds in full. Everything else — preview aliases, hash URLs,
+ * `wrangler pages dev` on localhost — is preview.
  */
 export function functionTier(hostname: string, env: FunctionEnv): FunctionTier {
   if (hostTier(hostname, extraHosts(env.PRODUCTION_HOSTS)) === 'production') return 'production'
-  if ((env.DEPLOY_TIER ?? '').trim() === 'staging') {
-    const project = (env.FIREBASE_PROJECT_ID ?? '').trim()
-    const saProject = serviceAccountProject(env.FIREBASE_SERVICE_ACCOUNT)
-    const named = [project, saProject].filter((x): x is string => !!x)
-    if (named.length && !named.includes(PRODUCTION_PROJECT)) return 'staging'
-  }
-  return 'preview'
+  return stagingAllowed(env) ? 'staging' : 'preview'
 }
 
 /** Function routes a preview may still serve: they read no secret, binding or database. */

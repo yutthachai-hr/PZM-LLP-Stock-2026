@@ -37,18 +37,47 @@ describe('host tier', () => {
 })
 
 describe('function tier', () => {
-  const sa = (project: string) => JSON.stringify({ project_id: project })
+  // A fake key, assembled so no scanner mistakes this file for a credential.
+  const KEY = ['-----BEGIN', 'PRIVATE KEY-----', 'AA==', '-----END', 'PRIVATE KEY-----'].join(' ')
+  const sa = (project: string, over: Record<string, unknown> = {}) =>
+    JSON.stringify({ type: 'service_account', project_id: project, client_email: `stock@${project}.iam.gserviceaccount.com`, private_key: KEY, ...over })
+  const STG = 'stg.pzmstock.pages.dev'
+  const ok = { DEPLOY_TIER: 'staging', FIREBASE_PROJECT_ID: 'pzm-staging', FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging') }
+
   test('production only on the production host', () => {
     expect(functionTier('pzmstock.pages.dev', {})).toBe('production')
     expect(functionTier('abc.pzmstock.pages.dev', { FIREBASE_SERVICE_ACCOUNT: sa(PRODUCTION_PROJECT) })).toBe('preview')
     expect(functionTier('localhost', {})).toBe('preview')
   })
-  test('staging only when declared AND every named project is not production', () => {
-    expect(functionTier('stg.pzmstock.pages.dev', { DEPLOY_TIER: 'staging', FIREBASE_PROJECT_ID: 'pzm-staging', FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging') })).toBe('staging')
-    expect(functionTier('stg.pzmstock.pages.dev', { DEPLOY_TIER: 'staging', FIREBASE_PROJECT_ID: 'pzm-staging', FIREBASE_SERVICE_ACCOUNT: sa(PRODUCTION_PROJECT) })).toBe('preview')
-    expect(functionTier('stg.pzmstock.pages.dev', { DEPLOY_TIER: 'staging', FIREBASE_PROJECT_ID: PRODUCTION_PROJECT })).toBe('preview')
-    expect(functionTier('stg.pzmstock.pages.dev', { DEPLOY_TIER: 'staging' })).toBe('preview')
-    expect(functionTier('stg.pzmstock.pages.dev', { DEPLOY_TIER: 'staging', FIREBASE_SERVICE_ACCOUNT: 'not json' })).toBe('preview')
+  test('production behaviour unchanged: the production host is production whatever else is set', () => {
+    expect(functionTier('pzmstock.pages.dev', ok)).toBe('production')
+    expect(functionTier('pzmstock.pages.dev', { DEPLOY_TIER: 'staging' })).toBe('production')
+  })
+  test('staging when every condition holds', () => {
+    expect(functionTier(STG, ok)).toBe('staging')
+    expect(functionTier(STG, { ...ok, DEPLOY_TIER: ' staging ', FIREBASE_PROJECT_ID: ' pzm-staging ' })).toBe('staging')
+  })
+  // Owner, 9 Oct 2026: missing, malformed, mismatched or production identifiers fail closed.
+  test.each([
+    ['DEPLOY_TIER missing', { ...ok, DEPLOY_TIER: undefined }],
+    ['DEPLOY_TIER not staging', { ...ok, DEPLOY_TIER: 'production' }],
+    ['DEPLOY_TIER wrong case', { ...ok, DEPLOY_TIER: 'Staging' }],
+    ['project id missing (service account alone)', { ...ok, FIREBASE_PROJECT_ID: undefined }],
+    ['project id empty', { ...ok, FIREBASE_PROJECT_ID: '  ' }],
+    ['service account missing (project id alone)', { ...ok, FIREBASE_SERVICE_ACCOUNT: undefined }],
+    ['service account not JSON', { ...ok, FIREBASE_SERVICE_ACCOUNT: 'not json' }],
+    ['service account a JSON array', { ...ok, FIREBASE_SERVICE_ACCOUNT: '["pzm-staging"]' }],
+    ['service account without project_id', { ...ok, FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging', { project_id: undefined }) }],
+    ['service account not of type service_account', { ...ok, FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging', { type: 'authorized_user' }) }],
+    ['service account without a private key', { ...ok, FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging', { private_key: '' }) }],
+    ['service account email of another project', { ...ok, FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging', { client_email: `stock@${PRODUCTION_PROJECT}.iam.gserviceaccount.com` }) }],
+    ['project ids differ', { ...ok, FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging-2') }],
+    ['project id is production', { ...ok, FIREBASE_PROJECT_ID: PRODUCTION_PROJECT, FIREBASE_SERVICE_ACCOUNT: sa(PRODUCTION_PROJECT) }],
+    ['service account is production', { ...ok, FIREBASE_SERVICE_ACCOUNT: sa(PRODUCTION_PROJECT) }],
+    ['project id production, service account staging', { ...ok, FIREBASE_PROJECT_ID: PRODUCTION_PROJECT }],
+    ['a production-only setting present', { ...ok, PRODUCTION_HOSTS: 'stock.pizzamania.co.th' }],
+  ] as const)('fails closed: %s', (_why, env) => {
+    expect(functionTier(STG, env)).toBe('preview')
   })
 })
 
