@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PZM Login V3 — Visual QA Gallery</title>
+  <title>PZM Login V4 — Full-Height Balanced Layout QA</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --border: #334155;
+      --bg: #0b0f19;
+      --card-bg: #151d30;
+      --border: #22304d;
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --accent: #38bdf8;
-      --accent-pizza: #c2410c;
+      --accent-pizza: #dc2626;
       --accent-lelapin: #ea580c;
       --accent-rnd: #1d4ed8;
       --success: #22c55e;
@@ -26,62 +26,97 @@
       line-height: 1.5;
     }
     header {
-      max-width: 1400px;
+      max-width: 1440px;
       margin: 0 auto 2.5rem;
       border-bottom: 1px solid var(--border);
       padding-bottom: 1.5rem;
     }
-    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    h1 { font-size: 2.2rem; font-weight: 800; margin-bottom: 0.5rem; }
     .badge {
       display: inline-block;
-      padding: 0.25rem 0.75rem;
+      padding: 0.3rem 0.85rem;
       border-radius: 9999px;
       font-size: 0.85rem;
-      font-weight: 600;
-      background: rgba(34, 197, 94, 0.2);
+      font-weight: 700;
+      background: rgba(34, 197, 94, 0.15);
       color: var(--success);
-      border: 1px solid rgba(34, 197, 94, 0.4);
+      border: 1px solid rgba(34, 197, 94, 0.35);
       margin-bottom: 1rem;
     }
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
       margin-top: 1.5rem;
     }
     .summary-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      padding: 1rem;
+      border-radius: 0.85rem;
+      padding: 1.25rem;
     }
-    .summary-card h3 { font-size: 0.95rem; color: var(--accent); margin-bottom: 0.5rem; }
+    .summary-card h3 { font-size: 1rem; color: var(--accent); margin-bottom: 0.6rem; font-weight: 700; }
     .summary-card ul { list-style: none; font-size: 0.85rem; color: var(--text-muted); }
-    .summary-card li { margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; }
+    .summary-card li { margin-bottom: 0.35rem; display: flex; align-items: flex-start; gap: 0.5rem; }
     .summary-card li::before { content: "✓"; color: var(--success); font-weight: bold; }
     
     .section-title {
-      max-width: 1400px;
-      margin: 3rem auto 1.5rem;
+      max-width: 1440px;
+      margin: 3.5rem auto 1.5rem;
       font-size: 1.4rem;
-      font-weight: 700;
+      font-weight: 800;
       display: flex;
       align-items: center;
       gap: 0.75rem;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 0.5rem;
+      padding-bottom: 0.6rem;
     }
     .section-title span { color: var(--accent); }
+
+    .video-card {
+      max-width: 1440px;
+      margin: 0 auto 2.5rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .video-card video {
+      width: 100%;
+      max-height: 620px;
+      border-radius: 0.6rem;
+      background: #000;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.85rem;
+      text-align: left;
+    }
+    th {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--accent);
+      font-weight: 700;
+    }
     
     .gallery-grid {
-      max-width: 1400px;
+      max-width: 1440px;
       margin: 0 auto 3rem;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
       gap: 1.5rem;
     }
+    .compare-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
     .mobile-grid {
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
     .item {
       background: var(--card-bg);
@@ -90,7 +125,7 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
     }
     .item-header {
       padding: 0.85rem 1.25rem;
@@ -98,7 +133,7 @@
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid var(--border);
-      background: rgba(15, 23, 42, 0.5);
+      background: rgba(11, 15, 25, 0.6);
     }
     .item-title { font-weight: 700; font-size: 0.95rem; }
     .item-tag {
@@ -112,7 +147,7 @@
       padding: 0.5rem;
       display: flex;
       justify-content: center;
-      background: #090d16;
+      background: #05070d;
     }
     .item img {
       max-width: 100%;
@@ -122,289 +157,281 @@
       transition: transform 0.2s ease;
     }
     .item img:hover {
-      transform: scale(1.02);
+      transform: scale(1.015);
     }
     .item-notes {
-      padding: 0.75rem 1.25rem;
+      padding: 0.85rem 1.25rem;
       font-size: 0.8rem;
       color: var(--text-muted);
       border-top: 1px solid var(--border);
-      background: rgba(15, 23, 42, 0.3);
+      background: rgba(11, 15, 25, 0.4);
     }
   </style>
 </head>
 <body>
   <header>
-    <div class="badge">QUALITY GATE PASSED · OWNER REVIEW READY</div>
-    <h1>PZM Inventory OS — Login V3 Visual QA Gallery</h1>
+    <div class="badge">LOGIN V4 FULL-HEIGHT IMPLEMENTATION COMPLETE</div>
+    <h1>PZM Inventory OS — Login V4 Layout QA Gallery</h1>
     <p style="color: var(--text-muted);">
-      Commit: <code>fdd9a75</code> | Branch: <code>feat/release-login</code> | 
-      Static mascots, zero animations, accessible Globe language menu, compact brand selector.
+      Branch: <code>feat/release-login</code> | 
+      Full-height 100dvh balanced layout, vertically centered two-zone composition, grounded artwork sizing, and restored circular logo switcher.
     </p>
 
     <div class="summary-grid">
       <div class="summary-card">
-        <h3>1. Artwork & Mascots</h3>
+        <h3>1. Root Cause & Full-Height Architecture</h3>
         <ul>
-          <li>Static WebP artwork across all 3 brands</li>
-          <li>Original R&D chef (clipboard + veggie bowl)</li>
-          <li>Zero animation loops, rAF, or rigs</li>
-          <li>Natural anchoring without clipping</li>
+          <li><strong>Root Cause:</strong> Previous layout stacked header and main at top without flex distribution, leaving ~450px blank void on 1080p screens.</li>
+          <li><strong>Fix:</strong> <code>flex min-h-[100dvh] flex-col</code> with <code>flex-1 justify-center</code> vertically centers hero and card.</li>
+          <li><strong>Width:</strong> Expanded desktop container to 1400px with generous horizontal breathing room.</li>
         </ul>
       </div>
       <div class="summary-card">
-        <h3>2. Header & Branding</h3>
+        <h3>2. Two-Zone Desktop Composition</h3>
         <ul>
-          <li>Unified platform identity (Inventory OS)</li>
-          <li>No duplicate active brand logos</li>
-          <li>Compact brand theme selector (radiogroup)</li>
-          <li>Theme switch changes UI theme only (no data leak)</li>
+          <li><strong>Left Zone:</strong> Brand headline ("Pizza Mania Stock"), supporting copy, anchored full-height mascot.</li>
+          <li><strong>Right Zone:</strong> 420–460px authentication card vertically aligned against the hero.</li>
+          <li><strong>No Duplication:</strong> Removed repetitive "เข้าสู่ระบบ" from the hero headline; reserved for the card.</li>
         </ul>
       </div>
       <div class="summary-card">
-        <h3>3. Accessibility & Layout</h3>
+        <h3>3. Mascot Visual Mass & Proportions</h3>
         <ul>
-          <li>Lucide Globe icon + dropdown (TH/EN)</li>
-          <li>400-440px desktop card width</li>
-          <li>Collapsed demo panel (&lt;details&gt;)</li>
-          <li>Playwright helper uses semantic role textbox</li>
+          <li><strong>Visible Bounds:</strong> Alpha analysis proved assets are 95–97% filled with zero transparent padding.</li>
+          <li><strong>Equal Presence:</strong> Landscape Le Lapin (350–400px height, 600px width) balanced with portrait Pizza/R&D (400–460px height).</li>
+          <li><strong>Zero Animation:</strong> Mascots remain 100% static with polite 200ms crossfade on brand switch.</li>
         </ul>
       </div>
     </div>
   </header>
 
-  <!-- SECTION 1: DESKTOP NORMAL LOGIN FOR ALL 3 BRANDS -->
-  <div class="section-title"><span>01</span> Desktop Presentation (1440×900) — All 3 Brands</div>
+  <!-- SECTION 0: BEFORE VS AFTER COMPARISON -->
+  <div class="section-title"><span>00</span> Before vs After (1440×900) — Layout Balance</div>
+  <div class="gallery-grid compare-grid">
+    <div class="item">
+      <div class="item-header">
+        <span class="item-title" style="color: #f87171;">BEFORE — Top-Heavy Imbalance</span>
+        <span class="item-tag">Old V3</span>
+      </div>
+      <div class="item-img-wrap">
+        <a href="logo-switch-1440x900-pizza.png" target="_blank">
+          <img src="logo-switch-1440x900-pizza.png" alt="Before: Top-heavy layout">
+        </a>
+      </div>
+      <div class="item-notes">
+        UI crammed into the top 50% of the screen. Mascot restricted to small height. Excessive empty void at the bottom.
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="item-header">
+        <span class="item-title" style="color: var(--success);">AFTER — Full-Height Balanced V4</span>
+        <span class="item-tag">New V4</span>
+      </div>
+      <div class="item-img-wrap">
+        <a href="v4-1440x900-pizza.png" target="_blank">
+          <img src="v4-1440x900-pizza.png" alt="After: Full-height balanced layout">
+        </a>
+      </div>
+      <div class="item-notes">
+        Vertically centered 100dvh composition, anchored 440px mascot, clean header alignment, and subtle bottom footer framing.
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: INTERACTIVE SWITCH VIDEO -->
+  <div class="section-title"><span>01</span> Interactive Switch & Micro-Interactions Video</div>
+  <div class="video-card">
+    <video controls autoplay loop muted playsinline src="v4-switch-preview.webm">
+      Your browser does not support the video tag.
+    </video>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.75rem;">
+      Full 1440×900 interaction demonstration: 1) Initial Pizza Mania theme, 2) Hover and select Le Lapin with 2-3px lift and warm orange ring, 3) Select R&D with royal blue ring, 4) Entered credentials preserved across brand switching, 5) Crossfade between static mascot artworks.
+    </p>
+  </div>
+
+  <!-- SECTION 2: ASSET ALPHA BOUNDS ANALYSIS -->
+  <div class="section-title"><span>02</span> Mascot Visible Alpha Bounds & Sizing Analysis</div>
+  <div class="video-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Asset</th>
+          <th>Natural Size</th>
+          <th>Aspect Ratio</th>
+          <th>Visible Bounding Box</th>
+          <th>Transparent Padding</th>
+          <th>Target Sizing Strategy</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>pizza-mania.webp</code></td>
+          <td>640 × 750</td>
+          <td>0.853 (Portrait)</td>
+          <td>621 × 738 (95.2% visible)</td>
+          <td>T: 5px, B: 7px, L: 16px, R: 3px</td>
+          <td><code>h-[400px] xl:h-[460px]</code> → ~390px rendered width</td>
+        </tr>
+        <tr>
+          <td><code>le-lapin.webp</code></td>
+          <td>885 × 530</td>
+          <td>1.670 (Landscape)</td>
+          <td>876 × 518 (96.6% visible)</td>
+          <td>T: 6px, B: 6px, L: 3px, R: 6px</td>
+          <td><code>h-[320px] xl:h-[380px]</code> → ~630px rendered width</td>
+        </tr>
+        <tr>
+          <td><code>rnd.webp</code></td>
+          <td>900 × 940</td>
+          <td>0.957 (Square)</td>
+          <td>888 × 929 (97.4% visible)</td>
+          <td>T: 5px, B: 6px, L: 5px, R: 7px</td>
+          <td><code>h-[400px] xl:h-[460px]</code> → ~440px rendered width</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECTION 3: DESKTOP PRESENTATION ACROSS ALL 3 BRANDS -->
+  <div class="section-title"><span>03</span> Desktop Presentation (1440×900) — All 3 Brands</div>
   <div class="gallery-grid">
     <div class="item">
       <div class="item-header">
         <span class="item-title" style="color: #f87171;">Pizza Mania</span>
-        <span class="item-tag">1440×900 Normal Login</span>
+        <span class="item-tag">1440×900</span>
       </div>
       <div class="item-img-wrap">
-        <a href="normal-1440x900-pizza.png" target="_blank">
-          <img src="normal-1440x900-pizza.png" alt="Pizza Mania Desktop">
+        <a href="v4-1440x900-pizza.png" target="_blank">
+          <img src="v4-1440x900-pizza.png" alt="Pizza Mania 1440x900">
         </a>
       </div>
-      <div class="item-notes">
-        Original pizza chef walking with 4 pizza boxes. Headline "เข้าสู่ระบบ Pizza Mania", 420px login card, red accent theme.
-      </div>
+      <div class="item-notes">Pizza Mania chef anchored at 440px height. Vivid red active ring and elevated button.</div>
     </div>
 
     <div class="item">
       <div class="item-header">
         <span class="item-title" style="color: #fb923c;">Le Lapin</span>
-        <span class="item-tag">1440×900 Normal Login</span>
+        <span class="item-tag">1440×900</span>
       </div>
       <div class="item-img-wrap">
-        <a href="normal-1440x900-lelapin.png" target="_blank">
-          <img src="normal-1440x900-lelapin.png" alt="Le Lapin Desktop">
+        <a href="v4-1440x900-lelapin.png" target="_blank">
+          <img src="v4-1440x900-lelapin.png" alt="Le Lapin 1440x900">
         </a>
       </div>
-      <div class="item-notes">
-        Original rabbit in orange apron running with baguette. Shelves and pantry background. Orange accent theme.
-      </div>
+      <div class="item-notes">Le Lapin running rabbit with bakery shelves. Warm orange active ring and button.</div>
     </div>
 
     <div class="item">
       <div class="item-header">
         <span class="item-title" style="color: #60a5fa;">R&D</span>
-        <span class="item-tag">1440×900 Normal Login</span>
+        <span class="item-tag">1440×900</span>
       </div>
       <div class="item-img-wrap">
-        <a href="normal-1440x900-rnd.png" target="_blank">
-          <img src="normal-1440x900-rnd.png" alt="R&D Desktop">
+        <a href="v4-1440x900-rnd.png" target="_blank">
+          <img src="v4-1440x900-rnd.png" alt="R&D 1440x900">
         </a>
       </div>
-      <div class="item-notes">
-        Exact approved R&D chef holding clipboard labeled "R&D" and bowl of fresh ingredients. Deep blue accent theme.
-      </div>
+      <div class="item-notes">Approved R&D chef holding clipboard and bowl. Royal blue active ring and button.</div>
     </div>
   </div>
 
-  <!-- SECTION 2: MOBILE PRESENTATION -->
-  <div class="section-title"><span>02</span> Mobile Presentation (375×812 & 390×844)</div>
+  <!-- SECTION 4: FULL HD (1920×1080) PRESENTATION -->
+  <div class="section-title"><span>04</span> Full HD Presentation (1920×1080)</div>
+  <div class="gallery-grid">
+    <div class="item">
+      <div class="item-header">
+        <span class="item-title" style="color: #f87171;">Pizza Mania (1920×1080)</span>
+        <span class="item-tag">Full HD</span>
+      </div>
+      <div class="item-img-wrap">
+        <a href="v4-1920x1080-pizza.png" target="_blank">
+          <img src="v4-1920x1080-pizza.png" alt="Pizza Mania Full HD">
+        </a>
+      </div>
+      <div class="item-notes">Max container width (1400px) preserves tight visual cohesion with zero excessive void.</div>
+    </div>
+
+    <div class="item">
+      <div class="item-header">
+        <span class="item-title" style="color: #fb923c;">Le Lapin (1920×1080)</span>
+        <span class="item-tag">Full HD</span>
+      </div>
+      <div class="item-img-wrap">
+        <a href="v4-1920x1080-lelapin.png" target="_blank">
+          <img src="v4-1920x1080-lelapin.png" alt="Le Lapin Full HD">
+        </a>
+      </div>
+      <div class="item-notes">Proportional horizontal expansion across wide 1080p monitors.</div>
+    </div>
+
+    <div class="item">
+      <div class="item-header">
+        <span class="item-title" style="color: #60a5fa;">R&D (1920×1080)</span>
+        <span class="item-tag">Full HD</span>
+      </div>
+      <div class="item-img-wrap">
+        <a href="v4-1920x1080-rnd.png" target="_blank">
+          <img src="v4-1920x1080-rnd.png" alt="R&D Full HD">
+        </a>
+      </div>
+      <div class="item-notes">Balanced vertical spacing between header, content, and footer.</div>
+    </div>
+  </div>
+
+  <!-- SECTION 5: MOBILE & SHORT VIEWPORTS -->
+  <div class="section-title"><span>05</span> Responsive & Short Viewports</div>
   <div class="gallery-grid mobile-grid">
     <div class="item">
       <div class="item-header">
-        <span class="item-title" style="color: #60a5fa;">R&D Mobile (375×812)</span>
-        <span class="item-tag">iPhone Mini</span>
+        <span class="item-title">Short Laptop (1366×650)</span>
+        <span class="item-tag">Short Screen</span>
       </div>
       <div class="item-img-wrap">
-        <a href="normal-375x812-rnd.png" target="_blank">
-          <img src="normal-375x812-rnd.png" alt="R&D Mobile 375x812">
+        <a href="v4-1366x650-pizza.png" target="_blank">
+          <img src="v4-1366x650-pizza.png" alt="Short Laptop 1366x650">
         </a>
       </div>
-      <div class="item-notes">
-        Compact header with Globe menu; side-by-side hero keeps the login card visible above the fold.
-      </div>
+      <div class="item-notes">No content clipping on 650px height displays. Login button fully visible.</div>
     </div>
 
     <div class="item">
       <div class="item-header">
-        <span class="item-title" style="color: #f87171;">Pizza Mania Mobile (375×812)</span>
-        <span class="item-tag">iPhone Mini</span>
+        <span class="item-title">iPad Portrait (768×1024)</span>
+        <span class="item-tag">Tablet</span>
       </div>
       <div class="item-img-wrap">
-        <a href="normal-375x812-pizza.png" target="_blank">
-          <img src="normal-375x812-pizza.png" alt="Pizza Mania Mobile 375x812">
+        <a href="v4-768x1024-pizza.png" target="_blank">
+          <img src="v4-768x1024-pizza.png" alt="Tablet 768x1024">
         </a>
       </div>
-      <div class="item-notes">
-        Clean inputs, password visibility toggle, compact brand pill switcher centered in row 2.
-      </div>
+      <div class="item-notes">Single-column tablet flow with centered hero and login card.</div>
     </div>
 
     <div class="item">
       <div class="item-header">
-        <span class="item-title" style="color: #fb923c;">Le Lapin Mobile (375×812)</span>
-        <span class="item-tag">iPhone Mini</span>
+        <span class="item-title">Mobile iPhone Mini (375×812)</span>
+        <span class="item-tag">Mobile</span>
       </div>
       <div class="item-img-wrap">
-        <a href="normal-375x812-lelapin.png" target="_blank">
-          <img src="normal-375x812-lelapin.png" alt="Le Lapin Mobile 375x812">
+        <a href="v4-375x812-rnd.png" target="_blank">
+          <img src="v4-375x812-rnd.png" alt="Mobile 375x812">
         </a>
       </div>
-      <div class="item-notes">
-        Mascot proportionally scaled; zero horizontal overflow or clipping.
-      </div>
+      <div class="item-notes">Side-by-side compact hero keeps form controls above fold with zero horizontal scroll.</div>
     </div>
 
     <div class="item">
       <div class="item-header">
-        <span class="item-title" style="color: #60a5fa;">R&D Mobile (390×844)</span>
-        <span class="item-tag">iPhone 13/14</span>
+        <span class="item-title">Credential Retention</span>
+        <span class="item-tag">Form State</span>
       </div>
       <div class="item-img-wrap">
-        <a href="normal-390x844-rnd.png" target="_blank">
-          <img src="normal-390x844-rnd.png" alt="R&D Mobile 390x844">
+        <a href="v4-form-preserved.png" target="_blank">
+          <img src="v4-form-preserved.png" alt="Form Preserved">
         </a>
       </div>
-      <div class="item-notes">
-        Standard viewport test showing well-balanced vertical rhythm.
-      </div>
-    </div>
-  </div>
-
-  <!-- SECTION 3: AUTH STATES & ACCESSIBILITY -->
-  <div class="section-title"><span>03</span> Auth & Interaction States</div>
-  <div class="gallery-grid">
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">Globe Language Dropdown</span>
-        <span class="item-tag">Accessible Menu</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="auth-globe-menu-open.png" target="_blank">
-          <img src="auth-globe-menu-open.png" alt="Globe Menu Opened">
-        </a>
-      </div>
-      <div class="item-notes">
-        Lucide globe icon replaces old segmented toggle. Clean dropdown with checkmark, keyboard Esc/Enter support.
-      </div>
-    </div>
-
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">First Admin Setup</span>
-        <span class="item-tag">Bootstrap State</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="auth-first-admin-setup.png" target="_blank">
-          <img src="auth-first-admin-setup.png" alt="First Admin Setup">
-        </a>
-      </div>
-      <div class="item-notes">
-        Initial local bootstrap screen displaying "ชื่อผู้ดูแล" name field in addition to email and password.
-      </div>
-    </div>
-
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">Collapsed Demo Panel (&lt;details&gt;)</span>
-        <span class="item-tag">Expanded on Demand</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="auth-demo-expanded.png" target="_blank">
-          <img src="auth-demo-expanded.png" alt="Demo Panel Expanded">
-        </a>
-      </div>
-      <div class="item-notes">
-        Collapses into a single clean line by default. Expands to reveal demo accounts and reset action for QA.
-      </div>
-    </div>
-
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">Validation / Error State</span>
-        <span class="item-tag">Accessible Alert</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="auth-invalid-credentials.png" target="_blank">
-          <img src="auth-invalid-credentials.png" alt="Invalid Credentials">
-        </a>
-      </div>
-      <div class="item-notes">
-        Clear accessible red error banner (role="alert") for invalid login credentials.
-      </div>
-    </div>
-
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">Forgot Password State</span>
-        <span class="item-tag">Notice Banner</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="auth-forgot-password.png" target="_blank">
-          <img src="auth-forgot-password.png" alt="Forgot Password Notice">
-        </a>
-      </div>
-      <div class="item-notes">
-        Friendly localized instruction prompt when clicking "ลืมรหัสผ่าน?".
-      </div>
-    </div>
-  </div>
-
-  <!-- SECTION 4: TABLET & DESKTOP RESOLUTIONS -->
-  <div class="section-title"><span>04</span> Tablet & Ultrawide Resolutions</div>
-  <div class="gallery-grid">
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">Tablet Portrait (768×1024)</span>
-        <span class="item-tag">iPad Portrait</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="normal-768x1024-rnd.png" target="_blank">
-          <img src="normal-768x1024-rnd.png" alt="Tablet Portrait R&D">
-        </a>
-      </div>
-      <div class="item-notes">R&D theme on iPad portrait. Hero and card flow naturally.</div>
-    </div>
-
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">Laptop Small (1366×768)</span>
-        <span class="item-tag">Common Laptop</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="normal-1366x768-pizza.png" target="_blank">
-          <img src="normal-1366x768-pizza.png" alt="Laptop Small Pizza Mania">
-        </a>
-      </div>
-      <div class="item-notes">Balanced vertical spacing without scrolling needed on 768px height laptops.</div>
-    </div>
-
-    <div class="item">
-      <div class="item-header">
-        <span class="item-title">Full HD (1920×1080)</span>
-        <span class="item-tag">Desktop Monitor</span>
-      </div>
-      <div class="item-img-wrap">
-        <a href="normal-1920x1080-rnd.png" target="_blank">
-          <img src="normal-1920x1080-rnd.png" alt="Full HD R&D">
-        </a>
-      </div>
-      <div class="item-notes">Max container width keeps the composition tight and centered on wide monitors.</div>
+      <div class="item-notes">Email and password stay entered when toggling brand theme.</div>
     </div>
   </div>
 </body>

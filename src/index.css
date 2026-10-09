@@ -442,3 +442,25 @@ input[type='number'] {
   }
 }
 
+/* Polite 200ms crossfade on brand switch. No continuous loops. Respects reduced motion. */
+@keyframes brand-art-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.brand-art-fade {
+  animation: brand-art-fade 200ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-art-fade {
+    animation: none;
+  }
+}
+

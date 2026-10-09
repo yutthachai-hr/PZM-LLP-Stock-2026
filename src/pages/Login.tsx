@@ -115,77 +115,83 @@ export function LoginPage() {
   } as CSSProperties
 
   return (
-    <div style={vars} className="relative min-h-screen overflow-x-hidden bg-[#fffdfc] text-ink antialiased">
+    <div style={vars} className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#fffdfc] text-ink antialiased">
       {/* ---- Header: Platform identity + compact theme switcher + Globe language ---- */}
-      <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-y-3 px-4 pt-4 sm:px-8 lg:px-12 lg:pt-6">
-        <div className="flex items-center gap-2.5">
-          <img
-            src="/pwa-192.png"
-            alt=""
-            width={36}
-            height={36}
-            className="h-9 w-9 rounded-xl object-cover shadow-xs"
-          />
-          <div className="leading-tight">
-            <div className="text-sm font-extrabold tracking-tight text-ink sm:text-base">Inventory OS</div>
-            <div className="text-[11px] text-ink-soft">The Inventory OS</div>
+      <header className="mx-auto flex w-full max-w-[1400px] shrink-0 items-center justify-between px-5 pt-4 sm:px-8 lg:px-12 lg:pt-6">
+        <div className="flex items-center gap-3 sm:gap-5">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/pwa-192.png"
+              alt=""
+              width={34}
+              height={34}
+              className="h-8.5 w-8.5 rounded-xl object-cover shadow-xs"
+            />
+            <span className="text-base font-bold tracking-tight text-ink sm:text-lg">Inventory OS</span>
+          </div>
+
+          <span className="hidden h-6 w-px bg-line/80 sm:block" aria-hidden="true" />
+
+          {/* Desktop: Brand Theme Selector beside platform identity */}
+          <div className="hidden sm:block">
+            <BrandSwitch brand={brand} onChange={setBrand} />
           </div>
         </div>
 
-        {/* Mobile: LangMenu top right */}
-        <div className="sm:hidden">
-          <LangMenu />
-        </div>
-
-        {/* Brand Theme Selector: centered on mobile, inline on desktop */}
-        <div className="order-last flex w-full justify-center sm:order-none sm:w-auto">
-          <BrandSwitch brand={brand} onChange={setBrand} />
-        </div>
-
-        {/* Desktop: LangMenu on far right */}
-        <div className="hidden sm:block">
+        {/* Top right: LangMenu (mobile and desktop) */}
+        <div>
           <LangMenu />
         </div>
       </header>
 
-      {/* ---- Main content: Hero & Login Card ---- */}
-      <main className="mx-auto grid w-full max-w-6xl items-center gap-6 px-4 py-6 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(390px,440px)] lg:gap-12 lg:px-12 lg:py-10">
-        {/* Left: Hero area with brand copy and anchored static mascot */}
-        <section className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:gap-6 lg:flex lg:flex-col lg:items-start lg:text-left">
-          <div className="min-w-0">
-            <div
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-              style={{ backgroundColor: def.accentSoft, color: def.accent }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: def.accentVivid }} />
-              {look.short}
+      {/* Mobile only: Brand Theme Selector on row 2, centered */}
+      <div className="flex w-full shrink-0 justify-center px-4 pt-2.5 sm:hidden">
+        <BrandSwitch brand={brand} onChange={setBrand} />
+      </div>
+
+      {/* ---- Main content: Hero & Login Card (vertically centered in remaining viewport height) ---- */}
+      <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col justify-center px-5 py-6 sm:px-8 lg:px-12 lg:py-8">
+        <div className="grid w-full items-center gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(420px,460px)] lg:gap-12 xl:gap-16">
+          {/* Left: Brand Hero */}
+          <section className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-6 lg:block">
+            <div className="min-w-0">
+              <div
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                style={{ backgroundColor: def.accentSoft, color: def.accent }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: def.accentVivid }} />
+                {look.short}
+              </div>
+
+              <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl lg:text-5xl xl:text-6xl lg:leading-[1.1]">
+                <span style={{ color: def.accent }}>{look.short}</span> Stock
+              </h1>
+
+              <p className="mt-1.5 max-w-lg text-xs leading-relaxed text-ink-soft sm:text-sm lg:mt-3 lg:text-base xl:text-lg">
+                {t(look.tagline)}
+              </p>
             </div>
 
-            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl lg:mt-3 lg:text-5xl lg:leading-[1.15]">
-              {t('เข้าสู่ระบบ')}{' '}
-              <span style={{ color: def.accent }}>{look.short}</span>
-            </h1>
-
-            <p className="mt-1.5 max-w-md text-xs leading-relaxed text-ink-soft sm:mt-2.5 sm:text-sm lg:text-base">
-              {t(look.tagline)}
-            </p>
-          </div>
-
-          {/* Mascot: side-by-side compact on mobile, large anchored below on lg+ */}
-          <div className="shrink-0 lg:mt-6 lg:w-full">
-            <div className={`relative mx-auto max-w-[125px] sm:max-w-[190px] ${look.artClass} lg:mx-0`}>
-              <img
-                src={look.art}
-                alt=""
-                draggable={false}
-                className="pointer-events-none h-auto w-full select-none object-contain"
-              />
+            {/* Mascot: small side-by-side thumbnail on mobile, large centered/anchored below on lg+ */}
+            <div className="shrink-0 lg:mt-8 lg:flex lg:justify-start">
+              <div className="relative max-w-[120px] sm:max-w-[160px] lg:max-w-none">
+                <img
+                  key={brand}
+                  src={look.art}
+                  alt={look.short}
+                  draggable={false}
+                  className={`brand-art-fade pointer-events-none w-auto select-none object-contain ${
+                    brand === 'lelapin'
+                      ? 'max-h-[120px] sm:max-h-[160px] lg:max-h-none lg:h-[320px] xl:h-[380px]'
+                      : 'max-h-[135px] sm:max-h-[180px] lg:max-h-none lg:h-[380px] xl:h-[440px]'
+                  }`}
+                />
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Right: Login Card */}
-        <section className="w-full rounded-3xl border border-line/70 bg-surface p-6 shadow-[0_24px_60px_-28px_rgb(0_0_0/0.18)] sm:p-8">
+          {/* Right: Login Card */}
+          <section className="w-full max-w-[460px] justify-self-center rounded-3xl border border-line/80 bg-surface p-6 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.12)] sm:p-9 lg:justify-self-end">
           <h2 className="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
             {!bootstrap ? t('เข้าสู่ระบบ') : firstAdmin ? t('ตั้งค่าผู้ดูแลระบบคนแรก') : t('ขอสิทธิ์เข้าใช้งาน')}
           </h2>
@@ -374,14 +380,26 @@ export function LoginPage() {
             </div>
           )}
         </section>
+        </div>
       </main>
+
+      {/* ---- Footer: Clean framing at bottom of full-height layout ---- */}
+      <footer className="mx-auto flex w-full max-w-[1400px] shrink-0 items-center justify-between px-5 py-3 text-[11px] text-ink-faint sm:px-8 sm:pr-40 lg:px-12 lg:pr-44">
+        <div>© 2026 Inventory OS</div>
+        <div className="flex items-center gap-2">
+          <span>{look.short}</span>
+          <span aria-hidden="true">•</span>
+          <span>{mode === 'cloud' ? 'Cloud' : 'Local / Demo'}</span>
+        </div>
+      </footer>
     </div>
   )
 }
 
 /**
- * Compact brand theme selector. Keyboard accessible radiogroup.
- * Does not duplicate selected-brand logo in the header.
+ * Circular brand logo switcher with polished interactive micro-transitions.
+ * Circular buttons (44-48px) showing original brand logos (Pizza Mania, Le Lapin, R&D).
+ * Interactive lift and active ring; zero continuous loops. Respects prefers-reduced-motion.
  */
 function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandId) => void }) {
   const t = useT()
@@ -398,7 +416,7 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
     <div
       role="radiogroup"
       aria-label={t('แบรนด์')}
-      className="flex items-center gap-1 rounded-full border border-line bg-surface p-1 shadow-xs"
+      className="flex items-center gap-2 sm:gap-2.5"
       onKeyDown={(e) => {
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
           e.preventDefault()
@@ -421,20 +439,26 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
             role="radio"
             aria-checked={active}
             aria-label={b.name}
+            title={b.name}
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(b.id)}
-            className={`flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
+            style={{
+              boxShadow: active
+                ? `0 0 0 2.5px #fff, 0 0 0 5px ${b.accentVivid}, 0 8px 18px -4px ${b.accentVivid}66`
+                : undefined,
+            }}
+            className={`group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white p-0.5 outline-none transition-all duration-200 motion-reduce:transition-none sm:h-12 sm:w-12 ${
               active
-                ? 'bg-brand text-white shadow-xs'
-                : 'text-ink-soft hover:bg-sunken hover:text-ink'
-            }`}
+                ? '-translate-y-1 scale-105 shadow-md motion-reduce:translate-y-0 motion-reduce:scale-100'
+                : 'opacity-70 saturate-[0.6] shadow-xs hover:-translate-y-0.5 hover:scale-105 hover:opacity-100 hover:saturate-100 hover:shadow-md motion-reduce:translate-y-0 motion-reduce:scale-100'
+            } focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:ring-brand`}
           >
-            <span
-              aria-hidden="true"
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: active ? '#ffffff' : b.accentVivid }}
+            <img
+              src={b.logo}
+              alt=""
+              draggable={false}
+              className="pointer-events-none h-full w-full select-none rounded-full object-cover"
             />
-            <span>{LOOK[b.id].short}</span>
           </button>
         )
       })}
