@@ -64,3 +64,26 @@ Aliases now **404**: `feat-login-mascots`, `fix-import-review`, `claude-phase-a-
 4. **Do not push `feat/login-mascots` as it is.** It lacks the isolation code, so its
    preview would be production-connected again. Merge the RC (or `main` after it) into it
    first.
+
+## Update, 9 Oct 2026: previews behind Cloudflare Access
+
+**Done:**
+- **Pages → pzmstock → Settings → General → Preview access → Restrict previews**: done at the
+  owner's request.
+- Cloudflare created the Access application with destination `*.pzmstock.pages.dev` and policy
+  "Allow Members - Cloudflare Pages" (account members only), with 24-hour sessions.
+- The owner separated preview variables and secrets from production.
+
+**Re-probed from outside, unauthenticated:**
+
+| Target | Result |
+|---|---|
+| Old deployments `91f2fc7d`, `98904039`, `88d7433e` | Page and `/api/*` → **302 to the Access login** |
+| Aliases `feat-outbox`, `perf-firestore-read-budget` | **302** |
+| Kept previews `0f5a6de5` (demo), `e2bd3503` | **302** |
+| Branch previews `exp-real-stack`, `rc-ops-os-rc1-candidate` | **302** |
+| **Production `pzmstock.pages.dev`** | **200**, unaffected: the policy covers subdomains only |
+
+**Consequence:** the public demo preview now requires an account-member login too. If the demo
+must be public again, add a Bypass policy for that one hostname. It is an owner decision, and
+safe only because the demo runs on demo data with no keys.

@@ -13,9 +13,11 @@ The budgets are:
 | Urgent | > 40K |
 | Free quota | 50K |
 
-**Status:** partly attributed. The 6 Oct spike is **not** explained by the measured per-device
-costs of the code that was live. The remainder is marked **unresolved** below, with the data
-needed to close it. No code on this branch was deployed, and nothing was disabled.
+**Status:** OPEN, narrowed (9 Oct, §8). The spike is about 630K reads in hourly bursts from
+6 Oct 20:00 to 7 Oct 10:00 ICT, and nearly all of it **bypassed the security rules**. It is
+therefore admin, service-account or console access, not the app's users. The process itself is
+not yet named; §8 lists the two checks that would name it. No code on this branch was deployed,
+and nothing was disabled.
 
 Each fact below says how it was established:
 - **[live]** read from Cloudflare or Firebase today;
@@ -183,3 +185,71 @@ This needs owner access to the GCP project. Nothing is changed by these steps.
   the update reload still re-attaches listeners. Five deploys in 70 minutes was the costly
   pattern on 6 Oct.
 - **No critical notification or workflow was disabled**, and none is proposed.
+
+## 8. Hourly metrics, 4–9 Oct (read 9 Oct 2026, owner's project in Cloud Monitoring) [live]
+
+**Source:** Cloud Monitoring, project `pzm-stock-x5`, PromQL, 1-hour steps. The raw exports are
+in `docs/evidence/data/`:
+- `firestore-reads-hourly-2026-10-04_09.csv` (`document/read_ops_count`);
+- `firestore-rules-evaluations-hourly-2026-10-04_09.csv` (`rules/evaluation_count`).
+
+**Daily totals (ICT days):**
+
+| Day | Reads | Peak hour |
+|---|---|---|
+| 5 Oct | 37,920 | 9,405 |
+| **6 Oct** | **366,473** | **107,198 (22:00)** |
+| **7 Oct** | **372,104** | 75,060 (02:00) |
+| 8 Oct | 81,956 | 8,365 |
+| 9 Oct, to 10:00 | 2,529 | 2,036 |
+
+The owner's "about 690K on 6 Oct" is a billing day (Pacific time, 14:00–14:00 ICT). It covers
+the whole burst window below.
+
+**The shape: bursts, not a steady leak.**
+- About 630K of the reads fall between **6 Oct 20:00 and 7 Oct 10:00 ICT**.
+- They come in single hours of 25K–107K: 20:00, 22:00, 23:00, then 01:00–03:00, 05:00–07:00 and
+  09:00.
+- Between them are ordinary hours of 1.7K–4K: 21:00, 00:00, 04:00, 08:00.
+
+**Who made them: not the app's users.** Security-rule evaluations happen for every client-SDK
+request and for no admin or service-account request. Through every burst hour they stayed at
+their ordinary 1–3K per hour, and every one was ALLOW (no DENY at all):
+
+| Hour (ICT) | Reads | Rule evaluations | Reads per evaluation |
+|---|---|---|---|
+| 6 Oct 18:00 (ordinary) | 2,495 | 1,004 | 2.5 |
+| 6 Oct 20:00 | 106,149 | 2,432 | 43.6 |
+| 6 Oct 22:00 | 107,198 | 2,973 | 36.1 |
+| 7 Oct 00:00 (ordinary) | 1,720 | 1,037 | 1.7 |
+| 7 Oct 02:00 | 75,060 | 2,221 | 33.8 |
+| 7 Oct 12:00 (ordinary) | 4,301 | 1,354 | 3.2 |
+
+Normal client traffic runs at about **2–3 reads per evaluation**. The burst hours carry about
+**100K reads more than their evaluations account for**.
+
+**Conclusion [inference from the two metrics]:**
+- The excess was read by something that **bypasses the security rules**: the Admin SDK or a
+  service-account script, the Firebase console's data viewer, or an export or backup run with
+  admin credentials.
+- **Ruled out** as the main source:
+  - staff devices and app tabs, which all evaluate rules;
+  - a listener retry loop, which would show as rule evaluations, likely DENY;
+  - the cron Worker, which was a placeholder that never ran (§1).
+
+**Still open.** Two things would name the process:
+1. **IAM → Service accounts → Keys**, "last used" for each key of `pzm-stock-x5`. A key used in
+   the window points to a script.
+2. **Cloud Audit Logs → Data Access** for Firestore, if enabled. They name the principal per
+   request. If they are not enabled, enable them for the next 30 days (owner decision; it costs
+   log volume).
+
+Repository commits in the window show heavy development by a cloud session
+(`claude/phase-a-ledger-continue-uzbbb5`) and locally. Neither proves an admin run against
+production. Status stays **OPEN, narrowed**: the source class is identified, the process is not.
+
+**Protection now in place:**
+- old previews deleted and the rest behind Cloudflare Access (9 Oct);
+- preview keys separated from production (owner, 9 Oct).
+
+**Still advised:** a Cloud Billing budget alert on Firestore reads at 40K/day.
