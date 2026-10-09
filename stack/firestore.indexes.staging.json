@@ -1,0 +1,15 @@
+{
+  "_comment": "STAGING project only (Ask PZM, Track 4): production firestore.indexes.json is unchanged. The three stockMovements indexes let the stockout tool read only the usage window of one product at one site. Deploy: npx firebase deploy --only firestore:indexes --project <staging-project> with firebase.json pointed here. Production adoption is a separate owner decision.",
+  "indexes": [
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "audienceKeys", "arrayConfig": "CONTAINS" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "lelapin__notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "audienceKeys", "arrayConfig": "CONTAINS" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "rnd__notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "audienceKeys", "arrayConfig": "CONTAINS" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "audienceKeys", "arrayConfig": "CONTAINS" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "lelapin__notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "audienceKeys", "arrayConfig": "CONTAINS" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "rnd__notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "audienceKeys", "arrayConfig": "CONTAINS" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "stockMovements", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "fromLocationId", "order": "ASCENDING" }, { "fieldPath": "date", "order": "ASCENDING" }] },
+    { "collectionGroup": "lelapin__stockMovements", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "fromLocationId", "order": "ASCENDING" }, { "fieldPath": "date", "order": "ASCENDING" }] },
+    { "collectionGroup": "rnd__stockMovements", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "fromLocationId", "order": "ASCENDING" }, { "fieldPath": "date", "order": "ASCENDING" }] }
+  ],
+  "fieldOverrides": []
+}

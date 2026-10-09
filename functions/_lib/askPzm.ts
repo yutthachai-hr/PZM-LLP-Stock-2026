@@ -1,6 +1,7 @@
 import type { AppUser, Role } from '../../src/types'
-import { guard, horizonDays, keywordRoute } from '../../src/agent/ask/guard'
-import type { AskIntent, IntentVerdict } from '../../src/agent/ask/intents'
+import { horizonDays } from '../../src/agent/ask/guard'
+import { eligibility, guidedEligibility, type Eligibility, type Ineligible } from '../../src/agent/ask/eligibility'
+import type { AskIntent } from '../../src/agent/ask/intents'
 import { levelId } from '../../src/lib/levelKey'
 import { usageAt, usageIndex } from '../../src/lib/inventoryRules/usage'
 import { expectedDeliveryAt, remainingBaseQty } from '../../src/lib/inventoryRules/purchasing'
@@ -28,7 +29,8 @@ export const ASK_LIMITS = {
   /** Hard caps on documents read per tool call (Firestore bills per document). */
   levelsPerProduct: 50,
   openOrders: 100,
-  movementsPerProductSite: 400,
+  /** Outgoing rows of ONE product at ONE site in the usage window; above it the answer is "partial". */
+  movementsPerProductSite: 200,
   ordersPerSite: 50,
   /** Usage window for the stockout explanation, as the app's own usage index. */
   usageWindowDays: 28,
@@ -45,10 +47,15 @@ export interface AskDeps {
   store: ServerStore
   verifyUser: (authorization: string | null) => Promise<string | null>
   now: () => number
-  /** Model routing through the gateway; null = no model (the pilot works without one). */
-  classify: ((text: string) => Promise<IntentVerdict>) | null
-  /** Per-isolate rate limiter; injected so tests control it. */
+  /**
+   * SHADOW ONLY (owner, Track 2): told the text and the contract's decision after the fact, e.g.
+   * to record what a model would have said. Never awaited; its result is never read here.
+   */
+  shadow?: (text: string, decision: Eligibility) => void
+  /** Per-isolate rate limiter; injected so tests control it. A first line only. */
   limiter: RateLimiter
+  /** The hard, edge-wide per-user limit (Cloudflare Rate Limiting binding). Required in staging. */
+  globalLimit?: (uid: string) => Promise<boolean>
 }
 
 export interface AskReply {
@@ -128,6 +135,9 @@ interface Ctx {
   sources: Source[]
   uncertainty: string[]
   freshest: number
+  /** Records already resolved in this request: each is read (and listed as a source) once. */
+  product?: Product
+  site?: Location
 }
 
 const col = (c: Ctx, name: string) => brandCollection(c.brand, name)
@@ -140,6 +150,13 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 
 /** A product id from the client or the text, resolved against the database. Never trusted as-is. */
 async function resolveProduct(c: Ctx, text: string, hint?: string): Promise<Product | null> {
+  if (c.product && (!hint || hint === c.product.id)) return c.product
+  const p = await resolveProductOnce(c, text, hint)
+  if (p) c.product = p
+  return p
+}
+
+async function resolveProductOnce(c: Ctx, text: string, hint?: string): Promise<Product | null> {
   if (hint) {
     const p = (await c.store.get<Product>(col(c, 'products'), hint))?.doc
     if (p) {
@@ -158,6 +175,13 @@ async function resolveProduct(c: Ctx, text: string, hint?: string): Promise<Prod
 }
 
 async function resolveSite(c: Ctx, hint?: string): Promise<Location | null | 'out_of_scope'> {
+  if (c.site && hint === c.site.id) return c.site
+  const s = await resolveSiteOnce(c, hint)
+  if (s && s !== 'out_of_scope') c.site = s
+  return s
+}
+
+async function resolveSiteOnce(c: Ctx, hint?: string): Promise<Location | null | 'out_of_scope'> {
   if (!hint) return null
   const l = (await c.store.get<Location>(col(c, 'locations'), hint))?.doc
   if (!l) {
@@ -184,7 +208,8 @@ async function stockLookup(c: Ctx, text: string, hints: Hints): Promise<Answer> 
     rows = l ? [{ ...l, id }] : []
   } else {
     rows = await c.store.query(col(c, 'stockLevels'), [{ field: 'productId', op: '==', value: p.id }], ASK_LIMITS.levelsPerProduct)
-    if (rows.length >= ASK_LIMITS.levelsPerProduct) c.uncertainty.push('levels_capped')
+    // A capped read is never summed into a "total": ask for one site instead.
+    if (rows.length >= ASK_LIMITS.levelsPerProduct) return { kind: 'CLARIFY', intent: 'stock_lookup', text: 'สินค้านี้มีหลายสาขาเกินขอบเขตการอ่าน — เลือกสาขาครับ', reason: 'scope_too_wide' }
     // Base balances only: a legacy "#unit" balance is another unit and is not added in.
     rows = rows.filter((r) => !r.id.includes('#') && inScope(c.user, r.locationId))
   }
@@ -200,7 +225,8 @@ async function poUnconfirmed(c: Ctx, hints: Hints): Promise<Answer> {
   if (site === 'out_of_scope') return { kind: 'REFUSE', intent: 'po_unconfirmed', text: 'สาขานี้ไม่อยู่ในสิทธิ์ของคุณ', reason: 'site_scope' }
   const f: QueryFilter[] = [{ field: 'status', op: '==', value: 'ordered' }, ...(site ? [{ field: 'locationId', op: '==' as const, value: site.id }] : [])]
   const open = await c.store.query<{ id: string; docNo: string; supplierName: string; locationId: string; orderedAt: number; supplierConfirmedAt?: number; updatedAt?: number }>(col(c, 'purchaseOrders'), f, ASK_LIMITS.openOrders)
-  if (open.length >= ASK_LIMITS.openOrders) c.uncertainty.push('orders_capped')
+  const capped = open.length >= ASK_LIMITS.openOrders
+  if (capped) c.uncertainty.push('orders_capped')
   const waiting = open.filter((o) => o.supplierConfirmedAt === undefined && inScope(c.user, o.locationId)).sort((a, b) => a.orderedAt - b.orderedAt)
   open.forEach((o) => fresh(c, o.updatedAt))
   src(c, col(c, 'purchaseOrders'), waiting.map((o) => o.id))
@@ -208,8 +234,13 @@ async function poUnconfirmed(c: Ctx, hints: Hints): Promise<Answer> {
   return {
     kind: 'ANSWER',
     intent: 'po_unconfirmed',
-    text: waiting.length ? `ใบสั่งซื้อที่ผู้ขายยังไม่ยืนยัน ${waiting.length} ใบ` : 'ไม่มีใบสั่งซื้อที่รอผู้ขายยืนยัน',
-    facts: { orders: waiting.slice(0, 30).map((o) => ({ id: o.id, docNo: o.docNo, supplierName: o.supplierName, siteId: o.locationId, daysWaiting: days(o.orderedAt) })), total: waiting.length },
+    // A capped read is "at least N", never a total; and "none" is only said when the read was complete.
+    text: capped
+      ? `ใบสั่งซื้อที่ผู้ขายยังไม่ยืนยัน อย่างน้อย ${waiting.length} ใบ (ใบสั่งซื้อเปิดอยู่มากกว่าที่อ่านได้ — เลือกสาขาเพื่อดูครบ)`
+      : waiting.length
+        ? `ใบสั่งซื้อที่ผู้ขายยังไม่ยืนยัน ${waiting.length} ใบ`
+        : 'ไม่มีใบสั่งซื้อที่รอผู้ขายยืนยัน',
+    facts: { orders: waiting.slice(0, 30).map((o) => ({ id: o.id, docNo: o.docNo, supplierName: o.supplierName, siteId: o.locationId, daysWaiting: days(o.orderedAt) })), total: waiting.length, complete: !capped },
   }
 }
 
@@ -225,15 +256,25 @@ async function stockoutRisk(c: Ctx, text: string, hints: Hints): Promise<Answer>
   const onHand = level?.qty ?? 0
   fresh(c, level?.updatedAt)
   src(c, col(c, 'stockLevels'), level ? [lid] : [])
-  // Outgoing rows only (two equalities: no composite index). Usage is what leaves a site; the
-  // history window then starts at the first outgoing row, not the first receipt, so a young
+  // Outgoing rows of the usage window only: the bounded aggregate (Track 4). Two equalities and a
+  // range on `date` — one composite index per brand (stack/firestore.indexes.staging.json), so a
+  // request reads about one row per issue in the last four weeks instead of the product's whole
+  // history. Usage is what leaves a site; the window starts at the first outgoing row, so a young
   // series reads slightly HIGHER usage than the app's own index — the cautious direction.
-  const moves = await c.store.query<Parameters<typeof usageIndex>[0][number]>(col(c, 'stockMovements'), [{ field: 'productId', op: '==', value: p.id }, { field: 'fromLocationId', op: '==', value: site.id }], ASK_LIMITS.movementsPerProductSite)
-  if (moves.length >= ASK_LIMITS.movementsPerProductSite) c.uncertainty.push('history_capped')
-  const usage = usageAt(usageIndex(moves, c.now, ASK_LIMITS.usageWindowDays), site.id, p.id)
+  const from = c.now - (ASK_LIMITS.usageWindowDays + 1) * 86_400_000
+  const moves = await c.store.query<Parameters<typeof usageIndex>[0][number]>(
+    col(c, 'stockMovements'),
+    [{ field: 'productId', op: '==', value: p.id }, { field: 'fromLocationId', op: '==', value: site.id }, { field: 'date', op: '>=', value: from }],
+    ASK_LIMITS.movementsPerProductSite,
+  )
+  // A capped window is partial: no rate, no verdict — never a figure from part of the history.
+  const partial = moves.length >= ASK_LIMITS.movementsPerProductSite
+  if (partial) c.uncertainty.push('history_capped')
+  const usage = partial ? undefined : usageAt(usageIndex(moves, c.now, ASK_LIMITS.usageWindowDays), site.id, p.id)
   const perDay = usage?.avgDaily ?? null
-  if (perDay === null) c.uncertainty.push('too_little_history')
+  if (perDay === null && !partial) c.uncertainty.push('too_little_history')
   const orders = await c.store.query<{ id: string; docNo: string; supplierName: string; orderedAt: number; expectedAt?: number; lines: Parameters<typeof remainingBaseQty>[0] & { productId: string }[] }>(col(c, 'purchaseOrders'), [{ field: 'status', op: '==', value: 'ordered' }, { field: 'locationId', op: '==', value: site.id }], ASK_LIMITS.ordersPerSite)
+  if (orders.length >= ASK_LIMITS.ordersPerSite) c.uncertainty.push('orders_capped')
   const incoming = orders.flatMap((o) =>
     (o.lines as unknown as ({ productId: string } & Parameters<typeof remainingBaseQty>[0])[])
       .filter((l) => l.productId === p.id)
@@ -245,10 +286,11 @@ async function stockoutRisk(c: Ctx, text: string, hints: Hints): Promise<Answer>
   const unit = p.unitType || p.unit || ''
   const parts = [`${p.name} ที่${site.name}: คงเหลือ ${r2(onHand)} ${unit}`]
   if (perDay !== null) parts.push(`ใช้เฉลี่ย ${r2(perDay)} ${unit}/วัน (${ASK_LIMITS.usageWindowDays} วันล่าสุด) → พอใช้ประมาณ ${r2(cover ?? 0)} วัน`)
+  else if (partial) parts.push('ประวัติการใช้มากเกินขอบเขตการอ่าน — ไม่คำนวณจากข้อมูลบางส่วน')
   else parts.push('ประวัติการใช้น้อยเกินไปที่จะคำนวณอัตราการใช้')
   parts.push(incoming.length ? `กำลังมา: ${incoming.map((x) => `${x.docNo} ${x.qty} ${unit}`).join(', ')}` : 'ไม่มีใบสั่งซื้อที่ค้างรับสำหรับสินค้านี้')
   parts.push(perDay === null ? 'ประเมินความเสี่ยงไม่ได้' : atRisk ? `เสี่ยงหมดภายใน ${days} วัน` : `ไม่เสี่ยงหมดภายใน ${days} วัน`)
-  return { kind: 'ANSWER', intent: 'stockout_risk', text: parts.join('\n'), facts: { productId: p.id, siteId: site.id, onHand: r2(onHand), perDay: perDay === null ? null : r2(perDay), coverDays: cover === null ? null : r2(cover), horizonDays: days, atRisk: perDay === null ? null : atRisk, incoming, movementsRead: moves.length } }
+  return { kind: 'ANSWER', intent: 'stockout_risk', text: parts.join('\n'), facts: { productId: p.id, siteId: site.id, onHand: r2(onHand), perDay: perDay === null ? null : r2(perDay), coverDays: cover === null ? null : r2(cover), horizonDays: days, atRisk: perDay === null ? null : atRisk, incoming, incomingComplete: orders.length < ASK_LIMITS.ordersPerSite, movementsRead: moves.length, historyComplete: !partial } }
 }
 
 interface Hints {
@@ -266,10 +308,13 @@ async function caller(deps: AskDeps, store: ServerStore, authorization: string |
 
 export async function runAsk(deps: AskDeps, authorization: string | null, body: unknown): Promise<AskReply> {
   const t0 = deps.now()
-  const counted = readOnlyCounting(deps.store)
+  const counted = { ...readOnlyCounting(deps.store), now: deps.now }
   const b = (body ?? {}) as Record<string, unknown>
   if (!SERVER_BRANDS.includes(b.brand as ServerBrand)) return fail(400, 'bad_request')
-  if (typeof b.text !== 'string' || !b.text.trim() || b.text.length > ASK_LIMITS.textMax) return fail(400, 'bad_request')
+  // Two ways to ask: free text (judged by the contract) or a guided request — an explicit
+  // operation the person picked with buttons, which carries no free text at all.
+  const guided = b.op !== undefined
+  if (guided ? b.text !== undefined : typeof b.text !== 'string' || !b.text.trim() || b.text.length > ASK_LIMITS.textMax) return fail(400, 'bad_request')
   const h = (b.hints ?? {}) as Record<string, unknown>
   const hints: Hints = {}
   for (const k of ['productId', 'siteId'] as const) {
@@ -282,55 +327,97 @@ export async function runAsk(deps: AskDeps, authorization: string | null, body: 
   if (!user) return fail(401, 'unauthorized')
   if (!ASK_ROLES.includes(user.role)) return fail(403, 'forbidden')
   if (!deps.limiter.allow(user.id, t0)) return fail(429, 'rate_limited')
+  if (deps.globalLimit && !(await deps.globalLimit(user.id))) return fail(429, 'rate_limited')
 
-  const text = b.text.trim()
+  const text = typeof b.text === 'string' ? b.text.trim() : ''
   const c: Ctx = { store: counted.store, brand: b.brand as ServerBrand, user, now: t0, sources: [], uncertainty: [], freshest: 0 }
-  let decidedBy: 'guard' | 'router' | 'model' | 'none' = 'none'
-  let verdict: IntentVerdict | null = null
   let answer: Answer
 
-  const g = guard(text)
-  if (g.decision === 'DENY') {
-    decidedBy = 'guard'
-    answer = { kind: 'REFUSE', intent: null, text: g.reason === 'WRITE' ? 'Ask PZM อ่านข้อมูลได้อย่างเดียว — การสร้างหรือแก้ไขรายการให้ทำที่หน้าจอของระบบ' : 'คำขอนี้มีคำสั่งถึงผู้ช่วยเอง — ไม่ดำเนินการ', reason: g.reason }
+  // ---- the eligibility contract decides; nothing else does (models are shadow-only) ----
+  let e: Eligibility
+  let decidedBy: 'guided' | 'contract'
+  if (guided) {
+    decidedBy = 'guided'
+    e = guidedEligibility({ op: b.op, productId: hints.productId ?? null, siteId: hints.siteId ?? null, horizonDays: b.horizonDays })
   } else {
-    let intent = keywordRoute(text).intent
-    if (intent) decidedBy = 'router'
-    else if (deps.classify) {
-      let timer: ReturnType<typeof setTimeout> | undefined
-      try {
-        verdict = await Promise.race([deps.classify(text), new Promise<null>((r) => (timer = setTimeout(() => r(null), ASK_LIMITS.deadlineMs / 2)))])
-        if (!verdict) c.uncertainty.push('model_timeout')
-        else if (verdict.failure) c.uncertainty.push(`model_${verdict.failure.toLowerCase()}`)
-      } catch {
-        verdict = null
-        c.uncertainty.push('model_error') // a model failure is never the user's failure
-      } finally {
-        if (timer) clearTimeout(timer)
-      }
-      intent = verdict?.intent ?? null
-      if (intent) decidedBy = 'model'
+    decidedBy = 'contract'
+    // Resolve every reference first, against the database (ids from the client are hints only).
+    const product = await resolveProduct(c, text, hints.productId)
+    const site = await resolveSite(c, hints.siteId)
+    if (site === 'out_of_scope') return done(c, t0, counted, { kind: 'REFUSE', intent: null, text: 'สาขานี้ไม่อยู่ในสิทธิ์ของคุณ', reason: 'site_scope' }, decidedBy)
+    const refs = await resolveRefs(c, text)
+    const siteNames = site ? [site.name] : []
+    e = eligibility(text, {
+      product: () => product?.id ?? null,
+      // The whole text resolves to the chosen site; a sub-phrase only if it names that site.
+      site: (s) => (!site ? null : s === text || siteNames.some((n) => s.normalize('NFC').toLowerCase().includes(n.normalize('NFC').toLowerCase())) ? site.id : null),
+      poExists: (d) => refs.po.has(d),
+      skuExists: (k) => refs.sku.has(k),
+    })
+    // Already-resolved records are passed on so no tool reads them twice.
+    if (e.eligible) {
+      if (product) hints.productId = product.id
+      if (site) hints.siteId = site.id
     }
-    if (intent === 'write_request') answer = { kind: 'REFUSE', intent, text: 'Ask PZM อ่านข้อมูลได้อย่างเดียว', reason: 'WRITE' }
-    else if (intent === 'stock_lookup') answer = await stockLookup(c, text, hints)
-    else if (intent === 'po_unconfirmed') answer = await poUnconfirmed(c, hints)
-    else if (intent === 'stockout_risk') answer = await stockoutRisk(c, text, hints)
-    else if (intent === 'transfer_status') answer = { kind: 'CLARIFY', intent, text: 'เรื่องใบโอนยังไม่เปิดใน Ask PZM รุ่นทดลอง — ดูได้ที่หน้า "ใบโอน"', reason: 'unsupported' }
-    else if (intent === 'out_of_scope') answer = { kind: 'REFUSE', intent, text: 'ถามได้เรื่องสต๊อก ใบสั่งซื้อที่รอยืนยัน และความเสี่ยงของหมดครับ', reason: 'OUT_OF_SCOPE' }
-    else answer = { kind: 'CLARIFY', intent: null, text: 'ไม่แน่ใจว่าถามเรื่องไหน — สต๊อกคงเหลือ, ใบสั่งซื้อที่รอผู้ขายยืนยัน หรือความเสี่ยงของหมด?', reason: 'intent' }
   }
-  if (decidedBy === 'model') c.uncertainty.push('intent_from_model')
+  try {
+    deps.shadow?.(text, e) // shadow only: never awaited, never consulted, never allowed to fail the request
+  } catch {
+    /* a shadow's failure is not the person's */
+  }
+
+  if (!e.eligible) answer = notEligible(e)
+  else if (e.op === 'STOCK_LOOKUP') answer = await stockLookup(c, text, hints)
+  else if (e.op === 'PO_UNCONFIRMED') answer = await poUnconfirmed(c, hints)
+  else answer = await stockoutRisk(c, e.horizonDays ? `${text} ${e.horizonDays} วัน` : text, hints)
+  return done(c, t0, counted, answer, decidedBy, e.eligible ? e.op : null)
+}
+
+/** The answer for a request the contract did not make eligible: never a tool, never a figure. */
+function notEligible(e: Extract<Eligibility, { eligible: false }>): Answer {
+  const refuse = 'Ask PZM อ่านข้อมูลได้อย่างเดียว และตอบได้ 3 เรื่อง: สต๊อกคงเหลือ, ใบสั่งซื้อที่รอผู้ขายยืนยัน, ความเสี่ยงของหมด — การสร้าง แก้ไข อนุมัติ หรือบันทึกรายการให้ทำที่หน้าจอของระบบ'
+  const texts: Partial<Record<Ineligible, string>> = {
+    GUARD_INJECTION: 'คำขอนี้มีคำสั่งถึงผู้ช่วยเอง — ไม่ดำเนินการ',
+    QUOTED_OR_DOCUMENT: 'Ask PZM ไม่ทำตามข้อความในเอกสารหรือคำพูดที่ยกมา — ถามเป็นคำถามของคุณเองครับ',
+    COMPOUND_REQUEST: 'ถามทีละเรื่องครับ — เลือกจากปุ่มด้านล่างได้',
+    NO_ALLOWED_OP: 'ไม่แน่ใจว่าถามเรื่องไหน — เลือก: สต๊อกคงเหลือ, ใบสั่งซื้อที่รอผู้ขายยืนยัน หรือความเสี่ยงของหมด',
+    AMBIGUOUS_OP: 'คำถามนี้ตรงกับหลายเรื่อง — เลือกเรื่องเดียวจากปุ่มด้านล่างครับ',
+    PRODUCT_MISSING: 'สินค้าตัวไหนครับ? เลือกสินค้าก่อน',
+    SITE_MISSING: 'สาขาไหนครับ? การดูความเสี่ยงของหมดทำทีละสินค้า ทีละสาขา',
+    UNRESOLVED_REFERENCE: 'ไม่พบสาขา สินค้า หรือเลขเอกสารที่อ้างถึงในข้อมูลของคุณ — เลือกจากรายการแทนครับ',
+  }
+  return { kind: e.kind, intent: e.op ? (e.op.toLowerCase() as AskIntent) : null, text: texts[e.reason] ?? refuse, reason: e.reason }
+}
+
+/** PO numbers and SKU codes the text mentions, each looked up once (1 read each, at most 3 each). */
+async function resolveRefs(c: Ctx, text: string): Promise<{ po: Set<string>; sku: Set<string> }> {
+  const t = text.normalize('NFC').toLowerCase()
+  const po = new Set<string>()
+  const sku = new Set<string>()
+  for (const m of [...new Set(t.match(/\bpo[-\s]?\d{3,6}\b/g) ?? [])].slice(0, 3)) {
+    const d = m.replace(/\s/g, '-').toUpperCase()
+    const rows = await c.store.query<{ id: string; locationId: string }>(col(c, 'purchaseOrders'), [{ field: 'docNo', op: '==', value: d }], 1)
+    if (rows.length && inScope(c.user, rows[0].locationId)) po.add(d)
+  }
+  for (const m of [...new Set(t.match(/\b[a-z]{2,4}-\d{3,5}\b/g) ?? [])].filter((x) => !/^po-/.test(x)).slice(0, 3)) {
+    const k = m.toUpperCase()
+    if ((await c.store.query(col(c, 'products'), [{ field: 'sku', op: '==', value: k }], 1)).length) sku.add(k)
+  }
+  return { po, sku }
+}
+
+function done(c: Ctx, t0: number, counted: ReturnType<typeof readOnlyCounting> & { now: () => number }, answer: Answer, decidedBy: 'guided' | 'contract', op: string | null = null): AskReply {
   return {
     status: 200,
     body: {
       ...answer,
       decidedBy,
-      ...(verdict ? { model: { name: verdict.model, intent: verdict.intent, confidence: Math.round(verdict.confidence * 1000) / 1000 } } : {}),
+      op,
       sources: c.sources,
       freshness: { readAt: t0, dataUpdatedAt: c.freshest || null },
       uncertainty: c.uncertainty,
       reads: counted.reads(),
-      ms: deps.now() - t0,
+      ms: counted.now() - t0,
     },
   }
 }

@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useData } from '../data/DataContext'
 import { useT } from '../i18n/I18nContext'
 import { Badge, Button } from '../components/ui'
-import { askPzm, hintProduct, hintSite, type AskAnswer, type AskFailure } from '../services/ask'
+import { askPzm, hintProduct, hintSite, type AskAnswer, type AskFailure, type AskOp, type AskRequest } from '../services/ask'
 
 /**
  * Ask PZM — read-only operations assistant (staging pilot, owner approval 4, 9 Oct 2026).
@@ -67,13 +67,11 @@ export function AskPzmPage() {
   const productName = products.find((p) => p.id === productId)?.name
   const siteName = locations.find((l) => l.id === siteId)?.name
 
-  async function submit(e?: FormEvent, q = text) {
-    e?.preventDefault()
-    const question = q.trim()
-    if (!question || busy) return
+  async function send(req: AskRequest) {
+    if (busy) return
     setBusy(true)
     setFailure(null)
-    const r = await askPzm(question, { ...(productId ? { productId } : {}), ...(siteId ? { siteId } : {}) })
+    const r = await askPzm(req)
     setBusy(false)
     if (r.ok) setAnswer(r.answer)
     else {
@@ -81,6 +79,21 @@ export function AskPzmPage() {
       setFailure(r.failure)
     }
   }
+
+  function submit(e?: FormEvent, q = text) {
+    e?.preventDefault()
+    const question = q.trim()
+    if (!question) return
+    void send({ text: question, hints: { ...(productId ? { productId } : {}), ...(siteId ? { siteId } : {}) } })
+  }
+
+  // ---- guided: pick the operation and the records; no language involved ----
+  const [gProduct, setGProduct] = useState('')
+  const [gSite, setGSite] = useState('')
+  const [gDays, setGDays] = useState(7)
+  const activeProducts = useMemo(() => products.filter((p) => p.active !== false).sort((a, b) => a.name.localeCompare(b.name)), [products])
+  const activeSites = useMemo(() => locations.filter((l) => l.active !== false), [locations])
+  const guided = (op: AskOp) => void send({ op, hints: { ...(gProduct ? { productId: gProduct } : {}), ...(gSite ? { siteId: gSite } : {}) }, ...(op === 'STOCKOUT_RISK' ? { horizonDays: gDays } : {}) })
 
   const tone = answer?.kind === 'ANSWER' ? 'green' : answer?.kind === 'REFUSE' ? 'red' : 'amber'
   const now = Date.now()
@@ -141,6 +154,58 @@ export function AskPzmPage() {
         </div>
       </form>
 
+      <section aria-labelledby="ask-guided" className="space-y-3 rounded-xl border border-line bg-surface p-3">
+        <h2 id="ask-guided" className="text-sm font-semibold text-ink">
+          {t('หรือเลือกเอง')}
+        </h2>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <label className="text-xs text-ink-faint">
+            {t('สินค้า')}
+            <select value={gProduct} onChange={(e) => setGProduct(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2 text-sm text-ink">
+              <option value="">{t('— เลือกสินค้า —')}</option>
+              {activeProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.sku ? ` · ${p.sku}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-ink-faint">
+            {t('สาขา')}
+            <select value={gSite} onChange={(e) => setGSite(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2 text-sm text-ink">
+              <option value="">{t('— ทุกสาขาในสิทธิ์ —')}</option>
+              {activeSites.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-ink-faint">
+            {t('ช่วงความเสี่ยง (วัน)')}
+            <select value={gDays} onChange={(e) => setGDays(Number(e.target.value))} className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2 text-sm text-ink">
+              {[3, 7, 14, 30].map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" disabled={busy || !gProduct} onClick={() => guided('STOCK_LOOKUP')} className="min-h-11">
+            {t('ดูสต๊อกคงเหลือ')}
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => guided('PO_UNCONFIRMED')} className="min-h-11">
+            {t('PO ที่ผู้ขายยังไม่ยืนยัน')}
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy || !gProduct || !gSite} onClick={() => guided('STOCKOUT_RISK')} className="min-h-11">
+            {t('ความเสี่ยงของหมด')}
+          </Button>
+        </div>
+      </section>
+
       {!answer && !failure && (
         <div className="flex flex-wrap gap-2">
           {examples(t).map((q) => (
@@ -169,7 +234,6 @@ export function AskPzmPage() {
         <article aria-live="polite" className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge color={tone}>{answer.kind === 'ANSWER' ? t('คำตอบ') : answer.kind === 'REFUSE' ? t('ทำให้ไม่ได้') : t('ต้องการข้อมูลเพิ่ม')}</Badge>
-            {answer.decidedBy === 'model' && <Badge color="amber">{t('AI เลือกหัวข้อ')}</Badge>}
           </div>
           {/* The answer text is data written by the server from database values: shown as is. */}
           <p className="whitespace-pre-line text-base text-ink">{answer.text}</p>

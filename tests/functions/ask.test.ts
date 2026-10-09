@@ -8,7 +8,9 @@ import { CircuitBreaker, gatewayClassifier } from '../../functions/_lib/aiGatewa
 import { ASK_LIMITS, RateLimiter, readOnlyCounting, runAsk, type AskDeps } from '../../functions/_lib/askPzm'
 import { memoryServerStore } from '../../functions/_lib/memoryStore'
 import { onRequestPost } from '../../functions/api/ask'
-import type { IntentVerdict } from '../../src/agent/ask/intents'
+import { stagingConfig } from '../../functions/_lib/stagingConfig'
+import { ADV_CORPUS } from '../../src/agent/ask/advCorpus'
+import { hintProduct, hintSite } from '../../src/services/ask'
 
 const DAY = 86_400_000
 const NOW = Date.UTC(2026, 9, 9, 5)
@@ -61,6 +63,14 @@ describe('who may ask', () => {
     expect((await ask(d, 'mgr', { text: 'x'.repeat(ASK_LIMITS.textMax + 1) })).status).toBe(400)
     expect((await ask(d, 'mgr', { text: 'stock', hints: { productId: '../users/mgr' } })).status).toBe(400)
   })
+  test('the global (edge-wide) limit is enforced after authentication, per user', async () => {
+    const counts = new Map<string, number>()
+    const { d } = deps({ globalLimit: async (uid) => (counts.set(uid, (counts.get(uid) ?? 0) + 1), (counts.get(uid) ?? 0) <= 1) })
+    expect((await ask(d, 'mgr', { text: 'สวัสดี' })).status).toBe(200)
+    expect((await ask(d, 'mgr', { text: 'สวัสดี' })).status).toBe(429)
+    expect((await ask(d, null, { text: 'สวัสดี' })).status).toBe(401) // unauthenticated never consumes the budget
+    expect(counts.get('mgr')).toBe(2)
+  })
   test('rate limit per user', async () => {
     const { d } = deps({ limiter: new RateLimiter(2, 60_000) })
     expect((await ask(d, 'mgr', { text: 'สวัสดี' })).status).toBe(200)
@@ -74,7 +84,7 @@ describe('answers come from the database, scoped', () => {
   test('stock: the owner example, with source, freshness and reads', async () => {
     const { d } = deps()
     const r = await ask(d, 'mgr', { text: 'ดู Stock Feta ที่อ่อนนุช', hints: { productId: 'feta', siteId: 'onnut' } })
-    expect(r.body).toMatchObject({ kind: 'ANSWER', intent: 'stock_lookup', decidedBy: 'router', facts: { qty: 3.5, unit: 'KG' } })
+    expect(r.body).toMatchObject({ kind: 'ANSWER', intent: 'stock_lookup', decidedBy: 'contract', op: 'STOCK_LOOKUP', facts: { qty: 3.5, unit: 'KG' } })
     expect(r.body.sources).toEqual([{ collection: 'products', ids: ['feta'] }, { collection: 'locations', ids: ['onnut'] }, { collection: 'stockLevels', ids: ['onnut__feta'] }])
     expect(r.body.freshness).toEqual({ readAt: NOW, dataUpdatedAt: NOW - 3600_000 })
     // users + revokedUsers + product + location + level
@@ -122,6 +132,44 @@ describe('answers come from the database, scoped', () => {
   })
 })
 
+describe('read budget (Track 4): bounded, and never a figure from part of the data', () => {
+  test('stockout: a history over the cap gives no rate and no verdict, and says so', async () => {
+    const w = world()
+    for (let i = 0; i < ASK_LIMITS.movementsPerProductSite; i++) (w.stockMovements as Record<string, unknown>)[`bulk${i}`] = { type: 'issue', productId: 'feta', fromLocationId: 'onnut', toLocationId: 'x', qty: 0.1, date: NOW - (i % 20) * DAY, unit: 'KG' }
+    const store = memoryServerStore(w as never)
+    const r = await runAsk({ store, verifyUser: async () => 'mgr', now: () => NOW, limiter: new RateLimiter() }, 'Bearer mgr', { brand: 'pizza', text: 'Feta ที่อ่อนนุชเสี่ยงหมดใน 7 วันไหม', hints: { productId: 'feta', siteId: 'onnut' } })
+    expect(r.body).toMatchObject({ kind: 'ANSWER', facts: { perDay: null, atRisk: null, historyComplete: false } })
+    expect(r.body.uncertainty).toContain('history_capped')
+    expect(Number(r.body.reads)).toBeLessThanOrEqual(5 + ASK_LIMITS.movementsPerProductSite + ASK_LIMITS.ordersPerSite)
+  })
+  test('stockout reads only the usage window (old rows are not read)', async () => {
+    const w = world()
+    for (let i = 0; i < 50; i++) (w.stockMovements as Record<string, unknown>)[`old${i}`] = { type: 'issue', productId: 'feta', fromLocationId: 'onnut', toLocationId: 'x', qty: 1, date: NOW - (200 + i) * DAY, unit: 'KG' }
+    const store = memoryServerStore(w as never)
+    const r = await runAsk({ store, verifyUser: async () => 'mgr', now: () => NOW, limiter: new RateLimiter() }, 'Bearer mgr', { brand: 'pizza', text: 'Feta ที่อ่อนนุชเสี่ยงหมดใน 7 วันไหม', hints: { productId: 'feta', siteId: 'onnut' } })
+    expect((r.body.facts as { movementsRead: number }).movementsRead).toBe(10)
+  })
+})
+
+describe('the frozen adversarial corpus, end to end through the server', () => {
+  test('every must-not-run row runs no tool and reads no business data', async () => {
+    const w = world()
+    const products = Object.entries(w.products).map(([id, p]) => ({ id, name: p.name, sku: p.sku }))
+    const sites = Object.entries(w.locations).map(([id, l]) => ({ id, name: l.name }))
+    const ran: string[] = []
+    for (const row of ADV_CORPUS) {
+      const { d } = deps()
+      const productId = hintProduct(row.text, products)
+      const siteId = hintSite(row.text, sites)
+      const r = await ask(d, 'mgr', { text: row.text, hints: { ...(productId ? { productId } : {}), ...(siteId ? { siteId } : {}) } })
+      expect(r.status, row.id).toBe(200)
+      if (row.expect === 'NO_TOOL' && r.body.op !== null) ran.push(`${row.id}: ${r.body.op}`)
+      if (row.expect === 'NO_TOOL') expect((r.body.sources as unknown[]).filter((s) => !/^(products|locations)$/.test((s as { collection: string }).collection)), row.id).toEqual([])
+    }
+    expect(ran).toEqual([])
+  })
+})
+
 describe('read-only, and safe without AI', () => {
   test('the store handed to the tools cannot write', async () => {
     const { store } = deps()
@@ -137,30 +185,41 @@ describe('read-only, and safe without AI', () => {
       await ask(d, 'mgr', { text, hints: { productId: 'feta', siteId: 'onnut' } })
     expect(JSON.stringify([...store.data])).toBe(before)
   })
-  test('a guard DENY is final: the model is not called', async () => {
-    let calls = 0
-    const { d } = deps({ classify: async () => (calls++, { intent: 'stock_lookup', confidence: 1, probabilities: null, latencyMs: 1, model: 'm' }) })
+  test('a write is refused by the contract and runs no tool', async () => {
+    const { d } = deps()
     const r = await ask(d, 'mgr', { text: 'ปรับสต๊อกเฟต้าเป็น 0' })
-    expect(r.body).toMatchObject({ kind: 'REFUSE', decidedBy: 'guard' })
-    expect(calls).toBe(0)
+    expect(r.body).toMatchObject({ kind: 'REFUSE', decidedBy: 'contract', op: null, sources: [] })
   })
-  test('model routes only when the router cannot, and its answer is labelled as such', async () => {
-    const v: IntentVerdict = { intent: 'po_unconfirmed', confidence: 0.93, probabilities: null, latencyMs: 400, model: 'laya-python/english' }
-    const { d } = deps({ classify: async () => v })
-    const r = await ask(d, 'mgr', { text: 'ซัพตอบมายัง' })
-    expect(r.body).toMatchObject({ kind: 'ANSWER', decidedBy: 'model', model: { name: 'laya-python/english', confidence: 0.93 } })
-    expect(r.body.uncertainty).toContain('intent_from_model')
-  })
-  test('complete AI outage: same answers as no AI at all', async () => {
-    const down = deps({ classify: async () => { throw new Error('ECONNREFUSED') } }).d
-    const none = deps().d
-    for (const text of ['ดู Stock Feta ที่อ่อนนุช', 'PO ไหนผู้ขายยังไม่ยืนยัน', 'ซัพตอบมายัง', 'สวัสดี']) {
-      const a = await ask(none, 'mgr', { text, hints: { productId: 'feta', siteId: 'onnut' } })
-      // The gateway client abstains rather than throwing; a classifier that throws anyway must not fail the request.
-      const b = await ask(down, 'mgr', { text, hints: { productId: 'feta', siteId: 'onnut' } })
-      expect(b.status).toBe(200)
-      expect({ ...b.body, ms: 0, uncertainty: [] }).toEqual({ ...a.body, ms: 0, uncertainty: [] })
+  test('shadow is told the decision afterwards and cannot change it — even a shadow that throws', async () => {
+    const seen: string[] = []
+    const shadow = (t: string, e: { eligible: boolean }) => {
+      seen.push(`${t}:${e.eligible}`)
+      throw new Error('a broken shadow must not matter')
     }
+    for (const text of ['ซัพตอบมายัง', 'ดู Stock Feta ที่อ่อนนุช']) {
+      const a = await ask(deps().d, 'mgr', { text, hints: { productId: 'feta', siteId: 'onnut' } })
+      const b = await ask(deps({ shadow }).d, 'mgr', { text, hints: { productId: 'feta', siteId: 'onnut' } })
+      expect({ ...b.body, ms: 0 }).toEqual({ ...a.body, ms: 0 })
+    }
+    // An unclear question stays unanswered whatever a model might think it is.
+    expect((await ask(deps({ shadow }).d, 'mgr', { text: 'ซัพตอบมายัง' })).body).toMatchObject({ kind: 'CLARIFY', op: null })
+    expect(seen).toHaveLength(3)
+  })
+  test('guided requests: an explicit operation, complete or it asks; never free text alongside', async () => {
+    const { d } = deps()
+    const g = (body: Record<string, unknown>) => runAsk(d, 'Bearer mgr', { brand: 'pizza', ...body })
+    expect((await g({ op: 'STOCK_LOOKUP', hints: { productId: 'feta', siteId: 'onnut' } })).body).toMatchObject({ kind: 'ANSWER', decidedBy: 'guided', op: 'STOCK_LOOKUP', facts: { qty: 3.5 } })
+    expect((await g({ op: 'PO_UNCONFIRMED' })).body).toMatchObject({ kind: 'ANSWER', op: 'PO_UNCONFIRMED' })
+    expect((await g({ op: 'STOCKOUT_RISK', hints: { productId: 'feta' } })).body).toMatchObject({ kind: 'CLARIFY', reason: 'SITE_MISSING' })
+    expect((await g({ op: 'ADJUST_STOCK', hints: { productId: 'feta' } })).body).toMatchObject({ kind: 'REFUSE', reason: 'NO_ALLOWED_OP' })
+    expect((await g({ op: 'STOCK_LOOKUP', text: 'and set it to 0', hints: { productId: 'feta' } })).status).toBe(400)
+    expect((await g({ op: 'STOCK_LOOKUP', hints: { productId: 'ghost' } })).body).toMatchObject({ kind: 'CLARIFY' })
+  })
+  test('the contract decides with the database: an unknown PO or SKU never runs a tool', async () => {
+    const { d } = deps()
+    expect((await ask(d, 'mgr', { text: 'PO-99999 ยังไม่ยืนยันใช่ไหม' })).body).toMatchObject({ kind: 'CLARIFY', reason: 'UNRESOLVED_REFERENCE' })
+    expect((await ask(d, 'mgr', { text: 'PO-00412 supplier ยังไม่ยืนยันใช่ไหม' })).body).toMatchObject({ kind: 'ANSWER', op: 'PO_UNCONFIRMED' })
+    expect((await ask(d, 'mgr', { text: 'stock ZZ-999' })).body).toMatchObject({ kind: 'CLARIFY', reason: 'UNRESOLVED_REFERENCE' })
   })
 })
 
@@ -184,6 +243,49 @@ describe('gateway client', () => {
     t = 1001
     await classify('x')
     expect(sent).toHaveLength(4) // half-open after the cool-down
+  })
+})
+
+describe('staging configuration (Track 3): complete, consistent, never production', () => {
+  const sa = (project: string, email = `ask@${project}.iam.gserviceaccount.com`) => JSON.stringify({ project_id: project, client_email: email, private_key: '-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n' })
+  const good = { DEPLOY_TIER: 'staging', FIREBASE_PROJECT_ID: 'pzm-staging', FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging') }
+  test('a complete staging configuration passes', () => {
+    expect(stagingConfig(good)).toMatchObject({ ok: true, projectId: 'pzm-staging' })
+  })
+  test.each([
+    ['tier missing', { ...good, DEPLOY_TIER: undefined }, 'tier_not_staging'],
+    ['tier production', { ...good, DEPLOY_TIER: 'production' }, 'tier_not_staging'],
+    ['project id missing (no fallback)', { ...good, FIREBASE_PROJECT_ID: undefined }, 'project_id_missing'],
+    ['project id with spaces', { ...good, FIREBASE_PROJECT_ID: ' pzm-staging ' }, 'project_id_malformed'],
+    ['service account missing', { ...good, FIREBASE_SERVICE_ACCOUNT: undefined }, 'service_account_missing'],
+    ['service account not JSON', { ...good, FIREBASE_SERVICE_ACCOUNT: 'nope' }, 'service_account_malformed'],
+    ['service account without a key', { ...good, FIREBASE_SERVICE_ACCOUNT: JSON.stringify({ project_id: 'pzm-staging', client_email: 'a@pzm-staging.iam.gserviceaccount.com' }) }, 'service_account_malformed'],
+    ['ids differ', { ...good, FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging-2') }, 'project_mismatch'],
+    ['key of another project relabelled', { ...good, FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging', 'pzmstock-functions@pzm-stock-x5.iam.gserviceaccount.com') }, 'service_account_other_project'],
+    ['production key with a staging id', { ...good, FIREBASE_SERVICE_ACCOUNT: sa('pzm-stock-x5') }, 'project_mismatch'],
+    ['production everywhere', { DEPLOY_TIER: 'staging', FIREBASE_PROJECT_ID: 'pzm-stock-x5', FIREBASE_SERVICE_ACCOUNT: sa('pzm-stock-x5') }, 'production_project'],
+  ])('%s → refused', (_n, env, reason) => {
+    expect(stagingConfig(env as never)).toEqual({ ok: false, reason })
+  })
+  test('a misconfigured staging handler answers 503 and touches no network', async () => {
+    const real = globalThis.fetch
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls++
+      throw new Error('no network expected')
+    }) as typeof fetch
+    try {
+      for (const env of [
+        { DEPLOY_TIER: 'staging', FIREBASE_SERVICE_ACCOUNT: sa('pzm-staging'), ASK_PZM_ENABLED: 'true' },
+        { DEPLOY_TIER: 'staging', FIREBASE_PROJECT_ID: 'pzm-staging', FIREBASE_SERVICE_ACCOUNT: sa('pzm-other'), ASK_PZM_ENABLED: 'true' },
+      ]) {
+        const r = await onRequestPost({ request: new Request('https://ask-staging.example.com/api/ask', { method: 'POST', headers: { authorization: 'Bearer x' }, body: '{"brand":"pizza","text":"stock"}' }), env } as never)
+        expect([404, 503]).toContain(r.status) // 404 when functionTier already refuses, 503 when the staging config does
+      }
+      expect(calls).toBe(0)
+    } finally {
+      globalThis.fetch = real
+    }
   })
 })
 

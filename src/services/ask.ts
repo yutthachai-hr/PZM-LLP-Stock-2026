@@ -18,8 +18,8 @@ export interface AskAnswer {
   text: string
   reason?: string
   facts?: Record<string, unknown>
-  decidedBy: 'guard' | 'router' | 'model' | 'none'
-  model?: { name: string; intent: string | null; confidence: number }
+  decidedBy: 'contract' | 'guided'
+  op: AskOp | null
   sources: { collection: string; ids: string[] }[]
   freshness: { readAt: number; dataUpdatedAt: number | null }
   uncertainty: string[]
@@ -53,11 +53,17 @@ export function hintSite(text: string, locations: readonly Pick<StockLocation, '
   return best?.id
 }
 
-export async function askPzm(text: string, hints: { productId?: string; siteId?: string }): Promise<{ ok: true; answer: AskAnswer } | { ok: false; failure: AskFailure }> {
+/** The three things Ask PZM does; a guided request names one explicitly (no free text). */
+export const ASK_OPS = ['STOCK_LOOKUP', 'PO_UNCONFIRMED', 'STOCKOUT_RISK'] as const
+export type AskOp = (typeof ASK_OPS)[number]
+
+export type AskRequest = { text: string; hints: { productId?: string; siteId?: string } } | { op: AskOp; hints: { productId?: string; siteId?: string }; horizonDays?: number }
+
+export async function askPzm(req: AskRequest): Promise<{ ok: true; answer: AskAnswer } | { ok: false; failure: AskFailure }> {
   const { authHeader } = await import('./poImages')
   let res: Response
   try {
-    res = await fetch('/api/ask', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeader()) }, body: JSON.stringify({ brand: getBrand(), text, hints }) })
+    res = await fetch('/api/ask', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeader()) }, body: JSON.stringify({ brand: getBrand(), ...req }) })
   } catch {
     return { ok: false, failure: 'network' }
   }

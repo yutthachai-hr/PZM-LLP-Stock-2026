@@ -79,9 +79,21 @@ export function findEntity<T extends Named>(text: string, items: readonly T[]): 
   for (const item of items)
     for (const a of [item.name, ...item.aliases]) {
       const n = norm(a)
-      if (n && t.includes(n) && (!best || n.length > best.len)) best = { item, len: n.length }
+      if (n && occurs(t, n) && (!best || n.length > best.len)) best = { item, len: n.length }
     }
   return best?.item ?? null
+}
+
+/**
+ * Does `name` occur in `text`? A name that starts or ends with a Latin letter or digit must stand
+ * as a whole word on that side: "CK" (central kitchen) is not in "check" or "Pack Plus". Thai has
+ * no spaces between words, so a Thai edge matches as a substring, as before.
+ */
+function occurs(text: string, name: string): boolean {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const left = /^[a-z0-9]/.test(name) ? '(?<![a-z0-9])' : ''
+  const right = /[a-z0-9]$/.test(name) ? '(?![a-z0-9])' : ''
+  return new RegExp(`${left}${esc}${right}`).test(text)
 }
 
 /** "7 วัน", "in 10 days", "สัปดาห์" → days; default 7. */
