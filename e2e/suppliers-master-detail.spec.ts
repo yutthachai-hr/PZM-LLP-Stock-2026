@@ -64,9 +64,7 @@ for (const vp of [
     await expect(pick(page, 'ZAKANA')).toBeVisible()
 
     // Down to the end of the list, then pick from there.
-    await pick(page, 'ณายลอย เบเกอรี่').scrollIntoViewIfNeeded()
-    await page.mouse.wheel(0, 4000)
-    await page.waitForTimeout(200)
+    await pick(page, 'ZAKANA').scrollIntoViewIfNeeded()
     const y0 = await page.evaluate(() => scrollY)
     expect(y0).toBeGreaterThan(400)
     await pick(page, 'NOBLE MONO').click()
@@ -114,7 +112,7 @@ test('desktop: sort, search and a filtered-out choice keep the details sensible'
   await expect(pick(page, 'NOBLE MONO')).toHaveAttribute('aria-pressed', 'true')
   await expect(panel.getByText('NOBLE MONO', { exact: true }).first()).toBeVisible()
   // A search that hides the chosen row: the details stay, nothing breaks.
-  await page.getByPlaceholder(/ค้นหา/).first().fill('ZAKANA')
+  await page.getByPlaceholder(/ค้นหาผู้ขาย/).fill('ZAKANA')
   await expect(pick(page, 'NOBLE MONO')).toHaveCount(0)
   await expect(panel.getByText('NOBLE MONO', { exact: true }).first()).toBeVisible()
   await pick(page, 'ZAKANA').click()
