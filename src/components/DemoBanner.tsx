@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom'
 import { BACKEND_MODE } from '../backend'
 import { isDemoMode, isEmulatorMode } from '../firebase/config'
 import { useT } from '../i18n/I18nContext'
@@ -26,11 +27,15 @@ import { Icon } from './Icon'
  */
 export function DemoBanner() {
   const t = useT()
+  const loc = useLocation()
   if (!isDemoMode()) return <LiveDataOnLocalhostWarning />
+  const isLogin = loc.pathname === '/' || loc.pathname === '/login'
   return (
     <div
       role="status"
-      className="pointer-events-none fixed left-3 md:left-auto md:right-3 z-[35] [bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3 flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]"
+      className={`pointer-events-none fixed left-3 md:left-auto md:right-3 z-[35] ${
+        isLogin ? 'bottom-2.5 md:bottom-3' : '[bottom:calc(var(--tabbar-h)+0.75rem)] md:bottom-3'
+      } flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white shadow-lg [margin-bottom:env(safe-area-inset-bottom)]`}
     >
       <Icon name="warning" size={13} />
       <span>{t('โหมดสาธิต — ไม่ใช่สต๊อกจริง')}</span>

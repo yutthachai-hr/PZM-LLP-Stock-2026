@@ -69,6 +69,11 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    watch: {
+      ignored: ['**/e2e-results/**', '**/docs/evidence/**', '**/firestore-debug.log'],
+    },
+  },
   build: {
     rollupOptions: {
       // Two pages: the app, and the supplier's delivery-date page (supplier.html, served
