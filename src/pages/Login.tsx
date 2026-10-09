@@ -175,7 +175,7 @@ export function LoginPage() {
           {/* Left: Brand Hero */}
           <section className="min-w-0">
             <div className="min-w-0">
-              <h1 className={`${legacyFont ? 'font-extrabold' : 'font-display font-bold xl:font-extrabold'} text-[1.75rem] tracking-[-0.02em] text-ink sm:text-4xl lg:text-5xl xl:text-[4.25rem] leading-[1.08] text-balance`}>
+              <h1 key={brand} className={`brand-heading-in ${legacyFont ? 'font-extrabold' : 'font-display font-bold xl:font-extrabold'} text-[1.75rem] tracking-[-0.02em] text-ink sm:text-4xl lg:text-5xl xl:text-[4.25rem] leading-[1.08] text-balance`}>
                 <span style={{ color: def.accent }}>{look.short}</span> Stock
               </h1>
 
@@ -467,11 +467,11 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
               boxShadow: active
                 ? `0 0 0 2.5px #fff, 0 0 0 5px ${b.accentVivid}, 0 8px 18px -4px ${b.accentVivid}66`
                 : undefined,
+              // the float drifts: each icon a beat after the last
+              animationDelay: active ? undefined : `${i * 0.4}s`,
             }}
-            className={`group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white p-0.5 outline-none transition-all duration-200 motion-reduce:transition-none sm:h-12 sm:w-12 lg:h-14 lg:w-14 ${
-              active
-                ? '-translate-y-1 scale-105 shadow-md motion-reduce:translate-y-0 motion-reduce:scale-100'
-                : 'opacity-70 saturate-[0.6] shadow-xs hover:-translate-y-0.5 hover:scale-105 hover:opacity-100 hover:saturate-100 hover:shadow-md motion-reduce:translate-y-0 motion-reduce:scale-100'
+            className={`brand-orb group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white p-0.5 outline-none transition-[opacity,filter,box-shadow] duration-300 motion-reduce:transition-none sm:h-12 sm:w-12 lg:h-14 lg:w-14 ${
+              active ? 'shadow-md' : 'opacity-70 saturate-[0.6] shadow-xs hover:opacity-100 hover:saturate-100 hover:shadow-md'
             } focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:ring-brand`}
           >
             <img

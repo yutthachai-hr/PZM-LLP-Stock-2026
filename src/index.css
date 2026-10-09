@@ -513,3 +513,31 @@ input[type='number'] {
   }
 }
 
+/* ---- sign-in page: the playful brand switch (owner, 8 Oct 2026; restored 9 Oct) ----
+   The round brand icons float gently, each a beat after the last, so the row reads as
+   something to touch; a hover tilts one; the chosen one pops in with a little overshoot and
+   then keeps floating, a little larger. The heading slides in on a brand change. Anyone who
+   asked the system for less motion gets none of it (the global rule above, and this one). */
+@keyframes brand-orb-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes brand-orb-pop {
+  0% { transform: scale(0.82) rotate(-14deg); }
+  55% { transform: scale(1.2) rotate(6deg); }
+  100% { transform: scale(1.1) rotate(0deg); }
+}
+@keyframes brand-orb-float-on { 0%, 100% { transform: translateY(-3px) scale(1.1); } 50% { transform: translateY(-6px) scale(1.1); } }
+@keyframes brand-orb-wiggle { 0%, 100% { transform: translateY(-4px) rotate(0); } 30% { transform: translateY(-4px) rotate(-8deg); } 65% { transform: translateY(-4px) rotate(6deg); } }
+@keyframes brand-heading-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+
+.brand-orb { animation: brand-orb-float 3.2s ease-in-out infinite; }
+.brand-orb:hover:not([aria-checked='true']) { animation: brand-orb-wiggle 0.5s ease-in-out; }
+.brand-orb[aria-checked='true'] {
+  animation:
+    brand-orb-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    brand-orb-float-on 3.2s ease-in-out 0.45s infinite;
+}
+.brand-heading-in { animation: brand-heading-in 0.4s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-orb, .brand-orb:hover, .brand-orb[aria-checked='true'], .brand-heading-in { animation: none; }
+}
+

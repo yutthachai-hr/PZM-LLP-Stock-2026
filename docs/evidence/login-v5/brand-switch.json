@@ -1,0 +1,123 @@
+{
+  "floatsOverTime": [
+    [
+      {
+        "brand": "Pizza",
+        "checked": "true",
+        "transform": "matrix(1.1, 0, 0, 1.1, 0, -3.01002)"
+      },
+      {
+        "brand": "Le",
+        "checked": "false",
+        "transform": "matrix(1, 0, 0, 1, 0, -0.0311084)"
+      },
+      {
+        "brand": "R&D",
+        "checked": "false",
+        "transform": "none"
+      }
+    ],
+    [
+      {
+        "brand": "Pizza",
+        "checked": "true",
+        "transform": "matrix(1.1, 0, 0, 1.1, 0, -3.57019)"
+      },
+      {
+        "brand": "Le",
+        "checked": "false",
+        "transform": "matrix(1, 0, 0, 1, 0, -0.695381)"
+      },
+      {
+        "brand": "R&D",
+        "checked": "false",
+        "transform": "matrix(1, 0, 0, 1, 0, -0.0408277)"
+      }
+    ],
+    [
+      {
+        "brand": "Pizza",
+        "checked": "true",
+        "transform": "matrix(1.1, 0, 0, 1.1, 0, -4.7673)"
+      },
+      {
+        "brand": "Le",
+        "checked": "false",
+        "transform": "matrix(1, 0, 0, 1, 0, -1.92328)"
+      },
+      {
+        "brand": "R&D",
+        "checked": "false",
+        "transform": "matrix(1, 0, 0, 1, 0, -0.69512)"
+      }
+    ],
+    [
+      {
+        "brand": "Pizza",
+        "checked": "true",
+        "transform": "matrix(1.1, 0, 0, 1.1, 0, -5.78541)"
+      },
+      {
+        "brand": "Le",
+        "checked": "false",
+        "transform": "matrix(1, 0, 0, 1, 0, -2.85246)"
+      },
+      {
+        "brand": "R&D",
+        "checked": "false",
+        "transform": "matrix(1, 0, 0, 1, 0, -1.97412)"
+      }
+    ]
+  ],
+  "hoverWiggle": [
+    {
+      "brand": "Pizza",
+      "checked": "true",
+      "transform": "matrix(1.1, 0, 0, 1.1, 0, -5.67591)"
+    },
+    {
+      "brand": "Le",
+      "checked": "false",
+      "transform": "matrix(1, 0, 0, 1, 0, -2.57874)"
+    },
+    {
+      "brand": "R&D",
+      "checked": "false",
+      "transform": "none"
+    }
+  ],
+  "popMidway": [
+    {
+      "brand": "Pizza",
+      "checked": "false",
+      "transform": "matrix(1, 0, 0, 1, 0, -0.0311257)"
+    },
+    {
+      "brand": "Le",
+      "checked": "true",
+      "transform": "matrix(1.21855, 0.161186, -0.161186, 1.21855, 0, 0)"
+    },
+    {
+      "brand": "R&D",
+      "checked": "false",
+      "transform": "none"
+    }
+  ],
+  "reducedMotion": [
+    {
+      "brand": "Pizza",
+      "checked": "true",
+      "transform": "none"
+    },
+    {
+      "brand": "Le",
+      "checked": "false",
+      "transform": "none"
+    },
+    {
+      "brand": "R&D",
+      "checked": "false",
+      "transform": "none"
+    }
+  ]
+}
