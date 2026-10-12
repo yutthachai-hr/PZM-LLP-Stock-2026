@@ -80,7 +80,7 @@ Branch: `feat/supplier-master-detail` (จาก `main` @ `ab51df9`)
 |---|---|---|
 | 1 | **1280–1535px: the list table overflowed beside the panel** (180px at 1366) — the status chip was cut and the row's ⋮ menu (edit / add product / hide / delete) was off the edge | Beside the panel, the columns the panel already shows (category, payment terms, lead time; last order) step aside until 1800px; table min-width 520 on desktop. New e2e assertion: no sideways scroll in the table, the page or the row, ⋮ and status fully in view — fails on the old code (overflow 180px), passes now |
 | 2 | Tab label "ประวัติการสั่งซื้อ" wrapped to two lines in the 360px panel and on phones | Tabs stay on one line (13px, no wrap) |
-| 3 | The emulator/demo badge (bottom-right) covers the panel's "เพิ่มสินค้า" button at 1440/1920 | Not a production issue — the badge exists only in demo/emulator builds. Left as is |
+| 3 | The emulator/demo badge (bottom-right) covered the panel's "เพิ่มสินค้า" button at 1440/1920 | Fixed for demo/emulator builds only: `demoPillShown()` (DemoBanner) is true only in a demo build or a local server; the sticky panel then ends 2.25rem higher. In every real deployment it is false and the layout is unchanged. e2e asserts the pill and the panel do not overlap |
 
 New viewports covered: **1280×720** (shortest desktop) and **1536×864** (the 2xl boundary) — 12/12 in this spec; full suite e2e 20 passed / 1 skipped, ×2.
 

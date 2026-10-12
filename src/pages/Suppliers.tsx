@@ -56,6 +56,7 @@ import {
 import type { Product, Supplier, SupplierItem, SupplierLink, SupplierType } from '../types'
 import { looseMatch } from '../lib/search'
 import { useViewport } from '../lib/viewport'
+import { demoPillShown } from '../components/DemoBanner'
 import { focusRing } from '../components/frame/tones'
 
 // Sunday first, matching Date#getDay(). i18n-key
@@ -132,6 +133,7 @@ export function SuppliersPage() {
   const desktop = viewport === 'desktop'
   const [sheetOpen, setSheetOpen] = useState(() => !!new URLSearchParams(location.search).get('id'))
   const lastPicked = useRef<string | null>(null)
+  const pillRoom = demoPillShown()
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [issuing, setIssuing] = useState(false)
   const filterCount =
@@ -562,7 +564,11 @@ export function SuppliersPage() {
         <aside className="hidden min-w-0 xl:block">
           <div
             data-supplier-panel
-            className="sticky top-[calc(var(--topbar-h)+1rem)] flex max-h-[calc(100dvh-var(--topbar-h)-2rem)] flex-col"
+            // A demo / emulator build has a pill pinned at the bottom-right: leave it room, so it
+            // does not sit on the panel's buttons. Never in a real deployment (demoPillShown).
+            className={`sticky top-[calc(var(--topbar-h)+1rem)] flex flex-col ${
+              pillRoom ? 'max-h-[calc(100dvh-var(--topbar-h)-4.25rem)]' : 'max-h-[calc(100dvh-var(--topbar-h)-2rem)]'
+            }`}
           >
             {selected ? (
                 <SupplierDetail

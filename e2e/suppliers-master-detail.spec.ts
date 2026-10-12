@@ -88,6 +88,12 @@ for (const vp of [
     await expect(row.getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' })).toBeInViewport({ ratio: 1 })
     await expect(row.getByText('ใช้งานอยู่')).toBeInViewport({ ratio: 1 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0)
+    // The emulator pill (bottom-right) does not sit on the panel or its buttons.
+    const pill = page.getByText('ฐานข้อมูลจำลองสำหรับทดสอบ (emulator)')
+    const p = (await pill.boundingBox())!
+    const q = (await panel.boundingBox())!
+    const overlap = p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height
+    expect(overlap).toBe(false)
 
     // The long list scrolls inside the panel; heading and close stay put.
     const body = panel.locator('[data-detail-body]')
