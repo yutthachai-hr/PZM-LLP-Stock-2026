@@ -134,7 +134,9 @@ export async function saveSettings(
 let cached: InventorySchedule[] | null = null
 let cachedSettings: InventorySettings | null = null
 let cachedSnoozes: ReorderSnooze[] = []
-let inflight: Promise<void> | null = null
+type ScheduleConfig = { schedules: InventorySchedule[]; settings: InventorySettings; snoozes: ReorderSnooze[] }
+/** Resolves with its own rows only when a brand switch made them not the current copy. */
+let inflight: Promise<ScheduleConfig | void> | null = null
 const listeners = new Set<() => void>()
 const NONE: InventorySchedule[] = []
 const DEFAULTS: InventorySettings = { ...DEFAULT_INVENTORY_SETTINGS, updatedAt: 0 }
@@ -156,26 +158,37 @@ export function invalidateScheduleCache(): void {
 
 onBrandChange(invalidateScheduleCache)
 
+/** One read of the collection, as the screens use it: the schedules, the settings, the snoozes. */
+function configFrom(rows: (Record<string, unknown> & { id: string; kind: string })[]): ScheduleConfig {
+  const settings = rows.find((r) => r.id === 'settings') as unknown as InventorySettings | undefined
+  return {
+    schedules: rows
+      .filter((r) => r.kind === 'stockCount')
+      .map((r) => r as unknown as InventorySchedule)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    settings: { ...DEFAULTS, ...(settings ?? {}) },
+    snoozes: rows.filter((r) => r.kind === 'snooze') as unknown as ReorderSnooze[],
+  }
+}
+
 export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedule[]; settings: InventorySettings; snoozes: ReorderSnooze[] }> {
   if (cached && cachedSettings) return { schedules: cached, settings: cachedSettings, snoozes: cachedSnoozes }
   if (!inflight) {
-    // A read that finishes after a brand switch belongs to the old brand: not kept (12 Oct 2026).
+    // A read that finishes after a brand switch belongs to the old brand: handed to whoever was
+    // waiting for it, never kept as the new brand's — and never turned into an empty list.
     const gen = generation
     inflight = (async () => {
       try {
         // One read of the whole collection: schedules and the settings document together.
         const rows = await scoped().getAll<Record<string, unknown> & { id: string; kind: string }>(COL.inventorySchedules)
-        if (gen !== generation) return
-        cached = rows
-          .filter((r) => r.kind === 'stockCount')
-          .map((r) => r as unknown as InventorySchedule)
-          .sort((a, b) => a.name.localeCompare(b.name))
-        const settings = rows.find((r) => r.id === 'settings') as unknown as InventorySettings | undefined
-        cachedSettings = { ...DEFAULTS, ...(settings ?? {}) }
-        cachedSnoozes = rows.filter((r) => r.kind === 'snooze') as unknown as ReorderSnooze[]
+        const own = configFrom(rows)
+        if (gen !== generation) return own
+        cached = own.schedules
+        cachedSettings = own.settings
+        cachedSnoozes = own.snoozes
       } catch {
         // A refused read must not stop the calendar; it simply has no schedules to show.
-        if (gen !== generation) return
+        if (gen !== generation) return { schedules: NONE, settings: DEFAULTS, snoozes: [] }
         cached = NONE
         cachedSettings = DEFAULTS
         cachedSnoozes = []
@@ -187,7 +200,8 @@ export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedu
       }
     })()
   }
-  await inflight
+  const own = await inflight
+  if (own) return own
   return { schedules: cached ?? NONE, settings: cachedSettings ?? DEFAULTS, snoozes: cachedSnoozes }
 }
 

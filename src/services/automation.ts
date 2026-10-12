@@ -1,5 +1,5 @@
 import { backend, BACKEND_MODE } from '../backend'
-import { getBrand, type BrandId } from '../brand/brand'
+import { brandEpoch, getBrand, type BrandId } from '../brand/brand'
 import { inventoryInsights } from '../lib/inventoryRules/insights'
 import { evaluate, plan, STATEFUL, weeklyFigures, type JobName } from '../lib/inventoryRules/notifications'
 import { GENERATE_AHEAD_DAYS, missingTasks, taskIdFor } from '../lib/inventoryRules/schedules'
@@ -41,6 +41,10 @@ import { loadSuppliers } from './suppliers'
  * getBrand() again and could file one brand's markers — or notifications — under the other. A
  * switch during the read phase now stops the job before it writes anything; it runs again,
  * under the right brand, the next time that brand is open.
+ *
+ * "A switch" is any switch, detected by the brand epoch (brand.ts), not by comparing brand ids:
+ * after Pizza → Le Lapin → Pizza the id matches again, but the caches the job read through were
+ * reset and its data is from before (ABA, 12 Oct 2026).
  */
 
 export interface CronStatus {
@@ -71,12 +75,13 @@ export async function generateStockCountTasks(
   now = Date.now(),
   schedules?: InventorySchedule[],
   brand: BrandId = getBrand(),
+  epoch: number = brandEpoch(),
 ): Promise<GenerateResult> {
   const from = bkkDayStart(now)
   const to = bkkDayEnd(now + GENERATE_AHEAD_DAYS * DAY_MS)
   const list = schedules ?? (await loadScheduleConfig()).schedules
-  // The schedules are the open brand's: if that is no longer the brand this run is for, stop.
-  if (getBrand() !== brand) return { written: 0, scanned: 0, from, to, skipped: 'brandChanged' }
+  // Any brand switch since this run began (even one that came back): stop, nothing written.
+  if (brandEpoch() !== epoch || getBrand() !== brand) return { written: 0, scanned: 0, from, to, skipped: 'brandChanged' }
   const enabled = list.filter((s) => s.enabled)
   if (enabled.length === 0) return { written: 0, scanned: 0, from, to }
   const db = backend.forBrand(brand)
@@ -95,8 +100,8 @@ export async function generateStockCountTasks(
   for (const task of missing) {
     const { id, ...doc } = task
     await db.set(COL.events, id, { id, ...doc })
-    // The calendar's cache is the open brand's: only told when that is still this brand.
-    if (getBrand() === brand) patchEvent(task)
+    // The calendar's cache is the open brand's: only told when nothing has switched since.
+    if (brandEpoch() === epoch) patchEvent(task)
   }
   return { written: missing.length, scanned: existing.length, from, to }
 }
@@ -147,9 +152,10 @@ export async function runOnOpen(
   actor: { id: string; name: string; role: Role },
   now = Date.now(),
   brand: BrandId = getBrand(),
+  epoch: number = brandEpoch(),
 ): Promise<GenerateResult | null> {
   if (!(await shouldRunOnOpen(actor.role, now, brand))) return null
-  const result = await generateStockCountTasks(actor, now, undefined, brand)
+  const result = await generateStockCountTasks(actor, now, undefined, brand, epoch)
   // Marked for the brand it ran for — and not at all when it stopped for a brand change.
   if (!result.skipped) markRanToday(now, brand)
   return result
@@ -215,6 +221,7 @@ export async function runNotificationJobs(
   data: NotifyData,
   now = Date.now(),
   brand: BrandId = getBrand(),
+  epoch: number = brandEpoch(),
 ): Promise<number> {
   const today = bkkDayStart(now)
   const [events, orders, requests, suppliers, config, riskOrders, transfers] = await Promise.all([
@@ -227,9 +234,10 @@ export async function runNotificationJobs(
     orderCache.fetchRange(today - 120 * DAY_MS, bkkDayEnd(now) + DAY_MS),
     transferCache.fetchRange(today - 30 * DAY_MS, bkkDayEnd(now) + DAY_MS),
   ])
-  // Everything above was read for the open brand. A switch meanwhile: stop before any write or
-  // marker; the next run under this brand does the work (none is lost, none is doubled).
-  if (getBrand() !== brand) return 0
+  // Everything above was read for the open brand. Any switch meanwhile — even one that came back
+  // (A → B → A): stop before any write or marker; a fresh run under this brand does the work,
+  // on fresh data (none is lost, none is doubled).
+  if (brandEpoch() !== epoch || getBrand() !== brand) return 0
   const view = stockView(data)
   const insights = inventoryInsights({
     ...view,

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { BACKEND_MODE } from '../backend'
-import { getBrand } from '../brand/brand'
+import { brandEpoch, getBrand } from '../brand/brand'
 import { runNotificationJobs, runOnOpen, shouldRunNotifications } from '../services/automation'
 import type { Role } from '../types'
 import { useData } from './DataContext'
@@ -27,11 +27,14 @@ export function useAutomation(): void {
     let stopped = false
     const actor = { id: user.id, name: user.name, role: user.role as Role }
     const tick = async () => {
-      // The brand this run is for, taken once (services/automation.ts).
+      // The brand this run is for, and the brand epoch, taken once at the start of the tick
+      // (services/automation.ts): `latest.current` is read after an await below, and any switch
+      // in between — even A → B → A — makes the jobs stop rather than use it.
       const brand = getBrand()
+      const epoch = brandEpoch()
       try {
-        await runOnOpen(actor, undefined, brand)
-        if (!stopped && (await shouldRunNotifications(actor.role, undefined, brand))) await runNotificationJobs(actor, latest.current, undefined, brand)
+        await runOnOpen(actor, undefined, brand, epoch)
+        if (!stopped && (await shouldRunNotifications(actor.role, undefined, brand))) await runNotificationJobs(actor, latest.current, undefined, brand, epoch)
       } catch {
         // see above
       }
