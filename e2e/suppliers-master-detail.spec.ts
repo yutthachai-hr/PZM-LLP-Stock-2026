@@ -52,7 +52,9 @@ test.afterEach(async ({ browser }) => {
 })
 
 for (const vp of [
+  { w: 1280, h: 720 },
   { w: 1366, h: 768 },
+  { w: 1536, h: 864 },
   { w: 1440, h: 900 },
   { w: 1920, h: 1080 },
 ]) {
@@ -77,6 +79,15 @@ for (const vp of [
     expect(Math.abs((await page.evaluate(() => scrollY)) - y0)).toBeLessThan(4)
     await expect(panel.getByRole('link', { name: 'NOBLE MONO ITEM 00' })).toBeVisible()
     await shot(page, `${vp.w}x${vp.h}-bottom-pick`)
+
+    // Nothing of the list is cut off beside the panel: no sideways scroll in the table, and
+    // the chosen row's status and ⋮ menu are on screen (owner review, 12 Oct 2026).
+    const table = page.locator('table').first()
+    expect(await table.evaluate((t) => { const box = t.parentElement!; return box.scrollWidth - box.clientWidth })).toBeLessThanOrEqual(1)
+    const row = page.locator('tr').filter({ has: pick(page, 'NOBLE MONO') })
+    await expect(row.getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' })).toBeInViewport({ ratio: 1 })
+    await expect(row.getByText('ใช้งานอยู่')).toBeInViewport({ ratio: 1 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0)
 
     // The long list scrolls inside the panel; heading and close stay put.
     const body = panel.locator('[data-detail-body]')

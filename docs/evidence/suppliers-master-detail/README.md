@@ -71,3 +71,23 @@ Branch: `feat/supplier-master-detail` (จาก `main` @ `ab51df9`)
   - `before-375x812-drawer.png` vs `after-375x812-drawer.png`
 
 *หมายเหตุเรื่อง Accessibility audit (axe): ในโปรเจกต์ยังไม่ได้ติดตั้ง `@axe-core/playwright` ตามแนวทางระเบียบ lazy senior developer และ ladder rule 4 (zero added dependencies) จึงรายงานผลเป็น "not available" เพื่อรอการตัดสินใจของเจ้าของระบบ*
+
+---
+
+## 6. Owner visual review (12 Oct 2026) — findings and fixes
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **1280–1535px: the list table overflowed beside the panel** (180px at 1366) — the status chip was cut and the row's ⋮ menu (edit / add product / hide / delete) was off the edge | Beside the panel, the columns the panel already shows (category, payment terms, lead time; last order) step aside until 1800px; table min-width 520 on desktop. New e2e assertion: no sideways scroll in the table, the page or the row, ⋮ and status fully in view — fails on the old code (overflow 180px), passes now |
+| 2 | Tab label "ประวัติการสั่งซื้อ" wrapped to two lines in the 360px panel and on phones | Tabs stay on one line (13px, no wrap) |
+| 3 | The emulator/demo badge (bottom-right) covers the panel's "เพิ่มสินค้า" button at 1440/1920 | Not a production issue — the badge exists only in demo/emulator builds. Left as is |
+
+New viewports covered: **1280×720** (shortest desktop) and **1536×864** (the 2xl boundary) — 12/12 in this spec; full suite e2e 20 passed / 1 skipped, ×2.
+
+## 7. Preview isolation — FAIL (do not test live)
+
+This branch is cut from `main`, which does not have PR #2's preview isolation:
+- `vite.config.ts` turns demo mode on only for the `demo` branch, so this branch's Cloudflare preview is built with the **Production Firebase config** (`pzm-stock-x5`), and a config saved in the browser's localStorage would also be honoured;
+- no `previewGuard` on `/api`, `/a`, `/po`; `wrangler.toml` binds the **Production** `po-images` KV and Workers AI to the preview.
+
+Cloudflare Access is the only barrier. Visual review is done on the local emulator only (this folder). After PR #2 merges, rebuild this PR on the new `main`; its previews then get demo data, guarded functions and the preview-only KV.

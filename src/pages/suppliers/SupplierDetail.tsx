@@ -104,7 +104,7 @@ export function SupplierDetail({
           role="tab"
           aria-selected={tab === x.key}
           onClick={() => setTab(x.key)}
-          className={`min-h-10 flex-1 cursor-pointer rounded-md px-2 text-sm font-medium ${focusRing} ${tab === x.key ? 'bg-surface text-brand shadow-sm' : 'text-ink-soft hover:text-ink'}`}
+          className={`min-h-10 min-w-0 flex-1 cursor-pointer whitespace-nowrap rounded-md px-1.5 text-[13px] font-medium ${focusRing} ${tab === x.key ? 'bg-surface text-brand shadow-sm' : 'text-ink-soft hover:text-ink'}`}
         >
           {x.label}
         </button>

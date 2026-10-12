@@ -367,6 +367,8 @@ export function SuppliersPage() {
       {
         key: 'category',
         header: t('หมวดหมู่'),
+        className: 'xl:hidden min-[1800px]:table-cell',
+        headerClassName: 'xl:hidden min-[1800px]:table-cell',
         cell: (r) =>
           r.supplier.category ? (
             <StatusChip tone="blue" icon={null} size="sm">
@@ -376,11 +378,12 @@ export function SuppliersPage() {
             <span className="text-ink-faint">—</span>
           ),
       },
-      { key: 'terms', header: t('เงื่อนไขชำระเงิน'), className: 'text-ink-soft', cell: (r) => r.supplier.paymentTerms || '—' },
+      { key: 'terms', header: t('เงื่อนไขชำระเงิน'), className: 'text-ink-soft xl:hidden min-[1800px]:table-cell', headerClassName: 'xl:hidden min-[1800px]:table-cell', cell: (r) => r.supplier.paymentTerms || '—' },
       {
         key: 'lead',
         header: t('ระยะเวลาส่ง'),
-        className: 'num whitespace-nowrap text-ink-soft',
+        className: 'num whitespace-nowrap text-ink-soft xl:hidden min-[1800px]:table-cell',
+        headerClassName: 'xl:hidden min-[1800px]:table-cell',
         cell: (r) => (r.supplier.leadTimeDays === undefined ? '—' : t('{n} วัน', { n: r.supplier.leadTimeDays })),
       },
       {
@@ -395,8 +398,8 @@ export function SuppliersPage() {
         key: 'last',
         header: t('สั่งซื้อล่าสุด'),
         card: 'hidden',
-        className: 'hidden whitespace-nowrap text-ink-soft 2xl:table-cell',
-        headerClassName: 'hidden 2xl:table-cell',
+        className: 'hidden whitespace-nowrap text-ink-soft min-[1800px]:table-cell',
+        headerClassName: 'hidden min-[1800px]:table-cell',
         cell: (r) => {
           const last = ordersOf(r.supplier.id)[0]
           if (!last) return <span className="text-ink-faint">—</span>
@@ -541,7 +544,8 @@ export function SuppliersPage() {
                 columns={columns}
                 rowKey={(r) => r.supplier.id}
                 rowClassName={(r) => `${r.supplier.active === false ? 'opacity-60' : ''} ${r.supplier.id === selectedId ? 'bg-brand-soft/60' : ''}`}
-                minWidth={820}
+                // Narrower beside the panel: only the columns that remain need the room.
+                minWidth={desktop ? 520 : 820}
                 onRowClick={(r) => select(r.supplier.id)}
                 rowMenu={(r) => menuFor(r.supplier)}
                 empty={
