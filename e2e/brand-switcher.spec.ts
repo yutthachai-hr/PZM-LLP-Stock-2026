@@ -49,8 +49,10 @@ async function stage() {
 
 /** Sign in on a fresh device; the first time, the picker asks which brand. */
 async function signIn(page: Page, who: Person, firstTime: boolean) {
-  await page.goto('/')
-  await page.getByRole('textbox', { name: /email|อีเมล/i }).fill(PEOPLE[who].email)
+  const email = page.getByRole('textbox', { name: /email|อีเมล/i })
+  // Already on the sign-in screen (just signed out): no navigation of our own to race the app's.
+  if (!(await email.isVisible().catch(() => false))) await page.goto('/')
+  await email.fill(PEOPLE[who].email)
   await page.locator('input[type="password"]').fill(PASSWORD)
   await page.getByRole('button', { name: 'เข้าสู่ระบบ' }).click()
   if (firstTime) await page.getByRole('button', { name: 'Pizza Mania' }).click()
@@ -91,6 +93,7 @@ test('first sign-in asks once; the next sign-in opens the last brand directly', 
   await expect(trigger(page)).toHaveAccessibleName(/Le Lapin/)
   // Sign out and back in (another account, same device): no picker, the device's last brand.
   await page.getByRole('button', { name: 'ออกจากระบบ' }).first().click()
+  await expect(page.getByRole('textbox', { name: /email|อีเมล/i })).toBeVisible()
   await signIn(page, 'staffA', false)
   await expect(page.getByRole('heading', { name: 'เลือกแบรนด์' })).toHaveCount(0)
   await expect(trigger(page)).toHaveAccessibleName(/Le Lapin/)
