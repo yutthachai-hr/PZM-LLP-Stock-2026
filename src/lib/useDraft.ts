@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
+import { reportUnsaved } from '../brand/unsavedWork'
 
 /**
  * What is half-keyed on a screen survives leaving it.
@@ -64,6 +65,29 @@ export function useDraft<T extends object>(
     return () => clearTimeout(h)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, value])
+
+  // While the form holds something, the brand switcher knows (brand/unsavedWork.ts) and can
+  // have it saved at once instead of 300 ms later.
+  const latest = useRef(value)
+  latest.current = value
+  const empty = isEmpty(value)
+  useEffect(() => {
+    if (empty) {
+      reportUnsaved(key, null)
+      return
+    }
+    reportUnsaved(key, {
+      screen,
+      flush: () => {
+        try {
+          localStorage.setItem(key, JSON.stringify(latest.current))
+        } catch {
+          /* full or blocked storage */
+        }
+      },
+    })
+    return () => reportUnsaved(key, null)
+  }, [key, screen, empty])
 
   const clear = useCallback(() => {
     try {

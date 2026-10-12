@@ -3032,4 +3032,13 @@ export const EN: Record<string, string> = {
   'วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน': 'This date is beyond the agreed range and needs purchasing approval first',
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
+
+  // ---- in-app brand switcher (9 Oct 2026) ----------------------------------------------
+  'เปลี่ยนเป็น {name}?': 'Switch to {name}?',
+  'มีงานที่ยังไม่ได้บันทึก {n} หน้า — จะเก็บไว้ในเครื่องนี้สำหรับ {from} และกลับมาเมื่อเปิดแบรนด์นี้อีกครั้ง (รูปถ่ายที่แนบไว้จะไม่ถูกเก็บ)':
+    'Unsaved work on {n} screen(s) — it is kept on this device for {from} and comes back when you open that brand again (attached photos are not kept)',
+  เปลี่ยนแบรนด์: 'Switch brand',
+  'ยังบันทึกข้อมูลไม่เสร็จ — รอให้เสร็จก่อนแล้วค่อยเปลี่ยนแบรนด์': 'Still saving — wait for it to finish, then switch brand',
+  'แบรนด์: {name} — เปลี่ยนแบรนด์': 'Brand: {name} — switch brand',
+  แบรนด์ที่เปิดอยู่: 'Open now',
 }

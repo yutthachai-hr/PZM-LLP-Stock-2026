@@ -1,0 +1,20 @@
+{
+  "listenersBefore": 8,
+  "switches": [
+    {
+      "to": "/Le Lapin/",
+      "reads": 39,
+      "listenersAfter": 8
+    },
+    {
+      "to": "/R&D/",
+      "reads": 39,
+      "listenersAfter": 8
+    },
+    {
+      "to": "/Pizza Mania/",
+      "reads": 17,
+      "listenersAfter": 8
+    }
+  ]
+}

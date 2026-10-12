@@ -7,7 +7,7 @@ import { PASSWORD, PEOPLE, type Person } from './fixture'
  */
 export async function open(page: Page, path: string): Promise<void> {
   await page.goto(path)
-  const brand = page.getByRole('button', { name: 'Pizza Mania' })
+  const brand = page.getByRole('button', { name: 'Pizza Mania', exact: true })
   const app = page.getByText('ฐานข้อมูลจำลองสำหรับทดสอบ (emulator)')
   await expect(brand.or(page.locator('main'))).toBeVisible()
   if (await brand.isVisible()) await brand.click()
@@ -23,7 +23,7 @@ export async function signedIn(browser: Browser, who: Person, path = '/'): Promi
   await page.getByPlaceholder('you@email.com').fill(PEOPLE[who].email)
   await page.locator('input[type="password"]').fill(PASSWORD)
   await page.getByRole('button', { name: 'เข้าสู่ระบบ' }).click()
-  await page.getByRole('button', { name: 'Pizza Mania' }).click()
+  await page.getByRole('button', { name: 'Pizza Mania', exact: true }).click()
   await expect(page.locator('main')).toBeVisible()
   if (path !== '/') await open(page, path)
   return page

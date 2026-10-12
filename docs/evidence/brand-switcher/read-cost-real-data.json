@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-12T05:12:53.684Z",
+  "loaded": {
+    "pizza": 4763,
+    "lelapin": 605
+  },
+  "steps": [
+    {
+      "step": "sign in → Pizza Mania (cold)",
+      "reads": 1657,
+      "listeners": 7
+    },
+    {
+      "step": "→ Le Lapin (first time)",
+      "reads": 500,
+      "listeners": 7
+    },
+    {
+      "step": "→ Pizza Mania (again)",
+      "reads": 73,
+      "listeners": 7
+    },
+    {
+      "step": "→ Le Lapin (again)",
+      "reads": 71,
+      "listeners": 7
+    }
+  ]
+}
