@@ -62,7 +62,13 @@ test('notifications written while switching brands stay with their own brand', a
     await page.waitForTimeout(300 + Math.floor(Math.random() * 900))
     await switchTo(page, b)
   }
-  await page.waitForTimeout(8_000)
+  // Then each brand opened once more and left to settle. A job a switch interrupted runs
+  // again here (none lost); one whose "done" marker was filed under the wrong brand would be
+  // skipped here for half an hour (the lost-run symptom) and leave that brand empty.
+  for (const b of ['rnd', 'lelapin', 'pizza'] as const) {
+    await switchTo(page, b)
+    await page.waitForTimeout(6_000)
+  }
 
   const found: Record<string, number> = {}
   for (const [brand, prefix] of Object.entries(brands)) {
