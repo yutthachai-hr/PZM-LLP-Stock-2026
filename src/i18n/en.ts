@@ -3037,4 +3037,8 @@ export const EN: Record<string, string> = {
   'วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน': 'This date is beyond the agreed range and needs purchasing approval first',
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
+
+  // ---- automation: a run stopped by a brand change (12 Oct 2026) ----------------------
+  'เปลี่ยนแบรนด์ระหว่างสร้างงาน — ยังไม่ได้สร้างงานนับสต๊อก ลองกดใหม่อีกครั้ง':
+    'The brand changed while creating tasks — no stock-count tasks were created. Press again',
 }

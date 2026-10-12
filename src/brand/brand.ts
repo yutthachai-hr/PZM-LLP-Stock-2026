@@ -150,9 +150,21 @@ export function onBrandChange(fn: () => void): () => void {
   return () => brandListeners.delete(fn)
 }
 
+/**
+ * Goes up by one on every brand change, and never comes back down. Work that waits on the
+ * network compares it with the value it started with: the brand id alone cannot tell
+ * Pizza → Le Lapin → Pizza from "nothing happened" (owner review, 12 Oct 2026).
+ */
+let epoch = 0
+
+export function brandEpoch(): number {
+  return epoch
+}
+
 /** Set the active brand for the data layer (updates collection resolution immediately). */
 export function setActiveBrand(b: BrandId): void {
   const changed = b !== current
+  if (changed) epoch++
   current = b
   try {
     localStorage.setItem(LS_KEY, b)
