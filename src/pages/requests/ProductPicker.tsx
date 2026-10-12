@@ -139,6 +139,7 @@ function ByProduct({
   const [supplierId, setSupplierId] = useState('')
   const [entryUnit, setEntryUnit] = useState('')
   const [qty, setQty] = useState('')
+  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const qtyRef = useRef<HTMLInputElement>(null)
@@ -153,6 +154,7 @@ function ByProduct({
     setSupplierId(p.supplierId && suppliers.some((s) => s.id === p.supplierId) ? p.supplierId : '')
     setEntryUnit('')
     setQty('')
+    setNote('')
     setTimeout(() => qtyRef.current?.focus(), 0)
   }
 
@@ -160,6 +162,7 @@ function ByProduct({
     setPicked(null)
     setQ('')
     setQty('')
+    setNote('')
     setTimeout(() => searchRef.current?.focus(), 0)
   }
 
@@ -177,6 +180,7 @@ function ByProduct({
         supplierName: s.name,
         qty: n,
         ...(entryUnit && !sameUnit(entryUnit, picked.unitType) ? { entryUnit } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
       })
       reset()
     } finally {
@@ -309,6 +313,20 @@ function ByProduct({
                 onRateDefined={(list) => setPicked((cur) => (cur ? { ...cur, unitConversions: list } : cur))}
               />
             </div>
+          </div>
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-medium text-ink">{t('หมายเหตุ (ไม่บังคับ)')}</label>
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={t('หมายเหตุ (ไม่บังคับ)')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void add()
+                }
+              }}
+            />
           </div>
           <div className="mt-3 flex justify-end">
             <Button onClick={() => void add()} disabled={busy || !supplierId || !(Number(qty) > 0)}>
