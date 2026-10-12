@@ -39,7 +39,12 @@ export function AutomationStatus() {
       // The brand this run is for, taken once (services/automation.ts).
       const brand = getBrand()
       const r = await generateStockCountTasks({ id: user.id, name: user.name }, undefined, undefined, brand)
-      if (!r.skipped) markRanToday(undefined, brand)
+      // A run stopped by a brand change did nothing: say so, never "all done".
+      if (r.skipped) {
+        toast.error(t('เปลี่ยนแบรนด์ระหว่างสร้างงาน — ยังไม่ได้สร้างงานนับสต๊อก ลองกดใหม่อีกครั้ง'))
+        return
+      }
+      markRanToday(undefined, brand)
       toast.success(r.written === 0 ? t('งานนับสต๊อกครบแล้ว ไม่มีงานใหม่') : t('สร้างงานนับสต๊อก {n} งาน', { n: r.written }))
     } catch (e) {
       toast.error(errText(e, t))
