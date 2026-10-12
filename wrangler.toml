@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # Order-sheet pictures for LINE (functions/api/po-image.ts, functions/po/[token].ts).
 # Create the namespace in the Cloudflare dashboard (Workers & Pages → KV → Create) and
-# paste its id here; the preview namespace can be the same one.
+# paste its id here. Production only: previews have their own namespace (below).
 [[kv_namespaces]]
 binding = "PO_IMAGES"
 id = "227ca0f947374f5d9ddf9752b7ea506c"
@@ -16,3 +16,12 @@ id = "227ca0f947374f5d9ddf9752b7ea506c"
 # Bill OCR fallback when Gemini's free quota is used up (functions/api/ocr-bill.ts).
 [ai]
 binding = "AI"
+
+# Preview isolation (owner, 9 Oct 2026): previews get their OWN, empty order-sheet store and no
+# AI binding. Overriding one binding for an environment replaces all of that environment's
+# bindings, so nothing above (the production KV, Workers AI) reaches a preview. Production uses
+# the top-level settings above, unchanged. Privileged routes are refused on previews anyway
+# (functions/_lib/previewGuard.ts); this keeps a mistake there from reaching production data.
+[[env.preview.kv_namespaces]]
+binding = "PO_IMAGES"
+id = "6dd0b33a67e94d2597b8625bac380885"
