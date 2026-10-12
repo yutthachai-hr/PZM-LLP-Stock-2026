@@ -26,6 +26,25 @@ Login page: unchanged (approved artwork untouched).
    by brand, so every subscription and in-memory list is rebuilt from nothing; brand-scoped module
    caches drop their copy via `onBrandChange`. Nothing of the previous brand stays on screen.
 
+## Review fix (12 Oct 2026): a draft is only "kept" when it really was written
+- `useDraft`'s immediate save now goes through `persistDraft()`: write, read back, compare — true
+  only if the stored text matches. Quota exceeded, blocked/unavailable storage, a store that drops
+  or alters the write, or an unserialisable value → false.
+- `flushUnsaved()` returns `{ saved, failed }` (nothing swallowed). If **any** draft fails, the
+  switch is **aborted before anything unmounts**: the brand, the page and every typed value stay
+  on screen, and a Thai error names the pages (`after-1440-draft-save-failed.png`).
+- The confirm dialog no longer promises the draft is kept; it says the switch will not happen if
+  it cannot be kept.
+- Drafts are keyed per brand **and** per person: `draftKey(brand, user, screen)` (tested).
+- **In-flight audit**: besides every Backend write (`add/set/update/remove/transaction`, including
+  `forBrand` copies), the switch now also waits for direct server calls that bypass the Backend:
+  `supplierLink` and `decideSupplierDate` (server writes to a PO), `uploadPoImage` (KV upload), and
+  bill OCR (its answer fills a form). The two PO commands also take the brand once before the
+  request and patch the per-brand order cache only if that brand is still open — a test that
+  switches brand mid-request proves the new brand's cache is untouched (fails on the old code).
+  Not tracked (no writes, no brand effect): weather, supplier confirmation page (public, its own
+  token), `rangeCache` reads.
+
 ## Authorization findings (reported, not changed)
 - `firestore.rules` grant access by **active profile + role** only. There is **no per-user brand
   list** (`AppUser` has none) and no brand condition in the rules: every active employee can read
@@ -43,15 +62,17 @@ Login page: unchanged (approved artwork untouched).
 - Stock writes (`ledgerTx` / commands) already take the brand once (`forBrand`); not touched.
 
 ## Tests
-- Unit `tests/brand-switch-guards.test.ts` (6): writes counted/released on success and failure,
+- Unit `tests/brand-switch-guards.test.ts` (15): writes counted/released on success and failure,
   wait + timeout, every write method counted (reads not, `forBrand` copies too), unsaved registry
   and flush, remembered brand validation (tampered / blocked storage).
-- E2E `e2e/brand-switcher.spec.ts` (8, emulator):
+- E2E `e2e/brand-switcher.spec.ts` (9, emulator; + storage-full case below):
   1. first sign-in asks once; sign out + another account on the same device → last brand, no picker
   2. Pizza → Le Lapin → R&D → Pizza: each lands on `/` with only its own products; **opening the
      list = 0 reads**; live listeners identical after every switch
   3. rapid switching settles on the last choice with that brand's data only
   4. unsaved receiving form → warning; cancel keeps everything; switching keeps the draft for Pizza
+  4b. **storage full** (`QuotaExceededError` on draft writes) → switch refused, Pizza / `/receive` /
+     FLOUR still on screen, Thai error; storage back → switch succeeds and the draft is really stored
   5. tampered `localStorage`/`sessionStorage` brand ids are ignored
   6. keyboard: Enter opens on the current brand, ArrowDown / End move, Enter switches, Escape returns focus
   7–8. tablet 1024×768 and phone 390×844: logo ≥ 44 px, sheet options ≥ 44 px and not covered

@@ -1,4 +1,5 @@
 import { BACKEND_MODE } from '../backend'
+import { trackWrite } from '../backend/pendingWrites'
 import { AppError } from '../i18n/AppError'
 
 /**
@@ -61,6 +62,11 @@ export async function authHeader(): Promise<Record<string, string>> {
 }
 
 async function put(path: string, blob: Blob, headers: Record<string, string>, type = 'image/jpeg'): Promise<string> {
+  // An upload the brand switcher waits for (backend/pendingWrites.ts).
+  return trackWrite(putNow(path, blob, headers, type))
+}
+
+async function putNow(path: string, blob: Blob, headers: Record<string, string>, type: string): Promise<string> {
   const res = await fetch(`${host()}${path}`, {
     method: 'POST',
     headers: { ...headers, 'content-type': type },

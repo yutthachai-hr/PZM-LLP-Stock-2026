@@ -16,6 +16,34 @@ import { reportUnsaved } from '../brand/unsavedWork'
  * pictures (a data URL can be megabytes) are never kept. Storage can be missing or full
  * — a private window, a wiped tablet — and then the form simply behaves as before.
  */
+/** Where a draft lives: one per brand, per person, per screen. */
+export function draftKey(brand: string | null | undefined, userId: string | null | undefined, screen: string): string {
+  return `draft:${brand ?? ''}:${userId ?? ''}:${screen}`
+}
+
+/**
+ * Write a draft and prove it: true only when the stored text reads back exactly as written.
+ * A full quota, blocked storage, or a store that silently drops the write all come back false.
+ */
+export function persistDraft(storage: Pick<Storage, 'setItem' | 'getItem'> | undefined, key: string, value: unknown): boolean {
+  try {
+    if (!storage) return false
+    const text = JSON.stringify(value)
+    storage.setItem(key, text)
+    return storage.getItem(key) === text
+  } catch {
+    return false
+  }
+}
+
+function browserStorage(): Storage | undefined {
+  try {
+    return typeof localStorage === 'undefined' ? undefined : localStorage
+  } catch {
+    return undefined
+  }
+}
+
 export function useDraft<T extends object>(
   screen: string,
   value: T,
@@ -25,7 +53,7 @@ export function useDraft<T extends object>(
 ): { restored: boolean; clear: () => void } {
   const { user } = useAuth()
   const { brand } = useBrand()
-  const key = `draft:${brand ?? ''}:${user?.id ?? ''}:${screen}`
+  const key = draftKey(brand, user?.id, screen)
   const [restored, setRestored] = useState(false)
   // The first render must not overwrite the saved draft with the empty form.
   const loaded = useRef(false)
@@ -78,13 +106,8 @@ export function useDraft<T extends object>(
     }
     reportUnsaved(key, {
       screen,
-      flush: () => {
-        try {
-          localStorage.setItem(key, JSON.stringify(latest.current))
-        } catch {
-          /* full or blocked storage */
-        }
-      },
+      // Verified, never assumed: the switcher refuses to switch when this is false.
+      flush: () => persistDraft(browserStorage(), key, latest.current),
     })
     return () => reportUnsaved(key, null)
   }, [key, screen, empty])

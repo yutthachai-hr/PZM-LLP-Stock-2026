@@ -183,6 +183,43 @@ test('an unsaved receiving form is named first; cancel keeps it, switching keeps
   await expect(page.getByText('FLOUR').first()).toBeVisible()
 })
 
+test('a draft that cannot be saved stops the switch; the form stays as typed', async ({ browser }) => {
+  await stage()
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await signIn(page, 'admin', true)
+  await open(page, '/receive')
+  await page.getByText('รับนอกใบสั่งซื้อ').first().click()
+  await page.getByPlaceholder('ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)').fill('FLOUR')
+  await page.getByRole('button', { name: /FLOUR/ }).first().click()
+
+  // The device's storage is full: every draft write throws QuotaExceededError.
+  await page.evaluate(() => {
+    const real = Storage.prototype.setItem
+    ;(window as unknown as { __realSetItem: typeof real }).__realSetItem = real
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith('draft:')) throw new DOMException('quota', 'QuotaExceededError')
+      return real.call(this, key, value)
+    }
+  })
+  await switchTo(page, /Le Lapin/)
+  await page.getByRole('dialog', { name: /เปลี่ยนเป็น/ }).getByRole('button', { name: 'เปลี่ยนแบรนด์' }).click()
+  await expect(page.getByText(/เก็บงานที่ยังไม่ได้บันทึกไว้ในเครื่องนี้ไม่ได้ \(รับสินค้าเข้า\)/)).toBeVisible()
+  await shot(page, 'after-1440-draft-save-failed')
+  await expect(trigger(page)).toHaveAccessibleName(/Pizza Mania/)
+  await expect(page).toHaveURL(/\/receive/)
+  await expect(page.getByText('FLOUR').first()).toBeVisible()
+
+  // Storage back: the same switch goes through, and the draft is really there afterwards.
+  await page.evaluate(() => {
+    Storage.prototype.setItem = (window as unknown as { __realSetItem: Storage['setItem'] }).__realSetItem
+  })
+  await switchTo(page, /Le Lapin/)
+  await page.getByRole('dialog', { name: /เปลี่ยนเป็น/ }).getByRole('button', { name: 'เปลี่ยนแบรนด์' }).click()
+  await expect(trigger(page)).toHaveAccessibleName(/Le Lapin/)
+  const kept = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('draft:pizza:') && k.endsWith(':receive')))
+  expect(kept).toHaveLength(1)
+})
+
 test('stale or tampered browser storage never picks a brand', async ({ browser }) => {
   await stage()
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })

@@ -3035,8 +3035,10 @@ export const EN: Record<string, string> = {
 
   // ---- in-app brand switcher (9 Oct 2026) ----------------------------------------------
   'เปลี่ยนเป็น {name}?': 'Switch to {name}?',
-  'มีงานที่ยังไม่ได้บันทึก {n} หน้า — จะเก็บไว้ในเครื่องนี้สำหรับ {from} และกลับมาเมื่อเปิดแบรนด์นี้อีกครั้ง (รูปถ่ายที่แนบไว้จะไม่ถูกเก็บ)':
-    'Unsaved work on {n} screen(s) — it is kept on this device for {from} and comes back when you open that brand again (attached photos are not kept)',
+  'มีงานที่ยังไม่ได้บันทึก {n} หน้า — ระบบจะเก็บไว้ในเครื่องนี้สำหรับ {from} ก่อนเปลี่ยน และกลับมาเมื่อเปิดแบรนด์นี้อีกครั้ง ถ้าเก็บไม่ได้จะไม่เปลี่ยนแบรนด์ (รูปถ่ายที่แนบไว้จะไม่ถูกเก็บ)':
+    'Unsaved work on {n} screen(s) — it is kept on this device for {from} before switching and comes back when you open that brand again; if it cannot be kept, the brand is not switched (attached photos are not kept)',
+  'เก็บงานที่ยังไม่ได้บันทึกไว้ในเครื่องนี้ไม่ได้ ({screens}) — ยังไม่เปลี่ยนแบรนด์ งานบนหน้าจอยังอยู่ครบ บันทึกหรือล้างงานก่อน แล้วค่อยเปลี่ยน':
+    'Could not keep the unsaved work on this device ({screens}) — the brand was not switched and everything on screen is still there. Save or clear that work first, then switch',
   เปลี่ยนแบรนด์: 'Switch brand',
   'ยังบันทึกข้อมูลไม่เสร็จ — รอให้เสร็จก่อนแล้วค่อยเปลี่ยนแบรนด์': 'Still saving — wait for it to finish, then switch brand',
   'แบรนด์: {name} — เปลี่ยนแบรนด์': 'Brand: {name} — switch brand',
