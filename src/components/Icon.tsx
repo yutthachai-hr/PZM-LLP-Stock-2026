@@ -50,6 +50,9 @@ const paths = {
   camera: 'M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z',
   // Hiding a product rather than deleting it. Lucide's eye / eye-off.
   eye: 'M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0',
+  // The sign-in fields (5 Oct 2026): who, and the lock for the password.
+  user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2',
+  lock: 'M7 11V7a5 5 0 0 1 10 0v4M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM12 15v3',
   eyeOff:
     'M10.73 5.08A10.43 10.43 0 0 1 12 5c4.64 0 8.57 3.02 9.94 7.19a1 1 0 0 1 0 .62 10.9 10.9 0 0 1-2.02 3.42M6.61 6.61A13.5 13.5 0 0 0 2.06 11.65a1 1 0 0 0 0 .7A10.75 10.75 0 0 0 12 19c2 0 3.83-.55 5.39-1.44M2 2l20 20M9.88 9.88a3 3 0 1 0 4.24 4.24',
   download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
@@ -138,6 +141,7 @@ const circles: Partial<Record<IconName, { cx: number; cy: number; r: number }[]>
   eye: [{ cx: 12, cy: 12, r: 3 }],
   info: [{ cx: 12, cy: 12, r: 10 }],
   users: [{ cx: 9, cy: 7, r: 4 }],
+  user: [{ cx: 12, cy: 7, r: 4 }],
   share: [
     { cx: 18, cy: 5, r: 3 },
     { cx: 6, cy: 12, r: 3 },
