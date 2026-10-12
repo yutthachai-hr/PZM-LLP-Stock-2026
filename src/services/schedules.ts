@@ -138,12 +138,15 @@ let inflight: Promise<void> | null = null
 const listeners = new Set<() => void>()
 const NONE: InventorySchedule[] = []
 const DEFAULTS: InventorySettings = { ...DEFAULT_INVENTORY_SETTINGS, updatedAt: 0 }
+/** Bumped whenever the cache is forgotten (a brand switch, a write), so a late read is not kept. */
+let generation = 0
 
 function announce(): void {
   for (const fn of listeners) fn()
 }
 
 export function invalidateScheduleCache(): void {
+  generation++
   cached = null
   cachedSettings = null
   cachedSnoozes = []
@@ -156,10 +159,13 @@ onBrandChange(invalidateScheduleCache)
 export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedule[]; settings: InventorySettings; snoozes: ReorderSnooze[] }> {
   if (cached && cachedSettings) return { schedules: cached, settings: cachedSettings, snoozes: cachedSnoozes }
   if (!inflight) {
+    // A read that finishes after a brand switch belongs to the old brand: not kept (12 Oct 2026).
+    const gen = generation
     inflight = (async () => {
       try {
         // One read of the whole collection: schedules and the settings document together.
         const rows = await scoped().getAll<Record<string, unknown> & { id: string; kind: string }>(COL.inventorySchedules)
+        if (gen !== generation) return
         cached = rows
           .filter((r) => r.kind === 'stockCount')
           .map((r) => r as unknown as InventorySchedule)
@@ -169,12 +175,15 @@ export async function loadScheduleConfig(): Promise<{ schedules: InventorySchedu
         cachedSnoozes = rows.filter((r) => r.kind === 'snooze') as unknown as ReorderSnooze[]
       } catch {
         // A refused read must not stop the calendar; it simply has no schedules to show.
+        if (gen !== generation) return
         cached = NONE
         cachedSettings = DEFAULTS
         cachedSnoozes = []
       } finally {
-        inflight = null
-        announce()
+        if (gen === generation) {
+          inflight = null
+          announce()
+        }
       }
     })()
   }

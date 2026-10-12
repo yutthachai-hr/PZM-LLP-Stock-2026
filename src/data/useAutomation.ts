@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { BACKEND_MODE } from '../backend'
+import { getBrand } from '../brand/brand'
 import { runNotificationJobs, runOnOpen, shouldRunNotifications } from '../services/automation'
 import type { Role } from '../types'
 import { useData } from './DataContext'
@@ -26,9 +27,11 @@ export function useAutomation(): void {
     let stopped = false
     const actor = { id: user.id, name: user.name, role: user.role as Role }
     const tick = async () => {
+      // The brand this run is for, taken once (services/automation.ts).
+      const brand = getBrand()
       try {
-        await runOnOpen(actor)
-        if (!stopped && (await shouldRunNotifications(actor.role))) await runNotificationJobs(actor, latest.current)
+        await runOnOpen(actor, undefined, brand)
+        if (!stopped && (await shouldRunNotifications(actor.role, undefined, brand))) await runNotificationJobs(actor, latest.current, undefined, brand)
       } catch {
         // see above
       }
