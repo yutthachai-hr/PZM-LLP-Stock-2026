@@ -214,7 +214,9 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
   const col = brandCollection(claims.brand, 'purchaseOrders')
   const { maxPostponeDays } = await settingsOf(deps.store, claims.brand)
   const now = deps.now()
-  type Answer = { replayed: true } | { replayed: false; outcome: RespondOutcome; change: DeliveryDateChange }
+  // `replayed`: nothing was written: this request was applied before, or (`unchanged`) the
+  // order already says what it says. Either way nobody is told again.
+  type Answer = { replayed: true; unchanged: boolean } | { replayed: false; outcome: RespondOutcome; change: DeliveryDateChange }
   const res = await writeOrder<Answer>(deps, col, claims.poId, (o) => {
     const problem = linkProblem(o, claims, now)
     if (problem === 'mismatch') return NOT_FOUND
@@ -231,7 +233,7 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
       { now, maxPostponeDays, makeId: deps.makeId },
     )
     if (!r.ok) return fail(422, r.error)
-    if (r.replayed) return { patch: null, reply: { replayed: true } }
+    if (r.replayed) return { patch: null, reply: { replayed: true, unchanged: r.unchanged === true } }
     return { patch: r.patch, reply: { replayed: false, outcome: r.outcome, change: r.change } }
   })
   if (isReply(res)) return res
@@ -245,6 +247,7 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
   }
   return ok({
     replayed: reply.replayed,
+    unchanged: reply.replayed ? reply.unchanged : false,
     outcome: reply.replayed ? null : reply.outcome,
     view: supplierView(res.order, claims.brand, maxPostponeDays, now, claims.expMs),
   })

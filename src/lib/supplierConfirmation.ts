@@ -273,7 +273,9 @@ export interface RespondContext {
 export type RespondOutcome = 'confirmed' | 'changed' | 'pending'
 
 export type RespondResult =
-  | { ok: true; replayed: true }
+  /** Nothing to write: this request was applied already, or (`unchanged`) the order is
+   *  already exactly where this answer would put it. */
+  | { ok: true; replayed: true; unchanged?: true }
   | {
       ok: true
       replayed: false
@@ -296,13 +298,12 @@ export function cleanText(s: unknown, max: number): string | undefined {
  * The supplier answers: accept the date asked for, or propose another. Applied at once
  * when within the owner's range (`confirmedDeliveryDate` and `expectedAt` move, so the
  * calendar does); held as `pendingDeliveryDate` otherwise. A newer answer replaces a
- * waiting one. Retrying the same `requestId` changes nothing.
+ * waiting one. Retrying the same `requestId` changes nothing, and neither does the same
+ * answer sent again under a new one (see `isUnchanged`).
  */
 export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondContext): RespondResult {
   if (isReplay(o, input.requestId)) return { ok: true, replayed: true }
   const history = o.deliveryDateHistory ?? []
-  // Room for this answer (two entries at most) and the decision that may follow it.
-  if (history.length > SUPPLIER_LIST_MAX - 3) return { ok: false, error: 'full' }
 
   const requested = requestedOf(o)
   const note = cleanText(input.note, SUPPLIER_NOTE_MAX)
@@ -329,6 +330,11 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
     target = bkkDayStart(input.date as number)
     mode = v.mode
   }
+
+  // Before the room check: an answer that changes nothing needs no room.
+  if (isUnchanged(o, target, mode)) return { ok: true, replayed: true, unchanged: true }
+  // Room for this answer (two entries at most) and the decision that may follow it.
+  if (history.length > SUPPLIER_LIST_MAX - 3) return { ok: false, error: 'full' }
 
   const nextHistory = [...history]
   const nextActivity = [...(o.supplierActivity ?? [])]
@@ -386,6 +392,29 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
   patch.deliveryDateHistory = nextHistory
   patch.supplierActivity = nextActivity.slice(-SUPPLIER_LIST_MAX)
   return { ok: true, replayed: false, outcome, patch: clean(patch), change: clean(change), supersededChangeId }
+}
+
+/**
+ * Whether this answer would leave the order where it already is: the same date already
+ * agreed on this link (nothing waiting over it), or the same date already waiting for a
+ * หัวหน้า. Then it is not a new event: no history, no activity, no notification, and the
+ * name and note sent with it overwrite nothing (owner, 12 Oct 2026: one confirmation,
+ * pressed five times, reached the bell five times).
+ *
+ * Judged on the order itself, re-read on every lost race, not on time: a different date is
+ * always new, and so is the first answer after the order was amended (the new link resets
+ * the status to 'waiting') or after a หัวหน้า refused a date (the supplier is answering the
+ * refusal; once answered, the same date again is unchanged).
+ */
+function isUnchanged(o: PurchaseOrder, target: number, mode: 'auto' | 'needsApproval'): boolean {
+  if (lastRejection(o)) return false
+  if (mode === 'needsApproval') return o.pendingDeliveryDate !== undefined && bkkDayStart(o.pendingDeliveryDate.date) === target
+  return (
+    !o.pendingDeliveryDate &&
+    (o.supplierConfirmationStatus === 'confirmed' || o.supplierConfirmationStatus === 'changed') &&
+    o.confirmedDeliveryDate !== undefined &&
+    bkkDayStart(o.confirmedDeliveryDate) === target
+  )
 }
 
 export interface DecideInput {
