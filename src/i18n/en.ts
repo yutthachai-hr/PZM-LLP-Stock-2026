@@ -2745,7 +2745,6 @@ export const EN: Record<string, string> = {
   "ระบบเดา {n}": "Guessed {n}",
   "จะเพิ่ม {n} จาก {total} รายการ": "Adding {n} of {total}",
   "ไม่เพิ่ม": "Not added",
-  "หน่วย {u} ไม่รู้จัก — ใช้เป็นหน่วยหลัก ตรวจก่อนเพิ่ม": "Unit {u} unknown — taken as the base unit, check before adding",
   "เปลี่ยนสินค้า": "Change product",
   "ใกล้เคียง — กดเลือก:": "Close matches — tap one:",
   "ค้นหาสินค้าในระบบ (ชื่อ / รหัส)": "Search products (name / code)",
@@ -2986,6 +2985,12 @@ export const EN: Record<string, string> = {
   'รอผู้ขายยืนยัน': 'Waiting Supplier',
   'ผู้ขายยืนยันแล้ว': 'Supplier Confirmed',
   'ผู้ขายเปลี่ยนวันส่ง': 'Supplier Changed Date',
+  "สินค้านี้ยังไม่มีหน่วย — ให้ผู้ดูแลกำหนดหน่วยที่หน้าสินค้าก่อน จึงจะขอสั่งซื้อได้": "This product has no unit yet — an admin must set it on the product before it can be requested",
+  "สินค้านี้ยังไม่มีหน่วย — ให้ผู้ดูแลกำหนดหน่วยที่หน้าสินค้าก่อน จึงจะนำเข้าได้": "This product has no unit yet — an admin must set it on the product before it can be imported",
+  "หน่วย {u} ยังไม่มีอัตราแปลงของสินค้านี้ — กำหนดอัตราที่หน้าสินค้าก่อน แล้วนำเข้าใหม่": "This product has no rate for {u} — set the rate on the product, then import again",
+  "จำนวนในไฟล์ใช้ไม่ได้": "The quantity in the file cannot be used",
+  "ยืนยันว่าเป็นสินค้านี้": "Confirm it is this product",
+  'ยอดคงเหลือจริงที่ {site}': 'Actual on hand at {site}',
   'รออนุมัติวันส่ง': 'Pending Date Approval',
   'ผู้ขายยืนยันวันส่ง: {supplier} ({docNo})': 'Supplier confirmed delivery: {supplier} ({docNo})',
   'ผู้ขายเปลี่ยนวันส่ง: {supplier} ({docNo})': 'Supplier changed delivery date: {supplier} ({docNo})',
@@ -3039,4 +3044,8 @@ export const EN: Record<string, string> = {
   'วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน': 'This date is beyond the agreed range and needs purchasing approval first',
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
+
+  // ---- automation: a run stopped by a brand change (12 Oct 2026) ----------------------
+  'เปลี่ยนแบรนด์ระหว่างสร้างงาน — ยังไม่ได้สร้างงานนับสต๊อก ลองกดใหม่อีกครั้ง':
+    'The brand changed while creating tasks — no stock-count tasks were created. Press again',
 }

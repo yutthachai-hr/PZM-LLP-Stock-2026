@@ -201,6 +201,15 @@ export function Spinner({ label }: { label?: string }) {
   )
 }
 
+/**
+ * The open dialogs, oldest first. Each one listens for Escape and Tab on the document, and a
+ * listener on the document cannot stop another one on the same node — so with a question
+ * raised from inside a dialog (useConfirm in an editor), one Escape closed both, throwing the
+ * editor's half-done form away with the question, and the dialog behind pulled Tab out of the
+ * one in front (P2, 8 Oct 2026, e2e/dialogs.spec.ts). Only the top one handles keys now.
+ */
+const openDialogs: symbol[] = []
+
 export function Modal({
   open,
   onClose,
@@ -274,6 +283,8 @@ export function Modal({
   useEffect(() => {
     if (!open) return
     const returnTo = document.activeElement as HTMLElement | null
+    const me = Symbol('dialog')
+    openDialogs.push(me)
 
     // Focus the first thing worth landing on, so keyboard users start inside the dialog.
     const focusables = () =>
@@ -286,6 +297,8 @@ export function Modal({
     focusables()[0]?.focus()
 
     function onKeyDown(e: KeyboardEvent) {
+      // A dialog under another one leaves the keys to the one in front.
+      if (openDialogs[openDialogs.length - 1] !== me) return
       if (e.key === 'Escape') {
         e.stopPropagation()
         closeRef.current()
@@ -311,6 +324,7 @@ export function Modal({
     document.addEventListener('keydown', onKeyDown, true)
     return () => {
       document.removeEventListener('keydown', onKeyDown, true)
+      openDialogs.splice(openDialogs.indexOf(me), 1)
       // Put focus back where it was, so closing a dialog does not dump the caret at the
       // top of the page.
       returnTo?.focus?.()
