@@ -55,9 +55,11 @@ for (const view of VIEWS) {
         expect(n).toEqual(['brand-orb-float', 'running'])
       }
       const boxesBefore = await radios(page).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()))
-      const s = await sampleTops(page, 2400)
+      // A full period of the slowest logo (4.2s): over a shorter window the travel depends on
+      // where in its cycle sampling starts, and 2.4s windows measured under 3px at some phases.
+      const s = await sampleTops(page, 4400)
       const boxesAfter = await radios(page).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()))
-      // Each logo travels a visible distance (5px design; at least 3.5px within 2.4s).
+      // Each logo travels a visible distance (5px design; at least 3.5px over one period).
       for (let k = 0; k < 3; k++) expect(range(track(s, k)), `logo ${k} travel`).toBeGreaterThan(3.5)
       // Out of step: at some moment two logos are at clearly different heights.
       const maxGap = Math.max(...s.map((row) => Math.max(range([row[0], row[1]]), range([row[1], row[2]]), range([row[0], row[2]]))))
