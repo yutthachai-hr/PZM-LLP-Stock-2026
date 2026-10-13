@@ -485,4 +485,20 @@ describe('one confirmation, one notification', () => {
     expect(m.gets).toBeLessThanOrEqual(first)
     expect(m.patchTries).toBe(0)
   })
+
+  test('15. a far date already approved, sent again from a stale tab: nothing re-opens', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-1' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    expect((await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).status).toBe(200)
+    const snapshot = structuredClone(po())
+    const before = db.writes
+    clock += 60_000
+    const r = await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-2' })
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ replayed: true, unchanged: true, outcome: null, view: { status: 'changed' } })
+    expect(db.writes).toBe(before)
+    expect(po()).toEqual(snapshot)
+    expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(1)
+  })
 })

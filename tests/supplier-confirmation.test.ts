@@ -441,4 +441,25 @@ describe('the same answer again is not a new event', () => {
     expect(lastRejection(o)).toBeUndefined()
     expect(respond(o, { action: 'propose', date: day(4), requestId: 'req-dup25' }, ctx)).toEqual(UNCHANGED)
   })
+
+  // Review of #14: a far date a หัวหน้า approved, sent again from a stale tab, re-opened the
+  // approval and rang the bell again.
+  test('a far date already approved, sent again, is not asked for again', () => {
+    let o = linked()
+    const p = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup26' }, ctx)
+    if (!p.ok || p.replayed) throw new Error()
+    o = applyPatch(o, p.patch)
+    const r = decide(o, { changeId: p.change.id, decision: 'approve' }, { id: 'm1', name: 'Boss' }, NOW, makeId)
+    if (!r.ok) throw new Error()
+    o = applyPatch(o, r.patch)
+    expect(o.supplierConfirmationStatus).toBe('changed')
+    expect(respond(o, { action: 'propose', date: day(9), requestId: 'req-dup27' }, { ...ctx, now: NOW + 60_000 })).toEqual(UNCHANGED)
+  })
+
+  test('a date waiting for approval that the range now allows applies at once', () => {
+    const o = apply(linked(), { action: 'propose', date: day(9), requestId: 'req-dup28' })
+    expect(o.supplierConfirmationStatus).toBe('pending_date_approval')
+    const r = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup29' }, { ...ctx, maxPostponeDays: 7 })
+    expect(r.ok && !r.replayed && r.outcome).toBe('changed')
+  })
 })

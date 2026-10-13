@@ -405,12 +405,15 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
  * always new, and so is the first answer after the order was amended (the new link resets
  * the status to 'waiting') or after a หัวหน้า refused a date (the supplier is answering the
  * refusal; once answered, the same date again is unchanged).
+ *
+ * The agreed date counts whatever the range says of it now: a far date a หัวหน้า approved is
+ * agreed, and sending it again must not ask for approval again. A waiting date only counts
+ * while it still needs approval; once the range allows it, sending it again applies it.
  */
 function isUnchanged(o: PurchaseOrder, target: number, mode: 'auto' | 'needsApproval'): boolean {
   if (lastRejection(o)) return false
-  if (mode === 'needsApproval') return o.pendingDeliveryDate !== undefined && bkkDayStart(o.pendingDeliveryDate.date) === target
+  if (o.pendingDeliveryDate) return mode === 'needsApproval' && bkkDayStart(o.pendingDeliveryDate.date) === target
   return (
-    !o.pendingDeliveryDate &&
     (o.supplierConfirmationStatus === 'confirmed' || o.supplierConfirmationStatus === 'changed') &&
     o.confirmedDeliveryDate !== undefined &&
     bkkDayStart(o.confirmedDeliveryDate) === target
