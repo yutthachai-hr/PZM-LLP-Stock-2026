@@ -12,9 +12,27 @@ explicit OpenCode target:
 { "providerInstanceId": "opencode", "model": "9router/gemini-3.8-flash-high" }
 ```
 
-`~/.pi/agent/extensions/t3-delegation-guard.ts` enforces this. It blocks Claude targets,
-omitted targets and Pi-native subagents. If a delegation is blocked or OpenCode is down,
-do the work yourself or report BLOCKED. Never retry on a Claude model.
+`9router/gemini-3.8-flash-medium` is the only other approved model.
+
+The local Pi extension `~/.pi/agent/extensions/t3-delegation-guard.ts` enforces this. Its
+allow-list is `~/.pi/agent/delegation-policy.json`, and decisions are logged to
+`~/.pi/agent/delegation-guard.log`. It blocks:
+
+- `delegate_task`, `create_threads` and `t3_thread_launch` with an omitted target, any
+  provider other than `opencode`, a missing model, a Claude model, or an unlisted model
+- `schedule_task`, `run_scheduled_task_now`, `t3_thread_fork` and `t3_thread_configure`,
+  which run on the thread's inherited Pi + Claude model
+- `t3_thread_send` to any thread that isn't the child of an approved OpenCode task
+- native subagent tools (`AskClaude`, `task`, `agent`, `subagent`, `spawn_agent`)
+- shell commands that start `pi` or `claude`, or call T3's MCP transport
+
+If the policy file is missing or invalid, every delegation is blocked. If a delegation is
+blocked or OpenCode is down, do the work yourself or report BLOCKED. Never retry on a
+Claude model. If no independent (non-Claude) reviewer is available, report the review as
+BLOCKED.
+
+Pstack's per-role models are in `~/.agents/pstack-models.md`. `inherit-parent` means the
+main agent does that role inline, without spawning a child.
 
 ## Pstack skills
 
