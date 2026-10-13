@@ -265,6 +265,49 @@ describe("ordering in a unit other than the product's own", () => {
 })
 
 describe('checking the delivery in', () => {
+  // Audit D1: two devices confirming the same delivery at once both filed the stock, because
+  // the order was read before the stock transaction and updated after it.
+  test('two devices confirming the same delivery at once: stock goes in once', async () => {
+    const id = await placeOrder()
+    const confirm = (invoiceNo: string) =>
+      receivePurchaseOrder({
+        orderId: id,
+        invoiceNo,
+        lines: [
+          { productId: 'p1', receivedQty: 0, checked: true },
+          { productId: 'p2', receivedQty: 0, checked: true },
+        ],
+        actor: ACTOR,
+      })
+    const results = await Promise.allSettled([confirm('IV-A'), confirm('IV-B')])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1)
+    expect(balance('p1')).toBe(10)
+    expect(balance('p2')).toBe(5)
+    expect(movements()).toHaveLength(2)
+    expect(orders()[0].status).toBe('received')
+    expect(orders()[0].receipts).toHaveLength(1)
+  })
+
+  test('a short delivery and a second device at once: the order and the stock still agree', async () => {
+    const id = await placeOrder()
+    const part = () =>
+      receivePurchaseOrder({
+        orderId: id,
+        invoiceNo: 'IV-1',
+        lines: [
+          { productId: 'p1', receivedQty: 6, checked: false, note: 'rest tomorrow' },
+          { productId: 'p2', receivedQty: 0, checked: true },
+        ],
+        actor: ACTOR,
+      })
+    const results = await Promise.allSettled([part(), part()])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(balance('p1')).toBe(6)
+    expect(orders()[0].receipts).toHaveLength(1)
+    expect(orders()[0].lines.map((l) => l.receivedQty)).toEqual([6, 5])
+  })
+
   test('a delivery that matches is ticked through and lands in stock', async () => {
     const id = await placeOrder()
     const result = await receivePurchaseOrder({
