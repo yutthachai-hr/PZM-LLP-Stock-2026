@@ -2050,6 +2050,7 @@ export const EN: Record<string, string> = {
   'แก้ไขไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — รับส่วนที่เหลือ หรือปิดยอดค้าง': 'Cannot edit: part of this order has been received — receive the rest, or close it',
   'กรุณาระบุเหตุผลที่ปิดยอดค้างของใบสั่งซื้อ': 'Give a reason for closing the rest of the order',
   'ใบสั่งซื้อนี้ถูกยกเลิกแล้ว': 'This order was cancelled',
+  'ใบสั่งซื้อนี้เพิ่งถูกแก้ไขหรือรับของจากเครื่องอื่น — เปิดใบใหม่แล้วตรวจอีกครั้ง': 'This order was just changed or received on another device — open it again and check',
   'ใบสั่งซื้อนี้ไม่ได้รอรับของอยู่': 'This order is not awaiting goods',
   'ใบสั่งซื้อนี้ยังไม่เคยรับของ — ถ้าไม่ได้ของเลยให้ยกเลิกใบสั่งซื้อแทน': 'Nothing has been received on this order — if nothing is coming, cancel it instead',
   'ยกเลิกไม่ได้: ใบสั่งซื้อนี้รับของไปแล้วบางส่วน — ให้ปิดยอดค้างแทน': 'Cannot cancel: part of this order has been received — close the rest instead',

@@ -298,8 +298,18 @@ export async function receiveStock(params: {
    * stock already moved, and saving again moves it twice.
    */
   photoDataUrl?: string
+  /**
+   * Another document that changes in the same commit as the stock — the order a delivery
+   * checks in against (audit D1). `read` runs with the other reads and may throw to refuse;
+   * `write` runs with the writes. A conflicting commit runs both again, so the check sees
+   * what the other device wrote.
+   */
+  alongside?: {
+    read: (tx: TxContext) => Promise<void>
+    write: (tx: TxContext, docNo: string) => void
+  }
 }): Promise<string> {
-  const { toLocationId, date, actor, note, photoDataUrl } = params
+  const { toLocationId, date, actor, note, photoDataUrl, alongside } = params
   const lines = mergeLines(params.lines)
   requireEpochMs(date)
   requireId(toLocationId, 'toLocationId')
@@ -318,9 +328,11 @@ export async function receiveStock(params: {
     const levels = await Promise.all(
       lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
     )
+    await alongside?.read(tx)
     // ---- writes ----
     const docNo = makeDocNo('receive', seq)
     tx.set(COL.counters, 'receive', { value: seq })
+    alongside?.write(tx, docNo)
     const now = Date.now()
     if (photoDataUrl) {
       tx.set(COL.movementImages, docNo, { dataUrl: photoDataUrl })
