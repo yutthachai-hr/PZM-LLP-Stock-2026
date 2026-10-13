@@ -415,9 +415,9 @@ export function LoginPage() {
 }
 
 /**
- * Circular brand logo switcher with polished interactive micro-transitions.
- * Circular buttons (44-48px) showing original brand logos (Pizza Mania, Le Lapin, R&D).
- * Interactive lift and active ring; zero continuous loops. Respects prefers-reduced-motion.
+ * Circular brand logo switcher (Pizza Mania, Le Lapin, R&D): 44-56px buttons that stay put
+ * as the hit area, with the logo floating, lifting and popping in layers inside them (the
+ * motion lives in index.css, "the playful brand switch"). Respects prefers-reduced-motion.
  */
 function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandId) => void }) {
   const t = useT()
@@ -434,7 +434,7 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
     <div
       role="radiogroup"
       aria-label={t('แบรนด์')}
-      className="flex items-center gap-2 sm:gap-2.5"
+      className="flex items-center gap-2.5 sm:gap-3"
       onKeyDown={(e) => {
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
           e.preventDefault()
@@ -460,23 +460,33 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
             title={b.name}
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(b.id)}
-            style={{
-              boxShadow: active
-                ? `0 0 0 2.5px #fff, 0 0 0 5px ${b.accentVivid}, 0 8px 18px -4px ${b.accentVivid}66`
-                : undefined,
-              // the float drifts: each icon a beat after the last
-              animationDelay: active ? undefined : `${i * 0.4}s`,
-            }}
-            className={`brand-orb group relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-white p-0.5 outline-none transition-[opacity,filter,box-shadow] duration-300 motion-reduce:transition-none sm:h-12 sm:w-12 lg:h-14 lg:w-14 ${
-              active ? 'shadow-md' : 'opacity-70 saturate-[0.6] shadow-xs hover:opacity-100 hover:saturate-100 hover:shadow-md'
-            } focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:ring-brand`}
+            // Which icon this is: its float period and phase, and its hover tilt (index.css).
+            style={{ '--orb-i': i } as CSSProperties}
+            className="brand-orb group relative block h-11 w-11 shrink-0 cursor-pointer rounded-full outline-none sm:h-12 sm:w-12 lg:h-14 lg:w-14"
           >
-            <img
-              src={b.logo}
-              alt=""
-              draggable={false}
-              className="pointer-events-none h-full w-full select-none rounded-full object-cover"
-            />
+            <span className="brand-orb-float pointer-events-none absolute inset-0 block">
+              <span
+                aria-hidden="true"
+                className="brand-orb-pulse absolute inset-0 rounded-full border-2"
+                style={{ borderColor: b.accentVivid }}
+              />
+              <span
+                className={`brand-orb-face absolute inset-0 block overflow-hidden rounded-full bg-white p-0.5 outline-offset-4 group-focus-visible:outline-3 ${
+                  active ? 'shadow-md' : 'shadow-xs group-hover:shadow-md'
+                }`}
+                style={{
+                  outlineColor: b.accentVivid,
+                  boxShadow: active ? `0 0 0 2.5px #fff, 0 0 0 5px ${b.accentVivid}, 0 8px 18px -4px ${b.accentVivid}66` : undefined,
+                }}
+              >
+                <img
+                  src={b.logo}
+                  alt=""
+                  draggable={false}
+                  className="pointer-events-none h-full w-full select-none rounded-full object-cover"
+                />
+              </span>
+            </span>
           </button>
         )
       })}
