@@ -21,6 +21,7 @@ interface View {
   supplierName: string
   docNo: string
   revision: number
+  expectedState: string
   status: SupplierConfirmationStatus
   requestedDate: string | null
   confirmedDate: string | null
@@ -78,6 +79,7 @@ const ERRORS: Record<string, string> = {
   invalid: 'กรุณาเลือกวันที่', // i18n-key
   noRequestedDate: 'ใบสั่งซื้อนี้ไม่ได้ระบุวันส่ง กรุณาเลือกวันที่', // i18n-key
   full: 'มีการเปลี่ยนแปลงมากเกินไป กรุณาติดต่อฝ่ายจัดซื้อ', // i18n-key
+  stale_state: 'ใบสั่งซื้อนี้เปลี่ยนแล้ว กรุณาโหลดข้อมูลล่าสุดและตรวจสอบก่อนยืนยันอีกครั้ง', // i18n-key
   busy: 'มีคนกำลังบันทึกพร้อมกัน กรุณาลองอีกครั้ง', // i18n-key
   network: 'เชื่อมต่อไม่ได้ กรุณาลองอีกครั้ง', // i18n-key
 }
@@ -110,11 +112,12 @@ export function SupplierConfirmPage() {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [needsRefresh, setNeedsRefresh] = useState(false)
   // `unchanged`: the server already had exactly this answer, so nothing new was recorded.
   const [done, setDone] = useState<{ outcome: Outcome; date: string; unchanged: boolean } | null>(null)
   // One id per answer: a retry after a dropped connection sends the same one, so the
   // server applies it once. A different answer gets a new id.
-  const pendingId = useRef<{ key: string; id: string } | null>(null)
+  const pendingId = useRef<{ key: string; id: string; expectedState: string } | null>(null)
   // Set before the first await: a second tap in the same frame, before React has re-rendered
   // the button as disabled, is dropped here rather than sent.
   const inFlight = useRef(false)
@@ -155,20 +158,20 @@ export function SupplierConfirmPage() {
   }, [view])
 
   async function submit(action: 'accept' | 'propose') {
-    if (!view || inFlight.current) return
+    if (!view || inFlight.current || needsRefresh) return
     if (action === 'propose' && !date) {
       setError('invalid')
       return
     }
     inFlight.current = true
     const key = JSON.stringify([action, action === 'propose' ? date : '', name.trim(), note.trim()])
-    if (pendingId.current?.key !== key) pendingId.current = { key, id: newRequestId() }
+    if (pendingId.current?.key !== key) pendingId.current = { key, id: newRequestId(), expectedState: view.expectedState }
     setBusy(true)
     setError(null)
     try {
       const { status, body } = await call(token, {
         method: 'POST',
-        body: JSON.stringify({ action, date: action === 'propose' ? date : undefined, name, note, requestId: pendingId.current.id }),
+        body: JSON.stringify({ action, date: action === 'propose' ? date : undefined, name, note, requestId: pendingId.current.id, expectedState: pendingId.current.expectedState }),
       })
       if (status === 200) {
         const next = body.view as View
@@ -180,8 +183,34 @@ export function SupplierConfirmPage() {
       } else if (status === 410 || status === 404) {
         setState({ kind: 'error', error: String(body.error ?? 'not_found') })
       } else {
+        if (status === 409 && body.error === 'stale_state') setNeedsRefresh(true)
         setError(String(body.error ?? 'network'))
       }
+    } catch {
+      setError('network')
+    } finally {
+      inFlight.current = false
+      setBusy(false)
+    }
+  }
+
+  async function refresh() {
+    if (inFlight.current) return
+    inFlight.current = true
+    setBusy(true)
+    try {
+      const { status, body } = await call(token)
+      if (status === 200) {
+        setState({ kind: 'ready', view: body.view as View })
+        pendingId.current = null
+        setNeedsRefresh(false)
+        setDone(null)
+        setDate('')
+        setMode('choose')
+        setError(null)
+      } else if (status === 404 || status === 410) {
+        setState({ kind: 'error', error: String(body.error ?? 'not_found') })
+      } else setError(String(body.error ?? 'network'))
     } catch {
       setError('network')
     } finally {
@@ -359,7 +388,7 @@ export function SupplierConfirmPage() {
               <Button
                 variant="success"
                 className={`min-h-12 text-base ${highlightAccept ? 'ring-2 ring-in/40 ring-offset-2' : ''}`}
-                disabled={busy}
+                disabled={busy || needsRefresh}
                 onClick={() => submit('accept')}
               >
                 ✅ {t('ยืนยันส่งวันที่ {date}', { date: label(v.requestedDate) })}
@@ -368,7 +397,7 @@ export function SupplierConfirmPage() {
             <Button
               variant="secondary"
               className="min-h-12 text-base"
-              disabled={busy}
+              disabled={busy || needsRefresh}
               onClick={() => {
                 setMode('pick')
                 setDate(v.pending?.date ?? v.confirmedDate ?? v.requestedDate ?? v.today)
@@ -397,14 +426,15 @@ export function SupplierConfirmPage() {
               <Button variant="ghost" disabled={busy} onClick={() => setMode('choose')}>
                 {t('ย้อนกลับ')}
               </Button>
-              <Button disabled={busy || !date || sameAsStanding} onClick={() => submit('propose')}>
+              <Button disabled={busy || needsRefresh || !date || sameAsStanding} onClick={() => submit('propose')}>
                 {t('ยืนยันวันที่เลือก')}
               </Button>
             </div>
           </div>
         )}
 
-        {error && <p className="text-sm text-out">{t(ERRORS[error] ?? ERRORS.network)}</p>}
+        {error && <p role="alert" className="text-sm text-out">{t(ERRORS[error] ?? ERRORS.network)}</p>}
+        {needsRefresh && <Button variant="secondary" disabled={busy} onClick={refresh}>{t('โหลดข้อมูลล่าสุด')}</Button>}
         {busy && <p className="text-xs text-ink-faint">{t('กำลังบันทึก...')}</p>}
       </Card>
     </Shell>

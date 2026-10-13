@@ -71,6 +71,24 @@ export function agreedDateOf(o: PurchaseOrder): number | undefined {
   return status === 'pending_date_approval' ? undefined : day
 }
 
+/**
+ * The supplier state a tab must have seen before making a new answer. Event identity
+ * catches C→P→C even when the visible dates return to C. First-view bookkeeping and
+ * unrelated PO writes do not change it. This is an optimistic precondition, not a credential.
+ */
+export function supplierStateOf(o: PurchaseOrder): string {
+  return JSON.stringify([
+    o.revision ?? 0,
+    o.supplierLink?.version ?? 0,
+    o.supplierConfirmationStatus ?? 'waiting',
+    requestedOf(o) ?? null,
+    o.confirmedDeliveryDate ?? null,
+    o.pendingDeliveryDate?.changeId ?? null,
+    o.pendingDeliveryDate?.date ?? null,
+    o.deliveryDateHistory?.at(-1)?.id ?? null,
+  ])
+}
+
 /** `YYYY-MM-DD` → start of that Bangkok day; null for anything that is not a real date. */
 export function dateKeyToMs(key: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key ?? '')
@@ -171,7 +189,7 @@ export function linkProblem(
   now: number,
 ): LinkProblem | null {
   const link = o.supplierLink
-  if (!link || link.version !== claims.version || o.supplierId !== claims.supplierId) return 'mismatch'
+  if (!link || link.version !== claims.version || link.rev !== (o.revision ?? 0) || o.supplierId !== claims.supplierId) return 'mismatch'
   if (o.status !== 'ordered' || (o.receipts?.length ?? 0) > 0) return 'closed'
   if (now > linkActiveUntil(o, claims.expMs)) return 'expired'
   return null

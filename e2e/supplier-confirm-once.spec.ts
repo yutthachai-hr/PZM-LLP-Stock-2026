@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
 import { memoryServerStore } from '../functions/_lib/memoryStore'
-import { answerLink, mintLink, viewLink, type Deps } from '../functions/_lib/supplierPo'
+import { answerLink, decideDate, mintLink, viewLink, type Deps } from '../functions/_lib/supplierPo'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../src/lib/inventoryRules/time'
 import { msToDateKey } from '../src/lib/supplierConfirmation'
+import type { PurchaseOrder } from '../src/types'
 
 /**
  * The supplier's page, in a real browser, answering once (owner, 12 Oct 2026: PPN SEAFOOD's
@@ -20,7 +21,7 @@ const day = (n: number) => bkkDayStart(NOW) + n * DAY_MS
 async function server() {
   let n = 0
   const db = memoryServerStore({
-    users: { staff1: { name: 'Nok', role: 'staff', active: true } },
+    users: { staff1: { name: 'Nok', role: 'staff', active: true }, boss: { name: 'Boss', role: 'manager', active: true } },
     purchaseOrders: {
       po5: {
         docNo: 'PO-00005',
@@ -49,6 +50,7 @@ async function server() {
   }
   const token = (await mintLink(deps, 'Bearer staff1', { brand: 'pizza', poId: 'po5' })).body.token as string
   const posts: string[] = []
+  let loseNextResponse = false
   const notes = (kind: string) => [...db.data.keys()].filter((k) => k.startsWith(`notifications/${kind}__`))
 
   /** Point a page (a phone) at this server. */
@@ -65,13 +67,23 @@ async function server() {
         posts.push(req.postData() ?? '')
         await new Promise((r) => setTimeout(r, 400)) // a slow phone network: room for a second tap
         const r = await answerLink(deps, t, JSON.parse(req.postData() ?? '{}'))
+        if (loseNextResponse) {
+          loseNextResponse = false
+          return route.abort('failed') // write succeeded; this phone never gets its response
+        }
         return route.fulfill({ status: r.status, json: r.body })
       }
       const r = await viewLink(deps, t)
       return route.fulfill({ status: r.status, json: r.body })
     })
   }
-  return { token, posts, notes, attach }
+  async function approveFarDate() {
+    const view = (await viewLink(deps, token)).body.view as { expectedState: string }
+    await answerLink(deps, token, { action: 'propose', date: msToDateKey(day(6)), requestId: 'e2e-approved-date', expectedState: view.expectedState })
+    const po = db.data.get('purchaseOrders/po5')!.doc as unknown as PurchaseOrder
+    expect((await decideDate(deps, 'Bearer boss', { brand: 'pizza', poId: 'po5', changeId: po.pendingDeliveryDate!.changeId, decision: 'approve' })).status).toBe(200)
+  }
+  return { token, posts, notes, attach, approveFarDate, loseResponse: () => { loseNextResponse = true }, order: () => db.data.get('purchaseOrders/po5')!.doc as unknown as PurchaseOrder }
 }
 
 test.use({ viewport: { width: 390, height: 844 } })
@@ -115,7 +127,7 @@ test('the supplier confirms once: a double tap sends one answer, and the page do
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
-test('a second device sending the same answer is told it is already confirmed, in either language', async ({ page, browser }) => {
+test('a stale second device must refresh, then sees the existing confirmation in English', async ({ page, browser }) => {
   const { token, posts, notes, attach } = await server()
   await attach(page)
   await page.goto(`/supplier/po/${token}`)
@@ -130,10 +142,74 @@ test('a second device sending the same answer is told it is already confirmed, i
   await expect(phone2.getByText(/^บันทึกวันส่ง .* เรียบร้อย/)).toBeVisible()
   await other.close()
 
-  // The first phone, still showing the button, presses it: success, and nothing new.
+  // A new request against the old view is a conflict, even for the same date.
   await page.getByRole('button', { name: 'EN' }).click()
-  await page.getByRole('button', { name: /^✅ Accept / }).click()
-  await expect(page.getByText(/is already confirmed; no need to confirm again/)).toBeVisible()
+  const accept = page.getByRole('button', { name: /^✅ Accept / })
+  await accept.click()
+  await expect(page.getByRole('alert')).toContainText('This order has changed')
+  await expect(accept).toBeDisabled()
   expect(posts).toHaveLength(2)
+  await page.getByRole('button', { name: 'Refresh order' }).click()
+  await expect(page.getByText(/^✅ Delivery on .* confirmed$/)).toBeVisible()
+  expect(posts).toHaveLength(2) // refresh never resubmits
   expect(notes('supplierConfirmed')).toHaveLength(1)
+})
+
+test('a lost response retries the exact request and state once, without a second notification', async ({ page }) => {
+  const s = await server()
+  await s.attach(page)
+  await page.goto(`/supplier/po/${s.token}`)
+  const accept = page.getByRole('button', { name: /^✅ ยืนยันส่งวันที่/ })
+  await expect(accept).toBeVisible()
+  s.loseResponse()
+  await accept.click()
+  await expect(page.getByRole('alert')).toContainText('เชื่อมต่อไม่ได้')
+  await accept.click()
+  await expect(page.getByText(/^บันทึกวันส่ง .* เรียบร้อย/)).toBeVisible()
+  expect(s.posts).toHaveLength(2)
+  expect(JSON.parse(s.posts[1])).toEqual(JSON.parse(s.posts[0]))
+  expect(s.notes('supplierConfirmed')).toHaveLength(1)
+  expect(s.order().deliveryDateHistory!.filter((h) => h.source === 'supplier')).toHaveLength(1)
+})
+
+test('an unseen pending proposal survives a stale phone; refresh permits intentional return to approved C', async ({ page, browser }) => {
+  const s = await server()
+  await s.approveFarDate()
+  await s.attach(page)
+  await page.goto(`/supplier/po/${s.token}`)
+  await expect(page.getByText('วันส่งที่ยืนยัน', { exact: true })).toBeVisible()
+  // This phone can still accept the originally requested date, unaware of the other phone.
+  const oldAccept = page.getByRole('button', { name: /^✅ ยืนยันส่งวันที่/ })
+  const other = await browser.newContext({ viewport: { width: 375, height: 812 } })
+  try {
+    const phone2 = await other.newPage()
+    await s.attach(phone2)
+    await phone2.goto(`/supplier/po/${s.token}`)
+    await phone2.getByRole('button', { name: /เลือกวันส่งอื่น/ }).click()
+    await phone2.locator('input[type="date"]').fill(msToDateKey(day(7)))
+    await phone2.getByRole('button', { name: 'ยืนยันวันที่เลือก' }).click()
+    await expect(phone2.getByText(/^ส่งคำขอเลื่อนเป็นวันที่/)).toBeVisible()
+    const before = structuredClone(s.order())
+    await oldAccept.click()
+    await expect(page.getByRole('alert')).toContainText('ใบสั่งซื้อนี้เปลี่ยนแล้ว')
+    await expect(oldAccept).toBeDisabled()
+    expect(s.order()).toEqual(before)
+    expect(s.notes('supplierDatePending')).toHaveLength(2)
+    const postCount = s.posts.length
+    await page.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' }).click()
+    await expect(page.getByText('วันที่ขอเลื่อน', { exact: true })).toBeVisible()
+    expect(s.posts).toHaveLength(postCount)
+    await page.getByRole('button', { name: /เลือกวันส่งอื่น/ }).click()
+    await page.locator('input[type="date"]').fill(msToDateKey(day(6)))
+    await expect(page.getByText('วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน')).toHaveCount(0)
+    await page.getByRole('button', { name: 'ยืนยันวันที่เลือก' }).click()
+    await expect(page.getByText(/^บันทึกวันส่ง .* เรียบร้อย/)).toBeVisible()
+    expect(s.order().pendingDeliveryDate).toBeUndefined()
+    expect(s.order().confirmedDeliveryDate).toBe(day(6))
+    expect(s.notes('supplierDatePending')).toHaveLength(2)
+    expect(s.notes('supplierDateChanged')).toHaveLength(1)
+    expect(s.order().deliveryDateHistory!.slice(-2).map((h) => h.action)).toEqual(['superseded', 'autoApplied'])
+  } finally {
+    await other.close()
+  }
 })

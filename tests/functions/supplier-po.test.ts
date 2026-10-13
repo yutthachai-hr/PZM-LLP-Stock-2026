@@ -6,10 +6,11 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 import { memoryServerStore } from '../../functions/_lib/memoryStore'
 import { assertServerWrite, brandCollection } from '../../functions/_lib/serverStore'
-import { answerLink, decideDate, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
+import { answerLink as postAnswer, decideDate, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
 import { signSupplierToken, verifySupplierToken } from '../../functions/_lib/supplierToken'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/time'
 import type { PurchaseOrder } from '../../src/types'
+import { supplierStateOf } from '../../src/lib/supplierConfirmation'
 
 const SECRET = 'test-secret-0123456789-abcdefghijklmnop'
 const NOW = bkkAtTime(bkkDayStart(Date.UTC(2026, 9, 5, 3)), '10:00')
@@ -115,6 +116,14 @@ beforeEach(() => {
 
 const po = () => db.data.get('purchaseOrders/po1')!.doc as unknown as PurchaseOrder
 const notes = () => [...db.data.keys()].filter((k) => k.startsWith('notifications/')).map((k) => db.data.get(k)!.doc)
+
+/** Existing endpoint scenarios submit against the current synthetic snapshot.
+ * Stale-state tests call postAnswer directly with the original page response. */
+async function answerLink(d: Deps, token: string, body: Record<string, unknown>) {
+  const c = await verifySupplierToken(token, d.secret, d.now())
+  const row = c ? db.data.get(`${brandCollection(c.brand, 'purchaseOrders')}/${c.poId}`) : undefined
+  return postAnswer(d, token, { expectedState: row ? supplierStateOf(row.doc as unknown as PurchaseOrder) : undefined, ...body })
+}
 
 async function link(): Promise<string> {
   const r = await mintLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })
@@ -263,6 +272,72 @@ describe('POST /api/supplier/<token>', () => {
   })
 })
 
+describe('supplier tabs must confirm the state they actually saw', () => {
+  async function approvedFarDate() {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'stale-approve-1' })
+    await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId: po().pendingDeliveryDate!.changeId, decision: 'approve' })
+    return token
+  }
+  async function seen(token: string) {
+    return ((await viewLink(deps, token)).body.view as { expectedState: string }).expectedState
+  }
+
+  test('an old tab cannot withdraw a pending date it never saw', async () => {
+    const token = await approvedFarDate()
+    const expectedState = await seen(token)
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'stale-other-tab' })
+    const snapshot = structuredClone(po())
+    const before = db.writes
+    const r = await postAnswer(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'stale-old-tab', expectedState })
+    expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect(po()).toEqual(snapshot)
+    expect(db.writes).toBe(before)
+  })
+
+  test('a lost CAS race rechecks the seen state instead of withdrawing the winner', async () => {
+    const token = await approvedFarDate()
+    const expectedState = await seen(token)
+    const patch = db.patchIf.bind(db)
+    let raced = false
+    db.patchIf = async (col, id, fields, time) => {
+      if (!raced) {
+        raced = true
+        expect((await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'stale-race-winner' })).status).toBe(200)
+      }
+      return patch(col, id, fields, time)
+    }
+    // Accepting the requested date would withdraw P, too; neither action may race blindly.
+    const r = await postAnswer(deps, token, { action: 'accept', requestId: 'stale-race-loser', expectedState })
+    expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect(po().pendingDeliveryDate?.date).toBe(day(7))
+    expect(po().deliveryDateHistory!.some((h) => h.requestId === 'stale-race-loser')).toBe(false)
+    expect(notes().filter((n) => n.kind === 'supplierDatePending')).toHaveLength(2)
+  })
+
+  test('a lost response replays its recorded requestId even after another answer', async () => {
+    const token = await link()
+    const expectedState = await seen(token)
+    const body = { action: 'propose', date: '2026-10-11', requestId: 'lost-response-id', expectedState }
+    expect((await postAnswer(deps, token, body)).status).toBe(200)
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'lost-response-later' })
+    const snapshot = structuredClone(po())
+    const before = db.writes
+    expect((await postAnswer(deps, token, body)).body).toMatchObject({ replayed: true, outcome: null })
+    expect(po()).toEqual(snapshot)
+    expect(db.writes).toBe(before)
+  })
+
+  test('missing state fails closed, but an already-recorded retry is still safe', async () => {
+    const token = await link()
+    expect(await postAnswer(deps, token, { action: 'accept', requestId: 'missing-state-id' })).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect((await answerLink(deps, token, { action: 'accept', requestId: 'recorded-retry-id' })).status).toBe(200)
+    const before = db.writes
+    expect((await postAnswer(deps, token, { action: 'accept', requestId: 'recorded-retry-id' })).body.replayed).toBe(true)
+    expect(db.writes).toBe(before)
+  })
+})
+
 describe('POST /api/supplier-po/decide', () => {
   async function pending(): Promise<string> {
     const token = await link()
@@ -374,7 +449,7 @@ describe('one confirmation, one notification', () => {
     expect(confirmed()).toHaveLength(1)
   })
 
-  test('5. two tabs answering at the same moment: one wins, the other re-reads and finds it done', async () => {
+  test('5. two tabs answering at the same moment: one wins, the other must refresh', async () => {
     const token = await link()
     const m = meter()
     const release = readTogether(2)
@@ -383,9 +458,10 @@ describe('one confirmation, one notification', () => {
       answerLink(deps, token, { action: 'accept', requestId: 'dup-tab-2' }),
     ])
     release()
-    expect(rs.map((r) => r.status)).toEqual([200, 200])
-    // Both read the same version and tried to write: a real race, which the precondition
-    // decided; the loser re-read, found the order confirmed, and wrote nothing more.
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409])
+    expect(rs.find((r) => r.status === 409)?.body).toEqual({ error: 'stale_state' })
+    // Both tried to write one snapshot; after losing CAS, a new request cannot apply
+    // to the winner's unseen state. A same-ID lost-response retry remains safe.
     expect(m.patchTries).toBe(2)
     expect(rs.filter((r) => r.body.replayed === false)).toHaveLength(1)
     expect(supplierEntries()).toHaveLength(1)
@@ -397,7 +473,7 @@ describe('one confirmation, one notification', () => {
     const rs = await Promise.all(
       [1, 2, 3, 4, 5].map((i) => answerLink(deps, token, { action: 'accept', name: `คนที่ ${i}`, requestId: `dup-dev-${i}` })),
     )
-    expect(rs.every((r) => r.status === 200)).toBe(true)
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409])
     expect(supplierEntries()).toHaveLength(1)
     expect(confirmed()).toHaveLength(1)
   })
@@ -438,7 +514,8 @@ describe('one confirmation, one notification', () => {
     const rs = await Promise.all(
       ['dup-pend-1', 'dup-pend-2', 'dup-pend-3'].map((requestId) => answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId })),
     )
-    expect(rs.map((r) => [r.status, r.body.error ?? null])).toEqual([[200, null], [200, null], [200, null]])
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409])
+    expect(rs.filter((r) => r.status === 409).every((r) => r.body.error === 'stale_state')).toBe(true)
     await answerLink(deps, token, { action: 'propose', date: '2026-10-11', note: 'ขอย้ำ', requestId: 'dup-pend-4' })
     expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(1)
     expect(po().deliveryDateHistory!.filter((h) => h.action === 'proposed')).toHaveLength(1)

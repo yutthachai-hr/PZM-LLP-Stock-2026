@@ -8,6 +8,7 @@ import {
   DEFAULT_MAX_POSTPONE_DAYS,
   effectiveDeliveryOf,
   issueLink,
+  isReplay,
   lastRejection,
   linkActiveUntil,
   linkProblem,
@@ -15,6 +16,7 @@ import {
   openLink,
   requestedOf,
   respond,
+  supplierStateOf,
   type RespondOutcome,
   type SupplierPatch,
 } from '../../src/lib/supplierConfirmation'
@@ -154,6 +156,7 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     supplierName: o.supplierName,
     docNo: o.docNo,
     revision: o.revision ?? 0,
+    expectedState: supplierStateOf(o),
     status: o.supplierConfirmationStatus ?? 'waiting',
     requestedDate: key(requested),
     confirmedDate: key(confirmed),
@@ -208,7 +211,7 @@ export async function viewLink(deps: Deps, token: string): Promise<Reply> {
 export async function answerLink(deps: Deps, token: string, body: unknown): Promise<Reply> {
   const claims = await claimsFor(deps, token)
   if (!claims) return NOT_FOUND
-  const b = (body ?? {}) as { action?: unknown; date?: unknown; note?: unknown; name?: unknown; requestId?: unknown }
+  const b = (body ?? {}) as { action?: unknown; date?: unknown; note?: unknown; name?: unknown; requestId?: unknown; expectedState?: unknown }
   if (b.action !== 'accept' && b.action !== 'propose') return fail(400, 'bad_request')
   if (typeof b.requestId !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(b.requestId)) return fail(400, 'bad_request')
   const date = b.action === 'propose' ? dateKeyToMs(typeof b.date === 'string' ? b.date : '') : null
@@ -224,6 +227,12 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
     const problem = linkProblem(o, claims, now)
     if (problem === 'mismatch') return NOT_FOUND
     if (problem) return fail(410, problem)
+    // A committed request survives a lost response, even if the state has since moved.
+    // New requests (including old clients without a state key) must refresh first.
+    if (isReplay(o, b.requestId as string)) return { patch: null, reply: { replayed: true, unchanged: false } }
+    if (b.expectedState !== supplierStateOf(o)) return fail(409, 'stale_state')
+    // This check is inside writeOrder: a lost updateTime race rechecks the original
+    // expected state, never silently recomputing an unseen state-changing answer.
     const r = respond(
       o,
       {

@@ -21,6 +21,7 @@ import {
   respond,
   SUPPLIER_LIST_MAX,
   supplierTimeline,
+  supplierStateOf,
 } from '../src/lib/supplierConfirmation'
 import { bkkAtTime, bkkDayEnd, bkkDayStart, DAY_MS } from '../src/lib/inventoryRules/time'
 import type { DeliveryDateChange, PurchaseOrder } from '../src/types'
@@ -62,6 +63,26 @@ function linked(over: Partial<PurchaseOrder> = {}): PurchaseOrder {
 }
 
 const ctx = { now: NOW, maxPostponeDays: 2, makeId }
+
+describe('the state a supplier tab saw', () => {
+  test('view bookkeeping and unrelated writes do not make a tab stale', () => {
+    const o = linked()
+    const state = supplierStateOf(o)
+    expect(supplierStateOf({ ...o, updatedAt: NOW + 1 })).toBe(state)
+    expect(supplierStateOf(applyPatch(o, openLink(o, o.supplierLink!.version, NOW, makeId)!))).toBe(state)
+  })
+  test('an intervening event is detected even if all visible dates return to the same state', () => {
+    const o = linked()
+    const h: DeliveryDateChange = { id: 'new-event', at: NOW, source: 'supplier', action: 'autoApplied', to: day(3), byName: 'Supplier' }
+    expect(supplierStateOf({ ...o, deliveryDateHistory: [...o.deliveryDateHistory!, h] })).not.toBe(supplierStateOf(o))
+  })
+  test('an amendment kills the old link immediately, before another link is minted', () => {
+    const o = linked()
+    const c = { supplierId: o.supplierId, version: o.supplierLink!.version, expMs: o.supplierLink!.expiresAt }
+    expect(linkProblem({ ...o, revision: 1 }, c, NOW)).toBe('mismatch')
+    expect(supplierStateOf({ ...o, revision: 1 })).not.toBe(supplierStateOf(o))
+  })
+})
 
 describe('dates as the page sends them', () => {
   test('YYYY-MM-DD is the Bangkok day, and back', () => {
