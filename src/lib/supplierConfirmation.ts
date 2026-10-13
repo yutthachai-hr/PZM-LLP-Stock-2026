@@ -52,6 +52,43 @@ export function effectiveDeliveryOf(o: PurchaseOrder): number | undefined {
   return o.confirmedDeliveryDate ?? requestedOf(o)
 }
 
+/**
+ * The Bangkok day the supplier and we agree on now: the last date accepted, applied within
+ * the range or approved by a หัวหน้า on this link. It still stands while a newer date waits
+ * for approval or after one was refused; an amended order's new link (`reset`) ends it.
+ */
+export function agreedDateOf(o: PurchaseOrder): number | undefined {
+  const status = o.supplierConfirmationStatus
+  if (o.confirmedDeliveryDate === undefined || !status || status === 'waiting') return undefined
+  const day = bkkDayStart(o.confirmedDeliveryDate)
+  const h = o.deliveryDateHistory ?? []
+  for (let i = h.length - 1; i >= 0; i--) {
+    const { action, to } = h[i]
+    if (action === 'reset') return undefined
+    if (action === 'accepted' || action === 'autoApplied' || action === 'approved') return to !== undefined && bkkDayStart(to) === day ? day : undefined
+  }
+  // The history was cut short: the status is all there is to go on.
+  return status === 'pending_date_approval' ? undefined : day
+}
+
+/**
+ * The supplier state a tab must have seen before making a new answer. Event identity
+ * catches C→P→C even when the visible dates return to C. First-view bookkeeping and
+ * unrelated PO writes do not change it. This is an optimistic precondition, not a credential.
+ */
+export function supplierStateOf(o: PurchaseOrder): string {
+  return JSON.stringify([
+    o.revision ?? 0,
+    o.supplierLink?.version ?? 0,
+    o.supplierConfirmationStatus ?? 'waiting',
+    requestedOf(o) ?? null,
+    o.confirmedDeliveryDate ?? null,
+    o.pendingDeliveryDate?.changeId ?? null,
+    o.pendingDeliveryDate?.date ?? null,
+    o.deliveryDateHistory?.at(-1)?.id ?? null,
+  ])
+}
+
 /** `YYYY-MM-DD` → start of that Bangkok day; null for anything that is not a real date. */
 export function dateKeyToMs(key: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key ?? '')
@@ -152,7 +189,7 @@ export function linkProblem(
   now: number,
 ): LinkProblem | null {
   const link = o.supplierLink
-  if (!link || link.version !== claims.version || o.supplierId !== claims.supplierId) return 'mismatch'
+  if (!link || link.version !== claims.version || link.rev !== (o.revision ?? 0) || o.supplierId !== claims.supplierId) return 'mismatch'
   if (o.status !== 'ordered' || (o.receipts?.length ?? 0) > 0) return 'closed'
   if (now > linkActiveUntil(o, claims.expMs)) return 'expired'
   return null
@@ -273,7 +310,9 @@ export interface RespondContext {
 export type RespondOutcome = 'confirmed' | 'changed' | 'pending'
 
 export type RespondResult =
-  | { ok: true; replayed: true }
+  /** Nothing to write: this request was applied already, or (`unchanged`) the order is
+   *  already exactly where this answer would put it. */
+  | { ok: true; replayed: true; unchanged?: true }
   | {
       ok: true
       replayed: false
@@ -296,13 +335,12 @@ export function cleanText(s: unknown, max: number): string | undefined {
  * The supplier answers: accept the date asked for, or propose another. Applied at once
  * when within the owner's range (`confirmedDeliveryDate` and `expectedAt` move, so the
  * calendar does); held as `pendingDeliveryDate` otherwise. A newer answer replaces a
- * waiting one. Retrying the same `requestId` changes nothing.
+ * waiting one. Retrying the same `requestId` changes nothing, and neither does the same
+ * answer sent again under a new one (see `isUnchanged`).
  */
 export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondContext): RespondResult {
   if (isReplay(o, input.requestId)) return { ok: true, replayed: true }
   const history = o.deliveryDateHistory ?? []
-  // Room for this answer (two entries at most) and the decision that may follow it.
-  if (history.length > SUPPLIER_LIST_MAX - 3) return { ok: false, error: 'full' }
 
   const requested = requestedOf(o)
   const note = cleanText(input.note, SUPPLIER_NOTE_MAX)
@@ -327,8 +365,15 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
     })
     if (!v.ok) return { ok: false, error: v.error }
     target = bkkDayStart(input.date as number)
-    mode = v.mode
+    // The date agreed was within the range or approved already: going back to it from a
+    // waiting date, or answering a refusal with it, is not asked for a second time.
+    mode = target === agreedDateOf(o) ? 'auto' : v.mode
   }
+
+  // Before the room check: an answer that changes nothing needs no room.
+  if (isUnchanged(o, target, mode)) return { ok: true, replayed: true, unchanged: true }
+  // Room for this answer (two entries at most) and the decision that may follow it.
+  if (history.length > SUPPLIER_LIST_MAX - 3) return { ok: false, error: 'full' }
 
   const nextHistory = [...history]
   const nextActivity = [...(o.supplierActivity ?? [])]
@@ -386,6 +431,24 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
   patch.deliveryDateHistory = nextHistory
   patch.supplierActivity = nextActivity.slice(-SUPPLIER_LIST_MAX)
   return { ok: true, replayed: false, outcome, patch: clean(patch), change: clean(change), supersededChangeId }
+}
+
+/**
+ * Whether this answer would leave the order where it already is: the same date already
+ * agreed on this link (nothing waiting over it), or the same date already waiting for a
+ * หัวหน้า. Then it is not a new event: no history, no activity, no notification, and the
+ * name and note sent with it overwrite nothing (owner, 12 Oct 2026: one confirmation,
+ * pressed five times, reached the bell five times).
+ *
+ * Judged on the order itself, re-read on every lost race, not on time: a different date is
+ * always new, and so is the first answer after the order was amended (the new link resets
+ * the status to 'waiting') or after a หัวหน้า refused a date (the supplier is answering the
+ * refusal; once answered, the same date again is unchanged).
+ */
+function isUnchanged(o: PurchaseOrder, target: number, mode: 'auto' | 'needsApproval'): boolean {
+  if (lastRejection(o)) return false
+  if (mode === 'needsApproval') return o.pendingDeliveryDate !== undefined && bkkDayStart(o.pendingDeliveryDate.date) === target
+  return !o.pendingDeliveryDate && agreedDateOf(o) === target
 }
 
 export interface DecideInput {

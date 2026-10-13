@@ -6,10 +6,11 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 import { memoryServerStore } from '../../functions/_lib/memoryStore'
 import { assertServerWrite, brandCollection } from '../../functions/_lib/serverStore'
-import { answerLink, decideDate, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
+import { answerLink as postAnswer, decideDate, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
 import { signSupplierToken, verifySupplierToken } from '../../functions/_lib/supplierToken'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/time'
 import type { PurchaseOrder } from '../../src/types'
+import { supplierStateOf } from '../../src/lib/supplierConfirmation'
 
 const SECRET = 'test-secret-0123456789-abcdefghijklmnop'
 const NOW = bkkAtTime(bkkDayStart(Date.UTC(2026, 9, 5, 3)), '10:00')
@@ -115,6 +116,14 @@ beforeEach(() => {
 
 const po = () => db.data.get('purchaseOrders/po1')!.doc as unknown as PurchaseOrder
 const notes = () => [...db.data.keys()].filter((k) => k.startsWith('notifications/')).map((k) => db.data.get(k)!.doc)
+
+/** Existing endpoint scenarios submit against the current synthetic snapshot.
+ * Stale-state tests call postAnswer directly with the original page response. */
+async function answerLink(d: Deps, token: string, body: Record<string, unknown>) {
+  const c = await verifySupplierToken(token, d.secret, d.now())
+  const row = c ? db.data.get(`${brandCollection(c.brand, 'purchaseOrders')}/${c.poId}`) : undefined
+  return postAnswer(d, token, { expectedState: row ? supplierStateOf(row.doc as unknown as PurchaseOrder) : undefined, ...body })
+}
 
 async function link(): Promise<string> {
   const r = await mintLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })
@@ -263,6 +272,72 @@ describe('POST /api/supplier/<token>', () => {
   })
 })
 
+describe('supplier tabs must confirm the state they actually saw', () => {
+  async function approvedFarDate() {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'stale-approve-1' })
+    await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId: po().pendingDeliveryDate!.changeId, decision: 'approve' })
+    return token
+  }
+  async function seen(token: string) {
+    return ((await viewLink(deps, token)).body.view as { expectedState: string }).expectedState
+  }
+
+  test('an old tab cannot withdraw a pending date it never saw', async () => {
+    const token = await approvedFarDate()
+    const expectedState = await seen(token)
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'stale-other-tab' })
+    const snapshot = structuredClone(po())
+    const before = db.writes
+    const r = await postAnswer(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'stale-old-tab', expectedState })
+    expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect(po()).toEqual(snapshot)
+    expect(db.writes).toBe(before)
+  })
+
+  test('a lost CAS race rechecks the seen state instead of withdrawing the winner', async () => {
+    const token = await approvedFarDate()
+    const expectedState = await seen(token)
+    const patch = db.patchIf.bind(db)
+    let raced = false
+    db.patchIf = async (col, id, fields, time) => {
+      if (!raced) {
+        raced = true
+        expect((await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'stale-race-winner' })).status).toBe(200)
+      }
+      return patch(col, id, fields, time)
+    }
+    // Accepting the requested date would withdraw P, too; neither action may race blindly.
+    const r = await postAnswer(deps, token, { action: 'accept', requestId: 'stale-race-loser', expectedState })
+    expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect(po().pendingDeliveryDate?.date).toBe(day(7))
+    expect(po().deliveryDateHistory!.some((h) => h.requestId === 'stale-race-loser')).toBe(false)
+    expect(notes().filter((n) => n.kind === 'supplierDatePending')).toHaveLength(2)
+  })
+
+  test('a lost response replays its recorded requestId even after another answer', async () => {
+    const token = await link()
+    const expectedState = await seen(token)
+    const body = { action: 'propose', date: '2026-10-11', requestId: 'lost-response-id', expectedState }
+    expect((await postAnswer(deps, token, body)).status).toBe(200)
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'lost-response-later' })
+    const snapshot = structuredClone(po())
+    const before = db.writes
+    expect((await postAnswer(deps, token, body)).body).toMatchObject({ replayed: true, outcome: null })
+    expect(po()).toEqual(snapshot)
+    expect(db.writes).toBe(before)
+  })
+
+  test('missing state fails closed, but an already-recorded retry is still safe', async () => {
+    const token = await link()
+    expect(await postAnswer(deps, token, { action: 'accept', requestId: 'missing-state-id' })).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect((await answerLink(deps, token, { action: 'accept', requestId: 'recorded-retry-id' })).status).toBe(200)
+    const before = db.writes
+    expect((await postAnswer(deps, token, { action: 'accept', requestId: 'recorded-retry-id' })).body.replayed).toBe(true)
+    expect(db.writes).toBe(before)
+  })
+})
+
 describe('POST /api/supplier-po/decide', () => {
   async function pending(): Promise<string> {
     const token = await link()
@@ -287,5 +362,233 @@ describe('POST /api/supplier-po/decide', () => {
     expect(po().expectedAt).toBe(day(3))
     expect((await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).status).toBe(409)
     expect(notes().find((x) => x.kind === 'supplierDateRejected')).toMatchObject({ params: { reason: 'ไม่ได้' } })
+  })
+})
+
+// Owner, 12 Oct 2026: PPN SEAFOOD's confirmation of PO-00005 reached the bell at least five
+// times. Exactly once per business event: the same answer again, from a retry, a second tab,
+// another phone or a double tap, writes nothing and tells nobody.
+describe('one confirmation, one notification', () => {
+  const confirmed = () => notes().filter((x) => x.kind === 'supplierConfirmed')
+  const supplierEntries = () => po().deliveryDateHistory!.filter((h) => h.source === 'supplier')
+  /** Count the reads and the write attempts the handlers make. */
+  function meter() {
+    const m = { gets: 0, patchTries: 0 }
+    const get = db.get.bind(db)
+    const patchIf = db.patchIf.bind(db)
+    db.get = (async (c: string, id: string) => {
+      m.gets++
+      return get(c, id)
+    }) as typeof db.get
+    db.patchIf = async (c, id, f, t) => {
+      m.patchTries++
+      return patchIf(c, id, f, t)
+    }
+    return m
+  }
+  /** Hold every reader of the order until `n` of them have read it: all see one version. */
+  function readTogether(n: number) {
+    const get = db.get.bind(db)
+    const waiting: (() => void)[] = []
+    let held = 0
+    db.get = (async (c: string, id: string) => {
+      const row = await get(c, id)
+      // Only the first n reads of the order wait; the loser's re-read goes straight through.
+      if (c === 'purchaseOrders' && held < n) {
+        held++
+        await new Promise<void>((go) => {
+          waiting.push(go)
+          if (waiting.length === n) waiting.forEach((f) => f())
+        })
+      }
+      return row
+    }) as typeof db.get
+    return () => {
+      db.get = get
+    }
+  }
+
+  test('1. the first acceptance: one order write and one notification', async () => {
+    const token = await link()
+    const before = db.writes
+    const r = await answerLink(deps, token, { action: 'accept', requestId: 'dup-0001' })
+    expect(r.body).toMatchObject({ replayed: false, outcome: 'confirmed' })
+    expect(db.writes - before).toBe(2)
+    expect(confirmed()).toHaveLength(1)
+    expect(supplierEntries()).toHaveLength(1)
+  })
+
+  test('2. the same requestId again writes nothing', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0002' })
+    const before = db.writes
+    expect((await answerLink(deps, token, { action: 'accept', requestId: 'dup-0002' })).body).toMatchObject({ replayed: true, outcome: null })
+    expect(db.writes).toBe(before)
+  })
+
+  test('3. a new requestId with the same answer: success, no new event', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0003' })
+    const snapshot = structuredClone(po())
+    const before = db.writes
+    clock += 60_000
+    const r = await answerLink(deps, token, { action: 'accept', requestId: 'dup-0004' })
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ replayed: true, unchanged: true, outcome: null, view: { status: 'confirmed', confirmedDate: '2026-10-08' } })
+    expect(db.writes).toBe(before)
+    expect(po()).toEqual(snapshot)
+    expect(confirmed()).toHaveLength(1)
+  })
+
+  test('4. a double tap (the same request sent twice at once) lands once', async () => {
+    const token = await link()
+    const body = { action: 'accept', requestId: 'dup-0005' }
+    const rs = await Promise.all([answerLink(deps, token, body), answerLink(deps, token, body)])
+    expect(rs.map((r) => r.status)).toEqual([200, 200])
+    expect(supplierEntries()).toHaveLength(1)
+    expect(confirmed()).toHaveLength(1)
+  })
+
+  test('5. two tabs answering at the same moment: one wins, the other must refresh', async () => {
+    const token = await link()
+    const m = meter()
+    const release = readTogether(2)
+    const rs = await Promise.all([
+      answerLink(deps, token, { action: 'accept', requestId: 'dup-tab-1' }),
+      answerLink(deps, token, { action: 'accept', requestId: 'dup-tab-2' }),
+    ])
+    release()
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409])
+    expect(rs.find((r) => r.status === 409)?.body).toEqual({ error: 'stale_state' })
+    // Both tried to write one snapshot; after losing CAS, a new request cannot apply
+    // to the winner's unseen state. A same-ID lost-response retry remains safe.
+    expect(m.patchTries).toBe(2)
+    expect(rs.filter((r) => r.body.replayed === false)).toHaveLength(1)
+    expect(supplierEntries()).toHaveLength(1)
+    expect(confirmed()).toHaveLength(1)
+  })
+
+  test('6. five phones with five requestIds and five names: one confirmation', async () => {
+    const token = await link()
+    const rs = await Promise.all(
+      [1, 2, 3, 4, 5].map((i) => answerLink(deps, token, { action: 'accept', name: `คนที่ ${i}`, requestId: `dup-dev-${i}` })),
+    )
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409])
+    expect(supplierEntries()).toHaveLength(1)
+    expect(confirmed()).toHaveLength(1)
+  })
+
+  test('7. a lost response: the retry (same id) and a reload (new id) both find it done', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0006' }) // reply never arrived
+    expect((await answerLink(deps, token, { action: 'accept', requestId: 'dup-0006' })).body.replayed).toBe(true)
+    expect((await answerLink(deps, token, { action: 'accept', requestId: 'dup-0007' })).body.unchanged).toBe(true)
+    expect(confirmed()).toHaveLength(1)
+  })
+
+  test('8. a new delivery date after confirming is a new event', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0008' })
+    const r = await answerLink(deps, token, { action: 'propose', date: '2026-10-09', requestId: 'dup-0009' })
+    expect(r.body).toMatchObject({ replayed: false, outcome: 'changed' })
+    expect(notes().filter((x) => x.kind === 'supplierDateChanged')).toHaveLength(1)
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-09', requestId: 'dup-0010' })
+    expect(notes().filter((x) => x.kind === 'supplierDateChanged')).toHaveLength(1)
+  })
+
+  test('9. an amended order is confirmed again on its new link, and that is heard', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0011' })
+    db.touch('purchaseOrders', 'po1', { revision: 1, revisions: [{ rev: 1, at: NOW, by: 'staff1', byName: 'Nok', reason: 'x', changes: [] }] })
+    const next = await link()
+    expect(next).not.toBe(token)
+    expect(po().supplierConfirmationStatus).toBe('waiting')
+    expect((await answerLink(deps, next, { action: 'accept', requestId: 'dup-0012' })).body).toMatchObject({ replayed: false, outcome: 'confirmed' })
+    expect(confirmed()).toHaveLength(2)
+    await answerLink(deps, next, { action: 'accept', requestId: 'dup-0013' })
+    expect(confirmed()).toHaveLength(2)
+  })
+
+  test('10. the same date beyond the range, asked again: one request to the หัวหน้า', async () => {
+    const token = await link()
+    const rs = await Promise.all(
+      ['dup-pend-1', 'dup-pend-2', 'dup-pend-3'].map((requestId) => answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId })),
+    )
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409])
+    expect(rs.filter((r) => r.status === 409).every((r) => r.body.error === 'stale_state')).toBe(true)
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-11', note: 'ขอย้ำ', requestId: 'dup-pend-4' })
+    expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(1)
+    expect(po().deliveryDateHistory!.filter((h) => h.action === 'proposed')).toHaveLength(1)
+    expect(po().deliveryDateHistory!.filter((h) => h.action === 'superseded')).toHaveLength(0)
+  })
+
+  test('11. the same order id and number in two brands stay two orders', async () => {
+    const pizza = await link()
+    const r = await mintLink(deps, auth('staff1'), { brand: 'lelapin', poId: 'po1' })
+    const lelapin = r.body.token as string
+    await answerLink(deps, pizza, { action: 'accept', requestId: 'dup-0014' })
+    await answerLink(deps, pizza, { action: 'accept', requestId: 'dup-0015' })
+    expect((await answerLink(deps, lelapin, { action: 'accept', requestId: 'dup-0016' })).body).toMatchObject({ replayed: false, outcome: 'confirmed' })
+    const keys = [...db.data.keys()].filter((k) => k.includes('supplierConfirmed'))
+    expect(keys.filter((k) => k.startsWith('notifications/'))).toHaveLength(1)
+    expect(keys.filter((k) => k.startsWith('lelapin__notifications/'))).toHaveLength(1)
+  })
+
+  test('12. a different name or note alone leaves the order and its note as they were', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'accept', name: 'Somchai', note: 'ส่งเช้า', requestId: 'dup-0017' })
+    await answerLink(deps, token, { action: 'accept', name: 'Somsri', note: 'ส่งบ่าย', requestId: 'dup-0018' })
+    expect(po()).toMatchObject({ supplierDeliveryNote: 'ส่งเช้า', supplierConfirmedBy: { via: 'link', name: 'Somchai' } })
+    expect(confirmed()).toHaveLength(1)
+  })
+
+  test('13. the notifications already there, and who has read them, are left alone', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0019' })
+    const id = [...db.data.keys()].find((k) => k.startsWith('notifications/supplierConfirmed'))!.split('/')[1]
+    db.touch('notifications', id, { readBy: { staff1: NOW + 5 } })
+    const before = structuredClone([...db.data.entries()].filter(([k]) => k.startsWith('notifications/')))
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0020' })
+    expect([...db.data.entries()].filter(([k]) => k.startsWith('notifications/'))).toEqual(before)
+  })
+
+  test('14. an unchanged answer costs no more reads than the first, and no write', async () => {
+    const token = await link()
+    let m = meter()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0021' })
+    const first = m.gets
+    m = meter()
+    await answerLink(deps, token, { action: 'accept', requestId: 'dup-0022' })
+    expect(m.gets).toBeLessThanOrEqual(first)
+    expect(m.patchTries).toBe(0)
+  })
+
+  test('15. a far date already approved, sent again from a stale tab: nothing re-opens', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-1' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    expect((await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).status).toBe(200)
+    const snapshot = structuredClone(po())
+    const before = db.writes
+    clock += 60_000
+    const r = await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-2' })
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ replayed: true, unchanged: true, outcome: null, view: { status: 'changed' } })
+    expect(db.writes).toBe(before)
+    expect(po()).toEqual(snapshot)
+    expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(1)
+  })
+
+  test('16. going back to the far date already approved: no second request to the หัวหน้า', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-3' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'dup-far-4' })
+    expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(2)
+    const r = await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-5' })
+    expect(r.body).toMatchObject({ replayed: false, outcome: 'changed', view: { status: 'changed', confirmedDate: '2026-10-11', agreedDate: '2026-10-11', pending: null } })
+    expect(po().pendingDeliveryDate).toBeUndefined()
+    expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(2)
   })
 })
