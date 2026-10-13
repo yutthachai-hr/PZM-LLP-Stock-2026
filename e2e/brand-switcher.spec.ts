@@ -56,6 +56,7 @@ async function signIn(page: Page, who: Person, firstTime: boolean) {
   await page.locator('input[type="password"]').fill(PASSWORD)
   await page.getByRole('button', { name: 'เข้าสู่ระบบ' }).click()
   if (firstTime) await page.getByRole('button', { name: 'Pizza Mania' }).click()
+  await expect(email).toHaveCount(0)
   await expect(page.locator('main')).toBeVisible()
 }
 
