@@ -22,6 +22,8 @@ async function session(viewport, lang) {
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
   await page.goto(BASE + '/')
+  const summary = page.locator('summary')
+  if (await summary.isVisible()) await summary.click()
   await page.getByRole('button', { name: lang === 'th' ? 'รีเซ็ตข้อมูลเดโม' : 'Reset demo data' }).click()
   await page.getByRole('button', { name: lang === 'th' ? 'รีเซ็ตข้อมูลเดโม' : 'Reset demo data' }).waitFor({ state: 'detached', timeout: 120_000 })
   await page.getByRole('button', { name: 'Pizza Mania', exact: true }).click()
