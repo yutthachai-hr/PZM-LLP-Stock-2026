@@ -21,6 +21,8 @@ page.on('pageerror', (e) => errors.push(String(e)))
 
 // A fresh demo device: reset seeds the catalogue and signs in as the demo admin.
 await page.goto(BASE + '/')
+const summary = page.locator('summary')
+if (await summary.isVisible()) await summary.click()
 await page.getByRole('button', { name: 'รีเซ็ตข้อมูลเดโม' }).click()
 // The reset reloads the page once it has signed in; wait until the sign-in screen is gone.
 await page.getByRole('button', { name: 'รีเซ็ตข้อมูลเดโม' }).waitFor({ state: 'detached', timeout: 120_000 })
