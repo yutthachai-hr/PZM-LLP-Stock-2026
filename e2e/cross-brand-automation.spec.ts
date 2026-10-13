@@ -3,12 +3,17 @@ import { listDocs, putMany } from './emulator'
 import { PASSWORD, PEOPLE, seedStage } from './fixture'
 
 /**
- * #10 + #11 together (owner, 12 Oct 2026): the background notification jobs run while the
- * brand is switched back and forth. Every notification any brand ends up with must be about
- * that brand's own products — none filed under the brand switched to mid-job.
+ * Background jobs and brand switching (owner, 12 Oct 2026). The notification jobs run as soon
+ * as a brand opens (cloud mode, admin, no Worker report); the brand is switched back and forth
+ * while they run. Every notification any brand ends up with must be about that brand's own
+ * products and places — none filed under the brand switched to mid-job.
+ *
+ * Switches the way the app offers today: the in-app brand list when it exists (PR #10), else
+ * the account menu's "สลับแบรนด์" and the full-screen picker (main before #10).
  */
 
 const brands = { pizza: '', lelapin: 'lelapin__', rnd: 'rnd__' } as const
+const LABEL: Record<keyof typeof brands, string> = { pizza: 'Pizza Mania', lelapin: 'Le Lapin', rnd: 'R&D' }
 
 async function stage() {
   await seedStage()
@@ -27,7 +32,19 @@ async function stage() {
   ])
 }
 
-const trigger = (page: Page) => page.getByRole('button', { name: /^แบรนด์: / }).locator('visible=true').first()
+async function switchTo(page: Page, brand: keyof typeof brands) {
+  const list = page.getByRole('button', { name: /^แบรนด์: / }).locator('visible=true').first()
+  if (await list.isVisible().catch(() => false)) {
+    await list.click({ timeout: 20_000 })
+    await page.getByRole('menuitemradio', { name: new RegExp(LABEL[brand].replace('&', '\\&')) }).click()
+    await expect(list).toHaveAccessibleName(new RegExp(LABEL[brand].replace('&', '\\&')))
+    return
+  }
+  await page.getByRole('button', { name: 'บัญชีผู้ใช้' }).click()
+  await page.getByRole('menuitem', { name: 'สลับแบรนด์' }).click()
+  await page.getByRole('button', { name: brand === 'pizza' ? 'Pizza Mania' : new RegExp(`^${LABEL[brand].replace('&', '\\&')}`), exact: brand === 'pizza' }).click()
+  await expect(page.locator('main')).toBeVisible()
+}
 
 test('notifications written while switching brands stay with their own brand', async ({ browser }) => {
   test.setTimeout(180_000)
@@ -40,28 +57,32 @@ test('notifications written while switching brands stay with their own brand', a
   await page.getByRole('button', { name: 'Pizza Mania', exact: true }).click()
   await expect(page.locator('main')).toBeVisible()
 
-  // Switch while each brand's jobs are starting (they run as soon as a brand opens).
-  for (const name of [/Le Lapin/, /R&D/, /Pizza Mania/, /Le Lapin/, /Pizza Mania/, /R&D/, /Le Lapin/]) {
-    await page.waitForTimeout(400 + Math.floor(Math.random() * 900))
-    await trigger(page).click({ timeout: 20_000 })
-    await page.getByRole('menuitemradio', { name }).click()
-    await expect(trigger(page)).toHaveAccessibleName(name)
+  // Rapid Pizza ↔ Le Lapin, then R&D, while each brand's jobs are starting.
+  for (const b of ['lelapin', 'pizza', 'lelapin', 'pizza', 'rnd', 'lelapin', 'pizza'] as const) {
+    await page.waitForTimeout(300 + Math.floor(Math.random() * 900))
+    await switchTo(page, b)
   }
-  // Let the last jobs finish.
-  await page.waitForTimeout(8_000)
+  // Then each brand opened once more and left to settle. A job a switch interrupted runs
+  // again here (none lost); one whose "done" marker was filed under the wrong brand would be
+  // skipped here for half an hour (the lost-run symptom) and leave that brand empty.
+  for (const b of ['rnd', 'lelapin', 'pizza'] as const) {
+    await switchTo(page, b)
+    await page.waitForTimeout(6_000)
+  }
 
-  const productsOf: Record<string, Set<string>> = {}
   const found: Record<string, number> = {}
   for (const [brand, prefix] of Object.entries(brands)) {
-    productsOf[brand] = new Set((await listDocs(`${prefix}products`)).map((p) => p.id))
+    const products = new Set((await listDocs(`${prefix}products`)).map((p) => p.id))
+    const places = new Set((await listDocs(`${prefix}locations`)).map((p) => p.id))
     const notes = await listDocs(`${prefix}notifications`)
     found[brand] = notes.length
     for (const n of notes) {
-      const productId = (n as { productId?: string }).productId
-      if (productId) expect(productsOf[brand].has(productId), `${brand} notification ${n.id} is about ${productId}`).toBe(true)
+      const { productId, locationId } = n as { productId?: string; locationId?: string }
+      if (productId) expect(products.has(productId), `${brand} notification ${n.id} is about product ${productId}`).toBe(true)
+      if (locationId) expect(places.has(locationId), `${brand} notification ${n.id} is about place ${locationId}`).toBe(true)
     }
   }
   console.log('CROSS-BRAND', JSON.stringify(found))
-  // The jobs did run (otherwise this test proves nothing).
-  expect(Object.values(found).reduce((a, b) => a + b, 0)).toBeGreaterThan(0)
+  // The jobs did run in every brand (otherwise this proves nothing).
+  for (const brand of Object.keys(brands)) expect(found[brand], `${brand} had no notifications at all`).toBeGreaterThan(0)
 })

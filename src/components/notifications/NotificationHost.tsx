@@ -70,7 +70,8 @@ function Host({ uid, role }: { uid: string; role: Role }) {
   const navigate = useNavigate()
   const { notifications } = useData()
   const prefs = useNotificationPrefs(uid)
-  const [state, dispatch] = useReducer(reducer, undefined, emptyQueue)
+  // Listening starts now: anything created after this moment is news, even in the first snapshot.
+  const [state, dispatch] = useReducer(reducer, undefined, () => emptyQueue(Date.now()))
   const [askSound, setAskSound] = useState(false)
   const byId = useRef(new Map<string, AppNotification>())
   const lastPlayed = useRef(new Set<string>())

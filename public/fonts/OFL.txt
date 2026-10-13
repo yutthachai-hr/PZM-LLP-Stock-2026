@@ -1,8 +1,18 @@
 LINE Seed Sans TH — Version 1.003
 Copyright (c) LY Corporation
 https://seed.line.me
-
 Bundled here: LINESeedSansTH_W_Rg.woff2 (400), LINESeedSansTH_W_Bd.woff2 (700).
+
+Plus Jakarta Sans — Version 2.8
+Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)
+Bundled here: PlusJakartaSans-Variable.woff2 (400..800), PlusJakartaSans-Ext-Variable.woff2 (400..800).
+See LICENSE-PlusJakartaSans.txt.
+
+Anuphan — Version 1.001
+Copyright 2019 The Anuphan Project Authors (https://github.com/cadsondemak/Anuphan)
+Bundled here: Anuphan-Thai-Variable.woff2 (400..700), Anuphan-Latin-Variable.woff2 (400..700), Anuphan-Ext-Variable.woff2 (400..700).
+See LICENSE-Anuphan.txt.
+
 Self-hosted rather than loaded from a CDN so the site keeps its
 "font-src 'self'" Content-Security-Policy without an exception.
 

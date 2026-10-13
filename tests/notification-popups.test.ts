@@ -73,6 +73,22 @@ describe('what pops', () => {
     expect(r.state.visible).toEqual([])
   })
 
+  // e2e business-flow, 8 Oct 2026: the first snapshot took ~8 s on a slow start, and the
+  // supplier's date change written meanwhile was swallowed into the baseline — no popup.
+  test('an alert created after the app opened pops even when it arrives in the first snapshot', () => {
+    const opened = NOW - 500 // the old ones were created at NOW - 1000, before opening
+    const late = item(note('late', 'supplierDateChanged', 'medium', { createdAt: NOW - 100 }))
+    const r = receive(emptyQueue(opened), [...first, late], NOW)
+    expect(r.fresh.map((c) => c.key)).toEqual([`late@${NOW - 100}`])
+    // And it is seen: the next delivery of the same list pops nothing more.
+    expect(receive(r.state, [...first, late], NOW + 1000).fresh).toEqual([])
+  })
+
+  test('without an opening time the first snapshot stays all history (the old behaviour)', () => {
+    const late = item(note('late', 'supplierDateChanged', 'medium', { createdAt: NOW - 100 }))
+    expect(receive(emptyQueue(), [...first, late], NOW).fresh).toEqual([])
+  })
+
   test('a new one after that pops once', () => {
     const s0 = receive(emptyQueue(), first, NOW).state
     const r = receive(s0, [...first, item(note('new1', 'supplierDateChanged', 'medium'))], NOW)
