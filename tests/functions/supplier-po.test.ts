@@ -501,4 +501,17 @@ describe('one confirmation, one notification', () => {
     expect(po()).toEqual(snapshot)
     expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(1)
   })
+
+  test('16. going back to the far date already approved: no second request to the หัวหน้า', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-3' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'dup-far-4' })
+    expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(2)
+    const r = await answerLink(deps, token, { action: 'propose', date: '2026-10-11', requestId: 'dup-far-5' })
+    expect(r.body).toMatchObject({ replayed: false, outcome: 'changed', view: { status: 'changed', confirmedDate: '2026-10-11', agreedDate: '2026-10-11', pending: null } })
+    expect(po().pendingDeliveryDate).toBeUndefined()
+    expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(2)
+  })
 })

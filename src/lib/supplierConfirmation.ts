@@ -52,6 +52,25 @@ export function effectiveDeliveryOf(o: PurchaseOrder): number | undefined {
   return o.confirmedDeliveryDate ?? requestedOf(o)
 }
 
+/**
+ * The Bangkok day the supplier and we agree on now: the last date accepted, applied within
+ * the range or approved by a หัวหน้า on this link. It still stands while a newer date waits
+ * for approval or after one was refused; an amended order's new link (`reset`) ends it.
+ */
+export function agreedDateOf(o: PurchaseOrder): number | undefined {
+  const status = o.supplierConfirmationStatus
+  if (o.confirmedDeliveryDate === undefined || !status || status === 'waiting') return undefined
+  const day = bkkDayStart(o.confirmedDeliveryDate)
+  const h = o.deliveryDateHistory ?? []
+  for (let i = h.length - 1; i >= 0; i--) {
+    const { action, to } = h[i]
+    if (action === 'reset') return undefined
+    if (action === 'accepted' || action === 'autoApplied' || action === 'approved') return to !== undefined && bkkDayStart(to) === day ? day : undefined
+  }
+  // The history was cut short: the status is all there is to go on.
+  return status === 'pending_date_approval' ? undefined : day
+}
+
 /** `YYYY-MM-DD` → start of that Bangkok day; null for anything that is not a real date. */
 export function dateKeyToMs(key: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key ?? '')
@@ -328,7 +347,9 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
     })
     if (!v.ok) return { ok: false, error: v.error }
     target = bkkDayStart(input.date as number)
-    mode = v.mode
+    // The date agreed was within the range or approved already: going back to it from a
+    // waiting date, or answering a refusal with it, is not asked for a second time.
+    mode = target === agreedDateOf(o) ? 'auto' : v.mode
   }
 
   // Before the room check: an answer that changes nothing needs no room.
@@ -405,19 +426,11 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
  * always new, and so is the first answer after the order was amended (the new link resets
  * the status to 'waiting') or after a หัวหน้า refused a date (the supplier is answering the
  * refusal; once answered, the same date again is unchanged).
- *
- * The agreed date counts whatever the range says of it now: a far date a หัวหน้า approved is
- * agreed, and sending it again must not ask for approval again. A waiting date only counts
- * while it still needs approval; once the range allows it, sending it again applies it.
  */
 function isUnchanged(o: PurchaseOrder, target: number, mode: 'auto' | 'needsApproval'): boolean {
   if (lastRejection(o)) return false
-  if (o.pendingDeliveryDate) return mode === 'needsApproval' && bkkDayStart(o.pendingDeliveryDate.date) === target
-  return (
-    (o.supplierConfirmationStatus === 'confirmed' || o.supplierConfirmationStatus === 'changed') &&
-    o.confirmedDeliveryDate !== undefined &&
-    bkkDayStart(o.confirmedDeliveryDate) === target
-  )
+  if (mode === 'needsApproval') return o.pendingDeliveryDate !== undefined && bkkDayStart(o.pendingDeliveryDate.date) === target
+  return !o.pendingDeliveryDate && agreedDateOf(o) === target
 }
 
 export interface DecideInput {

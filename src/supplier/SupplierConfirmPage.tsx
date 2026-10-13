@@ -24,6 +24,7 @@ interface View {
   status: SupplierConfirmationStatus
   requestedDate: string | null
   confirmedDate: string | null
+  agreedDate: string | null
   effectiveDate: string | null
   pending: { date: string | null; note: string | null } | null
   rejection: { date: string | null; reason: string } | null
@@ -232,7 +233,7 @@ export function SupplierConfirmPage() {
   const alreadyAgreed = v.status === 'confirmed' && !!v.requestedDate && v.confirmedDate === v.requestedDate && !v.pending && !v.rejection
   const canAccept = !!v.requestedDate && v.requestedDate >= v.today && !alreadyAgreed
   // The date already standing (agreed, or waiting for approval): picking it again changes nothing.
-  const standing = v.pending?.date ?? (v.status === 'confirmed' || v.status === 'changed' ? v.confirmedDate : null)
+  const standing = v.pending?.date ?? v.agreedDate
   const sameAsStanding = !!date && date === standing && !v.rejection
   const autoHint = v.autoUntil
     ? t('เลือกได้ถึง {date} ระบบอัปเดตทันที — หลังจากนั้นต้องรอฝ่ายจัดซื้ออนุมัติ', { date: label(v.autoUntil) })
@@ -387,7 +388,7 @@ export function SupplierConfirmPage() {
                 {v.pending ? t('วันที่นี้ส่งขอไว้แล้ว รอฝ่ายจัดซื้ออนุมัติ') : t('วันที่นี้ยืนยันไว้แล้ว เลือกวันอื่นหากต้องการเปลี่ยน')}
               </p>
             )}
-            {date && !sameAsStanding && v.autoUntil && date > v.autoUntil && (
+            {date && !sameAsStanding && date !== v.agreedDate && v.autoUntil && date > v.autoUntil && (
               <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
                 {t('วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน')}
               </p>

@@ -456,6 +456,51 @@ describe('the same answer again is not a new event', () => {
     expect(respond(o, { action: 'propose', date: day(9), requestId: 'req-dup27' }, { ...ctx, now: NOW + 60_000 })).toEqual(UNCHANGED)
   })
 
+  // Review round 2 of #14: going back to the far date already approved, from another waiting
+  // date or after a refusal, asked the หัวหน้า to approve it a second time.
+  test('going back to a far date already approved applies it without asking again', () => {
+    const boss = { id: 'm1', name: 'Boss' }
+    const approveFar = () => {
+      const o = apply(linked(), { action: 'propose', date: day(9), requestId: 'req-dup30' })
+      const r = decide(o, { changeId: o.pendingDeliveryDate!.changeId, decision: 'approve' }, boss, NOW, makeId)
+      if (!r.ok) throw new Error()
+      return applyPatch(o, r.patch)
+    }
+    // From another date still waiting: that one is withdrawn, the approved one stands.
+    let o = apply(approveFar(), { action: 'propose', date: day(12), requestId: 'req-dup31' })
+    let r = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup32' }, ctx)
+    expect(r.ok && !r.replayed && r.outcome).toBe('changed')
+    o = applyPatch(o, (r as { patch: Parameters<typeof applyPatch>[1] }).patch)
+    expect(o).toMatchObject({ supplierConfirmationStatus: 'changed', confirmedDeliveryDate: day(9) })
+    expect(o.pendingDeliveryDate).toBeUndefined()
+    // After a refusal of another date: answering it with the approved date needs no approval.
+    o = apply(approveFar(), { action: 'propose', date: day(12), requestId: 'req-dup33' })
+    const no = decide(o, { changeId: o.pendingDeliveryDate!.changeId, decision: 'reject', reason: 'no' }, boss, NOW, makeId)
+    if (!no.ok) throw new Error()
+    o = applyPatch(o, no.patch)
+    r = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup34' }, ctx)
+    expect(r.ok && !r.replayed && r.outcome).toBe('changed')
+    expect(respond(applyPatch(o, (r as { patch: Parameters<typeof applyPatch>[1] }).patch), { action: 'propose', date: day(9), requestId: 'req-dup35' }, ctx)).toEqual(UNCHANGED)
+  })
+
+  test('after an amendment, the far date approved before needs approval again', () => {
+    let o = apply(linked(), { action: 'propose', date: day(9), requestId: 'req-dup36' })
+    const ok = decide(o, { changeId: o.pendingDeliveryDate!.changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, NOW, makeId)
+    if (!ok.ok) throw new Error()
+    o = applyPatch(o, ok.patch)
+    o = { ...o, revision: 1, revisions: [{ rev: 1, at: NOW, by: 'u1', byName: 'Nok', reason: 'more', changes: [{ kind: 'qty', productName: 'BACON', unit: 'แพ็ค', from: 4, to: 6 }] }] }
+    const l = issueLink(o, { now: NOW + 1, actor, ttlDays: 30, makeId })
+    if (!l.ok || !l.patch) throw new Error()
+    o = applyPatch(o, l.patch)
+    expect(o.confirmedDeliveryDate).toBe(day(9)) // kept by the reset, but no longer agreed
+    const r = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup37' }, ctx)
+    expect(r.ok && !r.replayed && r.outcome).toBe('pending')
+    // Nor once another far date waits on the new link.
+    o = apply(o, { action: 'propose', date: day(12), requestId: 'req-dup38' })
+    const again = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup39' }, ctx)
+    expect(again.ok && !again.replayed && again.outcome).toBe('pending')
+  })
+
   test('a date waiting for approval that the range now allows applies at once', () => {
     const o = apply(linked(), { action: 'propose', date: day(9), requestId: 'req-dup28' })
     expect(o.supplierConfirmationStatus).toBe('pending_date_approval')
