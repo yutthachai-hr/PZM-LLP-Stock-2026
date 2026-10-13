@@ -29,13 +29,11 @@ test('one device receives an order in full: one receipt, stock and order agree',
 })
 
 /**
- * KNOWN DEFECT (audit D1), recorded as the Phase 0 baseline: stock is filed in one
- * transaction and the order updated in a second write, so two devices pressing confirm at
- * once both file the stock. `test.fail` keeps the suite green while the defect stands and
- * turns red the day A1 fixes it — then the marker comes off and this becomes a gate.
+ * Audit D1, now a gate: the stock and the order are written in one transaction, and the
+ * order is re-checked inside it, so of two devices pressing confirm at once only one files
+ * the stock; the other is refused with nothing written. (Was a `test.fail` baseline.)
  */
 test('two devices confirm the same delivery at once: stock goes in once', async ({ browser }) => {
-  test.fail(true, 'audit D1 — fixed by plan item A1 (idempotent receipt in one transaction)')
   await seedStage()
   const [a, b] = await Promise.all([signedIn(browser, 'staffA', '/receive?po=po1'), signedIn(browser, 'staffB', '/receive?po=po1')])
   await prepareFullReceipt(a, 'INV-200')
@@ -50,6 +48,10 @@ test('two devices confirm the same delivery at once: stock goes in once', async 
   test.info().annotations.push({ type: 'observed', description: JSON.stringify({ flour, receiptRows: rows.length, poReceipts: (po?.receipts as unknown[] | undefined)?.length, poStatus: po?.status }) })
   expect(flour).toBe(10)
   expect(rows.length).toBe(2)
+  // The device that lost is told why in plain words, not "insufficient permissions".
+  const told = await Promise.all([a, b].map((p) => p.getByText(/ใบสั่งซื้อนี้รับของแล้ว|รับของจากเครื่องอื่น/).count()))
+  expect(told.filter((n) => n > 0)).toHaveLength(1)
+  for (const p of [a, b]) await expect(p.getByText(/permission/i)).toHaveCount(0)
 })
 
 /**

@@ -1,5 +1,6 @@
 import type { AppUser, DeliveryDateChange, InventorySettings, PurchaseOrder } from '../../src/types'
 import {
+  agreedDateOf,
   applyPatch,
   dateKeyToMs,
   decide,
@@ -7,6 +8,7 @@ import {
   DEFAULT_MAX_POSTPONE_DAYS,
   effectiveDeliveryOf,
   issueLink,
+  isReplay,
   lastRejection,
   linkActiveUntil,
   linkProblem,
@@ -14,6 +16,7 @@ import {
   openLink,
   requestedOf,
   respond,
+  supplierStateOf,
   type RespondOutcome,
   type SupplierPatch,
 } from '../../src/lib/supplierConfirmation'
@@ -153,9 +156,12 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     supplierName: o.supplierName,
     docNo: o.docNo,
     revision: o.revision ?? 0,
+    expectedState: supplierStateOf(o),
     status: o.supplierConfirmationStatus ?? 'waiting',
     requestedDate: key(requested),
     confirmedDate: key(confirmed),
+    /** The date agreed on this link, still standing under a waiting date or a refusal. */
+    agreedDate: key(agreedDateOf(o)),
     effectiveDate: key(effectiveDeliveryOf(o)),
     pending: o.pendingDeliveryDate ? { date: key(o.pendingDeliveryDate.date), note: o.pendingDeliveryDate.note ?? null } : null,
     rejection: rejection ? { date: key(rejection.to), reason: rejection.note ?? '' } : null,
@@ -205,7 +211,7 @@ export async function viewLink(deps: Deps, token: string): Promise<Reply> {
 export async function answerLink(deps: Deps, token: string, body: unknown): Promise<Reply> {
   const claims = await claimsFor(deps, token)
   if (!claims) return NOT_FOUND
-  const b = (body ?? {}) as { action?: unknown; date?: unknown; note?: unknown; name?: unknown; requestId?: unknown }
+  const b = (body ?? {}) as { action?: unknown; date?: unknown; note?: unknown; name?: unknown; requestId?: unknown; expectedState?: unknown }
   if (b.action !== 'accept' && b.action !== 'propose') return fail(400, 'bad_request')
   if (typeof b.requestId !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(b.requestId)) return fail(400, 'bad_request')
   const date = b.action === 'propose' ? dateKeyToMs(typeof b.date === 'string' ? b.date : '') : null
@@ -214,11 +220,19 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
   const col = brandCollection(claims.brand, 'purchaseOrders')
   const { maxPostponeDays } = await settingsOf(deps.store, claims.brand)
   const now = deps.now()
-  type Answer = { replayed: true } | { replayed: false; outcome: RespondOutcome; change: DeliveryDateChange }
+  // `replayed`: nothing was written: this request was applied before, or (`unchanged`) the
+  // order already says what it says. Either way nobody is told again.
+  type Answer = { replayed: true; unchanged: boolean } | { replayed: false; outcome: RespondOutcome; change: DeliveryDateChange }
   const res = await writeOrder<Answer>(deps, col, claims.poId, (o) => {
     const problem = linkProblem(o, claims, now)
     if (problem === 'mismatch') return NOT_FOUND
     if (problem) return fail(410, problem)
+    // A committed request survives a lost response, even if the state has since moved.
+    // New requests (including old clients without a state key) must refresh first.
+    if (isReplay(o, b.requestId as string)) return { patch: null, reply: { replayed: true, unchanged: false } }
+    if (b.expectedState !== supplierStateOf(o)) return fail(409, 'stale_state')
+    // This check is inside writeOrder: a lost updateTime race rechecks the original
+    // expected state, never silently recomputing an unseen state-changing answer.
     const r = respond(
       o,
       {
@@ -231,7 +245,7 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
       { now, maxPostponeDays, makeId: deps.makeId },
     )
     if (!r.ok) return fail(422, r.error)
-    if (r.replayed) return { patch: null, reply: { replayed: true } }
+    if (r.replayed) return { patch: null, reply: { replayed: true, unchanged: r.unchanged === true } }
     return { patch: r.patch, reply: { replayed: false, outcome: r.outcome, change: r.change } }
   })
   if (isReply(res)) return res
@@ -245,6 +259,7 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
   }
   return ok({
     replayed: reply.replayed,
+    unchanged: reply.replayed ? reply.unchanged : false,
     outcome: reply.replayed ? null : reply.outcome,
     view: supplierView(res.order, claims.brand, maxPostponeDays, now, claims.expMs),
   })
