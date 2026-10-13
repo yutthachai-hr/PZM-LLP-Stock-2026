@@ -21,9 +21,11 @@ interface View {
   supplierName: string
   docNo: string
   revision: number
+  expectedState: string
   status: SupplierConfirmationStatus
   requestedDate: string | null
   confirmedDate: string | null
+  agreedDate: string | null
   effectiveDate: string | null
   pending: { date: string | null; note: string | null } | null
   rejection: { date: string | null; reason: string } | null
@@ -77,6 +79,7 @@ const ERRORS: Record<string, string> = {
   invalid: 'กรุณาเลือกวันที่', // i18n-key
   noRequestedDate: 'ใบสั่งซื้อนี้ไม่ได้ระบุวันส่ง กรุณาเลือกวันที่', // i18n-key
   full: 'มีการเปลี่ยนแปลงมากเกินไป กรุณาติดต่อฝ่ายจัดซื้อ', // i18n-key
+  stale_state: 'ใบสั่งซื้อนี้เปลี่ยนแล้ว กรุณาโหลดข้อมูลล่าสุดและตรวจสอบก่อนยืนยันอีกครั้ง', // i18n-key
   busy: 'มีคนกำลังบันทึกพร้อมกัน กรุณาลองอีกครั้ง', // i18n-key
   network: 'เชื่อมต่อไม่ได้ กรุณาลองอีกครั้ง', // i18n-key
 }
@@ -109,10 +112,15 @@ export function SupplierConfirmPage() {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ outcome: Outcome; date: string } | null>(null)
+  const [needsRefresh, setNeedsRefresh] = useState(false)
+  // `unchanged`: the server already had exactly this answer, so nothing new was recorded.
+  const [done, setDone] = useState<{ outcome: Outcome; date: string; unchanged: boolean } | null>(null)
   // One id per answer: a retry after a dropped connection sends the same one, so the
   // server applies it once. A different answer gets a new id.
-  const pendingId = useRef<{ key: string; id: string } | null>(null)
+  const pendingId = useRef<{ key: string; id: string; expectedState: string } | null>(null)
+  // Set before the first await: a second tap in the same frame, before React has re-rendered
+  // the button as disabled, is dropped here rather than sent.
+  const inFlight = useRef(false)
   const highlightAccept = new URLSearchParams(location.search).get('a') === 'accept'
 
   useEffect(() => {
@@ -150,35 +158,63 @@ export function SupplierConfirmPage() {
   }, [view])
 
   async function submit(action: 'accept' | 'propose') {
-    if (!view) return
+    if (!view || inFlight.current || needsRefresh) return
     if (action === 'propose' && !date) {
       setError('invalid')
       return
     }
+    inFlight.current = true
     const key = JSON.stringify([action, action === 'propose' ? date : '', name.trim(), note.trim()])
-    if (pendingId.current?.key !== key) pendingId.current = { key, id: newRequestId() }
+    if (pendingId.current?.key !== key) pendingId.current = { key, id: newRequestId(), expectedState: view.expectedState }
     setBusy(true)
     setError(null)
     try {
       const { status, body } = await call(token, {
         method: 'POST',
-        body: JSON.stringify({ action, date: action === 'propose' ? date : undefined, name, note, requestId: pendingId.current.id }),
+        body: JSON.stringify({ action, date: action === 'propose' ? date : undefined, name, note, requestId: pendingId.current.id, expectedState: pendingId.current.expectedState }),
       })
       if (status === 200) {
         const next = body.view as View
         setState({ kind: 'ready', view: next })
         const outcome = (body.outcome as Outcome | null) ?? (next.status === 'pending_date_approval' ? 'pending' : next.status === 'changed' ? 'changed' : 'confirmed')
-        setDone({ outcome, date: (outcome === 'pending' ? next.pending?.date : next.confirmedDate) ?? '' })
+        setDone({ outcome, date: (outcome === 'pending' ? next.pending?.date : next.confirmedDate) ?? '', unchanged: body.unchanged === true })
         pendingId.current = null
         setMode('choose')
       } else if (status === 410 || status === 404) {
         setState({ kind: 'error', error: String(body.error ?? 'not_found') })
       } else {
+        if (status === 409 && body.error === 'stale_state') setNeedsRefresh(true)
         setError(String(body.error ?? 'network'))
       }
     } catch {
       setError('network')
     } finally {
+      inFlight.current = false
+      setBusy(false)
+    }
+  }
+
+  async function refresh() {
+    if (inFlight.current) return
+    inFlight.current = true
+    setBusy(true)
+    try {
+      const { status, body } = await call(token)
+      if (status === 200) {
+        setState({ kind: 'ready', view: body.view as View })
+        pendingId.current = null
+        setNeedsRefresh(false)
+        setDone(null)
+        setDate('')
+        setMode('choose')
+        setError(null)
+      } else if (status === 404 || status === 410) {
+        setState({ kind: 'error', error: String(body.error ?? 'not_found') })
+      } else setError(String(body.error ?? 'network'))
+    } catch {
+      setError('network')
+    } finally {
+      inFlight.current = false
       setBusy(false)
     }
   }
@@ -221,7 +257,13 @@ export function SupplierConfirmPage() {
 
   const v = state.view
   const badge = STATUS_BADGE[v.status]
-  const canAccept = !!v.requestedDate && v.requestedDate >= v.today
+  // The date asked for is already agreed, with nothing waiting and no refusal to answer:
+  // pressing "confirm" again would say nothing new, so the page says it is done instead.
+  const alreadyAgreed = v.status === 'confirmed' && !!v.requestedDate && v.confirmedDate === v.requestedDate && !v.pending && !v.rejection
+  const canAccept = !!v.requestedDate && v.requestedDate >= v.today && !alreadyAgreed
+  // The date already standing (agreed, or waiting for approval): picking it again changes nothing.
+  const standing = v.pending?.date ?? v.agreedDate
+  const sameAsStanding = !!date && date === standing && !v.rejection
   const autoHint = v.autoUntil
     ? t('เลือกได้ถึง {date} ระบบอัปเดตทันที — หลังจากนั้นต้องรอฝ่ายจัดซื้ออนุมัติ', { date: label(v.autoUntil) })
     : null
@@ -290,9 +332,13 @@ export function SupplierConfirmPage() {
       {done && (
         <Card className="border-in/30 bg-in-soft p-4">
           <p className="font-semibold text-in">
-            {done.outcome === 'pending'
-              ? t('ส่งคำขอเลื่อนเป็นวันที่ {date} แล้ว — รอฝ่ายจัดซื้ออนุมัติ', { date: label(done.date) })
-              : t('บันทึกวันส่ง {date} เรียบร้อย ขอบคุณครับ/ค่ะ', { date: label(done.date) })}
+            {done.unchanged
+              ? done.outcome === 'pending'
+                ? t('คำขอเลื่อนเป็นวันที่ {date} ส่งไว้แล้ว — รอฝ่ายจัดซื้ออนุมัติ', { date: label(done.date) })
+                : t('วันส่ง {date} ยืนยันไว้แล้ว ไม่ต้องยืนยันซ้ำ', { date: label(done.date) })
+              : done.outcome === 'pending'
+                ? t('ส่งคำขอเลื่อนเป็นวันที่ {date} แล้ว — รอฝ่ายจัดซื้ออนุมัติ', { date: label(done.date) })
+                : t('บันทึกวันส่ง {date} เรียบร้อย ขอบคุณครับ/ค่ะ', { date: label(done.date) })}
           </p>
           <a
             className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#06c755] px-4 text-sm font-medium text-white"
@@ -333,11 +379,16 @@ export function SupplierConfirmPage() {
 
         {mode === 'choose' ? (
           <div className="grid gap-2">
+            {alreadyAgreed && (
+              <p className="flex min-h-12 items-center justify-center rounded-lg bg-in-soft px-3 text-center text-base font-medium text-in">
+                ✅ {t('ยืนยันส่งวันที่ {date} แล้ว', { date: label(v.confirmedDate) })}
+              </p>
+            )}
             {canAccept && (
               <Button
                 variant="success"
                 className={`min-h-12 text-base ${highlightAccept ? 'ring-2 ring-in/40 ring-offset-2' : ''}`}
-                disabled={busy}
+                disabled={busy || needsRefresh}
                 onClick={() => submit('accept')}
               >
                 ✅ {t('ยืนยันส่งวันที่ {date}', { date: label(v.requestedDate) })}
@@ -346,7 +397,7 @@ export function SupplierConfirmPage() {
             <Button
               variant="secondary"
               className="min-h-12 text-base"
-              disabled={busy}
+              disabled={busy || needsRefresh}
               onClick={() => {
                 setMode('pick')
                 setDate(v.pending?.date ?? v.confirmedDate ?? v.requestedDate ?? v.today)
@@ -361,7 +412,12 @@ export function SupplierConfirmPage() {
             <Field label={t('วันที่จะส่ง')} hint={autoHint ?? undefined}>
               <Input type="date" value={date} min={v.today} onChange={(e) => setDate(e.target.value)} className="text-base" />
             </Field>
-            {date && v.autoUntil && date > v.autoUntil && (
+            {sameAsStanding && (
+              <p className="rounded-lg bg-in-soft px-3 py-2 text-sm text-in">
+                {v.pending ? t('วันที่นี้ส่งขอไว้แล้ว รอฝ่ายจัดซื้ออนุมัติ') : t('วันที่นี้ยืนยันไว้แล้ว เลือกวันอื่นหากต้องการเปลี่ยน')}
+              </p>
+            )}
+            {date && !sameAsStanding && date !== v.agreedDate && v.autoUntil && date > v.autoUntil && (
               <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
                 {t('วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน')}
               </p>
@@ -370,14 +426,15 @@ export function SupplierConfirmPage() {
               <Button variant="ghost" disabled={busy} onClick={() => setMode('choose')}>
                 {t('ย้อนกลับ')}
               </Button>
-              <Button disabled={busy || !date} onClick={() => submit('propose')}>
+              <Button disabled={busy || needsRefresh || !date || sameAsStanding} onClick={() => submit('propose')}>
                 {t('ยืนยันวันที่เลือก')}
               </Button>
             </div>
           </div>
         )}
 
-        {error && <p className="text-sm text-out">{t(ERRORS[error] ?? ERRORS.network)}</p>}
+        {error && <p role="alert" className="text-sm text-out">{t(ERRORS[error] ?? ERRORS.network)}</p>}
+        {needsRefresh && <Button variant="secondary" disabled={busy} onClick={refresh}>{t('โหลดข้อมูลล่าสุด')}</Button>}
         {busy && <p className="text-xs text-ink-faint">{t('กำลังบันทึก...')}</p>}
       </Card>
     </Shell>
