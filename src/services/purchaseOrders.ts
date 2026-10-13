@@ -622,56 +622,88 @@ export async function receivePurchaseOrder(params: {
 
   const date = params.date ?? Date.now()
   const note = params.note?.trim()
-  // Stock first. If this fails nothing has been recorded against the order, and the check
-  // can simply be done again.
-  const docNo = await receiveStock({
-    toLocationId: order.locationId,
-    lines: stockLines,
-    actor,
-    date,
-    ...(note ? { note } : {}),
-    doc: {
-      supplierId: order.supplierId,
-      supplierName: order.supplierName,
-      invoiceNo,
-      docDate: params.docDate,
-      poId: order.id,
-      poDocNo: order.docNo,
-    },
-    photoDataUrl: params.photoDataUrl,
-  })
-
-  const receipt: PoReceipt = {
-    docNo,
-    date,
-    invoiceNo,
-    byId: actor.id,
-    byName: actor.name,
-    lines: arrived.map((d) => ({ productId: d.line.productId, qty: d.qty, ...(d.note ? { note: d.note } : {}) })),
-  }
   const stillOwed = settled.filter((l) => outstandingQty(l) > 0).length
   const done = stillOwed === 0 || !!closeReason
   const status: PurchaseOrderStatus = done ? 'received' : 'ordered'
-  const now = Date.now()
-  const patch: Partial<PurchaseOrder> = {
-    status,
-    lines: settled,
-    receipts: [...(order.receipts ?? []), receipt],
-    // The latest delivery, so everything that read one receipt per order still reads true.
-    invoiceNo,
-    // The date on the delivery note, the same one the stock receipt is filed under — not
-    // the moment it was keyed. (Until 17 Sep 2026 this was Date.now().) `updatedAt` keeps
-    // the keying time.
-    receivedAt: date,
-    receivedBy: actor.id,
-    receivedByName: actor.name,
-    movementDocNo: docNo,
-    ...(closeReason && stillOwed > 0
-      ? { closedShortReason: closeReason, closedShortBy: actor.id, closedShortByName: actor.name, closedShortAt: now }
-      : {}),
-    updatedAt: now,
+  const filedBefore = order.receipts?.length ?? 0
+  const orderPatch = (docNo: string): Partial<PurchaseOrder> => {
+    const receipt: PoReceipt = {
+      docNo,
+      date,
+      invoiceNo,
+      byId: actor.id,
+      byName: actor.name,
+      lines: arrived.map((d) => ({ productId: d.line.productId, qty: d.qty, ...(d.note ? { note: d.note } : {}) })),
+    }
+    const now = Date.now()
+    return {
+      status,
+      lines: settled,
+      receipts: [...(order.receipts ?? []), receipt],
+      // The latest delivery, so everything that read one receipt per order still reads true.
+      invoiceNo,
+      // The date on the delivery note, the same one the stock receipt is filed under — not
+      // the moment it was keyed. (Until 17 Sep 2026 this was Date.now().) `updatedAt` keeps
+      // the keying time.
+      receivedAt: date,
+      receivedBy: actor.id,
+      receivedByName: actor.name,
+      movementDocNo: docNo,
+      ...(closeReason && stillOwed > 0
+        ? { closedShortReason: closeReason, closedShortBy: actor.id, closedShortByName: actor.name, closedShortAt: now }
+        : {}),
+      updatedAt: now,
+    }
   }
-  await db.update(COL.purchaseOrders, orderId, patch as Record<string, unknown>)
+  let patch: Partial<PurchaseOrder> = {}
+  // Whether the order is no longer the one this check was made against.
+  const moved = (cur: PurchaseOrder) =>
+    cur.status !== order.status || (cur.receipts?.length ?? 0) !== filedBefore || (cur.revision ?? 0) !== (order.revision ?? 0)
+  const RACED = 'ใบสั่งซื้อนี้เพิ่งถูกแก้ไขหรือรับของจากเครื่องอื่น — เปิดใบใหม่แล้วตรวจอีกครั้ง' // i18n-key
+  // The stock and the order in ONE commit (audit D1). They used to be two writes, with the
+  // order read before either: two devices confirming the same delivery both passed the
+  // checks above and both filed the stock. Inside the transaction the order is read again
+  // and must still be what this check was made against — a commit that loses the race runs
+  // again, finds the other device's delivery, and is refused with nothing written.
+  let docNo: string
+  try {
+    docNo = await receiveStock({
+      toLocationId: order.locationId,
+      lines: stockLines,
+      actor,
+      date,
+      ...(note ? { note } : {}),
+      doc: {
+        supplierId: order.supplierId,
+        supplierName: order.supplierName,
+        invoiceNo,
+        docDate: params.docDate,
+        poId: order.id,
+        poDocNo: order.docNo,
+      },
+      photoDataUrl: params.photoDataUrl,
+      alongside: {
+        async read(tx) {
+          const now = await tx.get<PurchaseOrder>(COL.purchaseOrders, orderId)
+          if (!now) throw new AppError('ไม่พบใบสั่งซื้อ')
+          if (now.status === 'received') throw new AppError('ใบสั่งซื้อนี้รับของแล้ว')
+          if (moved(now)) throw new AppError(RACED)
+        },
+        write(tx, docNo) {
+          patch = orderPatch(docNo)
+          tx.update(COL.purchaseOrders, orderId, patch as Record<string, unknown>)
+        },
+      },
+    })
+  } catch (e) {
+    if (e instanceof AppError) throw e
+    // Firestore checks the rules before it notices the conflict: the commit that lost the
+    // race comes back "insufficient permissions" (the order's receipts no longer grow by
+    // exactly one), not as a retry. Nothing was written either way; say what happened.
+    const cur = await db.getOne<PurchaseOrder>(COL.purchaseOrders, orderId).catch(() => null)
+    if (cur && moved(cur)) throw new AppError(cur.status === 'received' ? 'ใบสั่งซื้อนี้รับของแล้ว' : RACED)
+    throw e
+  }
   orderCache.patch({ ...order, ...patch } as PurchaseOrder)
   return { docNo, receivedLines: arrived.length, status, outstandingLines: done ? 0 : stillOwed }
 }
