@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { backend } from '../backend'
-import { getBrand, onBrandChange } from '../brand/brand'
+import { getBrand, onBrandChange, type BrandId } from '../brand/brand'
 import { audienceKeysOf, toDoc, type NotificationDraft, type WritePlan } from '../lib/inventoryRules/notifications'
 import { COL, type AppNotification, type NotificationCategory, type NotificationPrefs, type NotificationPriority } from '../types'
 
@@ -13,7 +13,9 @@ import { COL, type AppNotification, type NotificationCategory, type Notification
  * write plan from the engine when the app stands in for the Worker.
  */
 
-const scoped = () => backend.forBrand(getBrand())
+// `brand` defaults to the open one; a background job passes the brand it started under, so
+// nothing it reads or writes after an await can land in a brand switched to meanwhile.
+const scoped = (brand: BrandId = getBrand()) => backend.forBrand(brand)
 
 export async function markRead(n: AppNotification, uid: string, now = Date.now()): Promise<void> {
   if (n.readBy?.[uid]) return
@@ -47,8 +49,8 @@ export async function deliver(draft: NotificationDraft, actor: { id: string }): 
 }
 
 /** Write what the engine planned. Returns how many documents were written. */
-export async function applyPlan(p: WritePlan): Promise<number> {
-  const db = scoped()
+export async function applyPlan(p: WritePlan, brand?: BrandId): Promise<number> {
+  const db = scoped(brand)
   const now = Date.now()
   for (const doc of [...p.create, ...p.rearm]) await db.set(COL.notifications, doc.id, doc as unknown as Record<string, unknown>)
   for (const id of p.resolve) await db.update(COL.notifications, id, { active: false, resolvedAt: now, updatedAt: now })
@@ -60,14 +62,14 @@ export async function applyPlan(p: WritePlan): Promise<number> {
  * for what is found plus one a query. (Until 6 Oct 2026 one read each: 134 billed reads per
  * run in the measurement, nearly all for documents that did not exist.)
  */
-export async function getNotifications(ids: readonly string[]): Promise<AppNotification[]> {
+export async function getNotifications(ids: readonly string[], brand?: BrandId): Promise<AppNotification[]> {
   if (!ids.length) return []
-  return scoped().getMany<AppNotification>(COL.notifications, ids, { label: 'notifications.job.lookup' })
+  return scoped(brand).getMany<AppNotification>(COL.notifications, ids, { label: 'notifications.job.lookup' })
 }
 
 /** Every notification still showing a live state — the job's occasional sweep for strays. */
-export async function getActiveNotifications(): Promise<AppNotification[]> {
-  return scoped().query<AppNotification>(COL.notifications, { filters: [{ field: 'active', op: '==', value: true }] }, { label: 'notifications.job.sweep' })
+export async function getActiveNotifications(brand?: BrandId): Promise<AppNotification[]> {
+  return scoped(brand).query<AppNotification>(COL.notifications, { filters: [{ field: 'active', op: '==', value: true }] }, { label: 'notifications.job.sweep' })
 }
 
 /**
@@ -75,8 +77,8 @@ export async function getActiveNotifications(): Promise<AppNotification[]> {
  * bell finds them. Only active ones the job is already holding; a manager may rewrite a
  * notification (rules: notificationUpdate). Best effort.
  */
-export async function backfillAudience(docs: readonly AppNotification[]): Promise<number> {
-  const db = scoped()
+export async function backfillAudience(docs: readonly AppNotification[], brand?: BrandId): Promise<number> {
+  const db = scoped(brand)
   let n = 0
   for (const d of docs) {
     if (d.audienceKeys || !d.active) continue

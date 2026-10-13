@@ -392,6 +392,8 @@ let cached: Supplier[] | null = null
 let inflight: Promise<Supplier[]> | null = null
 const listeners = new Set<() => void>()
 const NONE: Supplier[] = []
+/** Bumped whenever the list is forgotten (a brand switch, a write), so a late read is not kept. */
+let generation = 0
 
 function announce(): void {
   for (const fn of listeners) fn()
@@ -399,6 +401,7 @@ function announce(): void {
 
 /** Forgotten when the list is written to, so the next reader sees the change. */
 export function invalidateSupplierCache(): void {
+  generation++
   cached = null
   inflight = null
   announce()
@@ -423,8 +426,12 @@ export function patchSupplierCache(id: string, row: Supplier | null): void {
 export async function loadSuppliers(): Promise<Supplier[]> {
   if (cached) return cached
   if (inflight) return inflight
+  // A read that finishes after a brand switch is the old brand's list: it is handed to whoever
+  // asked, never kept as the new brand's (owner, 12 Oct 2026).
+  const gen = generation
   inflight = listSuppliers()
     .then((rows) => {
+      if (gen !== generation) return rows
       cached = rows
       announce()
       return rows
@@ -432,12 +439,13 @@ export async function loadSuppliers(): Promise<Supplier[]> {
     .catch(() => {
       // A denied or failed read must not stop someone editing a product; they simply do not
       // get to pick a supplier this time.
+      if (gen !== generation) return NONE
       cached = NONE
       announce()
       return NONE
     })
     .finally(() => {
-      inflight = null
+      if (gen === generation) inflight = null
     })
   return inflight
 }
