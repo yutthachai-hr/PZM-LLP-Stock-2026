@@ -659,7 +659,7 @@ export async function receivePurchaseOrder(params: {
   // Whether the order is no longer the one this check was made against.
   const moved = (cur: PurchaseOrder) =>
     cur.status !== order.status || (cur.receipts?.length ?? 0) !== filedBefore || (cur.revision ?? 0) !== (order.revision ?? 0)
-  const RACED = 'ใบสั่งซื้อนี้เพิ่งถูกแก้ไขหรือรับของจากเครื่องอื่น — เปิดใบใหม่แล้วตรวจอีกครั้ง'
+  const RACED = 'ใบสั่งซื้อนี้เพิ่งถูกแก้ไขหรือรับของจากเครื่องอื่น — เปิดใบใหม่แล้วตรวจอีกครั้ง' // i18n-key
   // The stock and the order in ONE commit (audit D1). They used to be two writes, with the
   // order read before either: two devices confirming the same delivery both passed the
   // checks above and both filed the stock. Inside the transaction the order is read again
