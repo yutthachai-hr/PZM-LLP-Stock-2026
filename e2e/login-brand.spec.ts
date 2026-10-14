@@ -71,8 +71,20 @@ async function expectOpenIn(page: Page, brand: BrandId) {
 /** Every brand-scoped read so far belongs to `brand`, and its products were read. */
 async function expectOnlyRead(page: Page, brand: BrandId) {
   const products = brand === 'pizza' ? 'products' : `${brand}__products`
-  await expect.poll(async () => (await readCollections(page)).includes(products), { timeout: 15_000 }).toBe(true)
-  const foreign = (await readCollections(page)).filter((c) => ownerOf(c) !== 'shared' && ownerOf(c) !== brand)
+  // Another brand's reads fail the test as soon as they appear, not only after this brand's
+  // own products have loaded (a late switch would load them too).
+  let seen: string[] = []
+  await expect
+    .poll(
+      async () => {
+        seen = await readCollections(page)
+        const foreign = seen.filter((c) => ownerOf(c) !== 'shared' && ownerOf(c) !== brand)
+        return foreign.length > 0 ? `foreign: ${foreign.join(', ')}` : seen.includes(products) ? 'ok' : 'waiting'
+      },
+      { timeout: 15_000 },
+    )
+    .toBe('ok')
+  const foreign = seen.filter((c) => ownerOf(c) !== 'shared' && ownerOf(c) !== brand)
   expect(foreign, `collections of another brand read on the way in: ${foreign.join(', ')}`).toEqual([])
 }
 
