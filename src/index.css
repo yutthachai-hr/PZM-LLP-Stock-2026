@@ -513,31 +513,71 @@ input[type='number'] {
   }
 }
 
-/* ---- sign-in page: the playful brand switch (owner, 8 Oct 2026; restored 9 Oct) ----
-   The round brand icons float gently, each a beat after the last, so the row reads as
-   something to touch; a hover tilts one; the chosen one pops in with a little overshoot and
-   then keeps floating, a little larger. The heading slides in on a brand change. Anyone who
-   asked the system for less motion gets none of it (the global rule above, and this one). */
-@keyframes brand-orb-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+/* ---- sign-in page: the playful brand switch (owner, 8 Oct 2026; restored 9 Oct; made
+   visible 12 Oct) ----
+   The first version floated the clickable button itself by 3px every 3.2s, a beat apart that
+   the selected icon's own restart cancelled out: measured on Production the row moved in
+   lockstep and too little to notice, a hover swapped the float for a wiggle that froze, and
+   the moving button made the click target drift.
+
+   Now each icon is layers, and each layer owns ONE transform, so nothing competes:
+     .brand-orb        the button: the hit area. Never moves.
+     .brand-orb-float  the idle float, 5px, on its own period and phase per icon (--orb-i),
+                       so the three never fall into step. Selection does not touch it, so
+                       choosing a brand never makes an icon jump.
+     .brand-orb-face   hover (lift, tilt, scale, full colour, by transition) and selection
+                       (a spring pop once, then a little larger inside the brand's ring).
+     .brand-orb-pulse  one ring that swells and fades once when an icon is chosen.
+   Only transform and opacity move. Anyone who asked the system for less motion keeps the
+   colour and ring changes and gets no movement. */
+@keyframes brand-orb-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @keyframes brand-orb-pop {
-  0% { transform: scale(0.82) rotate(-14deg); }
-  55% { transform: scale(1.2) rotate(6deg); }
-  100% { transform: scale(1.1) rotate(0deg); }
+  0% { transform: scale(0.88) rotate(-7deg); }
+  55% { transform: scale(1.1) rotate(3deg); }
+  100% { transform: scale(1.06) rotate(0deg); }
 }
-@keyframes brand-orb-float-on { 0%, 100% { transform: translateY(-3px) scale(1.1); } 50% { transform: translateY(-6px) scale(1.1); } }
-@keyframes brand-orb-wiggle { 0%, 100% { transform: translateY(-4px) rotate(0); } 30% { transform: translateY(-4px) rotate(-8deg); } 65% { transform: translateY(-4px) rotate(6deg); } }
+@keyframes brand-orb-pulse { from { transform: scale(1); opacity: 0.55; } to { transform: scale(1.28); opacity: 0; } }
 @keyframes brand-heading-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 
-.brand-orb { animation: brand-orb-float 3.2s ease-in-out infinite; }
-.brand-orb:hover:not([aria-checked='true']) { animation: brand-orb-wiggle 0.5s ease-in-out; }
-.brand-orb[aria-checked='true'] {
-  animation:
-    brand-orb-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-    brand-orb-float-on 3.2s ease-in-out 0.45s infinite;
+.brand-orb-float {
+  /* 3.8s, 4.0s and 4.2s, with the phases spread from the first frame (negative delays). */
+  animation: brand-orb-float calc(3.8s + var(--orb-i, 0) * 0.2s) cubic-bezier(0.45, 0, 0.55, 1)
+    calc(var(--orb-i, 0) * -1.35s) infinite;
+  will-change: transform;
+}
+.brand-orb-face {
+  opacity: 0.72;
+  filter: saturate(0.6);
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 240ms ease-out,
+    filter 240ms ease-out,
+    box-shadow 240ms ease-out;
+}
+.brand-orb[aria-checked='true'] .brand-orb-face {
+  opacity: 1;
+  filter: none;
+  transform: scale(1.06);
+  animation: brand-orb-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.brand-orb-pulse { opacity: 0; }
+.brand-orb[aria-checked='true'] .brand-orb-pulse { animation: brand-orb-pulse 750ms ease-out; }
+@media (hover: hover) {
+  .brand-orb:hover .brand-orb-face {
+    opacity: 1;
+    filter: none;
+    /* Tilts alternate across the row (6deg, 0, -6deg); never more than 6 degrees. */
+    transform: translateY(-4px) rotate(calc(6deg - var(--orb-i, 0) * 6deg)) scale(1.06);
+  }
+  .brand-orb[aria-checked='true']:hover .brand-orb-face { transform: translateY(-3px) scale(1.08); }
 }
 .brand-heading-in { animation: brand-heading-in 0.4s ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand-orb, .brand-orb:hover, .brand-orb[aria-checked='true'], .brand-heading-in { animation: none; }
+  .brand-orb-float, .brand-heading-in,
+  .brand-orb .brand-orb-pulse, .brand-orb[aria-checked='true'] .brand-orb-pulse,
+  .brand-orb .brand-orb-face, .brand-orb[aria-checked='true'] .brand-orb-face { animation: none; }
+  .brand-orb .brand-orb-face, .brand-orb[aria-checked='true'] .brand-orb-face,
+  .brand-orb:hover .brand-orb-face, .brand-orb[aria-checked='true']:hover .brand-orb-face { transform: none; }
 }
 

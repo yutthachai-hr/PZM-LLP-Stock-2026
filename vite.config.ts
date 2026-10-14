@@ -19,6 +19,11 @@ if (process.env.CF_PAGES && process.env.VITE_USE_EMULATOR) throw new Error('VITE
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    watch: {
+      ignored: ['**/e2e-results/**', '**/test-results/**'],
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
