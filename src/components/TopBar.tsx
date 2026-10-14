@@ -79,13 +79,17 @@ export function TopBar({ title }: { title: string }) {
   useEffect(() => setActive(0), [q])
 
   // Ctrl+K / ⌘K puts the cursor in the search from anywhere, the shortcut the hint in the
-  // field advertises. Only above sm, where the field is on screen to receive it.
+  // field advertises. On small viewports opens the overlay so the input is visible.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        input.current?.focus()
-        input.current?.select()
+        setMobileSearch(true)
+        // ponytail: microtask focus queue sufficient without cross-frame activeElement coordination
+        setTimeout(() => {
+          input.current?.focus()
+          input.current?.select()
+        }, 0)
       }
     }
     document.addEventListener('keydown', onKey)
@@ -133,9 +137,12 @@ export function TopBar({ title }: { title: string }) {
       setActive((i) => (i - 1 + results.length) % results.length)
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      choose(results[active].to)
+      // ponytail: guard bounds without secondary auto-clamp queue
+      if (results[active]) choose(results[active].to)
     }
   }
+
+  const hitId = (key: string) => `topbar-hit-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`
 
   const search = (
     <div ref={box} className="relative min-w-0 flex-1 md:max-w-lg xl:max-w-2xl">
@@ -149,6 +156,7 @@ export function TopBar({ title }: { title: string }) {
         aria-expanded={open && results.length > 0}
         aria-controls="topbar-results"
         aria-autocomplete="list"
+        aria-activedescendant={open && results[active] ? hitId(results[active].key) : undefined}
         value={q}
         onChange={(e) => {
           setQ(e.target.value)
@@ -186,6 +194,7 @@ export function TopBar({ title }: { title: string }) {
                     </div>
                   )}
                   <button
+                    id={hitId(hit.key)}
                     role="option"
                     aria-selected={i === active}
                     onMouseEnter={() => setActive(i)}

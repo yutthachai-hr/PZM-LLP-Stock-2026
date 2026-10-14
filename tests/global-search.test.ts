@@ -86,4 +86,17 @@ describe('global search', () => {
     const groups = globalSearch('la', src({ suppliers: [supplier({})], movements: [mv({ supplierName: 'LADER', invoiceNo: 'LA-9' })] })).hits.map((h) => order.indexOf(h.group))
     expect(groups).toEqual([...groups].sort((a, b) => a - b))
   })
+
+  test('every hit produces a deterministic unique key for DOM binding', () => {
+    const movements = [
+      mv({ id: 'a', docNo: 'RC-00012', poId: 'po7', poDocNo: 'PO-00007', supplierName: 'LADER', invoiceNo: 'IV-1' }),
+    ]
+    const r = globalSearch('lader', src({ suppliers: [supplier({})], movements }))
+    const keys = r.hits.map((h) => h.key)
+    expect(keys.length).toBeGreaterThan(0)
+    expect(new Set(keys).size).toBe(keys.length)
+    for (const key of keys) {
+      expect(key.replace(/[^a-zA-Z0-9_-]/g, '_')).toMatch(/^[a-zA-Z0-9_-]+$/)
+    }
+  })
 })
