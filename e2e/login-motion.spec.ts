@@ -43,8 +43,7 @@ for (const view of VIEWS) {
     test.use({ viewport: { width: view.width, height: view.height } })
 
     test.beforeEach(async ({ page }) => {
-      // ponytail: domcontentloaded + explicit radios count sufficient; avoids window.load stall on keepalive sockets
-      await page.goto('/', { waitUntil: 'domcontentloaded' })
+      await page.goto('/')
       await expect(radios(page)).toHaveCount(3)
       // Let the selection pop on first paint finish.
       await page.waitForTimeout(900)
@@ -161,7 +160,7 @@ test.describe('reduced motion', () => {
   test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } })
 
   test('asking for less motion stops the float, the pop and the pulse; choosing still works', async ({ page }) => {
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.goto('/')
     await expect(radios(page)).toHaveCount(3)
     const anims = await group(page).locator('.brand-orb-float, .brand-orb-face, .brand-orb-pulse').evaluateAll((els) => els.map((e) => getComputedStyle(e).animationName))
     expect(new Set(anims)).toEqual(new Set(['none']))
