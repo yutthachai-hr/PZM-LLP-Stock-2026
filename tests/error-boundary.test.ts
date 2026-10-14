@@ -16,7 +16,7 @@ import {
   ClearChunkReloadFlag,
   clearChunkReloadFlag,
 } from '../src/components/ErrorBoundary'
-import { I18nProvider } from '../src/i18n/I18nContext'
+import { I18nProvider, useT } from '../src/i18n/I18nContext'
 
 describe('Route ErrorBoundary & Chunk Load Handling', () => {
   let mockReload: ReturnType<typeof vi.fn>
@@ -141,7 +141,7 @@ describe('Route ErrorBoundary & Chunk Load Handling', () => {
       eb.state = { hasError: true, error: err, reloading: false }
 
       const rendered = eb.render() as React.ReactElement
-      const htmlTh = ReactDOMServer.renderToStaticMarkup(rendered)
+      const htmlTh = ReactDOMServer.renderToStaticMarkup(React.createElement(I18nProvider, null, rendered))
 
       // Localized messages (Thai default)
       expect(htmlTh).toContain('ไม่สามารถโหลดหน้านี้ได้')
@@ -197,5 +197,13 @@ describe('Route ErrorBoundary & Chunk Load Handling', () => {
       expect(sessionStorage.removeItem).toHaveBeenCalledWith(CHUNK_RELOAD_KEY)
       expect(storageStore[CHUNK_RELOAD_KEY]).toBeUndefined()
     })
+  })
+  // Review R3: useT() must fail fast outside I18nProvider, not silently show Thai to English readers.
+  test('useT throws outside I18nProvider', () => {
+    function UsesT() {
+      useT()
+      return null
+    }
+    expect(() => ReactDOMServer.renderToStaticMarkup(React.createElement(UsesT))).toThrow('useI18n must be used within I18nProvider')
   })
 })

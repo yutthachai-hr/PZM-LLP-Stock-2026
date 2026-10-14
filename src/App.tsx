@@ -93,7 +93,9 @@ function Gate() {
   return (
     <DataProvider key={brand}>
       <Layout>
-        <ErrorBoundary key={location.pathname} resetKeys={[location.pathname]}>
+        {/* Reset only an error screen on navigation; a key would remount every page (and its
+            listeners) on each path change, including /requests/A → /requests/B. */}
+        <ErrorBoundary resetKeys={[location.pathname]}>
           <Suspense
             fallback={
               <div className="flex min-h-[50vh] items-center justify-center">
