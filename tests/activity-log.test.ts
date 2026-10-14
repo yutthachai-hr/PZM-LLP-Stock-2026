@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from 'vitest'
 import { buildActivityLog } from '../src/lib/activityLog'
+import { translatorFor } from '../src/i18n/I18nContext'
 import { movedSince } from '../src/lib/ledger'
 import type { PurchaseOrder, PurchaseRequest, StockEvent, StockMovement } from '../src/types'
 
@@ -53,6 +54,24 @@ describe('the activity log', () => {
     t,
   }
 
+  test('order activity is factual in English, preserves Thai names and reasons, and never rewrites its source', () => {
+    const o = {
+      id: 'historical', docNo: 'PO-00014', supplierName: 'ผู้ขายเดิม', status: 'cancelled',
+      createdAt: D0, orderedAt: D0, createdByName: 'ยกเลิก', lines: [],
+      cancelledAt: D0 + DAY, cancelledByName: 'สมชาย', cancelReason: 'เหตุผลเดิม',
+    } as unknown as PurchaseOrder
+    const before = structuredClone(o)
+    const en = buildActivityLog({ ...input, t: translatorFor('en'), movements: [], orders: [o], requests: [], events: [] })
+    expect(en.map(e => [e.action, e.by, e.docNo])).toEqual([
+      ['Cancelled order', 'สมชาย', 'PO-00014'], ['placed order', 'ยกเลิก', 'PO-00014'],
+    ])
+    expect(en[0].detail).toBe('เหตุผลเดิม')
+    expect(en[0].subject).toContain('ผู้ขายเดิม')
+    expect(o).toEqual(before)
+    const th = buildActivityLog({ ...input, t: translatorFor('th'), movements: [], orders: [o], requests: [], events: [] })
+    expect(th.map(e => e.action)).toEqual(['ยกเลิกใบสั่งซื้อแล้ว', 'สั่งซื้อแล้ว'])
+  })
+
   test('a movement yields its filing, each edit with old and new values, and its void', () => {
     const m = mv({
       edits: [
@@ -81,7 +100,7 @@ describe('the activity log', () => {
       createdBy: 'u1', createdByName: 'Nuiy', createdAt: D0, updatedAt: D0,
     }
     const log = buildActivityLog({ ...input, movements: [], orders: [o], requests: [], events: [] })
-    expect(log.map((e) => e.action)).toEqual(['ยกเลิกใบสั่งซื้อ', 'แก้ไขใบสั่งซื้อ (Rev.{n}) {"n":1}', 'สั่งซื้อ'])
+    expect(log.map((e) => e.action)).toEqual(['ยกเลิกใบสั่งซื้อแล้ว', 'แก้ไขใบสั่งซื้อ (Rev.{n}) {"n":1}', 'สั่งซื้อแล้ว'])
     expect(log[1].detail).toBe('short — Prawn: 10 → 12 KG')
     expect(log[0].by).toBe('Boss')
     expect(log.every((e) => e.docNo === 'PO-00001')).toBe(true)
@@ -107,7 +126,7 @@ describe('the activity log', () => {
       'ปิดยอดค้าง',
       'รับของเข้าคลัง (รอบที่ {n}) {"n":2}',
       'รับของเข้าคลัง (รอบที่ {n}) {"n":1}',
-      'สั่งซื้อ',
+      'สั่งซื้อแล้ว',
     ])
     expect(log[0]).toMatchObject({ detail: 'supplier out', by: 'Boss' })
     expect(log[2].detail).toBe('บิล {no} {"no":"IV-1"} · RC-00010 · {n} รายการ {"n":2} · Prawn: 6 (rest tomorrow)')

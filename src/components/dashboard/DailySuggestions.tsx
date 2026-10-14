@@ -11,7 +11,7 @@ import { useData } from '../../data/DataContext'
 import { useCalendarFeed } from '../../data/useCalendarFeed'
 import { requestCache } from '../../data/requestCache'
 import { transferCache } from '../../data/transferCache'
-import { useT } from '../../i18n/I18nContext'
+import { useI18n } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { fmtQty, formatThaiDate } from '../../lib/format'
 import { bkkDayEnd, bkkDayKey, bkkDayStart, DAY_MS, isSameBkkDay } from '../../lib/inventoryRules/time'
@@ -54,7 +54,7 @@ const keyOf = (blockId: string, productId: string): Key => `${blockId}__${produc
  * request goes through submit → approve → orders, the transfer through its own review.
  */
 export function DailySuggestions() {
-  const t = useT()
+  const { t, lang } = useI18n()
   const toast = useToast()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -341,10 +341,8 @@ export function DailySuggestions() {
       title={t('ข้อเสนอแนะประจำวัน')}
       count={suggestions ? t('({n} รายการ)', { n: blocks.reduce((n, b) => n + b.lines.length, 0) }) : undefined}
       actions={
-        // LINE's own Thai share button (owner, 4 Oct 2026), the file from LINE's design guide
-        // (developers.line.biz, buttons_th_v3.zip) used exactly as published: LINE allows its
-        // icon on a share button only unaltered. Its grey twin while the button cannot be used.
-        // Files saved at twice their size for sharp screens, so shown at half.
+        // Unaltered official TH/EN artwork; see public/brand/line/README.md.
+        // English is wider: contain it within the original 68×30 footprint, never stretch.
         <button
           type="button"
           onClick={() => void shareDigest()}
@@ -354,11 +352,11 @@ export function DailySuggestions() {
           className="shrink-0 cursor-pointer rounded-md transition-opacity hover:opacity-85 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           <img
-            src={!suggestions || busy ? '/brand/line/share-th-grey.png' : '/brand/line/share-th.png'}
+            src={`/brand/line/share-${lang}${!suggestions || busy ? '-grey' : ''}.png`}
             alt=""
             width={68}
             height={30}
-            className="block h-[30px] w-[68px]"
+            className="block h-[30px] w-[68px] object-contain"
           />
         </button>
       }
