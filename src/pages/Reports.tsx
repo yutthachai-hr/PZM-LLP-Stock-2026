@@ -61,6 +61,26 @@ const TYPE_LABEL: Record<MovementType, string> = {
 
 type ReportMode = 'overview' | 'movement' | 'snapshot' | 'activity' | 'cost'
 
+export async function exportReportsExcel(
+  title: string,
+  sheetName: string,
+  rows: Record<string, string | number>[],
+  t: (key: string, params?: Record<string, string | number>) => string,
+  toast: { success: (m: string) => void; error: (m: string) => void },
+  setBusy: (val: string) => void,
+) {
+  setBusy('excel')
+  try {
+    const { exportExcel } = await import('../lib/export')
+    await exportExcel(title, sheetName, rows)
+    toast.success(t('ดาวน์โหลดไฟล์ Excel แล้ว'))
+  } catch (e) {
+    toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
+  } finally {
+    setBusy('')
+  }
+}
+
 export function ReportsPage() {
   const t = useT()
   const {
@@ -248,7 +268,7 @@ export function ReportsPage() {
         [t("ผู้แก้ไข")]: editorsOf(m).join(', '),
         [t("จำนวนครั้งที่แก้ไข")]: m.edits?.length ?? 0,
       }))
-      exportExcel(t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }), 'Movements', rows)
+      await exportExcel(t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }), 'Movements', rows)
     } else {
       const rows = snapshotRows.map((r) => ({
         [t("สินค้า")]: r.name,
@@ -260,7 +280,7 @@ export function ReportsPage() {
         [t("สถานะ")]: snapshotStatus(r, t),
         [t("มูลค่า")]: r.value === null ? '' : Math.round(r.value),
       }))
-      exportExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows)
+      await exportExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows)
     }
   }
 
@@ -297,7 +317,7 @@ export function ReportsPage() {
         m.byUserName,
         editorsOf(m).join(', '),
       ])
-      exportReportPdf({
+      await exportReportPdf({
         filename: t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }),
         title: t('รายงานการเคลื่อนไหวสต๊อก — {company}', { company }),
         meta: metaLines(),
@@ -325,7 +345,7 @@ export function ReportsPage() {
         snapshotStatus(r, t),
         r.value === null ? '' : fmtMoney(r.value),
       ])
-      exportReportPdf({
+      await exportReportPdf({
         filename: t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }),
         title: t('รายงานสต๊อกคงเหลือ — {company}', { company }),
         meta: metaLines(),

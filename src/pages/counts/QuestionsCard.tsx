@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { SectionCard } from '../../components/frame'
 import { Button } from '../../components/ui'
+import { useToast } from '../../components/Toast'
+import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { fmtQty } from '../../lib/format'
 import type { MonthlyCountQuestion, Product } from '../../types'
@@ -25,6 +27,7 @@ export function QuestionsCard({
   onAnswer: (key: string, answer: { productId: string; qty: number } | null) => Promise<void>
 }) {
   const t = useT()
+  const toast = useToast()
   const active = useMemo(() => products.filter((p) => p.active !== false), [products])
   const byLabel = useMemo(() => new Map(active.map((p) => [`${p.sku} · ${p.name}`, p])), [active])
   const [draft, setDraft] = useState<Record<string, { productId?: string; qty: string }>>({})
@@ -52,7 +55,7 @@ export function QuestionsCard({
         })),
       )
     } catch (e) {
-      console.error(e)
+      toast.error(errText(e, t))
     } finally {
       setExporting(false)
     }

@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/Confirm'
 import { I18nProvider, useT } from './i18n/I18nContext'
 import { Spinner } from './components/ui'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { UpdateBanner } from './pwa/UpdateBanner'
 import { DemoBanner } from './components/DemoBanner'
 import { Layout } from './components/Layout'
@@ -91,49 +92,51 @@ function Gate() {
   return (
     <DataProvider key={brand}>
       <Layout>
-        <Suspense
-          fallback={
-            <div className="flex min-h-[50vh] items-center justify-center">
-              <Spinner label={t('กำลังโหลด...')} />
-            </div>
-          }
-        >
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/products" element={<ProductsPage />} />
-            <Route path="/products/:id/card" element={<StockCardPage />} />
-            <Route path="/receive" element={<ReceivePage />} />
-            <Route path="/issue" element={<IssuePage />} />
-            <Route path="/recipes" element={<RecipesPage />} />
-            <Route path="/transfers" element={<TransfersPage />} />
-            <Route path="/transfers/today" element={<TransfersTodayPage />} />
-            <Route path="/transfers/new" element={<TransferDetailPage />} />
-            <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
-            <Route path="/transfers/:id" element={<TransferDetailPage />} />
-            <Route path="/adjust" element={<AdjustPage />} />
-            <Route path="/counts" element={<MonthlyCountsPage />} />
-            <Route path="/counts/:id" element={<MonthlyCountSheet />} />
-            <Route path="/movements" element={<MovementsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/import" element={<ImportPage />} />
-            <Route path="/suppliers" element={<SuppliersPage />} />
-            <Route path="/suppliers/performance" element={<SupplierPerformancePage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/requests" element={<PurchaseRequestsPage />} />
-            <Route path="/requests/:id" element={<RequestPage />} />
-            <Route path="/purchase" element={<PurchaseBatchesPage />} />
-            <Route path="/purchase/import" element={<PurchaseImportPage />} />
-            <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/announcements" element={<AnnouncementsPage />} />
-            <Route path="/announcements/new" element={<AnnouncementPage />} />
-            <Route path="/announcements/:company/:id" element={<AnnouncementPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/settings/:section" element={<SettingsPage />} />
-            <Route path="/more" element={<MorePage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="flex min-h-[50vh] items-center justify-center">
+                <Spinner label={t('กำลังโหลด...')} />
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/:id/card" element={<StockCardPage />} />
+              <Route path="/receive" element={<ReceivePage />} />
+              <Route path="/issue" element={<IssuePage />} />
+              <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/transfers" element={<TransfersPage />} />
+              <Route path="/transfers/today" element={<TransfersTodayPage />} />
+              <Route path="/transfers/new" element={<TransferDetailPage />} />
+              <Route path="/transfers/:id/receive" element={<TransferReceivePage />} />
+              <Route path="/transfers/:id" element={<TransferDetailPage />} />
+              <Route path="/adjust" element={<AdjustPage />} />
+              <Route path="/counts" element={<MonthlyCountsPage />} />
+              <Route path="/counts/:id" element={<MonthlyCountSheet />} />
+              <Route path="/movements" element={<MovementsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/import" element={<ImportPage />} />
+              <Route path="/suppliers" element={<SuppliersPage />} />
+              <Route path="/suppliers/performance" element={<SupplierPerformancePage />} />
+              <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/requests" element={<PurchaseRequestsPage />} />
+              <Route path="/requests/:id" element={<RequestPage />} />
+              <Route path="/purchase" element={<PurchaseBatchesPage />} />
+              <Route path="/purchase/import" element={<PurchaseImportPage />} />
+              <Route path="/purchase/:id" element={<PurchaseBatchReviewPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/announcements" element={<AnnouncementsPage />} />
+              <Route path="/announcements/new" element={<AnnouncementPage />} />
+              <Route path="/announcements/:company/:id" element={<AnnouncementPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/:section" element={<SettingsPage />} />
+              <Route path="/more" element={<MorePage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </Layout>
     </DataProvider>
   )
