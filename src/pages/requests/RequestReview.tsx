@@ -140,8 +140,8 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
   async function exportFile(kind: 'pdf' | 'excel') {
     if (!actor) return
     await run(kind, async () => {
-      if (kind === 'pdf') exportRequestPdf(pr, company, locationName, t)
-      else exportRequestExcel(pr, locationName, t, (id) => locationById(id)?.name ?? id)
+      if (kind === 'pdf') await exportRequestPdf(pr, company, locationName, t)
+      else await exportRequestExcel(pr, locationName, t, (id) => locationById(id)?.name ?? id)
       setPr(await S.noteExport(pr.id, kind, actor))
     })
   }

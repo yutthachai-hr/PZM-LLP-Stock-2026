@@ -12,7 +12,6 @@ import { useData } from '../../data/DataContext'
 import { movementCache } from '../../data/movementCache'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
-import { exportExcel } from '../../lib/export'
 import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import { balanceAtDayEnd } from '../../lib/ledger'
@@ -50,6 +49,7 @@ export function MonthlyCountSheet() {
   const [last, setLast] = useState<Record<string, MonthlyCountResult> | undefined>(undefined)
   const [edits, setEdits] = useState<Edits>({})
   const [filter, setFilter] = useState<Filter>('all')
+  const [exporting, setExporting] = useState(false)
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState<'record' | 'post' | null>(null)
@@ -362,20 +362,29 @@ export function MonthlyCountSheet() {
   const monthOver = bkkDayStart(Date.now()) >= sheet.countDate
   const toPost = rows.filter((r) => r.diff).length
 
-  function download() {
-    exportExcel(`monthly-count-${sheet!.id}`, t('นับสต๊อก'), shown.map((r) => {
-      const p = byId.get(r.productId)
-      return {
-        SKU: p?.sku ?? '',
-        [t('สินค้า')]: p?.name ?? r.productId,
-        [t('หน่วย')]: p?.unitType ?? '',
-        [t('ระบบ ณ สิ้นเดือน')]: r.systemQty,
-        [t('นับได้')]: r.countedQty ?? '',
-        [t('ผลต่าง')]: r.diff ?? '',
-        [t('มูลค่า')]: r.value ?? '',
-        [t('เดือนก่อน')]: r.lastDiff ?? '',
-      }
-    }))
+  // ponytail: dynamic export loader; add progress bar when exports exceed 50k rows
+  async function download() {
+    setExporting(true)
+    try {
+      const { exportExcel } = await import('../../lib/export')
+      await exportExcel(`monthly-count-${sheet!.id}`, t('นับสต๊อก'), shown.map((r) => {
+        const p = byId.get(r.productId)
+        return {
+          SKU: p?.sku ?? '',
+          [t('สินค้า')]: p?.name ?? r.productId,
+          [t('หน่วย')]: p?.unitType ?? '',
+          [t('ระบบ ณ สิ้นเดือน')]: r.systemQty,
+          [t('นับได้')]: r.countedQty ?? '',
+          [t('ผลต่าง')]: r.diff ?? '',
+          [t('มูลค่า')]: r.value ?? '',
+          [t('เดือนก่อน')]: r.lastDiff ?? '',
+        }
+      }))
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -406,7 +415,7 @@ export function MonthlyCountSheet() {
               <Icon name="chevronLeft" size={16} />
               {t('ใบนับทั้งหมด')}
             </Link>
-            <Button variant="secondary" onClick={download} disabled={!ready}>
+            <Button variant="secondary" onClick={() => void download()} disabled={!ready || exporting}>
               <Icon name="download" size={16} />
               Excel
             </Button>

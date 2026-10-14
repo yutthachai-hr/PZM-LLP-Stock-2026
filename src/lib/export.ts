@@ -1,6 +1,3 @@
-import * as XLSX from 'xlsx'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { SARABUN_BASE64 } from './sarabunFont'
 
 // ---------------- Excel ----------------
@@ -25,11 +22,13 @@ export function columnWidths(rows: Record<string, string | number>[]): { wch: nu
   })
 }
 
-export function exportExcel(
+// ponytail: dynamic xlsx loader; add streaming export when memory exceeds 100MB
+export async function exportExcel(
   filename: string,
   sheetName: string,
   rows: Record<string, string | number>[],
-): void {
+): Promise<void> {
+  const XLSX = await import('xlsx')
   const ws = XLSX.utils.json_to_sheet(rows)
   if (rows.length > 0) {
     ws['!cols'] = columnWidths(rows)
@@ -52,7 +51,7 @@ export function exportExcel(
  */
 const fontedDocs = new WeakSet<object>()
 
-export function registerThaiFont(doc: jsPDF): boolean {
+export function registerThaiFont(doc: { addFileToVFS: (name: string, data: string) => void; addFont: (name: string, font: string, style: string) => void }): boolean {
   if (!SARABUN_BASE64 || SARABUN_BASE64.length < 1000) return false
   if (fontedDocs.has(doc)) return true
   doc.addFileToVFS('Sarabun-Regular.ttf', SARABUN_BASE64)
@@ -71,7 +70,12 @@ export interface PdfReportOptions {
   foot?: (string | number)[]
 }
 
-export function exportReportPdf(opts: PdfReportOptions): void {
+// ponytail: dynamic jspdf loader; add web worker rendering when PDF generation exceeds 5s
+export async function exportReportPdf(opts: PdfReportOptions): Promise<void> {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const hasThai = registerThaiFont(doc)
   const font = hasThai ? 'Sarabun' : 'helvetica'

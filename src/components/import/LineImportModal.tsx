@@ -7,7 +7,7 @@ import { fmtQty } from '../../lib/format'
 import { buildMatchIndex } from '../../lib/productMatch'
 import { looseScore } from '../../lib/search'
 import { suggestProducts } from '../../lib/productSuggest'
-import { parseSheetLines, type SheetLine } from '../../lib/sheetLines'
+import type { SheetLine } from '../../lib/sheetLines'
 import { billReaderAvailable, readDocumentFile } from '../../services/billOcr'
 import type { Product } from '../../types'
 import { Icon } from '../Icon'
@@ -82,7 +82,9 @@ export function LineImportModal({
     if (!file) return
     setError(null)
     setStep('reading')
+    // ponytail: dynamic sheet parser; add progress bar when sheets exceed 10k rows
     try {
+      const { parseSheetLines } = await import('../../lib/sheetLines')
       const parsed = parseSheetLines(await file.arrayBuffer())
       if (!parsed.lines.length) throw new Error(t('ไม่พบแถวสินค้าในไฟล์ — ต้องมีหัวคอลัมน์ชื่อสินค้า (หรือรหัส) และจำนวน'))
       setSource(`${file.name} · ${parsed.sheet}`)
