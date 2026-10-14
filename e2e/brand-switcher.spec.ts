@@ -93,7 +93,11 @@ test('first sign-in asks once; the next sign-in opens the last brand directly', 
   await switchTo(page, /Le Lapin/)
   await expect(trigger(page)).toHaveAccessibleName(/Le Lapin/)
   // Sign out and back in (another account, same device): no picker, the device's last brand.
+  // Signing out shows the form at once, then clears the device's offline copy and reloads
+  // (firebase/app.ts clearLocalCaches). Wait for that reload, or it wipes what is typed next.
+  const reloaded = page.waitForEvent('load')
   await page.getByRole('button', { name: 'ออกจากระบบ' }).first().click()
+  await reloaded
   await expect(page.getByRole('textbox', { name: /email|อีเมล/i })).toBeVisible()
   await signIn(page, 'staffA', false)
   await expect(page.getByRole('heading', { name: 'เลือกแบรนด์' })).toHaveCount(0)
