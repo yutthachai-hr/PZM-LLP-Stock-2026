@@ -3052,10 +3052,43 @@ export const EN: Record<string, string> = {
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
 
+  // ---- suppliers: master–detail (9 Oct 2026) -----------------------------------------
+  'ปลด {name} ออกจากผู้ขายนี้': 'Unlink {name} from this supplier',
+  'ไม่พบผู้ขายรายนี้แล้ว': 'This supplier is no longer on file',
+
+  // ---- in-app brand switcher (9 Oct 2026) ----------------------------------------------
+  'เปลี่ยนเป็น {name}?': 'Switch to {name}?',
+  'มีงานที่ยังไม่ได้บันทึก {n} หน้า — ระบบจะเก็บไว้ในเครื่องนี้สำหรับ {from} ก่อนเปลี่ยน และกลับมาเมื่อเปิดแบรนด์นี้อีกครั้ง ถ้าเก็บไม่ได้จะไม่เปลี่ยนแบรนด์ (รูปถ่ายที่แนบไว้จะไม่ถูกเก็บ)':
+    'Unsaved work on {n} screen(s) — it is kept on this device for {from} before switching and comes back when you open that brand again; if it cannot be kept, the brand is not switched (attached photos are not kept)',
+  'เก็บงานที่ยังไม่ได้บันทึกไว้ในเครื่องนี้ไม่ได้ ({screens}) — ยังไม่เปลี่ยนแบรนด์ งานบนหน้าจอยังอยู่ครบ บันทึกหรือล้างงานก่อน แล้วค่อยเปลี่ยน':
+    'Could not keep the unsaved work on this device ({screens}) — the brand was not switched and everything on screen is still there. Save or clear that work first, then switch',
+  เปลี่ยนแบรนด์: 'Switch brand',
+  'ยังบันทึกข้อมูลไม่เสร็จ — รอให้เสร็จก่อนแล้วค่อยเปลี่ยนแบรนด์': 'Still saving — wait for it to finish, then switch brand',
+  'แบรนด์: {name} — เปลี่ยนแบรนด์': 'Brand: {name} — switch brand',
+  แบรนด์ที่เปิดอยู่: 'Open now',
+
   // ---- automation: a run stopped by a brand change (12 Oct 2026) ----------------------
   'เปลี่ยนแบรนด์ระหว่างสร้างงาน — ยังไม่ได้สร้างงานนับสต๊อก ลองกดใหม่อีกครั้ง':
     'The brand changed while creating tasks — no stock-count tasks were created. Press again',
 
+  // ---- receiving: smart supplier resolution (7 Oct 2026) -------------------------
+  จากผู้ขายประจำของสินค้า: "from the product's usual supplier",
+  จากผู้ขายสำรองที่ตั้งไว้ในสินค้า: "from the product's listed alternate",
+  จากชื่อผู้ขายบนบิล: 'from the supplier named on the bill',
+  จากประวัติการรับ: 'from receiving history',
+  'จาก {po}': 'From {po}',
+  เลือกให้อัตโนมัติจากสินค้าที่เลือก: 'Selected automatically from the chosen product',
+  'อ่านจากบิล — ตรวจให้ตรงก่อนรับ': 'Read from the bill — check it before receiving',
+  'แนะนำ: {name}': 'Suggested: {name}',
+  ใช้ผู้ขายนี้: 'Use this supplier',
+  'สินค้านี้ซื้อได้จากหลายผู้ขาย — เลือกเอง:': 'This can come from several suppliers — pick one:',
+  'ผู้ขายไม่ตรงกัน: บิลระบุ {ocr} แต่สินค้าผูกกับ {mapped}': 'Supplier mismatch: the bill says {ocr} but the products are mapped to {mapped}',
+  'ตรวจบิลกับสินค้าก่อนเลือกผู้ขาย — ระบบไม่เลือกให้': 'Check the bill against the products before choosing — the app will not choose for you',
+  '{product} ผูกกับ {mapped} แต่ใบรับนี้เป็นของ {supplier}': '{product} is mapped to {mapped}, but this receipt is for {supplier}',
+  ผู้ขายอื่น: 'another supplier',
+  'ตรวจผู้ขายอีกครั้ง หรือ': 'Review the supplier, or',
+  แยกไปใบรับถัดไป: 'move to the next receipt',
+  'แยก {n} รายการไปใบรับถัดไปแล้ว — รับใบนี้ก่อน แล้วกด "รับบิลถัดไป"': 'Moved {n} item(s) to the next receipt — receive this one first, then press "Next bill"',
   // ---- top bar: global search (early release, Phase 3) ---------------------------------
   'ค้นหาสินค้า หน้า เอกสาร ผู้ขาย…': 'Search products, pages, documents, suppliers…',
   ไม่พบในข้อมูลที่โหลดไว้: 'Nothing found in the loaded data',

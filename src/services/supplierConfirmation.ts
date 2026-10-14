@@ -1,6 +1,7 @@
 import { BACKEND_MODE } from '../backend'
 import { getBrand } from '../brand/brand'
 import { orderCache } from '../data/orderCache'
+import { trackWrite } from '../backend/pendingWrites'
 import type { PurchaseOrder } from '../types'
 import { authHeader } from './poImages'
 
@@ -14,19 +15,26 @@ import { authHeader } from './poImages'
  */
 export async function supplierLink(order: PurchaseOrder): Promise<{ url: string; order: PurchaseOrder } | null> {
   if (BACKEND_MODE === 'local' || order.status !== 'ordered') return null
-  try {
-    const res = await fetch('/api/supplier-po/link', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({ brand: getBrand(), poId: order.id }),
-    })
-    if (!res.ok) return null
-    const body = (await res.json()) as { url: string; order: PurchaseOrder }
-    orderCache.patch(body.order)
-    return body
-  } catch {
-    return null
-  }
+  // A server write the brand switcher waits for; the order goes into the cache only if the
+  // brand it belongs to is still the open one (the cache is per brand).
+  const brand = getBrand()
+  return trackWrite(
+    (async () => {
+      try {
+        const res = await fetch('/api/supplier-po/link', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...(await authHeader()) },
+          body: JSON.stringify({ brand, poId: order.id }),
+        })
+        if (!res.ok) return null
+        const body = (await res.json()) as { url: string; order: PurchaseOrder }
+        if (getBrand() === brand) orderCache.patch(body.order)
+        return body
+      } catch {
+        return null
+      }
+    })(),
+  )
 }
 
 /** A หัวหน้า/admin approves or refuses a date beyond the range. Throws the server's error code. */
@@ -36,13 +44,18 @@ export async function decideSupplierDate(
   decision: 'approve' | 'reject',
   reason?: string,
 ): Promise<PurchaseOrder> {
-  const res = await fetch('/api/supplier-po/decide', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...(await authHeader()) },
-    body: JSON.stringify({ brand: getBrand(), poId: order.id, changeId, decision, reason }),
-  })
-  const body = (await res.json().catch(() => ({}))) as { order?: PurchaseOrder; error?: string }
-  if (!res.ok || !body.order) throw new Error(body.error ?? `http_${res.status}`)
-  orderCache.patch(body.order)
-  return body.order
+  const brand = getBrand()
+  return trackWrite(
+    (async () => {
+      const res = await fetch('/api/supplier-po/decide', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ brand, poId: order.id, changeId, decision, reason }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { order?: PurchaseOrder; error?: string }
+      if (!res.ok || !body.order) throw new Error(body.error ?? `http_${res.status}`)
+      if (getBrand() === brand) orderCache.patch(body.order)
+      return body.order
+    })(),
+  )
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
+import { reportUnsaved } from '../brand/unsavedWork'
 
 /**
  * What is half-keyed on a screen survives leaving it.
@@ -15,6 +16,34 @@ import { useBrand } from '../brand/BrandContext'
  * pictures (a data URL can be megabytes) are never kept. Storage can be missing or full
  * — a private window, a wiped tablet — and then the form simply behaves as before.
  */
+/** Where a draft lives: one per brand, per person, per screen. */
+export function draftKey(brand: string | null | undefined, userId: string | null | undefined, screen: string): string {
+  return `draft:${brand ?? ''}:${userId ?? ''}:${screen}`
+}
+
+/**
+ * Write a draft and prove it: true only when the stored text reads back exactly as written.
+ * A full quota, blocked storage, or a store that silently drops the write all come back false.
+ */
+export function persistDraft(storage: Pick<Storage, 'setItem' | 'getItem'> | undefined, key: string, value: unknown): boolean {
+  try {
+    if (!storage) return false
+    const text = JSON.stringify(value)
+    storage.setItem(key, text)
+    return storage.getItem(key) === text
+  } catch {
+    return false
+  }
+}
+
+function browserStorage(): Storage | undefined {
+  try {
+    return typeof localStorage === 'undefined' ? undefined : localStorage
+  } catch {
+    return undefined
+  }
+}
+
 export function useDraft<T extends object>(
   screen: string,
   value: T,
@@ -24,7 +53,7 @@ export function useDraft<T extends object>(
 ): { restored: boolean; clear: () => void } {
   const { user } = useAuth()
   const { brand } = useBrand()
-  const key = `draft:${brand ?? ''}:${user?.id ?? ''}:${screen}`
+  const key = draftKey(brand, user?.id, screen)
   const [restored, setRestored] = useState(false)
   // The first render must not overwrite the saved draft with the empty form.
   const loaded = useRef(false)
@@ -64,6 +93,24 @@ export function useDraft<T extends object>(
     return () => clearTimeout(h)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, value])
+
+  // While the form holds something, the brand switcher knows (brand/unsavedWork.ts) and can
+  // have it saved at once instead of 300 ms later.
+  const latest = useRef(value)
+  latest.current = value
+  const empty = isEmpty(value)
+  useEffect(() => {
+    if (empty) {
+      reportUnsaved(key, null)
+      return
+    }
+    reportUnsaved(key, {
+      screen,
+      // Verified, never assumed: the switcher refuses to switch when this is false.
+      flush: () => persistDraft(browserStorage(), key, latest.current),
+    })
+    return () => reportUnsaved(key, null)
+  }, [key, screen, empty])
 
   const clear = useCallback(() => {
     try {

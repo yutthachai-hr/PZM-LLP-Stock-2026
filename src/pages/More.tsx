@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { BrandLogo } from '../components/BrandLogo'
+import { BrandSheet } from '../components/BrandSwitcher'
 import { Icon } from '../components/Icon'
 import { NAV_GROUPS, moreItemsFor, navSections } from '../components/nav/navItems'
 import { useI18n, useT } from '../i18n/I18nContext'
@@ -15,7 +17,8 @@ export function MorePage() {
   const t = useT()
   const { lang, setLang } = useI18n()
   const { user, logout } = useAuth()
-  const { brand, reset } = useBrand()
+  const { brand } = useBrand()
+  const [choosing, setChoosing] = useState(false)
   const def = brand ? brandDef(brand) : null
   const row =
     'flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 text-sm text-ink outline-none active:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40'
@@ -53,7 +56,8 @@ export function MorePage() {
           <span className="flex-1 text-left">{t('ภาษา')}</span>
           <span className="text-ink-soft">{lang === 'th' ? 'TH' : 'EN'}</span>
         </button>
-        <button type="button" className={row} onClick={reset}>
+        {/* The same short list as the logo in the top bar — not the full-screen picker. */}
+        <button type="button" className={row} onClick={() => setChoosing(true)} aria-haspopup="dialog">
           <Icon name="swap" size={20} className="text-ink-soft" />
           <span className="flex-1 text-left">{t('สลับแบรนด์')}</span>
         </button>
@@ -62,6 +66,7 @@ export function MorePage() {
           <span className="flex-1 text-left">{t('ออกจากระบบ')}</span>
         </button>
       </div>
+      <BrandSheet open={choosing} onClose={() => setChoosing(false)} />
     </div>
   )
 }

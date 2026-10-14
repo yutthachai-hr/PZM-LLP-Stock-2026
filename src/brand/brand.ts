@@ -179,6 +179,22 @@ export function lastBrand(): BrandId {
 }
 
 /**
+ * The brand this device last had open, if it has ever had one — not proof of anything.
+ *
+ * firestore.rules give every active account every brand (there is no per-person brand list),
+ * so reopening it after sign-in grants nothing the account does not already have. Should
+ * per-brand access ever be added, it must be checked here and enforced in the rules.
+ */
+export function savedBrand(): BrandId | null {
+  try {
+    const saved = localStorage.getItem(LS_KEY)
+    return saved === 'pizza' || saved === 'lelapin' || saved === 'rnd' ? saved : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Map a logical collection name to its brand-scoped physical name.
  *
  * `brand` defaults to whatever is selected right now, which is what a screen wants. Any
