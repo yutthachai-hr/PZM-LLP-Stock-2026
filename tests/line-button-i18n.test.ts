@@ -5,12 +5,13 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { I18nProvider } from '../src/i18n/I18nContext'
 import { DailySuggestions } from '../src/components/dashboard/DailySuggestions'
 import { PoSheet } from '../src/components/PoSheet'
-import type { PurchaseOrder } from '../src/types'
+import { RecentActivityCard } from '../src/components/dashboard/DeskCards'
+import type { PurchaseOrder, PurchaseRequest, StockMovement } from '../src/types'
 
 vi.mock('../src/backend', () => ({ backend: { mode: 'local' }, BACKEND_MODE: 'local' }))
 vi.mock('../src/auth/AuthContext', () => ({ useAuth: () => ({ user: null }) }))
 vi.mock('../src/brand/BrandContext', () => ({ useBrand: () => ({ brand: 'pizza' }) }))
-vi.mock('../src/data/DataContext', () => ({ useData: () => ({}) }))
+vi.mock('../src/data/DataContext', () => ({ useData: () => ({ locationById: () => ({ name: 'Warehouse' }) }) }))
 vi.mock('../src/data/useCalendarFeed', () => ({ useCalendarFeed: () => ({ insights: null, items: [] }) }))
 vi.mock('../src/services/schedules', () => ({ useScheduleConfig: () => ({ settings: { coverDays: 7 } }) }))
 vi.mock('../src/services/suppliers', () => ({ useSuppliers: () => [] }))
@@ -28,6 +29,28 @@ function markup(lang: 'th' | 'en') {
 }
 
 afterEach(() => vi.unstubAllGlobals())
+
+test('Dashboard activity titles are facts, not the navigation commands; sources remain untouched', () => {
+  vi.stubGlobal('localStorage', { getItem: () => 'en' })
+  const now = Date.now()
+  const movements = ['receive', 'issue', 'issue', 'adjust'].map((type, i) => ({
+    id: `m${i}`, docNo: `MV-${i}`, type, createdAt: now, productName: 'สินค้าเดิม',
+    fromLocationId: type === 'issue' ? 'wh' : undefined,
+    toLocationId: i === 2 ? 'branch' : undefined,
+  })) as StockMovement[]
+  const orders = [{ id: 'po', docNo: 'PO-00014', status: 'ordered', orderedAt: now,
+    supplierName: 'ผู้ขายเดิม', lines: [], createdByName: 'ชื่อเดิม' }] as unknown as PurchaseOrder[]
+  const requests = [{ id: 'pr', docNo: 'PR-00001', status: 'pendingApproval', submittedAt: now,
+    items: [], locationId: 'wh' }] as unknown as PurchaseRequest[]
+  const before = structuredClone({ movements, orders, requests })
+  const html = renderToStaticMarkup(createElement(I18nProvider, null, createElement(MemoryRouter, null,
+    createElement(RecentActivityCard, { movements, orders, requests }))))
+  for (const title of ['Stock received', 'Stock issued / used', 'Stock transferred', 'Stock adjusted', 'Purchase order created', 'Purchase request sent']) {
+    expect(html).toContain(`>${title}</span>`)
+  }
+  expect(html).toContain('ผู้ขายเดิม')
+  expect({ movements, orders, requests }).toEqual(before)
+})
 
 test.each(['th', 'en'] as const)('a supplier sheet explicitly in %s stays in that language under either UI language', sheetLang => {
   const order = {
