@@ -160,7 +160,7 @@ export async function filing<R>(
 }
 
 /** A changed row, as the screen should show it until the listener confirms it. */
-function noteChanged(mv: StockMovement, patch: Record<string, unknown>, epoch?: number): void {
+function noteChanged(mv: StockMovement, patch: Record<string, unknown>, epoch: number): void {
   const next: Record<string, unknown> = { ...mv }
   for (const [k, v] of Object.entries(patch)) {
     if (v === DELETE_FIELD) delete next[k]

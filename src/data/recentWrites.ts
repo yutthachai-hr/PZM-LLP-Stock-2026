@@ -39,9 +39,10 @@ function emit() {
 }
 
 /** Note rows that were just committed (created or changed). Later notes of an id win. */
-export function noteWritten(written: readonly StockMovement[], epoch?: number): void {
+export function noteWritten(written: readonly StockMovement[], epoch: number): void {
   if (written.length === 0) return
-  if (epoch !== undefined && epoch !== brandEpoch()) return
+  // Required: a row noted under the brand that was open when its transaction began.
+  if (epoch !== brandEpoch()) return
   const now = Date.now()
   const ids = new Set(written.map((w) => w.id))
   rows = [...rows.filter((r) => !ids.has(r.id)), ...written.map((w) => ({ ...w, notedAt: now }))]

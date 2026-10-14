@@ -46,10 +46,10 @@ describe('laying noted rows over the live list', () => {
   test('subscribers hear every note, latest note of an id winning', () => {
     const seen: Mv[][] = []
     const off = subscribeRecentWrites((rows) => seen.push(rows))
-    noteWritten([row('a', { qty: 1 })])
-    noteWritten([row('a', { qty: 2 }), row('b')])
+    noteWritten([row('a', { qty: 1 })], brandEpoch())
+    noteWritten([row('a', { qty: 2 }), row('b')], brandEpoch())
     off()
-    noteWritten([row('c')])
+    noteWritten([row('c')], brandEpoch())
     expect(seen).toHaveLength(2)
     expect(seen[1].map((m) => [m.id, m.qty])).toEqual([['a', 2], ['b', 1]])
   })
@@ -84,7 +84,7 @@ describe('the stock engine notes what it files', () => {
 describe('brand switching and generation guard', () => {
   test('a row noted under brand A is not delivered to a subscriber after a switch to B', () => {
     setActiveBrand('pizza')
-    noteWritten([row('pizza-1')])
+    noteWritten([row('pizza-1')], brandEpoch())
 
     const seen: Mv[][] = []
     const off = subscribeRecentWrites((rows) => seen.push(rows))
@@ -96,7 +96,7 @@ describe('brand switching and generation guard', () => {
     expect(seen.at(-1)).toEqual([])
 
     // Subsequent write in brand B emits only brand B rows
-    noteWritten([row('lapin-1')])
+    noteWritten([row('lapin-1')], brandEpoch())
     expect(seen.at(-1)?.map((m) => m.id)).toEqual(['lapin-1'])
 
     // Live overlay in brand B must not contain brand A's movement
@@ -110,7 +110,7 @@ describe('brand switching and generation guard', () => {
 
   test('a subscriber mounting after brand switch sees no prior brand movements', () => {
     setActiveBrand('pizza')
-    noteWritten([row('pizza-prior')])
+    noteWritten([row('pizza-prior')], brandEpoch())
 
     setActiveBrand('lelapin')
 
@@ -119,7 +119,7 @@ describe('brand switching and generation guard', () => {
       lapinRecent = rows
     })
 
-    noteWritten([row('lapin-subsequent')])
+    noteWritten([row('lapin-subsequent')], brandEpoch())
 
     expect(lapinRecent.map((m) => m.id)).toEqual(['lapin-subsequent'])
     expect(overlayRecent([], lapinRecent).map((m) => m.id)).toEqual(['lapin-subsequent'])
@@ -144,7 +144,7 @@ describe('brand switching and generation guard', () => {
     expect(seen).toHaveLength(0)
 
     // Current brand writes still work normally
-    noteWritten([row('lapin-1')])
+    noteWritten([row('lapin-1')], brandEpoch())
     expect(seen.at(-1)?.map((m) => m.id)).toEqual(['lapin-1'])
 
     off()
