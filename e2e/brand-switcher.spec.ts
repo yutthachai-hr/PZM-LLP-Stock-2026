@@ -73,12 +73,13 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${EVIDENCE}/${name}.png` })
 }
 
-async function catalogue(page: Page): Promise<string> {
+// ponytail: heading 2 presence signals lazy chunk + firestore loaded; add table row count assertion if page size exceeds 100
+async function catalogue(page: Page) {
   await open(page, '/products')
-  await expect(page.locator('main')).toBeVisible()
-  await expect(page.getByText('กำลังโหลดสินค้า...')).toHaveCount(0)
-  await page.waitForTimeout(300)
-  return page.locator('main').innerText()
+  const main = page.locator('main')
+  await expect(page.getByRole('heading', { level: 2, name: /รายการสินค้า|Items/ })).toBeVisible()
+  await expect(page.getByText(/กำลังโหลด/)).toHaveCount(0)
+  return main
 }
 
 test.afterEach(async ({ browser }) => {
@@ -109,9 +110,9 @@ test('Pizza → Le Lapin → R&D → Pizza: each lands on its Dashboard with onl
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await signIn(page, 'admin', true)
   await open(page, '/products')
-  let text = await catalogue(page)
-  expect(text).toContain('FLOUR')
-  expect(text).not.toContain('BAGUETTE')
+  const main = await catalogue(page)
+  await expect(main).toContainText('FLOUR')
+  await expect(main).not.toContainText('BAGUETTE')
   await shot(page, 'after-1440-sidebar-closed')
 
   // Opening the list reads nothing (measured once the page has stopped reading).
@@ -140,9 +141,9 @@ test('Pizza → Le Lapin → R&D → Pizza: each lands on its Dashboard with onl
     // What the switch itself costs: the new brand's Dashboard, loaded and quiet.
     const r1 = await settle(page)
     cost.push({ to: String(name), reads: r1.total - r0.total, listenersAfter: r1.listeners.active })
-    text = await catalogue(page)
-    expect(text).toContain(mine)
-    for (const o of others) expect(text, `${mine} vs ${o}`).not.toContain(o)
+    const main = await catalogue(page)
+    await expect(main).toContainText(mine)
+    for (const o of others) await expect(main, `${mine} vs ${o}`).not.toContainText(o)
   }
   // Same number of live listeners after three switches: the old brand's were closed.
   expect((await settle(page)).listeners.active).toBe(listeners0)
@@ -160,9 +161,9 @@ test('rapid switching settles on the last choice, with that brand\'s data only',
     await page.getByRole('menuitemradio', { name }).click()
   }
   await expect(trigger(page)).toHaveAccessibleName(/Le Lapin/)
-  const text = await catalogue(page)
-  expect(text).toContain('BAGUETTE')
-  expect(text).not.toContain('FLOUR')
+  const main = await catalogue(page)
+  await expect(main).toContainText('BAGUETTE')
+  await expect(main).not.toContainText('FLOUR')
 })
 
 test('an unsaved receiving form is named first; cancel keeps it, switching keeps its draft for that brand', async ({ browser }) => {
@@ -284,8 +285,8 @@ for (const vp of [
     await shot(page, `after-${vp.w}x${vp.h}-sheet`)
     await sheet.getByRole('menuitemradio', { name: /Le Lapin/ }).click()
     await expect(trigger(page)).toHaveAccessibleName(/Le Lapin/)
-    const text = await catalogue(page)
-    expect(text).toContain('BAGUETTE')
-    expect(text).not.toContain('FLOUR')
+    const main = await catalogue(page)
+    await expect(main).toContainText('BAGUETTE')
+    await expect(main).not.toContainText('FLOUR')
   })
 }
