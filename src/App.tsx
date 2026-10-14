@@ -43,7 +43,7 @@ import { TransfersTodayPage } from './pages/transfers/TransfersTodayPage'
 import { RecipesPage } from './pages/recipes/RecipesPage'
 import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
-import { savedBrand } from './brand/brand'
+import { pendingSignInBrand, savedBrand, setSignInBrand, startingBrand } from './brand/brand'
 
 function Gate() {
   const { user, loading } = useAuth()
@@ -56,13 +56,15 @@ function Gate() {
   }, [loading, user, reset])
 
   // After sign-in, straight into a brand (owner, 9 Oct 2026: no full-screen picker for
-  // routine use). A send picked up after a trip through LINE opens the brand its order
-  // belongs to (share/liffResume.ts); otherwise the brand this device last had open. Only a
-  // device that has never opened one sees the picker. Every active account may open every
-  // brand (see savedBrand), so this decides the starting screen, not access.
-  const startBrand = user && !brand ? (brandToResume() ?? savedBrand()) : null
+  // routine use): the one picked on the sign-in screen, else a resumed LINE send's, else
+  // this device's last; only a device that has never opened one sees the picker (order in
+  // startingBrand). Nothing brand-scoped is read before this: DataProvider mounts only once
+  // `brand` is set, and choose() points the data layer at it first.
+  const startBrand = user && !brand ? startingBrand(pendingSignInBrand(), brandToResume(), savedBrand()) : null
   useEffect(() => {
-    if (startBrand) choose(startBrand)
+    if (!startBrand) return
+    choose(startBrand)
+    setSignInBrand(null)
   }, [startBrand, choose])
 
   // Make sure the chosen brand has its default locations.
