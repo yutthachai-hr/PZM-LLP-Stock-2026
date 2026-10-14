@@ -43,6 +43,7 @@ import { TransfersTodayPage } from './pages/transfers/TransfersTodayPage'
 import { RecipesPage } from './pages/recipes/RecipesPage'
 import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
+import { savedBrand } from './brand/brand'
 
 function Gate() {
   const { user, loading } = useAuth()
@@ -54,14 +55,15 @@ function Gate() {
     if (!loading && !user) reset()
   }, [loading, user, reset])
 
-  // A send picked up after a trip through LINE says which brand its order belongs to, so
-  // it opens that one and lands on the sheet. Every other visit still starts at the picker
-  // (share/liffResume.ts).
+  // After sign-in, straight into a brand (owner, 9 Oct 2026: no full-screen picker for
+  // routine use). A send picked up after a trip through LINE opens the brand its order
+  // belongs to (share/liffResume.ts); otherwise the brand this device last had open. Only a
+  // device that has never opened one sees the picker. Every active account may open every
+  // brand (see savedBrand), so this decides the starting screen, not access.
+  const startBrand = user && !brand ? (brandToResume() ?? savedBrand()) : null
   useEffect(() => {
-    if (!user || brand) return
-    const wanted = brandToResume()
-    if (wanted) choose(wanted)
-  }, [user, brand, choose])
+    if (startBrand) choose(startBrand)
+  }, [startBrand, choose])
 
   // Make sure the chosen brand has its default locations.
   //
@@ -84,7 +86,14 @@ function Gate() {
     )
   }
   if (!user) return <LoginPage />
-  if (!brand) return <BrandPicker onPick={choose} />
+  if (!brand)
+    return startBrand ? (
+      <div className="flex h-screen items-center justify-center">
+        <Spinner label={t('กำลังโหลด...')} />
+      </div>
+    ) : (
+      <BrandPicker onPick={choose} />
+    )
 
   return (
     <DataProvider key={brand}>

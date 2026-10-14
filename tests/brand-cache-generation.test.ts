@@ -20,6 +20,7 @@ vi.mock('../src/backend', () => {
 import { setActiveBrand } from '../src/brand/brand'
 import { loadSuppliers } from '../src/services/suppliers'
 import { loadScheduleConfig } from '../src/services/schedules'
+import { loadRecipes } from '../src/services/recipes'
 
 beforeEach(() => {
   h.pending.length = 0
@@ -57,6 +58,22 @@ describe('stock-count schedules', () => {
     h.pending[1].resolve([{ id: 'sch-lelapin', kind: 'stockCount', name: 'LAPIN COUNT', enabled: true }])
     expect((await lelapin).schedules.map((s) => s.id)).toEqual(['sch-lelapin'])
     expect((await loadScheduleConfig()).schedules.map((s) => s.id)).toEqual(['sch-lelapin'])
+    expect(h.reads).toHaveLength(2)
+  })
+})
+
+describe('recipes', () => {
+  test('a Pizza Mania read finishing after the switch is not kept as Le Lapin\'s recipes', async () => {
+    const pizza = loadRecipes()
+    await vi.waitFor(() => expect(h.pending).toHaveLength(1))
+    setActiveBrand('lelapin')
+    h.pending[0].resolve([{ id: 'rec-pizza', code: 'P1', name: 'PIZZA ONLY' }])
+    expect((await pizza).map((r) => r.id)).toEqual(['rec-pizza'])
+    const lelapin = loadRecipes()
+    await vi.waitFor(() => expect(h.pending).toHaveLength(2))
+    h.pending[1].resolve([{ id: 'rec-lelapin', code: 'L1', name: 'LAPIN ONLY' }])
+    expect((await lelapin).map((r) => r.id)).toEqual(['rec-lelapin'])
+    expect((await loadRecipes()).map((r) => r.id)).toEqual(['rec-lelapin'])
     expect(h.reads).toHaveLength(2)
   })
 })

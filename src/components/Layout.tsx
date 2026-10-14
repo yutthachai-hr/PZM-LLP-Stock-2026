@@ -2,9 +2,7 @@ import type { ReactNode } from 'react'
 import { useAutomation } from '../data/useAutomation'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { useBrand } from '../brand/BrandContext'
-import { brandDef, type BrandDef } from '../brand/brand'
-import { BrandLogo } from './BrandLogo'
+import { BrandSwitcher } from './BrandSwitcher'
 import { useT } from '../i18n/I18nContext'
 import { Icon } from './Icon'
 import { isDemoMode } from '../firebase/config'
@@ -23,7 +21,6 @@ import { SupplierIntelProvider } from '../data/useSupplierIntel'
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout, mode } = useAuth()
-  const { brand, reset } = useBrand()
   const t = useT()
   const location = useLocation()
   // The background jobs the cron Worker also runs — see data/useAutomation.ts.
@@ -31,7 +28,6 @@ export function Layout({ children }: { children: ReactNode }) {
   // A supplier's answer moves an order's date server-side; bring it into the calendar.
   useSupplierRefresh(!!user)
 
-  const def = brand ? brandDef(brand) : null
   const items = navFor(user?.role)
   // One read per session, shared with the calendar's own cache — see useTodayEventCount.
   const todayCount = useTodayEventCount(!!user)
@@ -45,7 +41,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Sidebar (desktop, xl and up) — sticky so it stays put while the content scrolls.
           A tablet gets the rail, a phone the tab bar (spec, 21 Sep 2026). */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface xl:flex">
-        <Brand mode={mode} def={def} />
+        <Brand mode={mode} />
         {/* The menu and the live panels scroll as one: with room to spare the panels sit at
             the foot, and on a short screen they follow the menu instead of squeezing it. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -56,7 +52,6 @@ export function Layout({ children }: { children: ReactNode }) {
           name={user?.name ?? ''}
           role={user?.role ?? 'staff'}
           onLogout={() => void logout()}
-          onSwitch={reset}
         />
       </aside>
       <NavRail />
@@ -90,14 +85,12 @@ export function Layout({ children }: { children: ReactNode }) {
 
 function Brand({
   mode,
-  def,
 }: {
   mode: 'cloud' | 'local'
-  def: BrandDef | null
 }) {
   const t = useT()
   return (
-    <div className="relative flex items-center gap-2.5 border-b border-line px-4 py-4">
+    <div className="relative flex items-center gap-2 border-b border-line px-3 py-3">
       {/* The logo colour exactly as drawn, carried as a stripe rather than as text.
           Le Lapin's orange is 2.28:1 on white and would be unreadable set in type, but
           as a band of colour at the edge of vision it does the job the brand colour is
@@ -106,26 +99,25 @@ function Brand({
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-1 bg-brand-vivid"
       />
-      {/* The brand's own logo, round, linking to its website (owner, 27 Sep 2026). */}
-      <BrandLogo def={def} size={40} />
-      <div className="min-w-0">
-        <div className="truncate font-bold leading-tight text-brand">
-          {def?.name ?? 'Stock'}
-        </div>
-        {/* The company whose books are open, above the name of the system they are in. */}
-        <div className="text-xs text-ink-faint">The Inventory OS</div>
-      </div>
-      <div className="ml-auto">
-        {/* A demo build is in local mode too, but the local badge reads as a network
-            state — it is what the real app shows when the connection is down. A demo has
-            to read as a different system, not a disconnected one. */}
-        {isDemoMode() ? (
-          <Badge color="red">{t('เดโม')}</Badge>
-        ) : mode === 'cloud' ? (
-          <Badge color="green">Cloud</Badge>
-        ) : (
-          <Badge color="amber">{t('ในเครื่อง')}</Badge>
-        )}
+      {/* The open brand — its round logo, its name, the system's — and the way to the other
+          two (owner, 9 Oct 2026). The website is a named link inside the list now. */}
+      {/* The mode badge rides on the subtitle line, so the name and the list get the width.
+          A demo build is in local mode too, but the local badge reads as a network state —
+          it is what the real app shows when the connection is down. A demo has to read as a
+          different system, not a disconnected one. */}
+      <div className="min-w-0 flex-1">
+        <BrandSwitcher
+          variant="sidebar"
+          tag={
+            isDemoMode() ? (
+              <Badge color="red">{t('เดโม')}</Badge>
+            ) : mode === 'cloud' ? (
+              <Badge color="green">Cloud</Badge>
+            ) : (
+              <Badge color="amber">{t('ในเครื่อง')}</Badge>
+            )
+          }
+        />
       </div>
     </div>
   )
@@ -138,16 +130,15 @@ function UserBox({
   name,
   role,
   onLogout,
-  onSwitch,
 }: {
   name: string
   role: string
   onLogout: () => void
-  onSwitch: () => void
 }) {
   const t = useT()
   // "แก้ไขโปรไฟล์" lives only in the TopBar account menu (owner, 22 Sep 2026: one place,
-  // not two) — this box keeps just the brand and session actions.
+  // not two). The brand is changed from the top of the menu (owner, 9 Oct 2026), so this box
+  // keeps who is signed in and the way out.
   return (
     <div className="border-t border-line p-3">
       <div className="mb-3 flex items-center gap-2.5">
@@ -161,11 +152,7 @@ function UserBox({
           </div>
         </div>
       </div>
-      <button onClick={onSwitch} className={sideAction}>
-        <Icon name="swap" size={16} />
-        {t('สลับแบรนด์')}
-      </button>
-      <button onClick={onLogout} className={`mt-2 ${sideAction}`}>
+      <button onClick={onLogout} className={sideAction}>
         <Icon name="logout" size={16} />
         {t('ออกจากระบบ')}
       </button>
