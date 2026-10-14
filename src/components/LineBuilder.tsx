@@ -62,6 +62,7 @@ export function LineBuilder({
   onHandAt,
   lineNotes = false,
   importable = false,
+  rankFirst,
 }: {
   products: Product[]
   lines: Line[]
@@ -83,6 +84,11 @@ export function LineBuilder({
   focusOn?: number
   /** Offer "import from a file" (spreadsheet / photo / PDF) above the search box. */
   importable?: boolean
+  /**
+   * Higher lists first, before the text score — receiving puts the chosen supplier's
+   * products on top (lib/supplierResolution.ts supplierRank). Nothing is filtered out.
+   */
+  rankFirst?: (p: Product) => number
 }) {
   const t = useT()
   // Arriving from the quick menu's "import a file" (?import=1) opens the import at once.
@@ -125,11 +131,12 @@ export function LineBuilder({
       .filter((p) => looseMatch(searchFields(p), q))
       .sort(
         (a, b) =>
+          (rankFirst ? rankFirst(b) - rankFirst(a) : 0) ||
           looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q) ||
           (usage.lines.get(b.id) ?? 0) - (usage.lines.get(a.id) ?? 0),
       )
       .slice(0, MAX_MATCHES)
-  }, [search, products, lines, phone, usage])
+  }, [search, products, lines, phone, usage, rankFirst])
 
   function addProduct(p: Product) {
     if (phone) {
