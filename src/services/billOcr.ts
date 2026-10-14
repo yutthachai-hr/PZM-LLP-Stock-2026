@@ -1,4 +1,5 @@
 import { AppError } from '../i18n/AppError'
+import { trackWrite } from '../backend/pendingWrites'
 import { cleanOcr, type OcrBill } from '../lib/billOcr'
 import { authHeader } from './poImages'
 
@@ -15,6 +16,11 @@ export function billReaderAvailable(): boolean {
 }
 
 export async function readBillPhoto(dataUrl: string): Promise<OcrBill> {
+  // Not a write, but its answer fills a form: the brand switcher waits for it too.
+  return trackWrite(readBillPhotoNow(dataUrl))
+}
+
+async function readBillPhotoNow(dataUrl: string): Promise<OcrBill> {
   const res = await fetch('/api/ocr-bill', {
     method: 'POST',
     headers: { ...(await authHeader()), 'content-type': 'application/json' },
