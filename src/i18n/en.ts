@@ -693,7 +693,6 @@ export const EN: Record<string, string> = {
   'รีเซ็ตข้อมูลเดโมได้เฉพาะในโหมดสาธิตเท่านั้น': 'Demo data can only be reset in a demo build',
 
   // ---- shell: top bar, shared table ---------------------------------------------
-  'ค้นหาสินค้า หรือรหัสสินค้า…': 'Search a product or code…',
   'สินค้าใกล้หมด ({n} รายการ)': 'Low stock ({n} items)',
   'ตาราง {n} แถว': 'Table, {n} rows',
 
@@ -3056,4 +3055,13 @@ export const EN: Record<string, string> = {
   // ---- automation: a run stopped by a brand change (12 Oct 2026) ----------------------
   'เปลี่ยนแบรนด์ระหว่างสร้างงาน — ยังไม่ได้สร้างงานนับสต๊อก ลองกดใหม่อีกครั้ง':
     'The brand changed while creating tasks — no stock-count tasks were created. Press again',
+
+  // ---- top bar: global search (early release, Phase 3) ---------------------------------
+  'ค้นหาสินค้า หน้า เอกสาร ผู้ขาย…': 'Search products, pages, documents, suppliers…',
+  ไม่พบในข้อมูลที่โหลดไว้: 'Nothing found in the loaded data',
+  แสดงบางส่วน: 'showing some',
+  'ค้นจากข้อมูลที่โหลดไว้ — เอกสารตั้งแต่ {date}': 'Searched the loaded data — documents since {date}',
+  ยังไม่ได้โหลดรายชื่อผู้ขาย: 'suppliers not loaded yet',
+  'ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:': 'Purchase requests and deliveries are searched on their pages:',
+  หน้า: 'Pages',
 }
