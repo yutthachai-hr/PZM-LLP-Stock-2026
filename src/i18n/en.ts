@@ -13,6 +13,8 @@ export const EN: Record<string, string> = {
   'ปรับยอดสต๊อกแล้ว': 'adjusted stock',
   'ตัดใช้สินค้าแล้ว': 'consumed stock',
   'สั่งซื้อแล้ว': 'placed order',
+  // The activity table's action column: sentence case, like 'Draft created' beside it.
+  'สั่งซื้อเรียบร้อย': 'Order placed',
   'ยกเลิกใบสั่งซื้อแล้ว': 'Cancelled order',
   'บันทึกการรับสินค้าแล้ว': 'Stock received',
   'บันทึกการเบิกใช้แล้ว': 'Stock issued / used',
