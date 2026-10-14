@@ -114,12 +114,13 @@ export function SideLive({ todayCount }: { todayCount: number }) {
 }
 
 const KIND: Record<LiveKind, { icon: IconName; motion: string; verb: string }> = {
-  receive: { icon: 'receive', motion: 'lv-i-receive', verb: 'รับของ' }, // i18n-key
-  issue: { icon: 'send', motion: 'lv-i-send', verb: 'เบิก' }, // i18n-key
-  transfer: { icon: 'swap', motion: 'lv-i-swap', verb: 'โอน' }, // i18n-key
-  adjust: { icon: 'adjust', motion: 'lv-i-adjust', verb: 'ปรับสต๊อก' }, // i18n-key
-  consume: { icon: 'package', motion: 'lv-i-check', verb: 'ตัดใช้' }, // i18n-key
-  order: { icon: 'cart', motion: 'lv-i-cart', verb: 'สั่งซื้อ' }, // i18n-key
+  // Activity verbs, not navigation labels or commands. Actor names remain stored data.
+  receive: { icon: 'receive', motion: 'lv-i-receive', verb: 'รับสินค้าเข้าแล้ว' }, // i18n-key
+  issue: { icon: 'send', motion: 'lv-i-send', verb: 'เบิกสินค้าแล้ว' }, // i18n-key
+  transfer: { icon: 'swap', motion: 'lv-i-swap', verb: 'โอนสินค้าแล้ว' }, // i18n-key
+  adjust: { icon: 'adjust', motion: 'lv-i-adjust', verb: 'ปรับยอดสต๊อกแล้ว' }, // i18n-key
+  consume: { icon: 'package', motion: 'lv-i-check', verb: 'ตัดใช้สินค้าแล้ว' }, // i18n-key
+  order: { icon: 'cart', motion: 'lv-i-cart', verb: 'สั่งซื้อแล้ว' }, // i18n-key
 }
 
 const SKY_LABEL: Record<Sky, string> = {

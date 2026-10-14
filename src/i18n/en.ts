@@ -6,6 +6,19 @@
 // Product names, SKUs and categories are DATA and are never translated.
 
 export const EN: Record<string, string> = {
+  // Activity facts; intentionally separate from navigation nouns and command buttons.
+  'รับสินค้าเข้าแล้ว': 'received stock',
+  'เบิกสินค้าแล้ว': 'issued stock',
+  'โอนสินค้าแล้ว': 'transferred stock',
+  'ปรับยอดสต๊อกแล้ว': 'adjusted stock',
+  'ตัดใช้สินค้าแล้ว': 'consumed stock',
+  'สั่งซื้อแล้ว': 'placed order',
+  'ยกเลิกใบสั่งซื้อแล้ว': 'Cancelled order',
+  'บันทึกการรับสินค้าแล้ว': 'Stock received',
+  'บันทึกการเบิกใช้แล้ว': 'Stock issued / used',
+  'บันทึกการโอนสินค้าแล้ว': 'Stock transferred',
+  'บันทึกการปรับสต๊อกแล้ว': 'Stock adjusted',
+  'ออกใบสั่งซื้อแล้ว': 'Purchase order created',
   // ---- generic actions / words -------------------------------------------------
   บันทึก: 'Save',
   ยกเลิก: 'Cancel',

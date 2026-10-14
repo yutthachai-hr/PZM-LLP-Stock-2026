@@ -176,10 +176,10 @@ interface Activity {
 }
 
 const ACTIVITY_LOOK: Record<ActivityKind, { icon: IconName; tone: Tone; label: string }> = {
-  in: { icon: 'receive', tone: 'green', label: 'รับสินค้าเข้า' }, // i18n-key
-  out: { icon: 'truck', tone: 'red', label: 'เบิกใช้' }, // i18n-key
-  transfer: { icon: 'swap', tone: 'purple', label: 'โอนสินค้าระหว่างสาขา' }, // i18n-key
-  adjust: { icon: 'adjust', tone: 'amber', label: 'ปรับสต๊อก' }, // i18n-key
+  in: { icon: 'receive', tone: 'green', label: 'บันทึกการรับสินค้าแล้ว' }, // i18n-key
+  out: { icon: 'truck', tone: 'red', label: 'บันทึกการเบิกใช้แล้ว' }, // i18n-key
+  transfer: { icon: 'swap', tone: 'purple', label: 'บันทึกการโอนสินค้าแล้ว' }, // i18n-key
+  adjust: { icon: 'adjust', tone: 'amber', label: 'บันทึกการปรับสต๊อกแล้ว' }, // i18n-key
 }
 
 export function RecentActivityCard({
@@ -235,7 +235,7 @@ export function RecentActivityCard({
         at: o.orderedAt,
         icon: 'cart' as IconName,
         tone: 'brand' as Tone,
-        title: t('สร้างใบสั่งซื้อ'),
+        title: t('ออกใบสั่งซื้อแล้ว'),
         sub: [o.docNo, o.supplierName, t('{n} รายการ', { n: o.lines.length })].join(' • '),
         to: `/orders?po=${encodeURIComponent(o.id)}`,
       }))
