@@ -87,5 +87,6 @@ export function translatorFor(lang: Lang): TFn {
 
 /** Shorthand for the common case of only needing the translate function. */
 export function useT(): TFn {
-  return useI18n().t
+  const ctx = useContext(Ctx)
+  return ctx ? ctx.t : (thai, vars) => fill(thai, vars)
 }

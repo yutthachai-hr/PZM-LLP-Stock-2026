@@ -25,7 +25,7 @@ vi.hoisted(() => {
   }
 })
 
-import { exportOrdersExcel } from '../src/pages/Orders'
+import { exportOrdersExcel, exportOrdersPdf } from '../src/pages/Orders'
 import { exportReportsExcel } from '../src/pages/Reports'
 
 // Mock dynamic import target '../src/lib/export'
@@ -115,7 +115,62 @@ describe('Export Callers (Async await, busy state, success & error toast)', () =
     })
   })
 
-  describe('Representative Caller 2: Reports.tsx (exportReportsExcel)', () => {
+  describe('Representative Caller 2: Orders.tsx (exportOrdersPdf)', () => {
+    test('keeps busy state until PDF export resolves, then shows success toast only after completion', async () => {
+      let resolveExport!: () => void
+      const deferred = new Promise<void>((resolve) => {
+        resolveExport = resolve
+      })
+      mockExportReportPdf.mockImplementation(() => deferred)
+
+      const exportPromise = exportOrdersPdf(
+        {
+          rows: [{ SKU: 'P1', Name: 'Item 1' }],
+          title: 'Order Report',
+          meta: ['Meta 1'],
+          filename: 'orders.pdf',
+        },
+        t,
+        toast,
+        setBusy,
+      )
+
+      expect(setBusy).toHaveBeenCalledWith('pdf')
+      await new Promise((r) => setTimeout(r, 10))
+
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(setBusy).not.toHaveBeenCalledWith('')
+
+      resolveExport()
+      await exportPromise
+
+      expect(toast.success).toHaveBeenCalledWith('ดาวน์โหลดไฟล์ PDF แล้ว')
+      expect(setBusy).toHaveBeenLastCalledWith('')
+    })
+
+    test('catches rejection, shows error toast, and clears busy state on failure', async () => {
+      mockExportReportPdf.mockRejectedValue(new Error('Failed to fetch dynamically imported module: jspdf'))
+
+      await exportOrdersPdf(
+        {
+          rows: [{ SKU: 'P1', Name: 'Item 1' }],
+          title: 'Order Report',
+          meta: ['Meta 1'],
+          filename: 'orders.pdf',
+        },
+        t,
+        toast,
+        setBusy,
+      )
+
+      expect(toast.error).toHaveBeenCalled()
+      expect(toast.error.mock.calls[0][0]).toContain('Failed to fetch dynamically imported module: jspdf')
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(setBusy).toHaveBeenLastCalledWith('')
+    })
+  })
+
+  describe('Representative Caller 3: Reports.tsx (exportReportsExcel)', () => {
     test('keeps busy state until export resolves, then shows success toast only after completion', async () => {
       let resolveExport!: () => void
       const deferred = new Promise<void>((resolve) => {

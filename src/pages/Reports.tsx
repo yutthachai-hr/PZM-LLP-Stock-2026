@@ -221,32 +221,6 @@ export function ReportsPage() {
 
   // ---------- exports (libraries lazy-loaded to keep initial load light) ----------
   async function excel() {
-    setBusy('excel')
-    try {
-      await buildExcel()
-      toast.success(t('ดาวน์โหลดไฟล์ Excel แล้ว'))
-    } catch (e) {
-      // An export that fails silently leaves someone waiting for a file that is not coming.
-      toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
-    } finally {
-      setBusy('')
-    }
-  }
-
-  async function pdf() {
-    setBusy('pdf')
-    try {
-      await buildPdf()
-      toast.success(t('ดาวน์โหลดไฟล์ PDF แล้ว'))
-    } catch (e) {
-      toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
-    } finally {
-      setBusy('')
-    }
-  }
-
-  async function buildExcel() {
-    const { exportExcel } = await import('../lib/export')
     if (mode === 'movement') {
       const rows = movementRows.map(({ m, inQty, outQty, balance }) => ({
         [t("วันที่")]: formatThaiDate(m.date),
@@ -268,7 +242,7 @@ export function ReportsPage() {
         [t("ผู้แก้ไข")]: editorsOf(m).join(', '),
         [t("จำนวนครั้งที่แก้ไข")]: m.edits?.length ?? 0,
       }))
-      await exportExcel(t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }), 'Movements', rows)
+      await exportReportsExcel(t('รายงานการเคลื่อนไหว_{ts}', { ts: Date.now() }), 'Movements', rows, t, toast, setBusy)
     } else {
       const rows = snapshotRows.map((r) => ({
         [t("สินค้า")]: r.name,
@@ -280,7 +254,19 @@ export function ReportsPage() {
         [t("สถานะ")]: snapshotStatus(r, t),
         [t("มูลค่า")]: r.value === null ? '' : Math.round(r.value),
       }))
-      await exportExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows)
+      await exportReportsExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows, t, toast, setBusy)
+    }
+  }
+
+  async function pdf() {
+    setBusy('pdf')
+    try {
+      await buildPdf()
+      toast.success(t('ดาวน์โหลดไฟล์ PDF แล้ว'))
+    } catch (e) {
+      toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
+    } finally {
+      setBusy('')
     }
   }
 

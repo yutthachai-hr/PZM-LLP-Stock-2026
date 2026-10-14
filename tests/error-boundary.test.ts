@@ -13,7 +13,10 @@ import {
   ErrorBoundary,
   CHUNK_RELOAD_KEY,
   isChunkLoadError,
+  ClearChunkReloadFlag,
+  clearChunkReloadFlag,
 } from '../src/components/ErrorBoundary'
+import { I18nProvider } from '../src/i18n/I18nContext'
 
 describe('Route ErrorBoundary & Chunk Load Handling', () => {
   let mockReload: ReturnType<typeof vi.fn>
@@ -22,6 +25,21 @@ describe('Route ErrorBoundary & Chunk Load Handling', () => {
   beforeEach(() => {
     storageStore = {}
     mockReload = vi.fn()
+
+    // Mock localStorage
+    const localStore: Record<string, string> = {}
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => localStore[key] ?? null),
+      setItem: vi.fn((key: string, val: string) => {
+        localStore[key] = String(val)
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete localStore[key]
+      }),
+      clear: vi.fn(() => {
+        for (const k of Object.keys(localStore)) delete localStore[k]
+      }),
+    })
 
     // Mock sessionStorage
     const mockSessionStorage = {
@@ -116,19 +134,27 @@ describe('Route ErrorBoundary & Chunk Load Handling', () => {
       expect(eb.state.reloading).toBe(false)
     })
 
-    test('renders bilingual recovery UI with reload button when auto-reload has already fired', () => {
+    test('renders localized recovery UI with reload button via useT', () => {
       storageStore[CHUNK_RELOAD_KEY] = '1'
       const eb = new ErrorBoundary({ children: 'content' })
       const err = new TypeError('Failed to fetch dynamically imported module')
       eb.state = { hasError: true, error: err, reloading: false }
 
       const rendered = eb.render() as React.ReactElement
-      const html = ReactDOMServer.renderToStaticMarkup(rendered)
+      const htmlTh = ReactDOMServer.renderToStaticMarkup(rendered)
 
-      // Bilingual messages
-      expect(html).toContain('ไม่สามารถโหลดหน้านี้ได้')
-      expect(html).toContain('Page load failed')
-      expect(html).toContain('โหลดใหม่ / Reload')
+      // Localized messages (Thai default)
+      expect(htmlTh).toContain('ไม่สามารถโหลดหน้านี้ได้')
+      expect(htmlTh).toContain('โหลดใหม่')
+
+      // Localized messages (English via I18nProvider)
+      localStorage.setItem('pmstock:lang', 'en')
+      const htmlEn = ReactDOMServer.renderToStaticMarkup(
+        React.createElement(I18nProvider, null, rendered),
+      )
+      expect(htmlEn).toContain('Page load failed')
+      expect(htmlEn).toContain('Reload')
+      localStorage.removeItem('pmstock:lang')
     })
 
     test('manual reload button clears the guard flag and triggers window.location.reload', () => {
@@ -138,6 +164,38 @@ describe('Route ErrorBoundary & Chunk Load Handling', () => {
 
       expect(sessionStorage.removeItem).toHaveBeenCalledWith(CHUNK_RELOAD_KEY)
       expect(mockReload).toHaveBeenCalledTimes(1)
+    })
+
+    test('resets hasError when resetKeys change on navigation', () => {
+      const eb = new ErrorBoundary({ children: 'content', resetKeys: ['/orders'] })
+      ;(eb as unknown as { updater: unknown }).updater = {
+        enqueueSetState: (inst: ErrorBoundary, partial: Record<string, unknown>) => {
+          Object.assign(inst.state, partial)
+        },
+      }
+      eb.state = { hasError: true, error: new Error('boom'), reloading: false }
+
+      // When prevProps has same key, state stays in error
+      eb.componentDidUpdate?.({ children: 'content', resetKeys: ['/orders'] }, eb.state, {})
+      expect(eb.state.hasError).toBe(true)
+
+      // When prevProps had previous route (/reports), navigation occurred and boundary resets
+      eb.componentDidUpdate?.({ children: 'content', resetKeys: ['/reports'] }, eb.state, {})
+      expect(eb.state.hasError).toBe(false)
+      expect(eb.state.error).toBeNull()
+    })
+
+    test('clears sessionStorage reload flag when route renders successfully via ClearChunkReloadFlag', () => {
+      storageStore[CHUNK_RELOAD_KEY] = '1'
+      expect(sessionStorage.getItem(CHUNK_RELOAD_KEY)).toBe('1')
+
+      const element = React.createElement(ClearChunkReloadFlag)
+      expect(element.type).toBe(ClearChunkReloadFlag)
+
+      clearChunkReloadFlag()
+
+      expect(sessionStorage.removeItem).toHaveBeenCalledWith(CHUNK_RELOAD_KEY)
+      expect(storageStore[CHUNK_RELOAD_KEY]).toBeUndefined()
     })
   })
 })

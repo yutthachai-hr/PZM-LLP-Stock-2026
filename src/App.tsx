@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { BrandProvider, useBrand } from './brand/BrandContext'
 import { DataProvider } from './data/DataContext'
@@ -7,7 +7,7 @@ import { ToastProvider } from './components/Toast'
 import { ConfirmProvider } from './components/Confirm'
 import { I18nProvider, useT } from './i18n/I18nContext'
 import { Spinner } from './components/ui'
-import { ErrorBoundary } from './components/ErrorBoundary'
+import { ErrorBoundary, ClearChunkReloadFlag } from './components/ErrorBoundary'
 import { UpdateBanner } from './pwa/UpdateBanner'
 import { DemoBanner } from './components/DemoBanner'
 import { Layout } from './components/Layout'
@@ -50,6 +50,7 @@ const MorePage = lazy(() => import('./pages/More').then((m) => ({ default: m.Mor
 function Gate() {
   const { user, loading } = useAuth()
   const { brand, choose, reset } = useBrand()
+  const location = useLocation()
   const t = useT()
 
   // reset the brand choice on logout so the picker shows again next login
@@ -92,7 +93,7 @@ function Gate() {
   return (
     <DataProvider key={brand}>
       <Layout>
-        <ErrorBoundary>
+        <ErrorBoundary key={location.pathname} resetKeys={[location.pathname]}>
           <Suspense
             fallback={
               <div className="flex min-h-[50vh] items-center justify-center">
@@ -100,6 +101,7 @@ function Gate() {
               </div>
             }
           >
+            <ClearChunkReloadFlag />
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/products" element={<ProductsPage />} />
