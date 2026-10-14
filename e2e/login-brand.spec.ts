@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
-import { putMany } from './emulator'
+import { putDoc, putMany } from './emulator'
 import { PASSWORD, PEOPLE, seedStage } from './fixture'
 import { open } from './app'
 
@@ -19,7 +19,7 @@ const ITEM: Record<BrandId, string> = { pizza: 'FLOUR', lelapin: 'BAGUETTE', rnd
 const SHARED = new Set(['users', 'meta', 'revokedUsers'])
 
 async function stage() {
-  await seedStage()
+  const seeded = await seedStage()
   const now = Date.now()
   const p = (path: string, name: string, sku: string) => ({
     path,
@@ -31,6 +31,7 @@ async function stage() {
     p('lelapin__products/baguette', 'BAGUETTE', 'BAK-01-001'),
     p('rnd__products/sumac', 'SUMAC POWDER', 'RND-01-001'),
   ])
+  return seeded
 }
 
 /** A device whose last-opened brand is `last` (what the old code let win). */
@@ -88,29 +89,31 @@ async function expectOnlyRead(page: Page, brand: BrandId) {
   expect(foreign, `collections of another brand read on the way in: ${foreign.join(', ')}`).toEqual([])
 }
 
-async function catalogue(page: Page): Promise<string> {
+async function catalogue(page: Page, brand: BrandId): Promise<string> {
   await open(page, '/products')
-  await expect(page.getByText('กำลังโหลดสินค้า...')).toHaveCount(0)
-  await page.waitForTimeout(300)
+  // Wait for actual data, not absence of a loading node before the route has mounted.
+  await expect(page.locator('main')).toContainText(ITEM[brand])
   return page.locator('main').innerText()
 }
 
-for (const [last, pick] of [
-  ['pizza', 'lelapin'],
-  ['lelapin', 'pizza'],
-  ['pizza', 'rnd'],
-] as [BrandId, BrandId][]) {
-  test(`last brand ${last}, ${pick} picked on the sign-in screen: ${pick} opens, and only ${pick} is read`, async ({ browser }) => {
+for (const [last, pick, width] of [
+  ['pizza', 'lelapin', 1440],
+  ['lelapin', 'pizza', 1440],
+  ['pizza', 'rnd', 1440],
+  ['pizza', 'lelapin', 390],
+] as [BrandId, BrandId, number][]) {
+  test(`last brand ${last}, ${pick} picked at ${width}px: ${pick} opens, and only ${pick} is read`, async ({ browser }) => {
     await stage()
     const context = await device(browser, last)
     const page = await context.newPage()
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 })
     await page.goto('/')
     await page.getByRole('radio', { name: RADIO[pick], exact: true }).click()
     await expect(page.getByRole('radio', { name: RADIO[pick], exact: true })).toHaveAttribute('aria-checked', 'true')
     await fillSignIn(page)
     await expectOpenIn(page, pick)
     await expectOnlyRead(page, pick)
-    const text = await catalogue(page)
+    const text = await catalogue(page, pick)
     expect(text).toContain(ITEM[pick])
     for (const other of (['pizza', 'lelapin', 'rnd'] as BrandId[]).filter((b) => b !== pick)) expect(text).not.toContain(ITEM[other])
     await context.close()
@@ -162,6 +165,82 @@ test('a LINE resume link opens its own brand, and the sign-in screen shows that 
   await expectOpenIn(page, 'rnd')
   await expectOnlyRead(page, 'rnd')
   await context.close()
+})
+
+test('brand selection stays locked while the successful credential request awaits its business profile', async ({ browser }) => {
+  await stage()
+  const context = await device(browser, 'pizza')
+  const page = await context.newPage()
+  let release!: () => void
+  let started!: () => void
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  const listening = new Promise<void>((resolve) => { started = resolve })
+  let released = false
+  await page.route('**/Listen/channel**', async (route) => {
+    if (!released) { started(); await hold }
+    await route.continue().catch(() => {})
+  })
+  try {
+    await page.goto('/')
+    await page.getByRole('radio', { name: RADIO.lelapin, exact: true }).click()
+    const credentialsAccepted = page.waitForResponse((r) => r.url().includes('accounts:signInWithPassword') && r.status() === 200)
+    await fillSignIn(page)
+    await credentialsAccepted
+    await listening
+    // The profile listener cannot return yet: authenticating is not finished just because
+    // Firebase accepted the credentials. The displayed choice must not drift from intent.
+    await expect(page.getByRole('radio', { name: RADIO.lelapin, exact: true })).toBeDisabled()
+    await expect(page.getByRole('radio', { name: RADIO.rnd, exact: true })).toBeDisabled()
+    await expect(page.getByRole('textbox', { name: /email|อีเมล/i })).toBeVisible()
+    expect((await readCollections(page)).filter((c) => !SHARED.has(c))).toEqual([])
+    released = true
+    release()
+    await expectOpenIn(page, 'lelapin')
+    await expectOnlyRead(page, 'lelapin')
+  } finally {
+    released = true
+    release()
+    await context.close()
+  }
+})
+
+test('inactive business profile rejection clears intent and leaves the last brand unchanged', async ({ browser }) => {
+  const seeded = await stage()
+  await putDoc(`users/${seeded.uid.admin}`, {
+    name: PEOPLE.admin.name, email: PEOPLE.admin.email, role: 'admin', active: false, createdAt: Date.now(),
+  }, { stampId: false })
+  const context = await device(browser, 'pizza')
+  const page = await context.newPage()
+  try {
+    await page.goto('/')
+    await page.getByRole('radio', { name: RADIO.lelapin, exact: true }).click()
+    await fillSignIn(page)
+    await expect(page.getByText('บัญชีนี้ยังไม่ได้เปิดใช้งาน', { exact: false }).or(
+      page.getByText('บัญชีนี้ยังไม่ถูกเปิดใช้งาน', { exact: false }),
+    )).toBeVisible()
+    await expect.poll(() => page.evaluate(async () => {
+      const modulePath = '/src/brand/brand.ts'
+      return (await import(modulePath)).pendingSignInBrand()
+    })).toBeNull()
+    expect(await page.evaluate(() => [localStorage.getItem('pmstock:v1:lastBrand'), sessionStorage.getItem('pmstock:v1:tabBrand')])).toEqual(['pizza', null])
+    expect((await readCollections(page)).filter((c) => !SHARED.has(c))).toEqual([])
+    await expect(page.getByRole('radio', { name: RADIO.lelapin, exact: true })).toBeEnabled()
+  } finally { await context.close() }
+})
+
+test('an explicit pick conflicting with a LINE resume opens that brand without reusing the resume document ID', async ({ browser }) => {
+  await stage() // Pizza has po1; the resume refers to R&D's namespace, not Pizza's po1.
+  const context = await device(browser, 'pizza')
+  const page = await context.newPage()
+  try {
+    await page.goto('/orders?send=po1&brand=rnd')
+    await page.getByRole('radio', { name: RADIO.pizza, exact: true }).click()
+    await fillSignIn(page)
+    await expectOpenIn(page, 'pizza')
+    await expect(page).toHaveURL(/\/$/)
+    await expectOnlyRead(page, 'pizza')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+  } finally { await context.close() }
 })
 
 test('a device that has never opened a brand still gets the picker when nothing is picked', async ({ browser }) => {

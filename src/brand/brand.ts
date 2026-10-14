@@ -205,14 +205,32 @@ export function savedBrand(): BrandId | null {
  * Memory only, never storage: a sign-in that fails must not change which brand this device
  * opens next (the screen clears it), and a reload is a new visit.
  */
-let signInBrand: BrandId | null = null
+let signInAttempt = 0
+let signInBrand: { id: number; brand: BrandId | null } | null = null
+const signInSettled = new Set<() => void>()
 
-export function setSignInBrand(b: BrandId | null): void {
-  signInBrand = b
+/** Begin an attempt, including an untouched selector (null). No business context is activated. */
+export function setSignInBrand(b: BrandId | null): number {
+  const id = ++signInAttempt
+  signInBrand = { id, brand: b }
+  return id
 }
 
 export function pendingSignInBrand(): BrandId | null {
-  return signInBrand
+  return signInBrand?.brand ?? null
+}
+
+/** A stale failed/unmounted form must not cancel a newer attempt. */
+export function clearSignInBrand(attemptId?: number): void {
+  if (!signInBrand || (attemptId !== undefined && signInBrand.id !== attemptId)) return
+  signInBrand = null
+  for (const settled of signInSettled) settled()
+}
+
+/** Successful Gate activation or definitive profile rejection, not credential-promise success. */
+export function onSignInBrandSettled(settled: () => void): () => void {
+  signInSettled.add(settled)
+  return () => { signInSettled.delete(settled) }
 }
 
 /**

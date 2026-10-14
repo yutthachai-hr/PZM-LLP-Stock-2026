@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { BrandProvider, useBrand } from './brand/BrandContext'
 import { DataProvider } from './data/DataContext'
@@ -43,11 +43,12 @@ import { TransfersTodayPage } from './pages/transfers/TransfersTodayPage'
 import { RecipesPage } from './pages/recipes/RecipesPage'
 import { MorePage } from './pages/More'
 import { ensureBrandLocations } from './services/seed'
-import { pendingSignInBrand, savedBrand, setSignInBrand, startingBrand } from './brand/brand'
+import { clearSignInBrand, pendingSignInBrand, savedBrand, startingBrand } from './brand/brand'
 
 function Gate() {
   const { user, loading } = useAuth()
   const { brand, choose, reset } = useBrand()
+  const navigate = useNavigate()
   const t = useT()
 
   // reset the brand choice on logout so the picker shows again next login
@@ -60,12 +61,17 @@ function Gate() {
   // this device's last; only a device that has never opened one sees the picker (order in
   // startingBrand). Nothing brand-scoped is read before this: DataProvider mounts only once
   // `brand` is set, and choose() points the data layer at it first.
-  const startBrand = user && !brand ? startingBrand(pendingSignInBrand(), brandToResume(), savedBrand()) : null
+  const pickedBrand = pendingSignInBrand()
+  const resumedBrand = brandToResume()
+  const startBrand = user && !brand ? startingBrand(pickedBrand, resumedBrand, savedBrand()) : null
   useEffect(() => {
     if (!startBrand) return
+    // Resume IDs belong to the URL's brand. A deliberate override must not interpret one
+    // against another namespace, even if that namespace contains an identical document ID.
+    if (pickedBrand && resumedBrand && pickedBrand !== resumedBrand) navigate('/', { replace: true })
     choose(startBrand)
-    setSignInBrand(null)
-  }, [startBrand, choose])
+    clearSignInBrand()
+  }, [startBrand, pickedBrand, resumedBrand, choose, navigate])
 
   // Make sure the chosen brand has its default locations.
   //

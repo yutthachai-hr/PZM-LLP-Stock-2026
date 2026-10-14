@@ -13,10 +13,10 @@ vi.stubGlobal('localStorage', {
 })
 store['pmstock:v1:lastBrand'] = 'pizza'
 
-const { getBrand, pendingSignInBrand, resolveCollection, savedBrand, setSignInBrand, startingBrand } = await import('../src/brand/brand')
+const { clearSignInBrand, getBrand, onSignInBrandSettled, pendingSignInBrand, resolveCollection, savedBrand, setSignInBrand, startingBrand } = await import('../src/brand/brand')
 
 describe('the brand that opens after sign-in (owner, 14 Oct 2026: Le Lapin picked, Pizza Mania opened)', () => {
-  beforeEach(() => setSignInBrand(null))
+  beforeEach(() => clearSignInBrand())
 
   test('a pick on the sign-in screen beats a LINE resume and the last brand', () => {
     expect(startingBrand('lelapin', 'rnd', 'pizza')).toBe('lelapin')
@@ -38,7 +38,28 @@ describe('the brand that opens after sign-in (owner, 14 Oct 2026: Le Lapin picke
     expect(savedBrand()).toBe('pizza')
     expect(getBrand()).toBe('pizza')
     expect(resolveCollection('products')).toBe('products')
-    setSignInBrand(null)
+    clearSignInBrand()
     expect(pendingSignInBrand()).toBeNull()
+  })
+
+  test('an older failed or unmounted attempt cannot clear a newer intent', () => {
+    const first = setSignInBrand('lelapin')
+    const second = setSignInBrand('rnd')
+    clearSignInBrand(first)
+    expect(pendingSignInBrand()).toBe('rnd')
+    clearSignInBrand(second)
+    expect(pendingSignInBrand()).toBeNull()
+  })
+
+  test('settlement notifies once, including a login with no explicit pick', () => {
+    const settled = vi.fn()
+    const off = onSignInBrandSettled(settled)
+    try {
+      const attempt = setSignInBrand(null)
+      expect(settled).not.toHaveBeenCalled()
+      clearSignInBrand(attempt)
+      clearSignInBrand(attempt)
+      expect(settled).toHaveBeenCalledTimes(1)
+    } finally { off() }
   })
 })
