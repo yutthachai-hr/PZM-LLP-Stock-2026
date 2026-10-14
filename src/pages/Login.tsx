@@ -1,7 +1,7 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { useAuth } from '../auth/AuthContext'
-import { BRANDS, brandDef, type BrandId } from '../brand/brand'
+import { BRANDS, brandDef, clearSignInBrand, onSignInBrandSettled, savedBrand, setSignInBrand, type BrandId } from '../brand/brand'
 import { Button } from '../components/ui'
 import { Icon } from '../components/Icon'
 import { getAuthInstance } from '../firebase/app'
@@ -11,6 +11,7 @@ import { DEMO_ADMIN, DEMO_USERS } from '../services/demoUsers'
 import { errText } from '../i18n/AppError'
 import { useT } from '../i18n/I18nContext'
 import { LangMenu } from '../i18n/LangMenu'
+import { brandToResume } from '../share/liffResume'
 
 /**
  * Brand-specific copy, short names, and the static scene behind each brand: the mascot in
@@ -56,7 +57,18 @@ const SCENE_MASK: CSSProperties = {
 export function LoginPage() {
   const t = useT()
   const { login, signUp, needsBootstrap, mode, notice } = useAuth()
-  const [brand, setBrand] = useState<BrandId>('pizza')
+  // Starts on the brand that would open anyway (a resumed LINE send's, else this device's
+  // last), so the screen never shows one brand while signing in to another.
+  const [brand, setBrand] = useState<BrandId>(() => brandToResume() ?? savedBrand() ?? 'pizza')
+  // Only a brand someone actually picked here counts as a choice: an untouched switch leaves
+  // the usual order (startingBrand), so a device that has never opened a brand still asks.
+  const [picked, setPicked] = useState(false)
+  const submission = useRef<number | null>(null)
+  function pick(b: BrandId) {
+    if (submission.current !== null) return
+    setBrand(b)
+    setPicked(true)
+  }
   const def = brandDef(brand)
   const look = LOOK[brand]
   const [email, setEmail] = useState('')
@@ -64,6 +76,17 @@ export function LoginPage() {
   const [showPw, setShowPw] = useState(false)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const off = onSignInBrandSettled(() => {
+      if (submission.current === null) return
+      submission.current = null
+      setBusy(false)
+    })
+    return () => {
+      off()
+      if (submission.current !== null) clearSignInBrand(submission.current)
+    }
+  }, [])
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [showCloud, setShowCloud] = useState(false)
@@ -86,9 +109,14 @@ export function LoginPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (submission.current !== null) return
     setError('')
     setInfo('')
     setBusy(true)
+    // Before signing in: the account can be signed in before login() returns, and the gate
+    // opens a brand the moment it is.
+    const attempt = setSignInBrand(picked ? brand : null)
+    submission.current = attempt
     try {
       if (bootstrap) {
         await signUp(name, email, password)
@@ -96,10 +124,11 @@ export function LoginPage() {
         await login(email, password)
       }
     } catch (err) {
+      clearSignInBrand(attempt)
       setError(humanError(err))
-    } finally {
-      setBusy(false)
     }
+    // Cloud login() resolves after credentials, before the business profile is accepted.
+    // Keep the choice frozen until Gate activates it or AuthContext definitively rejects it.
   }
 
   async function forgot() {
@@ -154,7 +183,7 @@ export function LoginPage() {
 
           {/* Desktop: Brand Theme Selector beside platform identity */}
           <div className="hidden sm:block">
-            <BrandSwitch brand={brand} onChange={setBrand} />
+            <BrandSwitch brand={brand} onChange={pick} disabled={busy} />
           </div>
         </div>
 
@@ -166,7 +195,7 @@ export function LoginPage() {
 
       {/* Mobile only: Brand Theme Selector on row 2, centered */}
       <div className="flex w-full shrink-0 justify-center px-4 pt-2.5 sm:hidden">
-        <BrandSwitch brand={brand} onChange={setBrand} />
+        <BrandSwitch brand={brand} onChange={pick} disabled={busy} />
       </div>
 
       {/* ---- Main content: Hero & Login Card (vertically centered on desktop, naturally stacked on mobile) ---- */}
@@ -419,7 +448,7 @@ export function LoginPage() {
  * as the hit area, with the logo floating, lifting and popping in layers inside them (the
  * motion lives in index.css, "the playful brand switch"). Respects prefers-reduced-motion.
  */
-function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandId) => void }) {
+function BrandSwitch({ brand, onChange, disabled = false }: { brand: BrandId; onChange: (b: BrandId) => void; disabled?: boolean }) {
   const t = useT()
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
 
@@ -436,6 +465,7 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
       aria-label={t('แบรนด์')}
       className="flex items-center gap-2.5 sm:gap-3"
       onKeyDown={(e) => {
+        if (disabled) return
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
           e.preventDefault()
           move(1)
@@ -455,6 +485,7 @@ function BrandSwitch({ brand, onChange }: { brand: BrandId; onChange: (b: BrandI
             }}
             type="button"
             role="radio"
+            disabled={disabled}
             aria-checked={active}
             aria-label={b.name}
             title={b.name}

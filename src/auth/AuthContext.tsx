@@ -13,6 +13,7 @@ import { clearThumbCache } from '../components/ProductThumb'
 
 import { AppError } from '../i18n/AppError'
 import { classifyProfileError, retryDelayMs } from './profileError'
+import { clearSignInBrand } from '../brand/brand'
 
 interface AuthState {
   user: AppUser | null
@@ -113,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           disposed || gen !== generation || auth.currentUser?.uid !== fbUser?.uid
 
         if (!fbUser) {
+          clearSignInBrand()
           setUser(null)
           setLoading(false)
           return
@@ -122,6 +124,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Refuse the session and say why. Signing out also drops anything already loaded.
         async function reject(why: string) {
           if (stale()) return
+          // Credentials alone are not an accepted business session. Drop the pending entry
+          // intent only on this definitive rejection, not on a retryable connection failure.
+          clearSignInBrand()
           setNotice(why)
           setUser(null)
           try {
