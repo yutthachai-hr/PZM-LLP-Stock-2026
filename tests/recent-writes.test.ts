@@ -15,8 +15,8 @@ vi.mock('../src/backend', async () => {
 
 const { resetMemory, seed } = await import('./helpers/memory-backend')
 const { noteWritten, overlayRecent, resetRecentWrites, subscribeRecentWrites } = await import('../src/data/recentWrites')
-const { editMovement, receiveStock, voidMovement } = await import('../src/services/stock')
-const { setActiveBrand } = await import('../src/brand/brand')
+const { editMovement, filing, receiveStock, voidMovement } = await import('../src/services/stock')
+const { brandEpoch, setActiveBrand } = await import('../src/brand/brand')
 type Mv = import('../src/types').StockMovement
 
 const ACTOR = { id: 'u1', name: 'AA' }
@@ -46,10 +46,10 @@ describe('laying noted rows over the live list', () => {
   test('subscribers hear every note, latest note of an id winning', () => {
     const seen: Mv[][] = []
     const off = subscribeRecentWrites((rows) => seen.push(rows))
-    noteWritten([row('a', { qty: 1 })])
-    noteWritten([row('a', { qty: 2 }), row('b')])
+    noteWritten([row('a', { qty: 1 })], brandEpoch())
+    noteWritten([row('a', { qty: 2 }), row('b')], brandEpoch())
     off()
-    noteWritten([row('c')])
+    noteWritten([row('c')], brandEpoch())
     expect(seen).toHaveLength(2)
     expect(seen[1].map((m) => [m.id, m.qty])).toEqual([['a', 2], ['b', 1]])
   })
@@ -80,3 +80,105 @@ describe('the stock engine notes what it files', () => {
     expect(seen).toEqual([])
   })
 })
+
+describe('brand switching and generation guard', () => {
+  test('a row noted under brand A is not delivered to a subscriber after a switch to B', () => {
+    setActiveBrand('pizza')
+    noteWritten([row('pizza-1')], brandEpoch())
+
+    const seen: Mv[][] = []
+    const off = subscribeRecentWrites((rows) => seen.push(rows))
+
+    // Switch to brand B
+    setActiveBrand('lelapin')
+
+    // Switching brands must immediately emit the empty list
+    expect(seen.at(-1)).toEqual([])
+
+    // Subsequent write in brand B emits only brand B rows
+    noteWritten([row('lapin-1')], brandEpoch())
+    expect(seen.at(-1)?.map((m) => m.id)).toEqual(['lapin-1'])
+
+    // Live overlay in brand B must not contain brand A's movement
+    const live = [row('lapin-live')]
+    const overlaid = overlayRecent(live, seen.at(-1)!)
+    expect(overlaid.map((m) => m.id)).toEqual(['lapin-live', 'lapin-1'])
+    expect(overlaid.map((m) => m.id)).not.toContain('pizza-1')
+
+    off()
+  })
+
+  test('a subscriber mounting after brand switch sees no prior brand movements', () => {
+    setActiveBrand('pizza')
+    noteWritten([row('pizza-prior')], brandEpoch())
+
+    setActiveBrand('lelapin')
+
+    let lapinRecent: Mv[] = []
+    const off = subscribeRecentWrites((rows) => {
+      lapinRecent = rows
+    })
+
+    noteWritten([row('lapin-subsequent')], brandEpoch())
+
+    expect(lapinRecent.map((m) => m.id)).toEqual(['lapin-subsequent'])
+    expect(overlayRecent([], lapinRecent).map((m) => m.id)).toEqual(['lapin-subsequent'])
+
+    off()
+  })
+
+  test('a late note from a pre-switch transaction is dropped by the generation guard', () => {
+    setActiveBrand('pizza')
+    const epoch = brandEpoch()
+
+    // Transaction commits late, after brand switch to lelapin
+    setActiveBrand('lelapin')
+
+    const seen: Mv[][] = []
+    const off = subscribeRecentWrites((rows) => seen.push(rows))
+
+    // Late noteWritten carrying the pre-switch epoch
+    noteWritten([row('pizza-late')], epoch)
+
+    // The late note must be ignored: no emissions to brand B subscribers
+    expect(seen).toHaveLength(0)
+
+    // Current brand writes still work normally
+    noteWritten([row('lapin-1')], brandEpoch())
+    expect(seen.at(-1)?.map((m) => m.id)).toEqual(['lapin-1'])
+
+    off()
+  })
+
+  test('an in-flight filing from brand A that commits after switch to brand B is dropped', async () => {
+    setActiveBrand('pizza')
+    let fileFn!: (mv: Omit<Mv, 'id'>) => void
+    let resolveTx!: () => void
+    const txPromise = new Promise<void>((resolve) => {
+      resolveTx = resolve
+    })
+
+    const filingPromise = filing(undefined, async (_tx, file) => {
+      fileFn = file
+      await txPromise
+    })
+
+    await vi.waitFor(() => expect(fileFn).toBeDefined())
+    fileFn({ docNo: 'RC-PIZZA', type: 'receive', productId: 'p1', productName: 'P', unit: 'EA', qty: 5, date: 1 } as any)
+
+    const seen: Mv[][] = []
+    const off = subscribeRecentWrites((rows) => seen.push(rows))
+
+    // Switch brand while transaction is pending
+    setActiveBrand('lelapin')
+
+    // Now transaction commits
+    resolveTx()
+    await filingPromise
+
+    // Brand B subscriber received the brand-switch empty reset, but nothing from the brand A filing
+    expect(seen.flat()).toHaveLength(0)
+    off()
+  })
+})
+

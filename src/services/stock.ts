@@ -15,7 +15,7 @@ import {
   type MovementEditField,
 } from '../types'
 import { genId } from '../lib/id'
-import { getBrand } from '../brand/brand'
+import { brandEpoch, getBrand } from '../brand/brand'
 import { sameUnit } from '../lib/units'
 import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
 import { balancesFromLedger, filedUnit, levelId, levelRef, parseLevelId } from '../lib/levelKey'
@@ -145,6 +145,7 @@ export async function filing<R>(
   run: (tx: TxContext, file: (mv: Omit<StockMovement, 'id'>) => void) => Promise<R>,
 ): Promise<R> {
   const targetDb = db ?? scoped()
+  const epoch = brandEpoch()
   let sink: StockMovement[] = []
   const result = await targetDb.transaction(async (tx) => {
     sink = []
@@ -154,18 +155,18 @@ export async function filing<R>(
       sink.push({ ...mv, id } as StockMovement)
     })
   })
-  noteWritten(sink)
+  noteWritten(sink, epoch)
   return result
 }
 
 /** A changed row, as the screen should show it until the listener confirms it. */
-function noteChanged(mv: StockMovement, patch: Record<string, unknown>): void {
+function noteChanged(mv: StockMovement, patch: Record<string, unknown>, epoch: number): void {
   const next: Record<string, unknown> = { ...mv }
   for (const [k, v] of Object.entries(patch)) {
     if (v === DELETE_FIELD) delete next[k]
     else next[k] = v
   }
-  noteWritten([next as unknown as StockMovement])
+  noteWritten([next as unknown as StockMovement], epoch)
 }
 
 /**
@@ -919,6 +920,7 @@ export async function editMovement(params: {
   if (patch.qty !== undefined) requireQty(patch.qty)
   if (patch.date !== undefined) requireEpochMs(patch.date)
   const db = scoped()
+  const epoch = brandEpoch()
 
   let noted = () => {}
   await db.transaction(async (tx) => {
@@ -1073,7 +1075,7 @@ export async function editMovement(params: {
       updatedAt: now,
     }
     tx.update(COL.movements, movementId, patchDoc)
-    noted = () => noteChanged(mv, patchDoc)
+    noted = () => noteChanged(mv, patchDoc, epoch)
   })
   noted()
 }
@@ -1209,6 +1211,7 @@ export async function rebuildProductLevels(
  */
 export async function voidMovement(movementId: string, actor: Actor): Promise<void> {
   const db = scoped()
+  const epoch = brandEpoch()
   let noted = () => {}
   await db.transaction(async (tx) => {
     noted = () => {}
@@ -1251,7 +1254,7 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
     }
     const patchDoc = { voided: true, updatedBy: actor.id, updatedByName: actor.name, updatedAt: now }
     tx.update(COL.movements, movementId, patchDoc)
-    noted = () => noteChanged(mv, patchDoc)
+    noted = () => noteChanged(mv, patchDoc, epoch)
   })
   noted()
 }
