@@ -20,6 +20,9 @@ import { matchOcrLines } from '../lib/billOcr'
 import { buildMatchIndex } from '../lib/productMatch'
 import { billReaderAvailable, readBillPhoto, readDocumentFile } from '../services/billOcr'
 import { ocrFill, type OcrFill } from './receive/ocrApply'
+import { conflictsWith, resolveReceipt, supplierRank, type Candidate, type Resolution } from '../lib/supplierResolution'
+import { recordOverride } from '../lib/supplierFeedback'
+import { SupplierConflicts, SupplierHint, SupplierMismatch } from './receive/SupplierHint'
 import { shownUnit } from '../lib/ledger'
 import { dateInputToMs, msToDateInput, todayMs } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
@@ -75,7 +78,7 @@ export function ReceivePage() {
   const t = useT()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const { products, locations, qtyAt } = useData()
+  const { products, locations, qtyAt, movements } = useData()
   const suppliers = useSuppliers()
   const { user } = useAuth()
   const toast = useToast()
@@ -158,6 +161,42 @@ export function ReceivePage() {
   const supplierName = order ? order.supplierName : kitchen ? KITCHEN_SUPPLIER : d.supplierName.trim()
   const supplierId = order ? order.supplierId : !kitchen && d.supplierId && d.supplierId !== OTHER_SUPPLIER ? d.supplierId : ''
   const toLocationId = order ? order.locationId : d.toLocationId
+
+  // Smart supplier resolution (owner, 7 Oct 2026), from what is already in memory — no read.
+  // An order locks it; by hand, the products (and the bill, when read) suggest or pick it.
+  const resolveCtx = useMemo(() => ({ products, suppliers, movements }), [products, suppliers, movements])
+  const lineIds = useMemo(() => d.lines.map((l) => l.productId), [d.lines])
+  const resolution: Resolution = useMemo(
+    () =>
+      order
+        ? resolveReceipt({ order, productIds: [], ctx: resolveCtx })
+        : d.mode === 'manual'
+          ? resolveReceipt({ order: null, productIds: lineIds, ocrSupplierId: d.supplierPick === 'ocr' ? d.supplierId : undefined, ctx: resolveCtx })
+          : { kind: 'NO_MATCH' },
+    [order, d.mode, d.supplierPick, d.supplierId, lineIds, resolveCtx],
+  )
+  // Fill an EMPTY supplier when the products settle it; clear one the app picked if its lines are all gone.
+  // A person's choice, or the bill's, is never replaced — a later product that disagrees shows a conflict instead.
+  useEffect(() => {
+    if (d.mode !== 'manual') return
+    if (!d.supplierId && resolution.kind === 'AUTO') patch({ supplierId: resolution.candidate.supplierId, supplierName: resolution.candidate.supplierName, supplierPick: 'auto' })
+    else if (d.supplierPick === 'auto' && lineIds.length === 0) patch({ supplierId: '', supplierName: '', supplierPick: '' })
+  }, [d.mode, d.supplierId, d.supplierPick, resolution, lineIds.length, patch])
+  const conflicts = useMemo(() => (d.mode === 'manual' && supplierId ? conflictsWith(supplierId, lineIds, resolveCtx) : []), [d.mode, supplierId, lineIds, resolveCtx])
+  const rankFirst = useMemo(() => (d.mode === 'manual' && supplierId ? supplierRank(supplierId, resolveCtx) : undefined), [d.mode, supplierId, resolveCtx])
+
+  function chooseSupplier(id: string, name: string) {
+    // "Suggested A, chose B": a data-quality signal on this device, never applied to the product.
+    const suggested = resolution.kind === 'AUTO' || resolution.kind === 'SUGGEST' ? resolution.candidate.supplierId : d.supplierPick === 'auto' ? d.supplierId : ''
+    if (suggested && id && id !== OTHER_SUPPLIER && id !== suggested) for (const productId of lineIds) recordOverride({ productId, suggested, chosen: id, at: Date.now() })
+    patch({ supplierId: id, supplierName: name, supplierPick: id ? 'manual' : '' })
+  }
+  const pickCandidate = (c: Candidate) => patch({ supplierId: c.supplierId, supplierName: c.supplierName, supplierPick: 'manual' })
+  function splitOff(ids: string[]) {
+    const out = new Set(ids)
+    patch({ lines: d.lines.filter((l) => !out.has(l.productId)), queue: [...d.queue, { note: '', lines: d.lines.filter((l) => out.has(l.productId)) }] })
+    toast.success(t('แยก {n} รายการไปใบรับถัดไปแล้ว — รับใบนี้ก่อน แล้วกด "รับบิลถัดไป"', { n: ids.length }))
+  }
   const warehouseName = locations.find((l) => l.id === toLocationId)?.name ?? ''
   const date = dateInputToMs(d.dateStr)
   const docDate = dateInputToMs(d.docDateStr || d.dateStr)
@@ -334,7 +373,8 @@ export function ReceivePage() {
     try {
       const bill = file ? await readDocumentFile(file) : await readBillPhoto(photo!)
       const filled = ocrFill(bill, matchOcrLines(bill, buildMatchIndex(products, [])), { draft: d, order, suppliers })
-      patch(filled.patch)
+      const fromBill = filled.patch.supplierId
+      patch({ ...filled.patch, ...(fromBill ? { supplierPick: fromBill === OTHER_SUPPLIER ? 'manual' : 'ocr' } : {}) })
       setOcr(filled)
       toast.success(t('AI อ่านบิลแล้ว — ใส่ให้ {n} รายการ ตรวจก่อนยืนยันทุกครั้ง', { n: filled.filled }))
     } catch (e) {
@@ -468,6 +508,7 @@ export function ReceivePage() {
                   focusOn={focusLines}
                   lineNotes
                   importable
+                  rankFirst={rankFirst}
                 />
               </SectionCard>
             </>
@@ -479,7 +520,8 @@ export function ReceivePage() {
               suppliers={suppliers}
               supplierId={d.supplierId}
               supplierName={d.supplierName}
-              onSupplier={(id, name) => patch({ supplierId: id, supplierName: name })}
+              onSupplier={chooseSupplier}
+              supplierHint={<SupplierHint resolution={resolution} pick={d.supplierPick} hasSupplier={!!supplierId || d.supplierId === OTHER_SUPPLIER} onUse={pickCandidate} />}
               invoiceNo={d.invoiceNo}
               onInvoice={(v) => patch({ invoiceNo: v })}
               onInvoiceBlur={() => void checkDuplicate()}
@@ -494,6 +536,16 @@ export function ReceivePage() {
               onReadBill={billReaderAvailable() ? () => void readBill() : undefined}
               onReadFile={billReaderAvailable() ? (f) => void readBill(f) : undefined}
               reading={reading}
+            />
+          )}
+
+          {d.mode === 'manual' && <SupplierMismatch resolution={resolution} />}
+          {d.mode === 'manual' && (
+            <SupplierConflicts
+              supplierName={supplierName}
+              conflicts={conflicts}
+              onRemove={(id) => patch({ lines: d.lines.filter((l) => l.productId !== id) })}
+              onSplit={splitOff}
             />
           )}
 
