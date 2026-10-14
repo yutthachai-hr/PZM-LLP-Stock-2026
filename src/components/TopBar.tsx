@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { shortages } from '../lib/inventoryRules/lowStock'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { useBrand } from '../brand/BrandContext'
+import { BrandSwitcher } from './BrandSwitcher'
 import { useData } from '../data/DataContext'
 import { useT } from '../i18n/I18nContext'
 import { fmtQty, formatThaiDateShort } from '../lib/format'
@@ -252,6 +252,13 @@ export function TopBar({ title }: { title: string }) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
       <div className="flex items-center gap-2 px-2 py-2 sm:px-4 lg:px-6 xl:py-2.5">
+        {/* On a phone the open brand's logo is the way to the other two (a tablet has it at the
+            top of its rail, a desktop at the top of its menu). */}
+        {!mobileSearch && (
+          <span className="md:hidden">
+            <BrandSwitcher variant="compact" />
+          </span>
+        )}
         {/* On a phone the field would leave no room for anything else, so it opens over
             the bar instead of sitting in it. */}
         <div className={`min-w-0 flex-1 ${mobileSearch ? '' : 'hidden sm:block'}`}>{search}</div>
@@ -309,7 +316,6 @@ export function TopBar({ title }: { title: string }) {
 function UserMenu() {
   const t = useT()
   const { user, logout } = useAuth()
-  const { reset } = useBrand()
   const [open, setOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -364,10 +370,6 @@ function UserMenu() {
             <button role="menuitem" className={item} onClick={() => { setOpen(false); setEditingProfile(true) }}>
               <Icon name="pencil" size={16} />
               {t('แก้ไขโปรไฟล์')}
-            </button>
-            <button role="menuitem" className={item} onClick={() => { setOpen(false); reset() }}>
-              <Icon name="swap" size={16} />
-              {t('สลับแบรนด์')}
             </button>
             <button role="menuitem" className={item} onClick={() => { setOpen(false); void logout() }}>
               <Icon name="logout" size={16} />

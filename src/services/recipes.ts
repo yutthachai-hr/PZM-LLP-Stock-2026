@@ -25,33 +25,43 @@ const listeners = new Set<() => void>()
 const NONE: Recipe[] = []
 const announce = () => listeners.forEach((fn) => fn())
 
+let generation = 0
+
+export function invalidateRecipeCache(): void {
+  generation++
+  cached = null
+  inflight = null
+  announce()
+}
+
+// ponytail: brand cache invalidation via generation counter matching suppliers.ts / schedules.ts
+onBrandChange(invalidateRecipeCache)
+
 const byCode = (a: Recipe, b: Recipe) => a.code.localeCompare(b.code, undefined, { numeric: true }) || a.name.localeCompare(b.name)
 
 export async function loadRecipes(force = false): Promise<Recipe[]> {
   if (cached && !force) return cached
   if (inflight) return inflight
+  const gen = generation
   inflight = scoped()
     .getAll<Recipe>(COL.recipes)
     .then((rows) => {
+      if (gen !== generation) return rows
       cached = [...rows].sort(byCode)
       announce()
       return cached
     })
     .catch(() => {
+      if (gen !== generation) return NONE
       cached = NONE
       announce()
       return NONE
     })
     .finally(() => {
-      inflight = null
+      if (gen === generation) inflight = null
     })
   return inflight
 }
-
-onBrandChange(() => {
-  cached = null
-  announce()
-})
 
 function patch(row: Recipe) {
   if (!cached) return

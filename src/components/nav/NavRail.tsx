@@ -1,11 +1,9 @@
 import { Fragment, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
-import { useBrand } from '../../brand/BrandContext'
-import { brandDef } from '../../brand/brand'
 import { useTodayEventCount } from '../../data/useTodayEventCount'
 import { useT } from '../../i18n/I18nContext'
-import { BrandLogo } from '../BrandLogo'
+import { BrandSwitcher } from '../BrandSwitcher'
 import { Icon } from '../Icon'
 import { ActionSheet } from './ActionSheet'
 import { NAV_GROUPS, navFor, navMatches, navSections } from './navItems'
@@ -20,15 +18,14 @@ export function NavRail() {
   const t = useT()
   const { user } = useAuth()
   const { pathname } = useLocation()
-  const { brand } = useBrand()
   const [sheet, setSheet] = useState(false)
   const todayCount = useTodayEventCount(!!user)
-  const def = brand ? brandDef(brand) : null
   return (
     <>
       <aside className="sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-stretch border-r border-line bg-surface md:flex xl:hidden">
         <div className="flex h-14 shrink-0 items-center justify-center border-b border-line">
-          <BrandLogo def={def} size={36} />
+          {/* The open brand's logo, and the way to the other two (owner, 9 Oct 2026). */}
+          <BrandSwitcher variant="compact" />
         </div>
         <button
           type="button"
