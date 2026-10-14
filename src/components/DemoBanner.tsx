@@ -25,6 +25,17 @@ import { Icon } from './Icon'
  * Desktop: bottom-right, because bottom-left is the sidebar's sign-out / brand switch
  * (UX test 2026-10-02). pointer-events-none so a click on it lands on whatever is under it.
  */
+/**
+ * Whether one of the pills below is on screen (a demo build, or a local server on the test
+ * emulators / live data). Lets a sticky panel leave room at the bottom for it; false in every
+ * real deployment, so production layouts never change because of it.
+ */
+export function demoPillShown(): boolean {
+  if (isDemoMode()) return true
+  if (typeof window === 'undefined') return false
+  return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname) && BACKEND_MODE === 'cloud'
+}
+
 export function DemoBanner() {
   const t = useT()
   const loc = useLocation()

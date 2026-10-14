@@ -3052,6 +3052,10 @@ export const EN: Record<string, string> = {
   'ยืนยันวันที่เลือก': 'Confirm selected date',
   'ยืนยันวันส่งสินค้า': 'Delivery date confirmation',
 
+  // ---- suppliers: master–detail (9 Oct 2026) -----------------------------------------
+  'ปลด {name} ออกจากผู้ขายนี้': 'Unlink {name} from this supplier',
+  'ไม่พบผู้ขายรายนี้แล้ว': 'This supplier is no longer on file',
+
   // ---- in-app brand switcher (9 Oct 2026) ----------------------------------------------
   'เปลี่ยนเป็น {name}?': 'Switch to {name}?',
   'มีงานที่ยังไม่ได้บันทึก {n} หน้า — ระบบจะเก็บไว้ในเครื่องนี้สำหรับ {from} ก่อนเปลี่ยน และกลับมาเมื่อเปิดแบรนด์นี้อีกครั้ง ถ้าเก็บไม่ได้จะไม่เปลี่ยนแบรนด์ (รูปถ่ายที่แนบไว้จะไม่ถูกเก็บ)':

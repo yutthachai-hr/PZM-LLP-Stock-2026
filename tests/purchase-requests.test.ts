@@ -216,6 +216,66 @@ describe('building a request', () => {
     expect(next.items[0].note).toBe('updated note')
     expect(next.history.at(-1)).toMatchObject({ action: 'itemNoteChanged', oldValue: 'initial note', newValue: 'updated note' })
   })
+
+  test('item notes: multiple items preserve distinct notes, empty note is omitted, changing supplier preserves note', async () => {
+    const pr = await draftWith([
+      { productId: 'p-redoak', supplierId: 's-ack', qty: 2, note: 'คัดพิเศษ' },
+      { productId: 'p-rocket', supplierId: 's-ack', qty: 3, note: 'ส่งเช้า' },
+      { productId: 'p-coke', supplierId: 's-thai', qty: 10, note: '   ' },
+    ])
+    expect(pr.items[0].note).toBe('คัดพิเศษ')
+    expect(pr.items[1].note).toBe('ส่งเช้า')
+    expect(pr.items[2].note).toBeUndefined()
+
+    // Clear note via empty string
+    const cleared = await S.setItemNote({ id: pr.id, idx: 0, note: '   ', actor: STAFF })
+    expect(cleared.items[0].note).toBeUndefined()
+
+    // Changing supplier preserves remaining item note
+    const moreSuppliers = [...suppliers, { id: 's-other', name: 'Other Farm', active: true, createdAt: 0 }]
+    seed('suppliers', moreSuppliers)
+    const supChanged = await S.changeSupplier({ id: pr.id, idx: 1, supplierId: 's-other', products, suppliers: moreSuppliers, actor: STAFF })
+    expect(supChanged.items[1].note).toBe('ส่งเช้า')
+    expect(supChanged.items[1].supplierId).toBe('s-other')
+  })
+
+  test('item notes permissions across draft, pendingApproval, returned, and locked statuses', async () => {
+    const pr = await draftWith([{ productId: 'p-redoak', supplierId: 's-ack', qty: 2, note: 'draft note' }])
+
+    // Other staff cannot edit note on draft
+    await expect(S.setItemNote({ id: pr.id, idx: 0, note: 'tamper', actor: OTHER_STAFF })).rejects.toThrow()
+
+    // Requester submits request -> pendingApproval
+    const submitted = await S.submitRequest({ id: pr.id, ctx, actor: STAFF })
+    expect(submitted.status).toBe('pendingApproval')
+
+    // Requester cannot edit note in pendingApproval
+    await expect(S.setItemNote({ id: submitted.id, idx: 0, note: 'edit during review', actor: STAFF })).rejects.toThrow()
+
+    // Manager CAN edit note during review
+    const managerEdited = await S.setItemNote({ id: submitted.id, idx: 0, note: 'reviewed note', actor: MANAGER })
+    expect(managerEdited.items[0].note).toBe('reviewed note')
+
+    // Manager returns request -> returned
+    const returned = await S.returnRequest({ id: submitted.id, reason: 'ปรับยอด', actor: MANAGER })
+    expect(returned.status).toBe('returned')
+
+    // Requester CAN edit note when returned
+    const requesterFixed = await S.setItemNote({ id: returned.id, idx: 0, note: 'fixed note', actor: STAFF })
+    expect(requesterFixed.items[0].note).toBe('fixed note')
+
+    // Other staff still cannot edit note on returned request
+    await expect(S.setItemNote({ id: returned.id, idx: 0, note: 'other tamper', actor: OTHER_STAFF })).rejects.toThrow()
+
+    // Re-submit and approve
+    const resubmitted = await S.submitRequest({ id: returned.id, ctx, actor: STAFF })
+    const approved = await S.approveRequest({ id: resubmitted.id, ctx, actor: MANAGER })
+    expect(approved.status).toBe('approved')
+
+    // Once approved, neither requester nor manager can edit item note
+    await expect(S.setItemNote({ id: approved.id, idx: 0, note: 'post-approval edit', actor: STAFF })).rejects.toThrow()
+    await expect(S.setItemNote({ id: approved.id, idx: 0, note: 'post-approval edit', actor: MANAGER })).rejects.toThrow()
+  })
 })
 
 describe('submitting', () => {
