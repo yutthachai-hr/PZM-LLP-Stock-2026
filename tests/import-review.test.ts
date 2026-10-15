@@ -105,6 +105,7 @@ describe('every consumer goes through these rules', () => {
     const modal = readFileSync('src/components/import/LineImportWindow.tsx', 'utf8')
     expect(modal).toContain('planRows(')
     expect(modal).toContain('importable(rows)')
+    expect(modal).toContain("fromText ? t('อ่านจำนวนไม่ได้') : t('จำนวนในไฟล์ใช้ไม่ได้')")
     expect(modal).not.toMatch(/include:\s*!c\.unitUnknown/) // the old pre-tick of guesses is gone
     for (const f of ['src/components/LineBuilder.tsx', 'src/pages/Adjust.tsx', 'src/pages/counts/MonthlyCountSheet.tsx', 'src/pages/Orders.tsx', 'src/pages/requests/RequestEditor.tsx']) {
       expect(readFileSync(f, 'utf8'), f).toContain('<LineImportModal')

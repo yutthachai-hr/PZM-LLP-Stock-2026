@@ -67,7 +67,7 @@ export function readItemText(text: string): ItemText {
   for (const raw of plain.split(/\r?\n|[,;、]|\s+(?:และ|and)\s+/i)) {
     const seg = raw.trim().replace(/\s+/g, ' ')
     if (!seg) continue
-    if (PROHIBITION.test(seg) && !/\d/.test(seg)) {
+    if (PROHIBITION.test(seg)) {
       out.constraints.push(seg)
       continue
     }

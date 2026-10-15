@@ -76,6 +76,36 @@ describe('instructions are kept, never read as items', () => {
     expect(r.constraints).toEqual(['ยังไม่ต้องส่งผู้ขาย'])
   })
 
+  test('prohibitions containing digits, dates, times, quantities or SKUs are preserved as constraints, never product lines', () => {
+    const items = [
+      'ยังไม่ต้องส่งผู้ขาย วันที่ 15',
+      'ห้ามส่งก่อน 17:00',
+      "don't send before 5pm",
+      'ห้ามสั่งเกิน 10 กล่อง',
+      'อย่าเพิ่งส่ง 1-2 วันนี้',
+      'ห้ามสั่ง SKU-1234 จนกว่าจะแจ้ง',
+      'ยังไม่ต้องส่งผู้ขาย วันที่ ๑๕',
+    ]
+    for (const text of items) {
+      const res = readItemText(text)
+      expect(res.lines).toEqual([])
+      expect(res.constraints.length).toBe(1)
+    }
+
+    const mixed = readItemText('แป้งพิซซ่า 5 ถุง, ยังไม่ต้องส่งผู้ขาย วันที่ 15, ห้ามส่งก่อน 17:00, don\'t send before 5pm, ห้ามสั่งเกิน 10 กล่อง, อย่าเพิ่งส่ง 1-2 วันนี้, มอสซาเรลล่า 3 กก.')
+    expect(mixed.lines).toEqual([
+      { name: 'แป้งพิซซ่า', qty: 5, unit: 'ถุง' },
+      { name: 'มอสซาเรลล่า', qty: 3, unit: 'KG' },
+    ])
+    expect(mixed.constraints).toEqual([
+      'ยังไม่ต้องส่งผู้ขาย วันที่ 15',
+      'ห้ามส่งก่อน 17:00',
+      "don't send before 5pm",
+      'ห้ามสั่งเกิน 10 กล่อง',
+      'อย่าเพิ่งส่ง 1-2 วันนี้',
+    ])
+  })
+
   test('English prohibitions too', () => {
     expect(readItemText("ranch 2\ndon't send to supplier yet").constraints).toEqual(["don't send to supplier yet"])
   })

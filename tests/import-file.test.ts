@@ -2,7 +2,7 @@
 // import window). Decided before anything is read, so a wrong file costs nothing.
 
 import { describe, expect, test } from 'vitest'
-import { MAX_PDF_BYTES, MAX_SHEET_BYTES, routeImportFile } from '../src/lib/importFile'
+import { MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_SHEET_BYTES, routeImportFile } from '../src/lib/importFile'
 // The PDF limit is the bill reader's, defined once in lib/importFile.ts.
 
 const f = (name: string, type = '', size = 1000) => ({ name, type, size })
@@ -36,8 +36,12 @@ describe('routeImportFile', () => {
   test('an empty file and an oversized one are refused before reading', () => {
     expect(routeImportFile(f('order.xlsx', '', 0), open)).toEqual({ error: 'empty' })
     expect(routeImportFile(f('order.xlsx', '', MAX_SHEET_BYTES + 1), open)).toEqual({ error: 'too-big' })
+    expect(routeImportFile(f('order.xlsx', '', MAX_SHEET_BYTES), open)).toEqual({ kind: 'sheet' })
     expect(routeImportFile(f('bill.pdf', 'application/pdf', MAX_PDF_BYTES + 1), open)).toEqual({ error: 'too-big' })
     expect(routeImportFile(f('bill.pdf', 'application/pdf', MAX_PDF_BYTES), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.jpg', 'image/jpeg', MAX_IMAGE_BYTES + 1), open)).toEqual({ error: 'too-big' })
+    expect(routeImportFile(f('bill.jpg', 'image/jpeg', MAX_IMAGE_BYTES), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.png', 'image/png', MAX_IMAGE_BYTES + 1), open)).toEqual({ error: 'too-big' })
   })
 
   test('a second file while one is being read is refused', () => {

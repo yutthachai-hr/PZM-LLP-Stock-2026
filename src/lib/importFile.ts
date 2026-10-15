@@ -8,6 +8,13 @@
 export const MAX_PDF_BYTES = 2_900_000
 /** A spreadsheet is read in the browser; past this it is almost certainly not an order list. */
 export const MAX_SHEET_BYTES = 10_000_000
+/**
+ * Pictures are compressed in the browser (services/billOcr shrinks them to 2000 px),
+ * so they do not have to fit the 4 MB endpoint limit raw. But a huge file can crash
+ * the canvas or freeze the browser while decoding: 10 MB is plenty for any camera photo
+ * of a bill.
+ */
+export const MAX_IMAGE_BYTES = 10_000_000
 
 export type ImportRoute = { kind: 'sheet' | 'document' } | { error: 'busy' | 'unsupported' | 'no-reader' | 'too-big' | 'empty' }
 
@@ -25,6 +32,12 @@ export function routeImportFile(
   if (!sheet && !document) return { error: 'unsupported' }
   if (f.size === 0) return { error: 'empty' }
   if (document && !o.documents) return { error: 'no-reader' }
-  if (sheet ? f.size > MAX_SHEET_BYTES : PDF(f) && f.size > MAX_PDF_BYTES) return { error: 'too-big' }
+  if (sheet) {
+    if (f.size > MAX_SHEET_BYTES) return { error: 'too-big' }
+  } else if (PDF(f)) {
+    if (f.size > MAX_PDF_BYTES) return { error: 'too-big' }
+  } else if (f.size > MAX_IMAGE_BYTES) {
+    return { error: 'too-big' }
+  }
   return { kind: sheet ? 'sheet' : 'document' }
 }

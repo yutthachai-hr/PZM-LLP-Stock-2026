@@ -406,7 +406,7 @@ function ReviewRow({
               {blocked === 'unit-unknown' && <p className="mt-0.5 text-xs text-out">{t('หน่วย {u} ยังไม่มีอัตราแปลงของสินค้านี้ — กำหนดอัตราที่หน้าสินค้าก่อน แล้วนำเข้าใหม่', { u: r.unitUnknown ?? '' })}</p>}
               {(blocked === 'bad-qty' || qtyText !== null) && (
                 <label className={`mt-1 flex flex-wrap items-center gap-2 text-xs ${blocked === 'bad-qty' ? 'text-out' : 'text-ink-soft'}`}>
-                  {t('จำนวนในไฟล์ใช้ไม่ได้')}
+                  {fromText ? t('อ่านจำนวนไม่ได้') : t('จำนวนในไฟล์ใช้ไม่ได้')}
                   <Input
                     type="number"
                     inputMode="decimal"
