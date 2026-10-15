@@ -146,4 +146,10 @@ describe('lookupDocuments', () => {
     await lookupDocuments(' INV1 ')
     expect(calls.length).toBe(first)
   })
+
+  test('a number not found is asked again, so a bill received since then is found', async () => {
+    expect((await lookupDocuments('INV2026101501')).hits).toEqual([])
+    seed('stockMovements', [row({ invoiceNo: 'INV2026101501', docNo: 'RC-00120' })])
+    expect((await lookupDocuments('INV2026101501')).hits.map((h) => h.label)).toEqual(['RC-00120'])
+  })
 })

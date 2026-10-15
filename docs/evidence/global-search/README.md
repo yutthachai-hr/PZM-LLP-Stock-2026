@@ -26,7 +26,7 @@ Partial receipts, which also arrived on 24 Sep 2026, carry `invoiceNo` on each r
 ## Fix
 
 - **Stage 1, unchanged.** Instant local results from loaded data.
-- **Stage 2, new: `src/services/documentLookup.ts`.** It is lazy-loaded (a 1,563-byte chunk) and runs only for document-like entries (`src/lib/documentQuery.ts`), 350 ms after typing stops. It makes equality queries only, scoped to the current brand. Stale answers are dropped, results are deduplicated by document, and successful lookups are cached per brand for the session.
+- **Stage 2, new: `src/services/documentLookup.ts`.** It is lazy-loaded (a 1,563-byte chunk) and runs only for document-like entries (`src/lib/documentQuery.ts`), 350 ms after typing stops. It makes equality queries only, scoped to the current brand. Stale answers are dropped, results are deduplicated by document, and lookups that found something are cached per brand for the session. A number not found is asked again, because the bill may be received in between.
 - **Spellings.** A bill number is tried as typed, in capitals, and without inner spaces. App numbers are normalized the way the app writes them, so `rc 12` becomes `RC-00012`. No other variants are guessed. A bill stored as `INV-2026` is not found by typing `INV2026`, and the footer says the match is exact.
 - **Honest outcome.** "Not found" names the sources searched. For bill numbers it also states that bills typed into notes before 24 Sep 2026 are not searchable there yet.
 - **Deep links.** `/movements?doc=` reads that one document by equality when it is outside the window. `/orders?po=` reads that one order by id when it is outside the window.
@@ -40,7 +40,7 @@ Access is unchanged. Brand-prefixed collections give brand isolation, and Firest
 | Ordinary word (`flour`, `ชีส 2 kg`, `MOZZARELLA 2.72`) | 0 reads | 0 reads |
 | Bill number, first search | 0 reads, wrong answer | 2 to 6 equality queries (2 collections × at most 3 spellings). Each is billed 1 read when empty, plus 1 read per matching row |
 | App document number | 0 reads | 1 equality query, plus the document's rows |
-| Same search again in the session | not applicable | 0 reads (cache) |
+| Same search again in the session | not applicable | 0 reads when it was found (cache). A number not found is queried again |
 | Opening an old `?doc=` or `?po=` link | empty page | 1 equality query or 1 document read |
 
 No listener is added and nothing scans the ledger. Unit tests assert the exact queries made: `stockMovements.invoiceNo` and `purchaseOrders.invoiceNo` for `INV2026080528`, and none for words.
@@ -50,10 +50,10 @@ No listener is added and nothing scans the ledger. Unit tests assert the exact q
 | Check | Result |
 |---|---|
 | `tests/document-lookup.test.ts`, first run | Failed: module missing |
-| Same file after the fix | 15/15 passed |
+| Same file after the fix | 16/16 passed. The 16th was added in review: an empty answer was cached, so a bill received later in the session still read as not found. It failed before the cache kept answers only |
 | `npx playwright test -c playwright.search.config.ts` on the original code | 10/10 failed for the reported reasons (no option for the August bill, empty old receipt link, August PO bill not found) |
 | Same suite after the fix | 10/10 passed, zero retries |
-| `npm test` | 1341 passed, 110 files |
+| `npm test` | 1342 passed, 110 files |
 | Build, lint and i18n | Passed; lint 0 errors |
 | Main CI bundle budget | Passed. Initial JS is 498 bytes **smaller** than main, because the lookup is lazy-loaded |
 

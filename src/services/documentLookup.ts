@@ -67,8 +67,12 @@ export async function lookupDocuments(raw: string): Promise<DocumentLookup> {
     searched: true,
     ...(q.invoice.length ? { notIndexed: 'legacyNotes' as const } : {}),
   }
-  if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!)
-  cache.set(key, result)
+  // Only answers are kept. "Not found" is asked again next time, because the bill may be
+  // received in between: someone checks a number, files the receipt, then checks again.
+  if (result.hits.length) {
+    if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!)
+    cache.set(key, result)
+  }
   return result
 }
 
