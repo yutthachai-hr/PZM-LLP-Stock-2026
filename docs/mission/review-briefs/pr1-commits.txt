@@ -1,0 +1,101 @@
+4898dbb docs(release): RC Go/No-Go (NO-GO; restore PASS, attribution UNVERIFIED) and Supabase production readiness
+e3287fb release: restore rehearsal with real backups (3 brands, isolated) PASS; TS+Rust integrity agree; Firestore foren
+cb579f3 release: RC Go/No-Go (NO-GO today), merge checklist, Supabase readiness; incident narrowed; R&D units KG/EA/Pack
+430e1c9 ci(e2e): drop --retries=0, which npm passed to firebase emulators:exec (config already has retries: 0)
+762ab28 release: R&D unit template + dry-run validator (decision 4); build id on stock commands; deployment runbook (dec
+d02cdcc ci: activate the nine-job workflow (owner decision 3); actions pinned to commit SHAs; gitleaks allowlists the tw
+1e0cb82 docs(ops): preview cleanup evidence — 113 obsolete previews deleted, 0 failures; what remains and why
+5a20d78 docs(release): RC candidate report — clean-checkout gates green, stopped at the owner gate
+44554aa release: CI proposal (validated, not active); G25 transition rules for a rolling release
+7f192d6 fix(import, stock): guesses need a person's confirmation; unit-less products cannot hold stock
+d73fbc6 chore(dev): Vite dependency cache outside OneDrive; e2e 3×39 clean after Smart Other
+e179dc5 feat(rnd): Smart "Other" item — type the item, reuse or create its code, never a wrong SKU
+196fcc1 docs(release): RC readiness matrix; e2e 3×38 clean; HANDOFF current state
+561f297 research(goose): third implementation of pzm-integrity/1 — decision RESEARCH ONLY; Rust NaN-per fix
+a00da09 feat(p1): Supabase cold-start seed pilot — off by default, Firestore stays authoritative
+c65e572 fix(ui): stacked dialogs — Escape and Tab act on the top dialog only; owner gates A/B/C
+514faa3 fix(e2e/notifications): alerts created while the app loads now pop; dev server ignores test output; Supabase iss
+25943de docs(p0): live preview-isolation results; Firestore read investigation (6–7 Oct)
+0261c48 fix(p0): preview isolation — only main on the production host reaches Production
+69d7625 docs(integration): e2e results (2 isolated flakes, 1 fixed regression), read budget before/after, mutation tooli
+99a8191 integration: fix the two post-merge e2e findings; G21 at 10k cases; CI proposal; HANDOFF current state; laya-v2 
+99ef7ea wip(g21): property tests (TS + Rust), TS↔Rust differential on fresh random snapshots, Stryker config; batch-1 
+f701721 fix(g19): mark the machines' refusal words as translation keys; English for the generic one
+5e925a1 feat(g19): workflow state machines for orders, receiving, counts, requests and transfers
+aa2e35b feat(g18): traceId / requestId / operationId from the app to the Supabase shadow
+e4b6fb7 chore(verify): run the rules emulator suite when Java is available
+db8f1dd feat(g25): optimistic concurrency on products and purchase orders + versioned contracts
+eb57631 test(backtest): give the CPU-heavy leakage check room beside the PGlite shadow tests
+0731af0 feat(receive): supplier-resolution overrides filed centrally in the append-only audit log
+e3df8db fix(outbox): outbox events only with OUTBOX_ENABLED=true — merging changes nothing in production
+1c7cda5 docs(agent-safety): verify upstream sources for Laya, KatGPT-rs, Reflex/Jev and pstack (nothing installed)
+2ae7bbb docs: Phase G agent-safety evidence + HANDOFF §14.1 status after G11–G17
+7018770 feat(receive): smart supplier resolution from product mapping, PO, bill and history
+933c3f4 docs(agent-safety): G18–G27 audit of what exists, gaps, order, and a first batch for approval
+b8eabb7 feat(agent): G17 model-agnostic System-1 (Laya) harness — Laya itself not yet supplied
+c6806c2 chore(verify): score the safety bench without rewriting its evidence file
+858d2af chore(verify): G14 workflow doc + npm run verify for every mechanical gate
+9abcee6 feat(integrity): G13 pzm-integrity Rust crate checked against a TypeScript reference
+894e468 feat(agent): G15/G16 seeded safety dataset, attacks and benchmark
+9c9f29e feat(agent): G12 Business Guard + snapshot, with a fixed safety world
+be36a9d test(agent): G11 ActionProposal contract + no Agent→DB path gate
+6434c0f wip(agent): G11 ActionProposal contract (untested) + handoff for G11–G16
+6e54902 docs(agent-safety): inspection of the real code + G11–G16 design
+9b2437f docs(evidence): release gate results — green, RC freeze deferred to after G16
+69ed912 docs(handoff): release hardening + Phase G section, owner-side steps
+37c37e9 fix(ui): page errors clear on navigation without rebuilding the page
+a2f1c70 fix(shadow): never print the connection string; password given on its own, URL-encoded
+8678288 fix(live): a retry also covers listeners refused just after it was pressed
+1e797a3 test(e2e): flakiness-run config — no retries, failure traces kept, timing per run
+d2fe730 feat(migration): baseQty dry-run classifies every order line
+82f8949 feat(schema): reserve lot/expiry flags on products (deferred, no behaviour)
+1f3dece feat(purchasing): D4′ Excel purchasing goes through purchase requests
+15b428e docs(shadow): real Supabase steps (--pg backfill, Worker secrets); outbox wired
+cf977aa feat(outbox): stock commands write outbox events in the same commit; Worker replicates to the Supabase shadow
+a4e4482 feat(observability): E4 client error reports to the Workers log, never Firestore
+288acd6 feat(audit): B2 append-only audit log with bounded admin history
+0a4cbc8 docs(evidence): Phase G exit gate, benchmark and shadow mode
+9b3ee06 Release hardening: Firestore read budget (203k/day -> ~24k/day modelled)
+e499e47 feat(intel): G10 — intelligence where people already look, with Why
+945a3fd feat(intel): G9 shadow mode — immutable prediction snapshots judged against outcomes
+cc87e1a feat(intel): G8 time-correct backtest harness, synthetic history, benchmark
+4a5b299 feat(intel): Phase G engines — supplier, delivery risk, stockout, transfer, purchase, alternates, anomalies (G
+e4d7544 docs(evidence): Phase F — suggest-only with evidence; what waits on the owner
+d244ac7 feat(suggest): every suggestion shows its evidence; background jobs proven suggest-only (plan F1)
+2f395c6 docs(evidence): Phase E — supply position, big-difference approval, blind count
+76d31a7 feat(counts): blind count — counters see only what they count (plan E2)
+409fd45 feat(counts): a big difference is filed only once a manager approves it (plan E2)
+c38596a feat(stock): supply position — on hand, reserved, available, incoming, planned inbound (plan E1)
+a0b9391 docs(evidence): Phase D — bundle, renders, reads, mobile; D4' waits on the owner
+e9d2f3b perf(lists): DataTable draws one layout, and pages long lists (plan D6')
+7b40ab0 feat(mobile): pinch-zoom back on; phone cards for request review and supplier performance (plan D5')
+f3b26cb perf(render): notifications in their own context; supplier intel worked out once (plan D2')
+7e48710 perf(reads): range cache reads only the missing part; the meter counts every read (plan D3')
+7d7b28e perf(bundle): pages load when first opened; main 1,209 KB -> 223 KB (plan D1')
+78f34d2 docs(evidence): Phase C — C1-C5 pass; E3/E4 wait on the owner
+0a83c0b test(a11y): axe finds nothing serious on the five main pages (plan C exit gate)
+072bde1 fix(toast): clear the tab bar's raised + button too (plan C5)
+1b0b58f feat(notifications): critical alerts stay until acknowledged; error toasts stay and clear the tab bar (plan C5)
+e611906 feat(offline): say when the device is offline; keep half-keyed transfers (plan C4)
+9763337 feat(inbox): the Exception Inbox — every decision waiting on a manager (plan C3)
+564fc01 feat(alerts): transfers stuck in transit and stalled part-received orders (plan C2)
+1eb41ca feat(observability): failed listeners and pages say so, with a retry (plan C1)
+f120489 docs(evidence): Phase B — B1 B3 B5 B6 pass; B2 waits on the owner
+10cbc10 B5: record goods refused at receipt; cap over-receipt for staff
+b663a6d feat(control): period lock — a posted count closes its month at that location (plan B1)
+e529887 feat(control): server endpoints check the caller is still active; no hard delete with history (plan B6, B3)
+e68e94a feat(rules): staff and managers no longer write stock from a client (ADR-001 close-out, audit S1)
+982bd3b feat(transfers): the four stock-moving transfer steps are commands (ADR-001, A-sec commands 8-11)
+6da1d43 feat(counts): posting a monthly count is a command (ADR-001, A-sec command 7)
+62f2009 feat(stock): every everyday stock write is a command (ADR-001, A-sec commands 2-6)
+aa7b837 feat(stock): receivePO through the trusted command boundary (ADR-001, A-sec command 1)
+18bc559 refactor(stock): transaction bodies in src/commands, free of the database client (ADR-001 step 1)
+fa64586 feat(rules): Phase A-rules — real transfers, frozen approved requests, admin-only corrections (A4 A5 A9 B7 B4)
+b11da78 docs(evidence): Phase A gate — full-cycle e2e, retry x5, baseQty dry-run
+e3eda73 fix(counts): a count's difference is worked out inside the transaction (plan A10)
+688357f fix(stock): a row received against an order changes only with it (plan A8)
+d08ee4b fix(orders): amend, cancel and close-remainder are transactions (plan A7)
+0999dcb feat(orders): order opens in a side panel; status on one line
+77c767f fix(requests): PR -> PO conversion is one idempotent transaction (plan A6)
+abef783 docs: handoff for the Operations OS work (Phase 0 done, Phase A in progress)
+7aad548 fix(receive): a PO receipt is one idempotent transaction (plan A1, A2)
