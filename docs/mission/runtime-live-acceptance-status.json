@@ -1,0 +1,55 @@
+{
+  "checkedAt": "2026-10-15T09:12:00Z",
+  "threadId": "7fd797c6-ddd5-4cdd-ae6f-b9a5e6f37cfa",
+  "modelSync": {
+    "status": "FAIL",
+    "scope": "automatic inference-provider transitions in the installed host",
+    "currentSelectedVsActual": "PASS: T3 harness pi selects openai-codex-account-2/gpt-6.1-sol; native model_change and actual environment agree",
+    "cause": "Installed server.asar lacks reviewed native-model synchronization patch cddbf8b; live rotator also lacks the opted-in default-bridge alias",
+    "installedVersion": "0.0.46-nightly.20261012.3010",
+    "installedServerBundleSha256": "1a6ea4e898cf8706e67d860f62437682bfe26f1ed3209d75e5f3f69398eabb28",
+    "candidateHostSha": "cddbf8bdb5b38f7678e5e9d0046bade4051a192d",
+    "freshFocusedTests": "17 adapter PASS (83 excluded by name filter), 49 handoff/budget PASS on exact candidate in canonical isolated checkout",
+    "firstTestAttempt": "Sibling checkout missing @effect/vitest, zero tests loaded; preserved as harness setup failure, not product RED"
+  },
+  "simulatedClaudeToCodex": {
+    "status": "FAIL",
+    "reason": "End-to-end simulated event through installed T3 followed by actual inference/tool execution NOT RUN; blocked activation route",
+    "callbackSimulation": "Previously verified 14 new +34 legacy PASS; not rerun or represented as live proof"
+  },
+  "realCodexReadOnlyToolCall": {
+    "status": "PASS",
+    "scope": "current manually selected main session, not an automatic handoff",
+    "evidence": "Read-only Git, installed ASAR and statev2 projection inspections executed in this turn on the native Codex route; activation-checkpoint.json records matching selection/environment/native model_change"
+  },
+  "activated": "NO",
+  "t3RestartRequired": "YES for the missing host bundle patch; extension-only reload is insufficient to prove host synchronization. No restart performed.",
+  "rollbackTested": {
+    "sourceAndConfigSandbox": "YES: exact reviewed a9c0a56 staged in temporary directory, acceptance deliberately failed, both original byte sequences restored",
+    "liveRuntimeRestartRollback": "NOT TESTED",
+    "evidence": "C:/Users/Yutthachai/pzm-recovery-20261015/r2/reviewed-runtime-rollback-result.json"
+  },
+  "activationBlockers": [
+    "Owner-managed guard unconditionally blocks t3_thread_configure",
+    "Guard blocks t3_thread_send to the main thread (only children of approved tasks may be messaged), so agent cannot inject a main-session reload or simulated event through that API",
+    "Guard blocks non-OpenCode t3_thread_launch and shell-launched main agents; no alternative transport or policy modification used",
+    "Reviewed host patch is not present in installed bundle; no supported hot activation path was found",
+    "Active approved children must not be interrupted by a T3 restart",
+    "Pending continuation durability across a crash remains unproved beyond persisted cooldown state"
+  ],
+  "supportedNextAction": "At an owner-controlled idle checkpoint, activate reviewed host build and extension/config through supported installation/UI session reload. If automation via configure/send is desired, owner must first provide a narrow main-thread-only policy exception; do not weaken child delegation restrictions.",
+  "pr25": {
+    "headSha": "146d1ee906c3e5ca0a34c6482fddc028f6209e6d",
+    "ci": "10/10 SUCCESS rechecked",
+    "independentReview": "GO exact head",
+    "previewQA": "BLOCKED",
+    "previewUrl": "https://b157c19f.pzmstock.pages.dev",
+    "evidence": "Fresh HTTP302 Cloudflare-Access challenge. Collaborative browser navigation returned an app title but snapshot and evaluate each timed out; no authenticated page QA verified.",
+    "merge": "NOT PERFORMED"
+  },
+  "prsReadyForAutoMerge": [],
+  "activeChildren": ["pzm-pr24-2155955-review-r2"],
+  "matchingReview": "PR22 exact95665f8 recovered R2 independent APPROVE;25rankingtests PASS; Preview still required",
+  "nextQueue": ["Complete import2155955 exact-head review; matching95665f8 review GO recorded", "Final CI and authorized Preview for release queue", "PR16 integration before PR21 budget revalidation", "ThaiTrees saved-result reproduction and blind held-out work when P0 release is externally blocked"],
+  "unchanged": ["credentials", "delegation guard and policy", "live extension/configuration", "installed T3 bundle", "Production data", "Firestore Rules"]
+}

@@ -1,16 +1,17 @@
 {
   "parentThreadId": "7fd797c6-ddd5-4cdd-ae6f-b9a5e6f37cfa",
   "previousParentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
-  "observedAt": "2026-10-15T09:03:00Z",
+  "observedAt": "2026-10-15T09:15:00Z",
   "safeConcurrentChildrenNow": 4,
   "reason": "High verified by two completed runtime tasks and actual tool activity on independent reviews. Ramped 2 to 4 with 5.91 GiB free. Six/eight not tested. Old T3-terminal/OpenCode-orphan sessions reconciled separately.",
   "mainAgent": { "providerInstanceId": "pi", "model": "openai-codex-account-2/gpt-6.1-sol", "thinking": "high", "verified": "read-only T3 projection and native model_change at 08:14:31Z", "automaticFailover": "NOT PROVEN: owner prompt/manual transition" },
-  "activeReviewClientRequestIds": [],
-  "activeImplementationClientRequestIds": ["pzm-pr24-review-remediation-r1"],
-  "activeRecoveryClientRequestIds": ["pzm-pr22-orphan-reconcile-r1"],
+  "activeReviewClientRequestIds": ["pzm-pr24-2155955-review-r2"],
+  "activeImplementationClientRequestIds": [],
+  "activeRecoveryClientRequestIds": [],
+  "runtimeAcceptanceEvidence": "runtime-live-acceptance-status.json",
   "reviewRemediationEvidence": "review-remediation-checkpoint.md",
   "taskIdPrefix": "node:delegated-task:command%3Amcp%3A6e26b62c-8ea4-47ab-a2d1-675bd2547d54%3Adelegate-task%3A",
-  "runtimeFailover": { "worktree": "C:/Users/Yutthachai/pzm-runtime-failover-20261015", "branch": "fix/default-bridge-codex-failover", "headSha": "a9c0a562ddfb38634c3af71104c7b1cbbecc7dce", "tests": "14 new + 34 legacy PASS; strict TSC PASS", "review": "OpenCode High GO exact SHA, pzm-runtime-default-alias-a9c0a56-review-r1", "deployment": "BLOCKED: no live install/handoff proof; extension and guard unchanged", "nextAction": "runtime-failover-20261015.md and runtime-review-a9c0a56.md" },
+  "runtimeFailover": { "worktree": "C:/Users/Yutthachai/pzm-runtime-failover-20261015", "branch": "fix/default-bridge-codex-failover", "headSha": "a9c0a562ddfb38634c3af71104c7b1cbbecc7dce", "tests": "14 new + 34 legacy PASS; strict TSC PASS", "review": "OpenCode High GO exact SHA, pzm-runtime-default-alias-a9c0a56-review-r1", "deployment": "BLOCKED: installed ASAR confirmed missing model-sync host patch; configure/self-send/non-OpenCode launch blocked by owner guard. No live changes.", "nextAction": "runtime-live-acceptance-status.json; host cddbf8b targeted17+49 tests PASS; a9c0a56 source/config forced-failure rollback PASS in sandbox only" },
   "recovery": {
     "interruptedAt": "about 2026-10-15T04:25Z (last worktree writes 11:22-11:25 +0700)",
     "preserved": "Backups of both interrupted worktrees in C:/Users/Yutthachai/pzm-recovery-20261015/ (patches, untracked tar, logs)",
@@ -28,8 +29,8 @@
       "branch": "fix/product-match-ranking",
       "headSha": "95665f8",
       "pr": 22,
-      "state": "CI green. Old T3 task cancelled 05:59:41Z; OpenCode resumed 07:28 but last activity 07:28:35Z with no verdict. Orphan/stalled outcome UNRESOLVED.",
-      "nextAction": "Read-only recovery diagnosis running pzm-pr22-orphan-reconcile-r1; replacement product review only after actual run state reconciled"
+      "state": "CI green95665f8. Old T3-cancelled reviewer reconciled: frozen on unexecuted shell permission request call_593786, no live generation. Session preserved, never approved or deleted.",
+      "nextAction": "Fresh R2 independent GO exact95665f8,25rankingtests PASS; recorded recovered-reviews/pr22-95665f8-review-r2.md. Authorized Preview and final release gates remain"
     },
     {
       "id": "P0-SEARCH",
@@ -38,7 +39,7 @@
       "branch": "fix/global-search-documents",
       "headSha": "3300edf",
       "pr": 23,
-      "state": "Deep-link feedback fixed; fresh R2 CODE GO. Parent unit1356, demo10, E2E68+2skip, lint/i18n/build/budget PASS; final CI E2E pending09:00Z",
+      "state": "Deep-link feedback fixed; fresh R2 CODE GO. Parent unit1356, demo10, E2E68+2skip, lint/i18n/build/budget PASS; final CI10/10 green rechecked09:15Z",
       "nextAction": "Final CI and authorized Preview; no inherited e275251 review. Corrected child RED claim: missing exports, not behavioral repro"
     },
     {
@@ -75,10 +76,10 @@
       "owner": "parent inline",
       "worktree": "C:/Users/Yutthachai/pzm-smart-import-20261015",
       "branch": "feat/smart-import-dnd",
-      "headSha": "a01b56f",
+      "headSha": "2155955",
       "pr": 24,
-      "state": "R1 CHANGES_REQUESTED: numeric prohibitions become pending rows rather than constraints. No automatic sending demonstrated. Existing CI green is insufficient.",
-      "nextAction": "Implementation pzm-pr24-review-remediation-r1 in existing worktree: actual failing parser tests, source-size validation and typed-quantity copy; parent then finalSHA review/QA"
+      "state": "R1 remediated: numeric prohibitions preserved, image source cap10MB, typed-quantity label. Parent targeted39/full1354/demo9/build/budget PASS. Regenerated review-english.png preserved uncommitted; no discard.",
+      "nextAction": "R2 independent review pzm-pr24-2155955-review-r2 running; CI and new-head full emulator E2E pending; Preview/OCR success QA gaps remain"
     },
     {
       "id": "A19",
@@ -136,7 +137,7 @@
   ],
   "queuedAfterReset": [
     "PR19 aee0968 code GO; PR23 3300edf R2 code GO; PR21 07e8ab4 R2 code GO but budget80bytes over",
-    "PR24 remediation active; PR22 orphan reconciliation active; no duplicate reviewers",
+    "PR24 2155955 R2 active; PR22 95665f8 recovered R2 code GO; no duplicate old reviewers",
     "PR25 146d1ee, PR20 1cbcabc, PR17 d37e414 saved independent GO; Preview required",
     "C: Zero-Ops heldout >=240 cases in pzm-mission-zeroops-20261014 (7c78201)",
     "Rust/Laya/Reflexer/Goose evaluation on exp/real-stack (research, shadow only)",
