@@ -1,59 +1,92 @@
 {
-  "parentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
-  "observedAt": "2026-10-15T03:42:04Z",
-  "maximumConcurrentChildren": 3,
-  "activeCount": 3,
+  "parentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
+  "previousParentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
+  "observedAt": "2026-10-15T04:58:00Z",
+  "safeConcurrentChildrenNow": 0,
+  "reason": "Both approved 9Router routes in upstream 503 cooldown, reset about 07:28Z (capacity-preflight.md). Ramp 3 -> 4 -> 6 -> 8 only after the reset, one completed model turn per new child before the next step.",
+  "recovery": {
+    "interruptedAt": "about 2026-10-15T04:25Z (last worktree writes 11:22-11:25 +0700)",
+    "preserved": "Backups of both interrupted worktrees in C:/Users/Yutthachai/pzm-recovery-20261015/ (patches, untracked tar, logs)",
+    "untouched": [
+      "root checkout untracked fixes/",
+      "pzm-security-20261014 uncommitted S5.1 proto (+64 lines, 14 Oct)",
+      "pzm-qa-20261014 untracked QA artifacts"
+    ]
+  },
   "tasks": [
     {
+      "id": "P0-MATCH",
+      "owner": "parent inline (children blocked by quota)",
+      "worktree": "C:/Users/Yutthachai/pzm-match-20261015",
+      "branch": "fix/product-match-ranking",
+      "headSha": "b595c2b",
+      "pr": 22,
+      "state": "draft; local unit 1348, 22/22 new unit, 2/2 demo browser, lint/i18n/build/budget pass; RED shown on original code; GitHub CI running",
+      "nextAction": "Fresh independent OpenCode review on exact head after reset; Preview QA; merge sequentially"
+    },
+    {
+      "id": "P0-SEARCH",
+      "owner": "parent inline (children blocked by quota)",
+      "worktree": "C:/Users/Yutthachai/pzm-search-20261015",
+      "branch": "fix/global-search-documents",
+      "headSha": "3100245",
+      "pr": 23,
+      "state": "draft; re-verified fresh in recovery: 15/15 lookup unit, 1341 suite, 10/10 demo browser (10/10 RED on original), lint/i18n/build/budget pass; GitHub CI running",
+      "nextAction": "Fresh independent review; reviewer must check brand switch during ?po= out-of-window read; rebase after PR20 if that lands first"
+    },
+    {
       "id": "ORDERS-REVIEW",
-      "providerInstanceId": "opencode",
+      "ownerThread": "c5a2ecdc (old parent; not readable from this thread)",
       "model": "9router/gemini-3.8-flash-medium",
-      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-orders-ux-1cbcabc-review-r2",
       "clientRequestId": "pzm-orders-ux-1cbcabc-review-r2",
-      "worktree": "C:/Users/Yutthachai/pzm-orders-ux-20261015",
-      "branch": "feat/orders-ux-simplification",
-      "targetSha": "1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc",
       "pr": 20,
-      "lastObservedState": "working; no verdict or report yet",
-      "nextAction": "Receive exact-SHA verdict. Final CI is green; remote authenticated Preview QA remains blocked. No merge without both."
+      "targetSha": "1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc",
+      "lastObservedState": "accepted; no tool activity in OpenCode log today; waiting on quota",
+      "nextAction": "Do not duplicate. If no verdict by 07:45Z, report to Owner; a fresh round needs the old thread or Owner cancel"
     },
     {
       "id": "A17-REVIEW",
-      "providerInstanceId": "opencode",
+      "ownerThread": "c5a2ecdc",
       "model": "9router/gemini-3.8-flash-high",
-      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-pr17-d37e414-review-r1",
       "clientRequestId": "pzm-pr17-d37e414-review-r1",
-      "worktree": "C:/Users/Yutthachai/pzm-mission-release-20261014",
-      "branch": "review/20261015-pr17",
-      "targetSha": "d37e414466c2301854d808ea051cf5714b25780b",
       "pr": 17,
-      "lastObservedState": "working; no verdict or report yet",
-      "nextAction": "Receive independent review and native skill invocation evidence; parent completed full local revalidation. Preview gate still required."
+      "targetSha": "d37e414466c2301854d808ea051cf5714b25780b",
+      "lastObservedState": "accepted; no tool activity today; waiting on quota",
+      "nextAction": "Same as above"
     },
     {
       "id": "B-LEXICON",
-      "providerInstanceId": "opencode",
+      "ownerThread": "c5a2ecdc",
       "model": "9router/gemini-3.8-flash-high",
-      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-thaitrees-lexicon-r2",
       "clientRequestId": "pzm-thaitrees-lexicon-r2",
       "worktree": "C:/Users/Yutthachai/pzm-mission-thaitrees-20261014",
-      "branch": "research/20261014-thaitrees",
-      "baseline": "af0136b0f6886989bc32d651a384ac05b39cdad6",
-      "lastObservedState": "working; no artifact or result yet",
-      "nextAction": "Capture revision/license/schema/offline experiment evidence and final SHA; assign a fresh independent reviewer after completion."
+      "lastObservedState": "accepted; worktree clean, no artifact",
+      "nextAction": "Same as above"
     }
   ],
-  "historical": {
-    "A_B_C_original": "Original pzm-master-20261014-{a,b,c}-r1 tasks were interrupted before the latest owner directive and have no pending runs or completed deliverables. Do not count them as completed or still running.",
-    "ordersReviewRound1": "e8070ff review cancelled as obsolete before latest directive; no approval was received. Current round 2 remains untouched."
-  },
-  "queued": [
-    "C: existing exp/real-stack worktree, independent >=240-case heldout benchmark, read-only/shadow; assign on first eligible free slot",
-    "A19: current-main LINE and language revalidation after A17 integration",
-    "A16: current code-splitting candidate, strict target and functional offline/export/PWA diagnosis",
-    "PR1: read-only missing-feature inventory; never wholesale merge"
+  "awaitingReviewOnly": [
+    { "pr": 21, "id": "TOAST", "headSha": "d42bee1", "ci": "all green", "blocker": "independent review (quota), remote Preview QA (Access)" },
+    { "pr": 20, "id": "ORDERS", "headSha": "1cbcabc", "ci": "all green", "blocker": "review round 2 in old thread, remote Preview QA (Access)" },
+    { "pr": 17, "id": "A17", "headSha": "d37e414", "ci": "all green", "blocker": "review in old thread, Preview QA" }
   ],
-  "piSuperpowers": "BLOCKED pending owner confirmation and native activation/Compact proof. Package declaration is now observed in settings, but no reload or installation-success claim is made.",
+  "queuedAfterReset": [
+    "P1 review of PR22 and PR23 (exact SHAs), fresh OpenCode high",
+    "P1 review of PR21 d42bee1",
+    "C: Zero-Ops heldout >=240 cases in pzm-mission-zeroops-20261014 (7c78201)",
+    "A19: rebase PR19 on current main, LINE art TH/EN",
+    "A16: PR16 code-splitting diagnosis; also relieves the 3 KB initial-JS budget headroom",
+    "Rust/Laya/Reflexer/Goose evaluation on exp/real-stack (research, shadow only)",
+    "Smart Import + drag-and-drop for /requests/new (after P0 merges)",
+    "Matching Engine 2.0 alignment of globalSearch/OCR/suggestProducts scorers (after PR22)",
+    "PR1 read-only missing-feature inventory"
+  ],
+  "risks": [
+    "Bundle budget: initial JS 3445-3447 of 3450 KB on each P0 branch; PR20/21/22/23 landing in sequence may exceed it. Do not raise the limit; PR16 code-splitting is the real fix.",
+    "PR22 and PR23 both add a CI step after test:e2e in ci.yml; second to land rebases.",
+    "PR23 and PR20 both edit Orders.tsx ?po= handling."
+  ],
+  "piSuperpowers": "Listed natively in this parent session from ~/.pi/agent/git/github.com/obra/superpowers (owner install). Skills read and followed: systematic-debugging, test-driven-development, verification-before-completion. Compact survival UNVERIFIED.",
+  "humanizer": "humanizer-verification.md",
   "mergePolicy": "Every owner gate and fresh independent review must cover the exact final head; no inherited approvals; no Access bypass or gate weakening.",
-  "rollover": "UNVERIFIED; no genuine automatic new-thread handoff observed"
+  "rollover": "UNVERIFIED; this thread is a manual recovery, not an observed automatic handoff"
 }
