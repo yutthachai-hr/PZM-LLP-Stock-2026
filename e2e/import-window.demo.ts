@@ -26,6 +26,10 @@ async function stage(page: Page) {
       mozz: product('mozz', 'C-002', 'MOZZARELLA (FOODGALLERY)'),
       lone: product('lone', 'X-009', 'LONE ITEM', { supplierId: undefined }),
     })
+    // Le Lapin's own books: a different catalogue, so a list read there cannot match Pizza's.
+    put('lelapin__locations', { wh: { id: 'wh', name: 'Lapin Kitchen', active: true, type: 'warehouse', createdAt: now } })
+    put('lelapin__suppliers', { lsup: { id: 'lsup', name: 'LAPIN SUPPLY', active: true, createdAt: now } })
+    put('lelapin__products', { bag: product('bag', 'B-001', 'BAGUETTE', { supplierId: 'lsup' }) })
   })
   await page.goto('/requests/new')
   await page.getByRole('button', { name: /นำเข้าจากไฟล์/ }).click()
@@ -164,4 +168,29 @@ test('English labels', async ({ page }) => {
   await page.getByRole('button', { name: 'Read list' }).click()
   await expect(page.getByRole('dialog').getByRole('note')).toContainText('Nothing is sent to a supplier')
   await page.screenshot({ path: `${SHOTS}/review-english.png` })
+})
+
+test('the brand cannot change under the open window, and the next brand starts empty with its own catalogue', async ({ page }) => {
+  await stage(page)
+  await textBox(page).fill('FLOUR 2 kg')
+  const brand = page.getByRole('button', { name: /^แบรนด์: / }).locator('visible=true').first()
+  // The window's overlay takes the click, so the brand switcher cannot be used while it is open.
+  const blocked = await brand.click({ trial: true, timeout: 1500 }).then(() => '', (e: Error) => e.message)
+  expect(blocked).toMatch(/locator resolved to <button[^>]*แบรนด์: Pizza Mania/)
+  await page.getByRole('dialog').getByRole('button', { name: /ปิด|Close/ }).first().click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await brand.click()
+  await page.getByRole('menuitemradio', { name: /Le Lapin/ }).click()
+  await expect(brand).toHaveAccessibleName(/Le Lapin/)
+  await page.goto('/requests/new')
+  await expect(brand).toHaveAccessibleName(/Le Lapin/)
+  await page.getByRole('button', { name: /นำเข้าจากไฟล์/ }).click()
+  await expect(textBox(page)).toHaveValue('')
+  await textBox(page).fill('FLOUR 2\nBAGUETTE 3')
+  await page.getByRole('button', { name: 'อ่านรายการ' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('listitem')).toHaveCount(2)
+  await expect(dialog.getByText('จะเพิ่ม 1 จาก 2 รายการ')).toBeVisible()
+  await expect(dialog.getByRole('listitem').filter({ hasText: 'B-001' })).toHaveCount(1)
+  await expect(dialog.getByText('F-001')).toHaveCount(0)
 })
