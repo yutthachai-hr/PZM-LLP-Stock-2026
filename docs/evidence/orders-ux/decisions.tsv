@@ -1,0 +1,5 @@
+ts	phase	decision	why	evidence	result
+2026-10-15T03:12:36Z	start	Started isolated Orders UX change from remote main	Owner requested a scoped UI PR and immediate execution	af0136b0f6886989bc32d651a384ac05b39cdad6; docs/superpowers/specs/2026-10-15-orders-ux-design.md	open
+2026-10-15T03:12:37Z	presentation	Preserved supplier states as primary or secondary text instead of removing them	LINE delivery is not supplier approval; terminal receipt does not always mean full quantity	src/pages/orders/presentation.ts; tests/order-presentation.test.ts	15 status tests passed
+2026-10-15T03:12:37Z	implementation	Moved the unchanged resend helper into a pure module and kept its original export	Pure presentation cannot import browser backend initialization	src/lib/poRevision.ts; src/services/purchaseOrders.ts	existing order tests passed
+2026-10-15T03:12:37Z	verification	Ran local unit, rules, emulator E2E and separate Orders demo suite	Shared DataTable and menu changes require checking other callers	docs/evidence/orders-ux/logs/	1341 unit; 228 rules; 68 emulator passed and 2 existing skips; 19 new browser passed

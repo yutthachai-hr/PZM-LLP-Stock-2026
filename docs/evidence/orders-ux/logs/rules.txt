@@ -1,0 +1,24 @@
+
+> pizza-stock@0.0.0 test:rules
+> firebase emulators:exec --only firestore --project pzm-rules-test "vitest run --config vitest.rules.config.ts"
+
+i  emulators: Starting emulators: firestore
+i  firestore: Firestore Emulator logging to firestore-debug.log
++  firestore: Firestore Emulator was started in standard edition.
++  firestore: Firestore Emulator UI websocket is running on 9150.
+i  Running script: vitest run --config vitest.rules.config.ts
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-orders-ux-20261015
+
+
+ Test Files  8 passed (8)
+      Tests  228 passed (228)
+   Start at  09:57:04
+   Duration  51.54s (tests 97%, import 3%, transform 1%)
+
++  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+!  Firestore Emulator has exited upon receiving signal: SIGINT
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator

@@ -1,0 +1,24 @@
+
+Running 19 tests using 1 worker
+
+  ok  1 e2e\orders-ux.demo.ts:40:1 › screenshots at desktop tablet and mobile widths (1.7s)
+  ok  2 e2e\orders-ux.demo.ts:53:1 › row opens its own existing sheet and no view buttons remain (1.5s)
+  ok  3 e2e\orders-ux.demo.ts:61:1 › checkboxes and menu do not open a sheet; multi-selection survives (1.6s)
+  ok  4 e2e\orders-ux.demo.ts:73:1 › keyboard opens the focused row and does not activate a focused checkbox (1.6s)
+  ok  5 e2e\orders-ux.demo.ts:89:1 › receiving navigates and LINE menu opens only the send wizard (2.6s)
+  ok  6 e2e\orders-ux.demo.ts:101:1 › supplier confirmation updates remain visible in the list and open sheet (1.6s)
+  ok  7 e2e\orders-ux.demo.ts:116:1 › menu supports keyboard focus, arrows and Escape without opening the row (1.3s)
+  ok  8 e2e\orders-ux.demo.ts:129:1 › touch opens a mobile card, but tapping its menu does not (1.5s)
+  ok  9 e2e\orders-ux.demo.ts:145:1 › filters retain multi-selection and both export formats still download (1.9s)
+  ok 10 e2e\orders-ux.demo.ts:162:1 › request links navigate without opening the order (1.3s)
+  ok 11 e2e\orders-ux.demo.ts:169:1 › switching brands clears the sheet and multi-selection even when order IDs repeat (3.8s)
+  ok 12 e2e\orders-ux.demo.ts:187:1 › LINE resume opens only the wizard and consumes its query (2.3s)
+  ok 13 e2e\orders-ux.demo.ts:195:1 › English status and responsive screenshots use translated UI (2.3s)
+  ok 14 e2e\orders-ux.demo.ts:209:3 › existing actions stay available for admin without executing them (1.5s)
+  ok 15 e2e\orders-ux.demo.ts:209:3 › existing actions stay available for manager without executing them (1.5s)
+  ok 16 e2e\orders-ux.demo.ts:209:3 › existing actions stay available for staff without executing them (1.5s)
+  ok 17 e2e\orders-ux.demo.ts:221:3 › mobile cards and deep links stay in pizza (2.4s)
+  ok 18 e2e\orders-ux.demo.ts:221:3 › mobile cards and deep links stay in lelapin (2.4s)
+  ok 19 e2e\orders-ux.demo.ts:221:3 › mobile cards and deep links stay in rnd (2.4s)
+
+  19 passed (38.5s)

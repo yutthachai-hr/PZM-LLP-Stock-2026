@@ -1,0 +1,24 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-orders-ux-20261015
+
+ ❯ tests/order-presentation.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/order-presentation.test.ts [ tests/order-presentation.test.ts ]
+Error: Cannot find module '../src/pages/orders/presentation' imported from C:/Users/Yutthachai/pzm-orders-ux-20261015/tests/order-presentation.test.ts
+ ❯ tests/order-presentation.test.ts:3:1
+      1| import { describe, expect, it } from 'vitest'
+      2| import type { PurchaseOrder, SupplierConfirmationStatus } from '../src…
+      3| import { presentOrderStatus } from '../src/pages/orders/presentation'
+       | ^
+      4|
+      5| const order: PurchaseOrder = {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  09:39:11
+   Duration  170ms (worker 95%, environment 5%)
