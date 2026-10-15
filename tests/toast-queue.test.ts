@@ -22,6 +22,16 @@ describe('transient toast presentation queue', () => {
     const first = [notice(1, 'Saved')]
     expect(enqueueToast(first, notice(2, 'Saved'))).toBe(first)
   })
+  it('refreshes an identical error without adding a card or changing its identity and position', () => {
+    const first = [notice(1, 'Saved'), notice(2, 'Network failed', 'error')]
+    const repeated = enqueueToast(first, notice(3, 'Network failed', 'error'))
+    expect(repeated).not.toBe(first)
+    expect(repeated).toHaveLength(2)
+    expect(repeated[0]).toBe(first[0])
+    expect(repeated[1]).toMatchObject({ id: 2, revision: 1 })
+    expect(first[1]).not.toHaveProperty('revision')
+    expect(enqueueToast(repeated, notice(4, 'Network failed', 'error'))[1]).toMatchObject({ id: 2, revision: 2 })
+  })
   it('does not collapse different variants or descriptions', () => {
     const first = [notice(1, 'Saved')]
     expect(enqueueToast(first, notice(2, 'Saved', 'error'))).toHaveLength(2)

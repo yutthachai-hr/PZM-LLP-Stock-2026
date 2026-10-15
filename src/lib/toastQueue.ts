@@ -5,7 +5,7 @@ export interface ToastContent {
   action?: { label: string; onClick: () => void }
 }
 export type ToastInput = string | ToastContent
-export interface ToastRecord extends ToastContent { id: number; kind: ToastKind }
+export interface ToastRecord extends ToastContent { id: number; kind: ToastKind; revision?: number }
 export const TOAST_DURATION: Record<ToastKind, number> = { success: 3000, info: 4000, warning: 6500, error: 8000 }
 export const MAX_VISIBLE = 3
 export const MAX_QUEUED = 20
@@ -19,7 +19,12 @@ export function normalizeToast(input: ToastInput, description?: string): ToastCo
 }
 
 export function enqueueToast(items: ToastRecord[], next: ToastRecord): ToastRecord[] {
-  if (!next.action && items.some((item) => !item.action && item.kind === next.kind && item.title === next.title && item.description === next.description)) return items
+  const duplicate = !next.action ? items.findIndex((item) => !item.action && item.kind === next.kind && item.title === next.title && item.description === next.description) : -1
+  if (duplicate >= 0) {
+    if (next.kind !== 'error') return items
+    // A failed retry needs a full reading interval. Keep its slot and id so focus stays put.
+    return items.map((item, index) => index === duplicate ? { ...item, revision: (item.revision ?? 0) + 1 } : item)
+  }
   // Preserve the displayed head; on a unique-message flood discard the oldest waiting entry.
   const retained = items.length >= MAX_QUEUED ? [...items.slice(0, MAX_VISIBLE), ...items.slice(MAX_VISIBLE + 1)] : items
   return [...retained, next]

@@ -35,11 +35,17 @@ export function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss:
     return () => document.removeEventListener('visibilitychange', changed)
   }, [])
   useEffect(() => {
+    remaining.current = TOAST_DURATION[toast.kind]
+    closing.current = false
+    clearTimeout(exitTimer.current)
+    setLeaving(false)
+  }, [toast.kind, toast.revision])
+  useEffect(() => {
     if (hovered || focused || hidden || leaving) return
     const started = Date.now()
     const timer = setTimeout(close, remaining.current)
     return () => { clearTimeout(timer); remaining.current = Math.max(0, remaining.current - (Date.now() - started)) }
-  }, [hovered, focused, hidden, leaving, close])
+  }, [hovered, focused, hidden, leaving, close, toast.revision])
   useEffect(() => () => clearTimeout(exitTimer.current), [])
   const ui = variant[toast.kind]
   return <article ref={root} data-toast data-toast-kind={toast.kind} data-leaving={leaving} aria-hidden={leaving || undefined}
