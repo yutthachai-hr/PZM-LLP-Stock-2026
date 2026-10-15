@@ -6,9 +6,9 @@
 // "SMOKED BACON (TGM)" or "SMOKED BACON (เบทาโก)" — which is a different supplier. Nobody is
 // going to standardise the workbook, so the app has to read it the way a person does.
 //
-// The rule that matters more than any score: a guess is never an answer. Anything short of
-// an exact match, or an alias a person has already confirmed, comes back as something to
-// choose from. Ordering the wrong product from the wrong supplier is worse than asking.
+// The rule that matters more than any score: a guess is never an answer. Only the exact SKU,
+// or an alias a person has already confirmed, is an answer (owner, 15 Oct 2026). Even a name
+// spelled exactly like one product comes back as something to choose from. Ordering the wrong product from the wrong supplier is worse than asking.
 
 import type { Product } from '../types'
 
@@ -159,7 +159,11 @@ export function buildMatchIndex(
     bySku.set(p.sku.trim().toUpperCase(), p)
   }
   const aliasByKey = new Map<string, { productId: string; bracket: string }>()
-  for (const a of aliases) aliasByKey.set(a.key, { productId: a.productId, bracket: bracketOf(a.sourceName) })
+  for (const a of aliases) {
+    // Only a spelling a person confirmed, filed under its own key, may answer for a product.
+    if (!a.createdBy?.trim() || a.key !== normaliseName(a.sourceName)) continue
+    aliasByKey.set(a.key, { productId: a.productId, bracket: bracketOf(a.sourceName) })
+  }
   return { byKey, byLoose, bySku, aliasByKey, keyed }
 }
 
@@ -168,8 +172,8 @@ export function buildMatchIndex(
  *
  * In order: the text is a SKU; an alias somebody confirmed (checked before the exact name,
  * because an alias is also how a person settles which of two same-named products the
- * workbook means); exactly one product with the same normalised name; otherwise a list to
- * choose from. Hidden products are never matched silently — they show up as candidates, so
+ * workbook means); otherwise a list to choose from — even when exactly one product has the
+ * same normalised name, since a name is a suggestion, never an answer (owner, 15 Oct 2026). Hidden products are never matched silently — they show up as candidates, so
  * the person sees that the thing they typed exists but was hidden.
  */
 export function matchProduct(rawName: string, index: MatchIndex): ProductMatch {
@@ -177,8 +181,10 @@ export function matchProduct(rawName: string, index: MatchIndex): ProductMatch {
   const none = (candidates: MatchCandidate[] = []): ProductMatch => ({ kind: 'none', key, candidates })
   if (!key) return none()
 
-  const bySku = index.bySku.get(rawName.trim().toUpperCase())
-  if (bySku && bySku.active) return { kind: 'exact', key, product: bySku, candidates: [] }
+  // A SKU shared by two products (a catalogue mistake) answers for neither.
+  const sku = rawName.trim().toUpperCase()
+  const bySku = index.keyed.filter(({ product }) => product.active && product.sku.trim().toUpperCase() === sku)
+  if (bySku.length === 1) return { kind: 'exact', key, product: bySku[0].product, candidates: [] }
 
   // A spelling somebody confirmed — unless the brackets name someone else. Confirming
   // "SMOKED BACON(TGM)" must not quietly settle "SMOKED BACON(เบทาโก)" on TGM's bacon (owner's
@@ -187,17 +193,18 @@ export function matchProduct(rawName: string, index: MatchIndex): ProductMatch {
   if (alias) {
     const p = index.keyed.find((k) => k.product.id === alias.productId)?.product
     const said = bracketOf(rawName)
-    if (p && (!said || !alias.bracket || said === alias.bracket)) return { kind: 'alias', key, product: p, candidates: [] }
+    // A spelling confirmed without a supplier does not settle one that names a supplier.
+    if (p?.active && (!said || said === alias.bracket)) return { kind: 'alias', key, product: p, candidates: [] }
   }
 
   const same = (index.byKey.get(key) ?? []).filter((p) => p.active)
-  if (same.length === 1) return { kind: 'exact', key, product: same[0], candidates: [] }
+  if (same.length === 1) return none([{ product: same[0], score: 1 }])
   if (same.length > 1) {
     return { kind: 'ambiguous', key, candidates: same.map((product) => ({ product, score: 1 })) }
   }
   // The same name but for a unit word after a number ("2.72 kg*8" against "2.72*8").
   const loose = (index.byLoose.get(looseKey(key)) ?? []).filter((p) => p.active)
-  if (loose.length === 1) return { kind: 'exact', key, product: loose[0], candidates: [] }
+  if (loose.length === 1) return none([{ product: loose[0], score: 1 }])
   if (loose.length > 1) {
     return { kind: 'ambiguous', key, candidates: loose.map((product) => ({ product, score: 1 })) }
   }

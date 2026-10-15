@@ -108,9 +108,9 @@ describe('every consumer goes through these rules', () => {
     }
   })
 
-  test('the receiving bill reader takes sure matches only (it never had guesses)', () => {
+  test('the receiving bill reader fills no line from a reading (owner, 15 Oct 2026)', () => {
     const receive = readFileSync('src/pages/Receive.tsx', 'utf8')
-    expect(receive).toContain('matchOcrLines(')
-    expect(receive).not.toContain('suggestProducts(')
+    expect(receive).toContain('ocrCandidates(bill)')
+    expect(receive).not.toMatch(/matchProduct\(|suggestProducts\(/)
   })
 })

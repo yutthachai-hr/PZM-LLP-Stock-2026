@@ -99,10 +99,12 @@ describe('normaliseName', () => {
 })
 
 describe('what counts as an answer', () => {
-  test('the same name as exactly one product is a match', () => {
+  // Owner, 15 Oct 2026: only a SKU or a confirmed alias is an answer; a name is a suggestion.
+  test('the same name as exactly one product is offered first, never taken', () => {
     const m = matchProduct('SMOKED BACON SLICED 1 KG ', index())
-    expect(m.kind).toBe('exact')
-    expect(m.product).toBe(byName('SMOKED BACON SLICED 1 KG (TGM)'))
+    expect(m.kind).toBe('none')
+    expect(m.product).toBeUndefined()
+    expect(m.candidates[0].product).toBe(byName('SMOKED BACON SLICED 1 KG (TGM)'))
   })
 
   test('the SKU typed instead of the name is a match', () => {
@@ -143,9 +145,10 @@ describe('what counts as an answer', () => {
   })
 
   // Owner, 2 Oct 2026: it was in the catalogue and still came up as unknown.
-  test('a unit word between the numbers is the same product', () => {
+  test('a unit word between the numbers still finds the product, as a suggestion', () => {
     const m = matchProduct('MOZZARELLA WHOLE MILK 2.72 kg*8', index())
-    expect(m).toMatchObject({ kind: 'exact', product: byName('MOZZARELLA WHOLE MILK 2.72*8 (FOODGALLERY)') })
+    expect(m.product).toBeUndefined()
+    expect(m.candidates[0].product).toBe(byName('MOZZARELLA WHOLE MILK 2.72*8 (FOODGALLERY)'))
   })
 
   test('dropping the unit word never makes two sizes one', () => {
