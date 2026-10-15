@@ -1,7 +1,7 @@
 {
   "parentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
   "previousParentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
-  "observedAt": "2026-10-15T06:30:00Z",
+  "observedAt": "2026-10-15T06:35:00Z",
   "safeConcurrentChildrenNow": 0,
   "reason": "Both approved 9Router routes in upstream 503 cooldown, reset about 07:28Z (capacity-preflight.md). Ramp 3 -> 4 -> 6 -> 8 only after the reset, one completed model turn per new child before the next step.",
   "recovery": {
@@ -31,8 +31,8 @@
       "branch": "fix/global-search-documents",
       "headSha": "e275251",
       "pr": 23,
-      "state": "draft; CI e2e failed on e275251: suppliers-master-detail 1920x1080 scrollY drift 187 (<4). Local repeat 36/36 pass on same SHA; failed job re-run 06:2xZ",
-      "nextAction": "If re-run green, record as geometry flake and file test-hardening task; then review on e275251"
+      "state": "draft; CI 10/10 green on e275251 after re-run of e2e (first run: suppliers-master-detail 1920x1080 scroll drift, page untouched by PR; local 36/36)",
+      "nextAction": "Fresh independent review on e275251 after quota reset"
     },
     {
       "id": "ORDERS-REVIEW",
@@ -68,10 +68,20 @@
       "owner": "parent inline",
       "worktree": "C:/Users/Yutthachai/pzm-smart-import-20261015",
       "branch": "feat/smart-import-dnd",
-      "headSha": "974b967",
-      "pr": null,
-      "state": "WIP commit; unit 1353, demo browser 8/8, lint/i18n/build/budget pass per commit message; full emulator E2E interrupted",
-      "nextAction": "Fresh full verification on 974b967, then squash WIP message, push, draft PR"
+      "headSha": "1eec149",
+      "pr": 24,
+      "state": "draft PR24; fresh on this tree: unit 1353, emulator E2E 68 pass 2 skip, import demo 8/8, lint/i18n/build, budget initial 3435/3450",
+      "nextAction": "Review after reset; gaps listed in PR (brand-switch test, real photo/PDF read)"
+    },
+    {
+      "id": "A19",
+      "owner": "parent inline",
+      "worktree": "C:/Users/Yutthachai/pzm-i18n-20261014",
+      "branch": "fix/20261014-line-en-th",
+      "headSha": "aee0968",
+      "pr": 19,
+      "state": "merged main af0136b cleanly; unit 1340, E2E 80 pass 2 skip, lint/i18n/build, budget initial 3447/3450; CI running",
+      "nextAction": "Review on aee0968; LINE art TH/EN visual check in Preview"
     }
   ],
   "awaitingReviewOnly": [
@@ -101,15 +111,15 @@
     "P1 review of PR22 and PR23 (exact SHAs), fresh OpenCode high",
     "P1 review of PR21 d42bee1",
     "C: Zero-Ops heldout >=240 cases in pzm-mission-zeroops-20261014 (7c78201)",
-    "A19: rebase PR19 on current main, LINE art TH/EN",
     "A16: PR16 code-splitting diagnosis; also relieves the 3 KB initial-JS budget headroom",
     "Rust/Laya/Reflexer/Goose evaluation on exp/real-stack (research, shadow only)",
-    "Smart Import + drag-and-drop for /requests/new (after P0 merges)",
     "Matching Engine 2.0 alignment of globalSearch/OCR/suggestProducts scorers (after PR22)",
-    "PR1 read-only missing-feature inventory"
+    "PR1 read-only missing-feature inventory",
+    "P1 review of PR24 1eec149 and PR19 aee0968",
+    "P2 test hardening: suppliers-master-detail 1920x1080 scroll drift flake (CI run 38684878733 attempt 1)"
   ],
   "risks": [
-    "Bundle budget: initial JS 3445-3447 of 3450 KB on each P0 branch; PR20/21/22/23 landing in sequence may exceed it. Do not raise the limit; PR16 code-splitting is the real fix.",
+    "Bundle budget: initial JS 3435-3447 of 3450 KB per branch (PR19 3447). Re-run check:bundle after every sequential merge; do not raise the limit; PR16 code-splitting is the real fix.",
     "PR22 and PR23 both add a CI step after test:e2e in ci.yml; second to land rebases.",
     "PR23 and PR20 both edit Orders.tsx ?po= handling."
   ],
