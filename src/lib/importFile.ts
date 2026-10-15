@@ -17,7 +17,7 @@ export type ImportRoute = { kind: 'sheet' | 'document' } | { error: 'busy' | 'un
 const SHEET_NAME = /\.(xlsx|xls|csv)$/i
 const SHEET_TYPE = /^(text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)$/
 const PDF = (f: { name: string; type: string }) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
-const IMAGE = (f: { name: string; type: string }) => f.type.startsWith('image/') || (!f.type && /\.(jpe?g|png|webp)$/i.test(f.name))
+const IMAGE = (f: { name: string; type: string }) => f.type.startsWith('image/') || ((!f.type || f.type === 'application/octet-stream') && /\.(jpe?g|png|webp)$/i.test(f.name))
 
 export function routeImportFile(
   f: { name: string; type: string; size: number },

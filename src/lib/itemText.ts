@@ -45,17 +45,10 @@ function readOne(seg: string): ReadLine | null {
   if (!w.length) return null
   const n = w.length
 
-  // Multiplier: "2 x mozzarella", "2x mozzarella", "mozzarella x2", "2 x 12345", "12345 x2"
+  // Multiplier: "2 x mozzarella", "2x mozzarella", "mozzarella x2".
+  // Number-x-number with no non-numeric token ("12345 x 100", "10 x 2") never guesses: keeps original text, qty NaN.
   const multBoth = /^(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)$/i.exec(seg)
-  if (multBoth) {
-    const a = Number(multBoth[1])
-    const b = Number(multBoth[2])
-    if (a >= 100 && b < 100) return line(multBoth[1], b)
-    if (b >= 100 && a < 100) return line(multBoth[2], a)
-    // "12345 x2" where x is closer to tail
-    if (/\s+[x×*]\d+$/i.test(seg)) return line(multBoth[1], b)
-    return line(multBoth[2], a)
-  }
+  if (multBoth) return line(seg, NaN)
   const multHead = /^(\d+(?:\.\d+)?)\s*[x×*]\s*(.+)$/i.exec(seg)
   if (multHead) return line(multHead[2], Number(multHead[1]))
   const multTail = /^(.+?)\s*[x×*]\s*(\d+(?:\.\d+)?)$/i.exec(seg)
@@ -67,7 +60,11 @@ function readOne(seg: string): ReadLine | null {
   // "5 ถุง แป้งพิซซ่า": a number and a unit word at the start.
   if (n > 2 && NUMBER.test(w[0]) && isUnit(w[1])) return line(w.slice(2).join(' '), Number(w[0]), w[1])
 
-  // "RANCH 1", "12345 2": bare quantity at the end.
+  // A segment of only bare numbers with no unit ("2 12345", "12345 2") must not pick a quantity.
+  // Agreed trade-off: "12345 2" also becomes NaN (needs human confirmation).
+  if (w.every((t) => NUMBER.test(t))) return line(seg, NaN)
+
+  // "RANCH 1": bare quantity at the end.
   if (n > 1 && NUMBER.test(w[n - 1])) return line(w.slice(0, -1).join(' '), Number(w[n - 1]))
 
   // "3 mozzarella": bare quantity at the start followed by non-unit words.

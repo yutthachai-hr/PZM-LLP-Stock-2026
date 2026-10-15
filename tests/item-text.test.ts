@@ -81,11 +81,34 @@ describe('reading the quantity', () => {
     ])
   })
 
-  test('numeric SKU or barcode with explicit quantity or multiplier', () => {
-    expect(read('12345 2')).toEqual([{ name: '12345', qty: 2 }])
+  test('F1: number-x-number with no non-numeric name token gives one line, name = original, qty NaN', () => {
+    for (const s of ['12345 x 100', '12345 x100', '10 x 2', '10 x2', '2 x 10', '2 x10', '2 x 12345', '12345 x2']) {
+      const [l] = read(s)
+      expect(l.name).toBe(s)
+      expect(Number.isNaN(l.qty)).toBe(true)
+    }
+  })
+
+  test('F2: segment of only bare numbers with no unit leaves qty NaN; agreed trade-off: 12345 2 also becomes NaN', () => {
+    for (const s of ['2 12345', '12345 2']) {
+      const [l] = read(s)
+      expect(l.name).toBe(s)
+      expect(Number.isNaN(l.qty)).toBe(true)
+    }
+  })
+
+  test('numeric SKU with explicit unit preserves quantity', () => {
     expect(read('12345 2 pack')).toEqual([{ name: '12345', qty: 2, unit: 'Pack' }])
-    expect(read('2 x 12345')).toEqual([{ name: '12345', qty: 2 }])
-    expect(read('12345 x2')).toEqual([{ name: '12345', qty: 2 }])
+  })
+
+  test('preserved patterns: multipliers, units, and products', () => {
+    expect(read('RANCH 1')).toEqual([{ name: 'RANCH', qty: 1 }])
+    expect(read('2 x mozzarella')).toEqual([{ name: 'mozzarella', qty: 2 }])
+    expect(read('2x mozzarella')).toEqual([{ name: 'mozzarella', qty: 2 }])
+    expect(read('mozzarella x2')).toEqual([{ name: 'mozzarella', qty: 2 }])
+    expect(read('5 ถุง แป้งพิซซ่า')).toEqual([{ name: 'แป้งพิซซ่า', qty: 5, unit: 'ถุง' }])
+    expect(read('มอสซาเรลล่า 3 กก.')).toEqual([{ name: 'มอสซาเรลล่า', qty: 3, unit: 'KG' }])
+    expect(read('RANCH 1 kg.')).toEqual([{ name: 'RANCH', qty: 1, unit: 'KG' }])
   })
 
   test('valid leading counts with name or unit preserved', () => {

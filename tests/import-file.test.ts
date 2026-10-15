@@ -41,6 +41,19 @@ describe('routeImportFile', () => {
     expect(routeImportFile(f('notes.txt', ''), open)).toEqual({ error: 'unsupported' })
   })
 
+  test('F4: images with application/octet-stream MIME fall back to supported extensions', () => {
+    expect(routeImportFile(f('bill.jpg', 'application/octet-stream'), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.jpeg', 'application/octet-stream'), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.png', 'application/octet-stream'), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.webp', 'application/octet-stream'), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.jpg', 'application/octet-stream', MAX_IMAGE_BYTES + 1), open)).toEqual({ error: 'too-big' })
+    expect(routeImportFile(f('bill.png', 'application/octet-stream', 0), open)).toEqual({ error: 'empty' })
+    expect(routeImportFile(f('bill.png', 'application/octet-stream'), { documents: false, busy: false })).toEqual({ error: 'no-reader' })
+    // Non-image extension with application/octet-stream is unsupported
+    expect(routeImportFile(f('notes.txt', 'application/octet-stream'), open)).toEqual({ error: 'unsupported' })
+    expect(routeImportFile(f('data.bin', 'application/octet-stream'), open)).toEqual({ error: 'unsupported' })
+  })
+
   test('without the document reader, a photo or PDF is refused up front', () => {
     expect(routeImportFile(f('bill.jpg', 'image/jpeg'), { documents: false, busy: false })).toEqual({ error: 'no-reader' })
   })
@@ -76,5 +89,11 @@ describe('routeImportFile', () => {
     const emptyMimeImage = new File(['fake-image-bytes'], 'bill.jpg', { type: '' })
     // Must not be rejected with format error; proceeds to decode
     await expect(readDocumentFile(emptyMimeImage)).rejects.not.toThrow('รองรับเฉพาะรูปภาพหรือ PDF')
+
+    const octetStreamImage = new File(['fake-image-bytes'], 'bill.png', { type: 'application/octet-stream' })
+    await expect(readDocumentFile(octetStreamImage)).rejects.not.toThrow('รองรับเฉพาะรูปภาพหรือ PDF')
+
+    const octetStreamNonImage = new File(['fake-bytes'], 'data.bin', { type: 'application/octet-stream' })
+    await expect(readDocumentFile(octetStreamNonImage)).rejects.toThrow('รองรับเฉพาะรูปภาพหรือ PDF')
   })
 })
