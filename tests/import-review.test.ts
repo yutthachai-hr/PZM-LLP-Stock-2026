@@ -100,7 +100,9 @@ describe('units', () => {
 
 describe('every consumer goes through these rules', () => {
   test('the import window decides rows only through lib/importReview, and every screen imports through the window', () => {
-    const modal = readFileSync('src/components/import/LineImportModal.tsx', 'utf8')
+    // LineImportModal loads the window on demand (15 Oct 2026); the rules live in the window.
+    expect(readFileSync('src/components/import/LineImportModal.tsx', 'utf8')).toContain("import('./LineImportWindow')")
+    const modal = readFileSync('src/components/import/LineImportWindow.tsx', 'utf8')
     expect(modal).toContain('planRows(')
     expect(modal).toContain('importable(rows)')
     expect(modal).not.toMatch(/include:\s*!c\.unitUnknown/) // the old pre-tick of guesses is gone
