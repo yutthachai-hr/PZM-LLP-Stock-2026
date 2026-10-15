@@ -62,7 +62,6 @@ describe('PDF layout engine (real jsPDF & Sarabun font)', () => {
       body: [['LA VANILLE', 'ICE CREAM']],
     })
 
-    const contentWidth = doc.internal.pageSize.getWidth() - 80 // 761.89 pt
     const placements = extractTextPlacements(doc).filter((p) => p.page === 1 && p.x === 40)
 
     // With long title, subtitle, and long note, there must be multiple wrapped lines (> 3 lines)
