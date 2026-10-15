@@ -151,3 +151,23 @@ describe("the owner's other cases", () => {
     expect(matchProduct('RANCH 1 kg.', buildMatchIndex([mayo, ranch], [alias]))).toMatchObject({ kind: 'alias', product: mayo })
   })
 })
+
+describe('words that are the product, and Thai units that are not', () => {
+  test('CAN is part of COKE CAN, so the can outranks the bottle', () => {
+    const cat = [product('COKE BOTTLE 325 ML (X)'), product('COKE CAN 325ML 1X24 (Y)')]
+    expect(names('COKE CAN 325 ML', cat)[0]).toBe('COKE CAN 325ML 1X24 (Y)')
+  })
+
+  test('BOX is part of PIZZA BOX, so the box outranks pizza sauce', () => {
+    const cat = [product('PIZZA SAUCE 1 KG (A)'), product('PIZZA BOX 18 (B)')]
+    expect(names('PIZZA BOX 18.5', cat)[0]).toBe('PIZZA BOX 18 (B)')
+  })
+
+  test('a shared Thai unit word alone is not a product name', () => {
+    // Same sizes on purpose, so a size penalty cannot hide a shared unit word.
+    expect(productSimilarity('มอสซาเรลล่า 1 กก', 'เนยสด 1 กก').score).toBe(0)
+    expect(productSimilarity('นมสด 500 มล', 'น้ำปลา 500 มล').score).toBe(0)
+    expect(productSimilarity('แป้ง 500 กรัม', 'น้ำตาล 500 กรัม').score).toBe(0)
+    expect(productSimilarity('น้ำมัน 1 ลิตร', 'นมสด 1 ลิตร').score).toBe(0)
+  })
+})

@@ -19,7 +19,7 @@ Mayonnaise won on its pack size. The request form's product picker had the same 
 
 ## Change
 
-- `productSimilarity()` in `src/lib/productMatch.ts` scores the name words only. Numbers and pack or unit words (`KG`, `G`, `ML`, `PACK`, `PCS`, `X` and similar) are kept apart as sizes. A candidate needs at least one shared name word, so a shared `1 KG` alone scores 0. A size both names state and agree on adds 0.25. A size both state and disagree on subtracts 0.5 and sets `sizeConflict`, so `PENNE 1KG` is still offered for `PENNE 500G` but marked as a different pack.
+- `productSimilarity()` in `src/lib/productMatch.ts` scores the name words only. Numbers and pack or unit words (`KG`, `G`, `ML`, `PACK`, `PCS`, `X` and similar) are kept apart as sizes. The Thai weights and volumes `กก`, `กรัม`, `มล` and `ลิตร` count as units here too. They are not added to `UNIT_WORDS`, so the automatic exact match is no wider than before. A candidate needs at least one shared name word, so a shared `1 KG` alone scores 0. A size both names state and agree on adds 0.25. A size both state and disagree on subtracts 0.5 and sets `sizeConflict`, so `PENNE 1KG` is still offered for `PENNE 500G` but marked as a different pack.
 - A one-letter typo in a long word still counts as the same word (`MOZARELLA` is `MOZZARELLA`). The first letter must agree, so `BRANCH` is not `RANCH`.
 - `safeSuggestion()` picks the preview hint: the best candidate that is in use and has no size conflict. If there is none, no hint is shown.
 - The product picker's search moved unchanged into `src/lib/productSearch.ts`, then its fallback was switched to `productSimilarity()`. A word-order match that shares no whole name word now ranks below one that does. The resolve dialog's search uses the same score.
@@ -31,11 +31,11 @@ Unchanged: SKU, confirmed aliases, exact names and the unit-word-only (`2.72 kg*
 | Check | Result |
 |---|---|
 | `tests/product-match-ranking.test.ts` on the original matcher and picker | 10 of 22 failed, each on an Owner case (Mayonnaise first, Gas first, Penne against Mascarpone 500 G, no size flag) |
-| Same file with the change | 22/22 passed |
+| Same file with the change | 25/25 passed. Three were added after a self-review: `COKE CAN` against `COKE BOTTLE`, `PIZZA BOX` against `PIZZA SAUCE`, and Thai unit words. The first two already passed; the Thai case failed (0.75) until the unit words were added |
 | `npx playwright test -c playwright.match.config.ts` on the original code | 2/2 failed: preview hint `MAYONNAISE 1KG (FB FOOD)`, picker first result `GAS 48 KG Branch 1` |
 | Same suite with the change | 2/2 passed, no retries |
-| `npm test` | 1348 passed, 110 files |
-| Lint, i18n, build | Exit 0. No lint warning in a touched file |
+| `npm test` | 1351 passed, 110 files |
+| Lint, i18n, build | Exit 0. No lint warning in a touched file. `scripts/i18n-check.mjs` lists `lib/productMatch.ts` as data-only, beside `lib/productSuggest.ts`, because its Thai unit words are match data and not copy |
 | Main CI bundle budget | Passed: main 2932 KB, initial JS 3447 KB against 3450 KB |
 
 The browser suite runs the real app in demo mode with three synthetic products named as in the Owner's screenshot. It uploads a generated workbook to `/purchase/import` and types into the `/requests/new` picker. It uses no emulator ports and no live data.

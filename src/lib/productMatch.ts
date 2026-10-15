@@ -100,8 +100,11 @@ export function similarity(a: string, b: string): number {
   return (2 * shared) / (ta.size + tb.size)
 }
 
-/** Words that describe a quantity or pack, not which product it is. */
-const MEASURE_WORDS = new Set([...UNIT_WORDS, 'PACK', 'PK', 'PCS', 'PC', 'EA', 'CTN', 'BOX', 'BAG', 'X', 'CAN'])
+/**
+ * Words that describe a quantity or pack, not which product it is. Thai weights and volumes
+ * are here and not in UNIT_WORDS, so they lower a ranking without widening the exact match.
+ */
+const MEASURE_WORDS = new Set([...UNIT_WORDS, 'PACK', 'PK', 'PCS', 'PC', 'EA', 'CTN', 'BOX', 'BAG', 'X', 'CAN', 'กก', 'กรัม', 'มล', 'ลิตร'])
 const NUMBER = /^\d+(\.\d+)?$/
 
 function parts(key: string): { name: string[]; sizes: Set<string> } {
