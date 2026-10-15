@@ -89,7 +89,11 @@ test('keyboard opens the focused row and does not activate a focused checkbox', 
 test('receiving navigates and LINE menu opens only the send wizard', async ({ page }) => {
   await stage(page)
   await row(page).getByRole('button', { name: 'ตรวจรับของ', exact: true }).click()
-  await expect(page).toHaveURL(/\/receive\?po=ux-1/)
+  await expect(page).toHaveURL(/\/receive(?:\?|$)/)
+  await expect(page.getByRole('definition').filter({ hasText: 'PO-UX-001' })).toHaveText('PO-UX-001')
+  await expect(page.getByRole('spinbutton', { name: 'รับครั้งนี้: FLOUR' })).toHaveValue('')
+  await page.getByRole('button', { name: 'รับครบตาม PO ทั้งหมด', exact: true }).click()
+  await expect(page.getByRole('spinbutton', { name: 'รับครั้งนี้: FLOUR' })).toHaveValue('10')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.goto('/orders')
   await row(page).getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' }).click()
