@@ -5,7 +5,7 @@
   "safeConcurrentChildrenNow": 4,
   "reason": "High verified by two completed runtime tasks and actual tool activity on independent reviews. Ramped 2 to 4 with 5.91 GiB free. Six/eight not tested. Old T3-terminal/OpenCode-orphan sessions reconciled separately.",
   "mainAgent": { "providerInstanceId": "pi", "model": "openai-codex-account-2/gpt-6.1-sol", "thinking": "high", "verified": "read-only T3 projection and native model_change at 08:14:31Z", "automaticFailover": "NOT PROVEN: owner prompt/manual transition" },
-  "activeReviewClientRequestIds": ["pzm-pr23-e275251-review-r1", "pzm-pr16-77ede4f-review-r1", "pzm-pr21-d42bee1-review-r1", "pzm-pr24-a01b56f-review-r1"],
+  "activeReviewClientRequestIds": ["pzm-pr23-e275251-review-r1", "pzm-pr19-aee0968-review-r1", "pzm-pr21-d42bee1-review-r1", "pzm-pr24-a01b56f-review-r1"],
   "taskIdPrefix": "node:delegated-task:command%3Amcp%3A6e26b62c-8ea4-47ab-a2d1-675bd2547d54%3Adelegate-task%3A",
   "runtimeFailover": { "worktree": "C:/Users/Yutthachai/pzm-runtime-failover-20261015", "branch": "fix/default-bridge-codex-failover", "headSha": "a9c0a562ddfb38634c3af71104c7b1cbbecc7dce", "tests": "14 new + 34 legacy PASS; strict TSC PASS", "review": "OpenCode High GO exact SHA, pzm-runtime-default-alias-a9c0a56-review-r1", "deployment": "BLOCKED: no live install/handoff proof; extension and guard unchanged", "nextAction": "runtime-failover-20261015.md and runtime-review-a9c0a56.md" },
   "recovery": {
@@ -85,7 +85,7 @@
       "headSha": "aee0968",
       "pr": 19,
       "state": "merged main af0136b cleanly; unit 1340, E2E 80 pass 2 skip, lint/i18n/build, budget initial 3447/3450; CI 10/10 green",
-      "nextAction": "Review on aee0968; LINE art TH/EN visual check in Preview"
+      "nextAction": "Independent review running pzm-pr19-aee0968-review-r1; LINE art TH/EN visual check in Preview"
     },
     {
       "id": "A16",
@@ -95,7 +95,7 @@
       "headSha": "77ede4f",
       "pr": 16,
       "state": "pushed unverified 04:24Z merge after fresh checks: unit 1346, E2E 68 pass 2 skip, lint/i18n/build, budget main 235 KB initial 1783 KB (passes strict default too), 114/114 chunks precached, demo Chromium: xlsx+pdf downloads real, offline unvisited routes open. Old red = brand-switcher snapshot timing (bba9cdf, test-only). Evidence comment on PR16",
-      "nextAction": "Review running pzm-pr16-77ede4f-review-r1; then Preview QA. Conflicts with PR24 LineImportModal.tsx and additive en.ts"
+      "nextAction": "Independent GO exact 77ede4f recorded in recovered-reviews/pr16-77ede4f-review-r1.md; CI 10/10 green rechecked; authorized Preview QA still required"
     },
     {
       "id": "FLAKE-SUPPLIERS",
@@ -132,8 +132,8 @@
     }
   ],
   "queuedAfterReset": [
-    "PR19 aee0968 independent review next free slot; PR22 orphan/stalled review unresolved",
-    "PR23 e275251, PR24 a01b56f, PR16 77ede4f, PR21 d42bee1 reviews currently active",
+    "PR19 aee0968 independent review running; PR22 orphan/stalled review unresolved",
+    "PR23 e275251, PR24 a01b56f, PR19 aee0968, PR21 d42bee1 reviews currently active",
     "PR25 146d1ee, PR20 1cbcabc, PR17 d37e414 saved independent GO; Preview required",
     "C: Zero-Ops heldout >=240 cases in pzm-mission-zeroops-20261014 (7c78201)",
     "Rust/Laya/Reflexer/Goose evaluation on exp/real-stack (research, shadow only)",
