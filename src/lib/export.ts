@@ -71,28 +71,77 @@ export interface PdfReportOptions {
   foot?: (string | number)[]
 }
 
-export function exportReportPdf(opts: PdfReportOptions): void {
+export function createReportPdf(opts: PdfReportOptions): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const hasThai = registerThaiFont(doc)
   const font = hasThai ? 'Sarabun' : 'helvetica'
 
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const marginLeft = 40
+  const marginRight = 40
+  const marginTop = 40
+  const marginBottom = 40
+  const contentWidth = pageWidth - marginLeft - marginRight
+  const maxContentY = pageHeight - marginBottom
+
+  const titleLineHeight = 20
+  const metaLineHeight = 16
+
   doc.setFont(font, 'normal')
   doc.setFontSize(16)
-  doc.text(opts.title, 40, 40)
 
-  let y = 58
-  doc.setFontSize(10)
-  if (opts.subtitle) {
-    doc.text(opts.subtitle, 40, y)
-    y += 14
+  let y = marginTop
+  const titleLines = doc.splitTextToSize(opts.title, contentWidth)
+  for (const line of titleLines) {
+    if (y > maxContentY) {
+      doc.addPage()
+      doc.setFont(font, 'normal')
+      doc.setFontSize(16)
+      y = marginTop
+    }
+    doc.text(line, marginLeft, y)
+    y += titleLineHeight
   }
-  for (const line of opts.meta ?? []) {
-    doc.text(line, 40, y)
-    y += 13
+
+  doc.setFontSize(10)
+  y += 2
+
+  const printMetaLine = (line: string): void => {
+    if (y > maxContentY) {
+      doc.addPage()
+      doc.setFont(font, 'normal')
+      doc.setFontSize(10)
+      y = marginTop
+    }
+    doc.text(line, marginLeft, y)
+    y += metaLineHeight
+  }
+
+  if (opts.subtitle) {
+    const subLines = doc.splitTextToSize(opts.subtitle, contentWidth)
+    for (const line of subLines) {
+      printMetaLine(line)
+    }
+  }
+
+  for (const entry of opts.meta ?? []) {
+    if (!entry) continue
+    const metaLines = doc.splitTextToSize(entry, contentWidth)
+    for (const line of metaLines) {
+      printMetaLine(line)
+    }
+  }
+
+  let tableStartY = y
+  if (tableStartY > maxContentY - 30) {
+    doc.addPage()
+    tableStartY = marginTop
   }
 
   autoTable(doc, {
-    startY: y + 6,
+    startY: tableStartY,
+    margin: { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft },
     head: [opts.head],
     body: opts.body.map((r) => r.map((c) => String(c))),
     foot: opts.foot ? [opts.foot.map((c) => String(c))] : undefined,
@@ -105,5 +154,10 @@ export function exportReportPdf(opts: PdfReportOptions): void {
     alternateRowStyles: { fillColor: [250, 250, 250] },
   })
 
+  return doc
+}
+
+export function exportReportPdf(opts: PdfReportOptions): void {
+  const doc = createReportPdf(opts)
   doc.save(opts.filename.endsWith('.pdf') ? opts.filename : `${opts.filename}.pdf`)
 }
