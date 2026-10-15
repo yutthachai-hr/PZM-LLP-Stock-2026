@@ -20,7 +20,7 @@ export interface ItemText {
 /** Unit words a quantity may be followed by. Anything else after a number is part of the name. */
 const UNITS = new Set([
   'kg', 'kgs', 'kg.', 'g', 'gr', 'gram', 'grams', 'ml', 'l', 'l.', 'lt', 'ltr', 'pack', 'packs', 'pk', 'pcs', 'pc', 'ea', 'ea.',
-  'ctn', 'box', 'boxes', 'bag', 'bags', 'bottle', 'bottles', 'can', 'cans',
+  'ctn', 'carton', 'cartons', 'lot', 'lots', 'box', 'boxes', 'bag', 'bags', 'bottle', 'bottles', 'can', 'cans',
   'กก', 'กก.', 'ก.ก.', 'กิโล', 'กิโลกรัม', 'กรัม', 'มล', 'มล.', 'ลิตร', 'แพ็ค', 'แพค', 'แพ็ก', 'ชิ้น', 'อัน', 'ถุง', 'ขวด',
   'กล่อง', 'ลัง', 'ห่อ', 'ซอง', 'แผ่น', 'ถาด', 'กระป๋อง', 'ใบ', 'ม้วน', 'ตัว', 'โหล', 'แกลลอน', 'ถัง',
 ])

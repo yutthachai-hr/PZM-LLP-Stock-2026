@@ -48,6 +48,14 @@ describe('reading the quantity', () => {
     expect(read('ชีส MOZZARELLA 2.5 kg')).toEqual([{ name: 'ชีส MOZZARELLA', qty: 2.5, unit: 'KG' }])
   })
 
+  // R4 review (15 Oct 2026): carton and lot are catalogue units (lib/units.ts) and read like ctn.
+  test('carton and lot are read as units, spelled as typed', () => {
+    expect(read('BLUE CHEESE 2 CARTON')).toEqual([{ name: 'BLUE CHEESE', qty: 2, unit: 'CARTON' }])
+    expect(read('BLUE CHEESE 3 cartons')).toEqual([{ name: 'BLUE CHEESE', qty: 3, unit: 'cartons' }])
+    expect(read('1 lot RANCH')).toEqual([{ name: 'RANCH', qty: 1, unit: 'lot' }])
+    expect(read('RANCH 2 lots')).toEqual([{ name: 'RANCH', qty: 2, unit: 'lots' }])
+  })
+
   test('no quantity is left unknown, never guessed', () => {
     const [line] = read('มอสซาเรลล่า')
     expect(line.name).toBe('มอสซาเรลล่า')
