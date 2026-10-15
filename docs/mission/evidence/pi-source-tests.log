@@ -1,0 +1,14 @@
+✔ package.json declares a pi package with skills and extension resources (5.9251ms)
+✔ extension registers lifecycle hooks without pre-compaction injection (37.9094ms)
+✔ resources_discover contributes the bundled skills directory (2.731ms)
+✔ startup context injects the bootstrap as one user message until agent_end (2.4999ms)
+✔ session_compact injects bootstrap after compaction summaries, not before compaction (2.5676ms)
+✔ pi tools reference documents pi-specific mappings (2.7263ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 136.6004

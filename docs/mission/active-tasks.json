@@ -1,0 +1,40 @@
+{
+  "parentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
+  "providerInstanceId": "opencode",
+  "model": "9router/gemini-3.8-flash-high",
+  "tasks": [
+    {
+      "id": "A",
+      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-master-20261014-a-r1",
+      "clientRequestId": "pzm-master-20261014-a-r1",
+      "worktree": "C:/Users/Yutthachai/pzm-mission-release-20261014",
+      "branch": "mission/20261014-release",
+      "baseline": "af0136b0f6886989bc32d651a384ac05b39cdad6",
+      "lastObservedState": "working",
+      "nextAction": "Receive completion, inspect receipts, assign fresh exact-SHA independent review"
+    },
+    {
+      "id": "B",
+      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-master-20261014-b-r1",
+      "clientRequestId": "pzm-master-20261014-b-r1",
+      "worktree": "C:/Users/Yutthachai/pzm-mission-thaitrees-20261014",
+      "branch": "research/20261014-thaitrees",
+      "baseline": "af0136b0f6886989bc32d651a384ac05b39cdad6",
+      "lastObservedState": "working",
+      "nextAction": "Review licensing, fixed-set comparison and exact-SHA evidence; assign independent reviewer"
+    },
+    {
+      "id": "C",
+      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-master-20261014-c-r1",
+      "clientRequestId": "pzm-master-20261014-c-r1",
+      "worktree": "C:/Users/Yutthachai/pzm-mission-zeroops-20261014",
+      "branch": "research/20261014-zeroops-heldout",
+      "baseline": "7c78201c5df6b087177b8b18e5bb131e06b8ef9b",
+      "lastObservedState": "working",
+      "nextAction": "Verify frozen dataset provenance, real evaluator and safety invariants; assign independent reviewer"
+    }
+  ],
+  "mergePolicy": "No merges without every owner-named gate and fresh independent OpenCode review on final SHA",
+  "rollover": "UNVERIFIED; no genuine new-thread handoff observed",
+  "piSuperpowers": "BLOCKED by delegation guard; owner-side installation required"
+}

@@ -1,0 +1,6 @@
+
+> pizza-stock@0.0.0 check:bundle
+> node scripts/bundle-budget.mjs
+
+main 2931 KB · initial JS 3446 KB in 4 files
+✗ main 2931 KB > 900 KB; initial JS 3446 KB > 2048 KB

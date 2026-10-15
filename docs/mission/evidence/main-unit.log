@@ -1,0 +1,17 @@
+
+> pizza-stock@0.0.0 test
+> vitest run --maxWorkers=2
+
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-mission-control-20261014
+
+
+ Test Files  109 passed (109)
+      Tests  1326 passed (1326)
+   Start at  09:22:01
+   Duration  17.83s (import 36%, transform 34%, tests 24%, worker 5%)
+
+  Transform  transforming modules took 4.78s · 34% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+

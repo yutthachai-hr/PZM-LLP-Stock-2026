@@ -1,0 +1,5 @@
+ts	phase	decision	why	evidence	result
+2026-10-15T02:26:19Z	start	Opened mission with three independent workstreams	Owner requested immediate parallel execution with final-SHA gates	docs/mission/standing-orders.md; docs/mission/active-tasks.json	open
+2026-10-15T02:26:20Z	preflight	Kept dirty older root untouched and created clean sibling worktrees	Avoid overwriting existing work or testing the wrong main	docs/mission/preflight.md	origin/main af0136b confirmed
+2026-10-15T02:26:20Z	runtime	Added official OpenCode V2 plugin; parent installation remains owner-side	Preserve provider settings and obey delegation guard	docs/mission/preflight.md	OpenCode registry present; child workflow pending; parent installation BLOCKED
+2026-10-15T02:26:20Z	baseline	Retained default bundle failure and reran with checked-in main CI budgets	RC target differs from current main no-regression budget	docs/mission/evidence/main-bundle.log; docs/mission/evidence/main-bundle-ci.log; .github/workflows/ci.yml	1326 unit tests, lint, i18n, build and CI budget passed; rules and E2E pending
