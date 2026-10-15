@@ -31,6 +31,48 @@ import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { movementNote } from '../lib/receiptLabel'
+import { useBrand } from '../brand/BrandContext'
+import { getBrand, type BrandId } from '../brand/brand'
+import { movementsOfDocument } from '../services/documentLookup'
+
+export async function resolveDocFilterLookup({
+  docFilter,
+  docLoaded,
+  brand,
+  isAlive,
+  toast,
+  t,
+  setDocRows,
+  fetchMovements = movementsOfDocument,
+}: {
+  docFilter: string
+  docLoaded: boolean
+  brand: BrandId | null
+  isAlive: () => boolean
+  toast: { error: (msg: string) => void }
+  t: (thai: string, vars?: Record<string, string | number>) => string
+  setDocRows: (rows: StockMovement[]) => void
+  fetchMovements?: (docNo: string) => Promise<StockMovement[]>
+}): Promise<void> {
+  if (docLoaded || !docFilter) {
+    setDocRows([])
+    return
+  }
+  const requestBrand = brand ?? getBrand()
+  try {
+    const rows = await fetchMovements(docFilter)
+    if (!isAlive() || getBrand() !== requestBrand || (brand && brand !== requestBrand)) return
+    if (rows.length === 0) {
+      setDocRows([])
+      toast.error(t('ไม่พบเอกสาร {docNo}', { docNo: docFilter }))
+      return
+    }
+    setDocRows(rows)
+  } catch (e) {
+    if (!isAlive() || getBrand() !== requestBrand || (brand && brand !== requestBrand)) return
+    toast.error(errText(e, t) || t('โหลดเอกสารไม่สำเร็จ'))
+  }
+}
 
 export function MovementsPage() {
   const t = useT()
@@ -38,6 +80,7 @@ export function MovementsPage() {
   const [history, setHistory] = useState<StockMovement[]>([])
   const [historyFrom, setHistoryFrom] = useState<number | null>(null)
   const { user } = useAuth()
+  const { brand } = useBrand()
   const toast = useToast() // i18n-key
   const confirm = useConfirm()
   const isAdmin = user?.role === 'admin'
@@ -120,14 +163,19 @@ export function MovementsPage() {
       return
     }
     let alive = true
-    import('../services/documentLookup')
-      .then((m) => m.movementsOfDocument(docFilter))
-      .then((rows) => alive && setDocRows(rows))
-      .catch(() => {})
+    void resolveDocFilterLookup({
+      docFilter,
+      docLoaded,
+      brand,
+      isAlive: () => alive,
+      toast,
+      t,
+      setDocRows,
+    })
     return () => {
       alive = false
     }
-  }, [docFilter, docLoaded])
+  }, [docFilter, docLoaded, brand, toast, t])
 
   // ponytail: merges on-demand history with recent live window; add streaming pagination if history grows beyond thousands.
   const movements = useMemo(() => {

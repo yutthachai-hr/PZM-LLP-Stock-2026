@@ -3102,4 +3102,7 @@ export const EN: Record<string, string> = {
   'ค้นเลขเอกสารและเลขบิลในฐานข้อมูลทั้งหมดแล้ว (ตรงตัวอักษร)': 'Searched every recorded document and bill number (exact match)',
   'ค้นฐานข้อมูลไม่สำเร็จ — แสดงเฉพาะที่โหลดไว้ เอกสารตั้งแต่ {date}': 'Database search failed — showing loaded data only, documents since {date}',
   'เลขบิลที่คีย์ไว้ในหมายเหตุก่อน 24/09/2569 ยังค้นจากที่นี่ไม่ได้ — ดูได้ในหน้าประวัติตามช่วงวันที่': 'Bill numbers typed into a note before 24 Sep 2026 cannot be searched here yet — find them in History by date range',
+  'ไม่พบเอกสาร {docNo}': 'Document {docNo} not found',
+  โหลดเอกสารไม่สำเร็จ: 'Could not load document',
+  โหลดใบสั่งซื้อไม่สำเร็จ: 'Could not load purchase order',
 }
