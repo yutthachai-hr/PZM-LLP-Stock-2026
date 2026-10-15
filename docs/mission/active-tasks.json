@@ -1,11 +1,14 @@
 {
   "parentThreadId": "7fd797c6-ddd5-4cdd-ae6f-b9a5e6f37cfa",
   "previousParentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
-  "observedAt": "2026-10-15T08:34:00Z",
+  "observedAt": "2026-10-15T09:03:00Z",
   "safeConcurrentChildrenNow": 4,
   "reason": "High verified by two completed runtime tasks and actual tool activity on independent reviews. Ramped 2 to 4 with 5.91 GiB free. Six/eight not tested. Old T3-terminal/OpenCode-orphan sessions reconciled separately.",
   "mainAgent": { "providerInstanceId": "pi", "model": "openai-codex-account-2/gpt-6.1-sol", "thinking": "high", "verified": "read-only T3 projection and native model_change at 08:14:31Z", "automaticFailover": "NOT PROVEN: owner prompt/manual transition" },
-  "activeReviewClientRequestIds": ["pzm-pr23-e275251-review-r1", "pzm-pr19-aee0968-review-r1", "pzm-pr21-d42bee1-review-r1", "pzm-pr24-a01b56f-review-r1"],
+  "activeReviewClientRequestIds": [],
+  "activeImplementationClientRequestIds": ["pzm-pr24-review-remediation-r1"],
+  "activeRecoveryClientRequestIds": ["pzm-pr22-orphan-reconcile-r1"],
+  "reviewRemediationEvidence": "review-remediation-checkpoint.md",
   "taskIdPrefix": "node:delegated-task:command%3Amcp%3A6e26b62c-8ea4-47ab-a2d1-675bd2547d54%3Adelegate-task%3A",
   "runtimeFailover": { "worktree": "C:/Users/Yutthachai/pzm-runtime-failover-20261015", "branch": "fix/default-bridge-codex-failover", "headSha": "a9c0a562ddfb38634c3af71104c7b1cbbecc7dce", "tests": "14 new + 34 legacy PASS; strict TSC PASS", "review": "OpenCode High GO exact SHA, pzm-runtime-default-alias-a9c0a56-review-r1", "deployment": "BLOCKED: no live install/handoff proof; extension and guard unchanged", "nextAction": "runtime-failover-20261015.md and runtime-review-a9c0a56.md" },
   "recovery": {
@@ -26,17 +29,17 @@
       "headSha": "95665f8",
       "pr": 22,
       "state": "CI green. Old T3 task cancelled 05:59:41Z; OpenCode resumed 07:28 but last activity 07:28:35Z with no verdict. Orphan/stalled outcome UNRESOLVED.",
-      "nextAction": "Reconcile supported OpenCode session termination before fresh review; do not duplicate blindly"
+      "nextAction": "Read-only recovery diagnosis running pzm-pr22-orphan-reconcile-r1; replacement product review only after actual run state reconciled"
     },
     {
       "id": "P0-SEARCH",
       "owner": "parent inline (children blocked by quota)",
       "worktree": "C:/Users/Yutthachai/pzm-search-20261015",
       "branch": "fix/global-search-documents",
-      "headSha": "e275251",
+      "headSha": "3300edf",
       "pr": 23,
-      "state": "draft; CI 10/10 green on e275251 after re-run of e2e (first run: suppliers-master-detail 1920x1080 scroll drift, page untouched by PR; local 36/36)",
-      "nextAction": "Independent exact-head review running: pzm-pr23-e275251-review-r1; Preview QA after review"
+      "state": "Deep-link feedback fixed; fresh R2 CODE GO. Parent unit1356, demo10, E2E68+2skip, lint/i18n/build/budget PASS; final CI E2E pending09:00Z",
+      "nextAction": "Final CI and authorized Preview; no inherited e275251 review. Corrected child RED claim: missing exports, not behavioral repro"
     },
     {
       "id": "ORDERS-REVIEW",
@@ -74,8 +77,8 @@
       "branch": "feat/smart-import-dnd",
       "headSha": "a01b56f",
       "pr": 24,
-      "state": "CI green; local 1353 unit, 68 E2E + 2 skip, 9 demo incl brand switching, lint/i18n/build; initial JS 3435/3450",
-      "nextAction": "Independent review running pzm-pr24-a01b56f-review-r1; Preview QA; real photo/PDF success path remains untested"
+      "state": "R1 CHANGES_REQUESTED: numeric prohibitions become pending rows rather than constraints. No automatic sending demonstrated. Existing CI green is insufficient.",
+      "nextAction": "Implementation pzm-pr24-review-remediation-r1 in existing worktree: actual failing parser tests, source-size validation and typed-quantity copy; parent then finalSHA review/QA"
     },
     {
       "id": "A19",
@@ -85,7 +88,7 @@
       "headSha": "aee0968",
       "pr": 19,
       "state": "merged main af0136b cleanly; unit 1340, E2E 80 pass 2 skip, lint/i18n/build, budget initial 3447/3450; CI 10/10 green",
-      "nextAction": "Independent review running pzm-pr19-aee0968-review-r1; LINE art TH/EN visual check in Preview"
+      "nextAction": "Independent GO exact aee0968; CI10/10 green. Authorized LINE art TH/EN Preview QA still required"
     },
     {
       "id": "A16",
@@ -112,9 +115,9 @@
     {
       "pr": 21,
       "id": "TOAST",
-      "headSha": "d42bee1",
-      "ci": "all green",
-      "blocker": "independent review running pzm-pr21-d42bee1-review-r1; remote Preview QA (Access)"
+      "headSha": "07e8ab4",
+      "ci": "build-budget FAIL by80bytes; other9checks SUCCESS",
+      "blocker": "R2 CODE GO, RELEASE NO-GO. Retry error timer fixed with actual TDD; PR16 integration then finalSHA gates; Preview Access"
     },
     {
       "pr": 20,
@@ -132,8 +135,8 @@
     }
   ],
   "queuedAfterReset": [
-    "PR19 aee0968 independent review running; PR22 orphan/stalled review unresolved",
-    "PR23 e275251, PR24 a01b56f, PR19 aee0968, PR21 d42bee1 reviews currently active",
+    "PR19 aee0968 code GO; PR23 3300edf R2 code GO; PR21 07e8ab4 R2 code GO but budget80bytes over",
+    "PR24 remediation active; PR22 orphan reconciliation active; no duplicate reviewers",
     "PR25 146d1ee, PR20 1cbcabc, PR17 d37e414 saved independent GO; Preview required",
     "C: Zero-Ops heldout >=240 cases in pzm-mission-zeroops-20261014 (7c78201)",
     "Rust/Laya/Reflexer/Goose evaluation on exp/real-stack (research, shadow only)",
@@ -142,7 +145,7 @@
     "ThaiTrees c0d137b reproduce benchmark and provenance audit"
   ],
   "risks": [
-    "Bundle budget: initial JS 3435-3447 of 3450 KB per branch (PR19 3447). Re-run check:bundle after every sequential merge; do not raise the limit; PR16 code-splitting is the real fix.",
+    "PR21 07e8ab4 initial JS 3,532,880bytes exceeds limit3,532,800 by80bytes. PR23 3300edf 3448/3450KB passes. Do not raise limits; PR16 must integrate first, then rerun finalSHA gates.",
     "PR22 and PR23 both add a CI step after test:e2e in ci.yml; second to land rebases.",
     "PR23 and PR20 both edit Orders.tsx ?po= handling."
   ],

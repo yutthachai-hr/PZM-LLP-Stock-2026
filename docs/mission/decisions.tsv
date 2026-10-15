@@ -26,3 +26,7 @@ ts	phase	decision	why	evidence	result
 2026-10-15T08:34:02Z	capacity	Ramped 2 to 4 independent read-only reviews	Two High tasks completed; active tool activity; RAM5.91GiB	active-tasks.json	6/8 not verified
 2026-10-15T08:34:03Z	release	Held PR25 after independent GO	Exact Preview returns302CloudflareAccess	146d1ee; b157c19f.pzmstock.pages.dev	no merge
 2026-10-15T08:37:16Z	review	PR16 independent code GO exact77ede4f	No findings; parent rechecked exact remote head and10greenCIchecks	recovered-reviews/pr16-77ede4f-review-r1.md	Preview still required; slot reused for PR19
+2026-10-15T09:03:38Z	review-remediation	Fixed PR21 retry error lifetime; R2 code GO	Actual behavioral RED unit1/browser2 then GREEN	07e8ab4; review-remediation-checkpoint.md	unit1336/demo15/E2E68+2skip pass; budget FAIL80bytes; no merge
+2026-10-15T09:03:38Z	review-remediation	PR23 deep-link feedback fixed and independently re-reviewed	Silent catches should not hide failed document lookup	3300edf; review-remediation-checkpoint.md	unit1356/demo10/E2E68+2skip pass; R2 GO; Preview pending
+2026-10-15T09:03:38Z	evidence-correction	Rejected implementation child claim of behavioral TDD for search helpers	Original RED was missing-export/moduleload failure	review-remediation-checkpoint.md	14helpertests retained as unitcoverage, not oldbugreproduction
+2026-10-15T09:03:38Z	safety	Held PR24 on numeric prohibition parsing	Mandatory review prevents auto-send but constraint must be preserved	pzm-pr24-review-remediation-r1	fix in progress, no release
