@@ -103,6 +103,18 @@ export function setInclude(r: ReviewRow, on: boolean): ReviewRow {
   return { ...r, include: true, how: r.how === 'guess' ? 'picked' : r.how }
 }
 
+/**
+ * The person typed a quantity for a row, in the unit the line was written in (15 Oct 2026: a
+ * typed list may leave it out). A sure or picked row with nothing else wrong is ticked; a guess
+ * still waits for the person to confirm the product.
+ */
+export function setQty(r: ReviewRow, qty: number): ReviewRow {
+  const read = { ...r.read, qty }
+  const next: ReviewRow = { ...r, read, ...(r.product ? convertFor(read, r.product) : { qty }) }
+  const ok = blockedReason(next) === null && (next.how === 'sure' || next.how === 'picked')
+  return { ...next, include: ok }
+}
+
 /** What leaves the window: ticked, confirmed (never a bare guess), and not blocked. */
 export function importable(rows: readonly ReviewRow[]): ReviewRow[] {
   return rows.filter((r) => r.include && (r.how === 'sure' || r.how === 'picked') && blockedReason(r) === null)

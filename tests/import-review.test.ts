@@ -5,7 +5,8 @@
 //   npm test
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import { blockedReason, choose, importable, lacksUnit, planRows, setInclude, type ReadLine } from '../src/lib/importReview'
+import { blockedReason, choose, importable, lacksUnit, planRows, setInclude, setQty, type ReadLine } from '../src/lib/importReview'
+import { readItemText } from '../src/lib/itemText'
 import type { Product } from '../src/types'
 
 const P = (id: string, name: string, over: Partial<Product> = {}): Product =>
@@ -112,5 +113,51 @@ describe('every consumer goes through these rules', () => {
     const receive = readFileSync('src/pages/Receive.tsx', 'utf8')
     expect(receive).toContain('matchOcrLines(')
     expect(receive).not.toContain('suggestProducts(')
+  })
+})
+
+describe('a typed list and a quantity typed in the window (15 Oct 2026)', () => {
+  test('a typed exact name is sure; with no quantity it is blocked until one is typed', () => {
+    const [row] = planRows(readItemText('flour').lines, catalogue)
+    expect([row.how, row.product?.id, blockedReason(row), row.include]).toEqual(['sure', 'flour', 'bad-qty', false])
+    const fixed = setQty(row, 4)
+    expect([fixed.qty, blockedReason(fixed), fixed.include]).toEqual([4, null, true])
+    expect(importable([fixed]).map((r) => r.qty)).toEqual([4])
+  })
+
+  test('a typed quantity on a guess is converted but still waits for the person', () => {
+    const [g] = planRows(readItemText('feta cheese').lines, catalogue)
+    expect(g.how).toBe('guess')
+    const fixed = setQty(g, 3)
+    expect([fixed.include, fixed.how]).toEqual([false, 'guess'])
+    expect(importable([fixed])).toEqual([])
+  })
+
+  test('a typed quantity is converted by the unit written in the text', () => {
+    const [row] = planRows([{ ...readItemText('FETA CHEESE 500G (HOMEMADE CHEESE) 2 pack').lines[0] }], catalogue)
+    expect([row.how, row.entryUnit, row.entryQty, row.qty]).toEqual(['sure', 'Pack', 2, 1])
+    const fixed = setQty(row, 4)
+    expect([fixed.entryQty, fixed.qty]).toEqual([4, 2])
+  })
+
+  test('zero, negative or not-a-number stays blocked', () => {
+    const [row] = planRows(readItemText('flour').lines, catalogue)
+    for (const q of [0, -1, NaN]) expect(blockedReason(setQty(row, q))).toBe('bad-qty')
+  })
+
+  test('the same name from two suppliers is offered, never chosen', () => {
+    const [row] = planRows(readItemText('basil 2 kg').lines, catalogue)
+    expect(row.product).toBeNull()
+    expect(row.suggestions.map((p) => p.id).sort()).toEqual(['basil-a', 'basil-b'])
+  })
+
+  test('a unit the product has no rate for blocks the line, whatever the text says', () => {
+    const [row] = planRows(readItemText('flour 2 ถุง').lines, catalogue)
+    expect([row.product?.id, blockedReason(row), row.include]).toEqual(['flour', 'unit-unknown', false])
+  })
+
+  test('a row with no product cannot take a quantity into the import', () => {
+    const [row] = planRows(readItemText('unknown thing').lines, catalogue)
+    expect(importable([setQty(row, 2)])).toEqual([])
   })
 })
