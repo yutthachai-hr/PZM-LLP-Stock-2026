@@ -1,7 +1,7 @@
 {
   "parentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
   "previousParentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
-  "observedAt": "2026-10-15T06:35:00Z",
+  "observedAt": "2026-10-15T06:51:00Z",
   "safeConcurrentChildrenNow": 0,
   "reason": "Both approved 9Router routes in upstream 503 cooldown, reset about 07:28Z (capacity-preflight.md). Ramp 3 -> 4 -> 6 -> 8 only after the reset, one completed model turn per new child before the next step.",
   "recovery": {
@@ -82,6 +82,26 @@
       "pr": 19,
       "state": "merged main af0136b cleanly; unit 1340, E2E 80 pass 2 skip, lint/i18n/build, budget initial 3447/3450; CI running",
       "nextAction": "Review on aee0968; LINE art TH/EN visual check in Preview"
+    },
+    {
+      "id": "A16",
+      "owner": "parent inline",
+      "worktree": "C:/Users/Yutthachai/pzm-perf-20261014",
+      "branch": "perf/20261014-code-splitting",
+      "headSha": "77ede4f",
+      "pr": 16,
+      "state": "pushed unverified 04:24Z merge after fresh checks: unit 1346, E2E 68 pass 2 skip, lint/i18n/build, budget main 235 KB initial 1783 KB (passes strict default too), 114/114 chunks precached, demo Chromium: xlsx+pdf downloads real, offline unvisited routes open. Old red = brand-switcher snapshot timing (bba9cdf, test-only). Evidence comment on PR16",
+      "nextAction": "Review on 77ede4f (reviewer: retrying not.toContainText in bba9cdf); conflicts with PR24 LineImportModal.tsx and additive en.ts"
+    },
+    {
+      "id": "FLAKE-SUPPLIERS",
+      "owner": "parent inline",
+      "worktree": "C:/Users/Yutthachai/pzm-suppliers-flake-20261015",
+      "branch": "test/20261015-suppliers-scroll-settle",
+      "headSha": "146d1ee",
+      "pr": 25,
+      "state": "root cause from CI trace: baseline read before row stable; click self-scrolled 187px. Fix test-only; 36/36 green, negative control red (Received 200)",
+      "nextAction": "Review; merge early so later PR e2e runs are not hit by the flake"
     }
   ],
   "awaitingReviewOnly": [
@@ -108,15 +128,14 @@
     }
   ],
   "queuedAfterReset": [
+    "Reviews needed on exact heads: PR23 e275251, PR24 1eec149, PR19 aee0968, PR16 77ede4f, PR21 d42bee1, PR25 146d1ee (PR22/PR20/PR17 already queued)",
     "P1 review of PR22 and PR23 (exact SHAs), fresh OpenCode high",
     "P1 review of PR21 d42bee1",
     "C: Zero-Ops heldout >=240 cases in pzm-mission-zeroops-20261014 (7c78201)",
-    "A16: PR16 code-splitting diagnosis; also relieves the 3 KB initial-JS budget headroom",
     "Rust/Laya/Reflexer/Goose evaluation on exp/real-stack (research, shadow only)",
     "Matching Engine 2.0 alignment of globalSearch/OCR/suggestProducts scorers (after PR22)",
     "PR1 read-only missing-feature inventory",
-    "P1 review of PR24 1eec149 and PR19 aee0968",
-    "P2 test hardening: suppliers-master-detail 1920x1080 scroll drift flake (CI run 38684878733 attempt 1)"
+    "P1 review of PR24 1eec149 and PR19 aee0968"
   ],
   "risks": [
     "Bundle budget: initial JS 3435-3447 of 3450 KB per branch (PR19 3447). Re-run check:bundle after every sequential merge; do not raise the limit; PR16 code-splitting is the real fix.",
@@ -136,5 +155,20 @@
       "pzm-qa-20261014 untracked QA artifacts"
     ],
     "opencodeSessions": "All 6 queued sessions (PR22 review 95665f8, PR20 review r2, PR17 review x2, ThaiTrees, untitled) still 0 tokens on upstream 503 cooldown; not relaunched"
+  },
+  "mergeOrderPlan": {
+    "order": [
+      25,
+      22,
+      23,
+      16,
+      17,
+      20,
+      21,
+      19,
+      24
+    ],
+    "why": "flake fix first; P0 next; PR16 early for bundle headroom (3447/3450 on PR19); each merge re-runs check:bundle and dependent e2e",
+    "conflicts": "additive ci.yml step and en.ts appends among 20-24; real overlap PR16 x PR24 LineImportModal.tsx (both lazy-load the window); Orders.tsx merges cleanly across 16/20/23"
   }
 }

@@ -19,3 +19,5 @@ ts	phase	decision	why	evidence	result
 2026-10-15T06:24:00Z	P0-search	Recorded PR23 e2e red as a Suppliers geometry flake	Failed-job re-run green on the same SHA; local 36/36	CI run 38684878733 attempt 2	10/10 green
 2026-10-15T06:20:00Z	smart-import	Verified the recovered WIP fresh and opened draft PR24	WIP message said E2E was interrupted	PR24 1eec149; pzm-recovery-20261015/r2/smart-*.log	all local gates pass; review pending
 2026-10-15T06:34:00Z	A19	Merged main into PR19 instead of rebasing	Repo habit; avoids force-push on a shared PR	PR19 aee0968; r2/pr19-*.log	all local gates pass; CI running
+2026-10-15T06:45:00Z	A16	Pushed the unverified PR16 merge only after fresh checks and browser QA	Merge from the first interruption had no evidence	PR16 77ede4f; issuecomment-6186181908; r2/pr16-*	all local gates pass
+2026-10-15T06:50:00Z	flake	Fixed the Suppliers drift in the test, kept the assertion	CI trace: element not stable at baseline, click self-scrolled	PR25 146d1ee; r2/flake-*.log	green 36/36, negative control red
