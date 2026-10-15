@@ -135,4 +135,60 @@ describe('PDF layout engine (real jsPDF & Sarabun font)', () => {
     expect(doc1.getFontList()['Sarabun']).toBeDefined()
     expect(doc2.getFontList()['Sarabun']).toBeDefined()
   })
+
+  test('enforces safe Thai title leading >= 22pt between successive wrapped title baselines', () => {
+    const doc = createReportPdf({
+      filename: 'test-title-spacing',
+      title: 'Pizza Mania สาขาอโศก-สุขุมวิท — รายการขอสั่งซื้อวัตถุดิบและอุปกรณ์ประจำเดือนตุลาคม พ.ศ. 2569 เลขที่เอกสาร PR-LONG-001',
+      head: ['ผู้ขาย', 'สินค้า'],
+      body: [['LA VANILLE', 'ICE CREAM']],
+    })
+
+    const titlePlacements = extractTextPlacements(doc).filter((p) => p.page === 1 && p.x === 40 && p.yFromTop < 100)
+    expect(titlePlacements.length).toBeGreaterThanOrEqual(2)
+    const step = titlePlacements[1].yFromTop - titlePlacements[0].yFromTop
+    expect(step).toBeGreaterThanOrEqual(22)
+  })
+
+  test('configures line height factor on doc >= 1.35 for table cell Thai clearance', () => {
+    const doc = createReportPdf({
+      filename: 'test-table-lh',
+      title: 'ใบสั่งซื้อ',
+      head: ['ผู้ขาย', 'สินค้า'],
+      body: [['ผู้ขาย A', 'ชีส']],
+    })
+    expect(doc.getLineHeightFactor()).toBeGreaterThanOrEqual(1.35)
+  })
+
+  test('evaluates table-start headroom near page bottom to check for orphaned table headers', () => {
+    // Sweep tableStartY across the danger zone (500 to 525.28 pt)
+    // To check if autoTable EVER leaves an orphaned table header on page 1 without at least 1 body row.
+    let orphanedFound = false
+    let orphanDetails: any = null
+
+    for (let extra = 25; extra <= 30; extra++) {
+      const doc = createReportPdf({
+        filename: `test-headroom-${extra}`,
+        title: 'หัวข้อรายงาน',
+        meta: Array.from({ length: extra }, (_, i) => `บรรทัดข้อมูล ${i + 1}`),
+        head: ['ผู้ขาย', 'สินค้า'],
+        body: Array.from({ length: 10 }, (_, i) => [`ผู้ขาย ${i + 1}`, `สินค้า ${i + 1}`]),
+      })
+
+      const page1Placements = extractTextPlacements(doc).filter((p) => p.page === 1)
+      const page1TablePlacements = page1Placements.filter((p) => p.x !== 40)
+      if (page1TablePlacements.length > 0) {
+        // Table started on page 1
+        const uniqueY = Array.from(new Set(page1TablePlacements.map((p) => Math.round(p.yFromTop))))
+        // uniqueY[0] is header. If uniqueY.length === 1, only the header was placed on page 1!
+        if (uniqueY.length === 1) {
+          orphanedFound = true
+          orphanDetails = { extra, uniqueY, page1TablePlacements }
+          break
+        }
+      }
+    }
+
+    expect({ orphanedFound, orphanDetails }).toEqual({ orphanedFound: false, orphanDetails: null })
+  })
 })

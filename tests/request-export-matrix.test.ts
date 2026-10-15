@@ -1,10 +1,38 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, afterAll } from 'vitest'
 import { createRequestPdf, requestRows } from '../src/lib/requestExport'
+import { fmtQty } from '../src/lib/format'
 import type { PurchaseRequest, PurchaseRequestItem } from '../types'
+import type { jsPDF } from 'jspdf'
 import * as fs from 'fs'
 import * as path from 'path'
 
-const PDF_QA_DIR = 'C:/Users/Yutthachai/pzm-recovery-20261015/pdf-qa/generated'
+const PDF_QA_DIR = process.env.PDF_QA_DIR
+
+const manifest: Record<string, { count: number; rows: { sku: string; qty: string }[] }> = {}
+
+function saveQaPdf(filename: string, doc: jsPDF, items?: PurchaseRequestItem[]): void {
+  if (!PDF_QA_DIR) return
+  if (!fs.existsSync(PDF_QA_DIR)) {
+    fs.mkdirSync(PDF_QA_DIR, { recursive: true })
+  }
+  const pdfPath = path.join(PDF_QA_DIR, filename)
+  fs.writeFileSync(pdfPath, Buffer.from(doc.output('arraybuffer')))
+  if (items) {
+    manifest[filename] = {
+      count: items.length,
+      rows: items.map((i) => ({
+        sku: i.sku,
+        qty: fmtQty(i.approvedQty ?? 0),
+      })),
+    }
+  }
+}
+
+afterAll(() => {
+  if (PDF_QA_DIR && Object.keys(manifest).length > 0) {
+    fs.writeFileSync(path.join(PDF_QA_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2))
+  }
+})
 
 function makeMockItem(idx: number, overrides?: Partial<PurchaseRequestItem>): PurchaseRequestItem {
   return {
@@ -69,16 +97,10 @@ describe('PR workflow matrix and layout validation', () => {
     const doc = createRequestPdf(pr, 'Pizza Mania', 'คลังหลัก', mockT)
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1)
 
-    // Save synthetic PDF to QA directory
-    if (!fs.existsSync(PDF_QA_DIR)) {
-      fs.mkdirSync(PDF_QA_DIR, { recursive: true })
-    }
-    const pdfPath = path.join(PDF_QA_DIR, `matrix_${count}_rows_th.pdf`)
-    fs.writeFileSync(pdfPath, Buffer.from(doc.output('arraybuffer')))
-    expect(fs.existsSync(pdfPath)).toBe(true)
+    saveQaPdf(`matrix_${count}_rows_th.pdf`, doc, pr.items)
   })
 
-  test.each([17, 50])('generates valid PDF and preserves data parity for %i rows (EN)', (count) => {
+  test.each([1, 17, 50, 150, 180])('generates valid PDF and preserves data parity for %i rows (EN)', (count) => {
     const enT = (key: string) => {
       const dict: Record<string, string> = {
         'รายการขอสั่งซื้อ': 'Purchase Request',
@@ -109,9 +131,7 @@ describe('PR workflow matrix and layout validation', () => {
     const doc = createRequestPdf(pr, 'Pizza Mania International', 'Main Warehouse', enT)
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1)
 
-    const pdfPath = path.join(PDF_QA_DIR, `matrix_${count}_rows_en.pdf`)
-    fs.writeFileSync(pdfPath, Buffer.from(doc.output('arraybuffer')))
-    expect(fs.existsSync(pdfPath)).toBe(true)
+    saveQaPdf(`matrix_${count}_rows_en.pdf`, doc, pr.items)
   })
 
   test('handles very long approval note, title, location, and product names without collision', () => {
@@ -137,19 +157,17 @@ describe('PR workflow matrix and layout validation', () => {
     const doc = createRequestPdf(pr, longTitle, longLocation, mockT)
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(1)
 
-    const pdfPath = path.join(PDF_QA_DIR, 'matrix_long_metadata_and_products.pdf')
-    fs.writeFileSync(pdfPath, Buffer.from(doc.output('arraybuffer')))
-    expect(fs.existsSync(pdfPath)).toBe(true)
+    saveQaPdf('matrix_long_metadata_and_products.pdf', doc, pr.items)
   })
 
   test('handles multipage single long rows and repeated exports', () => {
-    const pr = makeMockRequest(10, {
+    const pr = makeMockRequest(25, {
       items: [
         makeMockItem(1, {
-          productName: 'แป้งสาลีสำหรับทำพิซซ่า ' + 'คุณภาพพรีเมียมนำเข้า '.repeat(10),
-          note: 'หมายเหตุรายละเอียดการสั่งซื้อ ' + 'ตรวจสอบอย่างละเอียดก่อนรับเข้าคลัง '.repeat(10),
+          productName: 'แป้งสาลีสำหรับทำพิซซ่า ' + 'คุณภาพพรีเมียมนำเข้าจากต่างประเทศ '.repeat(20),
+          note: 'หมายเหตุรายละเอียดการสั่งซื้อ ' + 'ตรวจสอบอย่างละเอียดก่อนรับเข้าคลังตามมาตรฐาน '.repeat(20),
         }),
-        ...Array.from({ length: 9 }, (_, i) => makeMockItem(i + 2)),
+        ...Array.from({ length: 24 }, (_, i) => makeMockItem(i + 2)),
       ],
     })
 
@@ -157,12 +175,12 @@ describe('PR workflow matrix and layout validation', () => {
     const docA = createRequestPdf(pr, 'Pizza Mania', 'Main', mockT)
     const docB = createRequestPdf(pr, 'Pizza Mania', 'Main', mockT)
 
-    const pdfPathA = path.join(PDF_QA_DIR, 'matrix_multipage_row_a.pdf')
-    const pdfPathB = path.join(PDF_QA_DIR, 'matrix_multipage_row_b.pdf')
-    fs.writeFileSync(pdfPathA, Buffer.from(docA.output('arraybuffer')))
-    fs.writeFileSync(pdfPathB, Buffer.from(docB.output('arraybuffer')))
+    // Assert getNumberOfPages() > 1 for genuinely multipage table
+    expect(docA.getNumberOfPages()).toBeGreaterThan(1)
+    expect(docB.getNumberOfPages()).toBeGreaterThan(1)
+    expect(docA.getNumberOfPages()).toBe(docB.getNumberOfPages())
 
-    expect(fs.statSync(pdfPathA).size).toBeGreaterThan(1000)
-    expect(fs.statSync(pdfPathB).size).toBeGreaterThan(1000)
+    saveQaPdf('matrix_multipage_row_a.pdf', docA, pr.items)
+    saveQaPdf('matrix_multipage_row_b.pdf', docB, pr.items)
   })
 })

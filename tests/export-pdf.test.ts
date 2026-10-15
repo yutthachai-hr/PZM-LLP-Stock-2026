@@ -24,6 +24,7 @@ vi.mock('jspdf', () => ({
     text = vi.fn()
     addPage = vi.fn()
     splitTextToSize = vi.fn((text: string) => [text])
+    setLineHeightFactor = vi.fn()
     save = vi.fn()
   },
 }))

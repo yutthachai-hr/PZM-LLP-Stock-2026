@@ -85,7 +85,7 @@ export function createReportPdf(opts: PdfReportOptions): jsPDF {
   const contentWidth = pageWidth - marginLeft - marginRight
   const maxContentY = pageHeight - marginBottom
 
-  const titleLineHeight = 20
+  const titleLineHeight = 22
   const metaLineHeight = 16
 
   doc.setFont(font, 'normal')
@@ -139,13 +139,17 @@ export function createReportPdf(opts: PdfReportOptions): jsPDF {
     tableStartY = marginTop
   }
 
+  if (typeof doc.setLineHeightFactor === 'function') {
+    doc.setLineHeightFactor(1.35)
+  }
+
   autoTable(doc, {
     startY: tableStartY,
     margin: { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft },
     head: [opts.head],
     body: opts.body.map((r) => r.map((c) => String(c))),
     foot: opts.foot ? [opts.foot.map((c) => String(c))] : undefined,
-    styles: { font, fontSize: 9, cellPadding: 4 },
+    styles: { font, fontSize: 9, cellPadding: 4, ...({ lineHeightFactor: 1.35 } as any) },
     // Sarabun is registered as 'normal' only; autoTable bolds the head by default, and a
     // bold request falls back to a font with no Thai glyphs — the header came out as
     // "'1 5H*1 @%" on the order sheet PDF while every body row read fine.
