@@ -8,7 +8,7 @@ Installed at `C:/Users/Yutthachai/.agents/skills/humanizer/SKILL.md`, version 3.
 |---|---|---|
 | Pi parent session (thread 6bea2b8e) | `humanizer` is in the session's native skill list at the path above. SKILL.md was read in full and used for the PR #22 evidence README | Discovered and loaded |
 | OpenCode registry | `MSYS_NO_PATHCONV=1 opencode api GET /api/skill` returned 126 skills, `humanizer` at the path above, beside Superpowers `brainstorming`, `writing-plans`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `executing-plans` and Pstack `tdd`, `interrogate` | Discovered |
-| OpenCode child session | Needs a model turn. Both approved models are in upstream cooldown until about 07:28Z | BLOCKED; verify with the first child after the reset |
+| OpenCode child session | Runtime audit task `pzm-runtime-failover-audit-20261015-r1`, OpenCode session `ses_ec15d3440ffehrZiM5p2ltIc42`: saved messages contain native `skill` tool input `{"id":"humanizer"}`; returned Thai/English copy preserves `฿350.2203`, `KG`, `PZS-01-06-001` | Discovered and invoked after quota reset (15 Oct, ~08:20Z) |
 
 Superpowers and the delegation guard were not changed. Pi Superpowers is now listed natively in this parent session from `~/.pi/agent/git/github.com/obra/superpowers` (owner install). Survival across a Pi Compact has not been observed yet.
 

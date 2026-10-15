@@ -1,9 +1,13 @@
 {
-  "parentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
-  "previousParentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
-  "observedAt": "2026-10-15T06:51:00Z",
-  "safeConcurrentChildrenNow": 0,
-  "reason": "Both approved 9Router routes in upstream 503 cooldown, reset about 07:28Z (capacity-preflight.md). Ramp 3 -> 4 -> 6 -> 8 only after the reset, one completed model turn per new child before the next step.",
+  "parentThreadId": "7fd797c6-ddd5-4cdd-ae6f-b9a5e6f37cfa",
+  "previousParentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
+  "observedAt": "2026-10-15T08:34:00Z",
+  "safeConcurrentChildrenNow": 4,
+  "reason": "High verified by two completed runtime tasks and actual tool activity on independent reviews. Ramped 2 to 4 with 5.91 GiB free. Six/eight not tested. Old T3-terminal/OpenCode-orphan sessions reconciled separately.",
+  "mainAgent": { "providerInstanceId": "pi", "model": "openai-codex-account-2/gpt-6.1-sol", "thinking": "high", "verified": "read-only T3 projection and native model_change at 08:14:31Z", "automaticFailover": "NOT PROVEN: owner prompt/manual transition" },
+  "activeReviewClientRequestIds": ["pzm-pr23-e275251-review-r1", "pzm-pr16-77ede4f-review-r1", "pzm-pr21-d42bee1-review-r1", "pzm-pr24-a01b56f-review-r1"],
+  "taskIdPrefix": "node:delegated-task:command%3Amcp%3A6e26b62c-8ea4-47ab-a2d1-675bd2547d54%3Adelegate-task%3A",
+  "runtimeFailover": { "worktree": "C:/Users/Yutthachai/pzm-runtime-failover-20261015", "branch": "fix/default-bridge-codex-failover", "headSha": "a9c0a562ddfb38634c3af71104c7b1cbbecc7dce", "tests": "14 new + 34 legacy PASS; strict TSC PASS", "review": "OpenCode High GO exact SHA, pzm-runtime-default-alias-a9c0a56-review-r1", "deployment": "BLOCKED: no live install/handoff proof; extension and guard unchanged", "nextAction": "runtime-failover-20261015.md and runtime-review-a9c0a56.md" },
   "recovery": {
     "interruptedAt": "about 2026-10-15T04:25Z (last worktree writes 11:22-11:25 +0700)",
     "preserved": "Backups of both interrupted worktrees in C:/Users/Yutthachai/pzm-recovery-20261015/ (patches, untracked tar, logs)",
@@ -21,8 +25,8 @@
       "branch": "fix/product-match-ranking",
       "headSha": "95665f8",
       "pr": 22,
-      "state": "draft; CI 10/10 green on 95665f8; review session queued 05:05Z (guard ALLOW) waiting on quota",
-      "nextAction": "Use queued review verdict when quota resets; do not relaunch"
+      "state": "CI green. Old T3 task cancelled 05:59:41Z; OpenCode resumed 07:28 but last activity 07:28:35Z with no verdict. Orphan/stalled outcome UNRESOLVED.",
+      "nextAction": "Reconcile supported OpenCode session termination before fresh review; do not duplicate blindly"
     },
     {
       "id": "P0-SEARCH",
@@ -32,7 +36,7 @@
       "headSha": "e275251",
       "pr": 23,
       "state": "draft; CI 10/10 green on e275251 after re-run of e2e (first run: suppliers-master-detail 1920x1080 scroll drift, page untouched by PR; local 36/36)",
-      "nextAction": "Fresh independent review on e275251 after quota reset"
+      "nextAction": "Independent exact-head review running: pzm-pr23-e275251-review-r1; Preview QA after review"
     },
     {
       "id": "ORDERS-REVIEW",
@@ -41,8 +45,8 @@
       "clientRequestId": "pzm-orders-ux-1cbcabc-review-r2",
       "pr": 20,
       "targetSha": "1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc",
-      "lastObservedState": "accepted; no tool activity in OpenCode log today; waiting on quota",
-      "nextAction": "Do not duplicate. If no verdict by 07:45Z, report to Owner; a fresh round needs the old thread or Owner cancel"
+      "lastObservedState": "Recovered saved exact-1cbcabc code APPROVE from OpenCode; recovered-reviews/orders-saved-opencode-output.md",
+      "nextAction": "Preview QA still blocked by Access; CI green exact head; no new review"
     },
     {
       "id": "A17-REVIEW",
@@ -51,8 +55,8 @@
       "clientRequestId": "pzm-pr17-d37e414-review-r1",
       "pr": 17,
       "targetSha": "d37e414466c2301854d808ea051cf5714b25780b",
-      "lastObservedState": "accepted; no tool activity today; waiting on quota",
-      "nextAction": "Same as above"
+      "lastObservedState": "Recovered saved code PASS exact d37e414; old T3 interruption did not stop OpenCode. Duplicate old T3 tasks terminal; no new PR17 review launched.",
+      "nextAction": "Preview QA; saved output in recovered-reviews/pr17-saved-opencode-output.md"
     },
     {
       "id": "B-LEXICON",
@@ -60,18 +64,18 @@
       "model": "9router/gemini-3.8-flash-high",
       "clientRequestId": "pzm-thaitrees-lexicon-r2",
       "worktree": "C:/Users/Yutthachai/pzm-mission-thaitrees-20261014",
-      "lastObservedState": "accepted; worktree clean, no artifact",
-      "nextAction": "Same as above"
+      "lastObservedState": "Saved report and commit c0d137bcf92a4f000626886e999df5e3b4af01fe recovered in existing worktree; not independently reverified",
+      "nextAction": "Parent reproduce benchmark/tests and audit provenance; no production search change"
     },
     {
       "id": "SMART-IMPORT",
       "owner": "parent inline",
       "worktree": "C:/Users/Yutthachai/pzm-smart-import-20261015",
       "branch": "feat/smart-import-dnd",
-      "headSha": "1eec149",
+      "headSha": "a01b56f",
       "pr": 24,
-      "state": "draft PR24; fresh on this tree: unit 1353, emulator E2E 68 pass 2 skip, import demo 8/8, lint/i18n/build, budget initial 3435/3450",
-      "nextAction": "Review after reset; gaps listed in PR (brand-switch test, real photo/PDF read)"
+      "state": "CI green; local 1353 unit, 68 E2E + 2 skip, 9 demo incl brand switching, lint/i18n/build; initial JS 3435/3450",
+      "nextAction": "Independent review running pzm-pr24-a01b56f-review-r1; Preview QA; real photo/PDF success path remains untested"
     },
     {
       "id": "A19",
@@ -80,7 +84,7 @@
       "branch": "fix/20261014-line-en-th",
       "headSha": "aee0968",
       "pr": 19,
-      "state": "merged main af0136b cleanly; unit 1340, E2E 80 pass 2 skip, lint/i18n/build, budget initial 3447/3450; CI running",
+      "state": "merged main af0136b cleanly; unit 1340, E2E 80 pass 2 skip, lint/i18n/build, budget initial 3447/3450; CI 10/10 green",
       "nextAction": "Review on aee0968; LINE art TH/EN visual check in Preview"
     },
     {
@@ -91,7 +95,7 @@
       "headSha": "77ede4f",
       "pr": 16,
       "state": "pushed unverified 04:24Z merge after fresh checks: unit 1346, E2E 68 pass 2 skip, lint/i18n/build, budget main 235 KB initial 1783 KB (passes strict default too), 114/114 chunks precached, demo Chromium: xlsx+pdf downloads real, offline unvisited routes open. Old red = brand-switcher snapshot timing (bba9cdf, test-only). Evidence comment on PR16",
-      "nextAction": "Review on 77ede4f (reviewer: retrying not.toContainText in bba9cdf); conflicts with PR24 LineImportModal.tsx and additive en.ts"
+      "nextAction": "Review running pzm-pr16-77ede4f-review-r1; then Preview QA. Conflicts with PR24 LineImportModal.tsx and additive en.ts"
     },
     {
       "id": "FLAKE-SUPPLIERS",
@@ -101,7 +105,7 @@
       "headSha": "146d1ee",
       "pr": 25,
       "state": "root cause from CI trace: baseline read before row stable; click self-scrolled 187px. Fix test-only; 36/36 green, negative control red (Received 200)",
-      "nextAction": "Review; merge early so later PR e2e runs are not hit by the flake"
+      "nextAction": "Independent GO exact 146d1ee (pzm-pr25-146d1ee-review-r1), CI green; Preview b157c19f.pzmstock.pages.dev HTTP302 Access at 08:32Z. No merge until authorized Preview QA"
     }
   ],
   "awaitingReviewOnly": [
@@ -110,32 +114,32 @@
       "id": "TOAST",
       "headSha": "d42bee1",
       "ci": "all green",
-      "blocker": "independent review (quota), remote Preview QA (Access)"
+      "blocker": "independent review running pzm-pr21-d42bee1-review-r1; remote Preview QA (Access)"
     },
     {
       "pr": 20,
       "id": "ORDERS",
       "headSha": "1cbcabc",
       "ci": "all green",
-      "blocker": "review round 2 in old thread, remote Preview QA (Access)"
+      "blocker": "saved exact-head code approval recovered; remote Preview QA (Access)"
     },
     {
       "pr": 17,
       "id": "A17",
       "headSha": "d37e414",
       "ci": "all green",
-      "blocker": "review in old thread, Preview QA"
+      "blocker": "saved exact-head PASS recovered; Preview QA"
     }
   ],
   "queuedAfterReset": [
-    "Reviews needed on exact heads: PR23 e275251, PR24 1eec149, PR19 aee0968, PR16 77ede4f, PR21 d42bee1, PR25 146d1ee (PR22/PR20/PR17 already queued)",
-    "P1 review of PR22 and PR23 (exact SHAs), fresh OpenCode high",
-    "P1 review of PR21 d42bee1",
+    "PR19 aee0968 independent review next free slot; PR22 orphan/stalled review unresolved",
+    "PR23 e275251, PR24 a01b56f, PR16 77ede4f, PR21 d42bee1 reviews currently active",
+    "PR25 146d1ee, PR20 1cbcabc, PR17 d37e414 saved independent GO; Preview required",
     "C: Zero-Ops heldout >=240 cases in pzm-mission-zeroops-20261014 (7c78201)",
     "Rust/Laya/Reflexer/Goose evaluation on exp/real-stack (research, shadow only)",
     "Matching Engine 2.0 alignment of globalSearch/OCR/suggestProducts scorers (after PR22)",
     "PR1 read-only missing-feature inventory",
-    "P1 review of PR24 1eec149 and PR19 aee0968"
+    "ThaiTrees c0d137b reproduce benchmark and provenance audit"
   ],
   "risks": [
     "Bundle budget: initial JS 3435-3447 of 3450 KB per branch (PR19 3447). Re-run check:bundle after every sequential merge; do not raise the limit; PR16 code-splitting is the real fix.",
@@ -159,16 +163,16 @@
   "mergeOrderPlan": {
     "order": [
       25,
+      17,
+      16,
       22,
       23,
-      16,
-      17,
       20,
       21,
       19,
       24
     ],
-    "why": "flake fix first; P0 next; PR16 early for bundle headroom (3447/3450 on PR19); each merge re-runs check:bundle and dependent e2e",
+    "why": "Owner latest proposed order; PR16 before UI for bundle headroom; every dependent final SHA needs review/CI/Preview again; no Access bypass",
     "conflicts": "additive ci.yml step and en.ts appends among 20-24; real overlap PR16 x PR24 LineImportModal.tsx (both lazy-load the window); Orders.tsx merges cleanly across 16/20/23"
   }
 }

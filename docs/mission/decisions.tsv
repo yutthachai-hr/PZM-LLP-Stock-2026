@@ -21,3 +21,7 @@ ts	phase	decision	why	evidence	result
 2026-10-15T06:34:00Z	A19	Merged main into PR19 instead of rebasing	Repo habit; avoids force-push on a shared PR	PR19 aee0968; r2/pr19-*.log	all local gates pass; CI running
 2026-10-15T06:45:00Z	A16	Pushed the unverified PR16 merge only after fresh checks and browser QA	Merge from the first interruption had no evidence	PR16 77ede4f; issuecomment-6186181908; r2/pr16-*	all local gates pass
 2026-10-15T06:50:00Z	flake	Fixed the Suppliers drift in the test, kept the assertion	CI trace: element not stable at baseline, click self-scrolled	PR25 146d1ee; r2/flake-*.log	green 36/36, negative control red
+2026-10-15T08:34:00Z	runtime	Kept live failover BLOCKED despite candidate GO	Default bridge outside managed routes; live handoff not verified	runtime-failover-20261015.md; a9c0a56; runtime-review-a9c0a56.md	14+34 tests pass; no installation
+2026-10-15T08:34:01Z	recovery	Recovered post-reset OpenCode outputs despite old T3 terminal states	OpenCode continued after interruption; avoid duplicate work	recovered-reviews/; read-only snapshots in r2	PR17/20 saved approvals; ThaiTrees c0d137b; PR22 unresolved
+2026-10-15T08:34:02Z	capacity	Ramped 2 to 4 independent read-only reviews	Two High tasks completed; active tool activity; RAM5.91GiB	active-tasks.json	6/8 not verified
+2026-10-15T08:34:03Z	release	Held PR25 after independent GO	Exact Preview returns302CloudflareAccess	146d1ee; b157c19f.pzmstock.pages.dev	no merge
