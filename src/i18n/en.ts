@@ -1564,7 +1564,6 @@ export const EN: Record<string, string> = {
   'สินค้านี้เปิดดูได้อย่างเดียว — ต้องเป็นผู้ดูแลระบบจึงจะแก้ไขได้ ให้แจ้งผู้ดูแลถ้าต้องการเปลี่ยน': 'This product is view-only — only an admin can edit it. Ask an admin if you need changes.',
   'ประวัติราคา': 'Price history',
   'ดูทั้งหมด ({n})': 'Show all ({n})',
-  'บันทึกราคาแล้ว — ฿{cost} ต่อ {unit}': 'Price saved — ฿{cost} per {unit}',
   'ราคาต้องเป็นตัวเลขไม่ติดลบ': 'The price must be a non-negative number',
   'กรุณาระบุวันที่มีผล': 'Give the day the price applies from',
   '1 {unit} = {n} {base}': '1 {unit} = {n} {base}',
@@ -3097,4 +3096,7 @@ export const EN: Record<string, string> = {
   ยังไม่ได้โหลดรายชื่อผู้ขาย: 'suppliers not loaded yet',
   'ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:': 'Purchase requests and deliveries are searched on their pages:',
   หน้า: 'Pages',
+  'บันทึกราคาแล้ว': 'Price saved',
+  '฿{cost} ต่อ {unit}': '฿{cost} per {unit}',
+  'การแจ้งเตือนชั่วคราว': 'Transient notifications',
 }
