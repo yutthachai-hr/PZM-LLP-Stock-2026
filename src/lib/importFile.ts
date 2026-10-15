@@ -8,12 +8,8 @@
 export const MAX_PDF_BYTES = 2_900_000
 /** A spreadsheet is read in the browser; past this it is almost certainly not an order list. */
 export const MAX_SHEET_BYTES = 10_000_000
-/**
- * Pictures are compressed in the browser (services/billOcr shrinks them to 2000 px),
- * so they do not have to fit the 4 MB endpoint limit raw. But a huge file can crash
- * the canvas or freeze the browser while decoding: 10 MB is plenty for any camera photo
- * of a bill.
- */
+/** Browser source-file cap before decoding/compression, separate from the OCR endpoint limit.
+ * Decoded memory also depends on pixel dimensions; this byte cap does not bound it. */
 export const MAX_IMAGE_BYTES = 10_000_000
 
 export type ImportRoute = { kind: 'sheet' | 'document' } | { error: 'busy' | 'unsupported' | 'no-reader' | 'too-big' | 'empty' }
