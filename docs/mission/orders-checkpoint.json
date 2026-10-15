@@ -17,9 +17,10 @@
     "buildTypechecksLintI18n": "passed; existing lint/build warnings recorded",
     "bundle": "main CI 2950/3450 KB budgets passed"
   },
-  "ci": "All nine checks and CF Pages passed on previous e8070ff; NEW head 1cbcabc requires fresh CI",
+  "ci": "All nine required checks and Cloudflare Pages now pass on final candidate 1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc; run 38676154747",
   "preview": {
     "previousDeployment": "https://34e4200a.pzmstock.pages.dev/orders",
+    "latestDeployment": "https://f6f1d137.pzmstock.pages.dev/orders",
     "remoteQA": "BLOCKED by Cloudflare Access unauthenticated HTTP302; no bypass attempted",
     "localCompiled": "http://127.0.0.1:5187/orders",
     "ownedServerPid": 13620,
@@ -38,7 +39,7 @@
   "earlierMissionChildren": "A/B/C exceeded 35-minute timeboxes with no result or worktree changes; cancellation confirmed interrupted, no pending children. Their work is not counted complete.",
   "nextActions": [
     "Receive final-head independent review; respond via fresh delegate_task round if needed",
-    "Read final-head GitHub CI and new deployment SHA",
+    "Final-head CI confirmed green; retain receipt and invalidate it if head changes",
     "Complete authenticated isolated remote Preview QA without weakening Access",
     "Only after all gates pass, mark ready and merge sequentially; then read-only production smoke",
     "If runtime or Preview remains blocked, preserve PR and report blocker, never fake a pass"

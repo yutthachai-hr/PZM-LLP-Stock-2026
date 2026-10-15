@@ -1,0 +1,194 @@
+
+> pizza-stock@0.0.0 test:e2e
+> firebase emulators:exec --only firestore,auth --project demo-pzm-e2e "playwright test"
+
+i  emulators: Starting emulators: auth, firestore
+i  emulators: Detected demo project ID "demo-pzm-e2e", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+i  firestore: Firestore Emulator logging to firestore-debug.log
++  firestore: Firestore Emulator was started in standard edition.
++  firestore: Firestore Emulator UI websocket is running on 9150.
+i  Running script: playwright test
+
+Running 70 tests using 1 worker
+
+  -   1 e2e\brand-switch-reads.spec.ts:54:1 › reads per brand switch, real Pizza Mania and Le Lapin data
+[WebServer] 10:33:58 AM [vite] (client) [console.error] [app] could not create the default locations FirebaseError: Firestore shutting down
+[WebServer] 10:33:58 AM [vite] (client) [Unhandled rejection] FirebaseError: The client has already been terminated.
+[WebServer]
+[WebServer] 10:33:58 AM [vite] (client) [Unhandled rejection] FirebaseError: The client has already been terminated.
+[WebServer]
+[WebServer] 10:33:58 AM [vite] (client) [Unhandled rejection] FirebaseError: The client has already been terminated.
+[WebServer]
+  ok  2 e2e\brand-switcher.spec.ts:88:1 › first sign-in asks once; the next sign-in opens the last brand directly (9.4s)
+SWITCH-COST {"listenersBefore":8,"switches":[{"to":"/Le Lapin/","reads":38,"listenersAfter":8},{"to":"/R&D/","reads":38,"listenersAfter":8},{"to":"/Pizza Mania/","reads":16,"listenersAfter":8}]}
+  ok  3 e2e\brand-switcher.spec.ts:107:1 › Pizza → Le Lapin → R&D → Pizza: each lands on its Dashboard with only its own data (30.3s)
+  ok  4 e2e\brand-switcher.spec.ts:154:1 › rapid switching settles on the last choice, with that brand's data only (5.6s)
+  ok  5 e2e\brand-switcher.spec.ts:168:1 › an unsaved receiving form is named first; cancel keeps it, switching keeps its draft for that brand (6.2s)
+  ok  6 e2e\brand-switcher.spec.ts:194:1 › a draft that cannot be saved stops the switch; the form stays as typed (5.7s)
+  ok  7 e2e\brand-switcher.spec.ts:231:1 › stale or tampered browser storage never picks a brand (2.5s)
+  ok  8 e2e\brand-switcher.spec.ts:243:1 › keyboard: open, move, choose, and Escape back to the trigger (3.0s)
+  ok  9 e2e\brand-switcher.spec.ts:262:3 › tablet 1024x768: the logo opens a sheet of the three brands (4.9s)
+  ok 10 e2e\brand-switcher.spec.ts:262:3 › phone 390x844: the logo opens a sheet of the three brands (6.0s)
+CROSS-BRAND {"pizza":4,"lelapin":3,"rnd":3}
+  ok 11 e2e\cross-brand-automation.spec.ts:49:1 › notifications written while switching brands stay with their own brand (30.3s)
+[WebServer] 10:35:35 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:35:35 AM [vite] (client) [console.error] [firestore] subscribe notifications failed FirebaseError:
+[WebServer] evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, false for 'list' @ L1632, false for 'list' @ L1668
+[WebServer] 10:35:35 AM [vite] (client) [console.error] [firestore] subscribe users failed FirebaseError:
+[WebServer] evaluation error at L1319:22 for 'list' @ L1319, false for 'list' @ L1668, false for 'list' @ L1319, false for 'list' @ L1668
+[WebServer] 10:35:35 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+  ok 12 e2e\dialogs.spec.ts:33:3 › desktop: Escape closes only the confirmation; the editor stays, and focus goes back to the button that opened it (7.3s)
+[WebServer] 10:35:42 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:35:42 AM [vite] (client) [console.error] [firestore] subscribe notifications failed FirebaseError:
+[WebServer] evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, false for 'list' @ L1632, false for 'list' @ L1668
+[WebServer] 10:35:42 AM [vite] (client) [console.error] [firestore] subscribe users failed FirebaseError:
+[WebServer] evaluation error at L1319:22 for 'list' @ L1319, false for 'list' @ L1668, false for 'list' @ L1319, false for 'list' @ L1668
+[WebServer] 10:35:42 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+  ok 13 e2e\dialogs.spec.ts:33:3 › phone: Escape closes only the confirmation; the editor stays, and focus goes back to the button that opened it (5.4s)
+[WebServer] 10:35:48 AM [vite] (client) [console.error] [firestore] subscribe users failed FirebaseError:
+[WebServer] evaluation error at L1319:22 for 'list' @ L1319, false for 'list' @ L1668, false for 'list' @ L1319, false for 'list' @ L1668
+[WebServer] 10:35:48 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:35:48 AM [vite] (client) [console.error] [firestore] subscribe notifications failed FirebaseError:
+[WebServer] evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, false for 'list' @ L1632, false for 'list' @ L1668
+[WebServer] 10:35:48 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+  ok 14 e2e\dialogs.spec.ts:47:1 › Tab stays inside the confirmation while it is on top, both directions (5.3s)
+[WebServer] 10:35:53 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:35:53 AM [vite] (client) [console.error] [firestore] subscribe notifications failed FirebaseError:
+[WebServer] evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, false for 'list' @ L1632, false for 'list' @ L1668
+[WebServer] 10:35:53 AM [vite] (client) [console.error] [firestore] subscribe users failed FirebaseError:
+[WebServer] evaluation error at L1319:22 for 'list' @ L1319, false for 'list' @ L1668, false for 'list' @ L1319, false for 'list' @ L1668
+[WebServer] 10:35:53 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+  ok 15 e2e\dialogs.spec.ts:58:1 › cancelling a destructive confirmation deletes nothing and leaves the editor open (8.3s)
+[WebServer] 10:36:01 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:36:01 AM [vite] (client) [console.error] [firestore] subscribe notifications failed FirebaseError:
+[WebServer] evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, evaluation error at L1632:22 for 'list' @ L1632, false for 'list' @ L1668, false for 'list' @ L1632, false for 'list' @ L1668
+[WebServer] 10:36:01 AM [vite] (client) [console.error] [firestore] subscribe users failed FirebaseError:
+[WebServer] evaluation error at L1319:22 for 'list' @ L1319, false for 'list' @ L1668, false for 'list' @ L1319, false for 'list' @ L1668
+[WebServer] 10:36:01 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+  ok 16 e2e\hostile-client.spec.ts:25:1 › control: staff cannot make themselves admin (347ms)
+  x  17 e2e\hostile-client.spec.ts:30:1 › S1: staff cannot write a stock balance directly (278ms)
+  x  18 e2e\hostile-client.spec.ts:38:1 › S2: staff cannot move stock between sites by naming a transfer that does not exist (293ms)
+  x  19 e2e\hostile-client.spec.ts:57:1 › S5: staff cannot rewrite the quantity of a recorded movement (304ms)
+  x  20 e2e\hostile-client.spec.ts:75:1 › B4: staff cannot place an order as already "ordered" without approval (279ms)
+  ok 21 e2e\login-brand.spec.ts:105:3 › last brand pizza, lelapin picked at 1440px: lelapin opens, and only lelapin is read (5.3s)
+  ok 22 e2e\login-brand.spec.ts:105:3 › last brand lelapin, pizza picked at 1440px: pizza opens, and only pizza is read (6.8s)
+  ok 23 e2e\login-brand.spec.ts:105:3 › last brand pizza, rnd picked at 1440px: rnd opens, and only rnd is read (9.2s)
+  ok 24 e2e\login-brand.spec.ts:105:3 › last brand pizza, lelapin picked at 390px: lelapin opens, and only lelapin is read (5.7s)
+  ok 25 e2e\login-brand.spec.ts:122:1 › a failed sign-in keeps the device on its last brand; the next sign-in without a pick opens it (4.5s)
+  ok 26 e2e\login-brand.spec.ts:140:1 › after a pick, a refresh stays in that brand and a new tab opens it as the last brand (11.5s)
+  ok 27 e2e\login-brand.spec.ts:158:1 › a LINE resume link opens its own brand, and the sign-in screen shows that brand (7.1s)
+  ok 28 e2e\login-brand.spec.ts:170:1 › brand selection stays locked while the successful credential request awaits its business profile (6.4s)
+  ok 29 e2e\login-brand.spec.ts:207:1 › inactive business profile rejection clears intent and leaves the last brand unchanged (3.8s)
+  ok 30 e2e\login-brand.spec.ts:231:1 › an explicit pick conflicting with a LINE resume opens that brand without reusing the resume document ID (4.3s)
+  ok 31 e2e\login-brand.spec.ts:246:1 › a device that has never opened a brand still gets the picker when nothing is picked (3.1s)
+  ok 32 e2e\login-motion.spec.ts:52:5 › desktop 1440 › the logos float visibly, out of step, while the buttons stay put (8.9s)
+  ok 33 e2e\login-motion.spec.ts:75:5 › desktop 1440 › a normal click selects the brand, and the page follows (5.3s)
+  ok 34 e2e\login-motion.spec.ts:97:5 › desktop 1440 › nothing overflows, clips or overlaps, even with the pulse and the selected ring (5.1s)
+  ok 35 e2e\login-motion.spec.ts:120:7 › desktop 1440 › hover lifts and tilts the logo and gives it full colour, then it settles back (5.3s)
+  ok 36 e2e\login-motion.spec.ts:141:5 › desktop 1440 › keyboard: one tab stop, arrows move the choice, and focus is visible (3.3s)
+  ok 37 e2e\login-motion.spec.ts:52:5 › tablet 1024 › the logos float visibly, out of step, while the buttons stay put (8.6s)
+  ok 38 e2e\login-motion.spec.ts:75:5 › tablet 1024 › a normal click selects the brand, and the page follows (5.1s)
+  ok 39 e2e\login-motion.spec.ts:97:5 › tablet 1024 › nothing overflows, clips or overlaps, even with the pulse and the selected ring (4.2s)
+  ok 40 e2e\login-motion.spec.ts:120:7 › tablet 1024 › hover lifts and tilts the logo and gives it full colour, then it settles back (4.2s)
+  ok 41 e2e\login-motion.spec.ts:141:5 › tablet 1024 › keyboard: one tab stop, arrows move the choice, and focus is visible (2.9s)
+  ok 42 e2e\login-motion.spec.ts:52:5 › phone 390 › the logos float visibly, out of step, while the buttons stay put (8.0s)
+  ok 43 e2e\login-motion.spec.ts:75:5 › phone 390 › a normal click selects the brand, and the page follows (5.8s)
+  ok 44 e2e\login-motion.spec.ts:97:5 › phone 390 › nothing overflows, clips or overlaps, even with the pulse and the selected ring (4.3s)
+  ok 45 e2e\login-motion.spec.ts:141:5 › phone 390 › keyboard: one tab stop, arrows move the choice, and focus is visible (3.2s)
+  ok 46 e2e\login-motion.spec.ts:52:5 › phone 375 › the logos float visibly, out of step, while the buttons stay put (8.7s)
+  ok 47 e2e\login-motion.spec.ts:75:5 › phone 375 › a normal click selects the brand, and the page follows (5.1s)
+  ok 48 e2e\login-motion.spec.ts:97:5 › phone 375 › nothing overflows, clips or overlaps, even with the pulse and the selected ring (5.2s)
+  ok 49 e2e\login-motion.spec.ts:141:5 › phone 375 › keyboard: one tab stop, arrows move the choice, and focus is visible (3.6s)
+  ok 50 e2e\login-motion.spec.ts:162:3 › reduced motion › asking for less motion stops the float, the pop and the pulse; choosing still works (4.5s)
+  -  51 e2e\read-budget.spec.ts:78:1 › read budget: everyday workflows on real data
+  ok 52 e2e\receive-po.spec.ts:18:1 › one device receives an order in full: one receipt, stock and order agree (7.2s)
+[WebServer] 10:39:02 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:02 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:02 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:02 AM [vite] (client) [console.error] [firestore] subscribe stockLevels failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:02 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.warn] [2026-10-15T03:39:12.405Z]  @firebase/firestore: Firestore (12.16.0): RestConnection RPC 'Commit' 0x5d8ecbcc failed with error:  {"code":"permission-denied","name":"FirebaseError"} url:  http://127.0.0.1:8080/v1/projects/demo-pzm-e2e/databases/(default)/documents:commit?key=demo-key request: {"writes":[{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/counters/receive","fields":{"value":{"integerValue":"1"},"id":{"stringValue":"receive"}}},"currentDocument":{"exists":false}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/purchaseOrders/po1","fields":{"status":{"stringValue":"received"},"lines":{"arrayValue":{"values":[{"mapValue":{"fields":{"productId":{"stringValue":"flour"},"productName":{"stringValue":"FLOUR"},"unit":{"stringValue":"KG"},"orderedQty":{"integerValue":"10"},"receivedQty":{"integerValue":"10"},"checked":{"booleanValue":true}}}},{"mapValue":{"fields":{"productId":{"stringValue":"cheese"},"productName":{"stringValue":"MOZZARELLA"},"unit":{"stringValue":"KG"},"orderedQty":{"integerValue":"4"},"receivedQty":{"integerValue":"4"},"checked":{"booleanValue":true}}}}]}},"receipts":{"arrayValue":{"values":[{"mapValue":{"fields":{"docNo":{"stringValue":"RC-00001"},"date":{"integerValue":"1791997200000"},"invoiceNo":{"stringValue":"INV-200"},"byId":{"stringValue":"fSouN7Lv872mRk0HY32xiWbe9VgD"},"byName":{"stringValue":"E2E Staff B"},"lines":{"arrayValue":{"values":[{"mapValue":{"fields":{"productId":{"stringValue":"flour"},"qty":{"integerValue":"10"}}}},{"mapValue":{"fields":{"productId":{"stringValue":"cheese"},"qty":{"integerValue":"4"}}}}]}}}}}]}},"invoiceNo":{"stringValue":"INV-200"},"receivedAt":{"integerValue":"1791997200000"},"receivedBy":{"stringValue":"fSouN7Lv872mRk0HY32xiWbe9VgD"},"receivedByName":{"stringValue":"E2E Staff B"},"movementDocNo":{"stringValue":"RC-00001"},"updatedAt":{"integerValue":"1792035552287"}}},"updateMask":{"fieldPaths":["invoiceNo","lines","movementDocNo","receipts","receivedAt","receivedBy","receivedByName","status","updatedAt"]},"currentDocument":{"updateTime":"2026-10-15T03:39:02.239630000Z"}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockLevels/wh__flour","fields":{"productId":{"stringValue":"flour"},"locationId":{"stringValue":"wh"},"qty":{"integerValue":"10"},"updatedAt":{"integerValue":"1792035552288"},"updatedBy":{"stringValue":"fSouN7Lv872mRk0HY32xiWbe9VgD"},"id":{"stringValue":"wh__flour"}}},"currentDocument":{"exists":false}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockMovements/MV8ZP5PC0V569MG1","fields":{"docNo":{"stringValue":"RC-00001"},"type":{"stringValue":"receive"},"productId":{"stringValue":"flour"},"productName":{"stringValue":"FLOUR"},"unit":{"stringValue":"KG"},"qty":{"integerValue":"10"},"toLocationId":{"stringValue":"wh"},"supplierId":{"stringValue":"sup1"},"supplierName":{"stringValue":"E2E SUPPLIER"},"invoiceNo":{"stringValue":"INV-200"},"docDate":{"integerValue":"1791997200000"},"poId":{"stringValue":"po1"},"poDocNo":{"stringValue":"PO-00001"},"date":{"integerValue":"1791997200000"},"byUserId":{"stringValue":"fSouN7Lv872mRk0HY32xiWbe9VgD"},"byUserName":{"stringValue":"E2E Staff B"},"createdAt":{"integerValue":"1792035552288"},"id":{"stringValue":"MV8ZP5PC0V569MG1"}}}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockLevels/wh__cheese","fields":{"productId":{"stringValue":"cheese"},"locationId":{"stringValue":"wh"},"qty":{"integerValue":"4"},"updatedAt":{"integerValue":"1792035552288"},"updatedBy":{"stringValue":"fSouN7Lv872mRk0HY32xiWbe9VgD"},"id":{"stringValue":"wh__cheese"}}},"currentDocument":{"exists":false}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockMovements/MV8ZP5PCCVGQ2NH9","fields":{"docNo":{"stringValue":"RC-00001"},"type":{"stringValue":"receive"},"productId":{"stringValue":"cheese"},"productName":{"stringValue":"MOZZARELLA"},"unit":{"stringValue":"KG"},"qty":{"integerValue":"4"},"toLocationId":{"stringValue":"wh"},"supplierId":{"stringValue":"sup1"},"supplierName":{"stringValue":"E2E SUPPLIER"},"invoiceNo":{"stringValue":"INV-200"},"docDate":{"integerValue":"1791997200000"},"poId":{"stringValue":"po1"},"poDocNo":{"stringValue":"PO-00001"},"date":{"integerValue":"1791997200000"},"byUserId":{"stringValue":"fSouN7Lv872mRk0HY32xiWbe9VgD"},"byUserName":{"stringValue":"E2E Staff B"},"createdAt":{"integerValue":"1792035552288"},"id":{"stringValue":"MV8ZP5PCCVGQ2NH9"}}}},{"verify":"projects/demo-pzm-e2e/databases/(default)/documents/products/flour","currentDocument":{"updateTime":"2026-10-15T03:39:02.197081000Z"}},{"verify":"projects/demo-pzm-e2e/databases/(default)/documents/products/cheese","currentDocument":{"updateTime":"2026-10-15T03:39:02.209129000Z"}},{"verify":"projects/demo-pzm-e2e/databases/(default)/documents/locations/wh","currentDocument":{"updateTime":"2026-10-15T03:39:02.182969000Z"}}]}
+  ok 53 e2e\receive-po.spec.ts:36:1 › two devices confirm the same delivery at once: stock goes in once (10.6s)
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe stockLevels failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe stockLevels failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:12 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:23 AM [vite] (client) [console.warn] [2026-10-15T03:39:23.760Z]  @firebase/firestore: Firestore (12.16.0): RestConnection RPC 'Commit' 0x16707703 failed with error:  {"code":"permission-denied","name":"FirebaseError"} url:  http://127.0.0.1:8080/v1/projects/demo-pzm-e2e/databases/(default)/documents:commit?key=demo-key request: {"writes":[{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/counters/receive","fields":{"value":{"integerValue":"1"},"id":{"stringValue":"receive"}}},"currentDocument":{"exists":false}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/purchaseOrders/po1","fields":{"status":{"stringValue":"received"},"lines":{"arrayValue":{"values":[{"mapValue":{"fields":{"productId":{"stringValue":"flour"},"productName":{"stringValue":"FLOUR"},"unit":{"stringValue":"KG"},"orderedQty":{"integerValue":"10"},"receivedQty":{"integerValue":"10"},"checked":{"booleanValue":true}}}},{"mapValue":{"fields":{"productId":{"stringValue":"cheese"},"productName":{"stringValue":"MOZZARELLA"},"unit":{"stringValue":"KG"},"orderedQty":{"integerValue":"4"},"receivedQty":{"integerValue":"4"},"checked":{"booleanValue":true}}}}]}},"receipts":{"arrayValue":{"values":[{"mapValue":{"fields":{"docNo":{"stringValue":"RC-00001"},"date":{"integerValue":"1791997200000"},"invoiceNo":{"stringValue":"INV-300"},"byId":{"stringValue":"qAnxiOEyYOAE7r7BgX0fW87IgqiM"},"byName":{"stringValue":"E2E Staff A"},"lines":{"arrayValue":{"values":[{"mapValue":{"fields":{"productId":{"stringValue":"flour"},"qty":{"integerValue":"10"}}}},{"mapValue":{"fields":{"productId":{"stringValue":"cheese"},"qty":{"integerValue":"4"}}}}]}}}}}]}},"invoiceNo":{"stringValue":"INV-300"},"receivedAt":{"integerValue":"1791997200000"},"receivedBy":{"stringValue":"qAnxiOEyYOAE7r7BgX0fW87IgqiM"},"receivedByName":{"stringValue":"E2E Staff A"},"movementDocNo":{"stringValue":"RC-00001"},"updatedAt":{"integerValue":"1792035563626"}}},"updateMask":{"fieldPaths":["invoiceNo","lines","movementDocNo","receipts","receivedAt","receivedBy","receivedByName","status","updatedAt"]},"currentDocument":{"updateTime":"2026-10-15T03:39:12.927682000Z"}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockLevels/wh__flour","fields":{"productId":{"stringValue":"flour"},"locationId":{"stringValue":"wh"},"qty":{"integerValue":"10"},"updatedAt":{"integerValue":"1792035563628"},"updatedBy":{"stringValue":"qAnxiOEyYOAE7r7BgX0fW87IgqiM"},"id":{"stringValue":"wh__flour"}}},"currentDocument":{"exists":false}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockMovements/MV8ZPEGCVHNUWM7P","fields":{"docNo":{"stringValue":"RC-00001"},"type":{"stringValue":"receive"},"productId":{"stringValue":"flour"},"productName":{"stringValue":"FLOUR"},"unit":{"stringValue":"KG"},"qty":{"integerValue":"10"},"toLocationId":{"stringValue":"wh"},"supplierId":{"stringValue":"sup1"},"supplierName":{"stringValue":"E2E SUPPLIER"},"invoiceNo":{"stringValue":"INV-300"},"docDate":{"integerValue":"1791997200000"},"poId":{"stringValue":"po1"},"poDocNo":{"stringValue":"PO-00001"},"date":{"integerValue":"1791997200000"},"byUserId":{"stringValue":"qAnxiOEyYOAE7r7BgX0fW87IgqiM"},"byUserName":{"stringValue":"E2E Staff A"},"createdAt":{"integerValue":"1792035563628"},"id":{"stringValue":"MV8ZPEGCVHNUWM7P"}}}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockLevels/wh__cheese","fields":{"productId":{"stringValue":"cheese"},"locationId":{"stringValue":"wh"},"qty":{"integerValue":"4"},"updatedAt":{"integerValue":"1792035563628"},"updatedBy":{"stringValue":"qAnxiOEyYOAE7r7BgX0fW87IgqiM"},"id":{"stringValue":"wh__cheese"}}},"currentDocument":{"exists":false}},{"update":{"name":"projects/demo-pzm-e2e/databases/(default)/documents/stockMovements/MV8ZPEGCLEZ4HQOL","fields":{"docNo":{"stringValue":"RC-00001"},"type":{"stringValue":"receive"},"productId":{"stringValue":"cheese"},"productName":{"stringValue":"MOZZARELLA"},"unit":{"stringValue":"KG"},"qty":{"integerValue":"4"},"toLocationId":{"stringValue":"wh"},"supplierId":{"stringValue":"sup1"},"supplierName":{"stringValue":"E2E SUPPLIER"},"invoiceNo":{"stringValue":"INV-300"},"docDate":{"integerValue":"1791997200000"},"poId":{"stringValue":"po1"},"poDocNo":{"stringValue":"PO-00001"},"date":{"integerValue":"1791997200000"},"byUserId":{"stringValue":"qAnxiOEyYOAE7r7BgX0fW87IgqiM"},"byUserName":{"stringValue":"E2E Staff A"},"createdAt":{"integerValue":"1792035563628"},"id":{"stringValue":"MV8ZPEGCLEZ4HQOL"}}}},{"verify":"projects/demo-pzm-e2e/databases/(default)/documents/products/flour","currentDocument":{"updateTime":"2026-10-15T03:39:12.882019000Z"}},{"verify":"projects/demo-pzm-e2e/databases/(default)/documents/products/cheese","currentDocument":{"updateTime":"2026-10-15T03:39:12.894592000Z"}},{"verify":"projects/demo-pzm-e2e/databases/(default)/documents/locations/wh","currentDocument":{"updateTime":"2026-10-15T03:39:12.849197000Z"}}]}
+  ok 54 e2e\receive-po.spec.ts:61:1 › the integrity auditor flags a doubled receipt the app wrote (11.8s)
+  ok 55 e2e\supplier-confirm-once.spec.ts:91:1 › the supplier confirms once: a double tap sends one answer, and the page does not offer it again (4.1s)
+  ok 56 e2e\supplier-confirm-once.spec.ts:130:1 › a stale second device must refresh, then sees the existing confirmation in English (5.2s)
+  ok 57 e2e\supplier-confirm-once.spec.ts:158:1 › a lost response retries the exact request and state once, without a second notification (3.3s)
+  ok 58 e2e\supplier-confirm-once.spec.ts:175:1 › an unseen pending proposal survives a stale phone; refresh permits intentional return to approved C (6.6s)
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe locations failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe stockLevels failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe stockLevels failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe stockMovements failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+[WebServer] 10:39:44 AM [vite] (client) [console.error] [firestore] subscribe products failed FirebaseError:
+[WebServer] evaluation error at L1668:22 for 'list' @ L1668, false for 'list' @ L1668
+  ok 59 e2e\suppliers-master-detail.spec.ts:87:3 › desktop 1280x720: a supplier picked at the bottom is shown beside the list, list unmoved (21.9s)
+  ok 60 e2e\suppliers-master-detail.spec.ts:87:3 › desktop 1366x768: a supplier picked at the bottom is shown beside the list, list unmoved (9.5s)
+  ok 61 e2e\suppliers-master-detail.spec.ts:87:3 › desktop 1536x864: a supplier picked at the bottom is shown beside the list, list unmoved (9.1s)
+  ok 62 e2e\suppliers-master-detail.spec.ts:87:3 › desktop 1440x900: a supplier picked at the bottom is shown beside the list, list unmoved (8.7s)
+  ok 63 e2e\suppliers-master-detail.spec.ts:87:3 › desktop 1920x1080: a supplier picked at the bottom is shown beside the list, list unmoved (10.0s)
+  ok 64 e2e\suppliers-master-detail.spec.ts:147:1 › desktop: sort, search and a filtered-out choice keep the details sensible (6.8s)
+  ok 65 e2e\suppliers-master-detail.spec.ts:166:1 › deep link /suppliers?id= opens the details in view (desktop and phone) (5.3s)
+  ok 66 e2e\suppliers-master-detail.spec.ts:183:3 › tablet 1024x768: a drawer, background still, Escape and focus back to the row (7.5s)
+  ok 67 e2e\suppliers-master-detail.spec.ts:183:3 › tablet 768x1024: a drawer, background still, Escape and focus back to the row (6.6s)
+  ok 68 e2e\suppliers-master-detail.spec.ts:183:3 › phone 390x844: a drawer, background still, Escape and focus back to the row (6.9s)
+  ok 69 e2e\suppliers-master-detail.spec.ts:183:3 › phone 375x812: a drawer, background still, Escape and focus back to the row (6.7s)
+  ok 70 e2e\suppliers-master-detail.spec.ts:216:1 › the supplier name is reachable with the keyboard and opens the details (3.7s)
+
+  2 skipped
+  68 passed (7.7m)
++  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+!  Firestore Emulator has exited upon receiving signal: SIGINT
+i  auth: Stopping Authentication Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator

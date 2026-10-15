@@ -1,6 +1,22 @@
 # PZM mission task board
 
-## Latest checkpoint, 15 October 2026
+## Current execution after Owner continuation, 15 October 2026
+
+Preflight `2541d78` is preserved. Remote main remains `af0136b`. Three current tasks are working and will not be interrupted. No fourth or duplicate child is launched. Exact IDs are in `active-tasks.json`.
+
+| Task | Model | Branch / SHA | Tests / CI | Review | Merge / deployment | Blocker / next |
+|---|---|---|---|---|---|---|
+| Orders PR20 final-head review | OpenCode medium | feat/orders-ux-simplification / 1cbcabc | Local 1341 unit, 228 rules, 68 E2E plus 2 existing skips; 19 Orders and compiled Preview cases; final GitHub checks and CF green | Working, no verdict | Not merged, production untouched | Authenticated remote Preview QA blocked by Access; consume exact-SHA verdict |
+| PR17 current-head independent review | OpenCode high | review/20261015-pr17 / d37e414 | Current main is an ancestor; fresh 1345 unit, 228 rules, 68 E2E plus 2 existing skips; build/lint/i18n and exact-head GitHub CI pass | Working, no verdict | Not merged, production untouched | Preview QA and final reviewer result required |
+| ThaiTrees Lexicon continuation | OpenCode high | research/20261014-thaitrees / af0136b baseline | No new artifact received yet | Not yet eligible | Research only | Capture licensing/revision/offline evidence, then independent review |
+
+Next eligible free slot goes to the existing Zero-Ops heldout worktree. PR19 and PR16 remain queued behind the release frontier. No earlier completed work is reset or recreated. Earlier A/B/C were interrupted before this continuation directive; this is historical fact, not a claim they are currently running.
+
+Superpowers was used in the Orders engineering workflow with SKILL.md reads, a written plan, observed behavioral RED/GREEN tests and full verification; evidence is in PR20's `docs/evidence/orders-ux/README.md` and logs. Native child invocation evidence is still required from the active OpenCode tasks. Pi remains BLOCKED for native availability and genuine Compact proof; the package declaration is now visible in settings, but owner confirmation and safe supported activation have not occurred.
+
+The separate strict bundle diagnosis is `bundle-diagnosis.md` plus a hash-stamped inventory. Strict failure stays open; main CI budget remains unchanged. No limit was weakened.
+
+## Previous checkpoint, retained for history
 
 Owner prioritized Orders UX and supplied reference screenshots. PR #20 is isolated on `feat/orders-ux-simplification`, final candidate `1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc`. Local checks and 19/19 compiled Preview cases pass. Final-head independent OpenCode medium review and new CI are pending. Remote Preview QA is blocked by Cloudflare Access. No merge or production smoke is claimed. Exact task ID and next actions are in `orders-checkpoint.json`.
 

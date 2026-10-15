@@ -1,0 +1,39 @@
+{
+  "baseline": "af0136b0f6886989bc32d651a384ac05b39cdad6",
+  "node": "v24.18.0",
+  "measurement": "uncompressed linked initial JS, not all lazy chunks, fonts, CSS, network or runtime latency",
+  "files": [
+    {
+      "file": "assets/main-n7Fi0LAl.js",
+      "bytes": 3001464,
+      "sha256": "9bb6ade7e68f61f8041a128f0cad0cd15ee4defefb8f1dabec70d470db63c7ad"
+    },
+    {
+      "file": "assets/rolldown-runtime-QTnfLwEv.js",
+      "bytes": 694,
+      "sha256": "5db5ba82eef00d1dee7e86e663098c9427d01183a88d357437daff295aec3e75"
+    },
+    {
+      "file": "assets/jsx-runtime-CkaNx6Tr.js",
+      "bytes": 11385,
+      "sha256": "07c177eb9769f039c4fc7092bb4d38d517d7f0d62609632788d5a7efff373edd"
+    },
+    {
+      "file": "assets/supplierConfirmation-CT_8smDX.js",
+      "bytes": 514805,
+      "sha256": "08028279e5274ccf233162dee2f82da259540a9b8fa4bb86fb6cef1f6ad61a2d"
+    }
+  ],
+  "totalBytes": 3528348,
+  "thaiFontBase64SourceBytes": 120296,
+  "unchangedLimits": {
+    "strict": {
+      "mainKB": 900,
+      "totalKB": 2048
+    },
+    "mainCI": {
+      "mainKB": 2950,
+      "totalKB": 3450
+    }
+  }
+}

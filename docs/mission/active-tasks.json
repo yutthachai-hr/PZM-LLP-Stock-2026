@@ -1,40 +1,59 @@
 {
   "parentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
-  "providerInstanceId": "opencode",
-  "model": "9router/gemini-3.8-flash-high",
+  "observedAt": "2026-10-15T03:42:04Z",
+  "maximumConcurrentChildren": 3,
+  "activeCount": 3,
   "tasks": [
     {
-      "id": "A",
-      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-master-20261014-a-r1",
-      "clientRequestId": "pzm-master-20261014-a-r1",
-      "worktree": "C:/Users/Yutthachai/pzm-mission-release-20261014",
-      "branch": "mission/20261014-release",
-      "baseline": "af0136b0f6886989bc32d651a384ac05b39cdad6",
-      "lastObservedState": "interrupted; no result or worktree artifact received within timebox",
-      "nextAction": "Coordinator retains incomplete release scope for later reassignment; see orders-checkpoint.json for current task"
+      "id": "ORDERS-REVIEW",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-medium",
+      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-orders-ux-1cbcabc-review-r2",
+      "clientRequestId": "pzm-orders-ux-1cbcabc-review-r2",
+      "worktree": "C:/Users/Yutthachai/pzm-orders-ux-20261015",
+      "branch": "feat/orders-ux-simplification",
+      "targetSha": "1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc",
+      "pr": 20,
+      "lastObservedState": "working; no verdict or report yet",
+      "nextAction": "Receive exact-SHA verdict. Final CI is green; remote authenticated Preview QA remains blocked. No merge without both."
     },
     {
-      "id": "B",
-      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-master-20261014-b-r1",
-      "clientRequestId": "pzm-master-20261014-b-r1",
+      "id": "A17-REVIEW",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-pr17-d37e414-review-r1",
+      "clientRequestId": "pzm-pr17-d37e414-review-r1",
+      "worktree": "C:/Users/Yutthachai/pzm-mission-release-20261014",
+      "branch": "review/20261015-pr17",
+      "targetSha": "d37e414466c2301854d808ea051cf5714b25780b",
+      "pr": 17,
+      "lastObservedState": "working; no verdict or report yet",
+      "nextAction": "Receive independent review and native skill invocation evidence; parent completed full local revalidation. Preview gate still required."
+    },
+    {
+      "id": "B-LEXICON",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-thaitrees-lexicon-r2",
+      "clientRequestId": "pzm-thaitrees-lexicon-r2",
       "worktree": "C:/Users/Yutthachai/pzm-mission-thaitrees-20261014",
       "branch": "research/20261014-thaitrees",
       "baseline": "af0136b0f6886989bc32d651a384ac05b39cdad6",
-      "lastObservedState": "interrupted; no result or worktree artifact received within timebox",
-      "nextAction": "Coordinator retains incomplete ThaiTrees scope for later reassignment"
-    },
-    {
-      "id": "C",
-      "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-master-20261014-c-r1",
-      "clientRequestId": "pzm-master-20261014-c-r1",
-      "worktree": "C:/Users/Yutthachai/pzm-mission-zeroops-20261014",
-      "branch": "research/20261014-zeroops-heldout",
-      "baseline": "7c78201c5df6b087177b8b18e5bb131e06b8ef9b",
-      "lastObservedState": "interrupted; no result or worktree artifact received within timebox",
-      "nextAction": "Coordinator retains incomplete Zero-Ops scope for later reassignment"
+      "lastObservedState": "working; no artifact or result yet",
+      "nextAction": "Capture revision/license/schema/offline experiment evidence and final SHA; assign a fresh independent reviewer after completion."
     }
   ],
-  "mergePolicy": "No merges without every owner-named gate and fresh independent OpenCode review on final SHA",
-  "rollover": "UNVERIFIED; no genuine new-thread handoff observed",
-  "piSuperpowers": "BLOCKED by delegation guard; owner-side installation required"
+  "historical": {
+    "A_B_C_original": "Original pzm-master-20261014-{a,b,c}-r1 tasks were interrupted before the latest owner directive and have no pending runs or completed deliverables. Do not count them as completed or still running.",
+    "ordersReviewRound1": "e8070ff review cancelled as obsolete before latest directive; no approval was received. Current round 2 remains untouched."
+  },
+  "queued": [
+    "C: existing exp/real-stack worktree, independent >=240-case heldout benchmark, read-only/shadow; assign on first eligible free slot",
+    "A19: current-main LINE and language revalidation after A17 integration",
+    "A16: current code-splitting candidate, strict target and functional offline/export/PWA diagnosis",
+    "PR1: read-only missing-feature inventory; never wholesale merge"
+  ],
+  "piSuperpowers": "BLOCKED pending owner confirmation and native activation/Compact proof. Package declaration is now observed in settings, but no reload or installation-success claim is made.",
+  "mergePolicy": "Every owner gate and fresh independent review must cover the exact final head; no inherited approvals; no Access bypass or gate weakening.",
+  "rollover": "UNVERIFIED; no genuine automatic new-thread handoff observed"
 }

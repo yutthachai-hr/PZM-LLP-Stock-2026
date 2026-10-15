@@ -1,0 +1,44 @@
+
+> pizza-stock@0.0.0 lint
+> oxlint
+
+tests/automation-brand-pin.test.ts:26:7: warning eslint(no-unused-vars): Variable 'waitAt' is declared but never used. Unused variables should start with a '_'. help: Consider removing this declaration.
+src/pages/purchase/SupplierConfirmationPanel.tsx:167:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/brand/BrandContext.tsx:68:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/data/DataContext.tsx:102:10: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/data/DataContext.tsx:245:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/data/DataContext.tsx:259:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/ui.tsx:136:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/Toast.tsx:66:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/Confirm.tsx:98:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/SiteChip.tsx:12:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/DataTable.tsx:41:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/QtyInput.tsx:14:10: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/QtyInput.tsx:20:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/QtyInput.tsx:33:14: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/QtyInput.tsx:40:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+e2e/receive-po.spec.ts:28:11: warning eslint(no-unsafe-optional-chaining): Unsafe usage of optional chaining help: If this short-circuits with 'undefined' the evaluation will throw TypeError
+src/components/ProductThumb.tsx:132:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/ProductThumb.tsx:149:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+tests/suppliers.test.ts:27:24: warning eslint(no-unused-vars): Type 'SupplierItem' is imported but never used. help: Consider removing this import.
+src/components/keying/KeyingSide.tsx:29:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/calendar/MonthGrid.tsx:13:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/calendar/ItemRow.tsx:10:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/calendar/ItemRow.tsx:15:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/calendar/ItemRow.tsx:38:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/components/DemoBanner.tsx:33:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/calendar/EventEditor.tsx:12:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/calendar/EventEditor.tsx:18:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/calendar/EventEditor.tsx:24:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/auth/AuthContext.tsx:352:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/lib/supplierName.ts:58:47: warning eslint(no-useless-escape): Unnecessary escape character '-' help: Replace `\-` with `-`.
+src/pages/products/ProductTable.tsx:50:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/products/ProductTable.tsx:139:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/suppliers/SupplierPerformance.tsx:84:41: warning react-hooks(exhaustive-deps): React Hook useMemo has unnecessary dependency: orders help: Either include it or remove the dependency array.
+src/i18n/I18nContext.tsx:74:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/i18n/I18nContext.tsx:84:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/i18n/I18nContext.tsx:89:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/requests/RequestReview.tsx:615:17: warning react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+src/pages/issue/PosImport.tsx:53:67: warning react-hooks(exhaustive-deps): React hook useMemo depends on `rows`, which changes every render help: Try memoizing this variable with `useRef` or `useCallback`.
+src/pages/issue/PosImport.tsx:59:13: warning react-hooks(exhaustive-deps): React hook useMemo depends on `header`, which changes every render help: Try memoizing this variable with `useRef` or `useCallback`.
+src/pages/issue/PosImport.tsx:59:7: warning react-hooks(exhaustive-deps): React hook useMemo depends on `rows`, which changes every render help: Try memoizing this variable with `useRef` or `useCallback`.
