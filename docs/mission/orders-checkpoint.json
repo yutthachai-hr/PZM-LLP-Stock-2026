@@ -1,0 +1,46 @@
+{
+  "task": "Orders UX simplification, Owner screenshots supplied",
+  "repo": "https://github.com/yutthachai-hr/PZM-LLP-Stock-2026",
+  "worktree": "C:/Users/Yutthachai/pzm-orders-ux-20261015",
+  "branch": "feat/orders-ux-simplification",
+  "base": "af0136b0f6886989bc32d651a384ac05b39cdad6",
+  "head": "1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc",
+  "pr": "https://github.com/yutthachai-hr/PZM-LLP-Stock-2026/pull/20",
+  "draft": true,
+  "mergeStatus": "NOT MERGED; no production change",
+  "localVerification": {
+    "unit": "1341 passed",
+    "rules": "228 passed",
+    "fullEmulatorE2E": "68 passed; 2 existing real-data-fixture skips, no new skip",
+    "ordersBrowser": "19 passed, zero skips/retries",
+    "compiledPreviewBrowser": "19 passed, zero skips/retries",
+    "buildTypechecksLintI18n": "passed; existing lint/build warnings recorded",
+    "bundle": "main CI 2950/3450 KB budgets passed"
+  },
+  "ci": "All nine checks and CF Pages passed on previous e8070ff; NEW head 1cbcabc requires fresh CI",
+  "preview": {
+    "previousDeployment": "https://34e4200a.pzmstock.pages.dev/orders",
+    "remoteQA": "BLOCKED by Cloudflare Access unauthenticated HTTP302; no bypass attempted",
+    "localCompiled": "http://127.0.0.1:5187/orders",
+    "ownedServerPid": 13620,
+    "artifact": "C:/Users/Yutthachai/pzm-orders-ux-20261015/.superpowers/sdd/2026-10-15-orders-ux/built-preview"
+  },
+  "activeReview": {
+    "round": 2,
+    "providerInstanceId": "opencode",
+    "model": "9router/gemini-3.8-flash-medium",
+    "taskId": "node:delegated-task:command%3Amcp%3A0ca0fdfe-d946-47fe-a4fc-0ff4b788180d%3Adelegate-task%3Apzm-orders-ux-1cbcabc-review-r2",
+    "clientRequestId": "pzm-orders-ux-1cbcabc-review-r2",
+    "targetSha": "1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc",
+    "state": "accepted working, no verdict yet"
+  },
+  "previousReview": "Round 1 on e8070ff canceled as obsolete after test-only correction; no findings or approval received",
+  "earlierMissionChildren": "A/B/C exceeded 35-minute timeboxes with no result or worktree changes; cancellation confirmed interrupted, no pending children. Their work is not counted complete.",
+  "nextActions": [
+    "Receive final-head independent review; respond via fresh delegate_task round if needed",
+    "Read final-head GitHub CI and new deployment SHA",
+    "Complete authenticated isolated remote Preview QA without weakening Access",
+    "Only after all gates pass, mark ready and merge sequentially; then read-only production smoke",
+    "If runtime or Preview remains blocked, preserve PR and report blocker, never fake a pass"
+  ]
+}

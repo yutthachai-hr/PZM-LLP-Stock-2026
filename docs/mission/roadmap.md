@@ -1,5 +1,11 @@
 # PZM mission task board
 
+## Latest checkpoint, 15 October 2026
+
+Owner prioritized Orders UX and supplied reference screenshots. PR #20 is isolated on `feat/orders-ux-simplification`, final candidate `1cbcabc3b77ee279d8ec491fa53b26574c2eb6bc`. Local checks and 19/19 compiled Preview cases pass. Final-head independent OpenCode medium review and new CI are pending. Remote Preview QA is blocked by Cloudflare Access. No merge or production smoke is claimed. Exact task ID and next actions are in `orders-checkpoint.json`.
+
+Earlier A/B/C tasks exceeded their 35-minute timeboxes without results or worktree artifacts. They were cancelled and confirmed interrupted with no pending children. Their original scope remains incomplete, owned by the coordinator for later reassignment. The historical rows below are the original plan, not active-agent claims.
+
 ## Execution checklist
 
 - [x] Frame. Three independent slices with no shared writers. Done means each artifact has reproducible evidence, exact-SHA independent review, and all applicable release gates.
