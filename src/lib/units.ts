@@ -96,3 +96,41 @@ export function normaliseConversions(raw: readonly UnitConversion[], baseUnit?: 
     return true
   })
 }
+
+/**
+ * The spellings the workbook (and a typed list) uses for units the app already has.
+ *
+ * Only spellings that mean exactly one thing. "ลัง" is not here: a case is a unit in its
+ * own right on the owner's list, and it is a different size on every product.
+ */
+const UNIT_SYNONYMS: Record<string, string> = {
+  'กก': 'KG',
+  'กก.': 'KG',
+  'ก.ก.': 'KG',
+  'กิโล': 'KG',
+  'กิโลกรัม': 'KG',
+  'kg': 'KG',
+  'kgs': 'KG',
+  'kg.': 'KG',
+  'pack': 'Pack',
+  'แพ็ค': 'Pack',
+  'แพค': 'Pack',
+  'แพ็ก': 'Pack',
+  'pk': 'Pack',
+  'pcs': 'EA',
+  'pc': 'EA',
+  'ชิ้น': 'EA',
+  'อัน': 'EA',
+  'ea.': 'EA',
+  'ลิตร': 'L',
+  'lt': 'L',
+  'ltr': 'L',
+  'l.': 'L',
+}
+
+/** A written unit as the app would spell it, or itself when it has no known spelling. */
+export function canonicalUnit(raw: string): string {
+  const s = raw.trim()
+  if (!s) return ''
+  return UNIT_SYNONYMS[s.toLowerCase()] ?? s
+}

@@ -1,0 +1,86 @@
+// Product lists typed or pasted into the import window (Owner, 15 Oct 2026):
+// "แป้งพิซซ่า 5 ถุง, มอสซาเรลล่า 3 กก., กล่องพิซซ่า 18 นิ้ว 2 แพ็ค".
+// The reader only splits and reads numbers. Matching, units and confirmation stay in
+// lib/importReview, so nothing typed here can be filed without a person.
+
+import { describe, expect, test } from 'vitest'
+import { readItemText } from '../src/lib/itemText'
+
+const read = (s: string) => readItemText(s).lines
+
+describe('splitting a list', () => {
+  test("the Owner's example is three lines, with the size kept in the box's name", () => {
+    expect(read('แป้งพิซซ่า 5 ถุง, มอสซาเรลล่า 3 กก., กล่องพิซซ่า 18 นิ้ว 2 แพ็ค')).toEqual([
+      { name: 'แป้งพิซซ่า', qty: 5, unit: 'ถุง' },
+      { name: 'มอสซาเรลล่า', qty: 3, unit: 'KG' },
+      { name: 'กล่องพิซซ่า 18 นิ้ว', qty: 2, unit: 'Pack' },
+    ])
+  })
+
+  test('one item per line, pasted from a chat, blank lines ignored', () => {
+    expect(read('MOZZARELLA 2 kg\n\n  PENNE 500G 3 pack  \r\nRANCH 1')).toEqual([
+      { name: 'MOZZARELLA', qty: 2, unit: 'KG' },
+      { name: 'PENNE 500G', qty: 3, unit: 'Pack' },
+      { name: 'RANCH', qty: 1 },
+    ])
+  })
+
+  test('semicolons and "และ" also separate items', () => {
+    expect(read('ชีส 2 กก; ซอส 3 ขวด และ แป้ง 1 ถุง').map((l) => l.name)).toEqual(['ชีส', 'ซอส', 'แป้ง'])
+  })
+})
+
+describe('reading the quantity', () => {
+  test('a count before the name', () => {
+    expect(read('2 x mozzarella')).toEqual([{ name: 'mozzarella', qty: 2 }])
+    expect(read('5 ถุง แป้งพิซซ่า')).toEqual([{ name: 'แป้งพิซซ่า', qty: 5, unit: 'ถุง' }])
+  })
+
+  test('a count after the name with x', () => {
+    expect(read('mozzarella x2')).toEqual([{ name: 'mozzarella', qty: 2 }])
+  })
+
+  test('a unit with a trailing dot is read as the unit', () => {
+    expect(read('นมสด 2 มล.')).toEqual([{ name: 'นมสด', qty: 2, unit: 'มล' }])
+  })
+
+  test('decimals and mixed Thai and English', () => {
+    expect(read('ชีส MOZZARELLA 2.5 kg')).toEqual([{ name: 'ชีส MOZZARELLA', qty: 2.5, unit: 'KG' }])
+  })
+
+  test('no quantity is left unknown, never guessed', () => {
+    const [line] = read('มอสซาเรลล่า')
+    expect(line.name).toBe('มอสซาเรลล่า')
+    expect(Number.isNaN(line.qty)).toBe(true)
+  })
+
+  test('a size glued to its unit is part of the name, not the quantity', () => {
+    const [line] = read('PENNE 500G')
+    expect(line.name).toBe('PENNE 500G')
+    expect(Number.isNaN(line.qty)).toBe(true)
+  })
+
+  test('Thai digits are read as numbers', () => {
+    expect(read('แป้ง ๕ ถุง')).toEqual([{ name: 'แป้ง', qty: 5, unit: 'ถุง' }])
+  })
+
+  test('"ตาม" is not a quantity', () => {
+    expect(Number.isNaN(read('PEPPERONI ตาม')[0].qty)).toBe(true)
+  })
+})
+
+describe('instructions are kept, never read as items', () => {
+  test('a prohibition is a constraint, not a product line', () => {
+    const r = readItemText('แป้งพิซซ่า 5 ถุง, ยังไม่ต้องส่งผู้ขาย')
+    expect(r.lines).toEqual([{ name: 'แป้งพิซซ่า', qty: 5, unit: 'ถุง' }])
+    expect(r.constraints).toEqual(['ยังไม่ต้องส่งผู้ขาย'])
+  })
+
+  test('English prohibitions too', () => {
+    expect(readItemText("ranch 2\ndon't send to supplier yet").constraints).toEqual(["don't send to supplier yet"])
+  })
+
+  test('empty text gives nothing', () => {
+    expect(readItemText('  \n , ;  ')).toEqual({ lines: [], constraints: [] })
+  })
+})

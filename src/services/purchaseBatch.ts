@@ -5,7 +5,7 @@ import { AppError } from '../i18n/AppError'
 import { entryUnitsFor } from '../components/QtyInput'
 import type { OrderBlock } from '../lib/orderSheet'
 import { buildMatchIndex, matchProduct, type MatchIndex, type ProductAlias } from '../lib/productMatch'
-import { sameUnit } from '../lib/units'
+import { canonicalUnit, sameUnit } from '../lib/units'
 import { startOfDay } from '../lib/format'
 import { shownUnit } from '../lib/ledger'
 import { approvePurchaseOrder, createPurchaseOrder, deletePurchaseOrder } from './purchaseOrders'
@@ -56,41 +56,8 @@ function scoped() {
 
 // ---------------------------------------------------------------- units ----
 
-/**
- * The spellings the workbook uses for units the app already has.
- *
- * Only spellings that mean exactly one thing. "ลัง" is not here: a case is a unit in its
- * own right on the owner's list, and it is a different size on every product.
- */
-const UNIT_SYNONYMS: Record<string, string> = {
-  'กก': 'KG',
-  'กก.': 'KG',
-  'ก.ก.': 'KG',
-  'กิโล': 'KG',
-  'กิโลกรัม': 'KG',
-  'kgs': 'KG',
-  'kg.': 'KG',
-  'แพ็ค': 'Pack',
-  'แพค': 'Pack',
-  'แพ็ก': 'Pack',
-  'pk': 'Pack',
-  'pcs': 'EA',
-  'pc': 'EA',
-  'ชิ้น': 'EA',
-  'อัน': 'EA',
-  'ea.': 'EA',
-  'ลิตร': 'L',
-  'lt': 'L',
-  'ltr': 'L',
-  'l.': 'L',
-}
-
-/** A workbook unit as the app would spell it, or itself when it has no known spelling. */
-export function canonicalUnit(raw: string): string {
-  const s = raw.trim()
-  if (!s) return ''
-  return UNIT_SYNONYMS[s.toLowerCase()] ?? s
-}
+// The workbook's unit spellings live with the other unit rules; kept exported from here.
+export { canonicalUnit }
 
 /**
  * The unit a row is ordered in, given what the workbook said and what the product allows.
