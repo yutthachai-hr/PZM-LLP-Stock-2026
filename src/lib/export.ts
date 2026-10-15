@@ -22,7 +22,8 @@ export function columnWidths(rows: Record<string, string | number>[]): { wch: nu
   })
 }
 
-// ponytail: dynamic xlsx loader; add streaming export when memory exceeds 100MB
+// xlsx and jspdf load on first export, not with the app: together they are most of what code
+// splitting took out of the first download.
 export async function exportExcel(
   filename: string,
   sheetName: string,
@@ -70,7 +71,6 @@ export interface PdfReportOptions {
   foot?: (string | number)[]
 }
 
-// ponytail: dynamic jspdf loader; add web worker rendering when PDF generation exceeds 5s
 export async function exportReportPdf(opts: PdfReportOptions): Promise<void> {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),

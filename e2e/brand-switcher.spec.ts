@@ -73,7 +73,10 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${EVIDENCE}/${name}.png` })
 }
 
-// ponytail: heading 2 presence signals lazy chunk + firestore loaded; add table row count assertion if page size exceeds 100
+// The heading proves the lazy page has mounted; it can show before the rows arrive. Callers
+// assert on the returned locator with retrying `toContainText`, which is what waits for data.
+// Check the brand's own item first, then the absent ones: a negative check alone passes on an
+// empty list.
 async function catalogue(page: Page) {
   await open(page, '/products')
   const main = page.locator('main')

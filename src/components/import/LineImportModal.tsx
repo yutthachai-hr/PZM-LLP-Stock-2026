@@ -82,7 +82,6 @@ export function LineImportModal({
     if (!file) return
     setError(null)
     setStep('reading')
-    // ponytail: dynamic sheet parser; add progress bar when sheets exceed 10k rows
     try {
       const { parseSheetLines } = await import('../../lib/sheetLines')
       const parsed = parseSheetLines(await file.arrayBuffer())

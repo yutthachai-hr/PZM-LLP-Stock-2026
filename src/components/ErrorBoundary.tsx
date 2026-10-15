@@ -71,7 +71,9 @@ interface State {
   reloading: boolean
 }
 
-// ponytail: class error boundary for lazy routes; add remote error telemetry when configured
+// A deploy replaces the hashed page files, so a tab opened before it can ask for one that no
+// longer exists. That case reloads once to pick up the new build (the sessionStorage flag stops
+// a reload loop if the file is still missing); any other error shows the reload screen.
 export class ErrorBoundary extends Component<Props, State> {
   static readonly CHUNK_RELOAD_KEY = CHUNK_RELOAD_KEY
   static readonly isChunkLoadError = isChunkLoadError

@@ -59,7 +59,6 @@ export function requestRows(
   return rows
 }
 
-// ponytail: dynamic export loader; add progress bar when exports exceed 50k rows
 export async function exportRequestExcel(
   pr: PurchaseRequest,
   locationName: string,
@@ -70,7 +69,6 @@ export async function exportRequestExcel(
   await exportExcel(`${pr.docNo}.xlsx`, pr.docNo, requestRows(pr, locationName, t, locationNameOf))
 }
 
-// ponytail: dynamic export loader; add progress bar when exports exceed 50k rows
 export async function exportRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): Promise<void> {
   const body: (string | number)[][] = []
   for (const g of groupedBySupplier(pr)) {

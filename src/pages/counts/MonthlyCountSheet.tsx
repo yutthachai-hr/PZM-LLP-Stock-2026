@@ -362,7 +362,6 @@ export function MonthlyCountSheet() {
   const monthOver = bkkDayStart(Date.now()) >= sheet.countDate
   const toPost = rows.filter((r) => r.diff).length
 
-  // ponytail: dynamic export loader; add progress bar when exports exceed 50k rows
   async function download() {
     setExporting(true)
     try {

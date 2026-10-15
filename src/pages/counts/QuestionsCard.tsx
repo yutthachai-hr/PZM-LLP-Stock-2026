@@ -34,7 +34,6 @@ export function QuestionsCard({
   const [exporting, setExporting] = useState(false)
   const entries = Object.entries(questions).sort((a, b) => a[1].source.localeCompare(b[1].source) || a[1].excelRow - b[1].excelRow)
 
-  // ponytail: dynamic export loader; add progress bar when exports exceed 50k rows
   async function download() {
     setExporting(true)
     try {

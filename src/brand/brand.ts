@@ -195,6 +195,61 @@ export function savedBrand(): BrandId | null {
 }
 
 /**
+ * The brand picked on the sign-in screen for the sign-in now in flight.
+ *
+ * The sign-in screen's switch was only that screen's own state, so the brand someone picked
+ * there was dropped on submit and the device's last brand opened instead: Le Lapin picked,
+ * Pizza Mania's Dashboard shown (owner's Production recording, 14 Oct 2026). The screen
+ * records the pick here before it signs in; the gate that opens the app takes it.
+ *
+ * Memory only, never storage: a sign-in that fails must not change which brand this device
+ * opens next (the screen clears it), and a reload is a new visit.
+ */
+let signInAttempt = 0
+let signInBrand: { id: number; brand: BrandId | null } | null = null
+const signInSettled = new Set<() => void>()
+
+/** Begin an attempt, including an untouched selector (null). No business context is activated. */
+export function setSignInBrand(b: BrandId | null): number {
+  const id = ++signInAttempt
+  signInBrand = { id, brand: b }
+  return id
+}
+
+export function pendingSignInBrand(): BrandId | null {
+  return signInBrand?.brand ?? null
+}
+
+/** A stale failed/unmounted form must not cancel a newer attempt. */
+export function clearSignInBrand(attemptId?: number): void {
+  if (!signInBrand || (attemptId !== undefined && signInBrand.id !== attemptId)) return
+  signInBrand = null
+  for (const settled of signInSettled) settled()
+}
+
+/** Successful Gate activation or definitive profile rejection, not credential-promise success. */
+export function onSignInBrandSettled(settled: () => void): () => void {
+  signInSettled.add(settled)
+  return () => { signInSettled.delete(settled) }
+}
+
+/**
+ * Which brand opens once someone is signed in, strongest reason first:
+ *
+ * 1. the brand they picked on the sign-in screen just now (which starts on 2 or 3, so an
+ *    untouched switch means the same thing as no pick);
+ * 2. the brand of a send resumed after a trip through LINE (share/liffResume.ts);
+ * 3. the brand this device last had open;
+ * 4. none: the picker asks.
+ *
+ * Every active account may open every brand (see savedBrand), so this decides the starting
+ * screen, not access.
+ */
+export function startingBrand(picked: BrandId | null, resumed: BrandId | null, saved: BrandId | null): BrandId | null {
+  return picked ?? resumed ?? saved
+}
+
+/**
  * Map a logical collection name to its brand-scoped physical name.
  *
  * `brand` defaults to whatever is selected right now, which is what a screen wants. Any

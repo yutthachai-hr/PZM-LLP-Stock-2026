@@ -246,7 +246,6 @@ export function ProductsPage() {
     }
   }
 
-  // ponytail: dynamic export loader; add progress bar when exports exceed 50k rows
   async function exportChosen() {
     setExporting(true)
     try {

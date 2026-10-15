@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { BrandProvider, useBrand } from './brand/BrandContext'
 import { DataProvider } from './data/DataContext'
@@ -17,9 +17,10 @@ import { LoginPage } from './pages/Login'
 import { DashboardPage } from './pages/Dashboard'
 import { ReceivePage } from './pages/Receive'
 import { ensureBrandLocations } from './services/seed'
-import { savedBrand } from './brand/brand'
+import { clearSignInBrand, pendingSignInBrand, savedBrand, startingBrand } from './brand/brand'
 
-// ponytail: route lazy-loading; keep login/brand/dashboard/receive on fast static path
+// Every other page loads on first visit. Sign-in, the Dashboard and receiving stay in the
+// first download: they are what a branch opens to, and what it needs offline.
 const ProductsPage = lazy(() => import('./pages/Products').then((m) => ({ default: m.ProductsPage })))
 const StockCardPage = lazy(() => import('./pages/StockCardPage').then((m) => ({ default: m.StockCardPage })))
 const IssuePage = lazy(() => import('./pages/Issue').then((m) => ({ default: m.IssuePage })))
@@ -52,6 +53,7 @@ function Gate() {
   const { user, loading } = useAuth()
   const { brand, choose, reset } = useBrand()
   const location = useLocation()
+  const navigate = useNavigate()
   const t = useT()
 
   // reset the brand choice on logout so the picker shows again next login
@@ -60,14 +62,21 @@ function Gate() {
   }, [loading, user, reset])
 
   // After sign-in, straight into a brand (owner, 9 Oct 2026: no full-screen picker for
-  // routine use). A send picked up after a trip through LINE opens the brand its order
-  // belongs to (share/liffResume.ts); otherwise the brand this device last had open. Only a
-  // device that has never opened one sees the picker. Every active account may open every
-  // brand (see savedBrand), so this decides the starting screen, not access.
-  const startBrand = user && !brand ? (brandToResume() ?? savedBrand()) : null
+  // routine use): the one picked on the sign-in screen, else a resumed LINE send's, else
+  // this device's last; only a device that has never opened one sees the picker (order in
+  // startingBrand). Nothing brand-scoped is read before this: DataProvider mounts only once
+  // `brand` is set, and choose() points the data layer at it first.
+  const pickedBrand = pendingSignInBrand()
+  const resumedBrand = brandToResume()
+  const startBrand = user && !brand ? startingBrand(pickedBrand, resumedBrand, savedBrand()) : null
   useEffect(() => {
-    if (startBrand) choose(startBrand)
-  }, [startBrand, choose])
+    if (!startBrand) return
+    // Resume IDs belong to the URL's brand. A deliberate override must not interpret one
+    // against another namespace, even if that namespace contains an identical document ID.
+    if (pickedBrand && resumedBrand && pickedBrand !== resumedBrand) navigate('/', { replace: true })
+    choose(startBrand)
+    clearSignInBrand()
+  }, [startBrand, pickedBrand, resumedBrand, choose, navigate])
 
   // Make sure the chosen brand has its default locations.
   //
