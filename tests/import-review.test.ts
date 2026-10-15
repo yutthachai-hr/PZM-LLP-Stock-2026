@@ -163,4 +163,13 @@ describe('a typed list and a quantity typed in the window (15 Oct 2026)', () => 
     const [row] = planRows(readItemText('unknown thing').lines, catalogue)
     expect(importable([setQty(row, 2)])).toEqual([])
   })
+
+  test('unclear quantity tokens like 12345 or 7UP are blocked as bad-qty and never auto-included', () => {
+    const customCatalogue = [...catalogue, P('p12345', 'SOME PRODUCT', { sku: '12345' })]
+    const r = readItemText('12345')
+    const [row] = planRows(r.lines, customCatalogue)
+    expect(row.product?.id).toBe('p12345')
+    expect(row.include).toBe(false)
+    expect(blockedReason(row)).toBe('bad-qty')
+  })
 })

@@ -1,8 +1,12 @@
 // Which reader a dropped or picked file goes to (Owner, 15 Oct 2026: drag and drop in the
 // import window). Decided before anything is read, so a wrong file costs nothing.
 
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
+
+vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {} })
+
 import { MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_SHEET_BYTES, routeImportFile } from '../src/lib/importFile'
+const { readDocumentFile } = await import('../src/services/billOcr')
 // The PDF limit is the bill reader's, defined once in lib/importFile.ts.
 
 const f = (name: string, type = '', size = 1000) => ({ name, type, size })
@@ -21,6 +25,20 @@ describe('routeImportFile', () => {
     expect(routeImportFile(f('bill.png', 'image/png'), open)).toEqual({ kind: 'document' })
     expect(routeImportFile(f('bill.pdf', 'application/pdf'), open)).toEqual({ kind: 'document' })
     expect(routeImportFile(f('scan.PDF'), open)).toEqual({ kind: 'document' })
+  })
+
+  test('images with empty MIME type fall back safely to supported extensions only when MIME is empty', () => {
+    expect(routeImportFile(f('bill.jpg', ''), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.png', ''), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.jpeg', ''), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.webp', ''), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.jpg', '', MAX_IMAGE_BYTES + 1), open)).toEqual({ error: 'too-big' })
+    expect(routeImportFile(f('bill.png', '', 0), open)).toEqual({ error: 'empty' })
+    expect(routeImportFile(f('bill.png', ''), { documents: false, busy: false })).toEqual({ error: 'no-reader' })
+    // Non-empty non-image MIME is not overridden by extension
+    expect(routeImportFile(f('bill.jpg', 'text/plain'), open)).toEqual({ error: 'unsupported' })
+    // Empty MIME with non-image extension is still unsupported
+    expect(routeImportFile(f('notes.txt', ''), open)).toEqual({ error: 'unsupported' })
   })
 
   test('without the document reader, a photo or PDF is refused up front', () => {
@@ -46,5 +64,17 @@ describe('routeImportFile', () => {
 
   test('a second file while one is being read is refused', () => {
     expect(routeImportFile(f('order.xlsx'), { documents: true, busy: true })).toEqual({ error: 'busy' })
+  })
+
+  test('downstream readDocumentFile validates format and accepts empty MIME with image extension without early type rejection', async () => {
+    const nonImage = new File(['text'], 'notes.txt', { type: '' })
+    await expect(readDocumentFile(nonImage)).rejects.toThrow('รองรับเฉพาะรูปภาพหรือ PDF')
+
+    const wrongMime = new File(['text'], 'bill.jpg', { type: 'text/plain' })
+    await expect(readDocumentFile(wrongMime)).rejects.toThrow('รองรับเฉพาะรูปภาพหรือ PDF')
+
+    const emptyMimeImage = new File(['fake-image-bytes'], 'bill.jpg', { type: '' })
+    // Must not be rejected with format error; proceeds to decode
+    await expect(readDocumentFile(emptyMimeImage)).rejects.not.toThrow('รองรับเฉพาะรูปภาพหรือ PDF')
   })
 })

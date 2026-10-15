@@ -67,6 +67,32 @@ describe('reading the quantity', () => {
   test('"ตาม" is not a quantity', () => {
     expect(Number.isNaN(read('PEPPERONI ตาม')[0].qty)).toBe(true)
   })
+
+  test('single tokens do not invent quantity or split into name: 12345, 10, 7UP, 15/10/2026, 17:00', () => {
+    for (const token of ['12345', '10', '7UP', '15/10/2026', '17:00']) {
+      const [l] = read(token)
+      expect(l.name).toBe(token)
+      expect(Number.isNaN(l.qty)).toBe(true)
+    }
+    const pair = readItemText('15/10/2026, 17:00').lines
+    expect(pair.map((l) => [l.name, Number.isNaN(l.qty)])).toEqual([
+      ['15/10/2026', true],
+      ['17:00', true],
+    ])
+  })
+
+  test('numeric SKU or barcode with explicit quantity or multiplier', () => {
+    expect(read('12345 2')).toEqual([{ name: '12345', qty: 2 }])
+    expect(read('12345 2 pack')).toEqual([{ name: '12345', qty: 2, unit: 'Pack' }])
+    expect(read('2 x 12345')).toEqual([{ name: '12345', qty: 2 }])
+    expect(read('12345 x2')).toEqual([{ name: '12345', qty: 2 }])
+  })
+
+  test('valid leading counts with name or unit preserved', () => {
+    expect(read('3 mozzarella')).toEqual([{ name: 'mozzarella', qty: 3 }])
+    expect(read('5 ถุง แป้งพิซซ่า')).toEqual([{ name: 'แป้งพิซซ่า', qty: 5, unit: 'ถุง' }])
+    expect(read('2 x mozzarella')).toEqual([{ name: 'mozzarella', qty: 2 }])
+  })
 })
 
 describe('instructions are kept, never read as items', () => {
@@ -74,6 +100,25 @@ describe('instructions are kept, never read as items', () => {
     const r = readItemText('แป้งพิซซ่า 5 ถุง, ยังไม่ต้องส่งผู้ขาย')
     expect(r.lines).toEqual([{ name: 'แป้งพิซซ่า', qty: 5, unit: 'ถุง' }])
     expect(r.constraints).toEqual(['ยังไม่ต้องส่งผู้ขาย'])
+  })
+
+  test('Thai quality words and samples with "อย่าง" are products, not prohibitions', () => {
+    const quality = readItemText('แป้งพิซซ่าอย่างดี 5 ถุง')
+    expect(quality.constraints).toEqual([])
+    expect(quality.lines).toEqual([{ name: 'แป้งพิซซ่าอย่างดี', qty: 5, unit: 'ถุง' }])
+
+    const sample = readItemText('ตัวอย่าง 2 pack')
+    expect(sample.constraints).toEqual([])
+    expect(sample.lines).toEqual([{ name: 'ตัวอย่าง', qty: 2, unit: 'Pack' }])
+
+    const each = readItemText('ชีส อย่างละ 2 กก.')
+    expect(each.constraints).toEqual([])
+    expect(each.lines).toEqual([{ name: 'ชีส อย่างละ', qty: 2, unit: 'KG' }])
+
+    // Real prohibition with "อย่า" is still kept as a constraint
+    const prohibit = readItemText('อย่าเพิ่งส่ง 1-2 วันนี้')
+    expect(prohibit.lines).toEqual([])
+    expect(prohibit.constraints).toEqual(['อย่าเพิ่งส่ง 1-2 วันนี้'])
   })
 
   test('prohibitions containing digits, dates, times, quantities or SKUs are preserved as constraints, never product lines', () => {

@@ -53,7 +53,8 @@ export async function readDocumentFile(file: File): Promise<OcrBill> {
     if (file.size > MAX_PDF_BYTES) throw new AppError('ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ 3 MB) — ลองส่งเฉพาะหน้าที่มีรายการ')
     return readBillPhoto(await asDataUrl(file, 'application/pdf'))
   }
-  if (!file.type.startsWith('image/')) throw new AppError('รองรับเฉพาะรูปภาพหรือ PDF')
+  const isImage = file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|webp)$/i.test(file.name))
+  if (!isImage) throw new AppError('รองรับเฉพาะรูปภาพหรือ PDF')
   return readBillPhoto(await shrinkImage(file, 2000))
 }
 

@@ -17,6 +17,7 @@ export type ImportRoute = { kind: 'sheet' | 'document' } | { error: 'busy' | 'un
 const SHEET_NAME = /\.(xlsx|xls|csv)$/i
 const SHEET_TYPE = /^(text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)$/
 const PDF = (f: { name: string; type: string }) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+const IMAGE = (f: { name: string; type: string }) => f.type.startsWith('image/') || (!f.type && /\.(jpe?g|png|webp)$/i.test(f.name))
 
 export function routeImportFile(
   f: { name: string; type: string; size: number },
@@ -24,7 +25,7 @@ export function routeImportFile(
 ): ImportRoute {
   if (o.busy) return { error: 'busy' }
   const sheet = SHEET_NAME.test(f.name) || SHEET_TYPE.test(f.type)
-  const document = !sheet && (f.type.startsWith('image/') || PDF(f))
+  const document = !sheet && (IMAGE(f) || PDF(f))
   if (!sheet && !document) return { error: 'unsupported' }
   if (f.size === 0) return { error: 'empty' }
   if (document && !o.documents) return { error: 'no-reader' }
