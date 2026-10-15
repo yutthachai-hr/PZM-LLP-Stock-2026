@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useT } from '../../i18n/I18nContext'
 import { Icon, type IconName } from '../Icon'
@@ -24,6 +24,7 @@ const GUTTER = 8
 export function RowMenu({ items, label }: { items: RowMenuItem[]; label?: string }) {
   const t = useT()
   const [open, setOpen] = useState(false)
+  const menuId = useId()
   const [at, setAt] = useState<{ top: number; left: number } | null>(null)
   const button = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -60,6 +61,10 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label?: string
   }, [open, items.length, place])
 
   useEffect(() => {
+    if (open && at) panel.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true })
+  }, [open, at])
+
+  useEffect(() => {
     if (!open) return
     function onDown(e: MouseEvent) {
       const target = e.target as Node
@@ -67,7 +72,10 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label?: string
       setOpen(false)
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') {
+        setOpen(false)
+        button.current?.focus({ preventScroll: true })
+      }
     }
     // Anything that moves the row moves the menu away from it, and a menu floating beside
     // the wrong row is worse than no menu: close on any scroll, the table's included
@@ -94,9 +102,16 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label?: string
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         aria-label={label ?? t('ตัวเลือกเพิ่มเติม')}
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink ${focusRing}`}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            setOpen(true)
+          }
+        }}
+        className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg border border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink ${focusRing}`}
       >
         <Icon name="moreVertical" size={18} />
       </button>
@@ -104,7 +119,21 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label?: string
         createPortal(
           <div
             ref={panel}
+            id={menuId}
             role="menu"
+            aria-label={label ?? t('ตัวเลือกเพิ่มเติม')}
+            onKeyDown={(event) => {
+              const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+              if (!keys.includes(event.key)) return
+              event.preventDefault()
+              event.stopPropagation()
+              const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')]
+              if (!options.length) return
+              const index = options.indexOf(document.activeElement as HTMLButtonElement)
+              const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+                : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length
+              options[next].focus({ preventScroll: true })
+            }}
             onClick={(e) => e.stopPropagation()}
             style={{ top: at?.top ?? 0, left: at?.left ?? 0, width: WIDTH }}
             className={`fixed z-50 rounded-xl border border-line bg-surface p-1.5 shadow-xl ${
