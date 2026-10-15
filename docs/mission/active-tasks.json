@@ -1,7 +1,7 @@
 {
   "parentThreadId": "6bea2b8e-6800-4440-98db-25cc0b3eddb0",
   "previousParentThreadId": "c5a2ecdc-3c6d-48e6-b367-2aa02e0d5835",
-  "observedAt": "2026-10-15T04:58:00Z",
+  "observedAt": "2026-10-15T06:30:00Z",
   "safeConcurrentChildrenNow": 0,
   "reason": "Both approved 9Router routes in upstream 503 cooldown, reset about 07:28Z (capacity-preflight.md). Ramp 3 -> 4 -> 6 -> 8 only after the reset, one completed model turn per new child before the next step.",
   "recovery": {
@@ -19,20 +19,20 @@
       "owner": "parent inline (children blocked by quota)",
       "worktree": "C:/Users/Yutthachai/pzm-match-20261015",
       "branch": "fix/product-match-ranking",
-      "headSha": "b595c2b",
+      "headSha": "95665f8",
       "pr": 22,
-      "state": "draft; local unit 1348, 22/22 new unit, 2/2 demo browser, lint/i18n/build/budget pass; RED shown on original code; GitHub CI running",
-      "nextAction": "Fresh independent OpenCode review on exact head after reset; Preview QA; merge sequentially"
+      "state": "draft; CI 10/10 green on 95665f8; review session queued 05:05Z (guard ALLOW) waiting on quota",
+      "nextAction": "Use queued review verdict when quota resets; do not relaunch"
     },
     {
       "id": "P0-SEARCH",
       "owner": "parent inline (children blocked by quota)",
       "worktree": "C:/Users/Yutthachai/pzm-search-20261015",
       "branch": "fix/global-search-documents",
-      "headSha": "3100245",
+      "headSha": "e275251",
       "pr": 23,
-      "state": "draft; re-verified fresh in recovery: 15/15 lookup unit, 1341 suite, 10/10 demo browser (10/10 RED on original), lint/i18n/build/budget pass; GitHub CI running",
-      "nextAction": "Fresh independent review; reviewer must check brand switch during ?po= out-of-window read; rebase after PR20 if that lands first"
+      "state": "draft; CI e2e failed on e275251: suppliers-master-detail 1920x1080 scrollY drift 187 (<4). Local repeat 36/36 pass on same SHA; failed job re-run 06:2xZ",
+      "nextAction": "If re-run green, record as geometry flake and file test-hardening task; then review on e275251"
     },
     {
       "id": "ORDERS-REVIEW",
@@ -62,12 +62,40 @@
       "worktree": "C:/Users/Yutthachai/pzm-mission-thaitrees-20261014",
       "lastObservedState": "accepted; worktree clean, no artifact",
       "nextAction": "Same as above"
+    },
+    {
+      "id": "SMART-IMPORT",
+      "owner": "parent inline",
+      "worktree": "C:/Users/Yutthachai/pzm-smart-import-20261015",
+      "branch": "feat/smart-import-dnd",
+      "headSha": "974b967",
+      "pr": null,
+      "state": "WIP commit; unit 1353, demo browser 8/8, lint/i18n/build/budget pass per commit message; full emulator E2E interrupted",
+      "nextAction": "Fresh full verification on 974b967, then squash WIP message, push, draft PR"
     }
   ],
   "awaitingReviewOnly": [
-    { "pr": 21, "id": "TOAST", "headSha": "d42bee1", "ci": "all green", "blocker": "independent review (quota), remote Preview QA (Access)" },
-    { "pr": 20, "id": "ORDERS", "headSha": "1cbcabc", "ci": "all green", "blocker": "review round 2 in old thread, remote Preview QA (Access)" },
-    { "pr": 17, "id": "A17", "headSha": "d37e414", "ci": "all green", "blocker": "review in old thread, Preview QA" }
+    {
+      "pr": 21,
+      "id": "TOAST",
+      "headSha": "d42bee1",
+      "ci": "all green",
+      "blocker": "independent review (quota), remote Preview QA (Access)"
+    },
+    {
+      "pr": 20,
+      "id": "ORDERS",
+      "headSha": "1cbcabc",
+      "ci": "all green",
+      "blocker": "review round 2 in old thread, remote Preview QA (Access)"
+    },
+    {
+      "pr": 17,
+      "id": "A17",
+      "headSha": "d37e414",
+      "ci": "all green",
+      "blocker": "review in old thread, Preview QA"
+    }
   ],
   "queuedAfterReset": [
     "P1 review of PR22 and PR23 (exact SHAs), fresh OpenCode high",
@@ -88,5 +116,15 @@
   "piSuperpowers": "Listed natively in this parent session from ~/.pi/agent/git/github.com/obra/superpowers (owner install). Skills read and followed: systematic-debugging, test-driven-development, verification-before-completion. Compact survival UNVERIFIED.",
   "humanizer": "humanizer-verification.md",
   "mergePolicy": "Every owner gate and fresh independent review must cover the exact final head; no inherited approvals; no Access bypass or gate weakening.",
-  "rollover": "UNVERIFIED; this thread is a manual recovery, not an observed automatic handoff"
+  "rollover": "UNVERIFIED; this thread is a manual recovery, not an observed automatic handoff",
+  "recovery2": {
+    "interruptedAt": "about 2026-10-15T05:55Z (host hang; T3 restarted 05:59Z)",
+    "preserved": "feat/smart-import-dnd WIP 974b967 (unpushed, committed 06:00Z) bundled to C:/Users/Yutthachai/pzm-recovery-20261015/r2/smart-import-974b967.bundle",
+    "untouched": [
+      "root checkout untracked fixes/",
+      "pzm-security-20261014 uncommitted S5.1 proto (+64 lines, 14 Oct)",
+      "pzm-qa-20261014 untracked QA artifacts"
+    ],
+    "opencodeSessions": "All 6 queued sessions (PR22 review 95665f8, PR20 review r2, PR17 review x2, ThaiTrees, untitled) still 0 tokens on upstream 503 cooldown; not relaunched"
+  }
 }

@@ -14,3 +14,5 @@ ts	phase	decision	why	evidence	result
 2026-10-15T04:56:00Z	P0-search	Re-verified interrupted search work fresh and opened PR23	A prior session's claims are not evidence for this session	PR23 3100245	10/10 RED then GREEN browser; 1341 suite; review pending
 2026-10-15T04:58:00Z	skills	Verified Humanizer discovery in the parent and the OpenCode registry; child-session check deferred	No model quota for a child turn	docs/mission/humanizer-verification.md	parent and registry PASS; child BLOCKED
 2026-10-15T04:58:00Z	capacity	Held new children at zero until the quota reset	Launching now would only queue duplicate retries	docs/mission/capacity-preflight.md	ramp after 07:28Z
+2026-10-15T06:30:00Z	recovery2	Recovered after host hang without reset or relaunch	Owner directive; prior session ended mid-E2E	docs/mission/active-tasks.json recovery2; pzm-recovery-20261015/r2/	WIP bundled; 6 queued children untouched
+2026-10-15T06:30:00Z	P0-search	Treated PR23 e2e red as unproven flake until re-run	Failure is in an untouched Suppliers spec; local 36/36 pass on same SHA	pzm-recovery-20261015/r2/pr23-e2e-failed.log; pr23-suppliers-local.log	re-run pending
