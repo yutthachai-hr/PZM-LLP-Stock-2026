@@ -160,35 +160,37 @@ describe('PDF layout engine (real jsPDF & Sarabun font)', () => {
     expect(doc.getLineHeightFactor()).toBeGreaterThanOrEqual(1.35)
   })
 
-  test('evaluates table-start headroom near page bottom to check for orphaned table headers', () => {
-    // Sweep tableStartY across the danger zone (500 to 525.28 pt)
-    // To check if autoTable EVER leaves an orphaned table header on page 1 without at least 1 body row.
-    let orphanedFound = false
-    let orphanDetails: any = null
+  test('never leaves a table header alone at the bottom of a page', () => {
+    // R2 review (15 Oct 2026): a one-line title only reaches table starts of 64 + 16n pt, which
+    // jumps from 512 to 528 and skips 518..524, where autoTable drew the header on page 1 and the
+    // first row on page 2. Two- and three-line titles shift the start by 22pt per line.
+    const titleWord = 'รายงานขอสั่งซื้อวัตถุดิบประจำเดือน '
+    const orphans: { titleRepeat: number; meta: number; headerY: number }[] = []
+    let lowestMetaY = 0
 
-    for (let extra = 25; extra <= 30; extra++) {
-      const doc = createReportPdf({
-        filename: `test-headroom-${extra}`,
-        title: 'หัวข้อรายงาน',
-        meta: Array.from({ length: extra }, (_, i) => `บรรทัดข้อมูล ${i + 1}`),
-        head: ['ผู้ขาย', 'สินค้า'],
-        body: Array.from({ length: 10 }, (_, i) => [`ผู้ขาย ${i + 1}`, `สินค้า ${i + 1}`]),
-      })
-
-      const page1Placements = extractTextPlacements(doc).filter((p) => p.page === 1)
-      const page1TablePlacements = page1Placements.filter((p) => p.x !== 40)
-      if (page1TablePlacements.length > 0) {
-        // Table started on page 1
-        const uniqueY = Array.from(new Set(page1TablePlacements.map((p) => Math.round(p.yFromTop))))
-        // uniqueY[0] is header. If uniqueY.length === 1, only the header was placed on page 1!
-        if (uniqueY.length === 1) {
-          orphanedFound = true
-          orphanDetails = { extra, uniqueY, page1TablePlacements }
-          break
-        }
+    for (const titleRepeat of [1, 7, 14]) {
+      for (let meta = 18; meta <= 30; meta++) {
+        const doc = createReportPdf({
+          filename: 'test-headroom',
+          title: titleWord.repeat(titleRepeat).trim(),
+          meta: Array.from({ length: meta }, (_, i) => `บรรทัดข้อมูล ${i + 1}`),
+          head: ['ผู้ขาย', 'สินค้า'],
+          body: Array.from({ length: 10 }, (_, i) => [`ผู้ขาย ${i + 1}`, `สินค้า ${i + 1}`]),
+        })
+        const placements = extractTextPlacements(doc)
+        const meta1 = placements.filter((p) => p.page === 1 && p.x === 40).map((p) => p.yFromTop)
+        lowestMetaY = Math.max(lowestMetaY, ...meta1)
+        const table = placements.filter((p) => p.x !== 40)
+        const firstPage = Math.min(...table.map((p) => p.page))
+        const rowsOnFirstPage = new Set(table.filter((p) => p.page === firstPage).map((p) => Math.round(p.yFromTop)))
+        const headerY = Math.min(...table.filter((p) => p.page === firstPage).map((p) => p.yFromTop))
+        if (rowsOnFirstPage.size === 1) orphans.push({ titleRepeat, meta, headerY })
       }
     }
 
-    expect({ orphanedFound, orphanDetails }).toEqual({ orphanedFound: false, orphanDetails: null })
+    // The sweep must end the header text low enough that the table would naturally start inside
+    // the old failure window (last metadata baseline = table start - 16pt, so above 500pt).
+    expect(lowestMetaY).toBeGreaterThan(500)
+    expect(orphans).toEqual([])
   })
 })

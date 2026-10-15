@@ -133,14 +133,20 @@ export function createReportPdf(opts: PdfReportOptions): jsPDF {
     }
   }
 
+  const tableFontSize = 9
+  const tableCellPadding = 4
+  const tableLineHeight = 1.35
+  // The header and at least one body row must fit, or autoTable draws the header here and the
+  // first row on the next page (R2 review, 15 Oct 2026: starts of 518..524pt did exactly that).
+  const tableRowHeight = tableFontSize * tableLineHeight + 2 * tableCellPadding
   let tableStartY = y
-  if (tableStartY > maxContentY - 30) {
+  if (tableStartY + 2 * tableRowHeight > maxContentY) {
     doc.addPage()
     tableStartY = marginTop
   }
 
   if (typeof doc.setLineHeightFactor === 'function') {
-    doc.setLineHeightFactor(1.35)
+    doc.setLineHeightFactor(tableLineHeight)
   }
 
   autoTable(doc, {
@@ -149,7 +155,7 @@ export function createReportPdf(opts: PdfReportOptions): jsPDF {
     head: [opts.head],
     body: opts.body.map((r) => r.map((c) => String(c))),
     foot: opts.foot ? [opts.foot.map((c) => String(c))] : undefined,
-    styles: { font, fontSize: 9, cellPadding: 4, ...({ lineHeightFactor: 1.35 } as any) },
+    styles: { font, fontSize: tableFontSize, cellPadding: tableCellPadding, ...({ lineHeightFactor: tableLineHeight } as any) },
     // Sarabun is registered as 'normal' only; autoTable bolds the head by default, and a
     // bold request falls back to a font with no Thai glyphs — the header came out as
     // "'1 5H*1 @%" on the order sheet PDF while every body row read fine.
