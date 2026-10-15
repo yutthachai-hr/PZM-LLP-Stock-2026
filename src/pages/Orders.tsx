@@ -40,6 +40,7 @@ import {
   createPurchaseOrder,
   daysWaiting,
   expectedDeliveryAt,
+  getPurchaseOrder,
   needsResend,
   overdueOrders,
   summariseBySupplier,
@@ -153,6 +154,14 @@ export function OrdersPage() {
     return () => window.removeEventListener(ORDER_UPDATED, onUpdate)
   }, [])
 
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
   // Opened from the calendar: ?po=<id> shows the sheet, ?receive=<id> goes to the receiving
   // screen with that order picked (24 Sep 2026 — the check-in modal is retired).
   // Back from LINE Login (or opened inside LINE): ?send=<id> reopens the send wizard on
@@ -168,8 +177,12 @@ export function OrdersPage() {
       navigate(`/receive?po=${encodeURIComponent(receive)}`, { replace: true })
       return
     }
-    const hit = orders.find((o) => o.id === (po ?? send))
-    if (hit) (po ? setViewing : setSending)(hit)
+    const id = (po ?? send)!
+    const open = po ? setViewing : setSending
+    const hit = orders.find((o) => o.id === id)
+    if (hit) open(hit)
+    // Older than the list's window (a search result from last month): read that one order.
+    else void getPurchaseOrder(id).then((o) => o && mounted.current && open(o)).catch(() => {})
     setParams({}, { replace: true })
   }, [loading, orders, params, setParams, navigate])
 

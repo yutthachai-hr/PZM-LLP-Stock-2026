@@ -110,14 +110,34 @@ export function MovementsPage() {
     setHistoryFrom(from)
   }, [])
 
+  // ?doc= from a search result can name a document from any month: read that document's rows
+  // alone (one equality query) rather than widening the window around it.
+  const [docRows, setDocRows] = useState<StockMovement[]>([])
+  const docLoaded = !docFilter || liveMovements.some((m) => m.docNo === docFilter) || history.some((m) => m.docNo === docFilter)
+  useEffect(() => {
+    if (docLoaded) {
+      setDocRows([])
+      return
+    }
+    let alive = true
+    import('../services/documentLookup')
+      .then((m) => m.movementsOfDocument(docFilter))
+      .then((rows) => alive && setDocRows(rows))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [docFilter, docLoaded])
+
   // ponytail: merges on-demand history with recent live window; add streaming pagination if history grows beyond thousands.
   const movements = useMemo(() => {
-    if (history.length === 0) return liveMovements
+    if (history.length === 0 && docRows.length === 0) return liveMovements
     const map = new Map<string, StockMovement>()
+    for (const m of docRows) map.set(m.id, m)
     for (const m of history) map.set(m.id, m)
     for (const m of liveMovements) map.set(m.id, m)
     return [...map.values()]
-  }, [history, liveMovements])
+  }, [history, docRows, liveMovements])
   const [editing, setEditing] = useState<StockMovement | null>(null)
   const [photoDoc, setPhotoDoc] = useState<string | null>(null)
 

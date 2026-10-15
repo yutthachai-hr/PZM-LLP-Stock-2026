@@ -3097,4 +3097,9 @@ export const EN: Record<string, string> = {
   ยังไม่ได้โหลดรายชื่อผู้ขาย: 'suppliers not loaded yet',
   'ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:': 'Purchase requests and deliveries are searched on their pages:',
   หน้า: 'Pages',
+  'กำลังค้นเอกสารทั้งหมด…': 'Searching all documents…',
+  'ไม่พบเลขนี้ในใบรับ ใบเบิก ใบปรับ ใบสั่งซื้อ หรือเลขบิลที่บันทึกไว้': 'No receipt, issue, adjustment, purchase order or recorded bill has this number',
+  'ค้นเลขเอกสารและเลขบิลในฐานข้อมูลทั้งหมดแล้ว (ตรงตัวอักษร)': 'Searched every recorded document and bill number (exact match)',
+  'ค้นฐานข้อมูลไม่สำเร็จ — แสดงเฉพาะที่โหลดไว้ เอกสารตั้งแต่ {date}': 'Database search failed — showing loaded data only, documents since {date}',
+  'เลขบิลที่คีย์ไว้ในหมายเหตุก่อน 24/09/2569 ยังค้นจากที่นี่ไม่ได้ — ดูได้ในหน้าประวัติตามช่วงวันที่': 'Bill numbers typed into a note before 24 Sep 2026 cannot be searched here yet — find them in History by date range',
 }

@@ -12,7 +12,9 @@ import { NotificationBell } from './notifications/NotificationBell'
 import { MessagesButton } from './messages/MessagesButton'
 import { ProductThumb } from './ProductThumb'
 import { ProfileModal } from './ProfileModal'
-import { globalSearch, MIN_QUERY, type SearchGroup, type SearchHit } from '../lib/globalSearch'
+import { globalSearch, GROUP_ORDER, MIN_QUERY, type SearchGroup, type SearchHit } from '../lib/globalSearch'
+import { documentQuery } from '../lib/documentQuery'
+import type { DocumentLookup } from '../services/documentLookup'
 import { navFor } from './nav/navItems'
 import { useLoadedSuppliers } from '../services/suppliers'
 
@@ -74,7 +76,40 @@ export function TopBar({ title }: { title: string }) {
     () => globalSearch(q, { pages: navFor(user?.role), products, locations, suppliers, movements, label: t }),
     [q, user?.role, products, locations, suppliers, movements, t],
   )
-  const results = found.hits
+  // Document and bill numbers older than the loaded window: asked of the database after a pause
+  // in typing, equality only (services/documentLookup.ts). A slower answer for an older query
+  // is dropped by the request counter.
+  const [remote, setRemote] = useState<{ q: string; state: 'loading' | 'done' | 'error'; result?: DocumentLookup } | null>(null)
+  const request = useRef(0)
+  useEffect(() => {
+    const id = ++request.current
+    const query = q.trim()
+    if (!documentQuery(query)) {
+      setRemote(null)
+      return
+    }
+    setRemote({ q: query, state: 'loading' })
+    const timer = setTimeout(() => {
+      import('../services/documentLookup')
+        .then((m) => m.lookupDocuments(query))
+        .then((result) => {
+          if (request.current === id) setRemote({ q: query, state: 'done', result })
+        })
+        .catch(() => {
+          if (request.current === id) setRemote({ q: query, state: 'error' })
+        })
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [q])
+  useEffect(() => () => void request.current++, [])
+
+  const remoteDone = remote?.state === 'done' && remote.q === q.trim() ? remote.result : undefined
+  const results = useMemo(() => {
+    if (!remoteDone?.hits.length) return found.hits
+    const seen = new Set(found.hits.map((h) => h.key))
+    const merged = [...found.hits, ...remoteDone.hits.filter((h) => !seen.has(h.key))]
+    return merged.sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group))
+  }, [found.hits, remoteDone])
 
   useEffect(() => setActive(0), [q])
 
@@ -179,7 +214,13 @@ export function TopBar({ title }: { title: string }) {
           className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[70vh] overflow-auto rounded-xl border border-line bg-surface shadow-xl"
         >
           {results.length === 0 ? (
-            <p className="px-3 py-4 text-center text-sm text-ink-soft">{t('ไม่พบในข้อมูลที่โหลดไว้')}</p>
+            <p className="px-3 py-4 text-center text-sm text-ink-soft" role="status">
+              {remote?.state === 'loading'
+                ? t('กำลังค้นเอกสารทั้งหมด…')
+                : remoteDone
+                  ? t('ไม่พบเลขนี้ในใบรับ ใบเบิก ใบปรับ ใบสั่งซื้อ หรือเลขบิลที่บันทึกไว้')
+                  : t('ไม่พบในข้อมูลที่โหลดไว้')}
+            </p>
           ) : (
             results.map((hit: SearchHit, i) => {
               const head = i === 0 || results[i - 1].group !== hit.group
@@ -226,9 +267,16 @@ export function TopBar({ title }: { title: string }) {
           {/* What was not searched, so a short or empty list never reads as "there is none". */}
           <div role="presentation" className="border-t border-line px-3 py-2 text-xs text-ink-faint">
             <p>
-              {t('ค้นจากข้อมูลที่โหลดไว้ — เอกสารตั้งแต่ {date}', { date: formatThaiDateShort(movementsFrom) })}
+              {remoteDone
+                ? t('ค้นเลขเอกสารและเลขบิลในฐานข้อมูลทั้งหมดแล้ว (ตรงตัวอักษร)')
+                : remote?.state === 'error'
+                  ? t('ค้นฐานข้อมูลไม่สำเร็จ — แสดงเฉพาะที่โหลดไว้ เอกสารตั้งแต่ {date}', { date: formatThaiDateShort(movementsFrom) })
+                  : t('ค้นจากข้อมูลที่โหลดไว้ — เอกสารตั้งแต่ {date}', { date: formatThaiDateShort(movementsFrom) })}
               {!found.suppliersSearched && ` · ${t('ยังไม่ได้โหลดรายชื่อผู้ขาย')}`}
             </p>
+            {remoteDone?.notIndexed === 'legacyNotes' && remoteDone.hits.length === 0 && (
+              <p className="mt-1">{t('เลขบิลที่คีย์ไว้ในหมายเหตุก่อน 24/09/2569 ยังค้นจากที่นี่ไม่ได้ — ดูได้ในหน้าประวัติตามช่วงวันที่')}</p>
+            )}
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
               {t('ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:')}
               <button type="button" className="cursor-pointer text-brand hover:underline" onClick={() => choose('/requests')}>
