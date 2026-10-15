@@ -15,7 +15,7 @@ vi.mock('../src/backend', async () => {
 
 const { resetMemory, seed } = await import('./helpers/memory-backend')
 const { noteWritten, overlayRecent, resetRecentWrites, subscribeRecentWrites } = await import('../src/data/recentWrites')
-const { editMovement, filing, receiveStock, voidMovement } = await import('../src/services/stock')
+const { captureFilingScope, editMovement, filing, receiveStock, voidMovement } = await import('../src/services/stock')
 const { brandEpoch, setActiveBrand } = await import('../src/brand/brand')
 type Mv = import('../src/types').StockMovement
 
@@ -158,7 +158,7 @@ describe('brand switching and generation guard', () => {
       resolveTx = resolve
     })
 
-    const filingPromise = filing(undefined, async (_tx, file) => {
+    const filingPromise = filing(captureFilingScope(), async (_tx, file) => {
       fileFn = file
       await txPromise
     })

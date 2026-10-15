@@ -20,7 +20,7 @@ import { deliver } from './notifications'
 import { genId } from '../lib/id'
 import { roundQty } from '../lib/validate'
 import { padSeq, takeSeq } from './sequence'
-import { filing, planAdjust, planIssue, type MovementLine } from './stock'
+import { captureFilingScope, filing, planAdjust, planIssue, type MovementLine } from './stock'
 import {
   COL,
   OVER_RESOLUTIONS,
@@ -464,7 +464,8 @@ export async function reviewTransfer(params: {
 }): Promise<Transfer> {
   const { transferId, expectedRevision, actor, action, note, items } = params
   if (!isManager(actor.role)) throw new AppError('เฉพาะหัวหน้าเท่านั้นที่อนุมัติหรือตรวจทานได้')
-  const db = scoped()
+  const scope = captureFilingScope()
+  const db = scope.db
   const guard = (cur: Transfer | null): Transfer => {
     if (!cur) throw new AppError('ไม่พบเอกสารโอนสินค้า')
     if (cur.status !== 'pendingApproval') throw new AppError('เอกสารไม่ได้อยู่ในสถานะรออนุมัติ')
@@ -491,7 +492,7 @@ export async function reviewTransfer(params: {
     })
   }
 
-  const approved = await filing(db, async (tx, file) => {
+  const approved = await filing(scope, async (tx, file) => {
     // ---- reads ----
     const cur = guard(await tx.get<Transfer>(COL.transfers, transferId))
     const transit = await tx.get<StockLocation>(COL.locations, TRANSIT_LOCATION_ID)
@@ -625,10 +626,11 @@ export async function confirmReceive(params: {
   note?: string
 }): Promise<Transfer> {
   const { transferId, actor, receivedLines, note } = params
-  const db = scoped()
+  const scope = captureFilingScope()
+  const db = scope.db
   let problem = false
 
-  const result = await filing(db, async (tx, file) => {
+  const result = await filing(scope, async (tx, file) => {
     // ---- reads ----
     const { cur, legs, parent, siblings } = await readFamily(tx, transferId)
     if (cur.status !== 'inTransit' && cur.status !== 'receiving') throw new AppError('เอกสารไม่ได้อยู่ในสถานะพร้อมตรวจรับ')
@@ -797,9 +799,9 @@ export async function resolveDiscrepancy(params: {
 }): Promise<Transfer> {
   const { transferId, itemIdx, resolution, actor, custodyLocationId, relatedTransferId } = params
   if (!isManager(actor.role)) throw new AppError('เฉพาะหัวหน้าเท่านั้นที่อนุมัติผลต่างได้')
-  const db = scoped()
+  const scope = captureFilingScope()
 
-  return filing(db, async (tx, file) => {
+  return filing(scope, async (tx, file) => {
     // ---- reads ----
     const { cur, legs, parent, siblings } = await readFamily(tx, transferId)
     if (cur.status !== 'discrepancy' && cur.status !== 'pendingDiscrepancyApproval') {
@@ -1051,9 +1053,9 @@ export async function resolveMisroute(params: {
 }): Promise<{ transfer: Transfer; childTransfer?: Transfer; replacement?: Transfer }> {
   const { transferId, itemIdx, misrouteId, action, actor, note, createReplacement } = params
   if (!isManager(actor.role)) throw new AppError('เฉพาะหัวหน้าเท่านั้นที่จัดการการส่งผิดสาขาได้')
-  const db = scoped()
+  const scope = captureFilingScope()
 
-  return filing(db, async (tx, file) => {
+  return filing(scope, async (tx, file) => {
     // ---- reads ----
     const { cur, legs, parent, siblings } = await readFamily(tx, transferId)
     const item = cur.items.find((i) => i.idx === itemIdx && !i.removed)

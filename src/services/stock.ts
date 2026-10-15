@@ -134,6 +134,18 @@ function scoped(): Backend {
   return backend.forBrand(getBrand())
 }
 
+/** Capture before the operation's first await; carry the pair through every part. */
+export interface FilingScope {
+  readonly db: Backend
+  readonly epoch: number
+}
+
+export function captureFilingScope(): FilingScope {
+  const brand = getBrand()
+  const epoch = brandEpoch()
+  return { db: backend.forBrand(brand), epoch }
+}
+
 /**
  * A transaction that files movement rows, and tells the screen about them the moment it
  * commits (data/recentWrites.ts). `file` is the only way rows are written here, so nothing
@@ -141,11 +153,10 @@ function scoped(): Backend {
  * callback on contention, and rows from an attempt that never committed must not show.
  */
 export async function filing<R>(
-  db: Backend | undefined,
+  scope: FilingScope,
   run: (tx: TxContext, file: (mv: Omit<StockMovement, 'id'>) => void) => Promise<R>,
 ): Promise<R> {
-  const targetDb = db ?? scoped()
-  const epoch = brandEpoch()
+  const { db: targetDb, epoch } = scope
   let sink: StockMovement[] = []
   const result = await targetDb.transaction(async (tx) => {
     sink = []
@@ -315,9 +326,9 @@ export async function receiveStock(params: {
   requireEpochMs(date)
   requireId(toLocationId, 'toLocationId')
   const paperwork = docFields(params.doc)
-  const db = scoped()
+  const scope = captureFilingScope()
 
-  return filing(db, async (tx, file) => {
+  return filing(scope, async (tx, file) => {
     // ---- reads ----
     await requireMasterData(
       tx,
@@ -468,8 +479,8 @@ export async function planIssue(
 
 /** Issue / transfer goods from one location to another (main -> branch). Moves stock. */
 export async function issueStock(params: PlanIssueParams): Promise<string> {
-  const db = scoped()
-  return filing(db, async (tx, file) => {
+  const scope = captureFilingScope()
+  return filing(scope, async (tx, file) => {
     const planned = await planIssue(tx, params, file)
     return planned.commit()
   })
@@ -497,9 +508,9 @@ export async function consumeStock(params: {
   const lines = mergeLines(params.lines)
   requireEpochMs(date)
   requireId(fromLocationId, 'fromLocationId')
-  const db = scoped()
+  const scope = captureFilingScope()
 
-  return filing(db, async (tx, file) => {
+  return filing(scope, async (tx, file) => {
     // ---- reads ----
     await requireMasterData(
       tx,
@@ -612,9 +623,9 @@ export async function adjustStock(params: {
   const date = requireEpochMs(params.date)
   requireId(productId, 'productId')
   requireId(locationId, 'locationId')
-  const db = scoped()
+  const scope = captureFilingScope()
 
-  return filing(db, async (tx, file) => {
+  return filing(scope, async (tx, file) => {
     await requireMasterData(tx, [productId], [locationId])
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
     const seq = (counter?.value ?? 0) + 1
@@ -762,8 +773,8 @@ export async function planAdjust(
 }
 
 export async function adjustStockLines(params: PlanAdjustParams): Promise<string> {
-  const db = scoped()
-  return filing(db, async (tx, file) => {
+  const scope = captureFilingScope()
+  return filing(scope, async (tx, file) => {
     const planned = await planAdjust(tx, params, file)
     return planned.commit()
   })
@@ -837,9 +848,9 @@ async function fileCount(
   requireId(productId, 'productId')
   requireId(locationId, 'locationId')
   const date = params.date === undefined ? Date.now() : requireEpochMs(params.date)
-  const db = scoped()
+  const scope = captureFilingScope()
 
-  return filing(db, async (tx, file) => {
+  return filing(scope, async (tx, file) => {
     await requireMasterData(tx, [productId], [locationId])
     // A count is someone standing in front of the shelf reconciling the product's own
     // balance, so it always lands on that row — there is no unit box on that screen.
