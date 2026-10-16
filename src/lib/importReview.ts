@@ -1,5 +1,5 @@
-import { matchOcrLines } from './billOcr'
-import { buildMatchIndex, type MatchIndex } from './productMatch'
+import { convertReadLine } from './billOcr'
+import { buildMatchIndex, matchProduct, type MatchIndex } from './productMatch'
 import { suggestProducts } from './productSuggest'
 import type { Product } from '../types'
 
@@ -8,7 +8,7 @@ import type { Product } from '../types'
  * the safety rules can be tested (release hardening, 8 Oct 2026). Used by every consumer of
  * the import window: purchase request, order, monthly count, adjust, line builder.
  *
- *   sure    SKU, a confirmed alias, or the one product of exactly that name (lib/billOcr):
+ *   sure    the exact SKU or a confirmed alias — never a name, never a photo/PDF reading:
  *           pre-ticked, as before — if its unit is known
  *   guess   the one clear word-by-word suggestion: SHOWN, never ticked. It is imported only
  *           after the person confirms it (ticking it, or picking it) — a model's or a fuzzy
@@ -26,6 +26,8 @@ export interface ReadLine {
   qty: number
   unit?: string
   note?: string
+  /** Read from a photo or PDF by a model: its name or code is never taken as the product. */
+  source?: 'ocr'
 }
 
 export type How = 'sure' | 'guess' | 'picked' | null
@@ -48,19 +50,20 @@ export interface ReviewRow {
 export const lacksUnit = (p: Pick<Product, 'unitType'>) => !p.unitType || !p.unitType.trim()
 
 function matchOne(read: ReadLine, index: MatchIndex) {
+  if (read.source === 'ocr') return undefined
   const bare = read.name.replace(/[\s.,;:]+$/, '')
   const tries = [...(read.code ? [read.code] : []), read.name, ...(bare !== read.name ? [bare] : [])]
   for (const name of tries) {
-    const m = matchOcrLines({ lines: [{ name, qty: read.qty, unit: read.unit }] }, index).matched[0]
-    if (m) return m
+    const m = matchProduct(name, index)
+    if (m.product) return convertReadLine(read, m.product)
   }
   return undefined
 }
 
 /** A line read for a chosen product, converted by that product's own units. */
 export function convertFor(read: ReadLine, product: Product): Pick<ReviewRow, 'qty' | 'entryUnit' | 'entryQty' | 'unitUnknown'> {
-  const m = matchOcrLines({ lines: [{ name: product.name, qty: read.qty, unit: read.unit }] }, buildMatchIndex([product], [])).matched[0]
-  return m ? { qty: m.qty, entryUnit: m.entryUnit, entryQty: m.entryQty, unitUnknown: m.unitUnknown } : { qty: read.qty }
+  const m = convertReadLine(read, product)
+  return { qty: m.qty, entryUnit: m.entryUnit, entryQty: m.entryQty, unitUnknown: m.unitUnknown }
 }
 
 /** Whether a row may be ticked at all: a product, a usable unit, a positive quantity. */

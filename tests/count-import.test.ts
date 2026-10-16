@@ -49,7 +49,7 @@ const products = [
   { id: 'p-mes', sku: 'MES-01-01-002', unitType: 'KG' },
   { id: 'p-flo', sku: 'FLO-01-01-001', unitType: 'EA' },
   { id: 'p-flo2', sku: 'FLO-01-01-002', unitType: 'EA' },
-]
+].map((p) => ({ ...p, active: true }))
 
 describe('importRows', () => {
   const skv = importRows(sheet, { snapshot: 0, column: 0 }, products)
@@ -72,6 +72,26 @@ describe('importRows', () => {
   test('an unknown code and a row with no code are kept out', () => {
     expect(by['XX-99-99-999'].status).toBe('unknown')
     expect(by.row11.status).toBe('nosku')
+  })
+
+  test('an inactive product with an exact SKU is not automatically selected', () => {
+    const inactive = products.map((p) => ({ ...p, active: false }))
+    const first = importRows(sheet, { snapshot: 0, column: 0 }, inactive).find((r) => r.excelRow === 6)
+    expect(first).toMatchObject({ status: 'unknown' })
+    expect(first?.productId).toBeUndefined()
+  })
+
+  test('a SKU shared by two active products cannot silently pick the last one', () => {
+    const duplicate = { ...products[0], id: 'different-product-same-sku' }
+    const first = importRows(sheet, { snapshot: 0, column: 0 }, [...products, duplicate]).find((r) => r.excelRow === 6)
+    expect(first).toMatchObject({ status: 'unknown' })
+    expect(first?.productId).toBeUndefined()
+  })
+
+  test('a unique active SKU still resolves when an inactive duplicate exists', () => {
+    const inactiveDuplicate = { ...products[0], id: 'inactive-duplicate', active: false }
+    const first = importRows(sheet, { snapshot: 0, column: 0 }, [...products, inactiveDuplicate]).find((r) => r.excelRow === 6)
+    expect(first).toMatchObject({ status: 'ready', productId: 'p-veg' })
   })
 
   test('a zero is a count; a blank is not', () => {

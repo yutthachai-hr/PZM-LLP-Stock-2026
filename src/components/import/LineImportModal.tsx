@@ -102,7 +102,7 @@ export function LineImportModal({
       const bill = await readDocumentFile(file)
       if (!bill.lines.length) throw new Error(t('AI ({model}) ไม่พบรายการสินค้าในเอกสารนี้ — ลองรูปที่ชัดขึ้น หรือใช้ Excel', { model: bill.model ?? '?' }))
       setSource([file.name, bill.supplier, bill.invoiceNo].filter(Boolean).join(' · '))
-      setRows(toRows(bill.lines))
+      setRows(toRows(bill.lines.map((line) => ({ ...line, source: 'ocr' as const }))))
       setStep('review')
     } catch (e) {
       setError(errText(e, t))
