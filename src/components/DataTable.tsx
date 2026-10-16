@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { useT } from '../i18n/I18nContext'
 import { RowMenu, type RowMenuItem } from './frame/RowMenu'
 
@@ -53,6 +53,7 @@ export function DataTable<T>({
   minWidth = 640,
   maxHeight,
   onRowClick,
+  rowLabel,
   cardActions,
   rowClassName,
   selection,
@@ -67,6 +68,8 @@ export function DataTable<T>({
   /** e.g. 'calc(100vh-260px)'. Omit for a table that grows with the page. */
   maxHeight?: string
   onRowClick?: (row: T) => void
+  /** Accessible name for a keyboard-activatable row or card. */
+  rowLabel?: (row: T) => string
   /** Rendered at the foot of each card on a phone, where a row-action column does not fit. */
   cardActions?: (row: T) => ReactNode
   /** Applied to the row and to the card, for states that colour the whole entry. */
@@ -105,6 +108,25 @@ export function DataTable<T>({
     selection.onChange(next)
   }
   const box = 'h-[18px] w-[18px] cursor-pointer rounded accent-[var(--color-brand)]'
+  function activate(event: MouseEvent<HTMLElement>, row: T) {
+    if (!onRowClick || event.defaultPrevented || !event.currentTarget.contains(event.target as Node)) return
+    const target = event.target as Element
+    if (target.closest('a, button, input, select, textarea, label, summary, [role="button"], [role="link"], [role="menu"], [contenteditable="true"], [data-row-action]')) return
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed && event.currentTarget.contains(selection.anchorNode)) return
+    onRowClick(row)
+  }
+  const activationProps = (row: T) => onRowClick ? {
+    tabIndex: 0,
+    'aria-label': rowLabel?.(row),
+    onKeyDown: (event: import('react').KeyboardEvent<HTMLElement>) => {
+      if (event.target !== event.currentTarget || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        onRowClick(row)
+      }
+    },
+  } : {}
 
   return (
     <>
@@ -113,8 +135,11 @@ export function DataTable<T>({
         {rows.map((row) => (
           <div
             key={rowKey(row)}
-            className={`px-4 py-3.5 ${onRowClick ? 'cursor-pointer active:bg-sunken' : ''} ${rowClassName?.(row) ?? ''}`}
-            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            data-row-key={rowKey(row)}
+            role={onRowClick ? 'group' : undefined}
+            {...activationProps(row)}
+            className={`px-4 py-3.5 ${onRowClick ? 'cursor-pointer hover:bg-sunken active:bg-sunken focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand' : ''} ${rowClassName?.(row) ?? ''}`}
+            onClick={onRowClick ? (event) => activate(event, row) : undefined}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{title.cell(row)}</div>
@@ -178,8 +203,10 @@ export function DataTable<T>({
             {rows.map((row) => (
               <tr
                 key={rowKey(row)}
-                className={`row-hover ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                data-row-key={rowKey(row)}
+                {...activationProps(row)}
+                className={`row-hover ${onRowClick ? 'cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand' : ''} ${rowClassName?.(row) ?? ''}`}
+                onClick={onRowClick ? (event) => activate(event, row) : undefined}
               >
                 {selection && (
                   <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>

@@ -1,0 +1,30 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-orders-ux-20261015
+
+ ❯ tests/order-presentation.test.ts (15 tests | 1 failed) 13ms
+   ❯ order presentation, not business eligibility (15)
+     × does not claim full receipt for legacy orders with unknown or short quantities 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/order-presentation.test.ts > order presentation, not business eligibility > does not claim full receipt for legacy orders with unknown or short quantities
+AssertionError: expected 'รับครบแล้ว' to be 'รับของแล้ว' // Object.is equality
+
+Expected: "รับของแล้ว"
+Received: "รับครบแล้ว"
+
+ ❯ tests/order-presentation.test.ts:67:87
+     65|   })
+     66|   it('does not claim full receipt for legacy orders with unknown or sh…
+     67|     expect(presentOrderStatus({ ...order, status: 'received' }, false)…
+       |                                                                                       ^
+     68|     expect(presentOrderStatus({ ...order, status: 'received', lines: o…
+     69|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  09:54:17
+   Duration  225ms (transform 64%, import 17%, tests 13%, worker 5%)

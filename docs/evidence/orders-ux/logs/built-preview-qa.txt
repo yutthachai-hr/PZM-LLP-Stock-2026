@@ -1,0 +1,49 @@
+
+Running 8 tests using 1 worker
+
+  ok 1 e2e\orders-ux.demo.ts:53:1 › row opens its own existing sheet and no view buttons remain (857ms)
+  ok 2 e2e\orders-ux.demo.ts:61:1 › checkboxes and menu do not open a sheet; multi-selection survives (3.1s)
+  ok 3 e2e\orders-ux.demo.ts:73:1 › keyboard opens the focused row and does not activate a focused checkbox (911ms)
+  x  4 e2e\orders-ux.demo.ts:89:1 › receiving navigates and LINE menu opens only the send wizard (11.0s)
+  ok 5 e2e\orders-ux.demo.ts:129:1 › touch opens a mobile card, but tapping its menu does not (1.0s)
+  ok 6 e2e\orders-ux.demo.ts:145:1 › filters retain multi-selection and both export formats still download (1.1s)
+  ok 7 e2e\orders-ux.demo.ts:169:1 › switching brands clears the sheet and multi-selection even when order IDs repeat (2.7s)
+  ok 8 e2e\orders-ux.demo.ts:187:1 › LINE resume opens only the wizard and consumes its query (780ms)
+
+
+  1) e2e\orders-ux.demo.ts:89:1 › receiving navigates and LINE menu opens only the send wizard ─────
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/receive\?po=ux-1/
+    Received string:  "http://127.0.0.1:5187/receive"
+    Timeout: 10000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 10000ms
+        23 × locator resolved to <html lang="th">…</html>
+           - unexpected value "http://127.0.0.1:5187/receive"
+
+
+      90 |   await stage(page)
+      91 |   await row(page).getByRole('button', { name: 'ตรวจรับของ', exact: true }).click()
+    > 92 |   await expect(page).toHaveURL(/\/receive\?po=ux-1/)
+         |                      ^
+      93 |   await expect(page.getByRole('dialog')).toHaveCount(0)
+      94 |   await page.goto('/orders')
+      95 |   await row(page).getByRole('button', { name: 'ตัวเลือกเพิ่มเติม' }).click()
+        at C:\Users\Yutthachai\pzm-orders-ux-20261015\e2e\orders-ux.demo.ts:92:22
+
+    Error Context: e2e-results\orders-ux\orders-ux.demo.ts-receivin-03ac0--opens-only-the-send-wizard\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\orders-ux\orders-ux.demo.ts-receivin-03ac0--opens-only-the-send-wizard\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\orders-ux\orders-ux.demo.ts-receivin-03ac0--opens-only-the-send-wizard\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    e2e\orders-ux.demo.ts:89:1 › receiving navigates and LINE menu opens only the send wizard ──────
+  7 passed (23.4s)
