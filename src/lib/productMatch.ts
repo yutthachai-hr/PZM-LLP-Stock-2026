@@ -86,6 +86,11 @@ export function bracketOf(raw: string): string {
     .join(' ')
 }
 
+/** Canonical composite spelling identity retaining supplier brackets. */
+export function aliasIdentity(key: string, bracket = ''): string {
+  return bracket ? `${key} (${bracket})` : key
+}
+
 function tokens(key: string): Set<string> {
   return new Set(key.split(' ').filter(Boolean))
 }
@@ -137,8 +142,7 @@ export interface MatchIndex {
   byKey: Map<string, Product[]>
   /** The same, by looseKey(): the name with the unit words after numbers dropped. */
   byLoose: Map<string, Product[]>
-  bySku: Map<string, Product>
-  aliasByKey: Map<string, { productId: string; bracket: string }>
+  aliasByKey: Map<string, { productId: string | null; bracket: string }>
   keyed: { product: Product; key: string }[]
 }
 
@@ -148,7 +152,6 @@ export function buildMatchIndex(
 ): MatchIndex {
   const byKey = new Map<string, Product[]>()
   const byLoose = new Map<string, Product[]>()
-  const bySku = new Map<string, Product>()
   const keyed: { product: Product; key: string }[] = []
   for (const p of products) {
     const key = normaliseName(p.name)
@@ -156,15 +159,24 @@ export function buildMatchIndex(
     byKey.set(key, [...(byKey.get(key) ?? []), p])
     const loose = looseKey(key)
     byLoose.set(loose, [...(byLoose.get(loose) ?? []), p])
-    bySku.set(p.sku.trim().toUpperCase(), p)
   }
-  const aliasByKey = new Map<string, { productId: string; bracket: string }>()
+  const aliasByKey = new Map<string, { productId: string | null; bracket: string }>()
   for (const a of aliases) {
     // Only a spelling a person confirmed, filed under its own key, may answer for a product.
     if (!a.createdBy?.trim() || a.key !== normaliseName(a.sourceName)) continue
-    aliasByKey.set(a.key, { productId: a.productId, bracket: bracketOf(a.sourceName) })
+    const bracket = bracketOf(a.sourceName)
+    const fullKey = aliasIdentity(a.key, bracket)
+    const existing = aliasByKey.get(fullKey)
+    if (existing) {
+      // Fail closed if two records for same full identity authorize distinct products.
+      if (existing.productId !== a.productId) {
+        aliasByKey.set(fullKey, { productId: null, bracket })
+      }
+    } else {
+      aliasByKey.set(fullKey, { productId: a.productId, bracket })
+    }
   }
-  return { byKey, byLoose, bySku, aliasByKey, keyed }
+  return { byKey, byLoose, aliasByKey, keyed }
 }
 
 /**
@@ -186,15 +198,16 @@ export function matchProduct(rawName: string, index: MatchIndex): ProductMatch {
   const bySku = index.keyed.filter(({ product }) => product.active && product.sku.trim().toUpperCase() === sku)
   if (bySku.length === 1) return { kind: 'exact', key, product: bySku[0].product, candidates: [] }
 
-  // A spelling somebody confirmed — unless the brackets name someone else. Confirming
-  // "SMOKED BACON(TGM)" must not quietly settle "SMOKED BACON(เบทาโก)" on TGM's bacon (owner's
-  // workbook, 2 Oct 2026): that row is asked about instead.
-  const alias = index.aliasByKey.get(key)
-  if (alias) {
+  // A spelling somebody confirmed — exact bracket identity only (owner, 16 Oct 2026). Confirming
+  // "SMOKED BACON(TGM)" must not settle bare "SMOKED BACON" or "SMOKED BACON(เบทาโก)".
+  const said = bracketOf(rawName)
+  const fullKey = aliasIdentity(key, said)
+  const alias = index.aliasByKey.get(fullKey)
+  if (alias && alias.productId) {
     const p = index.keyed.find((k) => k.product.id === alias.productId)?.product
-    const said = bracketOf(rawName)
-    // A spelling confirmed without a supplier does not settle one that names a supplier.
-    if (p?.active && (!said || said === alias.bracket)) return { kind: 'alias', key, product: p, candidates: [] }
+    if (p?.active && said === alias.bracket) {
+      return { kind: 'alias', key, product: p, candidates: [] }
+    }
   }
 
   const same = (index.byKey.get(key) ?? []).filter((p) => p.active)

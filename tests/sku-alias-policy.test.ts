@@ -49,6 +49,61 @@ describe('SKU or human alias only, across product-resolution consumers', () => {
   test('a bare alias never authorizes an explicitly different supplier bracket', () => {
     expect(matchProduct('sauce for salad (OTHER SUPPLIER)', idx([alias])).product).toBeUndefined()
   })
+  test('supplier-bracketed alias never authorizes unbracketed bare input (bracket asymmetry in both directions)', () => {
+    const baconTgm = p('bacon-tgm', 'BAC-001', 'SMOKED BACON 1 KG (TGM)')
+    const aliasTgm: ProductAlias = { id: 'a-tgm', key: 'SMOKED BACON', sourceName: 'SMOKED BACON (TGM)', productId: baconTgm.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 1 }
+    const index = buildMatchIndex([baconTgm], [aliasTgm])
+    // Bracketed alias -> bare input must NOT auto-match
+    expect(matchProduct('SMOKED BACON', index).product).toBeUndefined()
+    expect(matchProduct('SMOKED BACON', index).kind).not.toBe('alias')
+    // Bracketed alias -> different supplier must NOT auto-match
+    expect(matchProduct('SMOKED BACON (BETAGRO)', index).product).toBeUndefined()
+    // Exact bracket identity resolves correctly
+    expect(matchProduct('SMOKED BACON (TGM)', index)).toMatchObject({ kind: 'alias', product: baconTgm })
+  })
+  test('two suppliers with the same base name coexist and match their respective brackets', () => {
+    const baconTgm = p('bacon-tgm', 'BAC-001', 'SMOKED BACON 1 KG (TGM)')
+    const baconBeta = p('bacon-beta', 'BAC-002', 'SMOKED BACON 1 KG (BETAGRO)')
+    const aliasTgm: ProductAlias = { id: 'a-tgm', key: 'SMOKED BACON', sourceName: 'SMOKED BACON (TGM)', productId: baconTgm.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 1 }
+    const aliasBeta: ProductAlias = { id: 'a-beta', key: 'SMOKED BACON', sourceName: 'SMOKED BACON (BETAGRO)', productId: baconBeta.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 2 }
+    const index = buildMatchIndex([baconTgm, baconBeta], [aliasTgm, aliasBeta])
+    expect(matchProduct('SMOKED BACON (TGM)', index)).toMatchObject({ kind: 'alias', product: baconTgm })
+    expect(matchProduct('SMOKED BACON (BETAGRO)', index)).toMatchObject({ kind: 'alias', product: baconBeta })
+    expect(matchProduct('SMOKED BACON', index).product).toBeUndefined()
+  })
+  test('distinct confirmed full identities (bare and bracketed for same base name) coexist', () => {
+    const baconGen = p('bacon-gen', 'BAC-000', 'SMOKED BACON 1 KG')
+    const baconTgm = p('bacon-tgm', 'BAC-001', 'SMOKED BACON 1 KG (TGM)')
+    const aliasBare: ProductAlias = { id: 'a-bare', key: 'SMOKED BACON', sourceName: 'SMOKED BACON', productId: baconGen.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 1 }
+    const aliasTgm: ProductAlias = { id: 'a-tgm', key: 'SMOKED BACON', sourceName: 'SMOKED BACON (TGM)', productId: baconTgm.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 2 }
+    const index = buildMatchIndex([baconGen, baconTgm], [aliasBare, aliasTgm])
+    expect(matchProduct('SMOKED BACON', index)).toMatchObject({ kind: 'alias', product: baconGen })
+    expect(matchProduct('SMOKED BACON (TGM)', index)).toMatchObject({ kind: 'alias', product: baconTgm })
+    expect(matchProduct('SMOKED BACON (OTHER)', index).product).toBeUndefined()
+  })
+  test('conflicting duplicate aliases fail closed', () => {
+    const baconTgm = p('bacon-tgm', 'BAC-001', 'SMOKED BACON 1 KG (TGM)')
+    const baconBeta = p('bacon-beta', 'BAC-002', 'SMOKED BACON 1 KG (BETAGRO)')
+    const alias1: ProductAlias = { id: 'a1', key: 'SMOKED BACON', sourceName: 'SMOKED BACON (TGM)', productId: baconTgm.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 1 }
+    const alias2Conflicting: ProductAlias = { id: 'a2', key: 'SMOKED BACON', sourceName: 'SMOKED BACON (TGM)', productId: baconBeta.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 2 }
+    const conflictIndex = buildMatchIndex([baconTgm, baconBeta], [alias1, alias2Conflicting])
+    expect(conflictIndex.aliasByKey.get('SMOKED BACON (TGM)')?.productId).toBeNull()
+    const match = matchProduct('SMOKED BACON (TGM)', conflictIndex)
+    expect(match.product).toBeUndefined()
+    expect(match.kind).not.toBe('alias')
+
+    // Same full identity pointing to same product is NOT a conflict
+    const aliasSameProduct: ProductAlias = { id: 'a3', key: 'SMOKED BACON', sourceName: 'SMOKED BACON (TGM)', productId: baconTgm.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 3 }
+    const sameIndex = buildMatchIndex([baconTgm], [alias1, aliasSameProduct])
+    expect(matchProduct('SMOKED BACON (TGM)', sameIndex)).toMatchObject({ kind: 'alias', product: baconTgm })
+
+    // Conflicting bare aliases fail closed for bare input
+    const aliasBare1: ProductAlias = { id: 'ab1', key: 'SMOKED BACON', sourceName: 'SMOKED BACON', productId: baconTgm.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 1 }
+    const aliasBare2: ProductAlias = { id: 'ab2', key: 'SMOKED BACON', sourceName: 'SMOKED BACON', productId: baconBeta.id, createdBy: 'human', createdByName: 'Reviewer', createdAt: 2 }
+    const conflictBareIndex = buildMatchIndex([baconTgm, baconBeta], [aliasBare1, aliasBare2])
+    expect(matchProduct('SMOKED BACON', conflictBareIndex).product).toBeUndefined()
+    expect(matchProduct('SMOKED BACON', conflictBareIndex).kind).not.toBe('alias')
+  })
   test('duplicate SKU cannot silently choose the last product', () => {
     expect(matchProduct(ranch.sku, buildMatchIndex([ranch, { ...mayo, sku: ranch.sku }], [])).product).toBeUndefined()
   })

@@ -209,8 +209,11 @@ describe('an alias is remembered', () => {
     expect(other.kind).toBe('none')
     expect(other.product).toBeUndefined()
     expect(other.candidates[0].product).toBe(bacon)
-    // No bracket at all is the same spelling as before.
-    expect(matchProduct('SMOKED BACON', idx)).toMatchObject({ kind: 'alias', product: bacon })
+    // Owner rule (16 Oct 2026): A supplier-bracket confirmed alias must NOT auto-match unbracketed bare input.
+    // Bare sourceName must not become a bracketed alias and vice versa. Only exact bracket identity authorizes.
+    const bare = matchProduct('SMOKED BACON', idx)
+    expect(bare.product).toBeUndefined()
+    expect(bare.kind).not.toBe('alias')
   })
 
   test('a Thai spelling reaches its product through an alias only', () => {
@@ -260,5 +263,38 @@ describe('saving an alias', () => {
 
   test('an alias id is a plain path segment', () => {
     expect(aliasId(normaliseName('FRENCH FRIES 3/8'))).toMatch(/^alias-[0-9a-f]{16}$/)
+  })
+
+  test('aliases for same base name but different supplier brackets have distinct IDs and coexist', async () => {
+    const actor = { id: 'u1', name: 'AA' }
+    const a1 = await saveAlias({ sourceName: 'SMOKED BACON (TGM)', productId: 'p-tgm', actor })
+    const a2 = await saveAlias({ sourceName: 'SMOKED BACON (BETAGRO)', productId: 'p-betagro', actor })
+    expect(a1.id).not.toBe(a2.id)
+    const rows = raw('productAliases') as ProductAlias[]
+    expect(rows).toHaveLength(2)
+    const ids = new Set(rows.map((r) => r.id))
+    expect(ids.has(a1.id)).toBe(true)
+    expect(ids.has(a2.id)).toBe(true)
+    const all = await listAliases()
+    expect(all).toHaveLength(2)
+  })
+
+  test('saved aliases are brand-isolated in persistence', async () => {
+    const actor = { id: 'u1', name: 'AA' }
+    setActiveBrand('pizza')
+    await saveAlias({ sourceName: 'SMOKED BACON (TGM)', productId: 'p-pzm', actor })
+    expect(raw('productAliases')).toHaveLength(1)
+    expect(raw('lelapin__productAliases')).toHaveLength(0)
+
+    setActiveBrand('lelapin')
+    expect(await listAliases()).toHaveLength(0)
+    await saveAlias({ sourceName: 'SMOKED BACON (TGM)', productId: 'p-llp', actor })
+    expect(raw('lelapin__productAliases')).toHaveLength(1)
+    expect(raw('productAliases')).toHaveLength(1)
+
+    setActiveBrand('pizza')
+    expect((await listAliases())[0].productId).toBe('p-pzm')
+    setActiveBrand('lelapin')
+    expect((await listAliases())[0].productId).toBe('p-llp')
   })
 })
