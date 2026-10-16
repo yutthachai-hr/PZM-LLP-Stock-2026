@@ -67,6 +67,10 @@ for (const vp of [
 
     // Down to the end of the list, then pick from there.
     await pick(page, 'ZAKANA').scrollIntoViewIfNeeded()
+    // The row to pick must be settled and on screen before the baseline is read. Otherwise the
+    // click scrolls it into view itself and the drift is the test's, not the app's (CI run
+    // 38684878733: "element is not stable", then scrollY 5404 to 5217).
+    await pick(page, 'NOBLE MONO').scrollIntoViewIfNeeded()
     const y0 = await page.evaluate(() => scrollY)
     expect(y0).toBeGreaterThan(400)
     await pick(page, 'NOBLE MONO').click()

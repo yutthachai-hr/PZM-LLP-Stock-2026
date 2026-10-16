@@ -11,11 +11,20 @@ const autoTable = vi.fn()
 vi.mock('jspdf-autotable', () => ({ default: autoTable }))
 vi.mock('jspdf', () => ({
   jsPDF: class {
+    internal = {
+      pageSize: {
+        getWidth: () => 841.89,
+        getHeight: () => 595.28,
+      },
+    }
     addFileToVFS = vi.fn()
     addFont = vi.fn()
     setFont = vi.fn()
     setFontSize = vi.fn()
     text = vi.fn()
+    addPage = vi.fn()
+    splitTextToSize = vi.fn((text: string) => [text])
+    setLineHeightFactor = vi.fn()
     save = vi.fn()
   },
 }))
