@@ -5,7 +5,7 @@ import { useToast } from '../../components/Toast'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { defaultBlock, parseOrderWorkbook, type ColumnMapping, type OrderBlock } from '../../lib/orderSheet'
-import { buildMatchIndex, matchProduct } from '../../lib/productMatch'
+import { buildMatchIndex, matchProduct, safeSuggestion } from '../../lib/productMatch'
 import { assessRows, buildBatchRows, hashFile, rowState } from '../../services/purchaseBatch'
 import { saveAlias } from '../../services/productAliases'
 import { updateProduct } from '../../services/products'
@@ -100,7 +100,7 @@ export function useWorkbookRows(editsPrefix: string) {
   /** The closest product for a row nothing was matched to — shown, never taken. */
   const index = useMemo(() => buildMatchIndex(products, aliases), [products, aliases])
   const nearest = (r: BatchRow): Product | undefined =>
-    r.productId ? undefined : matchProduct(r.rawName, index).candidates[0]?.product
+    r.productId ? undefined : safeSuggestion(matchProduct(r.rawName, index))
 
   async function resolved(r: ResolveResult) {
     if (!user) return

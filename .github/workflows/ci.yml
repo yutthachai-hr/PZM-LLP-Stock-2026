@@ -129,6 +129,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # No retries: playwright.config.ts sets retries: 0.
       - run: npm run -s test:e2e
+      - name: Product matching on an isolated browser-storage demo
+        run: npx playwright test -c playwright.match.config.ts
       - name: Import window on an isolated browser-storage demo
         run: npx playwright test -c playwright.import.config.ts
       - if: failure()

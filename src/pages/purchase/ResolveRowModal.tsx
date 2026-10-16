@@ -5,7 +5,7 @@ import { Badge, Button, Field, Input, Modal, Select } from '../../components/ui'
 import { entryUnitsFor, UnitSelect } from '../../components/QtyInput'
 import { useEntryUnits } from '../../services/entryUnits'
 import { useT } from '../../i18n/I18nContext'
-import { buildMatchIndex, matchProduct, normaliseName, similarity, type ProductAlias } from '../../lib/productMatch'
+import { buildMatchIndex, matchProduct, normaliseName, productSimilarity, type ProductAlias } from '../../lib/productMatch'
 import { canonicalUnit } from '../../services/purchaseBatch'
 import { sameUnit } from '../../lib/units'
 import type { BatchRow, Product, Supplier } from '../../types'
@@ -75,7 +75,7 @@ export function ResolveRowModal({
     if (!q) return top
     return products
       .filter((p) => p.active !== false || p.id === productId)
-      .map((p) => ({ p, s: similarity(q, normaliseName(p.name)) + (normaliseName(p.name).includes(q) ? 1 : 0) }))
+      .map((p) => ({ p, s: productSimilarity(q, normaliseName(p.name)).score + (normaliseName(p.name).includes(q) ? 1 : 0) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s)
       .slice(0, 12)
