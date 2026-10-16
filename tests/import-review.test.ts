@@ -5,7 +5,8 @@
 //   npm test
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import { blockedReason, choose, importable, lacksUnit, planRows, setInclude, type ReadLine } from '../src/lib/importReview'
+import { blockedReason, choose, importable, lacksUnit, planRows, setInclude, setQty, type ReadLine } from '../src/lib/importReview'
+import { readItemText } from '../src/lib/itemText'
 import type { Product } from '../src/types'
 
 const P = (id: string, name: string, over: Partial<Product> = {}): Product =>
@@ -99,9 +100,13 @@ describe('units', () => {
 
 describe('every consumer goes through these rules', () => {
   test('the import window decides rows only through lib/importReview, and every screen imports through the window', () => {
-    const modal = readFileSync('src/components/import/LineImportModal.tsx', 'utf8')
+    // LineImportModal loads the window on demand (15 Oct 2026); the rules live in the window.
+    expect(readFileSync('src/components/import/LineImportModal.tsx', 'utf8')).toContain("import('./LineImportWindow')")
+    const modal = readFileSync('src/components/import/LineImportWindow.tsx', 'utf8')
     expect(modal).toContain('planRows(')
     expect(modal).toContain('importable(rows)')
+    expect(modal).toContain("fromText ? t('อ่านจำนวนไม่ได้') : t('จำนวนในไฟล์ใช้ไม่ได้')")
+    expect(modal).toContain("source: 'ocr'")
     expect(modal).not.toMatch(/include:\s*!c\.unitUnknown/) // the old pre-tick of guesses is gone
     for (const f of ['src/components/LineBuilder.tsx', 'src/pages/Adjust.tsx', 'src/pages/counts/MonthlyCountSheet.tsx', 'src/pages/Orders.tsx', 'src/pages/requests/RequestEditor.tsx']) {
       expect(readFileSync(f, 'utf8'), f).toContain('<LineImportModal')
@@ -112,5 +117,65 @@ describe('every consumer goes through these rules', () => {
     const receive = readFileSync('src/pages/Receive.tsx', 'utf8')
     expect(receive).toContain('ocrCandidates(bill)')
     expect(receive).not.toMatch(/matchProduct\(|suggestProducts\(/)
+  })
+})
+
+describe('a typed list and a quantity typed in the window (15 Oct 2026)', () => {
+  test('a typed exact name is sure; with no quantity it is blocked until one is typed', () => {
+    const [row] = planRows(readItemText('flour').lines, catalogue)
+    expect([row.how, row.product?.id, blockedReason(row), row.include]).toEqual(['sure', 'flour', 'bad-qty', false])
+    const fixed = setQty(row, 4)
+    expect([fixed.qty, blockedReason(fixed), fixed.include]).toEqual([4, null, true])
+    expect(importable([fixed]).map((r) => r.qty)).toEqual([4])
+  })
+
+  test('a typed quantity on a guess is converted but still waits for the person', () => {
+    const [g] = planRows(readItemText('feta cheese').lines, catalogue)
+    expect(g.how).toBe('guess')
+    const fixed = setQty(g, 3)
+    expect([fixed.include, fixed.how]).toEqual([false, 'guess'])
+    expect(importable([fixed])).toEqual([])
+  })
+
+  test('a typed quantity is converted by the unit written in the text', () => {
+    const [row] = planRows([{ ...readItemText('FETA CHEESE 500G (HOMEMADE CHEESE) 2 pack').lines[0] }], catalogue)
+    // A typed name is a guess (owner, 15 Oct 2026), but its unit is still read and converted.
+    expect([row.how, row.entryUnit, row.entryQty, row.qty]).toEqual(['guess', 'Pack', 2, 1])
+    const fixed = setQty(row, 4)
+    expect([fixed.entryQty, fixed.qty, fixed.include]).toEqual([4, 2, false])
+
+    // A typed exact SKU is sure and pre-ticked if unit converts
+    const [skuRow] = planRows([{ ...readItemText('FETA 2 pack').lines[0] }], catalogue)
+    expect([skuRow.how, skuRow.entryUnit, skuRow.entryQty, skuRow.qty, skuRow.include]).toEqual(['sure', 'Pack', 2, 1, true])
+  })
+
+  test('zero, negative or not-a-number stays blocked', () => {
+    const [row] = planRows(readItemText('flour').lines, catalogue)
+    for (const q of [0, -1, NaN]) expect(blockedReason(setQty(row, q))).toBe('bad-qty')
+  })
+
+  test('the same name from two suppliers is offered, never chosen', () => {
+    const [row] = planRows(readItemText('basil 2 kg').lines, catalogue)
+    expect(row.product).toBeNull()
+    expect(row.suggestions.map((p) => p.id).sort()).toEqual(['basil-a', 'basil-b'])
+  })
+
+  test('a unit the product has no rate for blocks the line, whatever the text says', () => {
+    const [row] = planRows(readItemText('flour 2 ถุง').lines, catalogue)
+    expect([row.product?.id, blockedReason(row), row.include]).toEqual(['flour', 'unit-unknown', false])
+  })
+
+  test('a row with no product cannot take a quantity into the import', () => {
+    const [row] = planRows(readItemText('unknown thing').lines, catalogue)
+    expect(importable([setQty(row, 2)])).toEqual([])
+  })
+
+  test('unclear quantity tokens like 12345 or 7UP are blocked as bad-qty and never auto-included', () => {
+    const customCatalogue = [...catalogue, P('p12345', 'SOME PRODUCT', { sku: '12345' })]
+    const r = readItemText('12345')
+    const [row] = planRows(r.lines, customCatalogue)
+    expect(row.product?.id).toBe('p12345')
+    expect(row.include).toBe(false)
+    expect(blockedReason(row)).toBe('bad-qty')
   })
 })

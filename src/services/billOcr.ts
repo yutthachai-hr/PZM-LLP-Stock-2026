@@ -1,6 +1,7 @@
 import { AppError } from '../i18n/AppError'
 import { trackWrite } from '../backend/pendingWrites'
 import { cleanOcr, type OcrBill } from '../lib/billOcr'
+import { MAX_PDF_BYTES } from '../lib/importFile'
 import { authHeader } from './poImages'
 
 /**
@@ -41,8 +42,6 @@ async function readBillPhotoNow(dataUrl: string): Promise<OcrBill> {
   return cleanOcr(await res.json())
 }
 
-/** The endpoint takes about 4 MB of base64: a PDF up to this size goes as it is. */
-const MAX_PDF_BYTES = 2_900_000
 
 /**
  * Any document a person picks — a photo, a screenshot, a PDF — read by the same model
@@ -54,7 +53,8 @@ export async function readDocumentFile(file: File): Promise<OcrBill> {
     if (file.size > MAX_PDF_BYTES) throw new AppError('ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ 3 MB) — ลองส่งเฉพาะหน้าที่มีรายการ')
     return readBillPhoto(await asDataUrl(file, 'application/pdf'))
   }
-  if (!file.type.startsWith('image/')) throw new AppError('รองรับเฉพาะรูปภาพหรือ PDF')
+  const isImage = file.type.startsWith('image/') || ((!file.type || file.type === 'application/octet-stream') && /\.(jpe?g|png|webp)$/i.test(file.name))
+  if (!isImage) throw new AppError('รองรับเฉพาะรูปภาพหรือ PDF')
   return readBillPhoto(await shrinkImage(file, 2000))
 }
 

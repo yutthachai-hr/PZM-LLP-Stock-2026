@@ -281,7 +281,9 @@ export function RequestEditor({ initial, onChange }: { initial: PurchaseRequest 
               })
             }
             if (noSupplier.length) toast.error(t('ยังไม่ได้เพิ่ม {n} รายการที่ไม่มีผู้ขายหลัก: {names}', { n: noSupplier.length, names: noSupplier.slice(0, 3).join(', ') }))
-            if (lines.length) await addFromExcel(lines, source)
+            // Nothing added keeps the import window open with its review (15 Oct 2026).
+            if (!lines.length) return false
+            return addFromExcel(lines, source)
           }}
         />
       )}
