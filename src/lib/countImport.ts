@@ -78,7 +78,14 @@ export function importRows(
 ): ImportRow[] {
   const col = sheet.snapshots[at.snapshot]?.columns[at.column]
   if (!col) return []
-  const bySku = new Map(products.map((p) => [p.sku.trim().toUpperCase(), p]))
+  // A closing-stock workbook follows the same identity rule as other imports: only one
+  // active product may answer for a SKU. Never let Map's last-wins choose a duplicate.
+  const bySku = new Map<string, (typeof products)[number][]>()
+  for (const p of products) {
+    if (!p.active) continue
+    const sku = p.sku.trim().toUpperCase()
+    bySku.set(sku, [...(bySku.get(sku) ?? []), p])
+  }
   const rows: ImportRow[] = []
   for (const r of sheet.rows) {
     const qty = num(r.cells[col.qtyCol])
@@ -89,7 +96,8 @@ export function importRows(
       rows.push({ ...base, status: 'nosku' })
       continue
     }
-    const p = bySku.get(r.code.trim().toUpperCase())
+    const matches = bySku.get(r.code.trim().toUpperCase()) ?? []
+    const p = matches.length === 1 ? matches[0] : undefined
     if (!p) {
       rows.push({ ...base, status: 'unknown' })
       continue

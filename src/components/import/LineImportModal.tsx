@@ -7,7 +7,7 @@ import { fmtQty } from '../../lib/format'
 import { buildMatchIndex } from '../../lib/productMatch'
 import { looseScore } from '../../lib/search'
 import { suggestProducts } from '../../lib/productSuggest'
-import { parseSheetLines, type SheetLine } from '../../lib/sheetLines'
+import type { SheetLine } from '../../lib/sheetLines'
 import { billReaderAvailable, readDocumentFile } from '../../services/billOcr'
 import type { Product } from '../../types'
 import { Icon } from '../Icon'
@@ -83,6 +83,7 @@ export function LineImportModal({
     setError(null)
     setStep('reading')
     try {
+      const { parseSheetLines } = await import('../../lib/sheetLines')
       const parsed = parseSheetLines(await file.arrayBuffer())
       if (!parsed.lines.length) throw new Error(t('ไม่พบแถวสินค้าในไฟล์ — ต้องมีหัวคอลัมน์ชื่อสินค้า (หรือรหัส) และจำนวน'))
       setSource(`${file.name} · ${parsed.sheet}`)
@@ -102,7 +103,7 @@ export function LineImportModal({
       const bill = await readDocumentFile(file)
       if (!bill.lines.length) throw new Error(t('AI ({model}) ไม่พบรายการสินค้าในเอกสารนี้ — ลองรูปที่ชัดขึ้น หรือใช้ Excel', { model: bill.model ?? '?' }))
       setSource([file.name, bill.supplier, bill.invoiceNo].filter(Boolean).join(' · '))
-      setRows(toRows(bill.lines))
+      setRows(toRows(bill.lines.map((line) => ({ ...line, source: 'ocr' as const }))))
       setStep('review')
     } catch (e) {
       setError(errText(e, t))

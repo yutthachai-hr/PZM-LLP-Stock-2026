@@ -16,8 +16,7 @@ import { listOpenOrders, receivePurchaseOrder } from '../services/purchaseOrders
 import { findDuplicateDocument, type DuplicateDoc } from '../services/receiptDocs'
 import { useSuppliers } from '../services/suppliers'
 import { compressImage } from '../lib/image'
-import { matchOcrLines } from '../lib/billOcr'
-import { buildMatchIndex } from '../lib/productMatch'
+import { ocrCandidates } from '../lib/billOcr'
 import { billReaderAvailable, readBillPhoto, readDocumentFile } from '../services/billOcr'
 import { ocrFill, type OcrFill } from './receive/ocrApply'
 import { conflictsWith, resolveReceipt, supplierRank, type Candidate, type Resolution } from '../lib/supplierResolution'
@@ -372,7 +371,7 @@ export function ReceivePage() {
     setReading(true)
     try {
       const bill = file ? await readDocumentFile(file) : await readBillPhoto(photo!)
-      const filled = ocrFill(bill, matchOcrLines(bill, buildMatchIndex(products, [])), { draft: d, order, suppliers })
+      const filled = ocrFill(bill, ocrCandidates(bill), { draft: d, order, suppliers })
       const fromBill = filled.patch.supplierId
       patch({ ...filled.patch, ...(fromBill ? { supplierPick: fromBill === OTHER_SUPPLIER ? 'manual' : 'ocr' } : {}) })
       setOcr(filled)
@@ -557,7 +556,7 @@ export function ReceivePage() {
                   <li key={`${s.name}-${i}`}>
                     {s.name} —{' '}
                     {s.why === 'noProduct'
-                      ? t('ไม่พบสินค้าที่ชื่อตรงกัน')
+                      ? t('AI ไม่เลือกสินค้าให้เอง — เลือกสินค้าเอง')
                       : s.why === 'notOnOrder'
                         ? t('ไม่อยู่ในใบสั่งซื้อนี้')
                         : s.why === 'unit'

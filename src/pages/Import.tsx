@@ -62,6 +62,7 @@ export function ImportPage() {
   // Null until read: a plan built on an empty ledger would compare every count with zero.
   const [ledger, setLedger] = useState<StockMovement[] | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [downloadingSkipped, setDownloadingSkipped] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [open, setOpen] = useState<SkipReason | 'units' | 'already' | 'moved' | null>(null)
 
@@ -193,22 +194,29 @@ export function ImportPage() {
   }
 
   async function downloadSkipped() {
-    if (!plan) return
-    const { exportExcel } = await import('../lib/export')
-    exportExcel(
-      `skipped-${fileName.replace(/\.xlsx?$/i, '')}`,
-      'Skipped',
-      plan.skipped.map((s) => ({
-        [t('แถวใน Excel')]: s.excelRow,
-        [t('รหัส')]: s.code,
-        [t('ชื่อ')]: s.name,
-        [t('ขนาดบรรจุ')]: s.packSize,
-        [t('สาเหตุ')]: t(SKIP_LABEL[s.reason]),
-        [t('จำนวนช่องที่ข้าม')]: s.droppedCells,
-        [t('ตำแหน่ง')]: s.where,
-        [t('รายละเอียด')]: s.detail ?? '',
-      })),
-    )
+    if (!plan || downloadingSkipped) return
+    setDownloadingSkipped(true)
+    try {
+      const { exportExcel } = await import('../lib/export')
+      await exportExcel(
+        `skipped-${fileName.replace(/\.xlsx?$/i, '')}`,
+        'Skipped',
+        plan.skipped.map((s) => ({
+          [t('แถวใน Excel')]: s.excelRow,
+          [t('รหัส')]: s.code,
+          [t('ชื่อ')]: s.name,
+          [t('ขนาดบรรจุ')]: s.packSize,
+          [t('สาเหตุ')]: t(SKIP_LABEL[s.reason]),
+          [t('จำนวนช่องที่ข้าม')]: s.droppedCells,
+          [t('ตำแหน่ง')]: s.where,
+          [t('รายละเอียด')]: s.detail ?? '',
+        })),
+      )
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setDownloadingSkipped(false)
+    }
   }
 
   if (!isAdmin) {
@@ -500,9 +508,9 @@ export function ImportPage() {
                 : t('นำเข้า {n} รายการ', { n: plan.postings.length })}
             </Button>
             {plan.skipped.length > 0 && (
-              <Button variant="secondary" onClick={downloadSkipped} disabled={!!progress}>
+              <Button variant="secondary" onClick={() => void downloadSkipped()} disabled={!!progress || downloadingSkipped}>
                 <Icon name="download" size={16} />
-                {t('ดาวน์โหลดรายการที่ข้าม')}
+                {downloadingSkipped ? t('กำลังสร้างไฟล์...') : t('ดาวน์โหลดรายการที่ข้าม')}
               </Button>
             )}
           </div>
