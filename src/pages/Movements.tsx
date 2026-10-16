@@ -31,6 +31,48 @@ import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { movementNote } from '../lib/receiptLabel'
+import { useBrand } from '../brand/BrandContext'
+import { getBrand, type BrandId } from '../brand/brand'
+import { movementsOfDocument } from '../services/documentLookup'
+
+export async function resolveDocFilterLookup({
+  docFilter,
+  docLoaded,
+  brand,
+  isAlive,
+  toast,
+  t,
+  setDocRows,
+  fetchMovements = movementsOfDocument,
+}: {
+  docFilter: string
+  docLoaded: boolean
+  brand: BrandId | null
+  isAlive: () => boolean
+  toast: { error: (msg: string) => void }
+  t: (thai: string, vars?: Record<string, string | number>) => string
+  setDocRows: (rows: StockMovement[]) => void
+  fetchMovements?: (docNo: string) => Promise<StockMovement[]>
+}): Promise<void> {
+  if (docLoaded || !docFilter) {
+    setDocRows([])
+    return
+  }
+  const requestBrand = brand ?? getBrand()
+  try {
+    const rows = await fetchMovements(docFilter)
+    if (!isAlive() || getBrand() !== requestBrand || (brand && brand !== requestBrand)) return
+    if (rows.length === 0) {
+      setDocRows([])
+      toast.error(t('ไม่พบเอกสาร {docNo}', { docNo: docFilter }))
+      return
+    }
+    setDocRows(rows)
+  } catch (e) {
+    if (!isAlive() || getBrand() !== requestBrand || (brand && brand !== requestBrand)) return
+    toast.error(errText(e, t) || t('โหลดเอกสารไม่สำเร็จ'))
+  }
+}
 
 export function MovementsPage() {
   const t = useT()
@@ -38,6 +80,7 @@ export function MovementsPage() {
   const [history, setHistory] = useState<StockMovement[]>([])
   const [historyFrom, setHistoryFrom] = useState<number | null>(null)
   const { user } = useAuth()
+  const { brand } = useBrand()
   const toast = useToast() // i18n-key
   const confirm = useConfirm()
   const isAdmin = user?.role === 'admin'
@@ -110,14 +153,39 @@ export function MovementsPage() {
     setHistoryFrom(from)
   }, [])
 
+  // ?doc= from a search result can name a document from any month: read that document's rows
+  // alone (one equality query) rather than widening the window around it.
+  const [docRows, setDocRows] = useState<StockMovement[]>([])
+  const docLoaded = !docFilter || liveMovements.some((m) => m.docNo === docFilter) || history.some((m) => m.docNo === docFilter)
+  useEffect(() => {
+    if (docLoaded) {
+      setDocRows([])
+      return
+    }
+    let alive = true
+    void resolveDocFilterLookup({
+      docFilter,
+      docLoaded,
+      brand,
+      isAlive: () => alive,
+      toast,
+      t,
+      setDocRows,
+    })
+    return () => {
+      alive = false
+    }
+  }, [docFilter, docLoaded, brand, toast, t])
+
   // ponytail: merges on-demand history with recent live window; add streaming pagination if history grows beyond thousands.
   const movements = useMemo(() => {
-    if (history.length === 0) return liveMovements
+    if (history.length === 0 && docRows.length === 0) return liveMovements
     const map = new Map<string, StockMovement>()
+    for (const m of docRows) map.set(m.id, m)
     for (const m of history) map.set(m.id, m)
     for (const m of liveMovements) map.set(m.id, m)
     return [...map.values()]
-  }, [history, liveMovements])
+  }, [history, docRows, liveMovements])
   const [editing, setEditing] = useState<StockMovement | null>(null)
   const [photoDoc, setPhotoDoc] = useState<string | null>(null)
 
