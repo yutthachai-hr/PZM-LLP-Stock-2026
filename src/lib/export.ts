@@ -71,32 +71,91 @@ export interface PdfReportOptions {
   foot?: (string | number)[]
 }
 
-export function exportReportPdf(opts: PdfReportOptions): void {
+export function createReportPdf(opts: PdfReportOptions): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const hasThai = registerThaiFont(doc)
   const font = hasThai ? 'Sarabun' : 'helvetica'
 
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const marginLeft = 40
+  const marginRight = 40
+  const marginTop = 40
+  const marginBottom = 40
+  const contentWidth = pageWidth - marginLeft - marginRight
+  const maxContentY = pageHeight - marginBottom
+
+  const titleLineHeight = 22
+  const metaLineHeight = 16
+
   doc.setFont(font, 'normal')
   doc.setFontSize(16)
-  doc.text(opts.title, 40, 40)
 
-  let y = 58
-  doc.setFontSize(10)
-  if (opts.subtitle) {
-    doc.text(opts.subtitle, 40, y)
-    y += 14
+  let y = marginTop
+  const titleLines = doc.splitTextToSize(opts.title, contentWidth)
+  for (const line of titleLines) {
+    if (y > maxContentY) {
+      doc.addPage()
+      doc.setFont(font, 'normal')
+      doc.setFontSize(16)
+      y = marginTop
+    }
+    doc.text(line, marginLeft, y)
+    y += titleLineHeight
   }
-  for (const line of opts.meta ?? []) {
-    doc.text(line, 40, y)
-    y += 13
+
+  doc.setFontSize(10)
+  y += 2
+
+  const printMetaLine = (line: string): void => {
+    if (y > maxContentY) {
+      doc.addPage()
+      doc.setFont(font, 'normal')
+      doc.setFontSize(10)
+      y = marginTop
+    }
+    doc.text(line, marginLeft, y)
+    y += metaLineHeight
+  }
+
+  if (opts.subtitle) {
+    const subLines = doc.splitTextToSize(opts.subtitle, contentWidth)
+    for (const line of subLines) {
+      printMetaLine(line)
+    }
+  }
+
+  for (const entry of opts.meta ?? []) {
+    if (!entry) continue
+    const metaLines = doc.splitTextToSize(entry, contentWidth)
+    for (const line of metaLines) {
+      printMetaLine(line)
+    }
+  }
+
+  const tableFontSize = 9
+  const tableCellPadding = 4
+  const tableLineHeight = 1.35
+  // The header and at least one body row must fit, or autoTable draws the header here and the
+  // first row on the next page (R2 review, 15 Oct 2026: starts of 518..524pt did exactly that).
+  const tableRowHeight = tableFontSize * tableLineHeight + 2 * tableCellPadding
+  let tableStartY = y
+  if (tableStartY + 2 * tableRowHeight > maxContentY) {
+    doc.addPage()
+    tableStartY = marginTop
+  }
+
+  if (typeof doc.setLineHeightFactor === 'function') {
+    doc.setLineHeightFactor(tableLineHeight)
   }
 
   autoTable(doc, {
-    startY: y + 6,
+    startY: tableStartY,
+    margin: { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft },
     head: [opts.head],
     body: opts.body.map((r) => r.map((c) => String(c))),
     foot: opts.foot ? [opts.foot.map((c) => String(c))] : undefined,
-    styles: { font, fontSize: 9, cellPadding: 4 },
+    styles: { font, fontSize: tableFontSize, cellPadding: tableCellPadding, ...({ lineHeightFactor: tableLineHeight } as any) },
     // Sarabun is registered as 'normal' only; autoTable bolds the head by default, and a
     // bold request falls back to a font with no Thai glyphs — the header came out as
     // "'1 5H*1 @%" on the order sheet PDF while every body row read fine.
@@ -105,5 +164,10 @@ export function exportReportPdf(opts: PdfReportOptions): void {
     alternateRowStyles: { fillColor: [250, 250, 250] },
   })
 
+  return doc
+}
+
+export function exportReportPdf(opts: PdfReportOptions): void {
+  const doc = createReportPdf(opts)
   doc.save(opts.filename.endsWith('.pdf') ? opts.filename : `${opts.filename}.pdf`)
 }
