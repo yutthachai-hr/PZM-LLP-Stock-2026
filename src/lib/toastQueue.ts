@@ -4,13 +4,19 @@ export interface ToastContent {
   description?: string
   action?: { label: string; onClick: () => void }
 }
-export type ToastInput = string | ToastContent
+export type ToastInput = string | Error | ToastContent
 export interface ToastRecord extends ToastContent { id: number; kind: ToastKind; revision?: number }
 export const TOAST_DURATION: Record<ToastKind, number> = { success: 3000, info: 4000, warning: 6500, error: 8000 }
 export const MAX_VISIBLE = 3
 export const MAX_QUEUED = 20
 
 export function normalizeToast(input: ToastInput, description?: string): ToastContent | null {
+  // ponytail: Error title defaults to 'Error'; upgrade to localized fallback if queue gains i18n.
+  if (input instanceof Error) {
+    const title = input.message.trim() || 'Error'
+    const details = description?.trim()
+    return { title, ...(details ? { description: details } : {}) }
+  }
   const content = typeof input === 'string' ? { title: input, description } : input
   const title = content.title.trim()
   if (!title) return null

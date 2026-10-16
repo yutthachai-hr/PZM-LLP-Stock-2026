@@ -21,7 +21,7 @@ export function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss:
   const [leaving, setLeaving] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
-  const [hidden, setHidden] = useState(() => document.hidden)
+  const [hidden, setHidden] = useState(() => typeof document !== 'undefined' ? document.hidden : false)
   const close = useCallback(() => {
     if (closing.current) return
     closing.current = true
@@ -48,7 +48,8 @@ export function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss:
   }, [hovered, focused, hidden, leaving, close, toast.revision])
   useEffect(() => () => clearTimeout(exitTimer.current), [])
   const ui = variant[toast.kind]
-  return <article ref={root} data-toast data-toast-kind={toast.kind} data-leaving={leaving} aria-hidden={leaving || undefined}
+  // ponytail: keying text by revision forces DOM re-insertion for a11y re-announcement; upgrade to dedicated speech lane if queued utterances needed.
+  return <article ref={root} data-toast data-toast-kind={toast.kind} data-toast-revision={toast.revision} data-leaving={leaving} aria-hidden={leaving || undefined}
     className="notice-card toast-card flex items-start gap-3 border border-line p-4"
     onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
     onFocusCapture={(event) => {
@@ -59,8 +60,8 @@ export function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss:
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() } }}>
     <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${ui.color}`}><Icon name={ui.icon} size={19} /></span>
     <div className="min-w-0 flex-1">
-      <h3 className="whitespace-pre-line text-sm font-semibold leading-6 text-ink">{toast.title}</h3>
-      {toast.description && <p className="mt-1 whitespace-pre-line text-[13px] leading-5 text-ink-soft">{toast.description}</p>}
+      <h3 key={toast.revision ?? 0} className="whitespace-pre-line text-sm font-semibold leading-6 text-ink">{toast.title}</h3>
+      {toast.description && <p key={toast.revision ?? 0} className="mt-1 whitespace-pre-line text-[13px] leading-5 text-ink-soft">{toast.description}</p>}
       {toast.action && <button type="button" disabled={leaving} className={`mt-2 min-h-11 rounded-lg px-2 text-sm font-semibold text-brand hover:bg-brand-soft ${focusRing}`}
         onClick={() => { if (closing.current) return; try { toast.action!.onClick() } finally { close() } }}>{toast.action.label}</button>}
     </div>

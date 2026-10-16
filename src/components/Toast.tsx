@@ -8,10 +8,10 @@ type Notify = (message: ToastInput, description?: string) => void
 interface ToastApi { success: Notify; error: Notify; warning: Notify; info: Notify }
 const Ctx = createContext<ToastApi | null>(null)
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({ children, initialToasts = [] }: { children: ReactNode; initialToasts?: ToastRecord[] }) {
   const t = useT()
-  const [toasts, setToasts] = useState<ToastRecord[]>([])
-  const counter = useRef(0)
+  const [toasts, setToasts] = useState<ToastRecord[]>(() => initialToasts)
+  const counter = useRef(initialToasts.length)
   const push = useCallback((kind: ToastKind, input: ToastInput, description?: string) => {
     const content = normalizeToast(input, description)
     if (!content) return
@@ -24,10 +24,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     warning: (m, d) => push('warning', m, d), info: (m, d) => push('info', m, d),
   }), [push])
   const dismiss = useCallback((id: number) => setToasts((current) => current.filter((item) => item.id !== id)), [])
+  // ponytail: two persistent live regions (assertive for errors, polite for others); upgrade to separate sub-lane managers if distinct timeouts or focus routing needed.
   return <Ctx.Provider value={api}>
-    <NoticeViewport renderToasts={(reserved) => <div role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions" aria-label={t('การแจ้งเตือนชั่วคราว')} className="flex flex-col gap-2">
-      {visibleToasts(toasts, reserved).map((toast) => <ToastCard key={toast.id} toast={toast} onDismiss={dismiss} />)}
-    </div>}>{children}</NoticeViewport>
+    <NoticeViewport renderToasts={(reserved) => {
+      const visible = visibleToasts(toasts, reserved)
+      return <>
+        <div role="alert" aria-live="assertive" aria-atomic="false" aria-relevant="additions text" className="flex flex-col gap-2">
+          {visible.filter((item) => item.kind === 'error').map((toast) => <ToastCard key={toast.id} toast={toast} onDismiss={dismiss} />)}
+        </div>
+        <div role="status" aria-live="polite" aria-atomic="false" aria-relevant="additions text" aria-label={t('การแจ้งเตือนชั่วคราว')} className="flex flex-col gap-2">
+          {visible.filter((item) => item.kind !== 'error').map((toast) => <ToastCard key={toast.id} toast={toast} onDismiss={dismiss} />)}
+        </div>
+      </>
+    }}>{children}</NoticeViewport>
   </Ctx.Provider>
 }
 

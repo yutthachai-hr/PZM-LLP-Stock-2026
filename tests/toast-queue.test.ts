@@ -11,6 +11,12 @@ describe('transient toast presentation queue', () => {
   it('supports a separate title and description without losing cost precision', () => {
     expect(normalizeToast({ title: 'บันทึกราคาแล้ว', description: '฿350.2203 ต่อ KG' })).toEqual({ title: 'บันทึกราคาแล้ว', description: '฿350.2203 ต่อ KG' })
   })
+  it('normalizes raw Error instances without throwing', () => {
+    expect(normalizeToast(new Error('Connection lost'))).toEqual({ title: 'Connection lost' })
+    expect(normalizeToast(new Error(''))).toEqual({ title: 'Error' })
+    expect(normalizeToast(new Error('  Failed to fetch  '), 'Retry in 5s')).toEqual({ title: 'Failed to fetch', description: 'Retry in 5s' })
+    expect(normalizeToast(new TypeError('Invalid response'))).toEqual({ title: 'Invalid response' })
+  })
   it('ignores empty titles and normalizes blank descriptions', () => {
     expect(normalizeToast('  ')).toBeNull()
     expect(normalizeToast({ title: 'Saved', description: ' ' })).toEqual({ title: 'Saved' })
