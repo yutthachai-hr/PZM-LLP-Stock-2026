@@ -55,10 +55,11 @@ function xlsx(rows: (string | number)[][]): string {
   return Buffer.from(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).toString('base64')
 }
 
-test("Owner's typed list: lines to review, the instruction shown, only the sure line ticked", async ({ page }) => {
+// Since PR27 only a typed exact SKU (or a confirmed alias) is sure; a name is a suggestion to confirm.
+test("Owner's typed list: lines to review, the instruction shown, only the typed SKU ticked", async ({ page }) => {
   await stage(page)
   await mkdir(SHOTS, { recursive: true })
-  await textBox(page).fill('แป้งพิซซ่า 5 ถุง, มอสซาเรลล่า 3 กก., กล่องพิซซ่า 18 นิ้ว 2 แพ็ค\nFLOUR 2 kg\nยังไม่ต้องส่งผู้ขาย')
+  await textBox(page).fill('แป้งพิซซ่า 5 ถุง, มอสซาเรลล่า 3 กก., กล่องพิซซ่า 18 นิ้ว 2 แพ็ค\nF-001 2 kg\nยังไม่ต้องส่งผู้ขาย')
   await page.screenshot({ path: `${SHOTS}/pick-with-text.png` })
   await page.getByRole('button', { name: 'อ่านรายการ' }).click()
   const dialog = page.getByRole('dialog')
@@ -74,7 +75,7 @@ test("Owner's typed list: lines to review, the instruction shown, only the sure 
 
 test('a line with no quantity waits for one, then can be added', async ({ page }) => {
   await stage(page)
-  await textBox(page).fill('FLOUR')
+  await textBox(page).fill('F-001')
   await page.getByRole('button', { name: 'อ่านรายการ' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByText('จะเพิ่ม 0 จาก 1 รายการ')).toBeVisible()
@@ -91,11 +92,13 @@ test('a dropped CSV and a dropped Excel file reach the review', async ({ page })
   await expect(zone(page)).toBeVisible()
   await page.screenshot({ path: `${SHOTS}/pick-dropzone.png` })
   await dropFiles(zone(page), [{ name: 'list.csv', type: 'text/csv', base64: text('ชื่อสินค้า,จำนวน\nFLOUR,3\nMOZZARELLA (FOODGALLERY),2\n') }])
-  await expect(page.getByRole('dialog').getByText('จะเพิ่ม 2 จาก 2 รายการ')).toBeVisible()
+  // Names, not SKUs: each reaches the review and waits for a person to confirm the product.
+  await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(2)
+  await expect(page.getByRole('dialog').getByText('จะเพิ่ม 0 จาก 2 รายการ')).toBeVisible()
   await page.getByRole('button', { name: 'เลือกไฟล์อื่น' }).click()
   await dropFiles(zone(page), [{ name: 'order.xlsx', type: '', base64: xlsx([['ชื่อสินค้า', 'จำนวน'], ['FLOUR', 7]]) }])
   await expect(page.getByRole('dialog').getByText('order.xlsx', { exact: false })).toBeVisible()
-  await expect(page.getByRole('dialog').getByText('จะเพิ่ม 1 จาก 1 รายการ')).toBeVisible()
+  await expect(page.getByRole('dialog').getByText('จะเพิ่ม 0 จาก 1 รายการ')).toBeVisible()
 })
 
 test('unsupported files, photos and PDFs without the reader, an empty file and two files at once are refused', async ({ page }) => {
@@ -148,7 +151,7 @@ test('a file dropped beside the zone does not navigate away', async ({ page }) =
 
 test('when nothing can be added the window stays open with its review', async ({ page }) => {
   await stage(page)
-  await textBox(page).fill('LONE ITEM 4')
+  await textBox(page).fill('X-009 4')
   await page.getByRole('button', { name: 'อ่านรายการ' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('button', { name: 'เพิ่ม 1 รายการ' }).click()
@@ -186,11 +189,30 @@ test('the brand cannot change under the open window, and the next brand starts e
   await expect(brand).toHaveAccessibleName(/Le Lapin/)
   await page.getByRole('button', { name: /นำเข้าจากไฟล์/ }).click()
   await expect(textBox(page)).toHaveValue('')
-  await textBox(page).fill('FLOUR 2\nBAGUETTE 3')
+  await textBox(page).fill('F-001 2\nB-001 3')
   await page.getByRole('button', { name: 'อ่านรายการ' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('listitem')).toHaveCount(2)
   await expect(dialog.getByText('จะเพิ่ม 1 จาก 2 รายการ')).toBeVisible()
   await expect(dialog.getByRole('listitem').filter({ hasText: 'B-001' })).toHaveCount(1)
-  await expect(dialog.getByText('F-001')).toHaveCount(0)
+  // Pizza's F-001 is not Le Lapin's: nothing from the other brand's catalogue is offered.
+  await expect(dialog.getByText('FLOUR')).toHaveCount(0)
+})
+
+test('a typed product name is offered, never ticked on its own', async ({ page }) => {
+  await stage(page)
+  await textBox(page).fill('FLOUR 2')
+  await page.getByRole('button', { name: 'อ่านรายการ' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('listitem')).toHaveCount(1)
+  await expect(dialog.getByText('จะเพิ่ม 0 จาก 1 รายการ')).toBeVisible()
+})
+
+test('a list reader that fails to load says so instead of doing nothing', async ({ page }) => {
+  await page.route(/\/src\/lib\/itemText\.ts/, (route) => route.abort())
+  await stage(page)
+  await textBox(page).fill('F-001 2')
+  await page.getByRole('button', { name: 'อ่านรายการ' }).click()
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible()
+  await expect(textBox(page)).toHaveValue('F-001 2')
 })

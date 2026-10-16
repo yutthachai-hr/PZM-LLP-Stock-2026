@@ -137,7 +137,14 @@ export function LineImportWindow({
 
   async function readText() {
     // Loaded on first use: most imports are files, and the reader is not needed for those.
-    const { readItemText } = await import('../../lib/itemText')
+    // Offline or after a deploy that chunk can fail to load; say so rather than do nothing.
+    let readItemText: (typeof import('../../lib/itemText'))['readItemText']
+    try {
+      ;({ readItemText } = await import('../../lib/itemText'))
+    } catch (e) {
+      setError(errText(e, t))
+      return
+    }
     const r = readItemText(text)
     if (!r.lines.length) {
       setError(t('ไม่พบรายการสินค้าในข้อความ พิมพ์ชื่อสินค้าและจำนวน บรรทัดละรายการ หรือคั่นด้วยจุลภาค'))
