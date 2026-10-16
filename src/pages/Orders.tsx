@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useBrand } from '../brand/BrandContext'
-import { brandDef } from '../brand/brand'
+import { brandDef, getBrand, type BrandId } from '../brand/brand'
 import { useData } from '../data/DataContext'
 import { orderCache } from '../data/orderCache'
 import { bkkDayEnd, bkkDayStart } from '../lib/inventoryRules/time'
@@ -40,6 +40,7 @@ import {
   createPurchaseOrder,
   daysWaiting,
   expectedDeliveryAt,
+  getPurchaseOrder,
   needsResend,
   overdueOrders,
   summariseBySupplier,
@@ -85,6 +86,38 @@ import { printElement } from '../lib/printSheet'
 type Tab = 'open' | 'received' | 'cancelled' | 'summary'
 
 const DAY = 86_400_000
+
+export async function resolvePoDeepLink({
+  id,
+  brand,
+  isAlive,
+  open,
+  toast,
+  t,
+  fetchOrder = getPurchaseOrder,
+}: {
+  id: string
+  brand: BrandId | null
+  isAlive: () => boolean
+  open: (order: PurchaseOrder) => void
+  toast: { error: (msg: string) => void }
+  t: (thai: string, vars?: Record<string, string | number>) => string
+  fetchOrder?: (id: string) => Promise<PurchaseOrder | null>
+}): Promise<void> {
+  const requestBrand = brand ?? getBrand()
+  try {
+    const o = await fetchOrder(id)
+    if (!isAlive() || getBrand() !== requestBrand || (brand && brand !== requestBrand)) return
+    if (o) {
+      open(o)
+    } else {
+      toast.error(t('ไม่พบใบสั่งซื้อ'))
+    }
+  } catch (e) {
+    if (!isAlive() || getBrand() !== requestBrand || (brand && brand !== requestBrand)) return
+    toast.error(errText(e, t) || t('โหลดใบสั่งซื้อไม่สำเร็จ'))
+  }
+}
 
 export async function exportOrdersExcel(
   exportRows: () => Record<string, string | number>[],
@@ -201,6 +234,14 @@ export function OrdersPage() {
     return () => window.removeEventListener(ORDER_UPDATED, onUpdate)
   }, [])
 
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
   // Opened from the calendar: ?po=<id> shows the sheet, ?receive=<id> goes to the receiving
   // screen with that order picked (24 Sep 2026 — the check-in modal is retired).
   // Back from LINE Login (or opened inside LINE): ?send=<id> reopens the send wizard on
@@ -216,10 +257,23 @@ export function OrdersPage() {
       navigate(`/receive?po=${encodeURIComponent(receive)}`, { replace: true })
       return
     }
-    const hit = orders.find((o) => o.id === (po ?? send))
-    if (hit) (po ? setViewing : setSending)(hit)
+    const id = (po ?? send)!
+    const open = po ? setViewing : setSending
+    const hit = orders.find((o) => o.id === id)
+    if (hit) open(hit)
+    // Older than the list's window (a search result from last month): read that one order.
+    else {
+      void resolvePoDeepLink({
+        id,
+        brand,
+        isAlive: () => mounted.current,
+        open,
+        toast,
+        t,
+      })
+    }
     setParams({}, { replace: true })
-  }, [loading, orders, params, setParams, navigate])
+  }, [loading, orders, params, setParams, navigate, brand, toast, t])
 
   const leadTimeOf = useCallback(
     (supplierId: string) => suppliers.find((x) => x.id === supplierId)?.leadTimeDays,
