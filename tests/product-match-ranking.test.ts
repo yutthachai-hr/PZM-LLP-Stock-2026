@@ -5,7 +5,14 @@
 // Exact, SKU and confirmed-alias answers are untouched: everything below stays a suggestion.
 
 import { describe, expect, test } from 'vitest'
-import { buildMatchIndex, matchProduct, productSimilarity, safeSuggestion } from '../src/lib/productMatch'
+import {
+  buildMatchIndex,
+  matchProduct,
+  normaliseName,
+  productSimilarity,
+  safeSuggestion,
+  type ProductAlias,
+} from '../src/lib/productMatch'
 import { searchProducts } from '../src/lib/productSearch'
 import type { Product } from '../src/types'
 
@@ -57,6 +64,7 @@ describe('sizes decide between products with the same name', () => {
   test('PENNE 500G is offered first when the catalogue has PENNE 500G, never taken', () => {
     const cat = [product('PENNE 500G (X)'), product('PENNE 1KG (Y)')]
     const m = matchProduct('PENNE 500G', buildMatchIndex(cat, []))
+    expect(m.kind).toBe('none')
     expect(m.product).toBeUndefined()
     expect(m.candidates[0].product).toBe(cat[0])
   })
@@ -130,6 +138,36 @@ describe('typing in the product picker ranks the way the import does', () => {
     expect(searchProducts('ranch', cat).map((p) => p.name)).toEqual(['RANCH (PICHON)'])
     expect(searchProducts('PZS-01-06-001', cat).map((p) => p.name)).toEqual(['RANCH (PICHON)'])
   })
+
+  test('bare punctuation queries do not flood the catalogue', () => {
+    const cat = [product('MAYONNAISE 1KG (FB FOOD)'), product('RANCH (PICHON)'), product('GAS 48 KG Branch 1')]
+    expect(searchProducts('*', cat)).toEqual([])
+    expect(searchProducts('""', cat)).toEqual([])
+    expect(searchProducts(';', cat)).toEqual([])
+    expect(searchProducts('!', cat)).toEqual([])
+  })
+
+  test('literal punctuation in SKU exact and prefix is preserved', () => {
+    const star = product('STAR ITEM', { sku: '*STAR*' })
+    const bracket = product('BRACKET ITEM', { sku: '[SPECIAL]-01' })
+    const regular = product('REGULAR ITEM', { sku: 'REG-001' })
+    const cat = [star, bracket, regular]
+    expect(searchProducts('*STAR*', cat)).toEqual([star])
+    expect(searchProducts('*', cat)).toEqual([star])
+    expect(searchProducts('[', cat)).toEqual([bracket])
+    expect(searchProducts('[SPECIAL]', cat)).toEqual([bracket])
+  })
+
+  test('supplier bracket search matches only genuine suppliers, not whole catalogue', () => {
+    const tgm1 = product('SMOKED BACON (TGM)')
+    const tgm2 = product('PARIS HAM (TGM)')
+    const betagro = product('SMOKED BACON (BETAGRO)')
+    const other = product('CHEESE 1KG (OTHER)')
+    const cat = [tgm1, betagro, tgm2, other]
+    const found = searchProducts('(TGM)', cat)
+    expect(found.map((p) => p.name).sort()).toEqual(['PARIS HAM (TGM)', 'SMOKED BACON (TGM)'])
+    expect(searchProducts('(NONEXISTENT)', cat)).toEqual([])
+  })
 })
 
 describe("the owner's other cases", () => {
@@ -172,5 +210,59 @@ describe('words that are the product, and Thai units that are not', () => {
     expect(productSimilarity('นมสด 500 มล', 'น้ำปลา 500 มล').score).toBe(0)
     expect(productSimilarity('แป้ง 500 กรัม', 'น้ำตาล 500 กรัม').score).toBe(0)
     expect(productSimilarity('น้ำมัน 1 ลิตร', 'นมสด 1 ลิตร').score).toBe(0)
+  })
+
+  test('Thai packaging words in MEASURE_WORDS prevent false cross-product matches', () => {
+    const butter = product('เนยสด 1 ลัง (FB FOOD)')
+    const cat = [butter]
+    const m = matchProduct('มอสซาเรลล่า 1 ลัง', buildMatchIndex(cat, []))
+    expect(productSimilarity('มอสซาเรลล่า 1 ลัง', 'เนยสด 1 ลัง (FB FOOD)').score).toBe(0)
+    expect(safeSuggestion(m)).toBeUndefined()
+    expect(m.candidates).toEqual([])
+
+    // Various Thai container words
+    expect(productSimilarity('น้ำส้ม 1 ขวด', 'นมสด 1 ขวด').score).toBe(0)
+    expect(productSimilarity('ซอส 2 ถุง', 'ข้าว 2 ถุง').score).toBe(0)
+    expect(productSimilarity('ชีส 1 กล่อง', 'เนย 1 กล่อง').score).toBe(0)
+    expect(productSimilarity('ไก่ 1 แพ็ค', 'หมู 1 แพ็ค').score).toBe(0)
+    expect(productSimilarity('ปลา 1 แพ็ก', 'กุ้ง 1 แพ็ก').score).toBe(0)
+    expect(productSimilarity('เนื้อ 1 แพค', 'เป็ด 1 แพค').score).toBe(0)
+    expect(productSimilarity('เค้ก 1 ชิ้น', 'พาย 1 ชิ้น').score).toBe(0)
+    expect(productSimilarity('น้ำมัน 1 ถัง', 'น้ำส้ม 1 ถัง').score).toBe(0)
+    expect(productSimilarity('ไอศกรีม 1 แกลลอน', 'น้ำแข็ง 1 แกลลอน').score).toBe(0)
+    expect(productSimilarity('วาซาบิ 1 หลอด', 'มัสตาร์ด 1 หลอด').score).toBe(0)
+  })
+
+  test('glued Thai unit tokens are split locally in ranking, never treated as product name', () => {
+    const butter = product('เนยสด 1กก')
+    const cat = [butter]
+    expect(productSimilarity('มอสซาเรลล่า 1กก', 'เนยสด 1กก').score).toBe(0)
+    expect(productSimilarity('แป้ง 500กรัม', 'น้ำตาล 500กรัม').score).toBe(0)
+    expect(productSimilarity('ซอส 2ถุง', 'ข้าว 2ถุง').score).toBe(0)
+    expect(productSimilarity('นมสด 1ลิตร', 'น้ำมัน 1ลิตร').score).toBe(0)
+
+    const m = matchProduct('มอสซาเรลล่า 1กก', buildMatchIndex(cat, []))
+    expect(safeSuggestion(m)).toBeUndefined()
+    expect(m.candidates).toEqual([])
+  })
+
+  test('normaliseName and alias identity remain unchanged for Thai units', () => {
+    // Crucial: normaliseName must NOT globally split Thai letters, protecting existing Firestore keys
+    expect(normaliseName('มอสซาเรลล่า 1กก')).toBe('มอสซาเรลล่า 1กก')
+    expect(normaliseName('แป้ง 500กรัม')).toBe('แป้ง 500กรัม')
+    expect(normaliseName('เนยสด 1 ลัง')).toBe('เนยสด 1 ลัง')
+
+    const mozz = product('MOZZARELLA CHEESE')
+    const alias: ProductAlias = {
+      id: 'a-thai-1',
+      key: normaliseName('มอสซาเรลล่า 1กก'),
+      productId: mozz.id,
+      sourceName: 'มอสซาเรลล่า 1กก',
+      createdBy: 'u1',
+      createdByName: 'AA',
+      createdAt: 0,
+    }
+    const idx = buildMatchIndex([mozz], [alias])
+    expect(matchProduct('มอสซาเรลล่า 1กก', idx)).toMatchObject({ kind: 'alias', product: mozz })
   })
 })

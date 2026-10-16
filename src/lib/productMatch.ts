@@ -109,13 +109,21 @@ export function similarity(a: string, b: string): number {
  * Words that describe a quantity or pack, not which product it is. Thai weights and volumes
  * are here and not in UNIT_WORDS, so they lower a ranking without widening the exact match.
  */
-const MEASURE_WORDS = new Set([...UNIT_WORDS, 'PACK', 'PK', 'PCS', 'PC', 'EA', 'CTN', 'BOX', 'BAG', 'X', 'CAN', 'กก', 'กรัม', 'มล', 'ลิตร'])
+const MEASURE_WORDS = new Set([
+  ...UNIT_WORDS,
+  'PACK', 'PK', 'PCS', 'PC', 'EA', 'CTN', 'BOX', 'BAG', 'X', 'CAN',
+  'กก', 'กรัม', 'มล', 'ลิตร',
+  'ลัง', 'แพ็ค', 'แพ็ก', 'แพค', 'ถุง', 'กล่อง', 'ขวด', 'ชิ้น', 'ถัง', 'แกลลอน', 'หลอด',
+])
 const NUMBER = /^\d+(\.\d+)?$/
 
 function parts(key: string): { name: string[]; sizes: Set<string> } {
+  const local = key
+    .replace(/(\d+(?:\.\d+)?)(กก|กรัม|มล|ลิตร|ลัง|แพ็ค|แพ็ก|แพค|ถุง|กล่อง|ขวด|ชิ้น|ถัง|แกลลอน|หลอด)/g, '$1 $2')
+    .replace(/(กก|กรัม|มล|ลิตร|ลัง|แพ็ค|แพ็ก|แพค|ถุง|กล่อง|ขวด|ชิ้น|ถัง|แกลลอน|หลอด)(\d+(?:\.\d+)?)/g, '$1 $2')
   const name: string[] = []
   const sizes = new Set<string>()
-  for (const t of key.split(' ')) {
+  for (const t of local.split(' ')) {
     if (!t) continue
     if (NUMBER.test(t)) sizes.add(String(Number(t)))
     else if (!MEASURE_WORDS.has(t)) name.push(t)
