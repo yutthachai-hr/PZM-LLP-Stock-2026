@@ -11,11 +11,20 @@ const autoTable = vi.fn()
 vi.mock('jspdf-autotable', () => ({ default: autoTable }))
 vi.mock('jspdf', () => ({
   jsPDF: class {
+    internal = {
+      pageSize: {
+        getWidth: () => 841.89,
+        getHeight: () => 595.28,
+      },
+    }
     addFileToVFS = vi.fn()
     addFont = vi.fn()
     setFont = vi.fn()
     setFontSize = vi.fn()
     text = vi.fn()
+    addPage = vi.fn()
+    splitTextToSize = vi.fn((text: string) => [text])
+    setLineHeightFactor = vi.fn()
     save = vi.fn()
   },
 }))
@@ -25,8 +34,8 @@ const { exportReportPdf } = await import('../src/lib/export')
 beforeEach(() => autoTable.mockClear())
 
 describe('the header row of a PDF report', () => {
-  test('asks for the normal weight, the only one the Thai font is registered under', () => {
-    exportReportPdf({
+  test('asks for the normal weight, the only one the Thai font is registered under', async () => {
+    await exportReportPdf({
       filename: 'ใบสั่งซื้อ',
       title: 'รายการสั่งซื้อ',
       head: ['วันที่', 'เลขที่', 'ผู้ขาย'],

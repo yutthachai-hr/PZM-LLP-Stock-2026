@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { DataTable, type Column } from '../../components/DataTable'
 import { Button, Card, EmptyState, SearchInput, Select } from '../../components/ui'
+import { useToast } from '../../components/Toast'
+import { errText } from '../../i18n/AppError'
 import { useData } from '../../data/DataContext'
 import { useT } from '../../i18n/I18nContext'
 import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
@@ -27,9 +29,11 @@ type Filter = 'all' | 'changed' | 'nocost'
 
 export function CostReport() {
   const t = useT()
+  const toast = useToast()
   const { products, locations, qtyAt } = useData()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [busyExport, setBusyExport] = useState(false)
 
   const rows = useMemo<Row[]>(() => {
     return products
@@ -118,31 +122,39 @@ export function CostReport() {
   )
 
   async function exportXlsx() {
-    const { exportExcel } = await import('../../lib/export')
-    const out: Record<string, string | number>[] = []
-    for (const r of rows) {
-      const hist = [...(r.p.costHistory ?? [])].sort((a, b) => a.effectiveAt - b.effectiveAt)
-      if (hist.length === 0) {
-        out.push({ [t('สินค้า')]: r.p.name, SKU: r.p.sku, [t('หมวดหมู่')]: r.p.category, [t('หน่วย')]: r.p.unitType, [t('ต้นทุนตอนนี้')]: r.p.cost ?? '' })
-        continue
+    setBusyExport(true)
+    try {
+      const { exportExcel } = await import('../../lib/export')
+      const out: Record<string, string | number>[] = []
+      for (const r of rows) {
+        const hist = [...(r.p.costHistory ?? [])].sort((a, b) => a.effectiveAt - b.effectiveAt)
+        if (hist.length === 0) {
+          out.push({ [t('สินค้า')]: r.p.name, SKU: r.p.sku, [t('หมวดหมู่')]: r.p.category, [t('หน่วย')]: r.p.unitType, [t('ต้นทุนตอนนี้')]: r.p.cost ?? '' })
+          continue
+        }
+        for (const h of hist) {
+          out.push({
+            [t('สินค้า')]: r.p.name,
+            SKU: r.p.sku,
+            [t('หมวดหมู่')]: r.p.category,
+            [t('หน่วย')]: r.p.unitType,
+            [t('มีผลตั้งแต่')]: formatThaiDateShort(h.effectiveAt),
+            [t('ราคาที่กรอก')]: h.price,
+            [t('ต่อ 1')]: h.unit,
+            [t('ต้นทุน/หน่วยหลัก')]: h.cost,
+            [t('โดย')]: h.byName,
+            [t('หมายเหตุ')]: h.note ?? '',
+            [t('คงเหลือ')]: fmtQty(onHand(r.p)),
+          })
+        }
       }
-      for (const h of hist) {
-        out.push({
-          [t('สินค้า')]: r.p.name,
-          SKU: r.p.sku,
-          [t('หมวดหมู่')]: r.p.category,
-          [t('หน่วย')]: r.p.unitType,
-          [t('มีผลตั้งแต่')]: formatThaiDateShort(h.effectiveAt),
-          [t('ราคาที่กรอก')]: h.price,
-          [t('ต่อ 1')]: h.unit,
-          [t('ต้นทุน/หน่วยหลัก')]: h.cost,
-          [t('โดย')]: h.byName,
-          [t('หมายเหตุ')]: h.note ?? '',
-          [t('คงเหลือ')]: fmtQty(onHand(r.p)),
-        })
-      }
+      await exportExcel(t('ราคาต้นทุน_{ts}', { ts: Date.now() }), 'Costs', out)
+      toast.success(t('ดาวน์โหลดไฟล์ Excel แล้ว'))
+    } catch (e) {
+      toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
+    } finally {
+      setBusyExport(false)
     }
-    exportExcel(t('ราคาต้นทุน_{ts}', { ts: Date.now() }), 'Costs', out)
   }
 
   return (
@@ -154,8 +166,8 @@ export function CostReport() {
           <option value="changed">{t('เคยปรับราคา')}</option>
           <option value="nocost">{t('ยังไม่มีต้นทุน')}</option>
         </Select>
-        <Button variant="sheet" onClick={() => void exportXlsx()}>
-          Excel
+        <Button variant="sheet" onClick={() => void exportXlsx()} disabled={busyExport || rows.length === 0}>
+          {busyExport ? t('กำลังสร้างไฟล์...') : 'Excel'}
         </Button>
       </div>
       <p className="text-xs text-ink-soft">{t('{n} รายการ · ต้นทุนคิดต่อหน่วยหลักของสินค้าเสมอ ราคาที่กรอกเป็นลัง/แพ็คจะถูกหารให้', { n: rows.length })}</p>

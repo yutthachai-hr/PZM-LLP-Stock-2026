@@ -87,6 +87,54 @@ type Tab = 'open' | 'received' | 'cancelled' | 'summary'
 
 const DAY = 86_400_000
 
+export async function exportOrdersExcel(
+  exportRows: () => Record<string, string | number>[],
+  t: (key: string, params?: Record<string, string | number>) => string,
+  toast: { success: (m: string) => void; error: (m: string) => void },
+  setBusyExport: (kind: '' | 'excel') => void,
+) {
+  setBusyExport('excel')
+  try {
+    const { exportExcel } = await import('../lib/export')
+    await exportExcel(t('ใบสั่งซื้อ_{ts}', { ts: Date.now() }), 'Orders', exportRows())
+    toast.success(t('ดาวน์โหลดไฟล์ Excel แล้ว'))
+  } catch (e) {
+    toast.error(errText(e, t))
+  } finally {
+    setBusyExport('')
+  }
+}
+
+export async function exportOrdersPdf(
+  opts: {
+    rows: Record<string, string | number>[]
+    title: string
+    meta: string[]
+    filename: string
+  },
+  t: (key: string, params?: Record<string, string | number>) => string,
+  toast: { success: (m: string) => void; error: (m: string) => void },
+  setBusyExport: (kind: '' | 'pdf') => void,
+) {
+  setBusyExport('pdf')
+  try {
+    const { exportReportPdf } = await import('../lib/export')
+    const head = opts.rows.length ? Object.keys(opts.rows[0]) : []
+    await exportReportPdf({
+      filename: opts.filename,
+      title: opts.title,
+      meta: opts.meta,
+      head,
+      body: opts.rows.map((r) => head.map((h) => r[h])),
+    })
+    toast.success(t('ดาวน์โหลดไฟล์ PDF แล้ว'))
+  } catch (e) {
+    toast.error(errText(e, t))
+  } finally {
+    setBusyExport('')
+  }
+}
+
 export function OrdersPage() {
   const t = useT()
   const toast = useToast()
@@ -286,40 +334,24 @@ export function OrdersPage() {
   }
 
   async function exportExcelFile() {
-    setBusyExport('excel')
-    try {
-      const { exportExcel } = await import('../lib/export')
-      exportExcel(t('ใบสั่งซื้อ_{ts}', { ts: Date.now() }), 'Orders', exportRows())
-      toast.success(t('ดาวน์โหลดไฟล์ Excel แล้ว'))
-    } catch (e) {
-      toast.error(errText(e, t))
-    } finally {
-      setBusyExport('')
-    }
+    await exportOrdersExcel(exportRows, t, toast, setBusyExport)
   }
 
   async function exportPdfFile() {
-    setBusyExport('pdf')
-    try {
-      const { exportReportPdf } = await import('../lib/export')
-      const rows = exportRows()
-      const head = rows.length ? Object.keys(rows[0]) : []
-      exportReportPdf({
-        filename: t('ใบสั่งซื้อ_{ts}', { ts: Date.now() }),
+    await exportOrdersPdf(
+      {
+        rows: exportRows(),
         title: t('รายการสั่งซื้อ — {company}', { company: brand ? brandDef(brand).name : '' }),
         meta: [
           t('{days} วันล่าสุด', { days }),
           tab === 'received' ? t('รับของแล้ว') : tab === 'open' ? t('รอรับของ') : tab === 'cancelled' ? t('ยกเลิกแล้ว') : t('ทั้งหมด'),
         ],
-        head,
-        body: rows.map((r) => head.map((h) => r[h])),
-      })
-      toast.success(t('ดาวน์โหลดไฟล์ PDF แล้ว'))
-    } catch (e) {
-      toast.error(errText(e, t))
-    } finally {
-      setBusyExport('')
-    }
+        filename: t('ใบสั่งซื้อ_{ts}', { ts: Date.now() }),
+      },
+      t,
+      toast,
+      setBusyExport,
+    )
   }
 
   function actionsFor(o: PurchaseOrder) {
