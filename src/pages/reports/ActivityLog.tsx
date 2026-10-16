@@ -155,7 +155,7 @@ export function ActivityLog() {
     setBusy('excel')
     try {
       const { exportExcel } = await import('../../lib/export')
-      exportExcel(t('บันทึกกิจกรรม_{ts}', { ts: Date.now() }), 'Activity', rowsForFile())
+      await exportExcel(t('บันทึกกิจกรรม_{ts}', { ts: Date.now() }), 'Activity', rowsForFile())
     } catch (e) {
       toast.error(t('สร้างไฟล์ไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
@@ -169,7 +169,7 @@ export function ActivityLog() {
       const { exportReportPdf } = await import('../../lib/export')
       const rows = rowsForFile()
       const head = rows.length ? Object.keys(rows[0]) : []
-      exportReportPdf({
+      await exportReportPdf({
         filename: t('บันทึกกิจกรรม_{ts}', { ts: Date.now() }),
         title: t('บันทึกกิจกรรมทั้งระบบ — {company}', { company }),
         meta: [

@@ -16,7 +16,6 @@ import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { readProductLedger } from '../services/stock'
 import { currentCost } from '../services/productCost'
 import { categoryIcon } from '../lib/categoryIcon'
-import { exportExcel, exportReportPdf } from '../lib/export'
 import { dayRange, fmtMoney, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput } from '../lib/format'
 import { bkkDayStart, bkkTimeOf, DAY_MS } from '../lib/inventoryRules/time'
 import { stockCard, type StockCardRow } from '../lib/ledger'
@@ -49,6 +48,7 @@ export function StockCardPage() {
   const [trendDays, setTrendDays] = useState(14)
   const [ledger, setLedger] = useState<StockMovement[] | null>(null)
   const [error, setError] = useState('')
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -332,21 +332,45 @@ export function StockCardPage() {
             <Button
               variant="pdf"
               size="sm"
-              disabled={rows.length === 0}
-              onClick={() =>
-                exportReportPdf({
-                  filename: fileBase,
-                  title: t('Stock Card — {name}', { name: product.name }),
-                  meta: [brand ? brandDef(brand).name : '', `SKU ${product.sku}`, `${fromStr} → ${toStr}`, locationId ? siteName(locationId) : t('ทุกคลังรวมกัน')],
-                  head: Object.keys(exportRows[0] ?? {}),
-                  body: exportRows.map((r) => Object.values(r)),
-                })
-              }
+              disabled={rows.length === 0 || !!exporting}
+              onClick={async () => {
+                if (!product) return
+                setExporting('pdf')
+                try {
+                  const { exportReportPdf } = await import('../lib/export')
+                  await exportReportPdf({
+                    filename: fileBase,
+                    title: t('Stock Card — {name}', { name: product.name }),
+                    meta: [brand ? brandDef(brand).name : '', `SKU ${product.sku}`, `${fromStr} → ${toStr}`, locationId ? siteName(locationId) : t('ทุกคลังรวมกัน')],
+                    head: Object.keys(exportRows[0] ?? {}),
+                    body: exportRows.map((r) => Object.values(r)),
+                  })
+                } catch (e) {
+                  setError(errText(e, t))
+                } finally {
+                  setExporting(null)
+                }
+              }}
             >
               <Icon name="download" size={16} />
               PDF
             </Button>
-            <Button variant="sheet" size="sm" disabled={rows.length === 0} onClick={() => exportExcel(fileBase, 'Stock Card', exportRows)}>
+            <Button
+              variant="sheet"
+              size="sm"
+              disabled={rows.length === 0 || !!exporting}
+              onClick={async () => {
+                setExporting('excel')
+                try {
+                  const { exportExcel } = await import('../lib/export')
+                  await exportExcel(fileBase, 'Stock Card', exportRows)
+                } catch (e) {
+                  setError(errText(e, t))
+                } finally {
+                  setExporting(null)
+                }
+              }}
+            >
               <Icon name="download" size={16} />
               Excel
             </Button>

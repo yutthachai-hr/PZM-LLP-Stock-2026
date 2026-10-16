@@ -53,9 +53,12 @@ describe('sizes decide between products with the same name', () => {
     expect(m.candidates).toEqual([expect.objectContaining({ sizeConflict: true })])
   })
 
-  test('PENNE 500G is an exact answer when the catalogue has PENNE 500G', () => {
+  // Owner, 15 Oct 2026: a name is a suggestion, never the answer — but the right size leads.
+  test('PENNE 500G is offered first when the catalogue has PENNE 500G, never taken', () => {
     const cat = [product('PENNE 500G (X)'), product('PENNE 1KG (Y)')]
-    expect(matchProduct('PENNE 500G', buildMatchIndex(cat, []))).toMatchObject({ kind: 'exact', product: cat[0] })
+    const m = matchProduct('PENNE 500G', buildMatchIndex(cat, []))
+    expect(m.product).toBeUndefined()
+    expect(m.candidates[0].product).toBe(cat[0])
   })
 })
 
