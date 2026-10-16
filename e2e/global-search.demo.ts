@@ -3,10 +3,11 @@ import { mkdir } from 'node:fs/promises'
 
 const DAY = 86_400_000
 const AUG5 = Date.parse('2026-08-05T03:00:00Z')
+const AUG1 = Date.parse('2026-08-01T03:00:00Z')
 
 /** Synthetic records only. The August receipt is far outside the seven-day ledger window. */
 async function stage(page: Page, brand = 'pizza') {
-  await page.addInitScript(({ brand, AUG5, DAY }) => {
+  await page.addInitScript(({ brand, AUG5, AUG1, DAY }) => {
     if (localStorage.getItem('search-fixture')) return
     localStorage.setItem('search-fixture', '1')
     const now = Date.now()
@@ -19,7 +20,11 @@ async function stage(page: Page, brand = 'pizza') {
       ({ id, docNo, type: 'receive', productId: 'flour', productName, unit: 'KG', qty: 5, toLocationId: 'wh', date, createdAt: date,
         byUserId: 'u', byUserName: 'Search QA', invoiceNo, supplierName, supplierId: 'sup' })
     for (const [prefix, rows] of [
-      ['', { a: mv('a', 'RC-00041', 'INV2026080528', 'SIAMFOOD', AUG5), r: mv('r', 'RC-00050', 'INV2026101401', 'SIAMFOOD', now - DAY) }],
+      ['', {
+        a: mv('a', 'RC-00041', 'INV2026080528', 'SIAMFOOD', AUG5), r: mv('r', 'RC-00050', 'INV2026101401', 'SIAMFOOD', now - DAY),
+        // Owner, 16 Oct 2026: keyed before 24 Sep 2026, the bill is the whole note and invoiceNo is empty.
+        s: { ...mv('s', 'RC-00008', '', 'FOODGALLERY', AUG1, 'BABY SPINACH (FOODGALLERY)'), invoiceNo: undefined, note: 'INV26080171' },
+      }],
       ['lelapin__', { l: mv('l', 'RC-00099', 'INV2026080528', 'LAPIN SUPPLY', AUG5, 'BAGUETTE') }],
       ['rnd__', {}],
     ] as const) {
@@ -31,7 +36,7 @@ async function stage(page: Page, brand = 'pizza') {
       orderedAt: AUG5 - 2 * DAY, receivedAt: AUG5, invoiceNo: 'IV-900', movementDocNo: 'RC-00007',
       lines: [{ productId: 'flour', productName: 'FLOUR', unit: 'KG', orderedQty: 5, receivedQty: 5 }],
       createdBy: 'u', createdByName: 'Search QA', createdAt: AUG5 - 2 * DAY, updatedAt: AUG5 } })
-  }, { brand, AUG5, DAY })
+  }, { brand, AUG5, AUG1, DAY })
   await page.goto('/')
   await expect(page.locator('main')).toBeVisible()
 }
@@ -53,6 +58,27 @@ test('owner report: INV2026080528 from August is found and opens its receipt', a
   await expect(page.locator('main').getByText('FLOUR').filter({ visible: true }).first()).toBeVisible()
 })
 
+test('owner report: INV26080171 kept as an old note finds RC-00008, marked as from the note, and opens it', async ({ page }) => {
+  await stage(page)
+  await box(page).fill('INV26080171')
+  await expect(option(page, 'RC-00008')).toBeVisible()
+  await expect(option(page, 'RC-00008')).toContainText('INV26080171')
+  await expect(option(page, 'RC-00008')).toContainText('พบในหมายเหตุเดิม')
+  await expect(page.getByRole('option')).toHaveCount(1)
+  await page.screenshot({ path: 'docs/evidence/global-search/after/inv26080171-legacy-note.png' })
+  await option(page, 'RC-00008').click()
+  await expect(page).toHaveURL(/\/movements\?doc=RC-00008/)
+  await expect(page.getByText('แสดงเฉพาะเอกสาร RC-00008')).toBeVisible()
+  await expect(page.locator('main').getByText('BABY SPINACH (FOODGALLERY)').filter({ visible: true }).first()).toBeVisible()
+})
+
+test('an old-note bill of Pizza Mania is not found in Le Lapin', async ({ page }) => {
+  await stage(page, 'lelapin')
+  await box(page).fill('INV26080171')
+  await expect(page.getByText('ไม่พบเลขนี้ในใบรับ ใบเบิก ใบปรับ ใบสั่งซื้อ หรือเลขบิลที่บันทึกไว้')).toBeVisible()
+  await expect(option(page, 'RC-00008')).toHaveCount(0)
+})
+
 test('direct reload of an old receipt link reads that document, not an empty window', async ({ page }) => {
   await stage(page)
   await page.goto('/movements?doc=RC-00041')
@@ -72,7 +98,8 @@ test('a number that is nowhere says what was searched and names the unindexed ga
   await stage(page)
   await box(page).fill('INV-404404')
   await expect(page.getByText('ไม่พบเลขนี้ในใบรับ ใบเบิก ใบปรับ ใบสั่งซื้อ หรือเลขบิลที่บันทึกไว้')).toBeVisible()
-  await expect(page.getByText(/ก่อน 24\/09\/2569 ยังค้นจากที่นี่ไม่ได้/)).toBeVisible()
+  // Whole-note bills are now searched; only a number mixed into longer note text is not.
+  await expect(page.getByText(/เลขบิลที่ปนกับข้อความอื่นในหมายเหตุยังค้นจากที่นี่ไม่ได้/)).toBeVisible()
   await expect(page.getByRole('option')).toHaveCount(0)
   await page.screenshot({ path: 'docs/evidence/global-search/after/missing-number.png' })
 })
@@ -136,4 +163,6 @@ test('English labels for the new search states', async ({ page }) => {
   await page.getByRole('button', { name: 'เปลี่ยนเป็นภาษาอังกฤษ' }).filter({ visible: true }).click()
   await box(page).fill('INV-404404')
   await expect(page.getByText('No receipt, issue, adjustment, purchase order or recorded bill has this number')).toBeVisible()
+  await box(page).fill('INV26080171')
+  await expect(option(page, 'RC-00008')).toContainText('Found in historical note')
 })
