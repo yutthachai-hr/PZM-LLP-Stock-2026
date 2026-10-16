@@ -3,7 +3,7 @@ import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { countDayOf, monthlyCountId } from '../lib/monthlyCount'
 import { COL, type MonthlyCount, type MonthlyCountLine, type MonthlyCountQuestion, type MonthlyCountResult } from '../types'
-import { filing, planAdjust } from './stock'
+import { captureFilingScope, filing, planAdjust } from './stock'
 
 /**
  * Monthly stock-count sheets (owner, 29 Sep 2026): figures are keyed and saved without
@@ -152,13 +152,13 @@ export async function postMonthlyCount(params: {
   reason?: 'count' | 'opening'
 }): Promise<string[]> {
   const { id, parts, results, actor, note, reason = 'count' } = params
-  const db = scoped()
+  const scope = captureFilingScope()
   const docNos: string[] = []
   const finish = parts.length === 0 ? [[] as CountAdjustment[]] : parts
   for (let i = 0; i < finish.length; i++) {
     const part = finish[i]
     const last = i === finish.length - 1
-    const docNo = await filing(db, async (tx, file) => {
+    const docNo = await filing(scope, async (tx, file) => {
       const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
       if (!sheet) throw new AppError('ไม่พบใบนับนี้')
       if (sheet.status === 'posted') throw new AppError('ใบนับนี้ปรับสต๊อกไปแล้ว')
