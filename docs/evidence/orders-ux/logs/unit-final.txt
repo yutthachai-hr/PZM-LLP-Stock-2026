@@ -1,0 +1,16 @@
+
+> pizza-stock@0.0.0 test
+> vitest run --maxWorkers=2
+
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-orders-ux-20261015
+
+
+ Test Files  110 passed (110)
+      Tests  1341 passed (1341)
+   Start at  10:10:16
+   Duration  11.18s (import 37%, transform 30%, tests 27%, worker 6%)
+
+  Transform  transforming modules took 2.66s · 30% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns

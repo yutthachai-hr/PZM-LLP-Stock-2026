@@ -29,7 +29,7 @@ import {
   bannerAction,
   type StatusTabItem,
 } from '../components/ui'
-import { ChipRow, FilterBar, FilterField, FramePage, ItemCell, PageHero, frameCard, type Tone } from '../components/frame'
+import { ChipRow, FramePage, ItemCell, PageHero, frameCard, type Tone } from '../components/frame'
 import type { Column } from '../components/DataTable'
 import { usePaged } from '../lib/usePaged'
 import {
@@ -38,7 +38,6 @@ import {
   cancelPurchaseOrder,
   closeOrderRemainder,
   createPurchaseOrder,
-  daysWaiting,
   expectedDeliveryAt,
   getPurchaseOrder,
   needsResend,
@@ -53,7 +52,9 @@ import { PoSheet, SheetLangToggle } from '../components/PoSheet'
 import { SendWizard } from './purchase/SendWizard'
 import { LineImportModal } from '../components/import/LineImportModal'
 import { DeliveryRiskCard, SupplierConfirmationPanel } from './purchase/SupplierConfirmationPanel'
-import { confirmationBadge, requestedOf } from '../lib/supplierConfirmation'
+import { requestedOf } from '../lib/supplierConfirmation'
+import { presentOrderStatus } from './orders/presentation'
+import { RowMenu, type RowMenuItem } from '../components/frame/RowMenu'
 import { RESUME_PARAM } from '../share/liffResume'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
@@ -409,7 +410,7 @@ export function OrdersPage() {
 
   function actionsFor(o: PurchaseOrder) {
     return {
-      onOpen: () => setViewing(o),
+      onReviewDate: () => setViewing(o),
       onSend: () => setSending(o),
       onReceive: () => navigate(`/receive?po=${encodeURIComponent(o.id)}`),
       onAmend: () => setAmending(o),
@@ -421,17 +422,17 @@ export function OrdersPage() {
   const orderColumns: Column<PurchaseOrder>[] = [
     {
       key: 'supplier',
-      header: t('ผู้ขาย / เลขที่ PO (รันแยกตามผู้ขาย)'),
+      header: t('ผู้ขาย / เลขที่ PO'),
       primary: true,
-      className: 'min-w-44',
+      className: 'min-w-0',
       cell: (o) => (
         <div className="flex min-w-0 items-center gap-3">
           {/* No supplier logos exist, so the initials in a tinted circle stand in for one. */}
-          <span className="hidden md:block">
+          <span className="hidden xl:block">
             <ItemCell title="" avatar={o.supplierName} tone={avatarTone(o.supplierName)} />
           </span>
           <div className="min-w-0">
-          <div className="font-semibold text-ink">{o.supplierName}</div>
+          <div className="break-words font-semibold text-ink">{o.supplierName}</div>
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-faint">
             <span className="doc-no">{o.docNo}</span>
             {o.revision ? <Badge color="amber">Rev.{o.revision}</Badge> : null}
@@ -441,6 +442,11 @@ export function OrdersPage() {
               </Link>
             )}
           </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">
+            <SiteChip locationId={o.locationId} />
+            <span>{t('{count} รายการ', { count: o.lines.length })}</span>
+            <span className="num xl:hidden">{formatThaiDate(o.orderedAt)}</span>
+          </div>
           </div>
         </div>
       ),
@@ -449,26 +455,13 @@ export function OrdersPage() {
       key: 'ordered',
       card: 'hidden',
       header: t('วันที่สั่ง'),
+      headerClassName: 'hidden xl:table-cell',
+      className: 'hidden xl:table-cell',
       cell: (o) => (
         <div className="flex items-start gap-2">
           <Icon name="calendar" size={16} className="mt-0.5 text-ink-faint" />
-          <div>
-            <div className="num text-ink">{formatThaiDate(o.orderedAt)}</div>
-            <div className="text-xs">
-              <SiteChip locationId={o.locationId} />
-            </div>
-          </div>
+          <span className="num whitespace-nowrap text-ink-soft">{formatThaiDate(o.orderedAt)}</span>
         </div>
-      ),
-    },
-    {
-      key: 'lines',
-      header: t('รายการสินค้า'),
-      cell: (o) => (
-        <span className="inline-flex items-center gap-2 whitespace-nowrap text-ink">
-          <Icon name="box" size={16} className="text-warn" />
-          {t('{count} รายการ', { count: o.lines.length })}
-        </span>
       ),
     },
     {
@@ -487,7 +480,9 @@ export function OrdersPage() {
       key: 'actions',
       header: t('การดำเนินการ'),
       tableOnly: true,
-      cell: (o) => <OrderActions order={o} compact {...actionsFor(o)} />,
+      headerClassName: 'w-48 text-right',
+      className: 'w-48',
+      cell: (o) => <OrderActions order={o} late={lateIds.has(o.id)} compact {...actionsFor(o)} />,
     },
   ]
 
@@ -512,11 +507,11 @@ export function OrdersPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => navigate('/purchase')}>
               <Icon name="upload" size={16} />
-              {t('นำเข้า Excel (ทางเลือก)')}
+              {t('นำเข้า Excel')}
             </Button>
-            <Button onClick={() => setCreating(true)}>
+            <Button className="order-first md:order-last" onClick={() => setCreating(true)}>
               <Icon name="plus" size={16} />
-              {t('สั่งของใหม่ (สั่งเอง)')}
+              {t('สั่งของใหม่')}
             </Button>
           </div>
         }
@@ -527,7 +522,7 @@ export function OrdersPage() {
         <AlertBanner
           action={
             <button
-              className={bannerAction}
+              className={`${bannerAction} w-full justify-center sm:w-auto`}
               onClick={() => {
                 setTab('open')
                 setLateOnly(true)
@@ -561,8 +556,8 @@ export function OrdersPage() {
             chips={tabItems.map((x) => ({ key: x.key, label: x.label }))}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 sm:flex sm:w-auto">
+          <div className="relative min-w-0">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
               <Icon name="calendar" size={17} />
             </span>
@@ -570,7 +565,7 @@ export function OrdersPage() {
               aria-label={t('ช่วงเวลา')}
               value={String(days)}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="w-auto pl-10 pr-8"
+              className="w-full pl-9 pr-6 sm:w-auto sm:pl-10 sm:pr-8"
             >
               <option value="7">{t('7 วันล่าสุด')}</option>
               <option value="30">{t('30 วันล่าสุด')}</option>
@@ -591,17 +586,13 @@ export function OrdersPage() {
       </div>
 
       {tab !== 'summary' && (
-        <FilterBar
-          search={<SearchInput value={search} onChange={setSearch} placeholder={t('ค้นหาเลข PO, ชื่อผู้ขาย, สินค้า...')} />}
-          onReset={() => {
-            setSearch('')
-            setSupplierFilter('')
-            setStateFilter('')
-            setLateOnly(false)
-          }}
-          resetDisabled={!filtersOn}
-        >
-          <FilterField label={t('ผู้ขาย')}>
+        <Card className="p-3 md:p-4">
+          <div className={`grid grid-cols-2 items-end gap-3 ${tab === 'open' ? 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]' : 'md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]'}`}>
+          <div className="col-span-2 min-w-0 md:col-span-1">
+            <SearchInput value={search} onChange={setSearch} placeholder={t('ค้นหาเลข PO, ชื่อผู้ขาย, สินค้า...')} />
+          </div>
+          <label className="block min-w-0">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">{t('ผู้ขาย')}</span>
             <Select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
               <option value="">{t('ผู้ขายทั้งหมด')}</option>
               {supplierOptions.map(([id, name]) => (
@@ -610,9 +601,10 @@ export function OrdersPage() {
                 </option>
               ))}
             </Select>
-          </FilterField>
+          </label>
           {tab === 'open' && (
-            <FilterField label={t('สถานะ')}>
+            <label className="block min-w-0">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">{t('สถานะ')}</span>
               <Select value={stateFilter} onChange={(e) => setStateFilter(e.target.value as StateFilter)}>
                 <option value="">{t('สถานะทั้งหมด')}</option>
                 <option value="late">{t('ล่าช้า')}</option>
@@ -622,9 +614,19 @@ export function OrdersPage() {
                 <option value="supplierWaiting">{t('รอผู้ขายยืนยัน')}</option>
                 <option value="datePending">{t('รออนุมัติวันส่ง')}</option>
               </Select>
-            </FilterField>
+            </label>
           )}
-        </FilterBar>
+          <Button variant="ghost" className={`col-span-2 justify-self-end md:col-span-1 ${filtersOn ? '' : 'hidden md:inline-flex'}`} disabled={!filtersOn} onClick={() => {
+            setSearch('')
+            setSupplierFilter('')
+            setStateFilter('')
+            setLateOnly(false)
+          }}>
+            <Icon name="rotateCcw" size={16} />
+            {t('รีเซ็ต')}
+          </Button>
+          </div>
+        </Card>
       )}
 
       {lateOnly && tab === 'open' && (
@@ -649,7 +651,9 @@ export function OrdersPage() {
               <DataTable
                 rows={paged.rows}
                 rowKey={(o) => o.id}
-                minWidth={960}
+                minWidth={640}
+                onRowClick={setViewing}
+                rowLabel={(o) => t('เปิดใบสั่งซื้อ {docNo} ของ {supplier}', { docNo: o.docNo, supplier: o.supplierName })}
                 selection={tab === 'open' ? { selected, onChange: setSelected } : undefined}
                 empty={
                   <EmptyState
@@ -658,7 +662,7 @@ export function OrdersPage() {
                   />
                 }
                 columns={orderColumns}
-                cardActions={(o) => <OrderActions order={o} {...actionsFor(o)} />}
+                cardActions={(o) => <OrderActions order={o} late={lateIds.has(o.id)} {...actionsFor(o)} />}
               />
             )}
           </Card>
@@ -784,39 +788,20 @@ function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: P
   )
 }
 
-/** The order's state as badges: where it is, and anything about it that needs a person. */
 function OrderStatus({ order, late }: { order: PurchaseOrder; late: boolean }) {
   const t = useT()
-  const done = order.status === 'received'
-  // A draft is a proposal from an imported list that nobody has approved yet. It is
-  // shown so the person knows it exists, but it is not waiting for goods and cannot be
-  // received — approving happens on the batch screen it came from.
-  const draft = order.status === 'draft'
+  const status = presentOrderStatus(order, late)
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {done ? (
-        order.closedShortAt ? (
-          <Badge color="amber">{t('ปิดยอดค้าง — รับไม่ครบ')}</Badge>
-        ) : (
-          <Badge color="green">{t('รับของแล้ว')}</Badge>
-        )
-      ) : draft ? (
-        <Badge color="slate">{t('ร่าง — รออนุมัติ')}</Badge>
-      ) : (
-        <Badge color={late ? 'red' : 'blue'}>{t('สั่งแล้ว')}</Badge>
+    <div className="space-y-1" data-urgency={status.urgency}>
+      <Badge color={status.primary.color}>{t(status.primary.label)}</Badge>
+      {status.secondary.length > 0 && (
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs leading-relaxed text-ink-soft">
+          {status.secondary.map((label) => <span key={label}>{t(label)}</span>)}
+        </div>
       )}
-      {needsResend(order) ? (
-        <Badge color="red">{t('แก้ไขแล้ว — ยังไม่ส่งใหม่')}</Badge>
-      ) : (
-        order.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>
-      )}
-      {(() => {
-        // The supplier's answer to the delivery date (5 Oct 2026); none on orders never linked.
-        const b = confirmationBadge(order)
-        return b && <Badge color={b.color}>{t(b.label)}</Badge>
-      })()}
-      {!done && partialLabel(order, t) && <Badge color="amber">{partialLabel(order, t)}</Badge>}
-      {late && <Badge color="red">{t('รอมา {days} วัน', { days: daysWaiting(order) })}</Badge>}
+      {order.status === 'ordered' && order.receipts?.length ? (
+        <div className="text-xs text-ink-soft">{partialLabel(order, t)}</div>
+      ) : null}
     </div>
   )
 }
@@ -850,7 +835,7 @@ function DueCell({ order, late, expectedAt }: { order: PurchaseOrder; late: bool
     <div className={`flex items-start gap-2 ${late ? 'text-danger' : 'text-ink-soft'}`}>
       <Icon name="calendar" size={16} className="mt-0.5" />
       <div>
-        <div className="num whitespace-nowrap">{t('กำหนด {date}', { date: formatThaiDate(expectedAt) })}</div>
+        <div className="num whitespace-nowrap">{formatThaiDate(expectedAt)}</div>
         {order.expectedAt === undefined && <div className="text-xs text-ink-faint">{t('ตามระยะส่งของผู้ขาย')}</div>}
         {(() => {
           // The supplier moved it: the date asked for stays visible, struck through.
@@ -866,17 +851,11 @@ function DueCell({ order, late, expectedAt }: { order: PurchaseOrder; late: bool
   )
 }
 
-/**
- * What can be done to an order, in the order it is usually done: look, change, send, receive.
- *
- * Receiving is the one filled button — it is the step that moves stock, and the reason most
- * people open this list. Cancelling stays a text link at the end so it is never the thing a
- * hurried tap lands on.
- */
 function OrderActions({
   order,
+  late,
   compact,
-  onOpen,
+  onReviewDate,
   onReceive,
   onAmend,
   onCancel,
@@ -884,9 +863,9 @@ function OrderActions({
   onSend,
 }: {
   order: PurchaseOrder
-  /** Table row on a desktop: smaller buttons, one line. */
+  late: boolean
   compact?: boolean
-  onOpen: () => void
+  onReviewDate: () => void
   onReceive: () => void
   onAmend: () => void
   onCancel: () => void
@@ -899,49 +878,27 @@ function OrderActions({
   // the rest is received, or closed short (owner, 24 Sep 2026).
   const partial = live && !!order.receipts?.length
   const size = compact ? 'sm' : 'md'
-  // In a table row narrower than a wide monitor the three quiet actions give up their words
-  // and keep their icons (named on hover and to a screen reader), so the row fits without
-  // scrolling sideways. Receiving keeps its label: it is the action the list exists for.
-  const label = compact ? 'hidden 2xl:inline' : ''
+  const next = presentOrderStatus(order, late).nextAction
+  const sending = next === 'send' || next === 'resend'
+  const reviewing = next === 'reviewDate'
+  const menu: RowMenuItem[] = []
+  if (live && !partial) menu.push({ key: 'edit', label: t('แก้ไข'), icon: 'pencil', onSelect: onAmend })
+  if (live && !sending) menu.push({ key: 'send', label: t('ส่ง LINE'), icon: 'share', onSelect: onSend })
+  if (partial) menu.push({ key: 'close', label: t('ปิดยอดค้าง'), onSelect: onCloseShort })
+  if (order.status === 'draft' || (live && !partial)) menu.push({ key: 'cancel', label: t('ยกเลิก'), danger: true, onSelect: onCancel })
   return (
-    <div className={`flex items-center gap-2 ${compact ? 'flex-nowrap' : 'flex-wrap'}`}>
-      <Button variant="outline" size={size} onClick={onOpen} title={t('ดูใบสั่ง')} aria-label={t('ดูใบสั่ง')}>
-        <Icon name="eye" size={16} />
-        <span className={label}>{t('ดูใบสั่ง')}</span>
-      </Button>
-      {live && !partial && (
-        <Button variant="outline" size={size} onClick={onAmend} title={t('แก้ไข')} aria-label={t('แก้ไข')}>
-          <Icon name="pencil" size={15} />
-          <span className={label}>{t('แก้ไข')}</span>
+    <div data-row-action className={`items-center gap-1.5 ${compact ? 'grid grid-cols-[max-content_auto] justify-end' : 'flex flex-wrap'}`}>
+      {live && (
+        <Button size={size} className="min-h-11" onClick={sending ? onSend : reviewing ? onReviewDate : onReceive}>
+          <Icon name={sending ? 'share' : reviewing ? 'calendar' : 'truck'} size={16} />
+          {sending ? (next === 'resend' ? t('ส่ง PO ใหม่') : t('ส่ง LINE')) : reviewing ? t('ตรวจวันส่ง') : partial ? t('รับส่วนที่เหลือ') : t('ตรวจรับของ')}
         </Button>
       )}
-      {live && (
-        <Button variant="outline" size={size} onClick={onSend} title={t('ส่ง LINE')} aria-label={t('ส่ง LINE')}>
-          <Icon name="share" size={16} />
-          <span className={label}>{t('ส่ง LINE')}</span>
-        </Button>
-      )}
-      {live && (
-        <Button size={size} onClick={onReceive}>
-          <Icon name="truck" size={16} />
+      <RowMenu items={menu} />
+      {live && (sending || reviewing) && (
+        <Button size={size} variant="ghost" className={`min-h-11 ${compact ? 'col-span-2 justify-self-end' : ''}`} onClick={onReceive}>
           {partial ? t('รับส่วนที่เหลือ') : t('ตรวจรับของ')}
         </Button>
-      )}
-      {partial && (
-        <button
-          onClick={onCloseShort}
-          className="min-h-10 cursor-pointer whitespace-nowrap rounded-lg px-2 text-sm font-medium text-warn hover:bg-warn-soft"
-        >
-          {t('ปิดยอดค้าง')}
-        </button>
-      )}
-      {(order.status === 'draft' || (order.status === 'ordered' && !partial)) && (
-        <button
-          onClick={onCancel}
-          className="min-h-10 cursor-pointer whitespace-nowrap rounded-lg px-2 text-sm font-medium text-danger hover:bg-danger-soft"
-        >
-          {t('ยกเลิก')}
-        </button>
       )}
     </div>
   )

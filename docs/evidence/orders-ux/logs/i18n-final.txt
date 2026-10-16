@@ -1,0 +1,10 @@
+
+> pizza-stock@0.0.0 i18n:check
+> node --experimental-strip-types scripts/i18n-check.mjs
+
+
+⚠ 2 entry/entries in en.ts that nothing uses:
+  "สั่งของใหม่ (สั่งเอง)"
+  "นำเข้า Excel (ทางเลือก)"
+
+✓ every Thai UI string is translated
