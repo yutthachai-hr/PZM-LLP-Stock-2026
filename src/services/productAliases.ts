@@ -1,7 +1,7 @@
 import { backend } from '../backend'
 import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
-import { normaliseName, type ProductAlias } from '../lib/productMatch'
+import { aliasIdentity, bracketOf, normaliseName, type ProductAlias } from '../lib/productMatch'
 import { COL } from '../types'
 
 /**
@@ -12,8 +12,9 @@ import { COL } from '../types'
  * work and so is staff-writable in the rules; the product itself is not, which is why these
  * are not a field on the product.
  *
- * Keyed by the normalised spelling, so confirming the same spelling twice overwrites rather
- * than accumulates, and a later confirmation wins — the way a person would expect.
+ * Keyed by canonical spelling identity retaining supplier brackets, so confirming the same
+ * bracketed spelling twice overwrites rather than accumulates, while spellings from different
+ * suppliers coexist cleanly without clobbering each other (owner, 16 Oct 2026).
  */
 
 function scoped() {
@@ -21,12 +22,13 @@ function scoped() {
 }
 
 /** A document id that is the same for the same spelling and safe for a document path. */
-export function aliasId(key: string): string {
+export function aliasId(keyOrIdentity: string, bracket = ''): string {
+  const identity = bracket ? aliasIdentity(keyOrIdentity, bracket) : keyOrIdentity
   // FNV-1a, 32-bit, twice with different seeds: not cryptographic, just stable and short.
   let h1 = 0x811c9dc5
   let h2 = 0x01000193
-  for (let i = 0; i < key.length; i++) {
-    const c = key.charCodeAt(i)
+  for (let i = 0; i < identity.length; i++) {
+    const c = identity.charCodeAt(i)
     h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0
     h2 = Math.imul(h2 ^ c, 0x811c9dc5) >>> 0
   }
@@ -46,8 +48,9 @@ export async function saveAlias(params: {
   const key = normaliseName(sourceName)
   if (!key) throw new AppError('ไม่มีชื่อให้จับคู่')
   if (!params.productId) throw new AppError('กรุณาเลือกสินค้า')
+  const bracket = bracketOf(sourceName)
   const alias: ProductAlias = {
-    id: aliasId(key),
+    id: aliasId(key, bracket),
     key,
     productId: params.productId,
     sourceName,

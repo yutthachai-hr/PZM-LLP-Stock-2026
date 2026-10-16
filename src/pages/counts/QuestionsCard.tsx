@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { SectionCard } from '../../components/frame'
 import { Button } from '../../components/ui'
+import { useToast } from '../../components/Toast'
+import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
-import { exportExcel } from '../../lib/export'
 import { fmtQty } from '../../lib/format'
 import type { MonthlyCountQuestion, Product } from '../../types'
 
@@ -26,27 +27,37 @@ export function QuestionsCard({
   onAnswer: (key: string, answer: { productId: string; qty: number } | null) => Promise<void>
 }) {
   const t = useT()
+  const toast = useToast()
   const active = useMemo(() => products.filter((p) => p.active !== false), [products])
   const byLabel = useMemo(() => new Map(active.map((p) => [`${p.sku} · ${p.name}`, p])), [active])
   const [draft, setDraft] = useState<Record<string, { productId?: string; qty: string }>>({})
+  const [exporting, setExporting] = useState(false)
   const entries = Object.entries(questions).sort((a, b) => a[1].source.localeCompare(b[1].source) || a[1].excelRow - b[1].excelRow)
 
-  function download() {
-    exportExcel(
-      'count-questions',
-      t('คำถาม'),
-      entries.map(([, q]) => ({
-        [t('ที่มา')]: q.source,
-        [t('แถว')]: q.excelRow,
-        [t('รหัส')]: q.code,
-        [t('ชื่อในไฟล์')]: q.name,
-        [t('ขนาดบรรจุ')]: q.packSize,
-        [t('จำนวน')]: q.qty,
-        [t('หน่วย')]: q.fileUnit,
-        [t('หมายเหตุ')]: q.note,
-        [t('ผู้ตั้งคำถาม')]: q.byName,
-      })),
-    )
+  async function download() {
+    setExporting(true)
+    try {
+      const { exportExcel } = await import('../../lib/export')
+      await exportExcel(
+        'count-questions',
+        t('คำถาม'),
+        entries.map(([, q]) => ({
+          [t('ที่มา')]: q.source,
+          [t('แถว')]: q.excelRow,
+          [t('รหัส')]: q.code,
+          [t('ชื่อในไฟล์')]: q.name,
+          [t('ขนาดบรรจุ')]: q.packSize,
+          [t('จำนวน')]: q.qty,
+          [t('หน่วย')]: q.fileUnit,
+          [t('หมายเหตุ')]: q.note,
+          [t('ผู้ตั้งคำถาม')]: q.byName,
+        })),
+      )
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -56,7 +67,7 @@ export function QuestionsCard({
       title={t('คำถามจากไฟล์ที่นำเข้า')}
       count={entries.length}
       actions={
-        <Button variant="secondary" onClick={download}>
+        <Button variant="secondary" onClick={() => void download()} disabled={exporting}>
           Excel
         </Button>
       }

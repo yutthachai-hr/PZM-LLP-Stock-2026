@@ -106,16 +106,17 @@ describe('every consumer goes through these rules', () => {
     expect(modal).toContain('planRows(')
     expect(modal).toContain('importable(rows)')
     expect(modal).toContain("fromText ? t('อ่านจำนวนไม่ได้') : t('จำนวนในไฟล์ใช้ไม่ได้')")
+    expect(modal).toContain("source: 'ocr'")
     expect(modal).not.toMatch(/include:\s*!c\.unitUnknown/) // the old pre-tick of guesses is gone
     for (const f of ['src/components/LineBuilder.tsx', 'src/pages/Adjust.tsx', 'src/pages/counts/MonthlyCountSheet.tsx', 'src/pages/Orders.tsx', 'src/pages/requests/RequestEditor.tsx']) {
       expect(readFileSync(f, 'utf8'), f).toContain('<LineImportModal')
     }
   })
 
-  test('the receiving bill reader takes sure matches only (it never had guesses)', () => {
+  test('the receiving bill reader fills no line from a reading (owner, 15 Oct 2026)', () => {
     const receive = readFileSync('src/pages/Receive.tsx', 'utf8')
-    expect(receive).toContain('matchOcrLines(')
-    expect(receive).not.toContain('suggestProducts(')
+    expect(receive).toContain('ocrCandidates(bill)')
+    expect(receive).not.toMatch(/matchProduct\(|suggestProducts\(/)
   })
 })
 
@@ -138,9 +139,14 @@ describe('a typed list and a quantity typed in the window (15 Oct 2026)', () => 
 
   test('a typed quantity is converted by the unit written in the text', () => {
     const [row] = planRows([{ ...readItemText('FETA CHEESE 500G (HOMEMADE CHEESE) 2 pack').lines[0] }], catalogue)
-    expect([row.how, row.entryUnit, row.entryQty, row.qty]).toEqual(['sure', 'Pack', 2, 1])
+    // A typed name is a guess (owner, 15 Oct 2026), but its unit is still read and converted.
+    expect([row.how, row.entryUnit, row.entryQty, row.qty]).toEqual(['guess', 'Pack', 2, 1])
     const fixed = setQty(row, 4)
-    expect([fixed.entryQty, fixed.qty]).toEqual([4, 2])
+    expect([fixed.entryQty, fixed.qty, fixed.include]).toEqual([4, 2, false])
+
+    // A typed exact SKU is sure and pre-ticked if unit converts
+    const [skuRow] = planRows([{ ...readItemText('FETA 2 pack').lines[0] }], catalogue)
+    expect([skuRow.how, skuRow.entryUnit, skuRow.entryQty, skuRow.qty, skuRow.include]).toEqual(['sure', 'Pack', 2, 1, true])
   })
 
   test('zero, negative or not-a-number stays blocked', () => {

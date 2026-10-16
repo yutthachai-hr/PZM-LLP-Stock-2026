@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { putMany } from './emulator'
 import { seedStage } from './fixture'
 import { open, signedIn } from './app'
@@ -41,6 +41,32 @@ async function stage() {
 /** The visible select button of a supplier (the table on wider screens, a card on a phone). */
 const pick = (page: Page, name: string) => page.locator(`[data-supplier-select="${idOf(name)}"]:visible`).first()
 
+/**
+ * Wait until the page has stopped moving: the target fully on screen, and the scroll position,
+ * its box and the page height the same across two animation frames. CI run 38547202512 read
+ * the baseline while the scroll to the end of the list was still landing; the click then found
+ * the row "not stable", retried with Playwright's block:'end' re-scroll and moved the page 187px
+ * itself. A baseline taken only once nothing moves makes the assertion measure the app.
+ */
+async function settled(target: Locator): Promise<void> {
+  await expect(target).toBeInViewport({ ratio: 1 })
+  await expect
+    .poll(() =>
+      target.evaluate(async (el) => {
+        const read = () => {
+          const r = el.getBoundingClientRect()
+          return `${scrollY}|${r.top}|${r.height}|${document.documentElement.scrollHeight}`
+        }
+        const frame = () => new Promise((ok) => requestAnimationFrame(ok))
+        const before = read()
+        await frame()
+        await frame()
+        return before === read()
+      }),
+    )
+    .toBe(true)
+}
+
 async function shot(page: Page, name: string) {
   if (!EVIDENCE) return
   mkdirSync(EVIDENCE, { recursive: true })
@@ -67,6 +93,11 @@ for (const vp of [
 
     // Down to the end of the list, then pick from there.
     await pick(page, 'ZAKANA').scrollIntoViewIfNeeded()
+    // The row to pick must be settled and on screen before the baseline is read. Otherwise the
+    // click scrolls it into view itself and the drift is the test's, not the app's (CI run
+    // 38684878733: "element is not stable", then scrollY 5404 to 5217).
+    await pick(page, 'NOBLE MONO').scrollIntoViewIfNeeded()
+    await settled(pick(page, 'NOBLE MONO'))
     const y0 = await page.evaluate(() => scrollY)
     expect(y0).toBeGreaterThan(400)
     await pick(page, 'NOBLE MONO').click()

@@ -1,11 +1,10 @@
 // A supplier's bill read by AI (Automation Plan Phase 4, 25 Sep 2026): the model's answer is
-// untrusted — cleaned here, matched only when sure, and nothing is filed without a person.
+// untrusted — cleaned here, never taken as the product, and nothing is filed without a person.
 //
 //   npm test
 
 import { describe, expect, test } from 'vitest'
-import { cleanOcr, matchOcrLines } from '../src/lib/billOcr'
-import { buildMatchIndex } from '../src/lib/productMatch'
+import { cleanOcr, convertReadLine, ocrCandidates } from '../src/lib/billOcr'
 import type { Product } from '../src/types'
 
 const product = (id: string, name: string, over: Partial<Product> = {}): Product => ({
@@ -15,7 +14,6 @@ const products = [
   product('moz', 'MOZZARELLA WHOLE MILK (FOODGALLERY)', { unitType: 'EA', unit: 'EA', unitConversions: [{ label: 'Carton', size: 8 }] }),
   product('flour', 'FLOUR 00 (OLIVA)'),
 ]
-const index = buildMatchIndex(products, [])
 
 describe('cleaning what the model said', () => {
   test('keeps well-formed fields, drops the rest, never throws', () => {
@@ -29,22 +27,20 @@ describe('cleaning what the model said', () => {
   })
 })
 
-describe('matching the lines', () => {
-  test('a sure match in the product unit, or converted from one of its units', () => {
-    const r = matchOcrLines(
-      { lines: [{ name: 'FLOUR 00 (OLIVA)', qty: 5, unit: 'kg' }, { name: 'MOZZARELLA WHOLE MILK (FOODGALLERY)', qty: 2, unit: 'Carton' }] },
-      index,
-    )
-    expect(r.matched.map((m) => [m.product.id, m.qty, m.entryUnit ?? null, m.entryQty ?? null])).toEqual([
-      ['flour', 5, null, null],
-      ['moz', 16, 'Carton', 2],
-    ])
+describe('the lines read (owner, 15 Oct 2026: a reading is never the product)', () => {
+  test('even a name exactly like a product is left for the person', () => {
+    const lines = [{ name: 'FLOUR 00 (OLIVA)', qty: 5, unit: 'kg' }, { name: 'Olive oil extra virgin', qty: 1 }]
+    expect(ocrCandidates({ lines })).toEqual({ matched: [], unmatched: lines })
   })
 
-  test('an unknown unit is flagged; a name that is not a sure match is left for the person', () => {
-    const r = matchOcrLines({ lines: [{ name: 'FLOUR 00 (OLIVA)', qty: 5, unit: 'sack' }, { name: 'Olive oil extra virgin', qty: 1 }] }, index)
-    expect(r.matched[0]).toMatchObject({ qty: 5, unitUnknown: 'sack' })
-    expect(r.unmatched.map((l) => l.name)).toEqual(['Olive oil extra virgin'])
+  test('once a product is chosen, the read quantity is in its unit or converted from one of its units', () => {
+    const [moz, flour] = products
+    expect(convertReadLine({ name: 'x', qty: 5, unit: 'kg' }, flour)).toMatchObject({ qty: 5 })
+    expect(convertReadLine({ name: 'x', qty: 2, unit: 'Carton' }, moz)).toMatchObject({ qty: 16, entryUnit: 'Carton', entryQty: 2 })
+  })
+
+  test('a unit the chosen product does not know is flagged, not taken as its own unit', () => {
+    expect(convertReadLine({ name: 'x', qty: 5, unit: 'sack' }, products[1])).toMatchObject({ qty: 5, unitUnknown: 'sack' })
   })
 })
 

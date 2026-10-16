@@ -1,8 +1,9 @@
-import { exportExcel, exportReportPdf } from './export'
+import { createReportPdf } from './export'
 import { fmtQty, formatThaiDate } from './format'
 import { liveItems } from './purchaseRequestStatus'
 import type { PurchaseRequest, PurchaseRequestItem } from '../types'
 import { PR_STATUS_KEYS } from './purchaseRequestStatus'
+import type { jsPDF } from 'jspdf'
 
 /**
  * A purchase request as a file — the whole request, grouped by supplier, with the
@@ -60,16 +61,17 @@ export function requestRows(
   return rows
 }
 
-export function exportRequestExcel(
+export async function exportRequestExcel(
   pr: PurchaseRequest,
   locationName: string,
   t: T,
   locationNameOf?: (id: string) => string,
-): void {
-  exportExcel(`${pr.docNo}.xlsx`, pr.docNo, requestRows(pr, locationName, t, locationNameOf))
+): Promise<void> {
+  const { exportExcel } = await import('./export')
+  await exportExcel(`${pr.docNo}.xlsx`, pr.docNo, requestRows(pr, locationName, t, locationNameOf))
 }
 
-export function exportRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): void {
+export function createRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): jsPDF {
   const body: (string | number)[][] = []
   for (const g of groupedBySupplier(pr)) {
     for (const i of g.items) {
@@ -85,7 +87,7 @@ export function exportRequestPdf(pr: PurchaseRequest, company: string, locationN
       ])
     }
   }
-  exportReportPdf({
+  return createReportPdf({
     filename: `${pr.docNo}.pdf`,
     title: `${company} — ${t('รายการขอสั่งซื้อ')} ${pr.docNo}`,
     subtitle: `${t('วันที่ขอ')} ${formatThaiDate(pr.createdAt)} · ${t('คลัง')} ${locationName}`,
@@ -99,4 +101,9 @@ export function exportRequestPdf(pr: PurchaseRequest, company: string, locationN
     head: [t('ผู้ขาย'), t('สินค้า'), t('รหัสสินค้า'), t('คงเหลือ'), t('จำนวนที่ขอ'), t('จำนวนที่อนุมัติ'), t('หน่วย'), t('หมายเหตุ')],
     body,
   })
+}
+
+export async function exportRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): Promise<void> {
+  const doc = createRequestPdf(pr, company, locationName, t)
+  doc.save(`${pr.docNo}.pdf`)
 }
