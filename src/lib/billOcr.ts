@@ -1,5 +1,4 @@
 import type { Product } from '../types'
-import { matchProduct, type MatchIndex } from './productMatch'
 import { resolveFactor, toBase } from './uom'
 import { sameUnit } from './units'
 import { roundQty } from './validate'
@@ -95,27 +94,19 @@ export interface OcrMatch {
   unmatched: OcrLine[]
 }
 
-/** The bill's lines against the catalogue: only a sure match (SKU, alias, one exact name) counts. */
-export function matchOcrLines(bill: OcrBill, index: MatchIndex): OcrMatch {
-  const matched: OcrMatchedLine[] = []
-  const unmatched: OcrLine[] = []
-  for (const read of bill.lines) {
-    const m = matchProduct(read.name, index)
-    const product = m.kind === 'exact' || m.kind === 'alias' ? m.product : undefined
-    if (!product) {
-      unmatched.push(read)
-      continue
-    }
-    if (!read.unit || sameUnit(read.unit, product.unitType)) {
-      matched.push({ product, qty: read.qty, read })
-      continue
-    }
-    const factor = resolveFactor(product, read.unit)
-    if (factor !== null) {
-      matched.push({ product, qty: toBase(read.qty, factor), entryUnit: read.unit, entryQty: read.qty, read })
-    } else {
-      matched.push({ product, qty: read.qty, unitUnknown: read.unit, read })
-    }
-  }
-  return { matched, unmatched }
+/**
+ * A bill's lines as the model read them: every one is for the person to key in or pick. A
+ * model's reading of a name or a code is never taken as the product (owner, 15 Oct 2026) — one
+ * misread digit is another real SKU.
+ */
+export function ocrCandidates(bill: OcrBill): OcrMatch {
+  return { matched: [], unmatched: [...bill.lines] }
+}
+
+/** A line converted by the units of a product the person chose (or a SKU / confirmed alias). */
+export function convertReadLine(read: OcrLine, product: Product): OcrMatchedLine {
+  if (!read.unit || sameUnit(read.unit, product.unitType)) return { product, qty: read.qty, read }
+  const factor = resolveFactor(product, read.unit)
+  if (factor !== null) return { product, qty: toBase(read.qty, factor), entryUnit: read.unit, entryQty: read.qty, read }
+  return { product, qty: read.qty, unitUnknown: read.unit, read }
 }

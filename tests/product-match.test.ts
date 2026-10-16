@@ -99,10 +99,12 @@ describe('normaliseName', () => {
 })
 
 describe('what counts as an answer', () => {
-  test('the same name as exactly one product is a match', () => {
+  // Owner, 15 Oct 2026: only a SKU or a confirmed alias is an answer; a name is a suggestion.
+  test('the same name as exactly one product is offered first, never taken', () => {
     const m = matchProduct('SMOKED BACON SLICED 1 KG ', index())
-    expect(m.kind).toBe('exact')
-    expect(m.product).toBe(byName('SMOKED BACON SLICED 1 KG (TGM)'))
+    expect(m.kind).toBe('none')
+    expect(m.product).toBeUndefined()
+    expect(m.candidates[0].product).toBe(byName('SMOKED BACON SLICED 1 KG (TGM)'))
   })
 
   test('the SKU typed instead of the name is a match', () => {
@@ -143,9 +145,10 @@ describe('what counts as an answer', () => {
   })
 
   // Owner, 2 Oct 2026: it was in the catalogue and still came up as unknown.
-  test('a unit word between the numbers is the same product', () => {
+  test('a unit word between the numbers still finds the product, as a suggestion', () => {
     const m = matchProduct('MOZZARELLA WHOLE MILK 2.72 kg*8', index())
-    expect(m).toMatchObject({ kind: 'exact', product: byName('MOZZARELLA WHOLE MILK 2.72*8 (FOODGALLERY)') })
+    expect(m.product).toBeUndefined()
+    expect(m.candidates[0].product).toBe(byName('MOZZARELLA WHOLE MILK 2.72*8 (FOODGALLERY)'))
   })
 
   test('dropping the unit word never makes two sizes one', () => {
@@ -206,8 +209,11 @@ describe('an alias is remembered', () => {
     expect(other.kind).toBe('none')
     expect(other.product).toBeUndefined()
     expect(other.candidates[0].product).toBe(bacon)
-    // No bracket at all is the same spelling as before.
-    expect(matchProduct('SMOKED BACON', idx)).toMatchObject({ kind: 'alias', product: bacon })
+    // Owner rule (16 Oct 2026): A supplier-bracket confirmed alias must NOT auto-match unbracketed bare input.
+    // Bare sourceName must not become a bracketed alias and vice versa. Only exact bracket identity authorizes.
+    const bare = matchProduct('SMOKED BACON', idx)
+    expect(bare.product).toBeUndefined()
+    expect(bare.kind).not.toBe('alias')
   })
 
   test('a Thai spelling reaches its product through an alias only', () => {
@@ -257,5 +263,38 @@ describe('saving an alias', () => {
 
   test('an alias id is a plain path segment', () => {
     expect(aliasId(normaliseName('FRENCH FRIES 3/8'))).toMatch(/^alias-[0-9a-f]{16}$/)
+  })
+
+  test('aliases for same base name but different supplier brackets have distinct IDs and coexist', async () => {
+    const actor = { id: 'u1', name: 'AA' }
+    const a1 = await saveAlias({ sourceName: 'SMOKED BACON (TGM)', productId: 'p-tgm', actor })
+    const a2 = await saveAlias({ sourceName: 'SMOKED BACON (BETAGRO)', productId: 'p-betagro', actor })
+    expect(a1.id).not.toBe(a2.id)
+    const rows = raw('productAliases') as ProductAlias[]
+    expect(rows).toHaveLength(2)
+    const ids = new Set(rows.map((r) => r.id))
+    expect(ids.has(a1.id)).toBe(true)
+    expect(ids.has(a2.id)).toBe(true)
+    const all = await listAliases()
+    expect(all).toHaveLength(2)
+  })
+
+  test('saved aliases are brand-isolated in persistence', async () => {
+    const actor = { id: 'u1', name: 'AA' }
+    setActiveBrand('pizza')
+    await saveAlias({ sourceName: 'SMOKED BACON (TGM)', productId: 'p-pzm', actor })
+    expect(raw('productAliases')).toHaveLength(1)
+    expect(raw('lelapin__productAliases')).toHaveLength(0)
+
+    setActiveBrand('lelapin')
+    expect(await listAliases()).toHaveLength(0)
+    await saveAlias({ sourceName: 'SMOKED BACON (TGM)', productId: 'p-llp', actor })
+    expect(raw('lelapin__productAliases')).toHaveLength(1)
+    expect(raw('productAliases')).toHaveLength(1)
+
+    setActiveBrand('pizza')
+    expect((await listAliases())[0].productId).toBe('p-pzm')
+    setActiveBrand('lelapin')
+    expect((await listAliases())[0].productId).toBe('p-llp')
   })
 })

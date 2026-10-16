@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type { OrderBlock } from '../src/lib/orderSheet'
+import { normaliseName, type ProductAlias } from '../src/lib/productMatch'
 import type { BatchRow, Product, PurchaseOrder, Supplier, SupplierItem } from '../src/types'
 
 vi.mock('../src/backend', async () => {
@@ -72,6 +73,22 @@ const PRODUCTS = [
   product('p-mozz', 'MOZZARELLA (X)', { supplierId: 's-global', unitType: 'KG', unit: 'Kilogram', unitConversions: [{ label: 'Pack', size: 2 }] }),
 ]
 
+// Under the SKU-or-confirmed-alias rule (owner, 15 Oct 2026) a workbook spelling resolves only
+// once a person has confirmed it. These tests are about what happens after that, so each
+// unambiguous spelling is confirmed here, as the review screen would have saved it. The two
+// BLUE CHEESEs share a spelling and stay a question.
+const bare = (name: string) => name.replace(/\s*\([^()]*\)/g, '').trim()
+const spellings = PRODUCTS.map((p) => bare(p.name))
+const CONFIRMED: ProductAlias[] = PRODUCTS.filter((p, i) => spellings.indexOf(spellings[i]) === spellings.lastIndexOf(spellings[i])).map((p) => ({
+  id: `alias-${p.id}`,
+  key: normaliseName(bare(p.name)),
+  productId: p.id,
+  sourceName: bare(p.name),
+  createdBy: ACTOR.id,
+  createdByName: ACTOR.name,
+  createdAt: 1,
+}))
+
 function block(rows: [string, string, string | number][]): OrderBlock {
   return {
     sheet: 's',
@@ -99,7 +116,7 @@ const ctx = (over: Partial<Parameters<typeof assessRows>[1]> = {}) => ({
 })
 
 function assessed(rows: [string, string, string | number][], over = {}) {
-  return assessRows(buildBatchRows(block(rows), PRODUCTS, []), ctx(over))
+  return assessRows(buildBatchRows(block(rows), PRODUCTS, CONFIRMED), ctx(over))
 }
 
 describe('the acceptance case', () => {
@@ -117,10 +134,14 @@ describe('the acceptance case', () => {
     ])
     expect(groups.map((g) => groupState(g, rows))).toEqual(['ready', 'ready'])
     expect(derivedStatus({ rows, groups, status: 'draft' })).toBe('ready')
+    // The same workbook before anyone confirmed a spelling: every row waits for a person.
+    const unconfirmed = assessRows(buildBatchRows(block([['COKE CAN 325 ML 1X24', 'Pack', 5], ['FRENCH FRIES 3/8', 'Pack', 6]]), PRODUCTS, []), ctx())
+    expect(unconfirmed.map((r) => r.productId)).toEqual([undefined, undefined])
+    expect(groupRows(unconfirmed)).toEqual([])
   })
 
   test('rows the workbook marks with a dash are not rows', () => {
-    const rows = buildBatchRows(block([['COKE CAN 325 ML 1X24', 'Pack', '-'], ['FRENCH FRIES 3/8', 'Pack', 6]]), PRODUCTS, [])
+    const rows = buildBatchRows(block([['COKE CAN 325 ML 1X24', 'Pack', '-'], ['FRENCH FRIES 3/8', 'Pack', 6]]), PRODUCTS, CONFIRMED)
     expect(rows.map((r) => r.rawName)).toEqual(['FRENCH FRIES 3/8'])
     expect(rows[0].idx).toBe(0)
   })
@@ -157,7 +178,7 @@ describe('what needs a person', () => {
 
   test('a hidden supplier or product blocks the row', () => {
     const rows = assessRows(
-      buildBatchRows(block([['COKE CAN 325 ML 1X24', 'Pack', 5], ['FRENCH FRIES 3/8', 'Pack', 6]]), PRODUCTS, []),
+      buildBatchRows(block([['COKE CAN 325 ML 1X24', 'Pack', 5], ['FRENCH FRIES 3/8', 'Pack', 6]]), PRODUCTS, CONFIRMED),
       ctx({
         suppliers: [supplier('s-thai', 'THAINAMTHIP', { active: false }), GLOBAL],
         products: PRODUCTS.map((p) => (p.id === 'p-fries' ? { ...p, active: false } : p)),
@@ -212,7 +233,7 @@ describe('units', () => {
   })
 
   test('a person\'s own choice of unit on a manual row is left alone', () => {
-    const [built] = buildBatchRows(block([['MOZZARELLA', 'ขา', 2]]), PRODUCTS, [])
+    const [built] = buildBatchRows(block([['MOZZARELLA', 'ขา', 2]]), PRODUCTS, CONFIRMED)
     const manual: BatchRow = { ...built, matchKind: 'manual', entryUnit: 'Lot' }
     const [row] = assessRows([manual], ctx())
     expect(row.entryUnit).toBe('Lot')
