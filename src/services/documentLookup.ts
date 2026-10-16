@@ -10,8 +10,10 @@ import { COL, type PurchaseOrder, type StockMovement } from '../types'
  * Loaded only when someone types a document-like number, and only as equality queries on
  * single fields Firestore indexes by default — never a scan of the ledger and never a
  * listener. A bill keyed by hand before 24 Sep 2026 lives inside a free-text note, which no
- * equality query can reach; `notIndexed` says so instead of letting "none found" read as
- * "there is none".
+ * equality query can reach unless the note IS the bill number; those whole-note matches are
+ * asked for too (Owner, 16 Oct 2026: INV26080171 on RC-00008), capped, and marked as found
+ * in a note. A bill number inside a longer note still cannot be found by equality, and
+ * `notIndexed` says so instead of letting "none found" read as "there is none".
  */
 export interface DocumentLookup {
   brand: BrandId
@@ -22,6 +24,8 @@ export interface DocumentLookup {
 }
 
 const MAX_CACHED = 50
+/** Old receipts whose whole note is the number: enough to show, never the ledger. */
+const MAX_NOTE_ROWS = 20
 const cache = new Map<string, DocumentLookup>()
 
 export function clearDocumentLookupCache(): void {
@@ -38,11 +42,13 @@ export async function lookupDocuments(raw: string): Promise<DocumentLookup> {
 
   const db = backend.forBrand(brand)
   const isPo = q.docNos.some((d) => d.startsWith('PO-'))
-  const [byDoc, byInvoice, poByDoc, poByInvoice] = await Promise.all([
+  const [byDoc, byInvoice, poByDoc, poByInvoice, byNote] = await Promise.all([
     isPo ? [] : Promise.all(q.docNos.map((d) => db.getBy<StockMovement>(COL.movements, 'docNo', d))),
     Promise.all(q.invoice.map((n) => db.getBy<StockMovement>(COL.movements, 'invoiceNo', n))),
     isPo ? Promise.all(q.docNos.map((d) => db.getBy<PurchaseOrder>(COL.purchaseOrders, 'docNo', d))) : [],
     Promise.all(q.invoice.map((n) => db.getBy<PurchaseOrder>(COL.purchaseOrders, 'invoiceNo', n))),
+    // Only for a bill-like entry (never an app document number), the same spellings, capped.
+    Promise.all(q.invoice.map((n) => db.query<StockMovement>(COL.movements, { filters: [{ field: 'note', op: '==', value: n }], limit: MAX_NOTE_ROWS }))),
   ])
 
   const hits = new Map<string, SearchHit & { at: number }>()
@@ -53,6 +59,13 @@ export async function lookupDocuments(raw: string): Promise<DocumentLookup> {
     hits.set(`doc:${m.docNo}`, {
       group: 'documents', key: `doc:${m.docNo}`, to: `/movements?doc=${encodeURIComponent(m.docNo)}`, label: m.docNo,
       sub: [m.supplierName, m.invoiceNo].filter(Boolean).join(' · ') || undefined, at: m.createdAt,
+    })
+  }
+  for (const m of byNote.flat()) {
+    if (m.voided || !m.docNo || hits.has(`doc:${m.docNo}`)) continue
+    hits.set(`doc:${m.docNo}`, {
+      group: 'documents', key: `doc:${m.docNo}`, to: `/movements?doc=${encodeURIComponent(m.docNo)}`, label: m.docNo,
+      sub: [m.supplierName, m.note?.trim()].filter(Boolean).join(' · ') || undefined, foundIn: 'note', at: m.createdAt,
     })
   }
   for (const o of [...poByDoc.flat(), ...poByInvoice.flat()]) {

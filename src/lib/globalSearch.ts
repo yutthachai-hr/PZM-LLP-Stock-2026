@@ -22,6 +22,8 @@ export interface SearchHit {
   to: string
   label: string
   sub?: string
+  /** Matched only through a movement's free-text note, not its document or bill number. */
+  foundIn?: 'note'
   /** A product's id, for its thumbnail and stock total. */
   productId?: string
 }
@@ -80,11 +82,14 @@ export function globalSearch(query: string, src: SearchSources): SearchResult {
   // Document numbers seen in the loaded movements: one hit per document, newest first.
   const docs = new Map<string, SearchHit & { at: number; s: number }>()
   for (const m of src.movements) {
-    const s = looseScore([m.docNo, m.invoiceNo], q)
+    // Bills keyed into the note before 24 Sep 2026 are searched here too: these rows are
+    // already in memory, so this costs no read.
+    const direct = looseScore([m.docNo, m.invoiceNo], q)
+    const s = direct || looseScore([m.note], q)
     if (s > 0 && m.docNo) {
       const was = docs.get(`doc:${m.docNo}`)
       if (!was || m.createdAt > was.at)
-        docs.set(`doc:${m.docNo}`, { group: 'documents', key: `doc:${m.docNo}`, to: `/movements?doc=${encodeURIComponent(m.docNo)}`, label: m.docNo, sub: [m.supplierName, m.invoiceNo].filter(Boolean).join(' · ') || undefined, at: m.createdAt, s })
+        docs.set(`doc:${m.docNo}`, { group: 'documents', key: `doc:${m.docNo}`, to: `/movements?doc=${encodeURIComponent(m.docNo)}`, label: m.docNo, sub: [m.supplierName, m.invoiceNo, direct ? undefined : m.note?.trim()].filter(Boolean).join(' · ') || undefined, ...(direct ? {} : { foundIn: 'note' as const }), at: m.createdAt, s })
     }
     const ps = m.poId && m.poDocNo ? looseScore([m.poDocNo], q) : 0
     if (ps > 0) {
