@@ -5,11 +5,11 @@ import { entryUnitsFor, UnitSelect } from '../../components/QtyInput'
 import { useEntryUnits } from '../../services/entryUnits'
 import { supplierChoiceFor, type LineInput } from '../../services/purchaseRequests'
 import { useT } from '../../i18n/I18nContext'
-import { normaliseName, similarity } from '../../lib/productMatch'
+import { normaliseName } from '../../lib/productMatch'
+import { searchProducts } from '../../lib/productSearch'
 import { sameUnit } from '../../lib/units'
 import type { Product, Supplier } from '../../types'
 import type { UnitConversion } from '../../lib/units'
-import { looseMatch, looseScore } from '../../lib/search'
 import { lacksUnit } from '../../lib/importReview'
 
 /**
@@ -28,7 +28,6 @@ import { lacksUnit } from '../../lib/importReview'
  * manager when they do. No modal opens from here; the cart beside it updates in place.
  */
 
-const MAX_RESULTS = 40
 const DEBOUNCE_MS = 120
 
 export type PickerMode = 'product' | 'supplier'
@@ -83,31 +82,6 @@ function useDebounced<T>(value: T, ms: number): T {
     return () => clearTimeout(id)
   }, [value, ms])
   return v
-}
-
-/** Name or code, the way the person types it: a code prefix wins, then closest name. */
-function searchProducts(q: string, products: readonly Product[]): Product[] {
-  const raw = q.trim()
-  if (!raw) return []
-  const key = normaliseName(raw)
-  const upper = raw.toUpperCase()
-  return products
-    .map((p) => {
-      const sku = p.sku.toUpperCase()
-      const name = normaliseName(p.name)
-      let score = 0
-      if (sku === upper) score = 3
-      else if (sku.startsWith(upper)) score = 2.5
-      else if (name.includes(key)) score = 2 + similarity(key, name) / 10
-      // Spacing and word order forgiven: "siamfood salad" finds "SALAD (SIAM FOOD)".
-      else if (looseMatch([p.name, p.sku], raw)) score = 1.5 + looseScore([p.name, p.sku], raw) / 100
-      else score = similarity(key, name)
-      return { p, score }
-    })
-    .filter((x) => x.score >= 0.4)
-    .sort((a, b) => b.score - a.score || a.p.name.localeCompare(b.p.name))
-    .slice(0, MAX_RESULTS)
-    .map((x) => x.p)
 }
 
 /** The suppliers a product may go to: its usual one first, alternates, then everyone else. */

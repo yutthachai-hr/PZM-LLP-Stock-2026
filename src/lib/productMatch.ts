@@ -105,6 +105,88 @@ export function similarity(a: string, b: string): number {
   return (2 * shared) / (ta.size + tb.size)
 }
 
+/**
+ * Words that describe a quantity or pack, not which product it is. Thai weights and volumes
+ * are here and not in UNIT_WORDS, so they lower a ranking without widening the exact match.
+ */
+const MEASURE_WORDS = new Set([
+  ...UNIT_WORDS,
+  'PACK', 'PK', 'PCS', 'PC', 'EA', 'CTN', 'BOX', 'BAG', 'X', 'CAN',
+  'กก', 'กรัม', 'มล', 'ลิตร',
+  'ลัง', 'แพ็ค', 'แพ็ก', 'แพค', 'ถุง', 'กล่อง', 'ขวด', 'ชิ้น', 'ถัง', 'แกลลอน', 'หลอด',
+])
+const NUMBER = /^\d+(\.\d+)?$/
+
+function parts(key: string): { name: string[]; sizes: Set<string> } {
+  const local = key
+    .replace(/(\d+(?:\.\d+)?)(กก|กรัม|มล|ลิตร|ลัง|แพ็ค|แพ็ก|แพค|ถุง|กล่อง|ขวด|ชิ้น|ถัง|แกลลอน|หลอด)/g, '$1 $2')
+    .replace(/(กก|กรัม|มล|ลิตร|ลัง|แพ็ค|แพ็ก|แพค|ถุง|กล่อง|ขวด|ชิ้น|ถัง|แกลลอน|หลอด)(\d+(?:\.\d+)?)/g, '$1 $2')
+  const name: string[] = []
+  const sizes = new Set<string>()
+  for (const t of local.split(' ')) {
+    if (!t) continue
+    if (NUMBER.test(t)) sizes.add(String(Number(t)))
+    else if (!MEASURE_WORDS.has(t)) name.push(t)
+  }
+  return { name: [...new Set(name)], sizes }
+}
+
+/** One insertion, deletion, substitution or swap apart. */
+function oneEditApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  if (a.slice(i + 1) === b.slice(i + 1)) return true
+  if (a.slice(i) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i)) return true
+  return a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2)
+}
+
+/**
+ * A typo of the same word: long alphabetic words, same first letter, one edit apart.
+ * "MOZARELLA" is MOZZARELLA; "BRANCH" is not RANCH, because the first letters differ.
+ */
+function sameWord(a: string, b: string): boolean {
+  if (a === b) return true
+  return a.length >= 5 && b.length >= 5 && a[0] === b[0] && /^[A-Z]+$/.test(a) && /^[A-Z]+$/.test(b) && oneEditApart(a, b)
+}
+
+export interface ProductSimilarity {
+  /** 0 when no word of the product's name is shared. */
+  score: number
+  /** Both names state a size and none of the numbers agree: 500 G against 1 KG. */
+  sizeConflict: boolean
+}
+
+/**
+ * How alike two normalised names are as products, for ranking the choices offered to a
+ * person (owner, 15 Oct 2026: "RANCH 1 kg." offered MAYONNAISE 1KG first).
+ *
+ * The product's name words decide; sizes only break ties. Shared numbers and unit words are
+ * never enough on their own, so a shared "1 KG" cannot make mayonnaise a ranch. A size both
+ * names state and agree on lifts a candidate; one they disagree on lowers it and is flagged,
+ * because a 500 G pack and a 1 KG pack are different products to order.
+ */
+export function productSimilarity(a: string, b: string): ProductSimilarity {
+  const pa = parts(a)
+  const pb = parts(b)
+  if (!pa.name.length || !pb.name.length) return { score: 0, sizeConflict: false }
+  let shared = 0
+  const used = new Set<number>()
+  for (const w of pa.name) {
+    const j = pb.name.findIndex((v, k) => !used.has(k) && sameWord(w, v))
+    if (j >= 0) {
+      used.add(j)
+      shared++
+    }
+  }
+  if (!shared) return { score: 0, sizeConflict: false }
+  const name = (2 * shared) / (pa.name.length + pb.name.length)
+  const both = pa.sizes.size > 0 && pb.sizes.size > 0
+  const agree = both && [...pa.sizes].some((s) => pb.sizes.has(s))
+  const sizeConflict = both && !agree
+  return { score: name + (agree ? 0.25 : 0) - (sizeConflict ? 0.5 : 0), sizeConflict }
+}
+
 export type MatchKind =
   /** One product has exactly this name, or the text is its SKU. */
   | 'exact'
@@ -118,6 +200,8 @@ export type MatchKind =
 export interface MatchCandidate {
   product: Product
   score: number
+  /** The name matches but the pack size differs: offered, never equivalent. */
+  sizeConflict?: boolean
 }
 
 export interface ProductMatch {
@@ -224,9 +308,19 @@ export function matchProduct(rawName: string, index: MatchIndex): ProductMatch {
 
   const scored: MatchCandidate[] = []
   for (const { product, key: pk } of index.keyed) {
-    const score = similarity(key, pk)
-    if (score >= CANDIDATE_FLOOR) scored.push({ product, score })
+    const sim = productSimilarity(key, pk)
+    if (sim.score > 0 && sim.score + (sim.sizeConflict ? 0.5 : 0) >= CANDIDATE_FLOOR)
+      scored.push({ product, score: sim.score, ...(sim.sizeConflict ? { sizeConflict: true } : {}) })
   }
   scored.sort((a, b) => b.score - a.score || a.product.name.localeCompare(b.product.name))
   return none(scored.slice(0, MAX_CANDIDATES))
+}
+
+/**
+ * The one candidate worth showing beside an unmatched row as a hint: the best that is in use
+ * and the same pack size. Nothing rather than a different pack or a hidden product, because a
+ * hint is read as "this is probably it". Still only a hint: the row stays for a person to settle.
+ */
+export function safeSuggestion(m: ProductMatch): Product | undefined {
+  return m.candidates.find((c) => c.product.active && !c.sizeConflict)?.product
 }
