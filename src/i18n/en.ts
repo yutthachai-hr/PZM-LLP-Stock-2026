@@ -3097,4 +3097,9 @@ export const EN: Record<string, string> = {
   ยังไม่ได้โหลดรายชื่อผู้ขาย: 'suppliers not loaded yet',
   'ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:': 'Purchase requests and deliveries are searched on their pages:',
   หน้า: 'Pages',
+  // ---- code-splitting chunk recovery (14 Oct 2026) -----------------------------------
+  'กำลังโหลดเวอร์ชันใหม่...': 'Loading update...',
+  'ไม่สามารถโหลดหน้านี้ได้': 'Page load failed',
+  'ระบบอาจมีการอัปเดตเวอร์ชันใหม่ หรือการเชื่อมต่ออินเทอร์เน็ตขัดข้อง กรุณากดโหลดใหม่':
+    'The app may have been updated or network connection was lost. Please reload.',
 }

@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { SARABUN_BASE64 } from './sarabunFont'
@@ -25,11 +24,14 @@ export function columnWidths(rows: Record<string, string | number>[]): { wch: nu
   })
 }
 
-export function exportExcel(
+// xlsx and jspdf load on first export, not with the app: together they are most of what code
+// splitting took out of the first download.
+export async function exportExcel(
   filename: string,
   sheetName: string,
   rows: Record<string, string | number>[],
-): void {
+): Promise<void> {
+  const XLSX = await import('xlsx')
   const ws = XLSX.utils.json_to_sheet(rows)
   if (rows.length > 0) {
     ws['!cols'] = columnWidths(rows)
@@ -167,7 +169,7 @@ export function createReportPdf(opts: PdfReportOptions): jsPDF {
   return doc
 }
 
-export function exportReportPdf(opts: PdfReportOptions): void {
+export async function exportReportPdf(opts: PdfReportOptions): Promise<void> {
   const doc = createReportPdf(opts)
   doc.save(opts.filename.endsWith('.pdf') ? opts.filename : `${opts.filename}.pdf`)
 }

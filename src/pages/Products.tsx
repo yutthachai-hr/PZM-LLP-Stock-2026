@@ -17,7 +17,6 @@ import { WipCatalogModal } from './products/WipCatalogModal'
 import { WIP_CATEGORY } from '../lib/wipCode'
 import { updateProduct } from '../services/products'
 import { catalogSize, resetCatalog, seedInitialData } from '../services/seed'
-import { exportExcel } from '../lib/export'
 import { fmtQty } from '../lib/format'
 import { valueAsOf } from '../lib/stats/periodCompare'
 import { DAY_MS } from '../lib/inventoryRules/time'
@@ -83,6 +82,7 @@ export function ProductsPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [editing, setEditing] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [addingWip, setAddingWip] = useState(false)
   /** The category a new product starts in: WIP when it was started from the WIP list. */
   const [newCategory, setNewCategory] = useState('')
@@ -246,18 +246,26 @@ export function ProductsPage() {
     }
   }
 
-  function exportChosen() {
-    const rows = (chosen.length ? chosen : filtered).map((r) => ({
-      [t('รหัสสินค้า')]: r.p.sku,
-      [t('ชื่อสินค้า')]: r.p.name,
-      [t('หมวดหมู่')]: r.p.category,
-      [t('หน่วย')]: r.p.unitType,
-      [t('คงเหลือ')]: r.qty,
-      [t('จุดสั่งซื้อ')]: r.min,
-      [t('สถานะ')]: r.p.active === false ? t('ที่ซ่อนไว้') : t(STATE_LOOK[r.state].label),
-      [t('คลังสินค้า')]: locId ? siteName(locId) : r.sites.map(siteName).join(', '),
-    }))
-    exportExcel(`products-${new Date().toISOString().slice(0, 10)}`, t('สินค้าคงคลัง'), rows)
+  async function exportChosen() {
+    setExporting(true)
+    try {
+      const { exportExcel } = await import('../lib/export')
+      const rows = (chosen.length ? chosen : filtered).map((r) => ({
+        [t('รหัสสินค้า')]: r.p.sku,
+        [t('ชื่อสินค้า')]: r.p.name,
+        [t('หมวดหมู่')]: r.p.category,
+        [t('หน่วย')]: r.p.unitType,
+        [t('คงเหลือ')]: r.qty,
+        [t('จุดสั่งซื้อ')]: r.min,
+        [t('สถานะ')]: r.p.active === false ? t('ที่ซ่อนไว้') : t(STATE_LOOK[r.state].label),
+        [t('คลังสินค้า')]: locId ? siteName(locId) : r.sites.map(siteName).join(', '),
+      }))
+      await exportExcel(`products-${new Date().toISOString().slice(0, 10)}`, t('สินค้าคงคลัง'), rows)
+    } catch (e) {
+      toast.error(errText(e, t))
+    } finally {
+      setExporting(false)
+    }
   }
 
   async function handleSeed() {
@@ -492,7 +500,7 @@ export function ProductsPage() {
               </Button>
             </>
           )}
-          <Button variant="sheet" size="sm" onClick={exportChosen}>
+          <Button variant="sheet" size="sm" onClick={() => void exportChosen()} disabled={exporting}>
             <Icon name="fileSheet" size={16} />
             {t('ส่งออก Excel')}
           </Button>

@@ -1,4 +1,4 @@
-import { createReportPdf, exportExcel } from './export'
+import { createReportPdf } from './export'
 import { fmtQty, formatThaiDate } from './format'
 import { liveItems } from './purchaseRequestStatus'
 import type { PurchaseRequest, PurchaseRequestItem } from '../types'
@@ -61,13 +61,14 @@ export function requestRows(
   return rows
 }
 
-export function exportRequestExcel(
+export async function exportRequestExcel(
   pr: PurchaseRequest,
   locationName: string,
   t: T,
   locationNameOf?: (id: string) => string,
-): void {
-  exportExcel(`${pr.docNo}.xlsx`, pr.docNo, requestRows(pr, locationName, t, locationNameOf))
+): Promise<void> {
+  const { exportExcel } = await import('./export')
+  await exportExcel(`${pr.docNo}.xlsx`, pr.docNo, requestRows(pr, locationName, t, locationNameOf))
 }
 
 export function createRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): jsPDF {
@@ -102,7 +103,7 @@ export function createRequestPdf(pr: PurchaseRequest, company: string, locationN
   })
 }
 
-export function exportRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): void {
+export async function exportRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): Promise<void> {
   const doc = createRequestPdf(pr, company, locationName, t)
   doc.save(`${pr.docNo}.pdf`)
 }
