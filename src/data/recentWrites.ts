@@ -1,3 +1,4 @@
+import { brandEpoch, onBrandChange } from '../brand/brand'
 import type { StockMovement } from '../types'
 
 /**
@@ -24,6 +25,12 @@ type Listener = (rows: StockMovement[]) => void
 let rows: (StockMovement & { notedAt: number })[] = []
 const listeners = new Set<Listener>()
 
+// ponytail: drop all noted rows across brand switch; upgrade to per-brand map if brand-switch retention is ever needed
+onBrandChange(() => {
+  rows = []
+  emit()
+})
+
 function emit() {
   const now = Date.now()
   rows = rows.filter((r) => now - r.notedAt < TTL_MS)
@@ -32,8 +39,10 @@ function emit() {
 }
 
 /** Note rows that were just committed (created or changed). Later notes of an id win. */
-export function noteWritten(written: readonly StockMovement[]): void {
+export function noteWritten(written: readonly StockMovement[], epoch: number): void {
   if (written.length === 0) return
+  // Required: a row noted under the brand that was open when its transaction began.
+  if (epoch !== brandEpoch()) return
   const now = Date.now()
   const ids = new Set(written.map((w) => w.id))
   rows = [...rows.filter((r) => !ids.has(r.id)), ...written.map((w) => ({ ...w, notedAt: now }))]
