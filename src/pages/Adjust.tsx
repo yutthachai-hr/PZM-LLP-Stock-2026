@@ -12,7 +12,7 @@ import { ProductThumb } from '../components/ProductThumb'
 import { QtySheet } from '../components/QtySheet'
 import { KeyingSide } from '../components/keying/KeyingSide'
 import { SubmitBar } from '../components/keying/SubmitBar'
-import { adjustStockLines, captureFilingScope, listMovementsInRange, type AdjustLine } from '../services/stock'
+import { adjustStockLines, captureFilingScope, listMovementsInRange, StockLevelConflictError, type AdjustLine } from '../services/stock'
 import { deliver } from '../services/notifications'
 import { useScheduleConfig } from '../services/schedules'
 import { significance } from '../lib/inventoryRules/adjustments'
@@ -248,6 +248,7 @@ export function AdjustPage() {
   }, [movements, dateStr, productById])
 
   async function submit() {
+    if (busy) return
     if (!locationId) return toast.error(t('เลือกคลัง'))
     if (rows.length === 0) return toast.error(t('เพิ่มรายการสินค้าก่อน'))
     if (bad) return toast.error(t('จำนวนที่นับได้ของ "{name}" ติดลบไม่ได้', { name: bad.productName }))
@@ -255,6 +256,21 @@ export function AdjustPage() {
     if (!laterReady) return toast.error(t('กำลังโหลดยอด ณ วันที่เลือก — รอสักครู่'))
     // The brand these figures were keyed in, pinned before the fresh read below is awaited.
     const scope = captureFilingScope()
+    // Capture lines and optimistic concurrency expectedLevel at SUBMIT time from this render
+    const lines: AdjustLine[] = toFile.map((r) => {
+      const d = deltaOf(r, system(r.productId))
+      return {
+        productId: r.productId,
+        productName: r.productName,
+        unit: r.unit,
+        ...(r.mode === 'delta' && r.entryUnit && r.entryQty ? { entryUnit: r.entryUnit, entryQty: r.entryQty } : {}),
+        direction: d > 0 ? 'in' : 'out',
+        qty: Math.abs(d),
+        reason: r.reason,
+        note: r.note?.trim() || undefined,
+        ...(r.mode === 'count' ? { expectedLevel: qtyAt(locationId, r.productId) } : {}),
+      }
+    })
     if (backdated) {
       // Another device may have filed or corrected a row since the figures were read. A
       // count is only as good as the balance it is compared with, so read them again and
@@ -274,19 +290,6 @@ export function AdjustPage() {
         setBusy(false)
       }
     }
-    const lines: AdjustLine[] = toFile.map((r) => {
-      const d = deltaOf(r, system(r.productId))
-      return {
-        productId: r.productId,
-        productName: r.productName,
-        unit: r.unit,
-        ...(r.mode === 'delta' && r.entryUnit && r.entryQty ? { entryUnit: r.entryUnit, entryQty: r.entryQty } : {}),
-        direction: d > 0 ? 'in' : 'out',
-        qty: Math.abs(d),
-        reason: r.reason,
-        note: r.note?.trim() || undefined,
-      }
-    })
     setBusy(true)
     try {
       const docNo = await adjustStockLines({
@@ -314,6 +317,10 @@ export function AdjustPage() {
       clearDraft()
       setTimeout(() => searchRef.current?.focus(), 0)
     } catch (e) {
+      if (e instanceof StockLevelConflictError) {
+        toast.error(errText(e, t))
+        return
+      }
       toast.error(t('บันทึกไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
       setBusy(false)

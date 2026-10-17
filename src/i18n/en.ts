@@ -12,6 +12,8 @@ export const EN: Record<string, string> = {
   'โหลดประวัติสินค้าครบแล้ว ({count} รายการ)': 'Full product history loaded ({count} records)',
   'โหลดช่วงวันที่ที่ขอครบแล้ว ({count} รายการ)': 'Requested date range loaded ({count} records)',
   'โหลดประวัติใหม่': 'Reload history',
+  'ยอดคงเหลือของ "{name}" เปลี่ยนไปแล้ว (ตอนนับ: {expected} {unit}, ล่าสุด: {actual} {unit}) — กรุณาตรวจยอดใหม่': 'The balance of "{name}" has changed (counted against: {expected} {unit}, now: {actual} {unit}) — please check the count again',
+  'ยอดคงเหลือเปลี่ยนไปแล้ว {count} รายการ ({details}) — กรุณาตรวจยอดใหม่': 'Balances changed for {count} items ({details}) — please check the counts again',
   'ลองใหม่': 'Try again',
   'เวลาที่บันทึก': 'Recorded at',
   'มีรายการหน่วยเดิมที่ยังไม่ได้แปลงหน่วย': 'History contains unconverted or differing units — combined balances are unavailable',
