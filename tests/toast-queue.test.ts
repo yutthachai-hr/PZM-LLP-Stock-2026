@@ -17,6 +17,11 @@ describe('transient toast presentation queue', () => {
     expect(normalizeToast(new Error('  Failed to fetch  '), 'Retry in 5s')).toEqual({ title: 'Failed to fetch', description: 'Retry in 5s' })
     expect(normalizeToast(new TypeError('Invalid response'))).toEqual({ title: 'Invalid response' })
   })
+  it('takes the caller’s localized fallback for an Error with no message', () => {
+    expect(normalizeToast(new Error(''), undefined, 'Something went wrong')).toEqual({ title: 'Something went wrong' })
+    expect(normalizeToast(new Error('   '))).toEqual({ title: 'Error' })
+    expect(normalizeToast(new Error('Connection lost'), undefined, 'Something went wrong')).toEqual({ title: 'Connection lost' })
+  })
   it('ignores empty titles and normalizes blank descriptions', () => {
     expect(normalizeToast('  ')).toBeNull()
     expect(normalizeToast({ title: 'Saved', description: ' ' })).toEqual({ title: 'Saved' })

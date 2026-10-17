@@ -10,10 +10,11 @@ export const TOAST_DURATION: Record<ToastKind, number> = { success: 3000, info: 
 export const MAX_VISIBLE = 3
 export const MAX_QUEUED = 20
 
-export function normalizeToast(input: ToastInput, description?: string): ToastContent | null {
-  // ponytail: Error title defaults to 'Error'; upgrade to localized fallback if queue gains i18n.
+export function normalizeToast(input: ToastInput, description?: string, fallbackTitle = 'Error'): ToastContent | null {
+  // ponytail: the pure queue keeps an English default; ToastProvider passes t()'s localized
+  // fallback for the one reachable case, an Error thrown with an empty message.
   if (input instanceof Error) {
-    const title = input.message.trim() || 'Error'
+    const title = input.message.trim() || fallbackTitle
     const details = description?.trim()
     return { title, ...(details ? { description: details } : {}) }
   }

@@ -3116,4 +3116,6 @@ export const EN: Record<string, string> = {
   'บันทึกราคาแล้ว': 'Price saved',
   '฿{cost} ต่อ {unit}': '฿{cost} per {unit}',
   'การแจ้งเตือนชั่วคราว': 'Transient notifications',
+  'การแจ้งเตือนสำคัญ': 'Important notifications',
+  'เกิดข้อผิดพลาด': 'Something went wrong',
 }
