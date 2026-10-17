@@ -1,0 +1,42 @@
+.notice-viewport {
+  --notice-bottom: calc(var(--tabbar-h, 0px) + env(safe-area-inset-bottom, 0px) + 5rem + var(--notice-keyboard, 0px));
+  position: fixed;
+  z-index: 90;
+  left: max(0.75rem, env(safe-area-inset-left, 0px));
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  bottom: var(--notice-bottom);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: max(5rem, calc(100dvh - var(--notice-bottom) - env(safe-area-inset-top, 0px) - 5rem));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 0.25rem;
+  pointer-events: none;
+  scrollbar-width: thin;
+}
+.notice-card {
+  min-width: 0;
+  border-radius: 1rem;
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgb(15 23 42 / 0.09), 0 1px 3px rgb(15 23 42 / 0.05);
+  pointer-events: auto;
+  overflow-wrap: anywhere;
+}
+.toast-card { animation: notice-in 160ms ease-out; transition: opacity 180ms ease-out, transform 180ms ease-out; }
+.toast-card[data-leaving=true] { opacity: 0; transform: translateY(0.25rem); pointer-events: none; }
+@keyframes notice-in { from { opacity: 0; transform: translateY(0.25rem); } to { opacity: 1; transform: translateY(0); } }
+@media (min-width: 768px) {
+  .notice-viewport {
+    left: auto;
+    right: max(1rem, env(safe-area-inset-right, 0px));
+    top: calc(env(safe-area-inset-top, 0px) + 4.75rem);
+    bottom: auto;
+    width: 22.5rem;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 6rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-card { animation: none; transition: none; }
+}
