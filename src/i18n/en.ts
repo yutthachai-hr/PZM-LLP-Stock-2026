@@ -1927,6 +1927,13 @@ export const EN: Record<string, string> = {
   'ผูกบาร์โค้ดกับ "{name}"': 'Attach a barcode to "{name}"',
   'ผูกบาร์โค้ด {code} กับ "{name}" แล้ว': 'Barcode {code} attached to "{name}"',
   'บาร์โค้ดนี้ใช้กับ "{name}" อยู่แล้ว': '"{name}" already carries this barcode',
+  'ยืนยันสินค้าจากบาร์โค้ด': 'Confirm product from barcode',
+  'พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?': 'Found product "{name}" from barcode {code} — add to lines?',
+  'บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง': 'Barcode {code} matches {n} products — please select manually',
+  'สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"': 'This product is inactive: "{name}"',
+  'ไม่พบบาร์โค้ด {code} ในระบบ': 'Barcode {code} not found in system',
+  'บาร์โค้ด {code} ซ้ำกับสินค้าในเอกสารหลายรายการ': 'Barcode {code} matches multiple items in document',
+  'รหัสสินค้านี้ซ้ำกับรายการในเอกสาร': 'This product code matches multiple items in document',
   // ---- R9 messages (22 Sep 2026) ----
   'ข้อความภายใน ({n} ใหม่)': 'Message board ({n} new)',
   'ข้อความภายใน': 'Message board',

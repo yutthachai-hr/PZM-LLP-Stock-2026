@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { brandEpoch, onBrandChange } from '../brand/brand'
 import { useT } from '../i18n/I18nContext'
 import { Button, Input, Modal } from './ui'
 import { Icon } from './Icon'
@@ -38,12 +39,17 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
 
   useEffect(() => {
     if (!open) return
+    const initialEpoch = brandEpoch()
+    const unsubBrand = onBrandChange(() => {
+      onClose()
+    })
     done.current = false
     setError('')
     setTyped('')
     let cancelled = false
 
     function finish(code: string) {
+      if (brandEpoch() !== initialEpoch) return
       const value = code.trim()
       if (!value || done.current) return
       done.current = true
@@ -96,12 +102,13 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
     void start()
     return () => {
       cancelled = true
+      unsubBrand()
       reader.current?.stop()
       reader.current = null
       for (const track of stream.current?.getTracks() ?? []) track.stop()
       stream.current = null
     }
-  }, [open, onRead, t])
+  }, [open, onClose, onRead, t])
 
   return (
     <Modal
@@ -140,7 +147,7 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
           onKeyDown={(e) => {
             if (e.key === 'Enter' && typed.trim()) onRead(typed.trim())
           }}
-          inputMode="numeric"
+          inputMode="text"
           placeholder={t('หรือพิมพ์เลขบาร์โค้ด')}
           aria-label={t('เลขบาร์โค้ด')}
         />

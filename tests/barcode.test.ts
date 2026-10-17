@@ -44,9 +44,9 @@ describe('Enter in a search box (a scanner in keyboard mode ends with Enter)', (
     expect(pickOnEnter(products, '8851959132012\n', [lookalike, scanned])?.id).toBe('a')
   })
 
-  test('then the product code exactly, then the best loose match', () => {
+  test('then the product code exactly, but never loose search suggestions', () => {
     expect(pickOnEnter(products, 'bev-02', [scanned, lookalike])?.id).toBe('b')
-    expect(pickOnEnter(products, 'coke', [scanned])?.id).toBe('a')
+    expect(pickOnEnter(products, 'coke', [scanned])).toBeUndefined()
     expect(pickOnEnter(products, '   ', [scanned])).toBeUndefined()
   })
 })

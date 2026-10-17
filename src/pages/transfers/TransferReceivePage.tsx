@@ -12,7 +12,7 @@ import { FramePage, PageHero, SectionCard } from '../../components/frame'
 import { transferCache } from '../../data/transferCache'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
-import { pickOnEnter } from '../../lib/barcode'
+import { resolveBarcode } from '../../lib/barcode'
 import { fmtQty } from '../../lib/format'
 import { compressImage } from '../../lib/image'
 import { DISCREPANCY_REASON_KEYS, canReceive } from '../../lib/transferStatus'
@@ -99,9 +99,28 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
 
   /** A scan: find the line, mark it counted, bring it into view. */
   function found(code: string) {
-    const hit = pickOnEnter(lineProducts, code, [])
-    const line = hit && lines.find((l) => l.productId === hit.id)
+    const raw = code.trim()
     setScan('')
+    if (!raw) return
+
+    const bRes = resolveBarcode(lineProducts, raw)
+    let hit: Product | undefined
+    if (bRes.status === 'verified_exact' || bRes.status === 'legacy_unverified') {
+      hit = bRes.product
+    } else if (bRes.status === 'duplicate') {
+      toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้าในเอกสารหลายรายการ', { code: bRes.code }))
+      return
+    } else {
+      const lower = raw.toLowerCase()
+      const skuMatches = lineProducts.filter((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === lower)
+      if (skuMatches.length === 1) hit = skuMatches[0]
+      else if (skuMatches.length > 1) {
+        toast.error(t('รหัสสินค้านี้ซ้ำกับรายการในเอกสาร'))
+        return
+      }
+    }
+
+    const line = hit && lines.find((l) => l.productId === hit.id)
     if (!line) {
       toast.error(t('ไม่พบสินค้านี้ในเอกสาร {docNo}', { docNo: transfer.docNo }))
       return

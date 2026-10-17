@@ -15,8 +15,10 @@ import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
-import { findByBarcode, pickOnEnter, searchFields } from '../lib/barcode'
+import { pickOnEnter, resolveBarcode, searchFields } from '../lib/barcode'
 import { BarcodeScanner } from './BarcodeScanner'
+import { useToast } from './Toast'
+import { useConfirm } from './Confirm'
 import { describeQty, entryFor, type QtyEntry } from '../lib/uom'
 
 export interface Line {
@@ -91,6 +93,8 @@ export function LineBuilder({
   rankFirst?: (p: Product) => number
 }) {
   const t = useT()
+  const toast = useToast()
+  const confirm = useConfirm()
   // Arriving from the quick menu's "import a file" (?import=1) opens the import at once.
   const [params, setParams] = useSearchParams()
   const [importing, setImporting] = useState(() => importable && params.get('import') === '1')
@@ -167,12 +171,37 @@ export function LineBuilder({
   /** A scan is a decision, not a suggestion: the line goes on as soon as it reads. */
   function scanned(code: string) {
     setScanning(false)
-    const hit = findByBarcode(products, code)
-    if (!hit) {
-      setSearch(code)
-      return
+    const res = resolveBarcode(products, code)
+    switch (res.status) {
+      case 'verified_exact': {
+        addProduct(res.product)
+        break
+      }
+      case 'legacy_unverified': {
+        void confirm({
+          title: t('ยืนยันสินค้าจากบาร์โค้ด'),
+          message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
+          confirmText: t('เพิ่มรายการ'),
+        }).then((ok) => {
+          if (ok) addProduct(res.product)
+        })
+        break
+      }
+      case 'duplicate': {
+        toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: res.code, n: res.candidates.length }))
+        break
+      }
+      case 'inactive': {
+        toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.product.name }))
+        break
+      }
+      case 'not_found': {
+        toast.error(t('ไม่พบบาร์โค้ด {code} ในระบบ', { code: res.code }))
+        break
+      }
+      case 'empty':
+        break
     }
-    addProduct(hit)
   }
 
   function sheetSubmit(e: QtyEntry) {

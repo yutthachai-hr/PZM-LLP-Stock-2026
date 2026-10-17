@@ -27,8 +27,9 @@ import { ADJUST_REASONS, type Product, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
-import { findByBarcode, searchFields } from '../lib/barcode'
+import { pickOnEnter, resolveBarcode, searchFields } from '../lib/barcode'
 import { BarcodeScanner } from '../components/BarcodeScanner'
+import { useConfirm } from '../components/Confirm'
 import { useViewport } from '../lib/viewport'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
@@ -79,6 +80,7 @@ export function AdjustPage() {
   const { products, locations, qtyAt, movements } = useData()
   const { user } = useAuth()
   const toast = useToast()
+  const confirm = useConfirm()
   const { settings } = useScheduleConfig()
   const phone = useViewport() === 'phone'
 
@@ -192,9 +194,37 @@ export function AdjustPage() {
 
   function scanned(code: string) {
     setScanning(false)
-    const hit = findByBarcode(products, code)
-    if (hit) add(hit)
-    else setSearch(code)
+    const res = resolveBarcode(products, code)
+    switch (res.status) {
+      case 'verified_exact': {
+        add(res.product)
+        break
+      }
+      case 'legacy_unverified': {
+        void confirm({
+          title: t('ยืนยันสินค้าจากบาร์โค้ด'),
+          message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
+          confirmText: t('เพิ่มรายการ'),
+        }).then((ok) => {
+          if (ok) add(res.product)
+        })
+        break
+      }
+      case 'duplicate': {
+        toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: res.code, n: res.candidates.length }))
+        break
+      }
+      case 'inactive': {
+        toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.product.name }))
+        break
+      }
+      case 'not_found': {
+        toast.error(t('ไม่พบบาร์โค้ด {code} ในระบบ', { code: res.code }))
+        break
+      }
+      case 'empty':
+        break
+    }
   }
 
   const patch = (id: string, p: Partial<AdjRow>) => setRows((rs) => rs.map((r) => (r.productId === id ? { ...r, ...p } : r)))
@@ -421,9 +451,12 @@ export function AdjustPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && matches[0]) {
-                    e.preventDefault()
-                    add(matches[0])
+                  if (e.key === 'Enter') {
+                    const hit = pickOnEnter(products, search, matches)
+                    if (hit) {
+                      e.preventDefault()
+                      add(hit)
+                    }
                   }
                 }}
                 autoComplete="off"
