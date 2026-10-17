@@ -6,6 +6,8 @@
 // Product names, SKUs and categories are DATA and are never translated.
 
 export const EN: Record<string, string> = {
+  'กำลังโหลดข้อมูลสินค้า — กรุณาสแกนอีกครั้ง': 'Still loading the product list — please scan again',
+  'กำลังรอยืนยันรายการก่อนหน้า — กรุณาสแกนใหม่หลังยืนยัน': 'Waiting for the previous item to be confirmed — scan again after confirming',
   // ---- generic actions / words -------------------------------------------------
   บันทึก: 'Save',
   ยกเลิก: 'Cancel',
