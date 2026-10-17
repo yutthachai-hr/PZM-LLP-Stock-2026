@@ -13,6 +13,15 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { EN } from '../src/i18n/en.ts'
+import { dictionaryProblems, translationCalls } from './i18n-audit.mjs'
+
+// Reviewed Thai data within English copy: exact accepted spreadsheet headings and the
+// native language name. Match the whole value so new Thai copy cannot inherit an exemption.
+const THAI_DATA_VALUES = {
+  'ไฟล์ .xlsx / .xls ที่มีคอลัมน์ ชื่อวัตถุดิบ · หน่วย · จำนวนสั่ง': 'An .xlsx / .xls with the columns ชื่อวัตถุดิบ · หน่วย · จำนวนสั่ง',
+  'ไฟล์ต้องมีคอลัมน์ SKU (หรือ "รหัสสินค้า") และ Barcode (หรือ "บาร์โค้ด") — SKU ยังเป็นกุญแจหลัก ไม่มีการสร้างสินค้าใหม่': 'The file needs an SKU column (or "รหัสสินค้า") and a Barcode column (or "บาร์โค้ด"). SKU stays the key — no product is created.',
+  'ไทย': 'ไทย',
+}
 
 const SRC = fileURLToPath(new URL('../src/', import.meta.url))
 const SKIP = /catalog\.generated|sarabunFont|[\\/]i18n[\\/]/
@@ -42,6 +51,7 @@ function walk(dir, out = []) {
 
 const untranslated = []
 const usedKeys = new Set()
+const auditProblems = dictionaryProblems(EN, THAI_DATA_VALUES)
 
 for (const file of walk(SRC)) {
   const src = readFileSync(file, 'utf8')
@@ -50,9 +60,9 @@ for (const file of walk(SRC)) {
   // Every key that reaches the dictionary, so unused entries can be spotted. Three routes:
   // a direct t(), an AppError thrown by a service, and constant tables whose Thai is
   // marked `i18n-key` and translated wherever it is rendered.
-  for (const m of src.matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g)) usedKeys.add(m[1])
-  for (const m of src.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) usedKeys.add(m[1])
-  for (const m of src.matchAll(/new AppError\(\s*'((?:[^'\\]|\\.)*)'/g)) usedKeys.add(m[1])
+  const calls = translationCalls(src, rel)
+  for (const key of calls.keys) usedKeys.add(key)
+  auditProblems.push(...calls.problems)
   for (const line of src.split('\n')) {
     if (!line.includes('i18n-key')) continue
     for (const m of line.matchAll(/'([^'\n]*[฀-๿][^'\n]*)'/g)) usedKeys.add(m[1])
@@ -67,6 +77,7 @@ for (const file of walk(SRC)) {
     .replace(/\bt\(\s*'(?:[^'\\]|\\.)*'(?:\s*,\s*\{[\s\S]*?\})?\s*\)/g, blank)
     .replace(/\bt\(\s*"(?:[^"\\]|\\.)*"(?:\s*,\s*\{[\s\S]*?\})?\s*\)/g, blank)
     .replace(/new AppError\(\s*'(?:[^'\\]|\\.)*'(?:\s*,\s*\{[\s\S]*?\})?\s*\)/g, blank)
+    .replace(/\bt\(\s*`(?:[^`\\$]|\\.)*`(?:\s*,\s*\{[\s\S]*?\})?\s*\)/g, blank)
 
   const origLines = src.split('\n')
   handled.split('\n').forEach((line, i) => {
@@ -95,6 +106,13 @@ if (unused.length) {
   console.log(`\n⚠ ${unused.length} entry/entries in en.ts that nothing uses:`)
   for (const u of unused) console.log('  ' + JSON.stringify(u))
 }
-if (!untranslated.length && !missing.length) console.log('\n✓ every Thai UI string is translated')
+if (auditProblems.length) {
+  console.log(`\n✗ ${auditProblems.length} dictionary / translation-call audit problem(s):`)
+  for (const problem of auditProblems) console.log('  ' + problem)
+}
+if (!untranslated.length && !missing.length && !auditProblems.length) {
+  console.log(`\n✓ UI copy checks passed (${usedKeys.size} keys; ${Object.keys(EN).length} English entries).`)
+  console.log('  Includes placeholder parity, English-copy leakage and literal/template keys; stored data and marked dynamic keys still require review.')
+}
 
-process.exit(untranslated.length || missing.length ? 1 : 0)
+process.exit(untranslated.length || missing.length || auditProblems.length ? 1 : 0)
