@@ -552,6 +552,9 @@ export function OrdersPage() {
             onChange={(k) => {
               setTab(k)
               setLateOnly(false)
+              // LINE states only exist on open orders; carried over, the filter would empty
+              // the received and cancelled lists with nothing on screen to say why.
+              setStateFilter('')
               setSelected(new Set())
             }}
             chips={tabItems.map((x) => ({ key: x.key, label: x.label }))}

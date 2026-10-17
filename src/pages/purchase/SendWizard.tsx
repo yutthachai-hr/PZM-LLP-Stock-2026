@@ -4,6 +4,7 @@ import { useBrand } from '../../brand/BrandContext'
 import { brandDef, getBrand } from '../../brand/brand'
 import { orderCache } from '../../data/orderCache'
 import { LineBadge } from '../orders/LineBadge'
+import { createOutcomeTracker } from './outcomeOrder'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
@@ -79,6 +80,10 @@ export function SendWizard({
   // order twice and ring the bell twice; the ref stops the second tap before React can
   // re-render, the state greys the buttons out for the person.
   const recording = useRef(false)
+  // The newest copy of each order seen here. The server's reply to the supplier link (the
+  // supplier asked, waiting, date requested) arrives after `current` was handed over, and the
+  // outcome written next must land on that reply, not roll the order back to the list's copy.
+  const tracker = useRef(createOutcomeTracker()).current
   const [recordingNow, setRecordingNow] = useState(false)
   const sheet = useRef<HTMLDivElement>(null)
 
@@ -121,7 +126,7 @@ export function SendWizard({
       if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
       // Exactly what was written, so the list, the sheet and the batch agree at once — and
       // the device's copy too, so coming back to the list does not show the old badge.
-      const next = { ...order, ...written }
+      const next = tracker.afterWrite(order, written)
       if (getBrand() === brand) orderCache.patch(next)
       await onStatus(next)
     } finally {
@@ -154,6 +159,7 @@ export function SendWizard({
       // mention cannot be made here and none is faked as text. No link (not set up yet,
       // or offline) → the sheet goes out exactly as before.
       const link = pageIdx === 0 ? await supplierLink(current) : null
+      if (link) tracker.observe(link.order)
       const st = translatorFor(sheetLang)
       const asked = requestedOf(link?.order ?? current)
       const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''

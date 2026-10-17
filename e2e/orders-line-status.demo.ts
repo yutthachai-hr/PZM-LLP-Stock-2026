@@ -128,6 +128,11 @@ test('quick filters count the loaded window and narrow the list', async ({ page 
   await expect(chip(/ต้องส่ง PO ใหม่/)).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('[data-row-key]:visible')).toHaveCount(1)
   await expect(row(page, 'resend')).toBeVisible()
+  // Another tab drops the LINE filter: received orders have no LINE state to match.
+  await page.locator('button', { hasText: /^รับของแล้ว/ }).click()
+  await page.locator('button', { hasText: /^รอรับของ/ }).click()
+  await expect(chip(/ต้องส่ง PO ใหม่/)).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('[data-row-key]:visible')).toHaveCount(8)
 })
 
 test('a resend confirmed in the wizard turns the badge green and recounts, without a reload, writing once', async ({ page }) => {
