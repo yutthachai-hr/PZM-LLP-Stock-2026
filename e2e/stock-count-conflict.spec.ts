@@ -57,7 +57,12 @@ test('a device whose screen is still stale is refused inside the transaction, wi
   const bInput = await countFlour(b, '15')
 
   // Freeze only B's live listener (the lag C-02 is about). Its transactions use separate RPCs.
+  // Blocking new Listen requests is not enough: a long-poll already open can still deliver,
+  // so drop B's connections once and let the block stop the reconnect.
   await b.route(/google\.firestore\.v1\.Firestore\/Listen\//, (route) => route.abort())
+  await b.context().setOffline(true)
+  await b.waitForTimeout(500)
+  await b.context().setOffline(false)
 
   await a.getByRole('button', { name: /บันทึกการปรับสต๊อก/ }).click()
   await expect(a.getByText(/ปรับสต๊อกเรียบร้อย/)).toBeVisible()
