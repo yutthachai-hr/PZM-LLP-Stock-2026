@@ -12,7 +12,7 @@ import { ProductThumb } from '../components/ProductThumb'
 import { QtySheet } from '../components/QtySheet'
 import { KeyingSide } from '../components/keying/KeyingSide'
 import { SubmitBar } from '../components/keying/SubmitBar'
-import { adjustStockLines, listMovementsInRange, type AdjustLine } from '../services/stock'
+import { adjustStockLines, captureFilingScope, listMovementsInRange, type AdjustLine } from '../services/stock'
 import { deliver } from '../services/notifications'
 import { useScheduleConfig } from '../services/schedules'
 import { significance } from '../lib/inventoryRules/adjustments'
@@ -253,6 +253,8 @@ export function AdjustPage() {
     if (bad) return toast.error(t('จำนวนที่นับได้ของ "{name}" ติดลบไม่ได้', { name: bad.productName }))
     if (toFile.length === 0) return toast.error(t('ยังไม่มีบรรทัดที่ยอดเปลี่ยน — ใส่จำนวนที่นับได้หรือจำนวนที่ปรับ'))
     if (!laterReady) return toast.error(t('กำลังโหลดยอด ณ วันที่เลือก — รอสักครู่'))
+    // The brand these figures were keyed in, pinned before the fresh read below is awaited.
+    const scope = captureFilingScope()
     if (backdated) {
       // Another device may have filed or corrected a row since the figures were read. A
       // count is only as good as the balance it is compared with, so read them again and
@@ -288,6 +290,7 @@ export function AdjustPage() {
     setBusy(true)
     try {
       const docNo = await adjustStockLines({
+        scope,
         lines,
         locationId,
         date: dateInputToMs(dateStr),

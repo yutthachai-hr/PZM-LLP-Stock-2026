@@ -776,8 +776,13 @@ export async function planAdjust(
   }
 }
 
-export async function adjustStockLines(params: PlanAdjustParams): Promise<string> {
-  const scope = captureFilingScope()
+/**
+ * `scope` pins the brand when the caller awaits something between the person pressing save
+ * and this call (a backdated screen's fresh read): without it the brand is whichever is
+ * active once that await returns.
+ */
+export async function adjustStockLines({ scope: pinned, ...params }: PlanAdjustParams & { scope?: FilingScope }): Promise<string> {
+  const scope = pinned ?? captureFilingScope()
   return filing(scope, async (tx, file) => {
     const planned = await planAdjust(tx, params, file)
     return planned.commit()

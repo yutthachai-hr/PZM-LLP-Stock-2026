@@ -27,7 +27,7 @@ import {
   rewindTicket,
   type RewindState,
 } from '../../lib/monthlyHistory'
-import { listMovementsInRange } from '../../services/stock'
+import { captureFilingScope, listMovementsInRange } from '../../services/stock'
 import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
@@ -271,13 +271,15 @@ export function MonthlyCountSheet() {
       toast.error(t('ยังอ่านยอด ณ สิ้นเดือนไม่ครบ — ยืนยันไม่ได้จนกว่าจะอ่านได้ครบ'))
       return
     }
+    // The brand this sheet was confirmed in, pinned before the fresh read below is awaited.
+    const scope = captureFilingScope()
     setBusy(true)
     try {
       const now = await freshRows()
       const results = resultsOf(now)
       const actor = { id: user.id, name: user.name }
       if (kind === 'record') {
-        await recordMonthlyCount({ id, results, actor })
+        await recordMonthlyCount({ id, results, actor, scope })
         toast.success(t('บันทึกผลนับไว้แล้ว — สต๊อกไม่ถูกปรับ'))
       } else {
         const parts = postingPlan(now, sheet.postedIds).map((part) =>
@@ -289,6 +291,7 @@ export function MonthlyCountSheet() {
           })),
         )
         const docs = await postMonthlyCount({
+          scope,
           id,
           parts,
           results,
