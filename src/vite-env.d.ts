@@ -27,3 +27,9 @@ interface ImportMetaEnv {
    */
   readonly VITE_PO_IMAGE_DEMO_KEY?: string
 }
+
+declare module 'pdfmake/build/pdfmake.js' {
+  const pdfMake: any
+  export default pdfMake
+}
+
