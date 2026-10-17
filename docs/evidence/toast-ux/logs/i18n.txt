@@ -1,0 +1,6 @@
+
+> pizza-stock@0.0.0 i18n:check
+> node --experimental-strip-types scripts/i18n-check.mjs
+
+
+✓ every Thai UI string is translated

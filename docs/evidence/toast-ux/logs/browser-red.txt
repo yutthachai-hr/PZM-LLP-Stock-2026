@@ -1,0 +1,34 @@
+
+Running 1 test using 1 worker
+
+  x  1 e2e\toast-ux.demo.ts:43:1 › deduplicates repeated active messages without making a growing stack (446ms)
+
+
+  1) e2e\toast-ux.demo.ts:43:1 › deduplicates repeated active messages without making a growing stack 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 8
+
+      44 |   await open(page)
+      45 |   await page.getByRole('button', { name: 'Duplicates', exact: true }).click()
+    > 46 |   expect(await page.getByText('สั่งของแล้ว', { exact: true }).count()).toBe(1)
+         |                                                                        ^
+      47 |   await expect(card(page)).toHaveCount(1)
+      48 |   await expect(card(page)).toContainText('สั่งของแล้ว')
+      49 |   await expect(page.getByTestId('identity-changes')).toHaveText('0')
+        at C:\Users\Yutthachai\pzm-toast-ux-20261015\e2e\toast-ux.demo.ts:46:72
+
+    Error Context: e2e-results\toast-ux\toast-ux.demo.ts-deduplica-4834c-hout-making-a-growing-stack\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\toast-ux\toast-ux.demo.ts-deduplica-4834c-hout-making-a-growing-stack\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\toast-ux\toast-ux.demo.ts-deduplica-4834c-hout-making-a-growing-stack\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    e2e\toast-ux.demo.ts:43:1 › deduplicates repeated active messages without making a growing stack 

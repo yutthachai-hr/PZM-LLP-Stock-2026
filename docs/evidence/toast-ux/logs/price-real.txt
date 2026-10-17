@@ -1,0 +1,6 @@
+
+Running 1 test using 1 worker
+
+  ok 1 e2e\toast-ux.demo.ts:154:1 › real price save in the product editor shows a title and the exact saved cost (3.3s)
+
+  1 passed (6.5s)
