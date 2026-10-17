@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
-import { brandDef } from '../../brand/brand'
+import { brandDef, getBrand } from '../../brand/brand'
+import { orderCache } from '../../data/orderCache'
+import { LineBadge } from '../orders/LineBadge'
+import { createOutcomeTracker, mergeWizardOrders } from './outcomeOrder'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
@@ -60,12 +63,16 @@ export function SendWizard({
   // per session and held, so this costs nothing per send.
   const suppliers = useSuppliers()
 
+  // ponytail: keep local map of patched orders in wizard state so completion summary and rows reflect outcome immediately
+  const [patchedOrders, setPatchedOrders] = useState<Record<string, PurchaseOrder>>({})
+  const effectiveOrders = useMemo(() => mergeWizardOrders(orders, patchedOrders), [orders, patchedOrders])
+
   // Once an order has been sent (or skipped) in THIS wizard it is done; `resend` only
   // decides whether one that was already sent before the wizard opened is offered again.
   const doneHere = useRef(new Set<string>())
   const pending = useMemo(
-    () => orders.filter((o) => !doneHere.current.has(o.id) && (resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'))),
-    [orders, resend],
+    () => effectiveOrders.filter((o) => !doneHere.current.has(o.id) && (resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'))),
+    [effectiveOrders, resend],
   )
   const [provider, setProvider] = useState<PurchaseShareProvider | null>(null)
   const [currentId, setCurrentId] = useState<string | null>(pending[0]?.id ?? null)
@@ -73,6 +80,15 @@ export function SendWizard({
   const [sheetLang, setSheetLang] = useState<Lang>(screenLang)
   const [busy, setBusy] = useState<'' | 'render' | 'share'>('')
   const [askOutcome, setAskOutcome] = useState(false)
+  // One outcome is written at a time. A double tap on "sent" or "skip" used to write the
+  // order twice and ring the bell twice; the ref stops the second tap before React can
+  // re-render, the state greys the buttons out for the person.
+  const recording = useRef(false)
+  // The newest copy of each order seen here. The server's reply to the supplier link (the
+  // supplier asked, waiting, date requested) arrives after `current` was handed over, and the
+  // outcome written next must land on that reply, not roll the order back to the list's copy.
+  const tracker = useRef(createOutcomeTracker()).current
+  const [recordingNow, setRecordingNow] = useState(false)
   const sheet = useRef<HTMLDivElement>(null)
 
   const [needsLogin, setNeedsLogin] = useState(false)
@@ -97,18 +113,31 @@ export function SendWizard({
   }, [pendingKey])
 
   // Always the order as it now stands: its status fields move while it is being sent.
-  const current = currentId ? (orders.find((o) => o.id === currentId) ?? null) : null
+  const current = currentId ? (effectiveOrders.find((o) => o.id === currentId) ?? null) : null
   const pages = useMemo(() => (current ? paginateLines(current.lines) : []), [current])
-  const doneCount = orders.length - pending.length
+  const doneCount = effectiveOrders.length - pending.length
   const position = doneCount + 1
 
   async function record(order: PurchaseOrder, status: 'shareOpened' | 'sent' | 'skipped' | 'failed', version?: number) {
-    if (!user) return
-    const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
-    if (status === 'sent' || status === 'skipped') doneHere.current.add(order.id)
-    // The bell's record that it went (info, no popup); best effort like every deliver().
-    if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
-    await onStatus({ ...order, shareStatus: status, ...written })
+    if (!user || recording.current) return
+    recording.current = true
+    setRecordingNow(true)
+    try {
+      const brand = getBrand()
+      const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
+      if (status === 'sent' || status === 'skipped') doneHere.current.add(order.id)
+      // The bell's record that it went (info, no popup); best effort like every deliver().
+      if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
+      // Exactly what was written, so the list, the sheet and the batch agree at once — and
+      // the device's copy too, so coming back to the list does not show the old badge.
+      const next = tracker.afterWrite(order, written)
+      setPatchedOrders((prev) => ({ ...prev, [next.id]: next }))
+      if (getBrand() === brand) orderCache.patch(next)
+      await onStatus(next)
+    } finally {
+      recording.current = false
+      setRecordingNow(false)
+    }
   }
 
   async function send() {
@@ -135,6 +164,7 @@ export function SendWizard({
       // mention cannot be made here and none is faked as text. No link (not set up yet,
       // or offline) → the sheet goes out exactly as before.
       const link = pageIdx === 0 ? await supplierLink(current) : null
+      if (link) tracker.observe(link.order)
       const st = translatorFor(sheetLang)
       const asked = requestedOf(link?.order ?? current)
       const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''
@@ -187,14 +217,11 @@ export function SendWizard({
         <div className="space-y-3">
           <p className="text-sm text-ink">{t('ส่งครบทุกรายแล้ว')}</p>
           <ul className="divide-y divide-line rounded-lg border border-line text-sm">
-            {orders.map((o) => (
+            {effectiveOrders.map((o) => (
               <li key={o.id} className="flex items-center gap-2 px-3 py-2">
-                <Icon name={o.shareStatus === 'sent' ? 'check' : 'x'} size={16} className={o.shareStatus === 'sent' ? 'text-in' : 'text-ink-faint'} />
                 <span className="flex-1 text-ink">{o.supplierName}</span>
                 <span className="doc-no text-xs text-ink-faint">{o.docNo}</span>
-                <Badge color={o.shareStatus === 'sent' ? 'green' : 'slate'}>
-                  {o.shareStatus === 'sent' ? t('ส่งเข้า LINE แล้ว') : t('ข้าม')}
-                </Badge>
+                <LineBadge order={o} />
               </li>
             ))}
           </ul>
@@ -242,7 +269,7 @@ export function SendWizard({
           <div className="rounded-lg border border-line bg-sunken p-3">
             <p className="mb-2 text-sm text-ink">{t('ส่งใน LINE เรียบร้อยหรือไม่?')}</p>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void record(current, 'sent', (current.imageVersion ?? 0) + 1)}>
+              <Button onClick={() => void record(current, 'sent', (current.imageVersion ?? 0) + 1)} disabled={recordingNow}>
                 <Icon name="check" size={16} />
                 {t('ส่งแล้ว')}
               </Button>
@@ -256,7 +283,7 @@ export function SendWizard({
             <Button variant="secondary" onClick={onClose} disabled={!!busy}>
               {t('พักไว้ก่อน')}
             </Button>
-            <Button variant="secondary" onClick={() => void skip()} disabled={!!busy}>
+            <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow}>
               {t('ข้าม')}
             </Button>
             <Button onClick={() => void send()} disabled={!!busy || !provider}>

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import type {
   ButtonHTMLAttributes,
+  HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
   Ref,
@@ -172,10 +173,11 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 export function Badge({
   children,
   color = 'slate',
+  ...rest
 }: {
   children: ReactNode
   color?: 'slate' | 'red' | 'green' | 'amber' | 'blue'
-}) {
+} & Omit<HTMLAttributes<HTMLSpanElement>, 'color' | 'className' | 'children'>) {
   const map = {
     slate: 'bg-sunken text-ink-soft ring-line',
     red: 'bg-out-soft text-out ring-out/20',
@@ -185,7 +187,8 @@ export function Badge({
   }
   return (
     <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${map[color]}`}
+      {...rest}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${map[color]}`}
     >
       {children}
     </span>
