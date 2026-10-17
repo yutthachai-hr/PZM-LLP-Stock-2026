@@ -50,6 +50,8 @@ export interface SubscribeOptions {
 /** For one-shot reads: the read meter's label. */
 export interface ReadOptions {
   label?: string
+  /** Completeness-sensitive history and scan verification must be acknowledged by the server. */
+  server?: boolean
 }
 
 export interface Backend {

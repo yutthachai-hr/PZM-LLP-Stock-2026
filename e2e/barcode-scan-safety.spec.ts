@@ -38,9 +38,19 @@ async function catalogHolds(page: Page, typed: string, products: RegExp[]): Prom
  */
 
 test.describe('Barcode Scanner & Search Safety Fences', () => {
+  const openedPages: Page[] = []
+
+  test.afterEach(async () => {
+    while (openedPages.length > 0) {
+      const p = openedPages.pop()
+      await p?.context().close().catch(() => {})
+    }
+  })
+
   test('manual barcode entry allows typing alphanumeric Code 128 characters', async ({ browser }) => {
     await seedStage()
     const page = await signedIn(browser, 'staffA', '/issue')
+    openedPages.push(page)
 
     // Open scanner modal
     await page.getByRole('button', { name: 'สแกนบาร์โค้ด' }).first().click()
@@ -58,6 +68,7 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
   test('search box Enter does NOT add loose search suggestion (matches[0])', async ({ browser }) => {
     await seedStage()
     const page = await signedIn(browser, 'staffA', '/issue')
+    openedPages.push(page)
 
     const searchInput = page.getByPlaceholder('ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)')
     await expect(searchInput).toBeVisible()
@@ -74,6 +85,7 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
   test('unknown barcode scan fails closed with not found toast and no fuzzy fallback', async ({ browser }) => {
     await seedStage()
     const page = await signedIn(browser, 'staffA', '/issue')
+    openedPages.push(page)
 
     await page.getByRole('button', { name: 'สแกนบาร์โค้ด' }).first().click()
     const input = page.getByRole('textbox', { name: 'เลขบาร์โค้ด' })
@@ -93,6 +105,7 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     await putDoc('products/dup2', { sku: 'DUP-02', name: 'DUP ITEM 2', barcode: '8851000999999', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: now, updatedAt: now })
 
     const page = await signedIn(browser, 'staffA', '/issue')
+    openedPages.push(page)
     // The duplicate fence can only be observed once BOTH seeds are in the loaded catalog:
     // against an empty one, every code is answered "not found". Probing with the shared barcode
     // proves both rows — and their barcode field — are in the array the gate will read.
@@ -114,6 +127,7 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     await putDoc('products/leg1', { sku: 'LEG-01', name: 'LEGACY ITEM', barcode: '8851000555555', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: now, updatedAt: now })
 
     const page = await signedIn(browser, 'staffA', '/issue')
+    openedPages.push(page)
     // Same cold-catalog window as the duplicate and repeated-scan tests: the modal takes long
     // enough to open that this test usually wins the race, but nothing in it proves the
     // catalog is loaded, so wait on the row instead of on the clock.
@@ -137,6 +151,7 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     await putDoc('products/v1', { sku: 'V-01', name: 'REPEAT ITEM', barcode: '8851000111111', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: now, updatedAt: now })
 
     const page = await signedIn(browser, 'staffA', '/issue')
+    openedPages.push(page)
     const searchInput = page.getByPlaceholder('ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)')
 
     // The wedge scan below is the first thing that reads the catalog, so it is the test that
@@ -196,6 +211,7 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     })
 
     const page = await signedIn(browser, 'staffA', '/transfers/tr1/receive')
+    openedPages.push(page)
 
     const scanInput = page.getByPlaceholder('ยิงบาร์โค้ด แล้วกด Enter')
     await expect(scanInput).toBeVisible()

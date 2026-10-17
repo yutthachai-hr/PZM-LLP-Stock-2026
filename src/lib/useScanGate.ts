@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { brandEpoch } from '../brand/brand'
+import { brandEpoch, getBrand, type BrandId } from '../brand/brand'
 import { decideScan, revalidateScan } from './barcodeSelection'
+import { fetchScanCatalog } from './scanCatalog'
 import type { Product } from '../types'
 import type { TFn } from '../i18n/I18nContext'
 
@@ -9,11 +10,12 @@ type ConfirmLike = (opts: { title?: string; message: string; confirmText?: strin
 /** The toast API, structurally — the real `useToast()` result satisfies this. */
 interface ToastLike {
   error: (msg: string) => void
+  info?: (msg: string) => void
 }
 
 export interface ScanGateOptions {
-  /** The brand catalog as the screen last rendered it; the hook re-reads the latest. */
-  products: readonly Product[]
+  /** Initial or fallback catalog from render scope (superseded by authoritative server read). */
+  products?: readonly Product[]
   /** Add the resolved product (append its line / mark the transfer line received). */
   onAdd: (product: Product) => void
   confirm: ConfirmLike
@@ -27,34 +29,36 @@ export interface ScanGateOptions {
   isEligible?: (product: Product) => boolean
   /** Optional callback invoked when a product is resolved but fails caller eligibility. */
   onIneligible?: (product: Product) => void
+  /** Authoritative catalog loader override (for testing or custom scoping). */
+  loadCatalog?: (brand: BrandId) => Promise<readonly Product[]>
 }
 
 /**
- * The single scan entry point the screens share (R4).
+ * The single scan entry point the screens share (R4/R2).
  *
- * It resolves the token exactly (never a fuzzy/SKU fallback), auto-adds only a verified exact
- * barcode, asks for confirmation on a legacy barcode and shows a terminal error otherwise.
- * The confirmation re-resolves the code against the catalog read at answer time, so a product
- * deactivated, rebound or duplicated while the dialog was open is refused rather than added
- * from the stale array (R3 C2). The brand epoch still fences a brand switch.
+ * Resolves the token against an authoritative server-acknowledged product catalog,
+ * preventing cold-start false "not found" toasts. Deduplicates in-flight reads and
+ * provides short-lived caching without session-long stale maps or brand leaks.
  *
- * `onAdd` is called with the freshly resolved product, so a line's unit is derived from the
- * current catalog row, never a stale one.
+ * Confirms legacy barcodes and revalidates against the server catalog at answer time.
  */
-export function useScanGate(opts: ScanGateOptions): (code: string) => void {
+export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<void> {
   const { confirm, toast, t } = opts
-  const productsRef = useRef(opts.products)
-  productsRef.current = opts.products
   const onAddRef = useRef(opts.onAdd)
   onAddRef.current = opts.onAdd
   const isEligibleRef = useRef(opts.isEligible)
   isEligibleRef.current = opts.isEligible
   const onIneligibleRef = useRef(opts.onIneligible)
   onIneligibleRef.current = opts.onIneligible
+  const loadCatalogRef = useRef(opts.loadCatalog)
+  loadCatalogRef.current = opts.loadCatalog
   const legacyMessage = opts.legacyMessage
   const confirmText = opts.confirmText
 
   const mounted = useRef(true)
+  const isConfirmingRef = useRef(false)
+  const scanScopeCounter = useRef(0)
+
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -63,8 +67,32 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => void {
   }, [])
 
   return useCallback(
-    (code: string) => {
-      const decision = decideScan(productsRef.current, code)
+    async (code: string): Promise<void> => {
+      const theCode = code.trim()
+      if (!theCode) return
+
+      // Refuse safely while confirmation dialog is already pending
+      if (isConfirmingRef.current) return
+
+      const epochAtScan = brandEpoch()
+      const brandAtScan = getBrand()
+      const scanScopeId = ++scanScopeCounter.current
+
+      let catalog: readonly Product[]
+      try {
+        catalog = await fetchScanCatalog(brandAtScan, { loader: loadCatalogRef.current })
+      } catch {
+        if (!mounted.current || brandEpoch() !== epochAtScan || getBrand() !== brandAtScan) return
+        if (scanScopeId !== scanScopeCounter.current) return
+        toast.error(t('เชื่อมต่อฐานข้อมูลไม่ได้ — กรุณาลองใหม่อีกครั้ง'))
+        return
+      }
+
+      // Drop stale async resolution if scope changed (newer scan or brand change or unmounted)
+      if (!mounted.current || brandEpoch() !== epochAtScan || getBrand() !== brandAtScan) return
+      if (scanScopeId !== scanScopeCounter.current) return
+
+      const decision = decideScan(catalog, theCode)
 
       if (decision.kind === 'legacy') {
         if (isEligibleRef.current && !isEligibleRef.current(decision.product)) {
@@ -72,29 +100,47 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => void {
           return
         }
 
-        const epochAtPrompt = brandEpoch()
         const expectedProductId = decision.product.id
-        const theCode = decision.code
         const message = legacyMessage
           ? legacyMessage(decision.product, decision.code)
           : t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', {
               name: decision.product.name,
               code: decision.code,
             })
-        void confirm({
-          title: t('ยืนยันสินค้าจากบาร์โค้ด'),
-          message,
-          confirmText: confirmText ?? t('เพิ่มรายการ'),
-        }).then((ok) => {
-          if (!ok || !mounted.current || brandEpoch() !== epochAtPrompt) return
-          const fresh = revalidateScan(productsRef.current, theCode, expectedProductId)
+
+        isConfirmingRef.current = true
+        try {
+          const ok = await confirm({
+            title: t('ยืนยันสินค้าจากบาร์โค้ด'),
+            message,
+            confirmText: confirmText ?? t('เพิ่มรายการ'),
+          })
+
+          if (!ok || !mounted.current || brandEpoch() !== epochAtScan || getBrand() !== brandAtScan) return
+          if (scanScopeId !== scanScopeCounter.current) return
+
+          // Revalidate server catalog at answer time
+          let freshCatalog: readonly Product[]
+          try {
+            freshCatalog = await fetchScanCatalog(brandAtScan, { force: true, loader: loadCatalogRef.current })
+          } catch {
+            toast.error(t('เชื่อมต่อฐานข้อมูลไม่ได้ — กรุณาลองใหม่อีกครั้ง'))
+            return
+          }
+
+          if (!mounted.current || brandEpoch() !== epochAtScan || getBrand() !== brandAtScan) return
+          if (scanScopeId !== scanScopeCounter.current) return
+
+          const fresh = revalidateScan(freshCatalog, theCode, expectedProductId)
           if (!fresh) return
           if (isEligibleRef.current && !isEligibleRef.current(fresh)) {
             onIneligibleRef.current?.(fresh)
             return
           }
           onAddRef.current(fresh)
-        })
+        } finally {
+          isConfirmingRef.current = false
+        }
         return
       }
 

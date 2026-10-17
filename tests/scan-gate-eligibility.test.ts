@@ -33,8 +33,9 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
   const pDup1 = p('dup1', { barcode: '3333333333333' })
   const pDup2 = p('dup2', { barcode: '3333333333333' })
   const products = [pInDoc, pNotInDoc, pDup1, pDup2]
+  const loadCatalog = async () => products
 
-  test('non-document product does not trigger confirmation prompt and does not mutate', () => {
+  test('non-document product does not trigger confirmation prompt and does not mutate', async () => {
     const onAdd = vi.fn()
     const confirm = vi.fn().mockResolvedValue(true)
     const toast = { error: vi.fn() }
@@ -49,11 +50,12 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
       confirm,
       toast,
       t,
+      loadCatalog,
       isEligible: (prod) => lines.some((l) => l.productId === prod.id),
       onIneligible,
     } as any)
 
-    gate('2222222222222')
+    await gate('2222222222222')
 
     // Must NOT show confirmation prompt for non-document product
     expect(confirm).not.toHaveBeenCalled()
@@ -77,11 +79,13 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
       confirm,
       toast,
       t,
+      loadCatalog,
       isEligible: (prod) => lines.some((l) => l.productId === prod.id),
       onIneligible,
     } as any)
 
-    gate('1111111111111')
+    const scanPromise = gate('1111111111111')
+    await new Promise((r) => setTimeout(r, 10))
 
     // Must show confirm dialog
     expect(confirm).toHaveBeenCalled()
@@ -90,12 +94,12 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
 
     // Confirm addition
     resolveConfirm(true)
-    await Promise.resolve()
+    await scanPromise
 
     expect(onAdd).toHaveBeenCalledWith(pInDoc)
   })
 
-  test('duplicate product in brand catalog remains terminal duplicate reject even if one/both outside document', () => {
+  test('duplicate product in brand catalog remains terminal duplicate reject even if one/both outside document', async () => {
     const onAdd = vi.fn()
     const confirm = vi.fn().mockResolvedValue(true)
     const toast = { error: vi.fn() }
@@ -109,11 +113,12 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
       confirm,
       toast,
       t,
+      loadCatalog,
       isEligible,
       onIneligible,
     } as any)
 
-    gate('3333333333333')
+    await gate('3333333333333')
 
     // Resolution happens BEFORE eligibility: duplicate fails closed immediately
     expect(isEligible).not.toHaveBeenCalled()
@@ -138,18 +143,20 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
       confirm,
       toast,
       t,
+      loadCatalog,
       isEligible: (prod) => lines.some((l) => l.productId === prod.id),
       onIneligible,
     } as any)
 
-    gate('1111111111111')
+    const scanPromise = gate('1111111111111')
+    await new Promise((r) => setTimeout(r, 10))
     expect(confirm).toHaveBeenCalled()
 
     // While confirmation is open, document line is removed
     lines = []
 
     resolveConfirm(true)
-    await Promise.resolve()
+    await scanPromise
 
     // Fail-closed at answer time
     expect(onAdd).not.toHaveBeenCalled()
