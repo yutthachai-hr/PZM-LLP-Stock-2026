@@ -1,0 +1,18 @@
+
+Running 13 tests using 1 worker
+
+  ok  1 e2e\toast-ux.demo.ts:7:1 › capture before or after with a real price toast (2.1s)
+  ok  2 e2e\toast-ux.demo.ts:28:1 › structured price copy and all four restrained variants (901ms)
+  ok  3 e2e\toast-ux.demo.ts:44:1 › deduplicates repeated active messages without making a growing stack (421ms)
+  ok  4 e2e\toast-ux.demo.ts:53:1 › pending notices get their reading time only after becoming visible (439ms)
+  ok  5 e2e\toast-ux.demo.ts:66:1 › success auto-dismisses after three seconds while errors remain longer (860ms)
+  ok  6 e2e\toast-ux.demo.ts:79:1 › hover and keyboard focus pause dismissal; Escape does not close underlying UI (902ms)
+  ok  7 e2e\toast-ux.demo.ts:95:1 › useful actions work once and do not steal focus on arrival (877ms)
+  ok  8 e2e\toast-ux.demo.ts:105:1 › TH/EN and reduced motion preserve accessible title and description (501ms)
+  ok  9 e2e\toast-ux.demo.ts:117:1 › operational alerts and toasts share three slots without expiring unseen messages (584ms)
+  ok 10 e2e\toast-ux.demo.ts:133:1 › hidden tabs pause transient timers and visibility resumes remaining time (432ms)
+  ok 11 e2e\toast-ux.demo.ts:145:1 › mobile viewport shrink keeps notices above the simulated on-screen keyboard (483ms)
+  ok 12 e2e\toast-ux.demo.ts:154:1 › real price save in the product editor shows a title and the exact saved cost (3.5s)
+  ok 13 e2e\toast-ux.demo.ts:180:1 › provider unmount cleans timers and leaves no stale cards (501ms)
+
+  13 passed (14.5s)

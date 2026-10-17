@@ -1,0 +1,8 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-toast-ux-20261015
+
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  11:05:16
+   Duration  202ms (transform 58%, import 21%, tests 12%, worker 9%)
