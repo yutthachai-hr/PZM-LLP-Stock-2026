@@ -33,6 +33,8 @@ def extract_table_grid(doc):
             if x['type'] == 'f' and x.get('fill') and (abs(x['rect'].height - 23.125) < 4 or abs(x['rect'].height - 19.625) < 4)
         ]
         if not header_candidates:
+            if all_rows:
+                break
             raise ValueError(f"Page {p_idx+1}: Could not find table header rectangles")
 
         top_y = min(x['rect'].y0 for x in header_candidates)
