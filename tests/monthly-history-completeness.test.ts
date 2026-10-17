@@ -21,6 +21,7 @@ import {
   rewindRange,
   rewindTicket,
 } from '../src/lib/monthlyHistory'
+import { mergeReportMovements } from '../src/lib/reportHistory'
 import type { StockMovement } from '../src/types'
 
 const DAY = 86_400_000
@@ -115,5 +116,23 @@ describe('a late answer never overwrites the request in flight', () => {
   test('a late failure cannot replace a good answer', () => {
     const current = rewindLoaded(CUT, ticket, [mv(CUT + DAY)])
     expect(acceptRewind(current, rewindFailed(CUT, stale, 'offline'))).toBe(current)
+  })
+})
+
+describe('fresh server movements and live listener merge (F-01)', () => {
+  test('a fresh server void is not clobbered by a stale live-window receipt', () => {
+    // Movement was voided on another device; fresh read from server has voided: true at updatedAt = 500
+    const fresh = [
+      { ...mv(CUT + 100), id: 'mv-1', qty: 25, voided: true, updatedAt: 500 },
+    ]
+    // Live listener still holds unvoided record at updatedAt = 100
+    const staleLive = [
+      { ...mv(CUT + 100), id: 'mv-1', qty: 25, voided: false, updatedAt: 100 },
+    ]
+
+    const merged = mergeReportMovements(fresh, staleLive)
+    expect(merged).toHaveLength(1)
+    expect(merged[0].voided).toBe(true)
+    expect(merged[0].updatedAt).toBe(500)
   })
 })

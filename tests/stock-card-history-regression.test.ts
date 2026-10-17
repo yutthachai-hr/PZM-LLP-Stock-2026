@@ -134,6 +134,56 @@ describe('stock-card-history-regression', () => {
     expect(html).toContain('permission-denied')
     expect(html).toContain('โหลดประวัติใหม่')
     expect(html).not.toContain('ไม่มีการเคลื่อนไหวในช่วงนี้')
+    expect(html).not.toContain('กำลังโหลด...')
+    const exports = (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter(button => /(?:PDF|Excel)<\/button>/.test(button))
+    expect(exports).toHaveLength(2)
+    expect(exports.every(button => button.includes('disabled=""'))).toBe(true)
+  })
+
+  test('legacy unit mixing: suppresses aggregate scalar totals and running balance, gates export with warning (F-06)', () => {
+    mockHistory = {
+      rows: [
+        {
+          id: 'mv-1',
+          docNo: 'RC-001',
+          type: 'receive',
+          productId: 'prod-1',
+          productName: 'Mozzarella Cheese',
+          unit: 'KG',
+          qty: 10,
+          date: 1791392400000,
+          createdAt: 1791400000000,
+          byUserId: 'u1',
+          byUserName: 'Chef',
+        } as StockMovement,
+        {
+          id: 'mv-2',
+          docNo: 'RC-002',
+          type: 'receive',
+          productId: 'prod-1',
+          productName: 'Mozzarella Cheese',
+          unit: 'Bag',
+          entryUnit: 'Bag',
+          qty: 2,
+          date: 1791392500000,
+          createdAt: 1791400100000,
+          byUserId: 'u1',
+          byUserName: 'Chef',
+        } as StockMovement,
+      ],
+      ready: true,
+      status: 'complete',
+      error: '',
+      retry: () => {},
+    }
+
+    const html = ReactDOMServer.renderToStaticMarkup(React.createElement(StockCardPage))
+
+    // Must NOT display 12 KG scalar sum
+    expect(html).not.toMatch(/รับเข้า \(ยอดรวม\)<\/div><div[^>]*>12 KG/)
+    // Must contain warning about legacy units
+    expect(html).toContain('มีรายการหน่วยเดิมที่ยังไม่ได้แปลงหน่วย')
+    // Exports must be disabled
     const exports = (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter(button => /(?:PDF|Excel)<\/button>/.test(button))
     expect(exports).toHaveLength(2)
     expect(exports.every(button => button.includes('disabled=""'))).toBe(true)

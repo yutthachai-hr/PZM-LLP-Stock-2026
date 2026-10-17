@@ -1,4 +1,5 @@
 import type { StockMovement } from '../types'
+import { isLegacyUnitRow } from './inventoryRules/uom'
 
 export const DAY_MS = 86_400_000
 
@@ -245,4 +246,8 @@ export function mergeReportMovements(
     if (!held || (m.updatedAt ?? m.createdAt) > (held.updatedAt ?? held.createdAt)) map.set(m.id, m)
   }
   return [...map.values()]
+}
+
+export function hasMixedLegacyUnits(rows: readonly StockMovement[]): boolean {
+  return rows.some(isLegacyUnitRow)
 }

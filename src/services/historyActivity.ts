@@ -15,7 +15,7 @@ export async function readActivitySources(from: number, to: number, brand: Brand
   const changed = async <T extends { id: string }>(collection: string, dates?: [string, number, number]) => {
     const read = (field: string, a: number, b: number) => db.getRange<T>(collection, field, a, b, { server: true, label: `activity.${collection}.${field}` })
     const parts = await Promise.all([
-      read('createdAt', from, Number.MAX_SAFE_INTEGER),
+      read('createdAt', from, to),
       read('updatedAt', from, Number.MAX_SAFE_INTEGER),
       ...(dates ? [read(...dates)] : []),
     ])

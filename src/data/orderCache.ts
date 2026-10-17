@@ -10,7 +10,7 @@ import { COL } from '../types'
  * ago may still be due), so one wide read serves every narrower view after it.
  */
 export const orderCache = createRangeCache<PurchaseOrder>({
-  fetch: listOrdersInRange,
+  fetch: (from, to, brand) => listOrdersInRange(from, to, brand),
   atOf: (o) => o.orderedAt,
   changedSince: changedSince<PurchaseOrder>(COL.purchaseOrders, 'purchaseOrders.delta'),
   persist: COL.purchaseOrders,

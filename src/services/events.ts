@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import type { BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { requireEpochMs } from '../lib/validate'
 import { DELETE_FIELD } from '../backend/types'
@@ -109,11 +110,12 @@ export function weekBounds(ms: number): { from: number; to: number } {
  * One query, however many events are in the window — typically tens. The caller caches by
  * range so paging back to a month already seen costs nothing.
  */
-export async function listEventsInRange(from: number, to: number): Promise<StockEvent[]> {
+export async function listEventsInRange(from: number, to: number, brand?: BrandId): Promise<StockEvent[]> {
   requireEpochMs(from)
   requireEpochMs(to)
   if (to < from) throw new AppError('ช่วงวันที่ไม่ถูกต้อง')
-  const rows = await backend.getRange<StockEvent>(COL.events, 'startAt', from, to)
+  const db = brand ? backend.forBrand(brand) : backend
+  const rows = await db.getRange<StockEvent>(COL.events, 'startAt', from, to)
   return rows.sort((a, b) => a.startAt - b.startAt || a.title.localeCompare(b.title))
 }
 

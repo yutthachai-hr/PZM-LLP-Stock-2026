@@ -1,7 +1,7 @@
 import { backend } from '../backend'
 import { DELETE_FIELD } from '../backend/types'
 import { isLate } from '../lib/inventoryRules/purchasing'
-import { getBrand } from '../brand/brand'
+import { getBrand, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { shownUnit } from '../lib/ledger'
 import { sameUnit } from '../lib/units'
@@ -355,11 +355,12 @@ export async function setShareStatus(
  * One field, two bounds — the automatic index serves it, so no composite index to deploy,
  * which is the same reason the calendar queries the way it does.
  */
-export async function listOrdersInRange(from: number, to: number): Promise<PurchaseOrder[]> {
+export async function listOrdersInRange(from: number, to: number, brand?: BrandId): Promise<PurchaseOrder[]> {
   requireEpochMs(from)
   requireEpochMs(to)
   if (to < from) throw new AppError('ช่วงวันที่ไม่ถูกต้อง')
-  const rows = await scoped().getRange<PurchaseOrder>(COL.purchaseOrders, 'orderedAt', from, to)
+  const db = brand ? backend.forBrand(brand) : scoped()
+  const rows = await db.getRange<PurchaseOrder>(COL.purchaseOrders, 'orderedAt', from, to)
   return rows.sort((a, b) => b.orderedAt - a.orderedAt)
 }
 

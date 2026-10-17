@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LineImportModal } from '../components/import/LineImportModal'
 import { SiteSelect } from '../components/SiteChip'
 import { useData } from '../data/DataContext'
+import { useBrand } from '../brand/BrandContext'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
 import { AlertBanner, Button, Field, Input, Select, blurOnWheel } from '../components/ui'
@@ -11,7 +12,7 @@ import { ProductThumb } from '../components/ProductThumb'
 import { QtySheet } from '../components/QtySheet'
 import { KeyingSide } from '../components/keying/KeyingSide'
 import { SubmitBar } from '../components/keying/SubmitBar'
-import { adjustStockLines, type AdjustLine } from '../services/stock'
+import { adjustStockLines, listMovementsInRange, type AdjustLine } from '../services/stock'
 import { deliver } from '../services/notifications'
 import { useScheduleConfig } from '../services/schedules'
 import { significance } from '../lib/inventoryRules/adjustments'
@@ -21,7 +22,17 @@ import { change } from '../lib/stats/periodCompare'
 import { dateInputToMs, fmtMoney, fmtQty, formatThaiDateShort, msToDateInput, todayMs } from '../lib/format'
 import { roundQty } from '../lib/validate'
 import { balanceAtDayEnd } from '../lib/ledger'
-import { movementCache } from '../data/movementCache'
+import { mergeReportMovements } from '../lib/reportHistory'
+import {
+  acceptRewind,
+  mayUseFigures,
+  rewindFailed,
+  rewindLoaded,
+  rewindLoading,
+  rewindRange,
+  rewindTicket,
+  type RewindState,
+} from '../lib/monthlyHistory'
 import { describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type Product, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
@@ -35,12 +46,6 @@ import { DraftNotice } from '../components/DraftNotice'
 
 /** Enough of the list that the item wanted is on it; the box scrolls. */
 const MAX_MATCHES = 40
-
-/**
- * The far end of "everything filed after the counted day" — day-aligned, so the range
- * cache sees the same key all day, and far enough to catch a row dated ahead.
- */
-const horizon = () => bkkDayStart(Date.now()) + 400 * DAY_MS
 
 /**
  * One product on the adjustment document.
@@ -133,29 +138,48 @@ export function AdjustPage() {
   const dayStart = bkkDayStart(dateInputToMs(dateStr))
   const backdated = dayStart < bkkDayStart(Date.now())
   const after = dayStart + DAY_MS
-  const [later, setLater] = useState<{ after: number; rows: StockMovement[] } | null>(null)
-  const laterReady = !backdated || later?.after === after
+  const [rewind, setRewind] = useState<RewindState>({ status: 'idle' })
+  const [attempt, setAttempt] = useState(0)
+  const { brand } = useBrand()
+  const ticket = useMemo(() => rewindTicket(brand ?? '', after, attempt), [brand, after, attempt])
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  const laterReady = mayUseFigures(backdated, rewind, ticket)
+
+  const readLater = useCallback(
+    () =>
+      listMovementsInRange(rewindRange(after).from, rewindRange(after).to, {
+        brand: brand ?? undefined,
+        server: true,
+      }),
+    [after, brand],
+  )
+
   useEffect(() => {
-    if (!backdated) return
+    if (!backdated) {
+      setRewind((cur) => (cur.status === 'idle' ? cur : { status: 'idle' }))
+      return
+    }
+    const mine = ticket
+    setRewind(rewindLoading(after, mine))
     let live = true
-    movementCache
-      .fetchRange(after, horizon())
+    readLater()
       .then((rows) => {
-        if (live) setLater({ after, rows })
+        if (live) setRewind((cur) => acceptRewind(cur, rewindLoaded(after, mine, rows)))
       })
       .catch((e) => {
-        if (live) toast.error(errText(e, t))
+        if (!live) return
+        setRewind((cur) => acceptRewind(cur, rewindFailed(after, mine, errText(e, t))))
+        toast.error(errText(e, t))
       })
     return () => {
       live = false
     }
-  }, [backdated, after, toast, t])
+  }, [backdated, after, ticket, readLater, toast, t])
+
   const laterRows = useMemo(() => {
-    if (!backdated || later?.after !== after) return []
-    const byId = new Map(later.rows.map((m) => [m.id, m]))
-    for (const m of movements) byId.set(m.id, m)
-    return [...byId.values()]
-  }, [backdated, later, after, movements])
+    if (!backdated || !laterReady || rewind.status !== 'ready') return []
+    return mergeReportMovements(rewind.rows, movements)
+  }, [backdated, laterReady, rewind, movements])
   const asOf = (productId: string, rows: StockMovement[]) =>
     balanceAtDayEnd(qtyAt(locationId, productId), rows, { productId, locationId }, after)
 
@@ -235,13 +259,11 @@ export function AdjustPage() {
       // stop if a row being counted would now show a different figure.
       setBusy(true)
       try {
-        const fresh = await movementCache.fetchRange(after, horizon(), { force: true })
-        const byId = new Map(fresh.map((m) => [m.id, m]))
-        for (const m of movements) byId.set(m.id, m)
-        const rowsNow = [...byId.values()]
+        const fresh = await readLater()
+        const rowsNow = mergeReportMovements(fresh, movements)
         const moved = toFile.some((r) => r.mode === 'count' && asOf(r.productId, rowsNow) !== system(r.productId))
         if (moved) {
-          setLater({ after, rows: fresh })
+          setRewind((cur) => acceptRewind(cur, rewindLoaded(after, ticket, fresh)))
           return toast.error(t('ยอด ณ วันที่เลือกเพิ่งเปลี่ยน — ตรวจตัวเลขอีกครั้งแล้วกดบันทึก'))
         }
       } catch (e) {
@@ -375,6 +397,16 @@ export function AdjustPage() {
           </AlertBanner>
         )}
 
+        {backdated && rewind.status === 'error' && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger-soft/40 p-3 text-sm">
+            <p className="font-medium text-danger">{rewind.message}</p>
+            <Button variant="secondary" size="sm" onClick={retry}>
+              <Icon name="refresh" size={14} />
+              {t('ลองใหม่')}
+            </Button>
+          </div>
+        )}
+
         <SectionCard
           icon="package"
           title={t('รายการสินค้าที่ปรับสต๊อก')}
@@ -451,7 +483,7 @@ export function AdjustPage() {
                       <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
                       <span className="doc-no shrink-0 text-xs text-ink-faint">{p.sku}</span>
                       <span className="num shrink-0 text-xs text-ink-soft">
-                        {fmtQty(system(p.id))} {p.unitType}
+                        {laterReady ? fmtQty(system(p.id)) : '…'} {p.unitType}
                       </span>
                     </button>
                   ))}

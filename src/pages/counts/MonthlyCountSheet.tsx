@@ -16,6 +16,7 @@ import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import { balanceAtDayEnd } from '../../lib/ledger'
 import { countRows, monthBefore, monthlyCountId, postingPlan, resultsOf, type CountRow } from '../../lib/monthlyCount'
+import { mergeReportMovements } from '../../lib/reportHistory'
 import {
   acceptRewind,
   mayUseFigures,
@@ -149,12 +150,7 @@ export function MonthlyCountSheet() {
   const ready = mayUseFigures(backdated, rewind, ticket)
   const laterRows = useMemo(() => {
     if (!backdated || !ready || rewind.status !== 'ready') return []
-    const byId = new Map(rewind.rows.map((m) => [m.id, m]))
-    for (const m of movements) {
-      const held = byId.get(m.id)
-      if (!held || (m.updatedAt ?? m.createdAt) > (held.updatedAt ?? held.createdAt)) byId.set(m.id, m)
-    }
-    return [...byId.values()]
+    return mergeReportMovements(rewind.rows, movements)
   }, [backdated, ready, rewind, movements])
   const systemAt = useCallback(
     (productId: string, rows: StockMovement[] = laterRows) =>
@@ -258,9 +254,7 @@ export function MonthlyCountSheet() {
     if (!backdated) return rows
     const fresh = await readLater()
     setRewind((cur) => acceptRewind(cur, rewindLoaded(after, ticket, fresh)))
-    const merged = new Map(fresh.map((m) => [m.id, m]))
-    for (const m of movements) merged.set(m.id, m)
-    const all = [...merged.values()]
+    const all = mergeReportMovements(fresh, movements)
     return countRows({
       productIds,
       lines,

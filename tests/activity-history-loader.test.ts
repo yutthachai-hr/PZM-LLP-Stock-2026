@@ -26,3 +26,21 @@ test('a source read rejection propagates instead of publishing successful empty 
   await expect(readActivitySources(400, 600, 'pizza')).rejects.toThrow('permission-denied')
   vi.restoreAllMocks()
 })
+
+test('createdAt query is bounded to the upper range to, while updatedAt queries up to MAX', async () => {
+  const db = memoryBackend.forBrand('pizza')
+  vi.spyOn(memoryBackend, 'forBrand').mockReturnValue(db)
+  const calls: { collection: string; field: string; a: number; b: number }[] = []
+  vi.spyOn(db, 'getRange').mockImplementation(async (collection: string, field: string, a: number, b: number) => {
+    calls.push({ collection, field, a, b })
+    return []
+  })
+  await readActivitySources(1_000, 2_000, 'pizza')
+  const createdCalls = calls.filter((c) => c.field === 'createdAt')
+  const updatedCalls = calls.filter((c) => c.field === 'updatedAt')
+  expect(createdCalls.length).toBeGreaterThan(0)
+  expect(createdCalls.every((c) => c.a === 1_000 && c.b === 2_000)).toBe(true)
+  expect(updatedCalls.length).toBeGreaterThan(0)
+  expect(updatedCalls.every((c) => c.a === 1_000 && c.b === Number.MAX_SAFE_INTEGER)).toBe(true)
+  vi.restoreAllMocks()
+})

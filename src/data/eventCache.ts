@@ -8,7 +8,7 @@ import { createRangeCache } from './rangeCache'
  * the ones the calendar and the sidebar badge have always imported.
  */
 const cache = createRangeCache<StockEvent>({
-  fetch: listEventsInRange,
+  fetch: (from, to, brand) => listEventsInRange(from, to, brand),
   atOf: (e) => e.startAt,
   compare: (a, b) => a.title.localeCompare(b.title),
 })
