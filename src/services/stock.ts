@@ -189,7 +189,7 @@ function noteChanged(mv: StockMovement, patch: Record<string, unknown>, epoch: n
  * check twice. The UI's line builder happens to prevent duplicates; that is not where this
  * belongs.
  */
-function mergeLines(lines: MovementLine[]): MovementLine[] {
+function mergeLines(lines: MovementLine[], opts?: { allowLegacy?: boolean }): MovementLine[] {
   if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
   const byProduct = new Map<string, MovementLine>()
   for (const raw of lines) {
@@ -199,7 +199,8 @@ function mergeLines(lines: MovementLine[]): MovementLine[] {
     // (lib/uom.ts) and `qty` is already the product's own unit. A line without that is
     // not a converted line, and the old per-unit filing is not offered to new rows.
     const keyed = keyedUnit(raw)
-    if (keyed && !(raw.entryQty !== undefined && raw.entryQty > 0)) {
+    const legacy = !!opts?.allowLegacy && isLegacyUnitRow(raw)
+    if (keyed && !legacy && !(raw.entryQty !== undefined && raw.entryQty > 0)) {
       throw new AppError('รายการ "{name}" คีย์เป็น {unit} แต่ไม่ได้ระบุจำนวนที่คีย์', { name: raw.productName, unit: keyed })
     }
     const l: MovementLine = keyed ? { ...raw, qty, entryUnit: keyed } : { ...raw, qty, entryUnit: undefined, entryQty: undefined }
@@ -672,6 +673,44 @@ export async function adjustStock(params: {
 export interface AdjustLine extends MovementLine {
   direction: 'in' | 'out'
   reason: string
+  expectedLevel?: number
+}
+
+export interface StockLineConflict {
+  productId: string
+  productName?: string
+  locationId: string
+  unit?: string
+  expected: number
+  actual: number
+}
+
+export class StockLevelConflictError extends AppError {
+  readonly conflicts: StockLineConflict[]
+
+  constructor(conflicts: StockLineConflict[]) {
+    const first = conflicts[0]
+    const single = conflicts.length === 1
+    const key = single
+      ? 'ยอดคงเหลือของ "{name}" เปลี่ยนไปแล้ว (ตอนนับ: {expected} {unit}, ล่าสุด: {actual} {unit}) — กรุณาตรวจยอดใหม่'
+      : 'ยอดคงเหลือเปลี่ยนไปแล้ว {count} รายการ ({details}) — กรุณาตรวจยอดใหม่'
+    const vars: Record<string, string | number> = single
+      ? {
+          name: first?.productName ?? first?.productId ?? '',
+          expected: first?.expected ?? 0,
+          actual: first?.actual ?? 0,
+          unit: first?.unit ?? '',
+        }
+      : {
+          count: conflicts.length,
+          details: conflicts
+            .map((c) => `${c.productName || c.productId} (ตอนนับ: ${c.expected}${c.unit ? ' ' + c.unit : ''}, ล่าสุด: ${c.actual}${c.unit ? ' ' + c.unit : ''})`)
+            .join(', '),
+        }
+    super(key, vars)
+    this.name = 'StockLevelConflictError'
+    this.conflicts = conflicts
+  }
 }
 
 /**
@@ -714,11 +753,12 @@ export async function planAdjust(
       throw new AppError('สินค้า "{name}" อยู่ในใบนี้มากกว่า 1 บรรทัด', { name: raw.productName })
     }
     seen.add(raw.productId)
-    const [line] = mergeLines([raw])
+    const [line] = mergeLines([raw], { allowLegacy: true })
     return {
       line,
       direction: requireOneOf(raw.direction, ['in', 'out'] as const),
       reason: requireOneOf(raw.reason, reasons),
+      expectedLevel: raw.expectedLevel,
     }
   })
   const date = requireEpochMs(params.date)
@@ -735,6 +775,32 @@ export async function planAdjust(
   const levels = await Promise.all(
     lines.map((x) => tx.get<StockLevel>(COL.stockLevels, levelRef(locationId, x.line).id)),
   )
+
+  // Rationale to keep: the adjustment is relative to the CURRENT level, so if the level
+  // now equals what the person saw, the delta is still right even if it changed and
+  // changed back — a quantity token is sufficient, no revision field, no schema/Rules change.
+  const conflicts: StockLineConflict[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const x = lines[i]
+    if (x.expectedLevel !== undefined) {
+      const cur = levels[i]?.qty ?? 0
+      if (roundQty(cur) !== roundQty(x.expectedLevel)) {
+        const ref = levelRef(locationId, x.line)
+        conflicts.push({
+          productId: x.line.productId,
+          productName: x.line.productName,
+          locationId,
+          unit: ref.unit ?? x.line.unit,
+          expected: x.expectedLevel,
+          actual: cur,
+        })
+      }
+    }
+  }
+  if (conflicts.length > 0) {
+    throw new StockLevelConflictError(conflicts)
+  }
+
   const next = lines.map((x, i) => {
     const cur = levels[i]?.qty ?? 0
     const value = roundQty(cur + (x.direction === 'in' ? x.line.qty : -x.line.qty))
@@ -834,6 +900,7 @@ export async function postCountAsOf(params: {
   actor: Actor
   note?: string
   date: number
+  expectedLevel?: number
 }): Promise<boolean> {
   const delta = roundQty(requireCountQty(params.countedQty) - params.asOfQty)
   if (!Number.isFinite(delta)) throw new AppError('ค่าไม่ถูกต้อง: {value}', { value: String(params.asOfQty) })
@@ -850,6 +917,7 @@ async function fileCount(
     actor: Actor
     note?: string
     date?: number
+    expectedLevel?: number
   },
   deltaFrom: (current: number) => number,
 ): Promise<boolean> {
@@ -866,6 +934,18 @@ async function fileCount(
     const level = await tx.get<StockLevel>(COL.stockLevels, levelId(locationId, productId))
     const counter = await tx.get<{ value: number }>(COL.counters, 'adjust')
     const cur = level?.qty ?? 0
+    if (params.expectedLevel !== undefined && roundQty(cur) !== roundQty(params.expectedLevel)) {
+      throw new StockLevelConflictError([
+        {
+          productId,
+          productName,
+          locationId,
+          unit,
+          expected: params.expectedLevel,
+          actual: cur,
+        },
+      ])
+    }
     const delta = deltaFrom(cur)
     if (delta === 0) return false
     const next = roundQty(cur + delta)

@@ -27,7 +27,7 @@ import {
   rewindTicket,
   type RewindState,
 } from '../../lib/monthlyHistory'
-import { captureFilingScope, listMovementsInRange } from '../../services/stock'
+import { captureFilingScope, listMovementsInRange, StockLevelConflictError } from '../../services/stock'
 import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
@@ -265,6 +265,7 @@ export function MonthlyCountSheet() {
   }
 
   async function confirm(kind: 'record' | 'post') {
+    if (busy) return
     if (!user || !sheet) return
     // Owner's rule: the result is never computed from incomplete later movements.
     if (!ready) {
@@ -273,6 +274,8 @@ export function MonthlyCountSheet() {
     }
     // The brand this sheet was confirmed in, pinned before the fresh read below is awaited.
     const scope = captureFilingScope()
+    // Capture optimistic concurrency expected levels at submit time from this render
+    const expectedLevels = new Map(productIds.map((pid) => [pid, qtyAt(locationId, pid)]))
     setBusy(true)
     try {
       const now = await freshRows()
@@ -288,6 +291,7 @@ export function MonthlyCountSheet() {
             productName: byId.get(r.productId)?.name ?? r.productId,
             unit: byId.get(r.productId)?.unitType ?? '',
             diff: r.diff ?? 0,
+            expectedLevel: expectedLevels.get(r.productId),
           })),
         )
         const docs = await postMonthlyCount({
@@ -306,6 +310,12 @@ export function MonthlyCountSheet() {
       setAsking(null)
       setSheet(await getMonthlyCount(id))
     } catch (e) {
+      if (e instanceof StockLevelConflictError) {
+        setAsking(null)
+        toast.error(errText(e, t))
+        setSheet(await getMonthlyCount(id).catch(() => sheet))
+        return
+      }
       toast.error(errText(e, t))
       setSheet(await getMonthlyCount(id).catch(() => sheet))
     } finally {

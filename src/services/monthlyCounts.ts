@@ -131,6 +131,7 @@ export interface CountAdjustment {
   productName: string
   unit: string
   diff: number
+  expectedLevel?: number
 }
 
 /**
@@ -185,6 +186,7 @@ export async function postMonthlyCount(params: {
               qty: Math.abs(a.diff),
               direction: a.diff > 0 ? ('in' as const) : ('out' as const),
               reason,
+              expectedLevel: a.expectedLevel,
             })),
           },
           file,
