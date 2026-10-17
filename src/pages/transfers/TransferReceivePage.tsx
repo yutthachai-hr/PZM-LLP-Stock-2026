@@ -13,12 +13,13 @@ import { transferCache } from '../../data/transferCache'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { resolveBarcode } from '../../lib/barcode'
+import { brandEpoch } from '../../brand/brand'
 import { fmtQty } from '../../lib/format'
 import { compressImage } from '../../lib/image'
 import { DISCREPANCY_REASON_KEYS, canReceive } from '../../lib/transferStatus'
 import { roundQty } from '../../lib/validate'
 import { confirmReceive, expectedQty, getTransfer, openReceiving, saveDiscrepancyPhoto, type ReceivedLineInput } from '../../services/transfers'
-import type { DiscrepancyReason, Transfer, TransferItem } from '../../types'
+import type { DiscrepancyReason, Product, Transfer, TransferItem } from '../../types'
 
 /**
  * `/transfers/:id/receive` — the destination checks in a delivery, standing at the door
@@ -85,9 +86,15 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
   const [busy, setBusy] = useState(false)
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const scanBox = useRef<HTMLInputElement>(null)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const allowed = canReceive(transfer, actor)
-  const lineProducts = useMemo(() => products.filter((p) => lines.some((l) => l.productId === p.id)), [products, lines])
 
   function set(idx: number, patch: Partial<Count>) {
     setCounts((c) => ({ ...c, [idx]: { ...c[idx], ...patch } }))
@@ -97,30 +104,8 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     set(i.idx, { qty: Math.max(0, roundQty((counts[i.idx]?.qty ?? 0) + by)), checked: true })
   }
 
-  /** A scan: find the line, mark it counted, bring it into view. */
-  function found(code: string) {
-    const raw = code.trim()
-    setScan('')
-    if (!raw) return
-
-    const bRes = resolveBarcode(lineProducts, raw)
-    let hit: Product | undefined
-    if (bRes.status === 'verified_exact' || bRes.status === 'legacy_unverified') {
-      hit = bRes.product
-    } else if (bRes.status === 'duplicate') {
-      toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้าในเอกสารหลายรายการ', { code: bRes.code }))
-      return
-    } else {
-      const lower = raw.toLowerCase()
-      const skuMatches = lineProducts.filter((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === lower)
-      if (skuMatches.length === 1) hit = skuMatches[0]
-      else if (skuMatches.length > 1) {
-        toast.error(t('รหัสสินค้านี้ซ้ำกับรายการในเอกสาร'))
-        return
-      }
-    }
-
-    const line = hit && lines.find((l) => l.productId === hit.id)
+  function markProductReceived(p: Product) {
+    const line = lines.find((l) => l.productId === p.id)
     if (!line) {
       toast.error(t('ไม่พบสินค้านี้ในเอกสาร {docNo}', { docNo: transfer.docNo }))
       return
@@ -129,6 +114,79 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     setLit(line.idx)
     rowRefs.current[line.idx]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setTimeout(() => setLit((cur) => (cur === line.idx ? null : cur)), 2500)
+  }
+
+  /** A scan: find the line, mark it counted, bring it into view. */
+  function found(code: string) {
+    const raw = code.trim()
+    setScan('')
+    if (!raw) return
+
+    // 1. Resolve against FULL brand catalog first (detects catalog-wide duplicates / inactives)
+    const bRes = resolveBarcode(products, raw)
+    switch (bRes.status) {
+      case 'verified_exact': {
+        markProductReceived(bRes.product)
+        return
+      }
+      case 'legacy_unverified': {
+        const epochAtPrompt = brandEpoch()
+        const prodId = bRes.product.id
+        void confirm({
+          title: t('ยืนยันสินค้าจากบาร์โค้ด'),
+          message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันตรวจรับรายการนี้?', {
+            name: bRes.product.name,
+            code: bRes.code,
+          }),
+          confirmText: t('ตรวจรับรายการนี้'),
+        }).then((ok) => {
+          if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
+            const fresh = products.find((p) => p.id === prodId && p.active !== false)
+            if (fresh) markProductReceived(fresh)
+          }
+        })
+        return
+      }
+      case 'duplicate': {
+        toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: bRes.code, n: bRes.candidates.length }))
+        return
+      }
+      case 'inactive': {
+        toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: bRes.product.name }))
+        return
+      }
+      case 'not_found': {
+        // Fall back to exact unique SKU only with explicit human confirmation
+        const lower = raw.toLowerCase()
+        const skuMatches = products.filter((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === lower)
+        if (skuMatches.length === 1) {
+          const skuProd = skuMatches[0]
+          const epochAtPrompt = brandEpoch()
+          void confirm({
+            title: t('ยืนยันรหัสสินค้า'),
+            message: t('พบสินค้า "{name}" จากรหัสสินค้า {sku} — ยืนยันตรวจรับรายการนี้?', {
+              name: skuProd.name,
+              sku: skuProd.sku,
+            }),
+            confirmText: t('ตรวจรับรายการนี้'),
+          }).then((ok) => {
+            if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
+              const fresh = products.find((p) => p.id === skuProd.id && p.active !== false)
+              if (fresh) markProductReceived(fresh)
+            }
+          })
+          return
+        }
+        if (skuMatches.length > 1) {
+          toast.error(t('รหัสสินค้านี้ซ้ำกับรายการในระบบ'))
+          return
+        }
+        toast.error(t('ไม่พบบาร์โค้ด {code} ในระบบ', { code: raw }))
+        return
+      }
+      case 'empty':
+        return
+    }
   }
 
   async function addPhoto(idx: number, file?: File) {

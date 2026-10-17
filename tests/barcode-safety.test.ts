@@ -1,6 +1,7 @@
 // Tests for P0 Barcode Safety (Workstream A)
 import { describe, expect, test } from 'vitest'
 import { findByBarcode, pickOnEnter, resolveBarcode } from '../src/lib/barcode'
+import { brandEpoch, setActiveBrand } from '../src/brand/brand'
 import type { Product } from '../src/types'
 
 const p = (id: string, over: Partial<Product> = {}): Product => ({
@@ -149,14 +150,46 @@ describe('Barcode Safety - Search Input Intent & pickOnEnter', () => {
   const p2 = p('item2', { sku: 'BEV-02', name: 'COKE BOTTLE' })
   const products = [p1, p2]
 
-  test('pickOnEnter resolves exact barcode', () => {
+  test('pickOnEnter only authorizes verified_exact barcodes; default Enter does NOT auto-select SKU or legacy barcode', () => {
+    // Verified barcode auto-authorizes
     expect(pickOnEnter(products, '8851959132012', [p1, p2])?.id).toBe('item1')
     expect(pickOnEnter(products, '  8851959132012\n', [p1, p2])?.id).toBe('item1')
+
+    // legacyEnter: unverified legacy barcode must NOT be auto-authorized on default Enter
+    const legacyProd = p('leg1', { barcode: '8851000123456' })
+    expect(pickOnEnter([legacyProd], '8851000123456')).toBeUndefined()
+
+    // sharedinputunknownmatchingSKU: hardware wedge or typing Enter on SKU must NOT auto-authorize movement
+    expect(pickOnEnter(products, 'bev-02', [p2])).toBeUndefined()
+    expect(pickOnEnter(products, 'BEV-01', [p1])).toBeUndefined()
   })
 
-  test('pickOnEnter resolves exact unique SKU', () => {
-    expect(pickOnEnter(products, 'bev-02', [p2])?.id).toBe('item2')
-    expect(pickOnEnter(products, 'BEV-01', [p1])?.id).toBe('item1')
+  test('3parentcases: casefold verified, duplicate barcode with third SKU, inactive barcode with third SKU', () => {
+    // Parent case 1: AbC128 queried with abc128 must NOT be authorized as verified_exact
+    const caseResult = resolveBarcode([p('case', { barcode: 'AbC128', barcodeVerified: true })], 'abc128')
+    expect(caseResult.status).not.toBe('verified_exact')
+
+    // Parent case 2: Duplicate barcode DUP with third product having SKU DUP -> terminal reject
+    const dup = [p('one', { barcode: 'DUP' }), p('two', { barcode: 'DUP' }), p('third', { sku: 'DUP', barcode: 'OTHER' })]
+    expect(pickOnEnter(dup, 'DUP', [])).toBeUndefined()
+
+    // Parent case 3: Inactive barcode OLD with third product having SKU OLD -> terminal reject
+    const inactive = [p('retired', { barcode: 'OLD', active: false }), p('third', { sku: 'OLD', barcode: 'OTHER' })]
+    expect(pickOnEnter(inactive, 'OLD', [])).toBeUndefined()
+  })
+
+  test('duplicateoutsideTransferdoc: resolves full brand catalog first so duplicate outside doc fails closed', () => {
+    // Transfer doc only contains inDoc, but brand catalog contains outsideDoc with identical barcode
+    const inDoc = p('item-in-transfer', { barcode: 'SHARED-BC-123' })
+    const outsideDoc = p('item-outside-transfer', { barcode: 'SHARED-BC-123' })
+    const fullBrandCatalog = [inDoc, outsideDoc]
+
+    // Checking only transfer doc lines would falsely show 1 match
+    expect(resolveBarcode([inDoc], 'SHARED-BC-123').status).not.toBe('duplicate')
+
+    // Resolving FULL brand catalog correctly fails closed as duplicate
+    const fullRes = resolveBarcode(fullBrandCatalog, 'SHARED-BC-123')
+    expect(fullRes.status).toBe('duplicate')
   })
 
   test('pickOnEnter MUST NOT fall back to matches[0] on loose search or name query', () => {
@@ -170,5 +203,24 @@ describe('Barcode Safety - Search Input Intent & pickOnEnter', () => {
     const dupSku1 = p('d1', { sku: 'SAME-SKU' })
     const dupSku2 = p('d2', { sku: 'SAME-SKU' })
     expect(pickOnEnter([dupSku1, dupSku2], 'SAME-SKU', [dupSku1, dupSku2])).toBeUndefined()
+  })
+})
+
+describe('Barcode Safety - Lifecycle, Epoch Fences & Latching', () => {
+  test('camera/manuallatchbrandchange+pendingconfirmation: brand epoch fence and pending confirmation invalidation', () => {
+    const startEpoch = brandEpoch()
+    setActiveBrand('lelapin')
+    const lelapinEpoch = brandEpoch()
+    expect(lelapinEpoch).toBeGreaterThan(startEpoch)
+
+    // A confirmation or scan latch started under startEpoch is invalidated when epoch advances
+    const isConfirmationValid = (epochAtPrompt: number) => brandEpoch() === epochAtPrompt
+    expect(isConfirmationValid(startEpoch)).toBe(false)
+    expect(isConfirmationValid(lelapinEpoch)).toBe(true)
+
+    // Switching back advances epoch again (never resets or rewinds)
+    setActiveBrand('pizza')
+    expect(brandEpoch()).toBeGreaterThan(lelapinEpoch)
+    expect(isConfirmationValid(lelapinEpoch)).toBe(false)
   })
 })

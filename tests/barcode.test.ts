@@ -36,16 +36,16 @@ test('the barcode is one of the fields a product is searched by', () => {
 
 describe('Enter in a search box (a scanner in keyboard mode ends with Enter)', () => {
   const box = (over: Partial<Product>): Product => ({ id: 'x', sku: 'X', name: 'X', category: 'c', unit: 'EA', unitType: 'EA', minStock: 0, hasImage: false, active: true, createdAt: 0, updatedAt: 0, ...over })
-  const scanned = box({ id: 'a', sku: 'BEV-01', name: 'COKE', barcode: '8851959132012' })
+  const scanned = box({ id: 'a', sku: 'BEV-01', name: 'COKE', barcode: '8851959132012', barcodeVerified: true })
   const lookalike = box({ id: 'b', sku: 'BEV-02', name: 'PACK 8851959132012 PROMO' })
   const products = [lookalike, scanned]
 
-  test('an exact barcode wins over a loose match that ranks first', () => {
+  test('an exact verified barcode wins over a loose match that ranks first', () => {
     expect(pickOnEnter(products, '8851959132012\n', [lookalike, scanned])?.id).toBe('a')
   })
 
-  test('then the product code exactly, but never loose search suggestions', () => {
-    expect(pickOnEnter(products, 'bev-02', [scanned, lookalike])?.id).toBe('b')
+  test('default Enter never auto-authorizes SKU or loose suggestions; requires deliberate confirmation or click', () => {
+    expect(pickOnEnter(products, 'bev-02', [scanned, lookalike])).toBeUndefined()
     expect(pickOnEnter(products, 'coke', [scanned])).toBeUndefined()
     expect(pickOnEnter(products, '   ', [scanned])).toBeUndefined()
   })

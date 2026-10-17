@@ -36,32 +36,47 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
   const [error, setError] = useState('')
   const [typed, setTyped] = useState('')
   const done = useRef(false)
+  const cancelled = useRef(false)
+  const epoch = useRef(0)
+
+  const onReadRef = useRef(onRead)
+  onReadRef.current = onRead
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  function finish(code: string) {
+    if (cancelled.current || done.current) return
+    if (brandEpoch() !== epoch.current) return
+    const value = code.trim()
+    if (!value) return
+    done.current = true
+    onCloseRef.current()
+    onReadRef.current(value)
+  }
+
+  const finishRef = useRef(finish)
+  finishRef.current = finish
 
   useEffect(() => {
     if (!open) return
     const initialEpoch = brandEpoch()
-    const unsubBrand = onBrandChange(() => {
-      onClose()
-    })
+    epoch.current = initialEpoch
     done.current = false
+    cancelled.current = false
     setError('')
     setTyped('')
-    let cancelled = false
 
-    function finish(code: string) {
-      if (brandEpoch() !== initialEpoch) return
-      const value = code.trim()
-      if (!value || done.current) return
-      done.current = true
-      onRead(value)
-    }
+    const unsubBrand = onBrandChange(() => {
+      cancelled.current = true
+      onCloseRef.current()
+    })
 
     async function start() {
       const el = video.current
       if (!el) return
       try {
         stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        if (cancelled) return
+        if (cancelled.current || done.current) return
         el.srcObject = stream.current
         await el.play()
       } catch {
@@ -73,10 +88,10 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
         const detector = new Detector({ formats: FORMATS })
         let timer = 0
         const tick = async () => {
-          if (cancelled || done.current) return
+          if (cancelled.current || done.current) return
           try {
             const hits = await detector.detect(el)
-            if (hits[0]?.rawValue) finish(hits[0].rawValue)
+            if (hits[0]?.rawValue) finishRef.current(hits[0].rawValue)
           } catch {
             /* a frame that cannot be read is not an error worth showing */
           }
@@ -88,10 +103,10 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
       }
       try {
         const { BrowserMultiFormatReader } = await import('@zxing/browser')
-        if (cancelled) return
+        if (cancelled.current || done.current) return
         const zx = new BrowserMultiFormatReader()
         const controls = await zx.decodeFromVideoElement(el, (result) => {
-          if (result) finish(result.getText())
+          if (result) finishRef.current(result.getText())
         })
         reader.current = { stop: () => controls.stop() }
       } catch {
@@ -101,14 +116,14 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
 
     void start()
     return () => {
-      cancelled = true
+      cancelled.current = true
       unsubBrand()
       reader.current?.stop()
       reader.current = null
       for (const track of stream.current?.getTracks() ?? []) track.stop()
       stream.current = null
     }
-  }, [open, onClose, onRead, t])
+  }, [open, t])
 
   return (
     <Modal
@@ -121,7 +136,7 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
           <Button variant="secondary" onClick={onClose} className="flex-1">
             {t('ยกเลิก')}
           </Button>
-          <Button onClick={() => onRead(typed.trim())} disabled={!typed.trim()} className="flex-1">
+          <Button onClick={() => finish(typed)} disabled={!typed.trim()} className="flex-1">
             {t('ใช้เลขนี้')}
           </Button>
         </div>
@@ -145,7 +160,10 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && typed.trim()) onRead(typed.trim())
+            if (e.key === 'Enter' && typed.trim()) {
+              e.preventDefault()
+              finish(typed)
+            }
           }}
           inputMode="text"
           placeholder={t('หรือพิมพ์เลขบาร์โค้ด')}

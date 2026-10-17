@@ -55,12 +55,19 @@ export function resolveBarcode(products: readonly Product[], code: string): Barc
   const needle = code.trim()
   if (!needle) return { status: 'empty' }
 
-  const active = products.filter((p) => p.active !== false)
-
   // Step 1: Exact case-sensitive match
-  const exactActive = active.filter((p) => (p.barcode ?? '').trim() === needle)
+  const exactActive = products.filter((p) => p.active !== false && (p.barcode ?? '').trim() === needle)
   if (exactActive.length > 1) {
     return { status: 'duplicate', candidates: exactActive, code: needle }
+  }
+
+  // Exact inactive match
+  const exactInactive = products.filter((p) => p.active === false && (p.barcode ?? '').trim() === needle)
+  if (exactInactive.length > 0) {
+    if (exactActive.length > 0) {
+      return { status: 'duplicate', candidates: [...exactActive, ...exactInactive], code: needle }
+    }
+    return { status: 'inactive', product: exactInactive[0], code: needle }
   }
 
   if (exactActive.length === 1) {
@@ -72,30 +79,31 @@ export function resolveBarcode(products: readonly Product[], code: string): Barc
 
   // Step 2: Case-insensitive fallback ONLY if no exact match and no casefold collision
   const lowerNeedle = needle.toLowerCase()
-  const casefoldActive = active.filter((p) => (p.barcode ?? '').trim().toLowerCase() === lowerNeedle)
+  const casefoldActive = products.filter(
+    (p) => p.active !== false && (p.barcode ?? '').trim().toLowerCase() === lowerNeedle,
+  )
   if (casefoldActive.length > 1) {
     // Distinct Code128 values or duplicate products collide on casefold -> fail closed as duplicate
     return { status: 'duplicate', candidates: casefoldActive, code: needle }
   }
 
-  if (casefoldActive.length === 1) {
-    const product = casefoldActive[0]
-    return product.barcodeVerified === true
-      ? { status: 'verified_exact', product, code: needle }
-      : { status: 'legacy_unverified', product, code: needle }
-  }
-
-  // Step 3: Check inactive products in catalogue
-  const inactive = products.filter(
-    (p) =>
-      p.active === false &&
-      ((p.barcode ?? '').trim() === needle || (p.barcode ?? '').trim().toLowerCase() === lowerNeedle),
+  const casefoldInactive = products.filter(
+    (p) => p.active === false && (p.barcode ?? '').trim().toLowerCase() === lowerNeedle,
   )
-  if (inactive.length > 0) {
-    return { status: 'inactive', product: inactive[0], code: needle }
+  if (casefoldInactive.length > 0) {
+    if (casefoldActive.length > 0) {
+      return { status: 'duplicate', candidates: [...casefoldActive, ...casefoldInactive], code: needle }
+    }
+    return { status: 'inactive', product: casefoldInactive[0], code: needle }
   }
 
-  // Step 4: Not found (Unknown)
+  if (casefoldActive.length === 1) {
+    // SAFETY INVARIANT: Case-mismatched fallback MUST NEVER be authorized as verified_exact.
+    // Even when product.barcodeVerified === true, distinct casing in Code 128 requires confirmation.
+    return { status: 'legacy_unverified', product: casefoldActive[0], code: needle }
+  }
+
+  // Step 3: Not found (Unknown)
   return { status: 'not_found', code: needle }
 }
 
@@ -124,11 +132,13 @@ export function searchFields(p: Product): (string | undefined)[] {
 /**
  * What Enter in a product search box means.
  *
- * A barcode scanner in keyboard mode ("keyboard wedge") types the code and presses Enter.
- * Fail-closed safety:
- * - Exact unique barcode is tried first.
- * - Exact unique product code (SKU) is tried next.
- * - MUST NOT fall back to matches[0]: search suggestions are not movement authorization.
+ * Design decision for shared search (P0 Safety Remediation R2):
+ * A barcode scanner in keyboard mode ("keyboard wedge") types characters and ends with Enter.
+ * Because hardware wedge input cannot be reliably distinguished from human typing,
+ * default search Enter MUST NOT automatically select SKU, name, or legacy unverified barcode.
+ * Only verified exact barcodes may auto-authorize on Enter.
+ * All barcode bad states (duplicate, inactive, legacy_unverified, not_found) reject terminal
+ * on Enter without falling back to SKU.
  */
 export function pickOnEnter(
   products: readonly Product[],
@@ -138,19 +148,13 @@ export function pickOnEnter(
   const q = query.trim()
   if (!q) return undefined
 
-  // 1. Exact unique barcode
+  // 1. Exact unique verified barcode only
   const barcodeRes = resolveBarcode(products, q)
-  if (barcodeRes.status === 'verified_exact' || barcodeRes.status === 'legacy_unverified') {
+  if (barcodeRes.status === 'verified_exact') {
     return barcodeRes.product
   }
 
-  // 2. Exact unique SKU
-  const lowerQ = q.toLowerCase()
-  const skuMatches = products.filter((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === lowerQ)
-  if (skuMatches.length === 1) {
-    return skuMatches[0]
-  }
-
-  // Fail closed: no loose name or suggestion fallback
+  // Fail closed: duplicate, inactive, legacy unverified, and non-barcode queries
+  // MUST NOT automatically select or fall back to SKU on default Enter.
   return undefined
 }

@@ -27,7 +27,8 @@ import { ADJUST_REASONS, type Product, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
-import { pickOnEnter, resolveBarcode, searchFields } from '../lib/barcode'
+import { resolveBarcode, searchFields } from '../lib/barcode'
+import { brandEpoch } from '../brand/brand'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { useConfirm } from '../components/Confirm'
 import { useViewport } from '../lib/viewport'
@@ -83,6 +84,13 @@ export function AdjustPage() {
   const confirm = useConfirm()
   const { settings } = useScheduleConfig()
   const phone = useViewport() === 'phone'
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const active = useMemo(() => locations.filter((l) => l.active !== false), [locations])
   const [locationId, setLocationId] = useState('')
@@ -201,12 +209,17 @@ export function AdjustPage() {
         break
       }
       case 'legacy_unverified': {
+        const epochAtPrompt = brandEpoch()
+        const prodId = res.product.id
         void confirm({
           title: t('ยืนยันสินค้าจากบาร์โค้ด'),
           message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
           confirmText: t('เพิ่มรายการ'),
         }).then((ok) => {
-          if (ok) add(res.product)
+          if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
+            const fresh = products.find((p) => p.id === prodId && p.active !== false)
+            if (fresh) add(fresh)
+          }
         })
         break
       }
@@ -451,12 +464,60 @@ export function AdjustPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const hit = pickOnEnter(products, search, matches)
-                    if (hit) {
-                      e.preventDefault()
-                      add(hit)
-                    }
+                  if (e.key !== 'Enter') return
+                  const raw = search.trim()
+                  if (!raw) return
+
+                  const res = resolveBarcode(products, raw)
+                  if (res.status === 'verified_exact') {
+                    e.preventDefault()
+                    add(res.product)
+                    return
+                  }
+                  if (res.status === 'legacy_unverified') {
+                    e.preventDefault()
+                    const epochAtPrompt = brandEpoch()
+                    const prodId = res.product.id
+                    void confirm({
+                      title: t('ยืนยันสินค้าจากบาร์โค้ด'),
+                      message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
+                      confirmText: t('เพิ่มรายการ'),
+                    }).then((ok) => {
+                      if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
+                        const fresh = products.find((p) => p.id === prodId && p.active !== false)
+                        if (fresh) add(fresh)
+                      }
+                    })
+                    return
+                  }
+                  if (res.status === 'duplicate') {
+                    e.preventDefault()
+                    toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: res.code, n: res.candidates.length }))
+                    return
+                  }
+                  if (res.status === 'inactive') {
+                    e.preventDefault()
+                    toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.product.name }))
+                    return
+                  }
+
+                  const lower = raw.toLowerCase()
+                  const skuMatches = products.filter((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === lower)
+                  if (skuMatches.length === 1) {
+                    e.preventDefault()
+                    const skuProd = skuMatches[0]
+                    const epochAtPrompt = brandEpoch()
+                    void confirm({
+                      title: t('ยืนยันรหัสสินค้า'),
+                      message: t('พบสินค้า "{name}" จากรหัสสินค้า {sku} — ยืนยันเพิ่มรายการ?', { name: skuProd.name, sku: skuProd.sku }),
+                      confirmText: t('เพิ่มรายการ'),
+                    }).then((ok) => {
+                      if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
+                        const fresh = products.find((p) => p.id === skuProd.id && p.active !== false)
+                        if (fresh) add(fresh)
+                      }
+                    })
+                    return
                   }
                 }}
                 autoComplete="off"
