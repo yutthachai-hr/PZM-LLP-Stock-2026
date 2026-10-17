@@ -22,6 +22,7 @@ const linked = {
   supplierConfirmationStatus: 'waiting',
   requestedDeliveryDate: 1_800_000_000_000,
   supplierLink: { version: 1, issuedAt: 210 },
+  supplierActivity: [{ id: 'a1', at: 210, kind: 'linkIssued', byName: 'Somchai' }],
   updatedAt: 210,
 } as unknown as PurchaseOrder
 
@@ -55,13 +56,38 @@ describe('send wizard: the order after an outcome', () => {
       supplierConfirmationStatus: 'confirmed',
       confirmedDeliveryDate: 1_800_086_400_000,
       expectedAt: 1_800_086_400_000,
-      updatedAt: 250,
+      supplierActivity: [...(linked.supplierActivity ?? []), { id: 'a2', at: 240, kind: 'accepted', byName: 'Supplier' }],
+      updatedAt: 240,
     } as unknown as PurchaseOrder
     const after = tracker.afterWrite(answered, sent)
     expect(after.supplierConfirmationStatus).toBe('confirmed')
     expect(after.confirmedDeliveryDate).toBe(1_800_086_400_000)
     expect(after.expectedAt).toBe(1_800_086_400_000)
     expect(after.shareStatus).toBe('sent')
+  })
+
+  // The share write is stamped by this device, the link by the server. A device clock that
+  // runs ahead must not make the link reply look older than the "opened" write before it.
+  test('a device clock ahead of the server does not lose the link reply', () => {
+    const tracker = createOutcomeTracker()
+    tracker.afterWrite(listed, { ...opened, updatedAt: 90_000, shareOpenedAt: 90_000 })
+    tracker.observe({ ...linked, updatedAt: 9_500 } as PurchaseOrder)
+    const after = tracker.afterWrite(listed, { ...sent, updatedAt: 90_500, sentAt: 90_500 })
+    expect(after.supplierConfirmationStatus).toBe('waiting')
+    expect(after.supplierLink).toEqual({ version: 1, issuedAt: 210 })
+    expect(after.shareStatus).toBe('sent')
+  })
+
+  // "Was it sent?" is answered from the screen, whose copy is the list's merge of the
+  // "opened" write: a newer object than the link reply, but without the link in it.
+  test('the list copy merged after "opened" does not hide the link reply', () => {
+    const tracker = createOutcomeTracker()
+    const afterOpen = tracker.afterWrite(listed, opened)
+    tracker.observe(linked)
+    const onScreen = { ...listed, ...afterOpen, updatedAt: 999_999 } as PurchaseOrder
+    const after = tracker.afterWrite(onScreen, sent)
+    expect(after.supplierConfirmationStatus).toBe('waiting')
+    expect(after.requestedDeliveryDate).toBe(1_800_000_000_000)
   })
 
   test('what was written always lands, and orders do not leak into each other', () => {
