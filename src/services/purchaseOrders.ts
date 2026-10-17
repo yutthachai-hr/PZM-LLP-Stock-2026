@@ -333,9 +333,9 @@ export async function setShareStatus(
   status: PurchaseShareStatus,
   actor: { id: string; name: string },
   imageVersion?: number,
-): Promise<{ sentAt?: number }> {
+): Promise<SharePatch> {
   const now = Date.now()
-  const patch: Record<string, unknown> = { shareStatus: status, updatedAt: now }
+  const patch: SharePatch = { shareStatus: status, updatedAt: now }
   if (status === 'shareOpened') patch.shareOpenedAt = now
   if (status === 'sent') {
     patch.sentAt = now
@@ -343,11 +343,15 @@ export async function setShareStatus(
     patch.sentByName = actor.name
     if (imageVersion !== undefined) patch.imageVersion = imageVersion
   }
-  await scoped().update(COL.purchaseOrders, id, patch)
-  // The screen that called this still holds the pre-write order. Hand back what changed so
-  // its "needs resend" badge can drop without a full reload (UX-0005).
-  return status === 'sent' ? { sentAt: now } : {}
+  await scoped().update(COL.purchaseOrders, id, { ...patch })
+  // The screen that called this still holds the pre-write order. Hand back exactly what was
+  // written, so its LINE badge, "needs resend" and who-sent-it change without a reload (UX-0005).
+  return patch
 }
+
+export type SharePatch = Pick<PurchaseOrder, 'updatedAt'> &
+  Required<Pick<PurchaseOrder, 'shareStatus'>> &
+  Partial<Pick<PurchaseOrder, 'shareOpenedAt' | 'sentAt' | 'sentBy' | 'sentByName' | 'imageVersion'>>
 
 /**
  * Orders placed in a window, newest first.
