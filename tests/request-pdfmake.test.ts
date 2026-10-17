@@ -4,13 +4,11 @@ import * as pdfmakeExport from '../src/lib/requestPdfmakeExport'
 import { exportRequestPdf, groupedBySupplier } from '../src/lib/requestExport'
 import { fmtQty, formatThaiDate } from '../src/lib/format'
 import { PR_STATUS_KEYS } from '../src/lib/purchaseRequestStatus'
-import type { PurchaseRequest, PurchaseRequestItem } from '../types'
+import type { PurchaseRequest, PurchaseRequestItem } from '../src/types'
 import { spawnSync } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-
-const PRIVATE_R5_DIR = 'C:/Users/Yutthachai/pzm-recovery-20261017/scan-first/L-pdf-remediation-r5'
 
 function getPythonCommand(): string {
   if (process.env.PYTHON_VENV_PATH) {
@@ -169,43 +167,68 @@ describe('pdfmake Thai Purchase Request export engine', () => {
   })
 
   test('preserves all 3 actual brands (Pizza, Le Lapin, R&D) and metadata', async () => {
-    const brands = [
-      'Pizza Mania',
-      'Le Lapin Sandwich Delivery',
-      'R&D (Research & Development)',
+    const brands = ['Pizza Mania', 'Le Lapin Sandwich Delivery', 'R&D (Research & Development)']
+    const enT = (k: string) =>
+      ({
+        'รายการขอสั่งซื้อ': 'Purchase Request',
+        'ผู้ขาย': 'Supplier',
+        'สินค้า': 'Product',
+        'ผู้ขอ': 'Requester',
+        'ผู้อนุมัติ': 'Approver',
+      }[k] ?? k)
+    const scenarios = [
+      {
+        language: 'th',
+        translate: mockT,
+        location: 'คลังอุดมสุข',
+        expectedHead: ['รายการขอสั่งซื้อ PR-00005', 'ผู้ขอ: สมชาย ผู้ขอเบิก', 'ผู้อนุมัติ: ยุทธชัย ผู้จัดการ'],
+      },
+      {
+        language: 'en',
+        translate: enT,
+        location: 'Main Warehouse',
+        expectedHead: ['Purchase Request PR-00005', 'Requester: สมชาย ผู้ขอเบิก', 'Approver: ยุทธชัย ผู้จัดการ', 'Supplier', 'Product'],
+      },
     ]
     for (const brand of brands) {
-      const pr = makeMockRequest(5)
-      const bufTh = await generateRequestPdfBuffer(pr, brand, 'คลังอุดมสุข', mockT)
-      expect(bufTh.length).toBeGreaterThan(1000)
-
-      const tmpPdf = path.join(os.tmpdir(), `test-brand-${Date.now()}.pdf`)
-      fs.writeFileSync(tmpPdf, Buffer.from(bufTh))
-      try {
-        const inspectRes = spawnSync(
-          getPythonCommand(),
-          ['tests/verify_document_structure.py', 'inspect', tmpPdf],
-          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-        )
-        expect(inspectRes.status).toBe(0)
-        const parsed = JSON.parse(inspectRes.stdout.trim())
-        expect(parsed.pageCount).toBeGreaterThanOrEqual(1)
-        expect(parsed.puaCount).toBe(0)
-        expect(parsed.actualTextCount).toBe(0)
-      } finally {
-        if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
+      for (const { language, translate, location, expectedHead } of scenarios) {
+        const pr = makeMockRequest(5)
+        const buf = await generateRequestPdfBuffer(pr, brand, location, translate)
+        expect(buf.length).toBeGreaterThan(1000)
+        const tmpBase = path.join(os.tmpdir(), `test-brand-${language}-${Date.now()}`)
+        const tmpPdf = `${tmpBase}.pdf`
+        const tmpSpec = `${tmpBase}.json`
+        fs.writeFileSync(tmpPdf, Buffer.from(buf))
+        fs.writeFileSync(tmpSpec, JSON.stringify({
+          ...buildExpectedSpec(pr, brand, location, translate),
+          // Hand-checked literals: wrong company, location, names or locale must fail.
+          head: [brand, location, ...expectedHead],
+        }), 'utf8')
+        try {
+          const inspectRes = spawnSync(
+            getPythonCommand(),
+            ['tests/verify_document_structure.py', 'inspect', tmpPdf],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+          )
+          expect(inspectRes.status).toBe(0)
+          const parsed = JSON.parse(inspectRes.stdout.trim())
+          expect(parsed.pageCount).toBeGreaterThanOrEqual(1)
+          expect(parsed.puaCount).toBe(0)
+          expect(parsed.actualTextCount).toBe(0)
+          const verified = spawnSync(
+            getPythonCommand(),
+            ['tests/verify_document_structure.py', 'verify', tmpPdf, tmpSpec],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+          )
+          expect(verified.status).toBe(0)
+          expect(JSON.parse(verified.stdout.trim())).toEqual({ ok: true, errors: [] })
+        } finally {
+          if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
+          if (fs.existsSync(tmpSpec)) fs.unlinkSync(tmpSpec)
+        }
       }
-
-      const enT = (k: string) =>
-        ({
-          'รายการขอสั่งซื้อ': 'Purchase Request',
-          'ผู้ขาย': 'Supplier',
-          'สินค้า': 'Product',
-        }[k] ?? k)
-      const bufEn = await generateRequestPdfBuffer(pr, brand, 'Main Warehouse', enT)
-      expect(bufEn.length).toBeGreaterThan(1000)
     }
-  })
+  }, 15000)
 
   test('cell-by-cell 2D table grid verification on actual NEW app PDF buffer (17 rows)', async () => {
     const pr = makeMockRequest(17)
@@ -218,12 +241,6 @@ describe('pdfmake Thai Purchase Request export engine', () => {
 
     fs.writeFileSync(tmpPdf, Buffer.from(buf))
     fs.writeFileSync(tmpSpec, JSON.stringify(spec, null, 2), 'utf8')
-
-    // Also persist into private remediation directory if present
-    if (fs.existsSync(PRIVATE_R5_DIR)) {
-      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-17.pdf'), Buffer.from(buf))
-      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-17-spec.json'), JSON.stringify(spec, null, 2), 'utf8')
-    }
 
     try {
       const run = spawnSync(
@@ -266,11 +283,6 @@ describe('pdfmake Thai Purchase Request export engine', () => {
 
     fs.writeFileSync(tmpPdf, Buffer.from(buf))
     fs.writeFileSync(tmpSpec, JSON.stringify(spec, null, 2), 'utf8')
-
-    if (fs.existsSync(PRIVATE_R5_DIR)) {
-      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-151.pdf'), Buffer.from(buf))
-      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-151-spec.json'), JSON.stringify(spec, null, 2), 'utf8')
-    }
 
     try {
       const run = spawnSync(
