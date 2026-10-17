@@ -248,6 +248,19 @@ export function mergeReportMovements(
   return [...map.values()]
 }
 
-export function hasMixedLegacyUnits(rows: readonly StockMovement[]): boolean {
-  return rows.some(isLegacyUnitRow)
+/** Unknown conversions and distinct raw units cannot contribute to one scalar balance. */
+export function hasMixedLegacyUnits(
+  rows: readonly StockMovement[],
+  scope: { productId?: string; locationId?: string } = {},
+): boolean {
+  const units = new Map<string, string>()
+  for (const row of rows) {
+    if (row.voided || (scope.productId && row.productId !== scope.productId)) continue
+    if (scope.locationId && row.fromLocationId !== scope.locationId && row.toLocationId !== scope.locationId) continue
+    if (isLegacyUnitRow(row)) return true
+    const prior = units.get(row.productId)
+    if (prior !== undefined && prior !== row.unit) return true
+    units.set(row.productId, row.unit)
+  }
+  return false
 }

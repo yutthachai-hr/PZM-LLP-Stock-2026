@@ -6,6 +6,7 @@ import { HistoryReadNotice } from '../components/HistoryReadNotice'
 import { useMovementHistory } from '../data/useMovementHistory'
 import {
   evaluateReportCompleteness,
+  hasMixedLegacyUnits,
   mergeReportMovements,
   resolveReportHistoryScope,
 } from '../lib/reportHistory'
@@ -255,7 +256,8 @@ export function ReportsPage() {
           ? t('ตั้งแต่ {date} (เท่าที่โหลดไว้)', { date: formatThaiDate(movementsFrom), })
           : t("ทั้งหมด")
 
-  const showBalance = !!productId && !!locationId && mode === 'movement'
+  const unsafeBalance = hasMixedLegacyUnits(movements, { productId: productId || undefined, locationId: locationId || undefined })
+  const showBalance = !!productId && !!locationId && mode === 'movement' && !unsafeBalance
 
   function metaLines(): string[] {
     return [
@@ -687,6 +689,9 @@ export function ReportsPage() {
       )}
 
       {/* preview */}
+      {mode === 'movement' && unsafeBalance && completeness.mayCalculate && (
+        <p role="status" className="text-sm text-warn">{t('มีรายการหน่วยเดิมที่ยังไม่ได้แปลงหน่วย')}</p>
+      )}
       {completeness.status === 'loading' || (loading && count === 0) ? (
         <Card className="p-8 text-center text-sm text-ink-soft">
           {t('กำลังโหลดข้อมูล...')}

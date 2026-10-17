@@ -26,7 +26,17 @@ const at = (y: number, m: number, d: number, h = 9) => new Date(y, m, d, h).getT
 
 /** Counts trips to the backend, which is what a Firestore read is billed on. */
 function countReads() {
-  return vi.spyOn(memoryBackend, 'getRange')
+  const reads = vi.fn()
+  const forBrand = memoryBackend.forBrand.bind(memoryBackend)
+  // Service queries now use a captured brand rather than the mutable root backend.
+  vi.spyOn(memoryBackend, 'forBrand').mockImplementation((brand) => {
+    const db = forBrand(brand)
+    return { ...db, getRange: <T,>(...args: Parameters<typeof db.getRange>) => {
+      reads()
+      return db.getRange<T>(...args)
+    } }
+  })
+  return reads
 }
 
 beforeEach(() => {

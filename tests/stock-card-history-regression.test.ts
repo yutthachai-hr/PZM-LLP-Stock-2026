@@ -11,7 +11,13 @@ import React from 'react'
 import ReactDOMServer from 'react-dom/server'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { StockCardPage } from '../src/pages/StockCardPage'
+import { balanceSeries } from '../src/lib/stats/balanceSeries'
 import type { StockMovement } from '../src/types'
+
+vi.mock('../src/lib/stats/balanceSeries', async (original) => {
+  const real = await original<typeof import('../src/lib/stats/balanceSeries')>()
+  return { ...real, balanceSeries: vi.fn(real.balanceSeries) }
+})
 
 // Mock dependencies
 const mockProduct = {
@@ -68,6 +74,7 @@ vi.mock('../src/services/productCost', () => ({
 
 describe('stock-card-history-regression', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     mockBrand = 'brand-a'
     mockParams = { id: 'prod-1' }
     mockMovements = []
@@ -181,6 +188,9 @@ describe('stock-card-history-regression', () => {
 
     // Must NOT display 12 KG scalar sum
     expect(html).not.toMatch(/รับเข้า \(ยอดรวม\)<\/div><div[^>]*>12 KG/)
+    // Raw rows remain legible in their actual unit; no mixed-unit trend is calculated.
+    expect(html).toContain('Bag')
+    expect(balanceSeries).not.toHaveBeenCalled()
     // Must contain warning about legacy units
     expect(html).toContain('มีรายการหน่วยเดิมที่ยังไม่ได้แปลงหน่วย')
     // Exports must be disabled

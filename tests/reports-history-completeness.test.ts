@@ -3,6 +3,7 @@ import {
   DAY_MS,
   MOVEMENTS_CEILING,
   evaluateReportCompleteness,
+  hasMixedLegacyUnits,
   isSnapshotBackdated,
   mergeReportMovements,
   resolveReportHistoryScope,
@@ -16,6 +17,16 @@ const TODAY = dateInputToMs('2026-10-17')
 const PAST_DAY = dateInputToMs('2026-09-30')
 const dummyDayRange = dayRange
 const dummyDateToMs = dateInputToMs
+
+test('scalar balance safety covers earlier raw-unit rows, not unrelated products or sites', () => {
+  const base = { ...makeMovement('base', PAST_DAY), unit: 'KG', toLocationId: 'kitchen' }
+  const rawBag = { ...base, id: 'old-bag', unit: 'Bag', entryUnit: undefined, entryQty: undefined }
+  expect(hasMixedLegacyUnits([base, rawBag], { productId: base.productId, locationId: 'kitchen' })).toBe(true)
+  expect(hasMixedLegacyUnits([base, { ...rawBag, voided: true }])).toBe(false)
+  expect(hasMixedLegacyUnits([base, { ...rawBag, productId: 'other' }], { productId: base.productId })).toBe(false)
+  expect(hasMixedLegacyUnits([base, { ...rawBag, toLocationId: 'elsewhere' }], { locationId: 'kitchen' })).toBe(false)
+  expect(hasMixedLegacyUnits([base, { ...base, id: 'converted', entryUnit: 'Bag', entryQty: 2 }])).toBe(false)
+})
 
 test('invalid product dates and invalid/future snapshot days fail closed', () => {
   for (const scope of [

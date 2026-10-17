@@ -26,7 +26,7 @@ import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { fmtQty, formatThaiDate, dayRange } from '../lib/format'
 import { effectAt, effectOverall, stockCard } from '../lib/ledger'
-import { mergeReportMovements } from '../lib/reportHistory'
+import { hasMixedLegacyUnits, mergeReportMovements } from '../lib/reportHistory'
 import { breakdown, describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
@@ -152,7 +152,8 @@ export function MovementsPage() {
   const [editing, setEditing] = useState<StockMovement | null>(null)
   const [photoDoc, setPhotoDoc] = useState<string | null>(null)
 
-  const stockCardMode = !!productId && !!locationId
+  const unsafeBalance = hasMixedLegacyUnits(movements, { productId: productId || undefined, locationId: locationId || undefined })
+  const stockCardMode = !!productId && !!locationId && !unsafeBalance
 
   // The rows to show and the balance each one leaves behind are two different questions.
   // stockCard() answers the second from EVERY movement in scope, so a date or type filter
@@ -439,6 +440,9 @@ export function MovementsPage() {
         </div>
       )}
 
+      {scopeReady && unsafeBalance && (
+        <p role="status" className="text-sm text-warn">{t('มีรายการหน่วยเดิมที่ยังไม่ได้แปลงหน่วย')}</p>
+      )}
       {scopeReady && <Card className="overflow-hidden">
         <DataTable
           rows={filtered}
