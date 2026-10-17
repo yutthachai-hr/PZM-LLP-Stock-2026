@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest'
-import { createOutcomeTracker } from '../src/pages/purchase/outcomeOrder'
+import { createOutcomeTracker, mergeWizardOrders } from '../src/pages/purchase/outcomeOrder'
+import { lineStateOf } from '../src/pages/orders/lineStatus'
 import type { PurchaseOrder } from '../src/types'
+import type { SharePatch } from '../src/services/purchaseOrders'
 
 // The wizard's `current` is the order as the list handed it over. On a first send the
 // server issues the supplier link and replies with the order in its new state — supplier
@@ -106,5 +108,41 @@ describe('send wizard: the order after an outcome', () => {
     expect(after.shareStatus).toBe('failed')
     expect(after.supplierConfirmationStatus).toBe('waiting')
     expect(after.sentAt).toBeUndefined()
+  })
+
+  test('regression (PR30-D1): summary badge state becomes "sent" after recording sent outcome on a resend-needed order', () => {
+    // PO-LN-008 Rev.1 situation: previously sent at 100, revised at 200 -> needs resend
+    const revisedOrder = {
+      id: 'po-ln-008',
+      docNo: 'PO-LN-008',
+      status: 'ordered',
+      supplierName: 'Le Lapin Bakery',
+      shareStatus: 'sent',
+      sentAt: 100,
+      revisions: [{ rev: 1, at: 200, byName: 'Somchai', reason: 'Quantity change' }],
+      lines: [],
+      updatedAt: 200,
+    } as unknown as PurchaseOrder
+
+    // Pre-send state shows 'resend' ("LINE · ต้องส่งใหม่")
+    expect(lineStateOf(revisedOrder)).toBe('resend')
+
+    // Outcome recorded: sent outcome written at time 300
+    const patch: SharePatch = {
+      shareStatus: 'sent',
+      sentAt: 300,
+      sentBy: 'user-1',
+      sentByName: 'Somchai',
+      updatedAt: 300,
+      imageVersion: 2,
+    }
+
+    const patchedOrders = { [revisedOrder.id]: patch }
+    const merged = mergeWizardOrders([revisedOrder], patchedOrders)
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].id).toBe(revisedOrder.id)
+    // The summary row badge state MUST be 'sent', not the stale 'resend'
+    expect(lineStateOf(merged[0])).toBe('sent')
   })
 })

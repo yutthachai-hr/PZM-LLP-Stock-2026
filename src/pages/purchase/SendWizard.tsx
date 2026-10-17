@@ -4,7 +4,7 @@ import { useBrand } from '../../brand/BrandContext'
 import { brandDef, getBrand } from '../../brand/brand'
 import { orderCache } from '../../data/orderCache'
 import { LineBadge } from '../orders/LineBadge'
-import { createOutcomeTracker } from './outcomeOrder'
+import { createOutcomeTracker, mergeWizardOrders } from './outcomeOrder'
 import { useData } from '../../data/DataContext'
 import { useToast } from '../../components/Toast'
 import { Icon } from '../../components/Icon'
@@ -63,12 +63,16 @@ export function SendWizard({
   // per session and held, so this costs nothing per send.
   const suppliers = useSuppliers()
 
+  // ponytail: keep local map of patched orders in wizard state so completion summary and rows reflect outcome immediately
+  const [patchedOrders, setPatchedOrders] = useState<Record<string, PurchaseOrder>>({})
+  const effectiveOrders = useMemo(() => mergeWizardOrders(orders, patchedOrders), [orders, patchedOrders])
+
   // Once an order has been sent (or skipped) in THIS wizard it is done; `resend` only
   // decides whether one that was already sent before the wizard opened is offered again.
   const doneHere = useRef(new Set<string>())
   const pending = useMemo(
-    () => orders.filter((o) => !doneHere.current.has(o.id) && (resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'))),
-    [orders, resend],
+    () => effectiveOrders.filter((o) => !doneHere.current.has(o.id) && (resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'))),
+    [effectiveOrders, resend],
   )
   const [provider, setProvider] = useState<PurchaseShareProvider | null>(null)
   const [currentId, setCurrentId] = useState<string | null>(pending[0]?.id ?? null)
@@ -109,9 +113,9 @@ export function SendWizard({
   }, [pendingKey])
 
   // Always the order as it now stands: its status fields move while it is being sent.
-  const current = currentId ? (orders.find((o) => o.id === currentId) ?? null) : null
+  const current = currentId ? (effectiveOrders.find((o) => o.id === currentId) ?? null) : null
   const pages = useMemo(() => (current ? paginateLines(current.lines) : []), [current])
-  const doneCount = orders.length - pending.length
+  const doneCount = effectiveOrders.length - pending.length
   const position = doneCount + 1
 
   async function record(order: PurchaseOrder, status: 'shareOpened' | 'sent' | 'skipped' | 'failed', version?: number) {
@@ -127,6 +131,7 @@ export function SendWizard({
       // Exactly what was written, so the list, the sheet and the batch agree at once — and
       // the device's copy too, so coming back to the list does not show the old badge.
       const next = tracker.afterWrite(order, written)
+      setPatchedOrders((prev) => ({ ...prev, [next.id]: next }))
       if (getBrand() === brand) orderCache.patch(next)
       await onStatus(next)
     } finally {
@@ -212,7 +217,7 @@ export function SendWizard({
         <div className="space-y-3">
           <p className="text-sm text-ink">{t('ส่งครบทุกรายแล้ว')}</p>
           <ul className="divide-y divide-line rounded-lg border border-line text-sm">
-            {orders.map((o) => (
+            {effectiveOrders.map((o) => (
               <li key={o.id} className="flex items-center gap-2 px-3 py-2">
                 <span className="flex-1 text-ink">{o.supplierName}</span>
                 <span className="doc-no text-xs text-ink-faint">{o.docNo}</span>

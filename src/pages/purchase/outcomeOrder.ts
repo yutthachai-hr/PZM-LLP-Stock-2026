@@ -33,3 +33,18 @@ export function createOutcomeTracker() {
     },
   }
 }
+
+/**
+ * Merges patched orders or share patches into the wizard's order list so summary and
+ * badges reflect recent outcomes without waiting for parent re-render.
+ */
+export function mergeWizardOrders(
+  orders: readonly PurchaseOrder[],
+  patches: Readonly<Record<string, PurchaseOrder | SharePatch>>,
+): PurchaseOrder[] {
+  return orders.map((o) => {
+    const patch = patches[o.id]
+    return patch ? ({ ...o, ...patch } as PurchaseOrder) : o
+  })
+}
+
