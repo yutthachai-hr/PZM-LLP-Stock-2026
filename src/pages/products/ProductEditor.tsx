@@ -545,7 +545,7 @@ export function ProductEditor({
                 try {
                   const entry = await setProductCost({ productId: product.id, ...d, actor: { id: user.id, name: user.name } })
                   setCostHistory((h) => [...h, entry])
-                  toast.success(t('บันทึกราคาแล้ว — ฿{cost} ต่อ {unit}', { cost: entry.cost, unit: form.unitType }))
+                  toast.success({ title: t('บันทึกราคาแล้ว'), description: t('฿{cost} ต่อ {unit}', { cost: entry.cost, unit: form.unitType }) })
                 } catch (e) {
                   toast.error(errText(e, t))
                 }
