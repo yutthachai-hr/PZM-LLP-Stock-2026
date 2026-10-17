@@ -1,0 +1,49 @@
+
+> pizza-stock@0.0.0 build
+> tsc -b && tsc -p functions/tsconfig.json && tsc -p worker/tsconfig.json && tsc -p e2e/tsconfig.json && vite build
+
+vite v8.1.4 building client environment for production...
+transforming...✓ 1428 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/manifest.webmanifest                            0.51 kB
+dist/supplier.html                                   1.23 kB │ gzip:   0.60 kB
+dist/index.html                                      2.84 kB │ gzip:   1.14 kB
+dist/assets/main-Chf6W1QX.css                        1.31 kB │ gzip:   0.59 kB
+dist/assets/supplierConfirmation-_peIPJgP.css      102.94 kB │ gzip:  18.25 kB
+dist/assets/rolldown-runtime-QTnfLwEv.js             0.69 kB │ gzip:   0.42 kB
+dist/assets/workbox-window.prod.es5-Bd17z0YL.js      5.65 kB │ gzip:   2.20 kB
+dist/assets/jsx-runtime-CkaNx6Tr.js                 11.38 kB │ gzip:   4.02 kB
+dist/assets/supplier-cLr2C68R.js                    14.75 kB │ gzip:   4.60 kB
+dist/assets/purify.es-DuRL7t6i.js                   26.87 kB │ gzip:  10.45 kB
+dist/assets/liff-z_H4zMMC.js                       126.53 kB │ gzip:  34.85 kB
+dist/assets/index.es-B3lK3_-e.js                   151.36 kB │ gzip:  48.90 kB
+dist/assets/html2canvas-BswC5BpG.js                199.56 kB │ gzip:  46.78 kB
+dist/assets/ChartKit-1LhogJUp.js                   391.10 kB │ gzip: 111.10 kB
+dist/assets/esm-hLKWDovD.js                        477.94 kB │ gzip: 125.29 kB
+dist/assets/supplierConfirmation-D-27qgob.js       514.88 kB │ gzip: 141.62 kB
+dist/assets/main-Bj1LRl3_.js                     3,005.70 kB │ gzip: 884.82 kB
+
+[INEFFECTIVE_DYNAMIC_IMPORT] src/firebase/app.ts is dynamically imported by src/services/poImages.ts but also statically imported by src/auth/AuthContext.tsx, src/backend/firestore.ts, src/pages/Login.tsx, src/services/users.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[INEFFECTIVE_DYNAMIC_IMPORT] src/services/purchaseOrders.ts is dynamically imported by src/pages/Settings.tsx, src/pages/purchase/PurchaseBatchReview.tsx but also statically imported by src/data/orderCache.ts, src/data/useSupplierRefresh.ts, src/pages/Orders.tsx, src/pages/Receive.tsx, src/pages/purchase/PurchaseBatchReview.tsx, ..., dynamic import will not move module into another chunk.
+
+[INEFFECTIVE_DYNAMIC_IMPORT] node_modules/xlsx/xlsx.mjs is dynamically imported by src/pages/issue/PosImport.tsx, src/pages/products/BarcodeImportModal.tsx but also statically imported by src/lib/export.ts, src/lib/orderSheet.ts, src/lib/sheetLines.ts, src/lib/stockSheet.ts, dynamic import will not move module into another chunk.
+
+[INEFFECTIVE_DYNAMIC_IMPORT] node_modules/jspdf/dist/jspdf.es.min.js is dynamically imported by src/lib/a5.ts but also statically imported by src/lib/export.ts, dynamic import will not move module into another chunk.
+
+[INEFFECTIVE_DYNAMIC_IMPORT] src/lib/export.ts is dynamically imported by src/pages/Import.tsx, src/pages/Orders.tsx, src/pages/Reports.tsx, src/pages/reports/ActivityLog.tsx, src/pages/reports/CostReport.tsx but also statically imported by src/lib/requestExport.ts, src/pages/Products.tsx, src/pages/StockCardPage.tsx, src/pages/counts/MonthlyCountSheet.tsx, src/pages/counts/QuestionsCard.tsx, dynamic import will not move module into another chunk.
+
+✓ built in 1.29s
+
+PWA v1.3.0
+mode      generateSW
+precache  22 entries (4916.79 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-2fbc6a65.js

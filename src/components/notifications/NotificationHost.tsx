@@ -12,6 +12,7 @@ import { logNotification } from '../../lib/notificationLog'
 import { markRead, useNotificationPrefs } from '../../services/notifications'
 import type { AppNotification, Role } from '../../types'
 import { Icon, type IconName } from '../Icon'
+import { OperationalNotices } from './NoticeViewport'
 
 /**
  * The popups (5 Oct 2026): one host for the whole app, on every page. It watches the same
@@ -185,14 +186,13 @@ function Host({ uid, role }: { uid: string; role: Role }) {
   }
 
   if (!state.visible.length && !askSound) return null
+  const showSoundPrompt = askSound && state.visible.length < 3
 
   return (
-    <div
-      className="pointer-events-none fixed inset-x-2 top-[calc(env(safe-area-inset-top)+4rem)] z-[90] flex flex-col gap-2 sm:inset-x-auto sm:right-4 sm:w-[22rem]"
-      aria-label={t('การแจ้งเตือนใหม่')}
-    >
-      {askSound && (
-        <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm shadow-md">
+    <OperationalNotices count={state.visible.length + Number(showSoundPrompt)}>
+    <div className="flex flex-col gap-2" aria-label={t('การแจ้งเตือนใหม่')}>
+      {showSoundPrompt && (
+        <div className="notice-card flex items-center gap-3 border border-line px-4 py-3 text-sm">
           <Icon name="bell" size={16} className="shrink-0 text-ink-soft" />
           <span className="min-w-0 flex-1 text-ink">{t('เปิดเสียงแจ้งเตือน?')}</span>
           <button className="min-h-9 rounded-md bg-brand px-3 text-xs font-medium text-white" onClick={() => void enableSound()}>
@@ -223,12 +223,12 @@ function Host({ uid, role }: { uid: string; role: Role }) {
             key={card.key}
             role={card.severity === 'critical' ? 'alert' : 'status'}
             aria-live={card.severity === 'critical' ? 'assertive' : 'polite'}
-            className={`pointer-events-auto rounded-lg border border-l-4 border-line bg-surface shadow-md transition-[opacity,transform] duration-300 ease-in motion-reduce:transition-none ${leaving.has(card.key) ? 'translate-x-[110%] opacity-0' : 'motion-safe:animate-[pzm-pop_160ms_ease-out]'} ${ui.bar}`}
+            className={`notice-card border border-l-2 border-line transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none ${leaving.has(card.key) ? 'translate-y-1 opacity-0' : 'motion-safe:animate-[pzm-pop_160ms_ease-out]'} ${ui.bar}`}
           >
-            <div className="flex items-start gap-2 px-3 pt-2.5">
+            <div className="flex items-start gap-3 px-4 pt-4">
               <Icon name={ui.icon} size={18} className={`mt-0.5 shrink-0 ${ui.text}`} />
               <div className="min-w-0 flex-1">
-                <p className={`text-[11px] font-semibold uppercase tracking-wide ${ui.text}`}>
+                <p className={`text-xs font-medium ${ui.text}`}>
                   {t(ui.label)}
                   {card.category && <span className="font-normal text-ink-faint"> · {t(CATEGORY_LABEL[card.category])}</span>}
                 </p>
@@ -247,7 +247,7 @@ function Host({ uid, role }: { uid: string; role: Role }) {
                 ) : (
                   <>
                     <p className="text-sm font-semibold text-ink">{titleOf(first.id)}</p>
-                    {bodyOf(first.id) && <p className="text-xs text-ink-soft">{bodyOf(first.id)}</p>}
+                    {bodyOf(first.id) && <p className="mt-1 text-[13px] leading-5 text-ink-soft">{bodyOf(first.id)}</p>}
                   </>
                 )}
               </div>
@@ -259,7 +259,7 @@ function Host({ uid, role }: { uid: string; role: Role }) {
                 <Icon name="x" size={16} />
               </button>
             </div>
-            <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 pt-2 pl-9">
+            <div className="flex flex-wrap gap-1.5 px-4 pb-4 pt-2 pl-12">
               {burst ? (
                 <button
                   className="min-h-9 rounded-md border border-line-strong px-3 text-xs font-medium text-ink hover:bg-sunken"
@@ -288,5 +288,6 @@ function Host({ uid, role }: { uid: string; role: Role }) {
         )
       })}
     </div>
+    </OperationalNotices>
   )
 }
