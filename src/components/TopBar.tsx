@@ -252,6 +252,7 @@ export function TopBar({ title }: { title: string }) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-ink">{hit.label}</span>
                       {hit.sub && <span className="doc-no block truncate text-xs text-ink-faint">{hit.sub}</span>}
+                      {hit.foundIn === 'note' && <span className="block text-[11px] text-ink-faint">{t('พบในหมายเหตุเดิม')}</span>}
                     </span>
                     {product && (
                       <span className="num shrink-0 text-right text-sm font-semibold text-ink">
@@ -275,7 +276,7 @@ export function TopBar({ title }: { title: string }) {
               {!found.suppliersSearched && ` · ${t('ยังไม่ได้โหลดรายชื่อผู้ขาย')}`}
             </p>
             {remoteDone?.notIndexed === 'legacyNotes' && remoteDone.hits.length === 0 && (
-              <p className="mt-1">{t('เลขบิลที่คีย์ไว้ในหมายเหตุก่อน 24/09/2569 ยังค้นจากที่นี่ไม่ได้ — ดูได้ในหน้าประวัติตามช่วงวันที่')}</p>
+              <p className="mt-1">{t('หมายเหตุเดิมค้นได้เฉพาะเมื่อทั้งช่องเป็นเลขบิลตรงตัว — เลขบิลที่ปนกับข้อความอื่นในหมายเหตุยังค้นจากที่นี่ไม่ได้ ดูได้ในหน้าประวัติตามช่วงวันที่')}</p>
             )}
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
               {t('ใบขอสั่งซื้อและการส่งสินค้า ค้นในหน้าของมัน:')}

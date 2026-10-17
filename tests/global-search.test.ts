@@ -72,6 +72,16 @@ describe('global search', () => {
     expect(globalSearch('IV-1', src({ movements })).hits[0]).toEqual(expect.objectContaining({ label: 'RC-00012' }))
   })
 
+  test('a bill kept in the note of a loaded movement is found in memory', () => {
+    const r = globalSearch('INV26080171', src({ movements: [mv({ docNo: 'RC-00008', note: 'INV26080171' })] }))
+    expect(r.hits).toContainEqual(expect.objectContaining({ group: 'documents', key: 'doc:RC-00008', to: '/movements?doc=RC-00008', foundIn: 'note' }))
+  })
+
+  test('a word inside a loaded note finds that document too, labelled as from the note', () => {
+    const r = globalSearch('ส่งช้า', src({ movements: [mv({ docNo: 'RC-00009', note: 'บิล INV1 ส่งช้า' })] }))
+    expect(r.hits).toContainEqual(expect.objectContaining({ key: 'doc:RC-00009', foundIn: 'note' }))
+  })
+
   test('places link to their stock history', () => {
     const r = globalSearch('main warehouse', src())
     expect(r.hits).toContainEqual(expect.objectContaining({ group: 'locations', to: '/movements?location=wh' }))

@@ -14,6 +14,7 @@ const { resetMemory, seed, memoryBackend } = await import('./helpers/memory-back
 const { setActiveBrand } = await import('../src/brand/brand')
 const { lookupDocuments, clearDocumentLookupCache } = await import('../src/services/documentLookup')
 const { documentQuery } = await import('../src/lib/documentQuery')
+type QuerySpec = import('../src/backend/querySpec').QuerySpec
 
 const AUG = Date.parse('2026-08-05T03:00:00Z')
 const row = (over: Record<string, unknown>) => ({
@@ -40,6 +41,11 @@ beforeEach(() => {
     inner.getBy = async <T,>(c: string, f: string, v: string | number | boolean) => {
       calls.push(`${c}.${f}=${String(v)}`)
       return getBy<T>(c, f, v)
+    }
+    const query = inner.query.bind(inner)
+    inner.query = async <T,>(c: string, spec: QuerySpec) => {
+      calls.push(`${c}.${spec.filters?.map((x) => `${x.field}${x.op}${String(x.value)}`).join('&')}#limit=${spec.limit ?? 'none'}`)
+      return query<T>(c, spec)
     }
     return inner
   })
@@ -133,10 +139,16 @@ describe('lookupDocuments', () => {
     await lookupDocuments('flour')
     expect(calls).toEqual([])
     await lookupDocuments('INV2026080528')
-    expect(calls).toEqual([
-      'stockMovements.invoiceNo=INV2026080528',
+    expect(calls.sort()).toEqual([
       'purchaseOrders.invoiceNo=INV2026080528',
+      'stockMovements.invoiceNo=INV2026080528',
+      'stockMovements.note==INV2026080528#limit=20',
     ])
+  })
+
+  test('an app document number never asks the notes', async () => {
+    await lookupDocuments('RC-00008')
+    expect(calls).toEqual(['stockMovements.docNo=RC-00008'])
   })
 
   test('a repeated search in the same brand is served from the session cache', async () => {
@@ -152,4 +164,64 @@ describe('lookupDocuments', () => {
     seed('stockMovements', [row({ invoiceNo: 'INV2026101501', docNo: 'RC-00120' })])
     expect((await lookupDocuments('INV2026101501')).hits.map((h) => h.label)).toEqual(['RC-00120'])
   })
+
+  // Owner, 16 Oct 2026: INV26080171 shows on RC-00008 in History, but the top bar found
+  // nothing. Keyed before 24 Sep 2026, the bill number is the whole note, not invoiceNo.
+  describe('a bill number kept as the whole note of an old receipt', () => {
+    const spinach = (over: Record<string, unknown> = {}) => row({
+      id: 'rc8', docNo: 'RC-00008', productName: 'BABY SPINACH (FOODGALLERY)', note: 'INV26080171',
+      date: Date.parse('2026-08-01T03:00:00Z'), createdAt: Date.parse('2026-08-01T03:00:00Z'), ...over,
+    })
+
+    test('INV26080171 finds RC-00008 and says it was found in an old note', async () => {
+      seed('stockMovements', [spinach()])
+      const r = await lookupDocuments('INV26080171')
+      expect(r.hits).toEqual([expect.objectContaining({ key: 'doc:RC-00008', to: '/movements?doc=RC-00008', label: 'RC-00008', foundIn: 'note' })])
+    })
+
+    test('typed in small letters it is still found, exactly as stored', async () => {
+      seed('stockMovements', [spinach()])
+      expect((await lookupDocuments('inv26080171')).hits.map((h) => h.label)).toEqual(['RC-00008'])
+    })
+
+    test('several lines of one receipt are one document', async () => {
+      seed('stockMovements', [spinach({ id: 'a' }), spinach({ id: 'b', productId: 'p2' })])
+      expect((await lookupDocuments('INV26080171')).hits.map((h) => h.key)).toEqual(['doc:RC-00008'])
+    })
+
+    test('the same number in two receipts gives two documents', async () => {
+      seed('stockMovements', [spinach(), spinach({ id: 'c', docNo: 'RC-00031' })])
+      expect((await lookupDocuments('INV26080171')).hits.map((h) => h.label).sort()).toEqual(['RC-00008', 'RC-00031'])
+    })
+
+    test('a receipt found by its bill field is not relabelled as found in a note', async () => {
+      seed('stockMovements', [row({ id: 'n', docNo: 'RC-00050', invoiceNo: 'INV777', note: 'INV777' })])
+      const [hit] = (await lookupDocuments('INV777')).hits
+      expect(hit.label).toBe('RC-00050')
+      expect(hit.foundIn).toBeUndefined()
+    })
+
+    test('a voided old receipt is not offered', async () => {
+      seed('stockMovements', [spinach({ voided: true })])
+      expect((await lookupDocuments('INV26080171')).hits).toEqual([])
+    })
+
+    test("another brand's old notes are never returned", async () => {
+      seed('lelapin__stockMovements', [spinach()])
+      expect((await lookupDocuments('INV26080171')).hits).toEqual([])
+    })
+
+    test('the note read is capped, however many rows share the note', async () => {
+      seed('stockMovements', Array.from({ length: 30 }, (_, i) => spinach({ id: `x${i}`, docNo: `RC-${String(100 + i).padStart(5, '0')}` })))
+      expect((await lookupDocuments('INV26080171')).hits.length).toBe(20)
+    })
+
+    test('a note that only contains the number among other words is not claimed as found', async () => {
+      seed('stockMovements', [spinach({ note: 'บิล INV26080171 ส่งช้า' })])
+      const r = await lookupDocuments('INV26080171')
+      expect(r.hits).toEqual([])
+      expect(r.notIndexed).toBe('legacyNotes')
+    })
+  })
 })
+

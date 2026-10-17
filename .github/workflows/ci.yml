@@ -133,6 +133,8 @@ jobs:
         run: npx playwright test -c playwright.match.config.ts
       - name: Global search on an isolated browser-storage demo
         run: npx playwright test -c playwright.search.config.ts
+      - name: Orders UX on an isolated browser-storage demo
+        run: npx playwright test -c playwright.orders.config.ts
       - name: Toast notifications on an isolated browser-storage demo
         run: npx playwright test -c playwright.toast.config.ts
       - if: failure()

@@ -1,0 +1,43 @@
+
+Running 1 test using 1 worker
+
+  x  1 e2e\orders-ux.demo.ts:116:1 › menu supports keyboard focus, arrows and Escape without opening the row (12.1s)
+
+
+  1) e2e\orders-ux.demo.ts:116:1 › menu supports keyboard focus, arrows and Escape without opening the row
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('menuitem', { name: 'แก้ไข', exact: true })
+    Expected: focused
+    Received: inactive
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('menuitem', { name: 'แก้ไข', exact: true }) with timeout 10000ms
+      - waiting for getByRole('menuitem', { name: 'แก้ไข', exact: true })
+        23 × locator resolved to <button type="button" role="menuitem" class="flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-sm row-hover disabled:cursor-not-allowed disabled:opacity-40 outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-1 focus-visible:ring-offset-surface text-ink-soft hover:text-ink">…</button>
+           - unexpected value "inactive"
+
+
+      119 |   await trigger.focus()
+      120 |   await page.keyboard.press('Enter')
+    > 121 |   await expect(page.getByRole('menuitem', { name: 'แก้ไข', exact: true })).toBeFocused()
+          |                                                                            ^
+      122 |   await page.keyboard.press('ArrowDown')
+      123 |   await expect(page.getByRole('menuitem', { name: 'ส่ง LINE', exact: true })).toBeFocused()
+      124 |   await page.keyboard.press('Escape')
+        at C:\Users\Yutthachai\pzm-orders-ux-20261015\e2e\orders-ux.demo.ts:121:76
+
+    Error Context: e2e-results\orders-ux\orders-ux.demo.ts-menu-sup-97ed4-ape-without-opening-the-row\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\orders-ux\orders-ux.demo.ts-menu-sup-97ed4-ape-without-opening-the-row\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\orders-ux\orders-ux.demo.ts-menu-sup-97ed4-ape-without-opening-the-row\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    e2e\orders-ux.demo.ts:116:1 › menu supports keyboard focus, arrows and Escape without opening the row
