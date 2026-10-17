@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useData } from '../data/DataContext'
 import { useBrand } from '../brand/BrandContext'
@@ -13,14 +13,16 @@ import { ProductThumb } from '../components/ProductThumb'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { Button, EmptyState, Input, Select, Spinner } from '../components/ui'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
-import { readProductLedger } from '../services/stock'
+import { useMovementHistory } from '../data/useMovementHistory'
+import { HistoryReadNotice } from '../components/HistoryReadNotice'
 import { currentCost } from '../services/productCost'
 import { categoryIcon } from '../lib/categoryIcon'
 import { dayRange, fmtMoney, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput } from '../lib/format'
 import { bkkDayStart, bkkTimeOf, DAY_MS } from '../lib/inventoryRules/time'
 import { stockCard, type StockCardRow } from '../lib/ledger'
 import { balanceSeries } from '../lib/stats/balanceSeries'
-import type { MovementType, StockMovement } from '../types'
+import { mergeReportMovements } from '../lib/reportHistory'
+import type { MovementType } from '../types'
 import { STATE_LOOK, stockState } from './products/productStatus'
 import { movementNote } from '../lib/receiptLabel'
 
@@ -46,43 +48,40 @@ export function StockCardPage() {
   const [toStr, setToStr] = useState(msToDateInput(today))
   const [typeFilter, setTypeFilter] = useState<MovementType | ''>('')
   const [trendDays, setTrendDays] = useState(14)
-  const [ledger, setLedger] = useState<StockMovement[] | null>(null)
-  const [error, setError] = useState('')
+  const history = useMovementHistory(id)
+  const ledger = history.ready ? history.rows : null
+  const ledgerLoading = !history.ready
+  const range = dayRange(fromStr, toStr)
+  const validRange = range.valid !== false && range.from < range.to
+  const [exportError, setError] = useState('')
+  const error = history.error || (!validRange ? t('ช่วงวันที่ไม่ถูกต้อง') : exportError)
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    setLedger(null)
-    setError('')
-    readProductLedger(id)
-      .then((rows) => alive && setLedger(rows))
-      .catch((e) => alive && setError(errText(e, t)))
-    return () => {
-      alive = false
-    }
-  }, [id, t])
 
   // The product's full history, with the live window's copies laid over it (newer edits,
   // voids and rows filed since the read).
   const all = useMemo(() => {
-    const map = new Map<string, StockMovement>()
-    for (const m of ledger ?? []) map.set(m.id, m)
-    for (const m of movements) if (m.productId === id) map.set(m.id, m)
-    return [...map.values()]
-  }, [ledger, movements, id])
+    if (ledgerLoading || !ledger) return []
+    return mergeReportMovements(ledger, movements.filter(m => m.productId === id))
+  }, [ledgerLoading, ledger, movements, id])
 
   const card = useMemo(() => {
-    const { from, to } = dayRange(fromStr, toStr)
+    if (ledgerLoading || !ledger) {
+      return { opening: 0, rows: [], totalIn: 0, totalOut: 0, closing: 0 }
+    }
+    const { from, to, valid } = dayRange(fromStr, toStr)
+    if (valid === false) {
+      return { opening: 0, rows: [], totalIn: 0, totalOut: 0, closing: 0 }
+    }
     return stockCard(all, { productId: id, locationId: locationId || undefined, from, to, type: typeFilter, overallBalance: true })
-  }, [all, id, locationId, fromStr, toStr, typeFilter])
+  }, [ledgerLoading, ledger, all, id, locationId, fromStr, toStr, typeFilter])
 
   const current = product ? (locationId ? qtyAt(locationId, product.id) : locations.reduce((s, l) => s + qtyAt(l.id, product.id), 0)) : 0
   const min = product ? (locationId ? minFor(product, locationId) : product.minStock) : 0
   const cost = product ? (product.cost ?? currentCost(product.costHistory ?? []) ?? 0) : 0
   const state = stockState(current, min)
   const series = useMemo(
-    () => (product ? balanceSeries(all, { productId: product.id, current, today, days: trendDays, locationId: locationId || undefined }) : []),
-    [all, product, current, today, trendDays, locationId],
+    () => (product && !ledgerLoading ? balanceSeries(all, { productId: product.id, current, today, days: trendDays, locationId: locationId || undefined }) : []),
+    [all, product, ledgerLoading, current, today, trendDays, locationId],
   )
 
   const totals = useMemo(() => {
@@ -163,7 +162,7 @@ export function StockCardPage() {
   const unit = product.unitType
   const look = categoryIcon(product.category)
   const exportRows = rows.map((r) => ({
-    [t('วันที่')]: formatThaiDateTime(r.movement.createdAt),
+    [t('วันที่')]: `${formatThaiDate(r.movement.date)} ${bkkTimeOf(r.movement.createdAt)}`,
     [t('เลขที่เอกสาร')]: r.movement.docNo,
     [t('การเคลื่อนไหว')]: t(TYPE_LABEL[r.movement.type]),
     [t('รับเข้า')]: r.inQty || '',
@@ -280,17 +279,36 @@ export function StockCardPage() {
         </FilterField>
       </FilterBar>
 
+      <HistoryReadNotice status={history.status} count={history.rows.length} error={history.error} retry={history.retry} product />
       <StatRow columns={4}>
-        <StatTile icon="arrowDown" tone="green" label={t('รับเข้า (ยอดรวม)')} value={`${fmtQty(totals.inQty)} ${unit}`} hint={t('{n} รายการ', { n: totals.inN })} />
-        <StatTile icon="arrowUp" tone="red" label={t('จ่ายออก (ยอดรวม)')} value={`${fmtQty(totals.outQty)} ${unit}`} hint={t('{n} รายการ', { n: totals.outN })} />
+        <StatTile
+          icon="arrowDown"
+          tone="green"
+          label={t('รับเข้า (ยอดรวม)')}
+          value={ledgerLoading || error ? '–' : `${fmtQty(totals.inQty)} ${unit}`}
+          hint={ledgerLoading ? t('กำลังโหลด...') : error ? error : t('{n} รายการ', { n: totals.inN })}
+        />
+        <StatTile
+          icon="arrowUp"
+          tone="red"
+          label={t('จ่ายออก (ยอดรวม)')}
+          value={ledgerLoading || error ? '–' : `${fmtQty(totals.outQty)} ${unit}`}
+          hint={ledgerLoading ? t('กำลังโหลด...') : error ? error : t('{n} รายการ', { n: totals.outN })}
+        />
         <StatTile
           icon="swap"
           tone="slate"
           label={t('ปรับปรุงสต๊อก')}
-          value={`${totals.adj > 0 ? '+' : totals.adj < 0 ? '−' : ''}${fmtQty(Math.abs(totals.adj))} ${unit}`}
-          hint={t('{n} รายการ', { n: totals.adjN })}
+          value={ledgerLoading || error ? '–' : `${totals.adj > 0 ? '+' : totals.adj < 0 ? '−' : ''}${fmtQty(Math.abs(totals.adj))} ${unit}`}
+          hint={ledgerLoading ? t('กำลังโหลด...') : error ? error : t('{n} รายการ', { n: totals.adjN })}
         />
-        <StatTile icon="report" tone="blue" label={t('ยอดคงเหลือปัจจุบัน')} value={`${fmtQty(current)} ${unit}`} hint={t('ณ {date}', { date: formatThaiDateTime(Date.now()) })} />
+        <StatTile
+          icon="report"
+          tone="blue"
+          label={t('ยอดคงเหลือปัจจุบัน')}
+          value={`${fmtQty(current)} ${unit}`}
+          hint={t('ณ {date}', { date: formatThaiDateTime(Date.now()) })}
+        />
       </StatRow>
 
       <SectionCard
@@ -306,7 +324,9 @@ export function StockCardPage() {
           </Select>
         }
       >
-        {ledger === null && !error ? (
+        {error ? (
+          <p className="p-4 text-sm text-danger">{error}</p>
+        ) : ledgerLoading ? (
           <Spinner />
         ) : (
           <AreaTrendChart
@@ -325,16 +345,16 @@ export function StockCardPage() {
       <SectionCard
         icon="list"
         title={t('ประวัติการเคลื่อนไหว')}
-        count={t('({n} รายการ)', { n: rows.length })}
+        count={ledgerLoading ? '' : t('({n} รายการ)', { n: rows.length })}
         flush
         actions={
           <>
             <Button
               variant="pdf"
               size="sm"
-              disabled={rows.length === 0 || !!exporting}
+              disabled={ledgerLoading || !!error || rows.length === 0 || !!exporting}
               onClick={async () => {
-                if (!product) return
+                if (!product || ledgerLoading || error) return
                 setExporting('pdf')
                 try {
                   const { exportReportPdf } = await import('../lib/export')
@@ -358,8 +378,9 @@ export function StockCardPage() {
             <Button
               variant="sheet"
               size="sm"
-              disabled={rows.length === 0 || !!exporting}
+              disabled={ledgerLoading || !!error || rows.length === 0 || !!exporting}
               onClick={async () => {
+                if (!product || ledgerLoading || error) return
                 setExporting('excel')
                 try {
                   const { exportExcel } = await import('../lib/export')
@@ -379,7 +400,7 @@ export function StockCardPage() {
       >
         {error ? (
           <p className="px-5 pb-5 text-sm text-danger">{error}</p>
-        ) : ledger === null ? (
+        ) : ledgerLoading ? (
           <Spinner />
         ) : (
           <div className="pb-2 md:px-5 md:pb-5">

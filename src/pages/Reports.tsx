@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
+import { HistoryReadNotice } from '../components/HistoryReadNotice'
+import { useMovementHistory } from '../data/useMovementHistory'
+import {
+  evaluateReportCompleteness,
+  mergeReportMovements,
+  resolveReportHistoryScope,
+} from '../lib/reportHistory'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
 import { ActivityLog } from './reports/ActivityLog'
 import { CostReport } from './reports/CostReport'
@@ -84,14 +91,13 @@ export async function exportReportsExcel(
 export function ReportsPage() {
   const t = useT()
   const {
-    movements,
+    movements: liveMovements,
     products,
     locations,
     locationById,
     qtyAt,
     qtyByUnit,
     minFor,
-    ensureMovementsFrom,
     loading,
     movementsFrom,
   } = useData()
@@ -113,23 +119,61 @@ export function ReportsPage() {
   // empty. Earlier days are today's figure with everything moved since taken back off.
   const [asOfStr, setAsOfStr] = useState('')
   const [busy, setBusy] = useState('')
+  const [loadAll, setLoadAll] = useState(false)
 
-  // Picking a date before the loaded window would silently show nothing, so widen it.
-  // Clearing the date does NOT widen: that is the default state, and loading the whole
-  // ledger on every visit is the cost this window exists to avoid. The banner below
-  // says what is loaded and offers to fetch the rest.
-  useEffect(() => {
-    if (fromStr) ensureMovementsFrom(dateInputToMs(fromStr))
-  }, [fromStr, ensureMovementsFrom])
-  useEffect(() => {
-    if (asOfStr) ensureMovementsFrom(dateInputToMs(asOfStr))
-  }, [asOfStr, ensureMovementsFrom])
+  const historyScope = useMemo(
+    () =>
+      resolveReportHistoryScope(
+        { mode, productId, fromStr, toStr, asOfStr, loadAll, today: todayMs() },
+        dayRange,
+        dateInputToMs,
+      ),
+    [mode, productId, fromStr, toStr, asOfStr, loadAll],
+  )
+
+  const historyRead = useMovementHistory(
+    historyScope.queryEnabled ? historyScope.queryProductId : '',
+    historyScope.queryEnabled ? historyScope.queryFrom : undefined,
+    historyScope.queryEnabled ? historyScope.queryTo : undefined,
+  )
+  const history = historyRead.rows
+
+  const completeness = useMemo(
+    () =>
+      evaluateReportCompleteness({
+        mode,
+        historyStatus: historyRead.status,
+        historyReady: historyRead.ready,
+        validRange: historyScope.validRange,
+        productId,
+        explicitRange: historyScope.explicitRange,
+        isBackdated: historyScope.isBackdated,
+      }),
+    [
+      mode,
+      historyRead.status,
+      historyRead.ready,
+      historyScope.validRange,
+      productId,
+      historyScope.explicitRange,
+      historyScope.isBackdated,
+    ],
+  )
+
+  // ponytail: merges on-demand history with recent live window; add streaming pagination if history grows beyond thousands.
+  const movements = useMemo(
+    () => mergeReportMovements(history, liveMovements),
+    [history, liveMovements],
+  )
 
   // ---------- movement dataset ----------
   // Balances come from every movement in scope, not from the rows that survived the
   // filters — otherwise a period that opens with stock already on the shelf reports its
   // first issue as a negative balance.
   const card = useMemo(() => {
+    if (mode !== 'movement' || !completeness.mayCalculate) {
+      return { opening: 0, rows: [], totalIn: 0, totalOut: 0, closing: 0 }
+    }
     const { from, to } = dayRange(fromStr, toStr)
     return stockCard(movements, {
       productId: productId || undefined,
@@ -138,7 +182,7 @@ export function ReportsPage() {
       to,
       type: (typeFilter || '') as MovementType | '',
     })
-  }, [movements, productId, locationId, typeFilter, fromStr, toStr])
+  }, [mode, completeness.mayCalculate, movements, productId, locationId, typeFilter, fromStr, toStr])
 
   const movementRows = useMemo<MovementRow[]>(
     () =>
@@ -152,14 +196,15 @@ export function ReportsPage() {
   )
 
   // ---------- snapshot dataset ----------
-  const asOfDay = asOfStr ? dateInputToMs(asOfStr) : null
+  const asOfDay = historyScope.asOfDay
   const rewind = useMemo(() => {
-    if (asOfDay === null || asOfDay >= todayMs()) return null
+    if (!completeness.mayCalculate || asOfDay === null || asOfDay >= todayMs()) return null
     const byId = new Map(products.map((p) => [p.id, p.unitType]))
     return movedSince(movements, asOfDay, (id) => byId.get(id))
-  }, [asOfDay, movements, products])
+  }, [completeness.mayCalculate, asOfDay, movements, products])
 
   const snapshotRows = useMemo<SnapshotRow[]>(() => {
+    if (mode !== 'snapshot' || !completeness.mayCalculate) return []
     const scope = locationId ? locations.filter((l) => l.id === locationId) : locations
     const rows: SnapshotRow[] = []
     const at = (loc: string, pid: string, unit: string, now: number) =>
@@ -191,7 +236,7 @@ export function ReportsPage() {
       }
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit))
-  }, [products, locations, productId, locationId, qtyAt, qtyByUnit, minFor, rewind])
+  }, [mode, completeness.mayCalculate, products, locations, productId, locationId, qtyAt, qtyByUnit, minFor, rewind])
 
   const branchName = locationId ? (locationById(locationId)?.name ?? '') : t("ทุกคลัง")
   const productName = productId
@@ -204,9 +249,11 @@ export function ReportsPage() {
       ? `${fromStr ? formatThaiDate(dateInputToMs(fromStr)) : t('เริ่มต้น')} - ${
           toStr ? formatThaiDate(dateInputToMs(toStr)) : t('ปัจจุบัน')
         }`
-      : movementsFrom > 0
-        ? t('ตั้งแต่ {date} (เท่าที่โหลดไว้)', { date: formatThaiDate(movementsFrom), })
-        : t("ทั้งหมด")
+      : loadAll
+        ? t("ทั้งหมด")
+        : movementsFrom > 0
+          ? t('ตั้งแต่ {date} (เท่าที่โหลดไว้)', { date: formatThaiDate(movementsFrom), })
+          : t("ทั้งหมด")
 
   const showBalance = !!productId && !!locationId && mode === 'movement'
 
@@ -221,6 +268,7 @@ export function ReportsPage() {
 
   // ---------- exports (libraries lazy-loaded to keep initial load light) ----------
   async function excel() {
+    if (!completeness.canExport || count === 0 || loading || !!busy) return
     if (mode === 'movement') {
       const rows = movementRows.map(({ m, inQty, outQty, balance }) => ({
         [t("วันที่")]: formatThaiDate(m.date),
@@ -259,6 +307,7 @@ export function ReportsPage() {
   }
 
   async function pdf() {
+    if (!completeness.canExport || count === 0 || loading || !!busy) return
     setBusy('pdf')
     try {
       await buildPdf()
@@ -573,12 +622,18 @@ export function ReportsPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
           <span className="text-sm text-ink-soft">
-            {loading ? t('กำลังโหลดข้อมูล...') : t('พบ {n} รายการ', { n: count })}
+            {loading || completeness.status === 'loading'
+              ? t('กำลังโหลดข้อมูล...')
+              : completeness.status === 'error'
+                ? t('โหลดประวัติไม่สำเร็จ — ยังยืนยันความครบถ้วนไม่ได้')
+                : !historyScope.validRange
+                  ? t('ช่วงวันที่ไม่ถูกต้อง')
+                  : t('พบ {n} รายการ', { n: count })}
           </span>
           <div className="flex gap-2">
             {/* Exporting mid-load writes yesterday's numbers into a file that outlives the
                 screen, so the buttons wait for the data to settle. */}
-            <Button variant="success" onClick={excel} disabled={count === 0 || loading || !!busy}>
+            <Button variant="success" onClick={excel} disabled={!completeness.canExport || count === 0 || loading || !!busy}>
               {busy === 'excel' ? (
                 t('กำลังสร้างไฟล์...')
               ) : (
@@ -588,7 +643,7 @@ export function ReportsPage() {
                 </>
               )}
             </Button>
-            <Button variant="danger" onClick={pdf} disabled={count === 0 || loading || !!busy}>
+            <Button variant="danger" onClick={pdf} disabled={!completeness.canExport || count === 0 || loading || !!busy}>
               {busy === 'pdf' ? (
                 t('กำลังสร้างไฟล์...')
               ) : (
@@ -602,10 +657,41 @@ export function ReportsPage() {
         </div>
       </Card>
 
-      <LedgerWindowNotice />
+      {mode === 'movement' && (
+        !historyScope.validRange ? (
+          <p role="alert" className="text-sm text-out">{t('ช่วงวันที่ไม่ถูกต้อง')}</p>
+        ) : productId || historyScope.explicitRange ? (
+          <HistoryReadNotice
+            status={historyRead.status}
+            count={history.length}
+            error={historyRead.error}
+            retry={historyRead.retry}
+            product={!!productId}
+          />
+        ) : (
+          <>
+            <HistoryReadNotice status="partial" count={liveMovements.length} retry={() => setLoadAll(true)} />
+            <LedgerWindowNotice from={movementsFrom} onLoadOlder={() => setLoadAll(true)} />
+          </>
+        )
+      )}
+      {mode === 'snapshot' && !historyScope.validRange && <p role="alert" className="text-sm text-out">{t('ช่วงวันที่ไม่ถูกต้อง')}</p>}
+      {mode === 'snapshot' && historyScope.isBackdated && (
+        <HistoryReadNotice
+          status={historyRead.status}
+          count={history.length}
+          error={historyRead.error}
+          retry={historyRead.retry}
+          product={!!productId}
+        />
+      )}
 
       {/* preview */}
-      {count === 0 ? (
+      {completeness.status === 'loading' || (loading && count === 0) ? (
+        <Card className="p-8 text-center text-sm text-ink-soft">
+          {t('กำลังโหลดข้อมูล...')}
+        </Card>
+      ) : completeness.status === 'error' || !historyScope.validRange ? null : count === 0 ? (
         <Card>
           <EmptyState
             icon="report"

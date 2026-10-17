@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useData } from '../data/DataContext'
-import { windowStart } from '../data/ledgerWindow'
-import { movementCache } from '../data/movementCache'
+import { useMovementHistory } from '../data/useMovementHistory'
+import { HistoryReadNotice } from '../components/HistoryReadNotice'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
@@ -20,12 +20,13 @@ import {
 } from '../components/ui'
 import { FramePage, PageHero } from '../components/frame'
 import { DataTable, type Column } from '../components/DataTable'
-import { voidMovement, getMovementImage, readProductLedger } from '../services/stock'
+import { voidMovement, getMovementImage } from '../services/stock'
 import { EditMovementModal } from '../components/movements/EditMovementModal'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
-import { fmtQty, formatThaiDate, dateInputToMs, dayRange } from '../lib/format'
+import { fmtQty, formatThaiDate, dayRange } from '../lib/format'
 import { effectAt, effectOverall, stockCard } from '../lib/ledger'
+import { mergeReportMovements } from '../lib/reportHistory'
 import { breakdown, describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type MovementType, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
@@ -77,8 +78,6 @@ export async function resolveDocFilterLookup({
 export function MovementsPage() {
   const t = useT()
   const { movements: liveMovements, locations, products, productById, movementsFrom } = useData()
-  const [history, setHistory] = useState<StockMovement[]>([])
-  const [historyFrom, setHistoryFrom] = useState<number | null>(null)
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast() // i18n-key
@@ -109,49 +108,18 @@ export function MovementsPage() {
   const [fromStr, setFromStr] = useState('')
   const [toStr, setToStr] = useState('')
 
-  // Single-product history is read on demand without widening the global listener.
-  useEffect(() => {
-    let alive = true
-    if (productId) {
-      readProductLedger(productId)
-        .then((rows) => alive && setHistory(rows))
-        .catch(() => {})
-    } else {
-      setHistory([])
-      setHistoryFrom(null)
-    }
-    return () => {
-      alive = false
-    }
-  }, [productId])
-
-  // Custom date ranges reaching beyond the live window are fetched on demand.
-  useEffect(() => {
-    if (productId || !fromStr) return
-    const from = dateInputToMs(fromStr)
-    const currentWindow = historyFrom ?? movementsFrom
-    if (from >= currentWindow) return
-    let alive = true
-    const to = toStr ? dateInputToMs(toStr) + 86400000 : Date.now()
-    movementCache
-      .fetchRange(from, to)
-      .then((rows) => {
-        if (!alive) return
-        setHistory(rows)
-        setHistoryFrom(from)
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [productId, fromStr, toStr, historyFrom, movementsFrom])
-
-  const loadHistory = useCallback(async (days = 0) => {
-    const from = days === 0 ? 0 : windowStart(days)
-    const rows = await movementCache.fetchRange(from, Date.now())
-    setHistory(rows)
-    setHistoryFrom(from)
-  }, [])
+  const [loadAll, setLoadAll] = useState(false)
+  const range = dayRange(fromStr, toStr)
+  const validRange = !Number.isNaN(range.from) && !Number.isNaN(range.to) && range.from < range.to
+  const explicitRange = !productId && (!!fromStr || !!toStr || loadAll)
+  // Product reads include ALL earlier movements for correct opening/running balances.
+  // Changing its date filter never re-reads it. Global date ranges are deliberate one-shot
+  // reads, independent of (and never widening) the seven-day live listener.
+  const historyRead = useMovementHistory(productId,
+    !productId && explicitRange && validRange ? Math.max(0, range.from) : undefined,
+    !productId && explicitRange && validRange ? Math.min(Number.MAX_SAFE_INTEGER, range.to) : undefined)
+  const history = historyRead.rows
+  const scopeReady = validRange && (productId || explicitRange ? historyRead.ready : true)
 
   // ?doc= from a search result can name a document from any month: read that document's rows
   // alone (one equality query) rather than widening the window around it.
@@ -179,12 +147,7 @@ export function MovementsPage() {
 
   // ponytail: merges on-demand history with recent live window; add streaming pagination if history grows beyond thousands.
   const movements = useMemo(() => {
-    if (history.length === 0 && docRows.length === 0) return liveMovements
-    const map = new Map<string, StockMovement>()
-    for (const m of docRows) map.set(m.id, m)
-    for (const m of history) map.set(m.id, m)
-    for (const m of liveMovements) map.set(m.id, m)
-    return [...map.values()]
+    return mergeReportMovements([...docRows, ...history], liveMovements)
   }, [history, docRows, liveMovements])
   const [editing, setEditing] = useState<StockMovement | null>(null)
   const [photoDoc, setPhotoDoc] = useState<string | null>(null)
@@ -457,10 +420,14 @@ export function MovementsPage() {
         )}
       </Card>
 
-      <LedgerWindowNotice
-        from={historyFrom ?? movementsFrom}
-        onLoadOlder={() => loadHistory(0)}
-      />
+      {!validRange ? <p role="alert">{t('ช่วงวันที่ไม่ถูกต้อง')}</p> : productId || explicitRange ? (
+        <HistoryReadNotice status={historyRead.status} count={history.length} error={historyRead.error} retry={historyRead.retry} product={!!productId} />
+      ) : (
+        <>
+          <HistoryReadNotice status="partial" count={liveMovements.length} retry={() => setLoadAll(true)} />
+          <LedgerWindowNotice from={movementsFrom} onLoadOlder={() => setLoadAll(true)} />
+        </>
+      )}
 
       {docFilter && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand/20 bg-brand-soft px-4 py-2.5 text-sm text-brand">
@@ -472,7 +439,7 @@ export function MovementsPage() {
         </div>
       )}
 
-      <Card className="overflow-hidden">
+      {scopeReady && <Card className="overflow-hidden">
         <DataTable
           rows={filtered}
           columns={columns}
@@ -496,7 +463,7 @@ export function MovementsPage() {
             )
           }
         />
-      </Card>
+      </Card>}
 
       {editing && <EditMovementModal movement={editing} onClose={() => setEditing(null)} />}
       {photoDoc && <PhotoModal docNo={photoDoc} onClose={() => setPhotoDoc(null)} />}
