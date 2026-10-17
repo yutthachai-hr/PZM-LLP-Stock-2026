@@ -54,11 +54,6 @@ export interface Product {
    * can only ever mean one thing.
    */
   barcode?: string
-  /**
-   * Whether the barcode has been explicitly verified (owner safety fix, 17 Oct 2026).
-   * If false or absent, a scanned barcode is an unverified candidate requiring human confirmation.
-   */
-  barcodeVerified?: boolean
   name: string
   category: string
   unit: string // display unit, e.g. "Kilogram", "Bottle"

@@ -29,13 +29,13 @@ const p = (id: string, over: Partial<Product> = {}): Product => ({
 
 describe('R4 C1 — code 128 is exact; a case-mismatched token is NOT_FOUND', () => {
   test('wrong-case alphanumeric never becomes a candidate, only not_found', () => {
-    const catalog = [p('case', { barcode: 'AbC128', barcodeVerified: true })]
+    const catalog = [p('case', { barcode: 'AbC128' })]
 
     expect(resolveBarcode(catalog, 'abc128').status).toBe('not_found')
     expect(decideScan(catalog, 'abc128')).toEqual({ kind: 'reject', reason: 'not_found', code: 'abc128' })
 
     // The exact token still resolves (case is respected, not dropped).
-    expect(resolveBarcode(catalog, 'AbC128').status).toBe('verified_exact')
+    expect(resolveBarcode(catalog, 'AbC128').status).toBe('legacy_unverified')
 
     // Control: a code matching nothing is also not_found, so the divergence above is the
     // case fold, and the fix is that both are now the same terminal state.
@@ -44,11 +44,11 @@ describe('R4 C1 — code 128 is exact; a case-mismatched token is NOT_FOUND', ()
 
   test('distinct Code 128 casings are never merged, and neither is a folded duplicate', () => {
     const distinct = [
-      p('upper', { barcode: 'ABC-128', barcodeVerified: true }),
-      p('lower', { barcode: 'abc-128', barcodeVerified: true }),
+      p('upper', { barcode: 'ABC-128' }),
+      p('lower', { barcode: 'abc-128' }),
     ]
-    expect(resolveBarcode(distinct, 'ABC-128')).toMatchObject({ status: 'verified_exact', product: { id: 'upper' } })
-    expect(resolveBarcode(distinct, 'abc-128')).toMatchObject({ status: 'verified_exact', product: { id: 'lower' } })
+    expect(resolveBarcode(distinct, 'ABC-128')).toMatchObject({ status: 'legacy_unverified', product: { id: 'upper' } })
+    expect(resolveBarcode(distinct, 'abc-128')).toMatchObject({ status: 'legacy_unverified', product: { id: 'lower' } })
     // A fold of both used to report `duplicate`; now no exact token exists, so not_found.
     expect(resolveBarcode(distinct, 'Abc-128').status).toBe('not_found')
   })
@@ -71,8 +71,8 @@ describe('R4 C5 — a scan never falls back to SKU, name or a loose match', () =
     expect(decideScan(inactive, 'OLD')).toMatchObject({ kind: 'reject', reason: 'inactive', inactiveName: 'OLD' })
   })
 
-  test('positive path: an exact verified code is an add, an exact legacy code needs confirmation', () => {
-    expect(decideScan([p('v', { barcode: 'V1', barcodeVerified: true })], 'V1')).toMatchObject({ kind: 'verified', product: { id: 'v' } })
+  test('positive path: an exact barcode requires human confirmation', () => {
+    expect(decideScan([p('v', { barcode: 'V1' })], 'V1')).toMatchObject({ kind: 'legacy', product: { id: 'v' } })
     expect(decideScan([p('l', { barcode: 'L1' })], 'L1')).toMatchObject({ kind: 'legacy', product: { id: 'l' } })
   })
 })

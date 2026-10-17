@@ -23,6 +23,10 @@ export interface ScanGateOptions {
   confirmText?: string
   /** The legacy-confirmation body, where a screen words it differently. */
   legacyMessage?: (product: Product, code: string) => string
+  /** Optional caller eligibility check, verified before prompting and rechecked at answer time. */
+  isEligible?: (product: Product) => boolean
+  /** Optional callback invoked when a product is resolved but fails caller eligibility. */
+  onIneligible?: (product: Product) => void
 }
 
 /**
@@ -43,6 +47,10 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => void {
   productsRef.current = opts.products
   const onAddRef = useRef(opts.onAdd)
   onAddRef.current = opts.onAdd
+  const isEligibleRef = useRef(opts.isEligible)
+  isEligibleRef.current = opts.isEligible
+  const onIneligibleRef = useRef(opts.onIneligible)
+  onIneligibleRef.current = opts.onIneligible
   const legacyMessage = opts.legacyMessage
   const confirmText = opts.confirmText
 
@@ -58,12 +66,12 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => void {
     (code: string) => {
       const decision = decideScan(productsRef.current, code)
 
-      if (decision.kind === 'verified') {
-        onAddRef.current(decision.product)
-        return
-      }
-
       if (decision.kind === 'legacy') {
+        if (isEligibleRef.current && !isEligibleRef.current(decision.product)) {
+          onIneligibleRef.current?.(decision.product)
+          return
+        }
+
         const epochAtPrompt = brandEpoch()
         const expectedProductId = decision.product.id
         const theCode = decision.code
@@ -80,7 +88,12 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => void {
         }).then((ok) => {
           if (!ok || !mounted.current || brandEpoch() !== epochAtPrompt) return
           const fresh = revalidateScan(productsRef.current, theCode, expectedProductId)
-          if (fresh) onAddRef.current(fresh)
+          if (!fresh) return
+          if (isEligibleRef.current && !isEligibleRef.current(fresh)) {
+            onIneligibleRef.current?.(fresh)
+            return
+          }
+          onAddRef.current(fresh)
         })
         return
       }

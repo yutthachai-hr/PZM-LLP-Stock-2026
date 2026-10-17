@@ -37,25 +37,25 @@ describe('Barcode Safety - Normalization & Token Preservation', () => {
   })
 
   test('trims whitespace and newlines from scanner wedge without mutating token characters', () => {
-    const p1 = p('item1', { barcode: '8851000654321', barcodeVerified: true })
+    const p1 = p('item1', { barcode: '8851000654321' })
     const products = [p1]
 
     const res = resolveBarcode(products, '  8851000654321\r\n')
-    expect(res.status).toBe('verified_exact')
-    if (res.status === 'verified_exact') {
+    expect(res.status).toBe('legacy_unverified')
+    if (res.status === 'legacy_unverified') {
       expect(res.product.id).toBe('item1')
       expect(res.code).toBe('8851000654321')
     }
   })
 
   test('distinct Code128 casings resolve exactly and are never merged', () => {
-    const codeUpper = p('upper', { barcode: 'ABC-128', barcodeVerified: true })
-    const codeLower = p('lower', { barcode: 'abc-128', barcodeVerified: true })
+    const codeUpper = p('upper', { barcode: 'ABC-128' })
+    const codeLower = p('lower', { barcode: 'abc-128' })
     const products = [codeUpper, codeLower]
 
     // Exact matches must resolve to their respective distinct products
-    expect(resolveBarcode(products, 'ABC-128')).toMatchObject({ status: 'verified_exact', product: { id: 'upper' } })
-    expect(resolveBarcode(products, 'abc-128')).toMatchObject({ status: 'verified_exact', product: { id: 'lower' } })
+    expect(resolveBarcode(products, 'ABC-128')).toMatchObject({ status: 'legacy_unverified', product: { id: 'upper' } })
+    expect(resolveBarcode(products, 'abc-128')).toMatchObject({ status: 'legacy_unverified', product: { id: 'lower' } })
 
     // A token that only folds onto both is an unknown code — NOT_FOUND, never the first casefold
     // match and never a duplicate (R3 C1: no casefold fallback at all).
@@ -111,12 +111,12 @@ describe('Barcode Safety - Inactive & Unknown Products', () => {
   })
 })
 
-describe('Barcode Safety - Legacy vs Verified Barcode Provenance', () => {
-  test('explicitly verified barcode returns verified_exact', () => {
-    const verified = p('v1', { barcode: '8851000123456', barcodeVerified: true })
+describe('Barcode Safety - Legacy Barcode Human Confirmation', () => {
+  test('all unique active barcodes require legacy confirmation even with untrusted barcodeVerified true', () => {
+    const verified = p('v1', { barcode: '8851000123456', barcodeVerified: true } as any)
     const res = resolveBarcode([verified], '8851000123456')
-    expect(res.status).toBe('verified_exact')
-    if (res.status === 'verified_exact') {
+    expect(res.status).toBe('legacy_unverified')
+    if (res.status === 'legacy_unverified') {
       expect(res.product.id).toBe('v1')
     }
   })
@@ -148,13 +148,13 @@ describe('Barcode Safety - Confirm-time revalidation against the live catalog', 
 })
 
 describe('Barcode Safety - Search Input Intent & the shared scan gate', () => {
-  const p1 = p('item1', { sku: 'BEV-01', name: 'COKE CAN', barcode: '8851959132012', barcodeVerified: true })
+  const p1 = p('item1', { sku: 'BEV-01', name: 'COKE CAN', barcode: '8851959132012' })
   const p2 = p('item2', { sku: 'BEV-02', name: 'COKE BOTTLE' })
   const products = [p1, p2]
 
-  test('a scan/Enter adds only a verified_exact barcode; SKU and legacy barcode are terminal', () => {
-    expect(decideScan(products, '8851959132012')).toMatchObject({ kind: 'verified', product: { id: 'item1' } })
-    expect(decideScan(products, '  8851959132012\n')).toMatchObject({ kind: 'verified', product: { id: 'item1' } })
+  test('a scan/Enter resolves exact barcode to legacy confirmation; SKU is terminal reject', () => {
+    expect(decideScan(products, '8851959132012')).toMatchObject({ kind: 'legacy', product: { id: 'item1' } })
+    expect(decideScan(products, '  8851959132012\n')).toMatchObject({ kind: 'legacy', product: { id: 'item1' } })
 
     // legacy barcode: a candidate, but with confirmation attached — never an auto-add
     const legacyProd = p('leg1', { barcode: '8851000123456' })
@@ -167,7 +167,7 @@ describe('Barcode Safety - Search Input Intent & the shared scan gate', () => {
 
   test('3parentcases: casefold verified, duplicate barcode with third SKU, inactive barcode with third SKU', () => {
     // Parent case 1: AbC128 queried with abc128 is NOT_FOUND (exact-only, no casefold candidate)
-    expect(resolveBarcode([p('case', { barcode: 'AbC128', barcodeVerified: true })], 'abc128').status).toBe('not_found')
+    expect(resolveBarcode([p('case', { barcode: 'AbC128' })], 'abc128').status).toBe('not_found')
 
     // Parent case 2: Duplicate barcode DUP with third product having SKU DUP -> terminal reject
     const dup = [p('one', { barcode: 'DUP' }), p('two', { barcode: 'DUP' }), p('third', { sku: 'DUP', barcode: 'OTHER' })]

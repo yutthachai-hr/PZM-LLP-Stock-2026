@@ -12,11 +12,6 @@ import type { Product } from '../types'
  */
 export type BarcodeResolution =
   | {
-      status: 'verified_exact'
-      product: Product
-      code: string
-    }
-  | {
       status: 'legacy_unverified'
       product: Product
       code: string
@@ -73,9 +68,7 @@ export function resolveBarcode(products: readonly Product[], code: string): Barc
 
   if (exactActive.length === 1) {
     const product = exactActive[0]
-    return product.barcodeVerified === true
-      ? { status: 'verified_exact', product, code: needle }
-      : { status: 'legacy_unverified', product, code: needle }
+    return { status: 'legacy_unverified', product, code: needle }
   }
 
   // Unknown token. There is deliberately NO case-insensitive fallback: Code 128 keeps its

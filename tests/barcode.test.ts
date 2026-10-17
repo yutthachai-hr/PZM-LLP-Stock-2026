@@ -39,12 +39,12 @@ test('the barcode is one of the fields a product is searched by', () => {
 
 describe('Enter in a search box (a scanner in keyboard mode ends with Enter)', () => {
   const box = (over: Partial<Product>): Product => ({ id: 'x', sku: 'X', name: 'X', category: 'c', unit: 'EA', unitType: 'EA', minStock: 0, hasImage: false, active: true, createdAt: 0, updatedAt: 0, ...over })
-  const scanned = box({ id: 'a', sku: 'BEV-01', name: 'COKE', barcode: '8851959132012', barcodeVerified: true })
+  const scanned = box({ id: 'a', sku: 'BEV-01', name: 'COKE', barcode: '8851959132012' })
   const lookalike = box({ id: 'b', sku: 'BEV-02', name: 'PACK 8851959132012 PROMO' })
   const products = [lookalike, scanned]
 
-  test('an exact verified barcode is the only thing Enter adds, even against a better-ranked loose match', () => {
-    expect(decideScan(products, '8851959132012\n')).toMatchObject({ kind: 'verified', product: { id: 'a' } })
+  test('an exact barcode resolves to legacy confirmation on Enter, even against a better-ranked loose match', () => {
+    expect(decideScan(products, '8851959132012\n')).toMatchObject({ kind: 'legacy', product: { id: 'a' } })
   })
 
   test('default Enter never authorizes an SKU or a loose suggestion', () => {

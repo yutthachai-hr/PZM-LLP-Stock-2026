@@ -22,6 +22,7 @@ import { dateInputToMs, fmtMoney, fmtQty, formatThaiDateShort, msToDateInput, to
 import { roundQty } from '../lib/validate'
 import { balanceAtDayEnd } from '../lib/ledger'
 import { movementCache } from '../data/movementCache'
+import { appendLineOnce } from '../lib/lines'
 import { describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type Product, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
@@ -52,7 +53,7 @@ const horizon = () => bkkDayStart(Date.now()) + 400 * DAY_MS
  * ("2 broken"). Whichever box the person typed in last is the one that holds; the other is
  * shown from it.
  */
-interface AdjRow {
+export interface AdjRow {
   productId: string
   productName: string
   unit: string
@@ -76,6 +77,21 @@ function deltaOf(r: AdjRow, system: number): number {
  * no approval step (owner, 22 Sep) — and every row is still its own `adjust` movement,
  * all under one ADJ- number (services/stock.ts adjustStockLines).
  */
+export function appendAdjRow(
+  rows: readonly AdjRow[],
+  p: Product,
+  defaultReason: string,
+): AdjRow[] {
+  return appendLineOnce(rows, {
+    productId: p.id,
+    productName: p.name,
+    unit: p.unitType,
+    mode: 'count',
+    value: null,
+    reason: defaultReason,
+  })
+}
+
 export function AdjustPage() {
   const t = useT()
   const { products, locations, qtyAt, movements } = useData()
@@ -196,7 +212,7 @@ export function AdjustPage() {
       setSheetFor(p)
       return
     }
-    setRows((rs) => [...rs, { productId: p.id, productName: p.name, unit: p.unitType, mode: 'count', value: null, reason: defaultReason }])
+    setRows((rs) => appendAdjRow(rs, p, defaultReason))
     setTimeout(() => searchRef.current?.focus(), 0)
   }
 

@@ -14,7 +14,6 @@ import { resolveBarcode } from './barcode'
 export type ScanRejectReason = 'duplicate' | 'inactive' | 'not_found' | 'empty'
 
 export type ScanDecision =
-  | { kind: 'verified'; product: Product; code: string }
   | { kind: 'legacy'; product: Product; code: string }
   | {
       kind: 'reject'
@@ -30,8 +29,6 @@ export type ScanDecision =
 export function decideScan(products: readonly Product[], code: string): ScanDecision {
   const res = resolveBarcode(products, code)
   switch (res.status) {
-    case 'verified_exact':
-      return { kind: 'verified', product: res.product, code: res.code }
     case 'legacy_unverified':
       return { kind: 'legacy', product: res.product, code: res.code }
     case 'duplicate':
@@ -61,6 +58,6 @@ export function decideScan(products: readonly Product[], code: string): ScanDeci
  */
 export function revalidateScan(products: readonly Product[], code: string, expectedProductId: string): Product | null {
   const res = resolveBarcode(products, code)
-  if (res.status !== 'verified_exact' && res.status !== 'legacy_unverified') return null
+  if (res.status !== 'legacy_unverified') return null
   return res.product.id === expectedProductId ? res.product : null
 }

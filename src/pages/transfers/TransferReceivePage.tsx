@@ -115,6 +115,9 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     setTimeout(() => setLit((cur) => (cur === line.idx ? null : cur)), 2500)
   }
 
+  const linesRef = useRef(lines)
+  linesRef.current = lines
+
   /**
    * A scan: find the line, mark it counted, bring it into view.
    *
@@ -132,6 +135,8 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     confirmText: t('ตรวจรับรายการนี้'),
     legacyMessage: (product, code) =>
       t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันตรวจรับรายการนี้?', { name: product.name, code }),
+    isEligible: (p) => linesRef.current.some((l) => l.productId === p.id),
+    onIneligible: () => toast.error(t('ไม่พบสินค้านี้ในเอกสาร {docNo}', { docNo: transfer.docNo })),
   })
 
   function found(code: string) {
