@@ -104,7 +104,7 @@ describe('useScanGate R3 authoritative quota-safe contract', () => {
     expect(mockBackend._calls.getOne).toBe(0)
     expect(mockBackend._calls.getBy).toBe(0)
 
-    // 3. legacy match prompt + answer: exactly <= 4 reads (2 getOne + 2 getBy), 0 getAll/getRange
+    // 3. legacy match prompt + answer: exactly 4 query operations (2 getOne + 2 getBy), 0 getAll/getRange
     await gate('8851000111111')
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(onAdd).toHaveBeenCalledWith(item)
@@ -112,8 +112,8 @@ describe('useScanGate R3 authoritative quota-safe contract', () => {
     expect(mockBackend._calls.getRange).toBe(0)
     expect(mockBackend._calls.getOne).toBe(2)
     expect(mockBackend._calls.getBy).toBe(2)
-    const totalReads = mockBackend._calls.getOne + mockBackend._calls.getBy
-    expect(totalReads).toBeLessThanOrEqual(4)
+    const totalQueryOps = mockBackend._calls.getOne + mockBackend._calls.getBy
+    expect(totalQueryOps).toBe(4)
   })
 
   test('C1: cold-before-sync refuses with catalogue loading message and performs 0 server reads', async () => {
@@ -246,6 +246,75 @@ describe('useScanGate R3 authoritative quota-safe contract', () => {
     // Server duplicate check fails closed with duplicate error before prompting
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('ซ้ำกับสินค้า 2 รายการ'))
     expect(confirm).not.toHaveBeenCalled()
+    expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  test('regression: local catalog has p1 active, server has p1 active + p2 inactive -> fails closed duplicate before prompt', async () => {
+    const itemActive = p('p1', { name: 'Active QA', barcode: 'RACE', active: true })
+    const itemRetired = p('p2', { name: 'Retired QA', barcode: 'RACE', active: false })
+    const mockBackend = createMockBackend([itemActive, itemRetired])
+
+    const onAdd = vi.fn()
+    const confirm = vi.fn().mockResolvedValue(true)
+    const toast = { error: vi.fn(), info: vi.fn() }
+    const t = (k: string, vars?: any) => (vars ? k.replace(/\{(\w+)\}/g, (_: string, f: string) => String(vars[f] ?? '')) : k)
+
+    const gate = useScanGate({
+      products: [itemActive], // local catalog only knows p1
+      productsServerSynced: true,
+      onAdd,
+      confirm,
+      toast,
+      t,
+      backend: mockBackend,
+    })
+
+    await gate('RACE')
+    // Remote collision with inactive record must fail closed duplicate BEFORE prompt
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('ซ้ำกับสินค้า 2 รายการ'))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  test('regression: prompt initial unique p1 then inactive collision appears while confirm waiting -> rejects duplicate at answer time', async () => {
+    const itemActive = p('p1', { name: 'Active QA', barcode: 'RACE', active: true })
+    const mockBackend = createMockBackend([itemActive])
+
+    const onAdd = vi.fn()
+    let resolveConfirm!: (ok: boolean) => void
+    let signalPromptOpened!: () => void
+    const promptOpened = new Promise<void>((resolve) => { signalPromptOpened = resolve })
+    const confirm = vi.fn().mockImplementation(() => new Promise<boolean>((resolve) => {
+      resolveConfirm = resolve
+      signalPromptOpened()
+    }))
+    const toast = { error: vi.fn(), info: vi.fn() }
+    const t = (k: string, vars?: any) => (vars ? k.replace(/\{(\w+)\}/g, (_: string, f: string) => String(vars[f] ?? '')) : k)
+
+    const gate = useScanGate({
+      products: [itemActive],
+      productsServerSynced: true,
+      onAdd,
+      confirm,
+      toast,
+      t,
+      backend: mockBackend,
+    })
+
+    const scanPromise = gate('RACE')
+    await promptOpened
+    expect(confirm).toHaveBeenCalledTimes(1)
+
+    // Remote inactive collision appears on server while dialog is open waiting for answer
+    const itemRetired = p('p2', { name: 'Retired QA', barcode: 'RACE', active: false })
+    mockBackend._store.set('p2', itemRetired)
+
+    resolveConfirm(true)
+    await scanPromise
+
+    // Answer-time check re-runs getBy, sees inactive collision, fails closed duplicate
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('ซ้ำกับสินค้า 2 รายการ'))
+    expect(confirm).toHaveBeenCalledTimes(1)
     expect(onAdd).not.toHaveBeenCalled()
   })
 

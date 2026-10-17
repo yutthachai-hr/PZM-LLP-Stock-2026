@@ -140,9 +140,9 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
             if ((targetDoc.barcode ?? '').trim() !== needle) {
               return { ok: false, reason: 'rebound' }
             }
-            const otherActive = (matches ?? []).filter((p) => p.id !== productId && p.active !== false)
-            if (otherActive.length > 0) {
-              return { ok: false, reason: 'duplicate', duplicateCount: otherActive.length + 1 }
+            const otherMatches = (matches ?? []).filter((p) => p.id !== productId)
+            if (otherMatches.length > 0) {
+              return { ok: false, reason: 'duplicate', duplicateCount: otherMatches.length + 1 }
             }
             return { ok: true, product: targetDoc }
           } catch {
