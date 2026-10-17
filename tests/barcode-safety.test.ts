@@ -1,6 +1,7 @@
-// Tests for P0 Barcode Safety (Workstream A)
+// Tests for P0 Barcode Safety (Workstream A / R4 remediation)
 import { describe, expect, test } from 'vitest'
-import { findByBarcode, pickOnEnter, resolveBarcode } from '../src/lib/barcode'
+import { resolveBarcode } from '../src/lib/barcode'
+import { decideScan, revalidateScan } from '../src/lib/barcodeSelection'
 import { brandEpoch, setActiveBrand } from '../src/brand/brand'
 import type { Product } from '../src/types'
 
@@ -47,32 +48,18 @@ describe('Barcode Safety - Normalization & Token Preservation', () => {
     }
   })
 
-  test('does not silently merge distinct Code128 values or pick first casefold duplicate', () => {
+  test('distinct Code128 casings resolve exactly and are never merged', () => {
     const codeUpper = p('upper', { barcode: 'ABC-128', barcodeVerified: true })
     const codeLower = p('lower', { barcode: 'abc-128', barcodeVerified: true })
     const products = [codeUpper, codeLower]
 
     // Exact matches must resolve to their respective distinct products
-    const resUpper = resolveBarcode(products, 'ABC-128')
-    expect(resUpper.status).toBe('verified_exact')
-    if (resUpper.status === 'verified_exact') {
-      expect(resUpper.product.id).toBe('upper')
-    }
+    expect(resolveBarcode(products, 'ABC-128')).toMatchObject({ status: 'verified_exact', product: { id: 'upper' } })
+    expect(resolveBarcode(products, 'abc-128')).toMatchObject({ status: 'verified_exact', product: { id: 'lower' } })
 
-    const resLower = resolveBarcode(products, 'abc-128')
-    expect(resLower.status).toBe('verified_exact')
-    if (resLower.status === 'verified_exact') {
-      expect(resLower.product.id).toBe('lower')
-    }
-
-    // findByBarcode must resolve exact case when distinct Code128 exist
-    expect(findByBarcode(products, 'ABC-128')?.id).toBe('upper')
-    expect(findByBarcode(products, 'abc-128')?.id).toBe('lower')
-
-    // An ambiguous casefold query that clashes between both must not pick the first one
-    const resAmbiguous = resolveBarcode(products, 'Abc-128')
-    expect(resAmbiguous.status).toBe('duplicate')
-    expect(findByBarcode(products, 'Abc-128')).toBeUndefined()
+    // A token that only folds onto both is an unknown code — NOT_FOUND, never the first casefold
+    // match and never a duplicate (R3 C1: no casefold fallback at all).
+    expect(resolveBarcode(products, 'Abc-128').status).toBe('not_found')
   })
 })
 
@@ -82,10 +69,9 @@ describe('Barcode Safety - Duplicate Detection & Fail-Closed', () => {
     const p2 = p('dup2', { barcode: '8851000999999', name: 'Product 2' })
     const products = [p1, p2]
 
-    // findByBarcode must NOT arbitrarily return the first product
-    expect(findByBarcode(products, '8851000999999')).toBeUndefined()
+    // No product is picked, and the resolution is terminal duplicate.
+    expect(decideScan(products, '8851000999999')).toMatchObject({ kind: 'reject', reason: 'duplicate', duplicateCount: 2 })
 
-    // resolveBarcode must return duplicate status with all candidates
     const res = resolveBarcode(products, '8851000999999')
     expect(res.status).toBe('duplicate')
     if (res.status === 'duplicate') {
@@ -100,7 +86,7 @@ describe('Barcode Safety - Inactive & Unknown Products', () => {
     const retired = p('old', { barcode: '8851000888888', active: false })
     const products = [retired]
 
-    expect(findByBarcode(products, '8851000888888')).toBeUndefined()
+    expect(decideScan(products, '8851000888888')).toMatchObject({ kind: 'reject', reason: 'inactive' })
     const res = resolveBarcode(products, '8851000888888')
     expect(res.status).toBe('inactive')
     if (res.status === 'inactive') {
@@ -115,13 +101,13 @@ describe('Barcode Safety - Inactive & Unknown Products', () => {
     // 8851000777777 is SKU and in name, but NOT in barcode
     const res = resolveBarcode(products, '8851000777777')
     expect(res.status).toBe('not_found')
-    expect(findByBarcode(products, '8851000777777')).toBeUndefined()
+    expect(decideScan(products, '8851000777777')).toMatchObject({ kind: 'reject', reason: 'not_found' })
   })
 
   test('empty or whitespace-only barcode returns empty', () => {
     expect(resolveBarcode([], '   ').status).toBe('empty')
     expect(resolveBarcode([], '').status).toBe('empty')
-    expect(findByBarcode([], '   ')).toBeUndefined()
+    expect(decideScan([], '   ')).toMatchObject({ kind: 'reject', reason: 'empty' })
   })
 })
 
@@ -145,37 +131,51 @@ describe('Barcode Safety - Legacy vs Verified Barcode Provenance', () => {
   })
 })
 
-describe('Barcode Safety - Search Input Intent & pickOnEnter', () => {
+describe('Barcode Safety - Confirm-time revalidation against the live catalog', () => {
+  const code = '8851000777777'
+
+  test('accepts the expected product when the catalog is unchanged, refuses otherwise', () => {
+    expect(revalidateScan([p('P1', { barcode: code })], code, 'P1')?.id).toBe('P1')
+    // deactivated while the dialog was open
+    expect(revalidateScan([p('P1', { barcode: code, active: false })], code, 'P1')).toBeNull()
+    // rebound to another code inside the same brand
+    expect(revalidateScan([p('P1', { barcode: 'DIFFERENT-CODE' })], code, 'P1')).toBeNull()
+    // a duplicate registration appeared after the prompt opened
+    expect(revalidateScan([p('P1', { barcode: code }), p('P2', { barcode: code })], code, 'P1')).toBeNull()
+    // the code now names a different product id
+    expect(revalidateScan([p('P9', { barcode: code })], code, 'P1')).toBeNull()
+  })
+})
+
+describe('Barcode Safety - Search Input Intent & the shared scan gate', () => {
   const p1 = p('item1', { sku: 'BEV-01', name: 'COKE CAN', barcode: '8851959132012', barcodeVerified: true })
   const p2 = p('item2', { sku: 'BEV-02', name: 'COKE BOTTLE' })
   const products = [p1, p2]
 
-  test('pickOnEnter only authorizes verified_exact barcodes; default Enter does NOT auto-select SKU or legacy barcode', () => {
-    // Verified barcode auto-authorizes
-    expect(pickOnEnter(products, '8851959132012', [p1, p2])?.id).toBe('item1')
-    expect(pickOnEnter(products, '  8851959132012\n', [p1, p2])?.id).toBe('item1')
+  test('a scan/Enter adds only a verified_exact barcode; SKU and legacy barcode are terminal', () => {
+    expect(decideScan(products, '8851959132012')).toMatchObject({ kind: 'verified', product: { id: 'item1' } })
+    expect(decideScan(products, '  8851959132012\n')).toMatchObject({ kind: 'verified', product: { id: 'item1' } })
 
-    // legacyEnter: unverified legacy barcode must NOT be auto-authorized on default Enter
+    // legacy barcode: a candidate, but with confirmation attached — never an auto-add
     const legacyProd = p('leg1', { barcode: '8851000123456' })
-    expect(pickOnEnter([legacyProd], '8851000123456')).toBeUndefined()
+    expect(decideScan([legacyProd], '8851000123456')).toMatchObject({ kind: 'legacy', product: { id: 'leg1' } })
 
-    // sharedinputunknownmatchingSKU: hardware wedge or typing Enter on SKU must NOT auto-authorize movement
-    expect(pickOnEnter(products, 'bev-02', [p2])).toBeUndefined()
-    expect(pickOnEnter(products, 'BEV-01', [p1])).toBeUndefined()
+    // sharedinputunknownmatchingSKU: a wedge or typed SKU must NOT resolve to a product
+    expect(decideScan(products, 'bev-02').kind).toBe('reject')
+    expect(decideScan(products, 'BEV-01').kind).toBe('reject')
   })
 
   test('3parentcases: casefold verified, duplicate barcode with third SKU, inactive barcode with third SKU', () => {
-    // Parent case 1: AbC128 queried with abc128 must NOT be authorized as verified_exact
-    const caseResult = resolveBarcode([p('case', { barcode: 'AbC128', barcodeVerified: true })], 'abc128')
-    expect(caseResult.status).not.toBe('verified_exact')
+    // Parent case 1: AbC128 queried with abc128 is NOT_FOUND (exact-only, no casefold candidate)
+    expect(resolveBarcode([p('case', { barcode: 'AbC128', barcodeVerified: true })], 'abc128').status).toBe('not_found')
 
     // Parent case 2: Duplicate barcode DUP with third product having SKU DUP -> terminal reject
     const dup = [p('one', { barcode: 'DUP' }), p('two', { barcode: 'DUP' }), p('third', { sku: 'DUP', barcode: 'OTHER' })]
-    expect(pickOnEnter(dup, 'DUP', [])).toBeUndefined()
+    expect(decideScan(dup, 'DUP')).toMatchObject({ kind: 'reject', reason: 'duplicate' })
 
     // Parent case 3: Inactive barcode OLD with third product having SKU OLD -> terminal reject
     const inactive = [p('retired', { barcode: 'OLD', active: false }), p('third', { sku: 'OLD', barcode: 'OTHER' })]
-    expect(pickOnEnter(inactive, 'OLD', [])).toBeUndefined()
+    expect(decideScan(inactive, 'OLD')).toMatchObject({ kind: 'reject', reason: 'inactive' })
   })
 
   test('duplicateoutsideTransferdoc: resolves full brand catalog first so duplicate outside doc fails closed', () => {
@@ -192,17 +192,15 @@ describe('Barcode Safety - Search Input Intent & pickOnEnter', () => {
     expect(fullRes.status).toBe('duplicate')
   })
 
-  test('pickOnEnter MUST NOT fall back to matches[0] on loose search or name query', () => {
-    // Typing 'coke' matches both in search, but neither has barcode 'coke' or sku 'coke'
-    // It must return undefined to prevent unauthorized movement from search suggestions
-    expect(pickOnEnter(products, 'coke', [p1, p2])).toBeUndefined()
-    expect(pickOnEnter(products, 'can', [p1])).toBeUndefined()
+  test('a loose search or name query never resolves to a product (no matches[0] fallback)', () => {
+    expect(decideScan(products, 'coke').kind).toBe('reject')
+    expect(decideScan(products, 'can').kind).toBe('reject')
   })
 
-  test('pickOnEnter fails closed if multiple products share SKU or barcode', () => {
+  test('fails closed if multiple products share SKU or barcode', () => {
     const dupSku1 = p('d1', { sku: 'SAME-SKU' })
     const dupSku2 = p('d2', { sku: 'SAME-SKU' })
-    expect(pickOnEnter([dupSku1, dupSku2], 'SAME-SKU', [dupSku1, dupSku2])).toBeUndefined()
+    expect(decideScan([dupSku1, dupSku2], 'SAME-SKU').kind).toBe('reject')
   })
 })
 

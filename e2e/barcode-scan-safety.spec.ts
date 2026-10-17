@@ -101,56 +101,73 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
   test('repeated scans do not trigger implicit autoincrement', async ({ browser }) => {
     await seedStage()
     const now = Date.now()
-    await putDoc('products/v1', { sku: 'V-01', name: 'VERIFIED ITEM', barcode: '8851000111111', barcodeVerified: true, unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: now, updatedAt: now })
+    // A rules-legal legacy product: NO barcodeVerified (live Rules reject that key, and there is
+    // no trusted verification writer yet), so a scan takes the confirmation path it will take in
+    // production today. The fixture must not invent a verification the product cannot carry.
+    await putDoc('products/v1', { sku: 'V-01', name: 'REPEAT ITEM', barcode: '8851000111111', unit: 'Kilogram', unitType: 'KG', minStock: 0, hasImage: false, active: true, createdAt: now, updatedAt: now })
 
     const page = await signedIn(browser, 'staffA', '/issue')
     const searchInput = page.getByPlaceholder('ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)')
 
-    // First scan via wedge
+    // First scan via wedge: the confirmation carries the addition.
     await searchInput.fill('8851000111111')
     await searchInput.press('Enter')
-    await expect(page.getByText('VERIFIED ITEM')).toBeVisible()
+    await page.getByRole('button', { name: 'เพิ่มรายการ' }).click()
+    await expect(page.getByText('REPEAT ITEM')).toBeVisible()
 
-    // Second scan with same code
+    // Second scan with the same code must not add a twin or bump the quantity.
     await searchInput.fill('8851000111111')
     await searchInput.press('Enter')
+    await page.getByRole('button', { name: 'เพิ่มรายการ' }).click()
 
-    // In LineBuilder, re-scanning does not duplicate lines or increment qty; qty stays 1
+    // MANDATORY: the line exists and its quantity is still 1 (no implicit autoincrement).
     const qtyInputs = page.locator('input[type="number"]')
-    if (await qtyInputs.count() > 0) {
-      await expect(qtyInputs.first()).toHaveValue('1')
-    }
+    await expect(qtyInputs).toHaveCount(1)
+    await expect(qtyInputs.first()).toHaveValue('1')
   })
 
-  test('transfer receiving scan fails closed on unknown product in document', async ({ browser }) => {
+  test('transfer receiving scan fails closed on an unknown code (camera and box are one origin)', async ({ browser }) => {
     const stage = await seedStage()
     const now = Date.now()
 
-    // Seed transfer document in transit so receiving screen can load
+    // A real, valid transfer: two DISTINCT locations (the rules require from != to), a line with
+    // its required sku, and a non-empty history — the shape the receiving flow actually files.
+    await putDoc('locations/br1', { name: 'Branch 1', type: 'branch', active: true, createdAt: now })
     await putDoc('transfers/tr1', {
       docNo: 'TR-00001',
       status: 'inTransit',
       revision: 1,
-      fromLocationId: stage.locationId,
-      toLocationId: stage.locationId,
+      fromLocationId: 'wh',
+      toLocationId: 'br1',
       dispatchDate: now,
       requestedBy: stage.uid.manager,
       requestedByName: PEOPLE.manager.name,
+      // An in-transit transfer always carries who approved it: the rules require `approvedBy`
+      // on every status from inTransit on (firestore.rules transferLive()), and opening the
+      // page writes status 'receiving'. Without it the update is denied, the page shows "no
+      // document" and there is no scan box to test.
+      approvedBy: stage.uid.manager,
+      approvedByName: PEOPLE.manager.name,
+      approvedAt: now - 1000,
       items: [
-        { idx: 0, productId: 'flour', productName: 'FLOUR', unit: 'KG', requestedQty: 10, dispatchedQty: 10, inTransitQty: 10 },
+        { idx: 0, productId: 'flour', productName: 'FLOUR', sku: 'DRY-01-001', unit: 'KG', requestedQty: 10, dispatchQty: 10, inTransitQty: 10, stockAtApprove: 100 },
       ],
-      history: [],
-      createdAt: now,
-      updatedAt: now,
+      history: [
+        { at: now - 1000, by: stage.uid.manager, byName: PEOPLE.manager.name, action: 'approved', fromStatus: 'pendingApproval', toStatus: 'inTransit' },
+      ],
+      createdAt: now - 1000,
+      updatedAt: now - 1000,
     })
 
     const page = await signedIn(browser, 'staffA', '/transfers/tr1/receive')
 
-    const scanInput = page.getByPlaceholder('ยิงบาร์โค้ดหรือพิมพ์รหัสสินค้า แล้วกด Enter')
+    const scanInput = page.getByPlaceholder('ยิงบาร์โค้ด แล้วกด Enter')
     await expect(scanInput).toBeVisible()
 
     await scanInput.fill('UNKNOWN-BARCODE-999')
     await scanInput.press('Enter')
+    // Terminal: no SKU confirmation dialog, no fuzzy fallback — just the not-found notice.
     await expect(page.getByText(/ไม่พบบาร์โค้ด UNKNOWN-BARCODE-999 ในระบบ/)).toBeVisible()
+    await expect(page.getByText(/ยืนยันรหัสสินค้า/)).toHaveCount(0)
   })
 })

@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useViewport } from '../lib/viewport'
-import { lineOf, upsertLine } from '../lib/lines'
+import { lineOf, upsertLine, appendLineOnce } from '../lib/lines'
 import { unitUsage, usualUnit } from '../lib/usualUnit'
 import { useData } from '../data/DataContext'
 import { QtySheet } from './QtySheet'
@@ -15,8 +15,8 @@ import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
-import { resolveBarcode, searchFields } from '../lib/barcode'
-import { brandEpoch } from '../brand/brand'
+import { searchFields } from '../lib/barcode'
+import { useScanGate } from '../lib/useScanGate'
 import { BarcodeScanner } from './BarcodeScanner'
 import { useToast } from './Toast'
 import { useConfirm } from './Confirm'
@@ -126,6 +126,10 @@ export function LineBuilder({
       mounted.current = false
     }
   }, [])
+  // The latest lines, read at confirm time: a confirmation dialog that opens, then a line
+  // added on another path, must not lose that line when the answer comes back (R3 C3).
+  const linesRef = useRef(lines)
+  linesRef.current = lines
 
   useEffect(() => {
     if (focusOn > 0) searchBox.current?.focus()
@@ -157,7 +161,7 @@ export function LineBuilder({
       return
     }
     // Scanned again: the line is already there (the list hides chosen products, a scan does not).
-    if (!lines.some((l) => l.productId === p.id)) onChange([...lines, firstLine(p)])
+    onChange(appendLineOnce(linesRef.current, firstLine(p)))
     setSearch('')
     // Straight on to the next line: the cursor stays in the search box after every add.
     setTimeout(() => searchBox.current?.focus(), 0)
@@ -176,45 +180,23 @@ export function LineBuilder({
     return { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }
   }
 
+  /**
+   * One entry point for a camera scan and for Enter in the search box, so the two can never
+   * disagree (R4). The exact resolution, the legacy confirmation with its live revalidation,
+   * and every terminal rejection live in useScanGate.
+   */
+  const gate = useScanGate({
+    products,
+    onAdd: addProduct,
+    confirm,
+    toast,
+    t,
+  })
+
   /** A scan is a decision, not a suggestion: the line goes on as soon as it reads. */
   function scanned(code: string) {
     setScanning(false)
-    const res = resolveBarcode(products, code)
-    switch (res.status) {
-      case 'verified_exact': {
-        addProduct(res.product)
-        break
-      }
-      case 'legacy_unverified': {
-        const epochAtPrompt = brandEpoch()
-        const prodId = res.product.id
-        void confirm({
-          title: t('ยืนยันสินค้าจากบาร์โค้ด'),
-          message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
-          confirmText: t('เพิ่มรายการ'),
-        }).then((ok) => {
-          if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
-            const fresh = products.find((p) => p.id === prodId && p.active !== false)
-            if (fresh) addProduct(fresh)
-          }
-        })
-        break
-      }
-      case 'duplicate': {
-        toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: res.code, n: res.candidates.length }))
-        break
-      }
-      case 'inactive': {
-        toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.product.name }))
-        break
-      }
-      case 'not_found': {
-        toast.error(t('ไม่พบบาร์โค้ด {code} ในระบบ', { code: res.code }))
-        break
-      }
-      case 'empty':
-        break
-    }
+    gate(code)
   }
 
   function sheetSubmit(e: QtyEntry) {
@@ -309,60 +291,11 @@ export function LineBuilder({
             if (e.key !== 'Enter') return
             const raw = search.trim()
             if (!raw) return
-
-            // 1. Exact verified barcode auto-authorizes
-            const res = resolveBarcode(products, raw)
-            if (res.status === 'verified_exact') {
-              e.preventDefault()
-              addProduct(res.product)
-              return
-            }
-            if (res.status === 'legacy_unverified') {
-              e.preventDefault()
-              const epochAtPrompt = brandEpoch()
-              const prodId = res.product.id
-              void confirm({
-                title: t('ยืนยันสินค้าจากบาร์โค้ด'),
-                message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
-                confirmText: t('เพิ่มรายการ'),
-              }).then((ok) => {
-                if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
-                  const fresh = products.find((p) => p.id === prodId && p.active !== false)
-                  if (fresh) addProduct(fresh)
-                }
-              })
-              return
-            }
-            if (res.status === 'duplicate') {
-              e.preventDefault()
-              toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: res.code, n: res.candidates.length }))
-              return
-            }
-            if (res.status === 'inactive') {
-              e.preventDefault()
-              toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.product.name }))
-              return
-            }
-
-            // 2. Exact unique SKU requires human confirmation on Enter
-            const lower = raw.toLowerCase()
-            const skuMatches = products.filter((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === lower)
-            if (skuMatches.length === 1) {
-              e.preventDefault()
-              const skuProd = skuMatches[0]
-              const epochAtPrompt = brandEpoch()
-              void confirm({
-                title: t('ยืนยันรหัสสินค้า'),
-                message: t('พบสินค้า "{name}" จากรหัสสินค้า {sku} — ยืนยันเพิ่มรายการ?', { name: skuProd.name, sku: skuProd.sku }),
-                confirmText: t('เพิ่มรายการ'),
-              }).then((ok) => {
-                if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
-                  const fresh = products.find((p) => p.id === skuProd.id && p.active !== false)
-                  if (fresh) addProduct(fresh)
-                }
-              })
-              return
-            }
+            // Enter means "this is a code". A hardware wedge scanner and a human typing in
+            // the same box cannot be told apart, so it is resolved exactly as a barcode and
+            // never as a loose name or an SKU; a human picks a product by clicking it.
+            e.preventDefault()
+            gate(raw)
           }}
           autoComplete="off"
           // Product codes and names are not prose; the browser's dictionary only gets in

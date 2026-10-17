@@ -46,10 +46,11 @@ export type BarcodeResolution =
 /**
  * Resolves a scanned barcode token against a brand catalogue with full safety fences:
  * 1. Tokens are preserved as-is (leading zeros kept, numeric EAN never parsed to number).
- * 2. Code 128 / Code 39 case-sensitivity preserved; distinct casing never silently merged.
+ * 2. Only the EXACT token may ever produce a candidate. There is no case fold and no fuzzy
+ *    match: Code 128 is case-significant, so a case-mismatched token is not_found (R3 C1).
  * 3. Duplicates fail closed (no implicit first match).
  * 4. Inactive products are rejected.
- * 5. Unknown barcodes return not_found without fuzzy or loose fallback.
+ * 5. Unknown barcodes return not_found without any fallback to name, SKU or loose match.
  */
 export function resolveBarcode(products: readonly Product[], code: string): BarcodeResolution {
   const needle = code.trim()
@@ -77,84 +78,14 @@ export function resolveBarcode(products: readonly Product[], code: string): Barc
       : { status: 'legacy_unverified', product, code: needle }
   }
 
-  // Step 2: Case-insensitive fallback ONLY if no exact match and no casefold collision
-  const lowerNeedle = needle.toLowerCase()
-  const casefoldActive = products.filter(
-    (p) => p.active !== false && (p.barcode ?? '').trim().toLowerCase() === lowerNeedle,
-  )
-  if (casefoldActive.length > 1) {
-    // Distinct Code128 values or duplicate products collide on casefold -> fail closed as duplicate
-    return { status: 'duplicate', candidates: casefoldActive, code: needle }
-  }
-
-  const casefoldInactive = products.filter(
-    (p) => p.active === false && (p.barcode ?? '').trim().toLowerCase() === lowerNeedle,
-  )
-  if (casefoldInactive.length > 0) {
-    if (casefoldActive.length > 0) {
-      return { status: 'duplicate', candidates: [...casefoldActive, ...casefoldInactive], code: needle }
-    }
-    return { status: 'inactive', product: casefoldInactive[0], code: needle }
-  }
-
-  if (casefoldActive.length === 1) {
-    // SAFETY INVARIANT: Case-mismatched fallback MUST NEVER be authorized as verified_exact.
-    // Even when product.barcodeVerified === true, distinct casing in Code 128 requires confirmation.
-    return { status: 'legacy_unverified', product: casefoldActive[0], code: needle }
-  }
-
-  // Step 3: Not found (Unknown)
+  // Unknown token. There is deliberately NO case-insensitive fallback: Code 128 keeps its
+  // case, so `abc128` is a different code from `AbC128`, and treating the fold as "probably
+  // this product" is exactly the fuzzy guess the Owner forbade (R3 C1). A wrong-case token
+  // is an unknown code and gets the same answer as any other unknown: NOT_FOUND.
   return { status: 'not_found', code: needle }
-}
-
-/**
- * The product a scan means.
- *
- * Exact, not fuzzy: a scanner hands over the number printed on the box, and "close enough"
- * on a stock movement is a wrong balance.
- *
- * Hidden products are not offered, and duplicates fail closed (returns undefined) to prevent
- * arbitrary movement allocation.
- */
-export function findByBarcode(products: readonly Product[], code: string): Product | undefined {
-  const res = resolveBarcode(products, code)
-  if (res.status === 'verified_exact' || res.status === 'legacy_unverified') {
-    return res.product
-  }
-  return undefined
 }
 
 /** The fields a product is searched by, including its barcode when it has one. */
 export function searchFields(p: Product): (string | undefined)[] {
   return [p.name, p.sku, p.barcode]
-}
-
-/**
- * What Enter in a product search box means.
- *
- * Design decision for shared search (P0 Safety Remediation R2):
- * A barcode scanner in keyboard mode ("keyboard wedge") types characters and ends with Enter.
- * Because hardware wedge input cannot be reliably distinguished from human typing,
- * default search Enter MUST NOT automatically select SKU, name, or legacy unverified barcode.
- * Only verified exact barcodes may auto-authorize on Enter.
- * All barcode bad states (duplicate, inactive, legacy_unverified, not_found) reject terminal
- * on Enter without falling back to SKU.
- */
-export function pickOnEnter(
-  products: readonly Product[],
-  query: string,
-  _matches?: readonly Product[],
-): Product | undefined {
-  const q = query.trim()
-  if (!q) return undefined
-
-  // 1. Exact unique verified barcode only
-  const barcodeRes = resolveBarcode(products, q)
-  if (barcodeRes.status === 'verified_exact') {
-    return barcodeRes.product
-  }
-
-  // Fail closed: duplicate, inactive, legacy unverified, and non-barcode queries
-  // MUST NOT automatically select or fall back to SKU on default Enter.
-  return undefined
 }

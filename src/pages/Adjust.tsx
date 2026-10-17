@@ -27,8 +27,8 @@ import { ADJUST_REASONS, type Product, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
-import { resolveBarcode, searchFields } from '../lib/barcode'
-import { brandEpoch } from '../brand/brand'
+import { searchFields } from '../lib/barcode'
+import { useScanGate } from '../lib/useScanGate'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { useConfirm } from '../components/Confirm'
 import { useViewport } from '../lib/viewport'
@@ -200,44 +200,16 @@ export function AdjustPage() {
     setTimeout(() => searchRef.current?.focus(), 0)
   }
 
+  /**
+   * One scan entry point (camera + Enter in the box), shared with the other screens (R4).
+   * `add` writes through a functional state update, so a confirmation can never clobber a
+   * row keyed while it was open.
+   */
+  const gate = useScanGate({ products, onAdd: add, confirm, toast, t })
+
   function scanned(code: string) {
     setScanning(false)
-    const res = resolveBarcode(products, code)
-    switch (res.status) {
-      case 'verified_exact': {
-        add(res.product)
-        break
-      }
-      case 'legacy_unverified': {
-        const epochAtPrompt = brandEpoch()
-        const prodId = res.product.id
-        void confirm({
-          title: t('ยืนยันสินค้าจากบาร์โค้ด'),
-          message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
-          confirmText: t('เพิ่มรายการ'),
-        }).then((ok) => {
-          if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
-            const fresh = products.find((p) => p.id === prodId && p.active !== false)
-            if (fresh) add(fresh)
-          }
-        })
-        break
-      }
-      case 'duplicate': {
-        toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: res.code, n: res.candidates.length }))
-        break
-      }
-      case 'inactive': {
-        toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.product.name }))
-        break
-      }
-      case 'not_found': {
-        toast.error(t('ไม่พบบาร์โค้ด {code} ในระบบ', { code: res.code }))
-        break
-      }
-      case 'empty':
-        break
-    }
+    gate(code)
   }
 
   const patch = (id: string, p: Partial<AdjRow>) => setRows((rs) => rs.map((r) => (r.productId === id ? { ...r, ...p } : r)))
@@ -467,58 +439,10 @@ export function AdjustPage() {
                   if (e.key !== 'Enter') return
                   const raw = search.trim()
                   if (!raw) return
-
-                  const res = resolveBarcode(products, raw)
-                  if (res.status === 'verified_exact') {
-                    e.preventDefault()
-                    add(res.product)
-                    return
-                  }
-                  if (res.status === 'legacy_unverified') {
-                    e.preventDefault()
-                    const epochAtPrompt = brandEpoch()
-                    const prodId = res.product.id
-                    void confirm({
-                      title: t('ยืนยันสินค้าจากบาร์โค้ด'),
-                      message: t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?', { name: res.product.name, code: res.code }),
-                      confirmText: t('เพิ่มรายการ'),
-                    }).then((ok) => {
-                      if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
-                        const fresh = products.find((p) => p.id === prodId && p.active !== false)
-                        if (fresh) add(fresh)
-                      }
-                    })
-                    return
-                  }
-                  if (res.status === 'duplicate') {
-                    e.preventDefault()
-                    toast.error(t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', { code: res.code, n: res.candidates.length }))
-                    return
-                  }
-                  if (res.status === 'inactive') {
-                    e.preventDefault()
-                    toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.product.name }))
-                    return
-                  }
-
-                  const lower = raw.toLowerCase()
-                  const skuMatches = products.filter((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === lower)
-                  if (skuMatches.length === 1) {
-                    e.preventDefault()
-                    const skuProd = skuMatches[0]
-                    const epochAtPrompt = brandEpoch()
-                    void confirm({
-                      title: t('ยืนยันรหัสสินค้า'),
-                      message: t('พบสินค้า "{name}" จากรหัสสินค้า {sku} — ยืนยันเพิ่มรายการ?', { name: skuProd.name, sku: skuProd.sku }),
-                      confirmText: t('เพิ่มรายการ'),
-                    }).then((ok) => {
-                      if (ok && mounted.current && brandEpoch() === epochAtPrompt) {
-                        const fresh = products.find((p) => p.id === skuProd.id && p.active !== false)
-                        if (fresh) add(fresh)
-                      }
-                    })
-                    return
-                  }
+                  // Enter means "this is a code" (a wedge scanner ends with Enter). It is
+                  // resolved exactly as a barcode; a human picks a product by clicking it.
+                  e.preventDefault()
+                  gate(raw)
                 }}
                 autoComplete="off"
                 spellCheck={false}
