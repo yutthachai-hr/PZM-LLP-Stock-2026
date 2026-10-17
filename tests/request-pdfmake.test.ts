@@ -1,10 +1,27 @@
-import { describe, expect, test } from 'vitest'
-import { generateRequestPdfBuffer } from '../src/lib/requestPdfmakeExport'
+import { describe, expect, test, vi } from 'vitest'
+import { generateRequestPdfBuffer, generateAndDownloadRequestPdf } from '../src/lib/requestPdfmakeExport'
+import * as pdfmakeExport from '../src/lib/requestPdfmakeExport'
+import { exportRequestPdf, groupedBySupplier } from '../src/lib/requestExport'
+import { fmtQty, formatThaiDate } from '../src/lib/format'
+import { PR_STATUS_KEYS } from '../src/lib/purchaseRequestStatus'
 import type { PurchaseRequest, PurchaseRequestItem } from '../types'
-import { execSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+
+const PRIVATE_R5_DIR = 'C:/Users/Yutthachai/pzm-recovery-20261017/scan-first/L-pdf-remediation-r5'
+
+function getPythonCommand(): string {
+  if (process.env.PYTHON_VENV_PATH) {
+    const venvPython =
+      process.platform === 'win32'
+        ? path.join(process.env.PYTHON_VENV_PATH, 'Scripts', 'python.exe')
+        : path.join(process.env.PYTHON_VENV_PATH, 'bin', 'python')
+    if (fs.existsSync(venvPython)) return venvPython
+  }
+  return process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3')
+}
 
 function makeMockItem(idx: number, overrides?: Partial<PurchaseRequestItem>): PurchaseRequestItem {
   return {
@@ -56,7 +73,92 @@ function makeMockRequest(rowCount: number, overrides?: Partial<PurchaseRequest>)
 
 const mockT = (key: string) => key
 
+function buildExpectedSpec(pr: PurchaseRequest, company: string, locationName: string, t: (k: string) => string) {
+  const cols = [
+    t('ผู้ขาย'),
+    t('สินค้า'),
+    t('รหัสสินค้า'),
+    t('คงเหลือ'),
+    t('จำนวนที่ขอ'),
+    t('จำนวนที่อนุมัติ'),
+    t('หน่วย'),
+    t('หมายเหตุ'),
+  ]
+
+  const rows: (string | number)[][] = []
+  for (const g of groupedBySupplier(pr)) {
+    for (const i of g.items) {
+      rows.push([
+        g.supplierName,
+        i.productName,
+        i.sku,
+        i.stockAtSubmit === undefined ? '-' : fmtQty(i.stockAtSubmit),
+        i.requestedQty === null ? '-' : fmtQty(i.requestedQty),
+        i.approvedQty === undefined ? '-' : fmtQty(i.approvedQty),
+        i.entryUnit ?? i.unit,
+        [i.note, i.managerAdded ? t('หัวหน้าเพิ่ม') : '', i.supplierChoice === 'custom' ? t('เลือกผู้ขายเอง') : '']
+          .filter(Boolean)
+          .join(' · '),
+      ])
+    }
+  }
+
+  const title = `${company} — ${t('รายการขอสั่งซื้อ')} ${pr.docNo}`
+  const subtitle = `${t('วันที่ขอ')} ${formatThaiDate(pr.createdAt)} · ${t('คลัง')} ${locationName}`
+  const metaLines = [
+    `${t('ผู้ขอ')}: ${pr.requestedByName}`,
+    pr.approvedByName
+      ? `${t('ผู้อนุมัติ')}: ${pr.approvedByName} · ${t('วันที่อนุมัติ')} ${pr.approvedAt ? formatThaiDate(pr.approvedAt) : ''}`
+      : `${t('สถานะ')}: ${t(PR_STATUS_KEYS[pr.status])}`,
+    ...(pr.approvalNote ? [`${t('หมายเหตุการอนุมัติ')}: ${pr.approvalNote}`] : []),
+  ]
+
+  return {
+    cols,
+    rows,
+    head: [title, subtitle, ...metaLines],
+  }
+}
+
 describe('pdfmake Thai Purchase Request export engine', () => {
+  test('exportRequestPdf propagates errors without silent fallback to legacy jsPDF', async () => {
+    const pr = makeMockRequest(1)
+    const err = new Error('Forced pdfmake renderer failure')
+    const spy = vi.spyOn(pdfmakeExport, 'generateAndDownloadRequestPdf').mockRejectedValueOnce(err)
+    await expect(exportRequestPdf(pr, 'Pizza Mania', 'คลังหลัก', mockT)).rejects.toThrow('Forced pdfmake renderer failure')
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  test('exportRequestPdf calls generateAndDownloadRequestPdf once on success', async () => {
+    const pr = makeMockRequest(1)
+    const spy = vi.spyOn(pdfmakeExport, 'generateAndDownloadRequestPdf').mockResolvedValueOnce(undefined)
+    await exportRequestPdf(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledWith(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+  })
+
+  test('generateAndDownloadRequestPdf calls doc.download with expected document filename', async () => {
+    const pr = makeMockRequest(2)
+    const pdfMakeMod = await import('pdfmake/build/pdfmake.js')
+    const pdfMake = pdfMakeMod.default || pdfMakeMod
+    let downloadArg: string | undefined
+    const originalCreatePdf = pdfMake.createPdf
+    pdfMake.createPdf = ((docDef: Record<string, unknown>, opts?: Record<string, unknown>) => {
+      const doc = originalCreatePdf.call(pdfMake, docDef, opts)
+      doc.download = async (filename?: string) => {
+        downloadArg = filename
+      }
+      return doc
+    }) as typeof pdfMake.createPdf
+
+    try {
+      await generateAndDownloadRequestPdf(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+      expect(downloadArg).toBe(`${pr.docNo}.pdf`)
+    } finally {
+      pdfMake.createPdf = originalCreatePdf
+    }
+  })
+
   test('generates valid PDF buffer with correct header and metadata', async () => {
     const pr = makeMockRequest(17)
     const buf = await generateRequestPdfBuffer(pr, 'Pizza Mania', 'คลังหลัก', mockT)
@@ -66,68 +168,200 @@ describe('pdfmake Thai Purchase Request export engine', () => {
     expect(header).toBe('%PDF-')
   })
 
-  test('preserves all 3 brands and translations (TH and EN)', async () => {
-    const brands = ['Pizza Mania', 'Le Lapin', 'Farang Food']
+  test('preserves all 3 actual brands (Pizza, Le Lapin, R&D) and metadata', async () => {
+    const brands = [
+      'Pizza Mania',
+      'Le Lapin Sandwich Delivery',
+      'R&D (Research & Development)',
+    ]
     for (const brand of brands) {
       const pr = makeMockRequest(5)
       const bufTh = await generateRequestPdfBuffer(pr, brand, 'คลังอุดมสุข', mockT)
       expect(bufTh.length).toBeGreaterThan(1000)
 
-      const enT = (k: string) => ({
-        'รายการขอสั่งซื้อ': 'Purchase Request',
-        'ผู้ขาย': 'Supplier',
-        'สินค้า': 'Product',
-      }[k] ?? k)
+      const tmpPdf = path.join(os.tmpdir(), `test-brand-${Date.now()}.pdf`)
+      fs.writeFileSync(tmpPdf, Buffer.from(bufTh))
+      try {
+        const inspectRes = spawnSync(
+          getPythonCommand(),
+          ['tests/verify_document_structure.py', 'inspect', tmpPdf],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+        )
+        expect(inspectRes.status).toBe(0)
+        const parsed = JSON.parse(inspectRes.stdout.trim())
+        expect(parsed.pageCount).toBeGreaterThanOrEqual(1)
+        expect(parsed.puaCount).toBe(0)
+        expect(parsed.actualTextCount).toBe(0)
+      } finally {
+        if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
+      }
+
+      const enT = (k: string) =>
+        ({
+          'รายการขอสั่งซื้อ': 'Purchase Request',
+          'ผู้ขาย': 'Supplier',
+          'สินค้า': 'Product',
+        }[k] ?? k)
       const bufEn = await generateRequestPdfBuffer(pr, brand, 'Main Warehouse', enT)
       expect(bufEn.length).toBeGreaterThan(1000)
     }
   })
 
-  test('extracts exact Unicode text and binds SKUs/quantities with PyMuPDF', async () => {
-    const pr = makeMockRequest(25)
+  test('cell-by-cell 2D table grid verification on actual NEW app PDF buffer (17 rows)', async () => {
+    const pr = makeMockRequest(17)
     const buf = await generateRequestPdfBuffer(pr, 'Pizza Mania', 'คลังหลัก', mockT)
     expect(buf.length).toBeGreaterThan(2000)
 
-    const tmpPdf = path.join(os.tmpdir(), `test-pr-25-${Date.now()}.pdf`)
-    const tmpPy = path.join(os.tmpdir(), `test-pr-25-${Date.now()}.py`)
+    const spec = buildExpectedSpec(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+    const tmpPdf = path.join(os.tmpdir(), `test-app-17-${Date.now()}.pdf`)
+    const tmpSpec = path.join(os.tmpdir(), `test-app-17-spec-${Date.now()}.json`)
+
     fs.writeFileSync(tmpPdf, Buffer.from(buf))
+    fs.writeFileSync(tmpSpec, JSON.stringify(spec, null, 2), 'utf8')
 
-    const pyScript = `import sys, pymupdf
-sys.stdout.reconfigure(encoding='utf-8')
-doc = pymupdf.open(sys.argv[1])
-pages_text = [page.get_text() for page in doc]
-full_text = '\\n---PAGE---\\n'.join(pages_text)
-print('PAGE_COUNT:', len(doc))
-assert len(doc) >= 2, f'Expected multipage document, got {len(doc)} pages'
-
-# Check authentic Thai words and F04 glyph words
-assert 'ผำ' in full_text, 'Expected authentic ผำ ingredient'
-assert 'ไข่ผำสดสำหรับประกอบอาหาร' in full_text, 'Expected full ingredient name'
-assert 'แป้งพิซซ่า ปำ ฝำ ฟำ ผำ' in full_text, 'Expected tall consonants and am'
-assert 'PHA-01-001' in full_text, 'Expected SKU PHA-01-001'
-assert 'SKU-TALL-002' in full_text, 'Expected SKU-TALL-002'
-
-# Check table headers repeated on page 2
-assert 'ผู้ขาย' in pages_text[0] and 'ผู้ขาย' in pages_text[1], 'Expected repeat table header on page 2'
-assert 'รหัสสินค้า' in pages_text[0] and 'รหัสสินค้า' in pages_text[1], 'Expected repeat header'
-
-# Check footer pagination
-assert '1 / ' in pages_text[0], 'Expected page 1 footer'
-assert '2 / ' in pages_text[1], 'Expected page 2 footer'
-print('PYMUPDF_ASSERTIONS_PASSED')
-`
-    fs.writeFileSync(tmpPy, pyScript, 'utf8')
+    // Also persist into private remediation directory if present
+    if (fs.existsSync(PRIVATE_R5_DIR)) {
+      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-17.pdf'), Buffer.from(buf))
+      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-17-spec.json'), JSON.stringify(spec, null, 2), 'utf8')
+    }
 
     try {
-      const out = execSync(`python "${tmpPy}" "${tmpPdf}"`, {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      expect(out).toContain('PYMUPDF_ASSERTIONS_PASSED')
-      expect(out).toContain('PAGE_COUNT: 2')
+      const run = spawnSync(
+        getPythonCommand(),
+        ['tests/verify_document_structure.py', 'verify', tmpPdf, tmpSpec],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      expect(run.status).toBe(0)
+      const result = JSON.parse(run.stdout.trim())
+      expect(result.ok).toBe(true)
+      expect(result.errors).toEqual([])
+
+      const inspectRun = spawnSync(
+        getPythonCommand(),
+        ['tests/verify_document_structure.py', 'inspect', tmpPdf],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      expect(inspectRun.status).toBe(0)
+      const inspectRes = JSON.parse(inspectRun.stdout.trim())
+      expect(inspectRes.pageCount).toBe(2)
+      expect(inspectRes.puaCount).toBe(0)
+      expect(inspectRes.actualTextCount).toBe(0)
+      expect(inspectRes.invisible3TrCount).toBe(0)
+      expect(inspectRes.hasPha).toBe(true)
+      expect(inspectRes.hasTallAm).toBe(true)
     } finally {
       if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
-      if (fs.existsSync(tmpPy)) fs.unlinkSync(tmpPy)
+      if (fs.existsSync(tmpSpec)) fs.unlinkSync(tmpSpec)
     }
-  }, 15000)
+  })
+
+  test('multipage 2D table grid verification on actual NEW app PDF buffer (151 rows across pages)', async () => {
+    const pr = makeMockRequest(151)
+    const buf = await generateRequestPdfBuffer(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+    expect(buf.length).toBeGreaterThan(10000)
+
+    const spec = buildExpectedSpec(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+    const tmpPdf = path.join(os.tmpdir(), `test-app-151-${Date.now()}.pdf`)
+    const tmpSpec = path.join(os.tmpdir(), `test-app-151-spec-${Date.now()}.json`)
+
+    fs.writeFileSync(tmpPdf, Buffer.from(buf))
+    fs.writeFileSync(tmpSpec, JSON.stringify(spec, null, 2), 'utf8')
+
+    if (fs.existsSync(PRIVATE_R5_DIR)) {
+      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-151.pdf'), Buffer.from(buf))
+      fs.writeFileSync(path.join(PRIVATE_R5_DIR, 'new-app-pr-151-spec.json'), JSON.stringify(spec, null, 2), 'utf8')
+    }
+
+    try {
+      const run = spawnSync(
+        getPythonCommand(),
+        ['tests/verify_document_structure.py', 'verify', tmpPdf, tmpSpec],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      expect(run.status).toBe(0)
+      const result = JSON.parse(run.stdout.trim())
+      expect(result.ok).toBe(true)
+      expect(result.errors).toEqual([])
+
+      const inspectRun = spawnSync(
+        getPythonCommand(),
+        ['tests/verify_document_structure.py', 'inspect', tmpPdf],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      expect(inspectRun.status).toBe(0)
+      const inspectRes = JSON.parse(inspectRun.stdout.trim())
+      expect(inspectRes.pageCount).toBeGreaterThanOrEqual(7)
+      expect(inspectRes.puaCount).toBe(0)
+      expect(inspectRes.actualTextCount).toBe(0)
+      expect(inspectRes.invisible3TrCount).toBe(0)
+    } finally {
+      if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
+      if (fs.existsSync(tmpSpec)) fs.unlinkSync(tmpSpec)
+    }
+  })
+
+  test('negative controls MUST detect permutations, swapped SKU/qty, missing or duplicate rows', async () => {
+    const pr = makeMockRequest(17)
+    const buf = await generateRequestPdfBuffer(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+    const baseSpec = buildExpectedSpec(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+
+    const tmpPdf = path.join(os.tmpdir(), `test-neg-${Date.now()}.pdf`)
+    const tmpSpec = path.join(os.tmpdir(), `test-neg-spec-${Date.now()}.json`)
+    fs.writeFileSync(tmpPdf, Buffer.from(buf))
+
+    const runCheck = (mutatedSpec: typeof baseSpec) => {
+      fs.writeFileSync(tmpSpec, JSON.stringify(mutatedSpec, null, 2), 'utf8')
+      const run = spawnSync(
+        getPythonCommand(),
+        ['tests/verify_document_structure.py', 'verify', tmpPdf, tmpSpec],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      expect(run.status).toBe(2)
+      const parsed = JSON.parse(run.stdout.trim())
+      expect(parsed.ok).toBe(false)
+      expect(parsed.errors.length).toBeGreaterThan(0)
+      return parsed.errors as string[]
+    }
+
+    try {
+      // 1. Permuted rows
+      const permuted = JSON.parse(JSON.stringify(baseSpec))
+      const row0 = permuted.rows[0]
+      permuted.rows[0] = permuted.rows[1]
+      permuted.rows[1] = row0
+      const permErrs = runCheck(permuted)
+      expect(permErrs.some((e) => e.includes('Row 1') || e.includes('Row 2'))).toBe(true)
+
+      // 2. Swapped SKU
+      const swappedSku = JSON.parse(JSON.stringify(baseSpec))
+      const sku0 = swappedSku.rows[0][2]
+      swappedSku.rows[0][2] = swappedSku.rows[1][2]
+      swappedSku.rows[1][2] = sku0
+      const skuErrs = runCheck(swappedSku)
+      expect(skuErrs.some((e) => e.includes('รหัสสินค้า'))).toBe(true)
+
+      // 3. Swapped quantity
+      const swappedQty = JSON.parse(JSON.stringify(baseSpec))
+      const qty0 = swappedQty.rows[0][4]
+      swappedQty.rows[0][4] = swappedQty.rows[1][4]
+      swappedQty.rows[1][4] = qty0
+      const qtyErrs = runCheck(swappedQty)
+      expect(qtyErrs.some((e) => e.includes('จำนวนที่ขอ'))).toBe(true)
+
+      // 4. Missing row
+      const missingRow = JSON.parse(JSON.stringify(baseSpec))
+      missingRow.rows.splice(3, 1)
+      const missErrs = runCheck(missingRow)
+      expect(missErrs.some((e) => e.includes('Row count mismatch'))).toBe(true)
+
+      // 5. Duplicate row
+      const dupRow = JSON.parse(JSON.stringify(baseSpec))
+      dupRow.rows.splice(1, 0, dupRow.rows[0])
+      const dupErrs = runCheck(dupRow)
+      expect(dupErrs.some((e) => e.includes('Row count mismatch'))).toBe(true)
+    } finally {
+      if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
+      if (fs.existsSync(tmpSpec)) fs.unlinkSync(tmpSpec)
+    }
+  })
 })

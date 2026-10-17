@@ -29,7 +29,32 @@ interface ImportMetaEnv {
 }
 
 declare module 'pdfmake/build/pdfmake.js' {
-  const pdfMake: any
+  export interface OutputDocument {
+    getBuffer(): Promise<Buffer | Uint8Array>
+    getBlob(): Promise<Blob>
+    getBase64(): Promise<string>
+    getDataUrl(): Promise<string>
+    download(filename?: string): Promise<void>
+    open(win?: Window | null): Promise<void>
+    print(win?: Window | null): Promise<void>
+  }
+
+  export interface FontDefinition {
+    normal?: string
+    bold?: string
+    italics?: string
+    bolditalics?: string
+  }
+
+  export interface PdfMakeInstance {
+    vfs?: Record<string, string>
+    fonts?: Record<string, FontDefinition>
+    addVirtualFileSystem(vfs: Record<string, string | { data: string; encoding?: string }>): void
+    addFonts(fonts: Record<string, FontDefinition>): void
+    createPdf(docDefinition: Record<string, unknown>, options?: Record<string, unknown>): OutputDocument
+  }
+
+  const pdfMake: PdfMakeInstance
   export default pdfMake
 }
 

@@ -1,4 +1,5 @@
 import type { PurchaseRequest } from '../types'
+import type { PdfMakeInstance } from 'pdfmake/build/pdfmake.js'
 import { fmtQty, formatThaiDate } from './format'
 import { PR_STATUS_KEYS } from './purchaseRequestStatus'
 import { groupedBySupplier } from './requestExport'
@@ -8,25 +9,22 @@ type T = (key: string, vars?: Record<string, string | number>) => string
 
 let fontsRegistered = false
 
-async function getPdfMake() {
+async function getPdfMake(): Promise<PdfMakeInstance> {
   const mod = await import('pdfmake/build/pdfmake.js')
-  const pdfMake = mod.default || mod
+  const pdfMake = (mod.default || mod) as PdfMakeInstance
   if (!fontsRegistered) {
-    if (typeof pdfMake.addVirtualFileSystem === 'function') {
-      pdfMake.addVirtualFileSystem({ 'SarabunPDF3-Regular.ttf': SARABUN_PDF3_BASE64 })
-    } else if (pdfMake.virtualfs && typeof pdfMake.virtualfs.writeFileSync === 'function') {
-      pdfMake.virtualfs.writeFileSync('SarabunPDF3-Regular.ttf', SARABUN_PDF3_BASE64, 'base64')
+    if (typeof pdfMake.addVirtualFileSystem !== 'function' || typeof pdfMake.addFonts !== 'function') {
+      throw new Error('pdfMake missing required font registration methods')
     }
-    if (typeof pdfMake.addFonts === 'function') {
-      pdfMake.addFonts({
-        SarabunPDF: {
-          normal: 'SarabunPDF3-Regular.ttf',
-          bold: 'SarabunPDF3-Regular.ttf',
-          italics: 'SarabunPDF3-Regular.ttf',
-          bolditalics: 'SarabunPDF3-Regular.ttf',
-        },
-      })
-    }
+    pdfMake.addVirtualFileSystem({ 'SarabunPDF3-Regular.ttf': SARABUN_PDF3_BASE64 })
+    pdfMake.addFonts({
+      SarabunPDF: {
+        normal: 'SarabunPDF3-Regular.ttf',
+        bold: 'SarabunPDF3-Regular.ttf',
+        italics: 'SarabunPDF3-Regular.ttf',
+        bolditalics: 'SarabunPDF3-Regular.ttf',
+      },
+    })
     fontsRegistered = true
   }
   return pdfMake
@@ -151,16 +149,8 @@ export async function generateAndDownloadRequestPdf(
   const pdfMake = await getPdfMake()
   const docDef = buildRequestPdfDocDefinition(pr, company, locationName, t)
   const doc = pdfMake.createPdf(docDef)
-  if (typeof doc.download === 'function') {
-    await doc.download(`${pr.docNo}.pdf`)
-  } else {
-    const buf = await doc.getBuffer()
-    const blob = new Blob([buf], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${pr.docNo}.pdf`
-    a.click()
-    URL.revokeObjectURL(url)
+  if (typeof doc.download !== 'function') {
+    throw new Error('pdfMake doc.download is not supported in current environment')
   }
+  await doc.download(`${pr.docNo}.pdf`)
 }
