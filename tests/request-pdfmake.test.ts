@@ -376,4 +376,186 @@ describe('pdfmake Thai Purchase Request export engine', () => {
       if (fs.existsSync(tmpSpec)) fs.unlinkSync(tmpSpec)
     }
   })
+
+  test('regression: prevents table rows from splitting across page breaks with orphan continuation row', async () => {
+    const enT = (k: string) =>
+      ({
+        'รายการขอสั่งซื้อ': 'Purchase requests',
+        'ผู้ขาย': 'Supplier',
+        'สินค้า': 'Product',
+        'รหัสสินค้า': 'Product code',
+        'คงเหลือ': 'On hand',
+        'จำนวนที่ขอ': 'Requested qty',
+        'จำนวนที่อนุมัติ': 'Approved qty',
+        'หน่วย': 'Unit',
+        'หมายเหตุ': 'Note',
+        'ผู้ขอ': 'Requested by',
+        'ผู้อนุมัติ': 'Approved by',
+        'วันที่ขอ': 'Request date',
+        'วันที่อนุมัติ': 'Approved date',
+        'สถานะ': 'Status',
+        'คลัง': 'Location',
+        'เลือกผู้ขายเอง': 'Supplier chosen by hand',
+        'หัวหน้าเพิ่ม': 'Added by manager',
+        'สถานะ: อนุมัติแล้ว': 'Status: Approved',
+      }[k] ?? k)
+
+    const sups = [
+      { id: 'sup-1', name: 'เบทาโกร' },
+      { id: 'sup-2', name: 'โครงการหลวง' },
+      { id: 'sup-3', name: 'ซีพีเอฟ' },
+      { id: 'sup-4', name: 'สยามฟูดส์' },
+      { id: 'sup-5', name: 'วิสาหกิจชุมชนผำไทย' },
+    ]
+    const units = ['KG', 'EA', 'Pack', 'Carton']
+    const items: PurchaseRequestItem[] = []
+    for (let i = 1; i <= 50; i++) {
+      const s = sups[(i - 1) % sups.length]
+      const u = units[(i - 1) % units.length]
+      items.push({
+        idx: i,
+        productId: `prod-bulk-${i}`,
+        productName: i === 1 ? 'ไข่ผำสดสำหรับประกอบอาหาร' : i === 2 ? 'แป้งพิซซ่า ปำ ฝำ ฟำ ผำ' : `สินค้าทดสอบรายการที่ ${i}`,
+        sku: `SKU-${String(i).padStart(5, '0')}`,
+        unit: u,
+        entryUnit: i % 2 === 0 ? 'Pack' : u,
+        supplierId: s.id,
+        supplierName: s.name,
+        supplierChoice: i % 5 === 0 ? 'custom' : 'default',
+        requestedQty: i * 2.5,
+        approvedQty: i * 2.5,
+        stockAtSubmit: i % 10,
+        managerAdded: i % 7 === 0,
+        note: i % 3 === 0 ? `หมายเหตุรายการที่ ${i}` : undefined,
+      })
+    }
+
+    const pr: PurchaseRequest = {
+      id: 'pr-50-regress',
+      docNo: 'PR-00050',
+      status: 'approved',
+      revision: 1,
+      locationId: 'wh-main',
+      requestedBy: 'user-req-1',
+      requestedByName: 'สมชาย ผู้ขอเบิก',
+      approvedBy: 'user-admin',
+      approvedByName: 'ยุทธชัย ผู้จัดการ',
+      approvedAt: 1776240000000,
+      createdAt: 1776230000000,
+      updatedAt: 1776240000000,
+      createdBy: 'user-req-1',
+      createdByName: 'สมชาย ผู้ขอเบิก',
+      history: [],
+      approvalNote: 'อนุมัติตามรายการ น้ำมันและวัตถุดิบผำสด',
+      items,
+    }
+
+    const buf = await generateRequestPdfBuffer(pr, 'Pizza Mania', 'Main Warehouse', enT)
+    const tmpPdf = path.join(os.tmpdir(), `test-split-regression-${Date.now()}.pdf`)
+    fs.writeFileSync(tmpPdf, Buffer.from(buf))
+
+    try {
+      const inspectRes = spawnSync(
+        getPythonCommand(),
+        [
+          '-c',
+          `import sys, json, pymupdf
+from tests.verify_document_structure import extract_table_grid
+doc = pymupdf.open(sys.argv[1])
+headers, rows = extract_table_grid(doc)
+split_rows = [r for r in rows if (not r[0] and not r[1] and r[7])]
+page_start_splits = []
+for p_idx, page in enumerate(doc):
+    if p_idx == 0: continue
+    drawings = page.get_drawings()
+    strokes = [x for x in drawings if x['type'] == 's']
+    y_divs = sorted(list(set(round(s['rect'].y0, 1) for s in strokes)))
+    header_candidates = [
+        x for x in drawings
+        if x['type'] == 'f' and x.get('fill') and (abs(x['rect'].height - 23.125) < 4 or abs(x['rect'].height - 19.625) < 4)
+    ]
+    if not header_candidates: continue
+    top_y = min(x['rect'].y0 for x in header_candidates)
+    header_rects = sorted([x['rect'] for x in header_candidates if abs(x['rect'].y0 - top_y) < 2], key=lambda r: r.x0)
+    col_bounds = [(r.x0 - 1.5, r.x1 + 1.5) for r in header_rects]
+    header_bottom = max(r.y1 for r in header_rects)
+    words = page.get_text('words')
+    data_y_cuts = [header_bottom] + [y for y in y_divs if y > header_bottom + 1]
+    if len(data_y_cuts) > 1:
+        y0, y1 = data_y_cuts[0], data_y_cuts[1]
+        first_row = []
+        for cx0, cx1 in col_bounds:
+            c_words = [w for w in words if y0 <= w[1] < y1 and cx0 <= w[0] < cx1]
+            first_row.append(' '.join(w[4] for w in c_words).strip())
+        if not first_row[0] and not first_row[1] and first_row[7]:
+            page_start_splits.append({'page': p_idx + 1, 'row': first_row})
+print(json.dumps({'split_rows': split_rows, 'page_start_splits': page_start_splits, 'total_rows': len(rows)}))
+`,
+          tmpPdf,
+        ],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      expect(inspectRes.status).toBe(0)
+      const data = JSON.parse(inspectRes.stdout.trim())
+      expect(data.split_rows).toEqual([])
+      expect(data.page_start_splits).toEqual([])
+      expect(data.total_rows).toBe(50)
+    } finally {
+      if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
+    }
+  })
+
+  test('pathological case: handles single note exceeding page height without hang or text loss', async () => {
+    const tokens = Array.from({ length: 80 }, (_, i) => `หมายเหตุทดสอบขนาดยาวมากพิเศษ-${i + 1}`)
+    const longNote = tokens.join(' · ')
+    const pr = makeMockRequest(1, {
+      items: [
+        makeMockItem(1, {
+          note: longNote,
+        }),
+      ],
+    })
+
+    const start = Date.now()
+    const buf = await generateRequestPdfBuffer(pr, 'Pizza Mania', 'คลังหลัก', mockT)
+    const duration = Date.now() - start
+
+    expect(duration).toBeLessThan(10000)
+    expect(buf.length).toBeGreaterThan(1000)
+
+    const tmpPdf = path.join(os.tmpdir(), `test-pathological-${Date.now()}.pdf`)
+    fs.writeFileSync(tmpPdf, Buffer.from(buf))
+
+    try {
+      const inspectRes = spawnSync(
+        getPythonCommand(),
+        [
+          '-c',
+          `import sys, json, pymupdf
+doc = pymupdf.open(sys.argv[1])
+full_text = '\\n'.join(p.get_text() for p in doc)
+print(json.dumps({
+    'pageCount': len(doc),
+    'full_text': full_text,
+}))
+`,
+          tmpPdf,
+        ],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      expect(inspectRes.status).toBe(0)
+      const data = JSON.parse(inspectRes.stdout.trim())
+      expect(data.pageCount).toBeGreaterThanOrEqual(1)
+      expect(data.pageCount).toBeLessThan(10)
+
+      const cleanFullText = data.full_text.replace(/\s+/g, '')
+      // Verify row is not lost: product name and initial note content are present
+      expect(cleanFullText).toContain('ไข่ผำสดสำหรับประกอบอาหาร')
+      expect(cleanFullText).toContain(tokens[0].replace(/\s+/g, ''))
+      // Visible ellipsis confirms explicit truncation rather than silent drop
+      expect(cleanFullText).toContain('…')
+    } finally {
+      if (fs.existsSync(tmpPdf)) fs.unlinkSync(tmpPdf)
+    }
+  })
 })

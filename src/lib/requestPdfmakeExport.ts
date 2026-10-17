@@ -47,9 +47,20 @@ export function buildRequestPdfDocDefinition(
         i.requestedQty === null ? '-' : fmtQty(i.requestedQty),
         i.approvedQty === undefined ? '-' : fmtQty(i.approvedQty),
         i.entryUnit ?? i.unit,
-        [i.note, i.managerAdded ? t('หัวหน้าเพิ่ม') : '', i.supplierChoice === 'custom' ? t('เลือกผู้ขายเอง') : '']
-          .filter(Boolean)
-          .join(' · '),
+        (() => {
+          const rawNote = [
+            i.note,
+            i.managerAdded ? t('หัวหน้าเพิ่ม') : '',
+            i.supplierChoice === 'custom' ? t('เลือกผู้ขายเอง') : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')
+          // ponytail: cap note length with visible ellipsis when exceeding single-page height to prevent pdfmake dropping row under dontBreakRows
+          const MAX_NOTE_CHARS = 300
+          return rawNote.length > MAX_NOTE_CHARS
+            ? `${rawNote.slice(0, MAX_NOTE_CHARS - 1)}…`
+            : rawNote
+        })(),
       ])
     }
   }
@@ -95,6 +106,7 @@ export function buildRequestPdfDocDefinition(
         margin: [0, 8, 0, 0],
         table: {
           headerRows: 1,
+          dontBreakRows: true,
           widths: [100, '*', 95, 48, 60, 65, 36, 68],
           body: [
             headCols.map((col, idx) => ({
