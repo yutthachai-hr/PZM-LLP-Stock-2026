@@ -335,56 +335,26 @@ describe('Stock count stale-level conflict (P0 C-02)', () => {
     ).rejects.toThrow(StockLevelConflictError)
   })
 
-  test('mixed units: legacy #unit level compared against its own doc only', async () => {
-    // Seed a legacy unit level
+  test('mixed units: a base-unit count is checked against the base balance only, never a legacy #unit one', async () => {
     seed('stockLevels', [
       { id: `${MAIN}__p1`, locationId: MAIN, productId: 'p1', qty: 10, updatedAt: 1 },
       { id: `${MAIN}__p1#pack`, locationId: MAIN, productId: 'p1', qty: 4, unit: 'pack', updatedAt: 1 },
     ])
+    const line = { productId: 'p1', productName: 'Bacon', unit: 'KG', direction: 'in' as const, qty: 2, reason: 'count' }
+    // The legacy pack balance (4) is a different number, not the one this count was based on.
+    await expect(adjustStockLines({ locationId: MAIN, date: Date.now(), actor: ACTOR, lines: [{ ...line, expectedLevel: 4 }] }))
+      .rejects.toThrow(StockLevelConflictError)
+    await adjustStockLines({ locationId: MAIN, date: Date.now(), actor: ACTOR, lines: [{ ...line, expectedLevel: 10 }] })
+    const levels = raw('stockLevels')
+    expect(levels.find((l) => l.id === `${MAIN}__p1`)?.qty).toBe(12)
+    expect(levels.find((l) => l.id === `${MAIN}__p1#pack`)?.qty).toBe(4)
+  })
 
-    // Adjusting legacy unit row checks against #pack doc
-    await expect(
-      adjustStockLines({
-        locationId: MAIN,
-        date: Date.now(),
-        actor: ACTOR,
-        lines: [
-          {
-            productId: 'p1',
-            productName: 'Bacon',
-            unit: 'KG',
-            entryUnit: 'pack',
-            direction: 'in',
-            qty: 2,
-            reason: 'count',
-            expectedLevel: 5, // Expected 5, but actual is 4
-          },
-        ],
-      }),
-    ).rejects.toThrow(StockLevelConflictError)
-
-    // With matching expectedLevel 4, succeeds
-    const docNo = await adjustStockLines({
-      locationId: MAIN,
-      date: Date.now(),
-      actor: ACTOR,
-      lines: [
-        {
-          productId: 'p1',
-          productName: 'Bacon',
-          unit: 'KG',
-          entryUnit: 'pack',
-          direction: 'in',
-          qty: 2,
-          reason: 'count',
-          expectedLevel: 4,
-        },
-      ],
-    })
-    expect(docNo).toMatch(/^ADJ-/)
-    expect(getLevel(MAIN, 'p1', 'pack')).toBe(6)
-    // Base unit untouched
-    expect(getLevel(MAIN, 'p1')).toBe(10)
+  test('a new per-unit (legacy) line is still refused: the old filing is not offered to new rows', async () => {
+    await expect(adjustStockLines({
+      locationId: MAIN, date: Date.now(), actor: ACTOR,
+      lines: [{ productId: 'p1', productName: 'Bacon', unit: 'KG', entryUnit: 'pack', direction: 'in', qty: 2, reason: 'count' }],
+    })).rejects.toThrow(/ไม่ได้ระบุจำนวนที่คีย์/)
   })
 
   test('delta-mode rows never conflict', async () => {

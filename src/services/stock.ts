@@ -189,7 +189,7 @@ function noteChanged(mv: StockMovement, patch: Record<string, unknown>, epoch: n
  * check twice. The UI's line builder happens to prevent duplicates; that is not where this
  * belongs.
  */
-function mergeLines(lines: MovementLine[], opts?: { allowLegacy?: boolean }): MovementLine[] {
+function mergeLines(lines: MovementLine[]): MovementLine[] {
   if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
   const byProduct = new Map<string, MovementLine>()
   for (const raw of lines) {
@@ -199,8 +199,7 @@ function mergeLines(lines: MovementLine[], opts?: { allowLegacy?: boolean }): Mo
     // (lib/uom.ts) and `qty` is already the product's own unit. A line without that is
     // not a converted line, and the old per-unit filing is not offered to new rows.
     const keyed = keyedUnit(raw)
-    const legacy = !!opts?.allowLegacy && isLegacyUnitRow(raw)
-    if (keyed && !legacy && !(raw.entryQty !== undefined && raw.entryQty > 0)) {
+    if (keyed && !(raw.entryQty !== undefined && raw.entryQty > 0)) {
       throw new AppError('รายการ "{name}" คีย์เป็น {unit} แต่ไม่ได้ระบุจำนวนที่คีย์', { name: raw.productName, unit: keyed })
     }
     const l: MovementLine = keyed ? { ...raw, qty, entryUnit: keyed } : { ...raw, qty, entryUnit: undefined, entryQty: undefined }
@@ -704,7 +703,8 @@ export class StockLevelConflictError extends AppError {
       : {
           count: conflicts.length,
           details: conflicts
-            .map((c) => `${c.productName || c.productId} (ตอนนับ: ${c.expected}${c.unit ? ' ' + c.unit : ''}, ล่าสุด: ${c.actual}${c.unit ? ' ' + c.unit : ''})`)
+            // Language-neutral: the sentence around it is translated, the figures are not words.
+            .map((c) => `${c.productName || c.productId} ${c.expected} → ${c.actual}${c.unit ? ' ' + c.unit : ''}`)
             .join(', '),
         }
     super(key, vars)
@@ -753,7 +753,7 @@ export async function planAdjust(
       throw new AppError('สินค้า "{name}" อยู่ในใบนี้มากกว่า 1 บรรทัด', { name: raw.productName })
     }
     seen.add(raw.productId)
-    const [line] = mergeLines([raw], { allowLegacy: true })
+    const [line] = mergeLines([raw])
     return {
       line,
       direction: requireOneOf(raw.direction, ['in', 'out'] as const),

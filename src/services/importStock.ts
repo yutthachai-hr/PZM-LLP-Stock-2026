@@ -63,7 +63,6 @@ export interface Posting {
    */
   asOfQty: number
   excelRow: number
-  expectedLevel?: number
 }
 
 /** The latest count of a product at a location — the one thing a count cannot go behind. */
@@ -468,7 +467,6 @@ export async function applyImportPlan(
         actor,
         note,
         date: p.date,
-        expectedLevel: p.expectedLevel,
       })
       if (wrote) result.posted++
       else result.unchanged++
