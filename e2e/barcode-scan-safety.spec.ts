@@ -86,6 +86,9 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     await seedStage()
     const page = await signedIn(browser, 'staffA', '/issue')
     openedPages.push(page)
+    // Sibling tests prove the catalog is loaded before scanning: an empty catalog refuses as
+    // "catalogue still loading" (line ~229 covers that cold-scan path). Wait on the seeded row.
+    await catalogHolds(page, 'flour', [/FLOUR/])
 
     await page.getByRole('button', { name: 'สแกนบาร์โค้ด' }).first().click()
     const input = page.getByRole('textbox', { name: 'เลขบาร์โค้ด' })
