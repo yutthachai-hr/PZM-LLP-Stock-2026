@@ -1,24 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
-import { brandDef } from '../../brand/brand'
+import { brandDef, brandEpoch, getBrand } from '../../brand/brand'
 import { DataTable, type Column } from '../../components/DataTable'
 import { Icon } from '../../components/Icon'
-import { LedgerWindowNotice } from '../../components/LedgerWindowNotice'
+import { HistoryReadNotice } from '../../components/HistoryReadNotice'
 import { describeEditChange, TYPE_LABEL } from '../../components/movements/labels'
 import { useToast } from '../../components/Toast'
 import { Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui'
 import { useData } from '../../data/DataContext'
-import { fetchRange as fetchEvents } from '../../data/eventCache'
-import { orderCache } from '../../data/orderCache'
-import { requestCache } from '../../data/requestCache'
+import { readActivitySources } from '../../services/historyActivity'
+import { createHistoryRequest } from '../../data/historyRequest'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { buildActivityLog, type ActivityArea, type ActivityEntry } from '../../lib/activityLog'
 import { dateInputToMs, fmtQty, formatThaiDate, formatThaiDateTime, msToDateInput, todayMs } from '../../lib/format'
 import { looseMatch } from '../../lib/search'
-import type { PurchaseOrder, PurchaseRequest, StockEvent } from '../../types'
 import { HISTORY_LABEL } from '../calendar/chips'
 import { historyText } from '../requests/RequestReview'
 
@@ -43,52 +41,41 @@ const AREA_COLOR: Record<ActivityArea, 'green' | 'blue' | 'amber' | 'slate'> = {
 }
 const DAY = 86_400_000
 const PREVIEW = 300
+const EMPTY_SOURCES: Awaited<ReturnType<typeof readActivitySources>> = { movements: [], orders: [], requests: [], events: [] }
 
 export function ActivityLog() {
   const t = useT()
   const toast = useToast()
   const { user } = useAuth()
   const { brand } = useBrand()
-  const { movements, locationById, ensureMovementsFrom } = useData()
+  const { locationById } = useData()
   const company = brand ? brandDef(brand).name : ''
 
   const [fromStr, setFromStr] = useState(msToDateInput(todayMs() - 7 * DAY))
   const [toStr, setToStr] = useState(msToDateInput(todayMs()))
   const [area, setArea] = useState<'' | ActivityArea>('')
   const [search, setSearch] = useState('')
-  const [orders, setOrders] = useState<PurchaseOrder[]>([])
-  const [requests, setRequests] = useState<PurchaseRequest[]>([])
-  const [events, setEvents] = useState<StockEvent[]>([])
-  const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState('')
 
   const from = fromStr ? dateInputToMs(fromStr) : todayMs() - 7 * DAY
   const to = (toStr ? dateInputToMs(toStr) : todayMs()) + DAY - 1
 
-  useEffect(() => {
-    ensureMovementsFrom(from)
-  }, [from, ensureMovementsFrom])
-
-  // An order placed before the window may have been received or cancelled inside it, and
-  // a request may have moved weeks after it was written: reach back 60 days for those.
-  useEffect(() => {
-    let on = true
-    setLoading(true)
-    Promise.all([orderCache.fetchRange(from - 60 * DAY, to), requestCache.fetchRange(from - 60 * DAY, to), fetchEvents(from - 30 * DAY, to + 30 * DAY)])
-      .then(([o, r, e]) => {
-        if (!on) return
-        setOrders(o)
-        setRequests(r)
-        setEvents(e)
-      })
-      .catch((e) => toast.error(errText(e, t)))
-      .finally(() => on && setLoading(false))
-    return () => {
-      on = false
-    }
-    // toast/t are stable for the page's life
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to])
+  const key = `${brand}:${from}:${to}`
+  const request = useMemo(() => createHistoryRequest<Awaited<ReturnType<typeof readActivitySources>>>(key), [key])
+  const result = useSyncExternalStore(request.subscribe, request.get, request.get)
+  const ready = result.status === 'complete' || result.status === 'empty'
+  const loading = result.status === 'idle' || result.status === 'loading'
+  const { movements, orders, requests, events } = result.rows[0] ?? EMPTY_SOURCES
+  const refresh = useCallback(() => {
+    if (!brand) return
+    const epoch = brandEpoch()
+    void request.load(key, async () => {
+      const rows = await readActivitySources(from, to, brand)
+      if (getBrand() !== brand || brandEpoch() !== epoch) throw new Error('History scope changed')
+      return [rows]
+    })
+  }, [brand, from, to, key, request])
+  useEffect(() => { refresh(); return () => request.cancel() }, [refresh, request])
 
   const entries = useMemo(
     () =>
@@ -152,6 +139,7 @@ export function ActivityLog() {
     }))
 
   async function excel() {
+    if (!ready) return
     setBusy('excel')
     try {
       const { exportExcel } = await import('../../lib/export')
@@ -164,6 +152,7 @@ export function ActivityLog() {
   }
 
   async function pdf() {
+    if (!ready) return
     setBusy('pdf')
     try {
       const { exportReportPdf } = await import('../../lib/export')
@@ -215,9 +204,9 @@ export function ActivityLog() {
           </Field>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-          <span className="text-sm text-ink-soft">{loading ? t('กำลังโหลดข้อมูล...') : t('พบ {n} รายการ', { n: shown.length })}</span>
+          <span className="text-sm text-ink-soft">{loading ? t('กำลังโหลดข้อมูล...') : ready ? t('พบ {n} รายการ', { n: shown.length }) : '—'}</span>
           <div className="flex gap-2">
-            <Button variant="success" onClick={excel} disabled={shown.length === 0 || loading || !!busy}>
+            <Button variant="success" onClick={excel} disabled={shown.length === 0 || !ready || !!busy}>
               {busy === 'excel' ? (
                 t('กำลังสร้างไฟล์...')
               ) : (
@@ -227,7 +216,7 @@ export function ActivityLog() {
                 </>
               )}
             </Button>
-            <Button variant="danger" onClick={pdf} disabled={shown.length === 0 || loading || !!busy}>
+            <Button variant="danger" onClick={pdf} disabled={shown.length === 0 || !ready || !!busy}>
               {busy === 'pdf' ? (
                 t('กำลังสร้างไฟล์...')
               ) : (
@@ -241,9 +230,9 @@ export function ActivityLog() {
         </div>
       </Card>
 
-      <LedgerWindowNotice />
+      <HistoryReadNotice status={result.status === 'idle' ? 'loading' : result.status} count={shown.length} error={result.error} retry={refresh} />
 
-      {shown.length === 0 ? (
+      {!ready ? null : shown.length === 0 ? (
         <Card>
           <EmptyState icon="history" title={t('ไม่พบรายการ')} hint={t('ลองปรับตัวกรอง')} />
         </Card>

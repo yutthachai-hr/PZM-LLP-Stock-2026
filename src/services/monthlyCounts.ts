@@ -3,7 +3,7 @@ import { getBrand } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { countDayOf, monthlyCountId } from '../lib/monthlyCount'
 import { COL, type MonthlyCount, type MonthlyCountLine, type MonthlyCountQuestion, type MonthlyCountResult } from '../types'
-import { captureFilingScope, filing, planAdjust } from './stock'
+import { captureFilingScope, filing, planAdjust, type FilingScope } from './stock'
 
 /**
  * Monthly stock-count sheets (owner, 29 Sep 2026): figures are keyed and saved without
@@ -105,9 +105,11 @@ export async function recordMonthlyCount(params: {
   id: string
   results: Record<string, MonthlyCountResult>
   actor: Actor
+  /** The brand the confirm was pressed in, when the caller awaits before filing. */
+  scope?: FilingScope
 }): Promise<void> {
   const { id, results, actor } = params
-  await scoped().transaction(async (tx) => {
+  await (params.scope?.db ?? scoped()).transaction(async (tx) => {
     const sheet = await tx.get<MonthlyCount>(COL.monthlyCounts, id)
     if (!sheet) throw new AppError('ไม่พบใบนับนี้')
     if (sheet.status !== 'counting') throw new AppError('ใบนับนี้ยืนยันแล้ว')
@@ -150,9 +152,11 @@ export async function postMonthlyCount(params: {
    * so it must not read as shrinkage in the reports (owner, 29 Sep 2026).
    */
   reason?: 'count' | 'opening'
+  /** The brand the confirm was pressed in, when the caller awaits before filing. */
+  scope?: FilingScope
 }): Promise<string[]> {
   const { id, parts, results, actor, note, reason = 'count' } = params
-  const scope = captureFilingScope()
+  const scope = params.scope ?? captureFilingScope()
   const docNos: string[] = []
   const finish = parts.length === 0 ? [[] as CountAdjustment[]] : parts
   for (let i = 0; i < finish.length; i++) {
