@@ -94,7 +94,7 @@ export function appendAdjRow(
 
 export function AdjustPage() {
   const t = useT()
-  const { products, locations, qtyAt, movements } = useData()
+  const { products, productsServerSynced, productsListenerError, locations, qtyAt, movements } = useData()
   const { user } = useAuth()
   const toast = useToast()
   const confirm = useConfirm()
@@ -221,7 +221,7 @@ export function AdjustPage() {
    * `add` writes through a functional state update, so a confirmation can never clobber a
    * row keyed while it was open.
    */
-  const gate = useScanGate({ products, onAdd: add, confirm, toast, t })
+  const gate = useScanGate({ products, productsServerSynced, productsListenerError, onAdd: add, confirm, toast, t })
 
   function scanned(code: string) {
     setScanning(false)

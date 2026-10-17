@@ -274,7 +274,10 @@ export function createLocalBackend(brand?: BrandId): Backend {
       // would show an empty warehouse and invite writing over it. Delivering is separate,
       // and a subscriber that throws is its own problem, not this one's.
       const initial = apply(Object.values(loadMap(c))) as T[]
-      emit(() => cb(initial), c)
+      emit(() => {
+        cb(initial)
+        opts?.onServerSync?.()
+      }, c)
       return () => {
         set?.delete(listener)
       }

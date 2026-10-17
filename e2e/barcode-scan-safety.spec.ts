@@ -222,4 +222,18 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     await expect(page.getByText(/ไม่พบบาร์โค้ด UNKNOWN-BARCODE-999 ในระบบ/)).toBeVisible()
     await expect(page.getByText(/ยืนยันรหัสสินค้า/)).toHaveCount(0)
   })
+
+  test('scan made before catalogue is server-synced shows loading message, not not-found', async ({ browser }) => {
+    await seedStage()
+    const page = await signedIn(browser, 'staffA', '/issue')
+    openedPages.push(page)
+
+    const searchInput = page.getByPlaceholder('ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)')
+    await expect(searchInput).toBeVisible()
+    await searchInput.fill('8851000111111')
+    await searchInput.press('Enter')
+
+    // Must never show false not-found
+    await expect(page.getByText(/ไม่พบบาร์โค้ด/)).toHaveCount(0)
+  })
 })

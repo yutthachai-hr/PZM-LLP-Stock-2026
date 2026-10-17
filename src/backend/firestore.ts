@@ -128,6 +128,11 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
             noteReadOp({ label, collection: c, kind: 'listen.bootstrap', docs: snap.size, billed: resumed ? changes : Math.max(1, snap.size) })
             fromServer = true
             epoch = currentResumeEpoch()
+            try {
+              opts?.onServerSync?.()
+            } catch (e) {
+              console.error(`[firestore] onServerSync ${c} failed`, e)
+            }
           } else if (currentResumeEpoch() !== epoch) {
             noteReadOp({ label, collection: c, kind: 'listen.resume', docs: snap.size, billed: Math.max(1, snap.size) })
             epoch = currentResumeEpoch()

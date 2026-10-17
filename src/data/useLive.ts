@@ -19,17 +19,23 @@ export function useLive<T>(
     sinceValue,
     label,
   }: { enabled?: boolean; sinceField?: string; sinceValue?: number; label?: string } = {},
-): { data: T[]; loading: boolean } {
+): { data: T[]; loading: boolean; serverSynced: boolean; error: unknown | null } {
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
+  const [serverSynced, setServerSynced] = useState(false)
+  const [error, setError] = useState<unknown | null>(null)
 
   useEffect(() => {
     if (!enabled) {
       setData([])
       setLoading(false)
+      setServerSynced(false)
+      setError(null)
       return
     }
     setLoading(true)
+    setServerSynced(false)
+    setError(null)
     const since =
       sinceField !== undefined && sinceValue !== undefined
         ? { field: sinceField, value: sinceValue }
@@ -43,13 +49,17 @@ export function useLive<T>(
       {
         ...(since ? { since } : {}),
         ...(label ? { label } : {}),
+        onServerSync: () => setServerSynced(true),
         // A listener the rules refuse, or that cannot connect, used to leave the screen
         // loading forever. Stop waiting; the data stays whatever it was.
-        onError: () => setLoading(false),
+        onError: (err) => {
+          setError(err)
+          setLoading(false)
+        },
       },
     )
     return unsub
   }, [collection, enabled, sinceField, sinceValue, label])
 
-  return { data, loading }
+  return { data, loading, serverSynced, error }
 }

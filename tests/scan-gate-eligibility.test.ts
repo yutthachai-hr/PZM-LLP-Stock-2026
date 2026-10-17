@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 import { useScanGate } from '../src/lib/useScanGate'
 import type { Product } from '../src/types'
+import type { Backend } from '../src/backend/types'
 
 // Mock react hooks in pure function harness for useScanGate
 vi.mock('react', () => ({
@@ -27,13 +28,26 @@ const p = (id: string, over: Partial<Product> = {}): Product => ({
   ...over,
 })
 
+function createMockBackend(initialDocs: Product[] = []) {
+  const store = new Map<string, Product>(initialDocs.map((doc) => [doc.id, doc]))
+  const be: any = {
+    mode: 'local',
+    forBrand: () => be,
+    getOne: vi.fn(async (_col: string, id: string) => store.get(id) ?? null),
+    getBy: vi.fn(async (_col: string, field: string, val: any) =>
+      [...store.values()].filter((item: any) => (item[field] ?? '').trim() === String(val).trim()),
+    ),
+  }
+  return be as Backend
+}
+
 describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', () => {
   const pInDoc = p('inDoc', { barcode: '1111111111111' })
   const pNotInDoc = p('notInDoc', { barcode: '2222222222222' })
   const pDup1 = p('dup1', { barcode: '3333333333333' })
   const pDup2 = p('dup2', { barcode: '3333333333333' })
   const products = [pInDoc, pNotInDoc, pDup1, pDup2]
-  const loadCatalog = async () => products
+  const mockBackend = createMockBackend(products)
 
   test('non-document product does not trigger confirmation prompt and does not mutate', async () => {
     const onAdd = vi.fn()
@@ -46,14 +60,15 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
 
     const gate = useScanGate({
       products,
+      productsServerSynced: true,
       onAdd,
       confirm,
       toast,
       t,
-      loadCatalog,
+      backend: mockBackend,
       isEligible: (prod) => lines.some((l) => l.productId === prod.id),
       onIneligible,
-    } as any)
+    })
 
     await gate('2222222222222')
 
@@ -75,14 +90,15 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
 
     const gate = useScanGate({
       products,
+      productsServerSynced: true,
       onAdd,
       confirm,
       toast,
       t,
-      loadCatalog,
+      backend: mockBackend,
       isEligible: (prod) => lines.some((l) => l.productId === prod.id),
       onIneligible,
-    } as any)
+    })
 
     const scanPromise = gate('1111111111111')
     await new Promise((r) => setTimeout(r, 10))
@@ -109,14 +125,15 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
 
     const gate = useScanGate({
       products,
+      productsServerSynced: true,
       onAdd,
       confirm,
       toast,
       t,
-      loadCatalog,
+      backend: mockBackend,
       isEligible,
       onIneligible,
-    } as any)
+    })
 
     await gate('3333333333333')
 
@@ -139,14 +156,15 @@ describe('useScanGate eligibility gate (Transfer UX & fail-closed ordering)', ()
 
     const gate = useScanGate({
       products,
+      productsServerSynced: true,
       onAdd,
       confirm,
       toast,
       t,
-      loadCatalog,
+      backend: mockBackend,
       isEligible: (prod) => lines.some((l) => l.productId === prod.id),
       onIneligible,
-    } as any)
+    })
 
     const scanPromise = gate('1111111111111')
     await new Promise((r) => setTimeout(r, 10))

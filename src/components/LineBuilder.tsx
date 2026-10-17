@@ -117,7 +117,7 @@ export function LineBuilder({
   // How each product is usually keyed, and how often it is used at all, from the movements
   // already in memory (owner, 29 Sep 2026) — a new line starts in its usual unit, and among
   // equally good matches the product people use most is listed first. No read.
-  const { movements } = useData()
+  const { movements, productsServerSynced, productsListenerError } = useData()
   const usage = useMemo(() => unitUsage(movements), [movements])
   const mounted = useRef(true)
   useEffect(() => {
@@ -187,6 +187,8 @@ export function LineBuilder({
    */
   const gate = useScanGate({
     products,
+    productsServerSynced,
+    productsListenerError,
     onAdd: addProduct,
     confirm,
     toast,

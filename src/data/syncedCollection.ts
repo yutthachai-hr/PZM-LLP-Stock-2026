@@ -104,7 +104,10 @@ export function newestOf(docs: Iterable<Record<string, unknown>>, field: string)
  * The collection, as a list, kept current. Same shape as `useLive`. In local/demo mode it
  * is simply `useLive` — there is no bill to save.
  */
-export function useSynced<T extends WithStamp>(collection: string, opts: SyncOptions): { data: T[]; loading: boolean } {
+export function useSynced<T extends WithStamp>(
+  collection: string,
+  opts: SyncOptions,
+): { data: T[]; loading: boolean; serverSynced: boolean; error: unknown | null } {
   const cloud = BACKEND_MODE === 'cloud'
   const live = useLive<T>(collection, {
     enabled: !cloud,
@@ -115,9 +118,15 @@ export function useSynced<T extends WithStamp>(collection: string, opts: SyncOpt
   return cloud ? synced : live
 }
 
-function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptions, enabled: boolean): { data: T[]; loading: boolean } {
+function useSyncedCloud<T extends WithStamp>(
+  collection: string,
+  opts: SyncOptions,
+  enabled: boolean,
+): { data: T[]; loading: boolean; serverSynced: boolean; error: unknown | null } {
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
+  const [serverSynced, setServerSynced] = useState(false)
+  const [error, setError] = useState<unknown | null>(null)
   const brand = getBrand()
   const { label } = opts
   const fields = (opts.fields ?? ['updatedAt']).join(',')
@@ -127,6 +136,8 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
 
   useEffect(() => {
     if (!enabled) return
+    setServerSynced(false)
+    setError(null)
     let stopped = false
     const unsubs: (() => void)[] = []
     let offReturn: (() => void) | null = null
@@ -170,8 +181,10 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
           fullAt = Date.now()
           emit()
           persist()
-        } catch {
+          setServerSynced(true)
+        } catch (err) {
           // Offline or refused: what was held (nothing) stands; the listeners below retry.
+          if (!stopped) setError(err)
         }
         setLoading(false)
       }
@@ -189,7 +202,19 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
                 persist()
                 setLoading(false)
               },
-              { since: { field, value: since }, label: `${label}.delta.${field}`, onError: () => setLoading(false) },
+              {
+                since: { field, value: since },
+                label: `${label}.delta.${field}`,
+                onServerSync: () => {
+                  if (!stopped) setServerSynced(true)
+                },
+                onError: (err) => {
+                  if (!stopped) {
+                    setError(err)
+                    setLoading(false)
+                  }
+                },
+              },
             ),
           )
         }
@@ -215,5 +240,5 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
     }
   }, [collection, brand, enabled, label, fields, fullEvery, winField, winFrom])
 
-  return { data, loading }
+  return { data, loading, serverSynced, error }
 }

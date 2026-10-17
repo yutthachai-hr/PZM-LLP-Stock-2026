@@ -73,7 +73,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
   const confirm = useConfirm()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { products } = useData()
+  const { products, productsServerSynced, productsListenerError } = useData()
   const actor = useMemo(() => ({ id: user!.id, name: user!.name, role: user!.role, siteIds: user!.siteIds }), [user])
   const lines = transfer.items.filter((i) => !i.removed)
   const [counts, setCounts] = useState<Record<number, Count>>(() =>
@@ -128,6 +128,8 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
    */
   const gate = useScanGate({
     products,
+    productsServerSynced,
+    productsListenerError,
     onAdd: markProductReceived,
     confirm,
     toast,
