@@ -33,3 +33,19 @@ describe('synced collection merge', () => {
     expect(newestStamp([])).toBe(0)
   })
 })
+
+describe('server-sync status behind the scan gate', async () => {
+  const { syncStatusAfter, SYNC_INITIAL } = await import('../src/data/syncedCollection')
+  test('a cold-start read failure does not outlive a later server sync', () => {
+    const failed = syncStatusAfter(SYNC_INITIAL, { kind: 'failed', error: new Error('offline') })
+    expect(failed).toEqual({ serverSynced: false, error: expect.any(Error) })
+    // The listener reached the server afterwards: the catalogue is current again.
+    expect(syncStatusAfter(failed, { kind: 'synced' })).toEqual({ serverSynced: true, error: null })
+  })
+  test('a listener that fails after syncing stops updates, so scans stay refused until it syncs again', () => {
+    const synced = syncStatusAfter(SYNC_INITIAL, { kind: 'synced' })
+    const broken = syncStatusAfter(synced, { kind: 'failed', error: 'permission-denied' })
+    expect(broken.error).toBe('permission-denied')
+    expect(syncStatusAfter(broken, { kind: 'synced' }).error).toBeNull()
+  })
+})

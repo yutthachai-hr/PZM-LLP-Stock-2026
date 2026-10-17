@@ -1,40 +1,84 @@
 import type { Product } from '../types'
 
 /**
- * The product a scan means (spec §3).
+ * Barcode resolution outcome (Workstream A P0 safety contract).
  *
- * Exact, not fuzzy: a scanner hands over the number printed on the box, and "close enough"
- * on a stock movement is a wrong balance. Whitespace is trimmed (some readers append a
- * newline) and case ignored, because a Code 128 label may carry letters.
- *
- * Hidden products are not offered — nothing should be filed against them — and a duplicate
- * cannot happen: services/products refuses a barcode another product already carries.
+ * Exact verified: exactly one active product with verified barcode.
+ * Legacy unverified: single active candidate found, but lacks explicit verification proof; requires confirmation.
+ * Duplicate: 2 or more products carry this barcode; fail-closed, requires human choice.
+ * Inactive: product is retired/inactive; rejected.
+ * Not found: unknown barcode (link request candidate); no fallback to fuzzy/name/SKU.
+ * Empty: blank or whitespace-only code.
  */
-export function findByBarcode(products: readonly Product[], code: string): Product | undefined {
-  const needle = code.trim().toLowerCase()
-  if (!needle) return undefined
-  return products.find((p) => p.active !== false && (p.barcode ?? '').trim().toLowerCase() === needle)
+export type BarcodeResolution =
+  | {
+      status: 'legacy_unverified'
+      product: Product
+      code: string
+      message?: string
+    }
+  | {
+      status: 'duplicate'
+      candidates: Product[]
+      code: string
+      message?: string
+    }
+  | {
+      status: 'inactive'
+      product: Product
+      code: string
+      message?: string
+    }
+  | {
+      status: 'not_found'
+      code: string
+      message?: string
+    }
+  | {
+      status: 'empty'
+    }
+
+/**
+ * Resolves a scanned barcode token against a brand catalogue with full safety fences:
+ * 1. Tokens are preserved as-is (leading zeros kept, numeric EAN never parsed to number).
+ * 2. Only the EXACT token may ever produce a candidate. There is no case fold and no fuzzy
+ *    match: Code 128 is case-significant, so a case-mismatched token is not_found (R3 C1).
+ * 3. Duplicates fail closed (no implicit first match).
+ * 4. Inactive products are rejected.
+ * 5. Unknown barcodes return not_found without any fallback to name, SKU or loose match.
+ */
+export function resolveBarcode(products: readonly Product[], code: string): BarcodeResolution {
+  const needle = code.trim()
+  if (!needle) return { status: 'empty' }
+
+  // Step 1: Exact case-sensitive match
+  const exactActive = products.filter((p) => p.active !== false && (p.barcode ?? '').trim() === needle)
+  if (exactActive.length > 1) {
+    return { status: 'duplicate', candidates: exactActive, code: needle }
+  }
+
+  // Exact inactive match
+  const exactInactive = products.filter((p) => p.active === false && (p.barcode ?? '').trim() === needle)
+  if (exactInactive.length > 0) {
+    if (exactActive.length > 0) {
+      return { status: 'duplicate', candidates: [...exactActive, ...exactInactive], code: needle }
+    }
+    return { status: 'inactive', product: exactInactive[0], code: needle }
+  }
+
+  if (exactActive.length === 1) {
+    const product = exactActive[0]
+    return { status: 'legacy_unverified', product, code: needle }
+  }
+
+  // Unknown token. There is deliberately NO case-insensitive fallback: Code 128 keeps its
+  // case, so `abc128` is a different code from `AbC128`, and treating the fold as "probably
+  // this product" is exactly the fuzzy guess the Owner forbade (R3 C1). A wrong-case token
+  // is an unknown code and gets the same answer as any other unknown: NOT_FOUND.
+  return { status: 'not_found', code: needle }
 }
 
 /** The fields a product is searched by, including its barcode when it has one. */
 export function searchFields(p: Product): (string | undefined)[] {
   return [p.name, p.sku, p.barcode]
-}
-
-/**
- * What Enter in a product search box means.
- *
- * A barcode scanner in keyboard mode ("keyboard wedge") types the code and presses Enter,
- * so the box sees exactly what a person typing a code would. The barcode is tried first and
- * exactly, then the product code exactly, and only then the best loose match — otherwise a
- * scanned number that happens to appear inside another product's name would add that one.
- */
-export function pickOnEnter(products: readonly Product[], query: string, matches: readonly Product[]): Product | undefined {
-  const q = query.trim().toLowerCase()
-  if (!q) return undefined
-  return (
-    findByBarcode(products, q) ??
-    products.find((p) => p.active !== false && (p.sku ?? '').trim().toLowerCase() === q) ??
-    matches[0]
-  )
 }

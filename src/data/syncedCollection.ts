@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { backend, BACKEND_MODE } from '../backend'
 import { getBrand, resolveCollection } from '../brand/brand'
-import { useLive } from './useLive'
+import { SYNC_INITIAL, syncStatusAfter, useLive, type SyncStatus } from './useLive'
+export { SYNC_INITIAL, syncStatusAfter, type SyncStatus } from './useLive'
 import { onReturnFromLongAbsence } from './readMeter'
 import { clearCopies, FULL_EVERY_MS, readCopy, SKEW_MS, writeCopy } from './deviceStore'
 
@@ -104,7 +105,10 @@ export function newestOf(docs: Iterable<Record<string, unknown>>, field: string)
  * The collection, as a list, kept current. Same shape as `useLive`. In local/demo mode it
  * is simply `useLive` — there is no bill to save.
  */
-export function useSynced<T extends WithStamp>(collection: string, opts: SyncOptions): { data: T[]; loading: boolean } {
+export function useSynced<T extends WithStamp>(
+  collection: string,
+  opts: SyncOptions,
+): { data: T[]; loading: boolean; serverSynced: boolean; error: unknown | null } {
   const cloud = BACKEND_MODE === 'cloud'
   const live = useLive<T>(collection, {
     enabled: !cloud,
@@ -115,9 +119,14 @@ export function useSynced<T extends WithStamp>(collection: string, opts: SyncOpt
   return cloud ? synced : live
 }
 
-function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptions, enabled: boolean): { data: T[]; loading: boolean } {
+function useSyncedCloud<T extends WithStamp>(
+  collection: string,
+  opts: SyncOptions,
+  enabled: boolean,
+): { data: T[]; loading: boolean; serverSynced: boolean; error: unknown | null } {
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
+  const [sync, setSync] = useState<SyncStatus>(SYNC_INITIAL)
   const brand = getBrand()
   const { label } = opts
   const fields = (opts.fields ?? ['updatedAt']).join(',')
@@ -127,6 +136,7 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
 
   useEffect(() => {
     if (!enabled) return
+    setSync(SYNC_INITIAL)
     let stopped = false
     const unsubs: (() => void)[] = []
     let offReturn: (() => void) | null = null
@@ -170,8 +180,10 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
           fullAt = Date.now()
           emit()
           persist()
-        } catch {
+          setSync((cur) => syncStatusAfter(cur, { kind: 'synced' }))
+        } catch (err) {
           // Offline or refused: what was held (nothing) stands; the listeners below retry.
+          if (!stopped) setSync((cur) => syncStatusAfter(cur, { kind: 'failed', error: err }))
         }
         setLoading(false)
       }
@@ -189,7 +201,19 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
                 persist()
                 setLoading(false)
               },
-              { since: { field, value: since }, label: `${label}.delta.${field}`, onError: () => setLoading(false) },
+              {
+                since: { field, value: since },
+                label: `${label}.delta.${field}`,
+                onServerSync: () => {
+                  if (!stopped) setSync((cur) => syncStatusAfter(cur, { kind: 'synced' }))
+                },
+                onError: (err) => {
+                  if (!stopped) {
+                    setSync((cur) => syncStatusAfter(cur, { kind: 'failed', error: err }))
+                    setLoading(false)
+                  }
+                },
+              },
             ),
           )
         }
@@ -215,5 +239,5 @@ function useSyncedCloud<T extends WithStamp>(collection: string, opts: SyncOptio
     }
   }, [collection, brand, enabled, label, fields, fullEvery, winField, winFrom])
 
-  return { data, loading }
+  return { data, loading, serverSynced: sync.serverSynced, error: sync.error }
 }

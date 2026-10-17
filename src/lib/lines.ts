@@ -13,6 +13,19 @@ export function lineOf(product: { id: string; name: string; unitType: string }, 
 }
 
 /**
+ * The lines with `line` appended once — no twin for a product already on the list.
+ *
+ * The caller must hand over the LATEST lines (a ref read at confirm time), not the array it
+ * captured when a confirmation dialog opened: a line added on another path in the meantime
+ * would otherwise be dropped when the answer came back (R3 C3). Returning the same array when
+ * the product is already present keeps a redundant write from triggering a re-render.
+ */
+export function appendLineOnce<T extends { productId: string }>(lines: readonly T[], line: T): T[] {
+  if (lines.some((l) => l.productId === line.productId)) return lines as T[]
+  return [...lines, line]
+}
+
+/**
  * The lines with this product's line set to the entry: replaced where it already is,
  * appended where it is not, removed when the entry is nothing. A phone keys one product
  * at a time through a sheet, and tapping a product already on the list edits it rather

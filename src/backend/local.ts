@@ -211,12 +211,14 @@ if (channel) {
     if (typeof col === 'string') notifyLocal(col)
   }
 }
-window.addEventListener('storage', (ev) => {
-  if (ev.key && ev.key.startsWith(PREFIX) && !ev.key.startsWith(CORRUPT_PREFIX)) {
-    const col = ev.key.slice(PREFIX.length)
-    notifyLocal(col)
-  }
-})
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('storage', (ev) => {
+    if (ev.key && ev.key.startsWith(PREFIX) && !ev.key.startsWith(CORRUPT_PREFIX)) {
+      const col = ev.key.slice(PREFIX.length)
+      notifyLocal(col)
+    }
+  })
+}
 
 function commit(collection: string, map: DocMap): void {
   commitAll([[collection, map]])
@@ -272,7 +274,10 @@ export function createLocalBackend(brand?: BrandId): Backend {
       // would show an empty warehouse and invite writing over it. Delivering is separate,
       // and a subscriber that throws is its own problem, not this one's.
       const initial = apply(Object.values(loadMap(c))) as T[]
-      emit(() => cb(initial), c)
+      emit(() => {
+        cb(initial)
+        opts?.onServerSync?.()
+      }, c)
       return () => {
         set?.delete(listener)
       }

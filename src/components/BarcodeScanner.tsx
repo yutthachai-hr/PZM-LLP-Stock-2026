@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { brandEpoch, onBrandChange } from '../brand/brand'
 import { useT } from '../i18n/I18nContext'
 import { Button, Input, Modal } from './ui'
 import { Icon } from './Icon'
+import { CameraScanController, type DetectorCtor } from '../lib/cameraScan'
 
 /**
  * Read a barcode with the device's camera (spec §3).
@@ -10,98 +12,83 @@ import { Icon } from './Icon'
  * Android, no download), and `@zxing/browser` — imported only when the first is missing, so
  * a phone that has the native one never pays for the library.
  *
- * Whatever happens — no camera, permission refused, a reader that cannot start — the sheet
- * still offers a box to type the number into, because the person is standing in front of
- * the shelf either way. The camera is stopped on every exit path; a stream left running
- * keeps the lamp on and drains the tablet.
+ * The reading itself is the session-generation controller in lib/cameraScan.ts: every open is
+ * a new generation, the stream is only shared once it belongs to the current one, and a close
+ * or reopen stops the tracks, the reader and the polling timer. Whatever happens — no camera,
+ * permission refused, a reader that cannot start — the sheet still offers a box to type the
+ * number into, because the person is standing in front of the shelf either way.
  */
-type Reader = { stop: () => void }
-
-interface DetectedBarcode {
-  rawValue: string
-}
-interface BarcodeDetectorLike {
-  detect: (source: CanvasImageSource) => Promise<DetectedBarcode[]>
-}
-type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetectorLike
-
-const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code']
-
 export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean; onClose: () => void; onRead: (code: string) => void; title?: string }) {
   const t = useT()
   const video = useRef<HTMLVideoElement>(null)
-  const reader = useRef<Reader | null>(null)
-  const stream = useRef<MediaStream | null>(null)
   const [error, setError] = useState('')
   const [typed, setTyped] = useState('')
+  const session = useRef<CameraScanController | null>(null)
   const done = useRef(false)
+  const epoch = useRef(0)
+
+  const onReadRef = useRef(onRead)
+  onReadRef.current = onRead
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  function finish(code: string) {
+    const active = session.current
+    if (!active || !active.isActive() || done.current) return
+    if (brandEpoch() !== epoch.current) return
+    const value = code.trim()
+    if (!value) return
+    done.current = true
+    // Tear the camera down now, not on the next render: the read is complete.
+    active.close()
+    onCloseRef.current()
+    onReadRef.current(value)
+  }
+
+  const finishRef = useRef(finish)
+  finishRef.current = finish
 
   useEffect(() => {
     if (!open) return
+    epoch.current = brandEpoch()
     done.current = false
     setError('')
     setTyped('')
-    let cancelled = false
 
-    function finish(code: string) {
-      const value = code.trim()
-      if (!value || done.current) return
-      done.current = true
-      onRead(value)
-    }
-
-    async function start() {
-      const el = video.current
-      if (!el) return
-      try {
-        stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        if (cancelled) return
-        el.srcObject = stream.current
-        await el.play()
-      } catch {
-        setError(t('เปิดกล้องไม่ได้ — พิมพ์เลขบาร์โค้ดแทนได้'))
-        return
-      }
-      const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector
-      if (Detector) {
-        const detector = new Detector({ formats: FORMATS })
-        let timer = 0
-        const tick = async () => {
-          if (cancelled || done.current) return
-          try {
-            const hits = await detector.detect(el)
-            if (hits[0]?.rawValue) finish(hits[0].rawValue)
-          } catch {
-            /* a frame that cannot be read is not an error worth showing */
-          }
-          timer = window.setTimeout(() => void tick(), 250)
-        }
-        void tick()
-        reader.current = { stop: () => window.clearTimeout(timer) }
-        return
-      }
-      try {
+    const ctrl = new CameraScanController({
+      getVideo: () => video.current,
+      getUserMedia: () => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }),
+      getDetector: () => (window as unknown as { BarcodeDetector?: DetectorCtor }).BarcodeDetector,
+      startZxing: async (video, emit) => {
         const { BrowserMultiFormatReader } = await import('@zxing/browser')
-        if (cancelled) return
         const zx = new BrowserMultiFormatReader()
-        const controls = await zx.decodeFromVideoElement(el, (result) => {
-          if (result) finish(result.getText())
+        return zx.decodeFromVideoElement(video as unknown as HTMLVideoElement, (result) => {
+          if (result) emit(result.getText())
         })
-        reader.current = { stop: () => controls.stop() }
-      } catch {
-        setError(t('อ่านบาร์โค้ดจากกล้องไม่ได้บนเครื่องนี้ — พิมพ์เลขแทนได้'))
-      }
-    }
+      },
+      onCode: (code) => finishRef.current(code),
+      onError: (kind) =>
+        setError(
+          kind === 'camera'
+            ? t('เปิดกล้องไม่ได้ — พิมพ์เลขบาร์โค้ดแทนได้')
+            : t('อ่านบาร์โค้ดจากกล้องไม่ได้บนเครื่องนี้ — พิมพ์เลขแทนได้'),
+        ),
+      onStream: () => {},
+    })
+    session.current = ctrl
+    ctrl.open()
 
-    void start()
+    const unsubBrand = onBrandChange(() => {
+      ctrl.close()
+      onCloseRef.current()
+    })
+
     return () => {
-      cancelled = true
-      reader.current?.stop()
-      reader.current = null
-      for (const track of stream.current?.getTracks() ?? []) track.stop()
-      stream.current = null
+      unsubBrand()
+      ctrl.close()
+      if (session.current === ctrl) session.current = null
     }
-  }, [open, onRead, t])
+  }, [open, t])
 
   return (
     <Modal
@@ -114,7 +101,7 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
           <Button variant="secondary" onClick={onClose} className="flex-1">
             {t('ยกเลิก')}
           </Button>
-          <Button onClick={() => onRead(typed.trim())} disabled={!typed.trim()} className="flex-1">
+          <Button onClick={() => finish(typed)} disabled={!typed.trim()} className="flex-1">
             {t('ใช้เลขนี้')}
           </Button>
         </div>
@@ -138,9 +125,12 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && typed.trim()) onRead(typed.trim())
+            if (e.key === 'Enter' && typed.trim()) {
+              e.preventDefault()
+              finish(typed)
+            }
           }}
-          inputMode="numeric"
+          inputMode="text"
           placeholder={t('หรือพิมพ์เลขบาร์โค้ด')}
           aria-label={t('เลขบาร์โค้ด')}
         />

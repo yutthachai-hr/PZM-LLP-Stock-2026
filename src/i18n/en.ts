@@ -6,6 +6,8 @@
 // Product names, SKUs and categories are DATA and are never translated.
 
 export const EN: Record<string, string> = {
+  'กำลังโหลดข้อมูลสินค้า — กรุณาสแกนอีกครั้ง': 'Still loading the product list — please scan again',
+  'กำลังรอยืนยันรายการก่อนหน้า — กรุณาสแกนใหม่หลังยืนยัน': 'Waiting for the previous item to be confirmed — scan again after confirming',
   // ---- generic actions / words -------------------------------------------------
   บันทึก: 'Save',
   ยกเลิก: 'Cancel',
@@ -1926,6 +1928,13 @@ export const EN: Record<string, string> = {
   'ผูกบาร์โค้ดกับ "{name}"': 'Attach a barcode to "{name}"',
   'ผูกบาร์โค้ด {code} กับ "{name}" แล้ว': 'Barcode {code} attached to "{name}"',
   'บาร์โค้ดนี้ใช้กับ "{name}" อยู่แล้ว': '"{name}" already carries this barcode',
+  'ยืนยันสินค้าจากบาร์โค้ด': 'Confirm product from barcode',
+  'พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันเพิ่มรายการ?': 'Found product "{name}" from barcode {code} — add to lines?',
+  'บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง': 'Barcode {code} matches {n} products — please select manually',
+  'สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"': 'This product is inactive: "{name}"',
+  'ไม่พบบาร์โค้ด {code} ในระบบ': 'Barcode {code} not found in system',
+  'พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันตรวจรับรายการนี้?': 'Found product "{name}" from barcode {code} — confirm receive this line?',
+  'ตรวจรับรายการนี้': 'Receive this line',
   // ---- R9 messages (22 Sep 2026) ----
   'ข้อความภายใน ({n} ใหม่)': 'Message board ({n} new)',
   'ข้อความภายใน': 'Message board',
@@ -2327,7 +2336,7 @@ export const EN: Record<string, string> = {
   'รับสินค้าครบ เอกสารเสร็จสิ้น': 'All received — transfer completed',
   'บันทึกการรับแล้ว — มีผลต่างรอหัวหน้าพิจารณา': 'Receipt saved — differences wait for the manager',
   'ยิงบาร์โค้ด / ค้นหาสินค้า': 'Scan / find a product',
-  'ยิงบาร์โค้ดหรือพิมพ์รหัสสินค้า แล้วกด Enter': 'Scan a barcode or type a product code, then Enter',
+  'ยิงบาร์โค้ด แล้วกด Enter': 'Scan a barcode, then Enter',
   'สแกนด้วยกล้อง': 'Camera',
   'ตรวจแล้ว': 'Counted',
   'ส่วนหนึ่งถูกรายงานว่าอยู่สาขาอื่น': 'part reported at another branch',
