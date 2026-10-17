@@ -164,7 +164,10 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     await searchInput.fill('8851000111111')
     await searchInput.press('Enter')
     await page.getByRole('button', { name: 'เพิ่มรายการ' }).click()
-    await expect(page.getByText('REPEAT ITEM')).toBeVisible()
+    // The addition lands after the answer-time server check, so wait for the line itself.
+    // The product name alone is also in the suggestion list and the closing dialog, and a
+    // scan made before the add finishes is (rightly) refused as "previous item pending".
+    await expect(page.locator('input[type="number"]')).toHaveCount(1)
 
     // Second scan with the same code must not add a twin or bump the quantity.
     await searchInput.fill('8851000111111')
