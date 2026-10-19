@@ -38,7 +38,7 @@ export function ocrErrorMessage(kind: OcrErrorKind, params?: { maxPages?: number
     case 'too_large':
       return 'รูปใหญ่เกินไป' // i18n-key
     case 'pdf_too_large':
-      return 'ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ 3 MB) — ลองส่งเฉพาะหน้าที่มีรายการ' // i18n-key
+      return 'ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ {mb} MB) — ลองส่งเฉพาะหน้าที่มีรายการ' // i18n-key
     case 'pdf_unreadable':
       return 'ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ' // i18n-key
     case 'pdf_fallback_limit':
@@ -231,7 +231,8 @@ async function readDocumentFileNow(file: File, signal: AbortSignal): Promise<Ocr
 
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
     if (file.size > MAX_LOCAL_PDF_BYTES) {
-      throw new OcrAppError('pdf_too_large', ocrErrorMessage('pdf_too_large'))
+      const mb = Math.round(MAX_LOCAL_PDF_BYTES / 1_000_000)
+      throw new OcrAppError('pdf_too_large', ocrErrorMessage('pdf_too_large'), { params: { mb } })
     }
 
     const renderAndReadPages = async (): Promise<OcrBill> => {

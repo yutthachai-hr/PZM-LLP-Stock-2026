@@ -2801,7 +2801,7 @@ export const EN: Record<string, string> = {
   "การอ่านสำรองรองรับ PDF สูงสุด {n} หน้า — ลองส่งเฉพาะหน้าที่มีรายการ": "Fallback reader supports up to {n} PDF pages — send only the pages with lines",
   "คำขอไม่ถูกต้อง": "Bad request",
   "รองรับเฉพาะรูปภาพหรือ PDF": "Photos or PDF only",
-  "ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ 3 MB) — ลองส่งเฉพาะหน้าที่มีรายการ": "PDF too large (about 3 MB max) — send only the pages with lines",
+  "ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ {mb} MB) — ลองส่งเฉพาะหน้าที่มีรายการ": "PDF too large (about {mb} MB max) — send only the pages with lines",
   "อ่านไฟล์ไม่ได้": "Could not read the file",
   "อ่านรูปไม่ได้": "Could not read the picture",
   // Supplier intelligence (5 Oct 2026)

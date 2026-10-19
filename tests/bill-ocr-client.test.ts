@@ -81,7 +81,7 @@ describe('client OCR resilience and TDD requirements', () => {
       expect(ocrErrorMessage('upstream_timeout')).toBe('การเชื่อมต่อ AI หมดเวลา — ลองใหม่อีกครั้ง หรือคีย์เอง')
       expect(ocrErrorMessage('unreadable')).toBe('AI อ่านแล้วแต่ตอบกลับไม่เป็นรายการ — ลองรูปที่ชัดขึ้น หรือคีย์เอง')
       expect(ocrErrorMessage('too_large')).toBe('รูปใหญ่เกินไป')
-      expect(ocrErrorMessage('pdf_too_large')).toBe('ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ 3 MB) — ลองส่งเฉพาะหน้าที่มีรายการ')
+      expect(ocrErrorMessage('pdf_too_large')).toBe('ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ {mb} MB) — ลองส่งเฉพาะหน้าที่มีรายการ')
       expect(ocrErrorMessage('pdf_unreadable')).toBe('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
       expect(ocrErrorMessage('pdf_fallback_limit', { maxPages: 5 })).toBe('การอ่านสำรองรองรับ PDF สูงสุด 5 หน้า — ลองส่งเฉพาะหน้าที่มีรายการ')
       expect(ocrErrorMessage('not_configured')).toBe('ยังไม่ได้เปิดใช้ AI อ่านบิล — ผู้ดูแลต้องตั้งค่า GEMINI_API_KEY ใน Cloudflare ก่อน')
@@ -281,6 +281,17 @@ describe('client OCR resilience and TDD requirements', () => {
       await expect(readDocumentFile(hugePdfFile)).rejects.toThrow(
         /ไฟล์ PDF ใหญ่เกินไป/,
       )
+    })
+
+    test('PDF exceeding 20 MB rejects with message stating real limit (20 MB) and not 3 MB', async () => {
+      const hugeBytes = new Uint8Array(21 * 1024 * 1024)
+      hugeBytes[0] = 37; hugeBytes[1] = 80; hugeBytes[2] = 68; hugeBytes[3] = 70
+      const hugePdfFile = new File([hugeBytes], 'huge.pdf', { type: 'application/pdf' })
+
+      const promise = readDocumentFile(hugePdfFile)
+      await expect(promise).rejects.toThrow(/20 MB/)
+      await expect(promise).rejects.toThrow(/ลองส่งเฉพาะหน้าที่มีรายการ/)
+      await expect(promise).rejects.not.toThrow(/3 MB/)
     })
 
     test('cancellation while loadingTask.promise is pending immediately destroys task and aborts', async () => {
