@@ -172,10 +172,49 @@ test('hidden tabs pause transient timers and visibility resumes remaining time',
   await page.clock.install()
   await open(page)
   await page.getByRole('button', { name: 'Save order', exact: true }).click()
+  await expect(card(page)).toHaveCount(1)
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')) })
   await page.clock.runFor(10_000)
   await expect(card(page)).toHaveCount(1)
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')) })
+  await page.clock.runFor(3400)
+  await expect(card(page)).toHaveCount(0)
+})
+
+test('hidden tab race between render and passive effect flushes pauses timer deterministically', async ({ page }) => {
+  await page.clock.install()
+  await open(page)
+  await page.evaluate(() => {
+    const origSetAttribute = Element.prototype.setAttribute
+    Element.prototype.setAttribute = function (name: string, value: string) {
+      origSetAttribute.apply(this, [name, value])
+      if (name === 'data-toast') {
+        Element.prototype.setAttribute = origSetAttribute
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+        document.dispatchEvent(new Event('visibilitychange'))
+      }
+    }
+    const win = window as any
+    const origSetTimeout = win.setTimeout.bind(win)
+    win.setTimeout = function (fn: TimerHandler, delay?: number, ...args: any[]) {
+      const id = origSetTimeout(fn, delay, ...args)
+      if (delay === 3000 && document.hidden) {
+        win.setTimeout = origSetTimeout
+        win.__pwClock?.controller?.runFor(10_000)
+      }
+      return id
+    }
+    win.__restoreTestTimeout = () => { win.setTimeout = origSetTimeout }
+  })
+  await page.getByRole('button', { name: 'Save order', exact: true }).click()
+  await expect(card(page)).toHaveCount(1)
+  await page.clock.runFor(10_000)
+  await expect(card(page)).toHaveCount(1)
+  await page.evaluate(() => {
+    ;(window as any).__restoreTestTimeout?.()
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
   await page.clock.runFor(3400)
   await expect(card(page)).toHaveCount(0)
 })
