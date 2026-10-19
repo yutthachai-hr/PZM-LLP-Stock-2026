@@ -1,13 +1,11 @@
 import { describe, expect, test } from 'vitest'
 import {
   fmtCostAmount,
-  fmtCostPerUnit,
   getCostHint,
   compareProductCost,
   mapProductExportRow,
-  canViewProductCost,
 } from '../src/pages/products/productCostDisplay'
-import type { Product, Role } from '../src/types'
+import type { Product } from '../src/types'
 import type { ProductRow } from '../src/pages/products/ProductTable'
 
 describe('Product cost formatter (Requirements 3, 5, 6, 11)', () => {
@@ -18,15 +16,6 @@ describe('Product cost formatter (Requirements 3, 5, 6, 11)', () => {
     expect(fmtCostAmount(0.0035)).toBe('0.0035')
     expect(fmtCostAmount(1000)).toBe('1,000.00')
     expect(fmtCostAmount(1234.5678)).toBe('1,234.5678')
-  })
-
-  test('fmtCostPerUnit returns explicit unit string or null when undefined', () => {
-    expect(fmtCostPerUnit(12.5, 'EA')).toBe('฿12.50 / EA')
-    expect(fmtCostPerUnit(0, 'EA')).toBe('฿0.00 / EA')
-    expect(fmtCostPerUnit(0.0035, 'KG')).toBe('฿0.0035 / KG')
-    expect(fmtCostPerUnit(0.993, 'Pack')).toBe('฿0.993 / Pack')
-    expect(fmtCostPerUnit(undefined, 'EA')).toBeNull()
-    expect(fmtCostPerUnit(null, 'EA')).toBeNull()
   })
 
   test('getCostHint returns secondary hint when latest purchase unit differs from base unit', () => {
@@ -177,19 +166,5 @@ describe('Product export row mapping (Requirement 7)', () => {
     }
     const exportedNoCost = mapProductExportRow(rowNoCost, t, 'loc1', () => 'Main Warehouse')
     expect(exportedNoCost['ต้นทุน/หน่วย']).toBe('')
-  })
-})
-
-describe('Visibility gate (Requirement 9)', () => {
-  test('all authenticated roles can view cost in accordance with existing policy', () => {
-    // Existing policy parity:
-    // Products.tsx:161 (valuation tile) has no role check
-    // StockCardPage.tsx:235 (cost & value cards) has no role check
-    // CostReport.tsx:76 (cost report table) has no role check
-    // ProductEditor.tsx:540 (view cost history) has no role check (only editing is admin)
-    expect(canViewProductCost('admin')).toBe(true)
-    expect(canViewProductCost('manager')).toBe(true)
-    expect(canViewProductCost('staff')).toBe(true)
-    expect(canViewProductCost(undefined as unknown as Role)).toBe(false)
   })
 })

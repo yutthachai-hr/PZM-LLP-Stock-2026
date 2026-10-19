@@ -1,6 +1,6 @@
 import type { TFn } from '../../i18n/I18nContext'
 import { sameUnit } from '../../lib/units'
-import type { Product, Role } from '../../types'
+import type { Product } from '../../types'
 import { STATE_LOOK } from './productStatus'
 import type { ProductRow } from './ProductTable'
 
@@ -13,17 +13,6 @@ export function fmtCostAmount(cost: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   })
-}
-
-/**
- * Explicit cost per unit string: e.g. "฿12.50 / EA".
- * Returns null if cost is undefined/null/non-finite.
- */
-export function fmtCostPerUnit(cost: number | undefined | null, unitType: string): string | null {
-  if (cost === undefined || cost === null || !Number.isFinite(cost)) {
-    return null
-  }
-  return `฿${fmtCostAmount(cost)} / ${unitType}` // i18n-key
 }
 
 /**
@@ -97,16 +86,4 @@ export function mapProductExportRow(
     [t('สถานะ')]: r.p.active === false ? t('ที่ซ่อนไว้') : t(STATE_LOOK[r.state].label),
     [t('คลังสินค้า')]: locId ? siteName(locId) : r.sites.map(siteName).join(', '),
   }
-}
-
-/**
- * Visibility gate: returns whether a user role can view product cost.
- * Parity with existing codebase:
- * - Products.tsx:161 (valuation tile) has no role check
- * - StockCardPage.tsx:235 (cost & value cards) has no role check
- * - CostReport.tsx:76 (cost report table) has no role check
- * - ProductEditor.tsx:540 (view cost history) has no role check (only editing is admin)
- */
-export function canViewProductCost(role: Role | undefined): boolean {
-  return role === 'admin' || role === 'manager' || role === 'staff'
 }

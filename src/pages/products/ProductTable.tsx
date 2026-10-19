@@ -58,19 +58,14 @@ export function CostFigure({ p, t, showLabel }: { p: Product; t: TFn; showLabel?
       </span>
     )
   }
+  // The invoice hint rides in the tooltip only. Printed as a second line it wrapped the
+  // cost column to six lines at 1440 and pushed the Location column off the right edge.
   const hint = getCostHint(p, t)
   return (
-    <div className="inline-block">
-      <div>
-        {showLabel && <span className="text-xs text-ink-faint">{t('ต้นทุน/หน่วย')}: </span>}
-        <span className="num font-semibold text-ink">฿{fmtCostAmount(cost)}</span> {/* i18n-key */}
-        <span className="text-xs font-normal text-ink-soft"> / {p.unitType}</span>
-      </div>
-      {hint && (
-        <span className="block text-xs font-normal text-ink-faint" title={hint.tooltip}>
-          {hint.text}
-        </span>
-      )}
+    <div className="inline-block whitespace-nowrap" title={hint?.tooltip}>
+      {showLabel && <span className="text-xs text-ink-faint">{t('ต้นทุน/หน่วย')}: </span>}
+      <span className="num font-semibold text-ink">฿{fmtCostAmount(cost)}</span> {/* i18n-key */}
+      <span className="text-xs font-normal text-ink-soft"> / {p.unitType}</span>
     </div>
   )
 }
@@ -82,7 +77,7 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       header: t('สินค้า'),
       primary: true,
       // Long catalogue names truncate rather than pushing the figures off the right edge.
-      className: 'md:max-w-[260px] 2xl:max-w-[340px]',
+      className: 'md:max-w-[200px] 2xl:max-w-[340px]',
       cell: (r) => {
         const look = categoryIcon(r.p.category)
         return (
@@ -108,6 +103,9 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       key: 'category',
       header: t('หมวดหมู่'),
       card: 'hidden',
+      // Below 2xl the category is already on the name's second line, so its own column can go.
+      className: 'hidden 2xl:table-cell',
+      headerClassName: 'hidden 2xl:table-cell',
       cell: (r) => (
         <StatusChip tone={categoryIcon(r.p.category).tone} icon={null} size="sm">
           {r.p.category}
