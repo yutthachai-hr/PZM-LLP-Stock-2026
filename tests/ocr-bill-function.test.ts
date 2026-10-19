@@ -338,4 +338,114 @@ describe('functions/api/ocr-bill - server resilience and TDD requirements', () =
     expect(loggedPayload).not.toContain('42.5')
     expect(loggedPayload).not.toContain(TINY_IMAGE)
   })
+
+  test('never-resolving upstream fetch times out within per-attempt budget and returns 504', async () => {
+    vi.useFakeTimers()
+    try {
+      fetchMock.mockImplementation((_url: string, opts?: { signal?: AbortSignal }) => {
+        return new Promise<Response>((_, reject) => {
+          opts?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+          })
+        })
+      })
+
+      const requestPromise = onRequestPost({
+        request: makeRequest({ image: TINY_IMAGE }),
+        env: makeEnv(),
+        params: {},
+      } as unknown as Ctx)
+
+      // Fast forward time through per-attempt timeout (30s) x 3 attempts
+      await vi.advanceTimersByTimeAsync(35_000)
+      await vi.advanceTimersByTimeAsync(35_000)
+      await vi.advanceTimersByTimeAsync(35_000)
+
+      const res = await requestPromise
+      expect(res.status).toBe(504)
+      const body = (await res.json()) as { error: string }
+      expect(body.error).toBe('upstream_timeout')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('never-resolving upstream body stream times out', async () => {
+    vi.useFakeTimers()
+    try {
+      fetchMock.mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: () => new Promise<never>(() => {}), // never resolves
+        } as unknown as Response),
+      )
+
+      const requestPromise = onRequestPost({
+        request: makeRequest({ image: TINY_IMAGE }),
+        env: makeEnv(),
+        params: {},
+      } as unknown as Ctx)
+
+      await vi.advanceTimersByTimeAsync(35_000)
+      await vi.advanceTimersByTimeAsync(35_000)
+      await vi.advanceTimersByTimeAsync(35_000)
+
+      const res = await requestPromise
+      expect(res.status).toBe(504)
+      const body = (await res.json()) as { error: string }
+      expect(body.error).toBe('upstream_timeout')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('HTTP 200 with malformed JSON body returns typed 502 unreadable without unhandled exception', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('{malformed json syntax', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const res = await onRequestPost({
+      request: makeRequest({ image: TINY_IMAGE }),
+      env: makeEnv(),
+      params: {},
+    } as unknown as Ctx)
+
+    expect(res.status).toBe(502)
+    const body = (await res.json()) as { error: string }
+    expect(body.error).toBe('unreadable')
+  })
+
+  test('reply error does not reflect raw candidate/document text in message', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'CONFIDENTIAL_CUSTOMER_DOCUMENT_CONTENT not json' }],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    const res = await onRequestPost({
+      request: makeRequest({ image: TINY_IMAGE }),
+      env: makeEnv(),
+      params: {},
+    } as unknown as Ctx)
+
+    expect(res.status).toBe(502)
+    const body = (await res.json()) as { error: string; message?: string }
+    expect(body.error).toBe('unreadable')
+    expect(body.message).not.toContain('CONFIDENTIAL_CUSTOMER_DOCUMENT_CONTENT')
+  })
 })
+

@@ -367,8 +367,21 @@ export function ReceivePage() {
   const [reading, setReading] = useState(false)
   const [ocr, setOcr] = useState<OcrFill | null>(null)
   const ocrAbortRef = useRef<AbortController | null>(null)
+  const ocrRequestIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrRequestIdRef.current++
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current?.abort()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current = null
+    }
+  }, [])
 
   function cancelReadBill() {
+    ocrRequestIdRef.current++
     ocrAbortRef.current?.abort()
     ocrAbortRef.current = null
     setReading(false)
@@ -377,20 +390,22 @@ export function ReceivePage() {
   async function readBill(file?: File) {
     if (!photo && !file) return
     setReading(true)
+    const reqId = ++ocrRequestIdRef.current
+    ocrAbortRef.current?.abort()
     const controller = new AbortController()
     ocrAbortRef.current = controller
     try {
       const bill = file
         ? await readDocumentFile(file, { signal: controller.signal })
         : await readBillPhoto(photo!, { signal: controller.signal })
-      if (controller.signal.aborted) return
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       const filled = ocrFill(bill, ocrCandidates(bill), { draft: d, order, suppliers })
       const fromBill = filled.patch.supplierId
       patch({ ...filled.patch, ...(fromBill ? { supplierPick: fromBill === OTHER_SUPPLIER ? 'manual' : 'ocr' } : {}) })
       setOcr(filled)
       toast.success(t('AI อ่านบิลแล้ว — ใส่ให้ {n} รายการ ตรวจก่อนยืนยันทุกครั้ง', { n: filled.filled }))
     } catch (e) {
-      if (controller.signal.aborted) return
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       toast.error(errText(e, t))
     } finally {
       if (ocrAbortRef.current === controller) {
@@ -401,6 +416,7 @@ export function ReceivePage() {
   }
 
   async function pickPhoto(file: File | null) {
+    cancelReadBill()
     if (!file) return setPhoto(null)
     try {
       setPhoto(await compressImage(file))
@@ -410,6 +426,7 @@ export function ReceivePage() {
   }
 
   function discardDraft() {
+    cancelReadBill()
     linkRef.current = null
     setD({ ...emptyDraft(), toLocationId: d.toLocationId, dateStr: msToDateInput(todayMs()) })
     setPhoto(null)

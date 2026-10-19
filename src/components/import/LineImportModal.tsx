@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { type OcrLine } from '../../lib/billOcr'
@@ -96,8 +96,21 @@ export function LineImportModal({
   }
 
   const ocrAbortRef = useRef<AbortController | null>(null)
+  const ocrRequestIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrRequestIdRef.current++
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current?.abort()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current = null
+    }
+  }, [])
 
   function cancelReading() {
+    ocrRequestIdRef.current++
     ocrAbortRef.current?.abort()
     ocrAbortRef.current = null
     setStep('pick')
@@ -107,17 +120,19 @@ export function LineImportModal({
     if (!file) return
     setError(null)
     setStep('reading')
+    const reqId = ++ocrRequestIdRef.current
+    ocrAbortRef.current?.abort()
     const controller = new AbortController()
     ocrAbortRef.current = controller
     try {
       const bill = await readDocumentFile(file, { signal: controller.signal })
-      if (controller.signal.aborted) return
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       if (!bill.lines.length) throw new Error(t('AI ({model}) ไม่พบรายการสินค้าในเอกสารนี้ — ลองรูปที่ชัดขึ้น หรือใช้ Excel', { model: bill.model ?? '?' }))
       setSource([file.name, bill.supplier, bill.invoiceNo].filter(Boolean).join(' · '))
       setRows(toRows(bill.lines.map((line) => ({ ...line, source: 'ocr' as const }))))
       setStep('review')
     } catch (e) {
-      if (controller.signal.aborted) return
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       setError(errText(e, t))
       setStep('pick')
     } finally {
@@ -156,6 +171,7 @@ export function LineImportModal({
   }
 
   function handleClose() {
+    ocrRequestIdRef.current++
     ocrAbortRef.current?.abort()
     ocrAbortRef.current = null
     onClose()

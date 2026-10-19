@@ -44,13 +44,12 @@ const MAX_IMAGE_CHARS = 4_000_000
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 const FALLBACK_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct'
 const MAX_RETRIES = 2
+const PER_ATTEMPT_TIMEOUT_MS = 30_000
+const AGGREGATE_TIMEOUT_MS = 75_000
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function retryDelay(attempt: number): number {
-  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
-    return 0
-  }
   const base = 500 * Math.pow(2, attempt)
   const jitter = Math.floor(Math.random() * (base / 2))
   return base + jitter
@@ -58,6 +57,68 @@ function retryDelay(attempt: number): number {
 
 function isTransient(status: number): boolean {
   return status === 503 || status === 500 || status === 504
+}
+
+function createAttemptSignal(
+  parentSignal?: AbortSignal,
+  timeoutMs = PER_ATTEMPT_TIMEOUT_MS,
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController()
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+  }, timeoutMs)
+
+  let onParentAbort: (() => void) | undefined
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      clearTimeout(timer)
+      controller.abort(parentSignal.reason)
+    } else {
+      onParentAbort = () => {
+        clearTimeout(timer)
+        controller.abort(parentSignal.reason)
+      }
+      parentSignal.addEventListener('abort', onParentAbort, { once: true })
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer)
+      if (parentSignal && onParentAbort) {
+        parentSignal.removeEventListener('abort', onParentAbort)
+      }
+    },
+  }
+}
+
+async function safeReadJson<T>(
+  res: Response,
+  signal?: AbortSignal,
+  timeoutMs = 15_000,
+): Promise<{ data: T | null; isTimeout?: boolean }> {
+  const { signal: timeoutSignal, cleanup } = createAttemptSignal(signal, timeoutMs)
+  let timedOut = false
+  try {
+    const jsonPromise = res.json() as Promise<T>
+    const abortPromise = new Promise<never>((_, reject) => {
+      timeoutSignal.addEventListener(
+        'abort',
+        () => {
+          timedOut = true
+          reject(timeoutSignal.reason ?? new DOMException('Timeout', 'TimeoutError'))
+        },
+        { once: true },
+      )
+    })
+    const data = await Promise.race([jsonPromise, abortPromise])
+    return { data }
+  } catch {
+    return { data: null, isTimeout: timedOut }
+  } finally {
+    cleanup()
+  }
 }
 
 const PROMPT = [
@@ -103,45 +164,67 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
   let modelMs = 0
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const elapsed = Date.now() - t0
+    if (elapsed >= AGGREGATE_TIMEOUT_MS) {
+      lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+      break
+    }
     if (attempt > 0) {
       retries++
-      await sleep(retryDelay(attempt - 1))
+      const delay = retryDelay(attempt - 1)
+      if (elapsed + delay >= AGGREGATE_TIMEOUT_MS) {
+        lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+        break
+      }
+      await sleep(delay)
     }
+
+    const remainingBudget = Math.max(1_000, AGGREGATE_TIMEOUT_MS - (Date.now() - t0))
+    const attemptBudget = Math.min(PER_ATTEMPT_TIMEOUT_MS, remainingBudget)
+    const { signal: attemptSignal, cleanup: cleanupAttempt } = createAttemptSignal(request.signal, attemptBudget)
     const attemptT0 = Date.now()
     lastErr = null
+
     try {
-      res = await generate(key, model, mime, data)
+      res = await generate(key, model, mime, data, attemptSignal)
       modelMs += Date.now() - attemptT0
     } catch (err) {
       modelMs += Date.now() - attemptT0
       lastErr = err
       res = null
-      if (attempt < MAX_RETRIES) continue
+      cleanupAttempt()
+      if (attempt < MAX_RETRIES && Date.now() - t0 < AGGREGATE_TIMEOUT_MS) continue
       break
+    } finally {
+      cleanupAttempt()
     }
 
     // The model was retired (Google answers 404 "no longer available"): ask which ones this key
     // can use, take the newest stable Flash, remember it, try once more.
     if (res.status === 404) {
-      const next = await discoverModel(key)
+      const next = await discoverModel(key, request.signal)
       if (next && next !== model) {
         chosenModel = next
         model = next
+        const discoverBudget = Math.min(PER_ATTEMPT_TIMEOUT_MS, Math.max(1_000, AGGREGATE_TIMEOUT_MS - (Date.now() - t0)))
+        const { signal: discoverSignal, cleanup: cleanupDiscover } = createAttemptSignal(request.signal, discoverBudget)
         const discoverT0 = Date.now()
         try {
-          res = await generate(key, model, mime, data)
+          res = await generate(key, model, mime, data, discoverSignal)
           modelMs += Date.now() - discoverT0
         } catch (err) {
           modelMs += Date.now() - discoverT0
           lastErr = err
           res = null
+        } finally {
+          cleanupDiscover()
         }
       }
     }
 
     if (res && res.ok) break
     if (res && isTransient(res.status)) {
-      if (attempt < MAX_RETRIES) continue
+      if (attempt < MAX_RETRIES && Date.now() - t0 < AGGREGATE_TIMEOUT_MS) continue
       break
     }
     // Non-transient errors (400, 401, 413, 415, 429) must never retry
@@ -150,16 +233,46 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
 
   if (res && res.ok) {
     const parseT0 = Date.now()
-    const out = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
-    const text = out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+    const { data: out, isTimeout: bodyTimeout } = await safeReadJson<{
+      candidates?: { content?: { parts?: { text?: string }[] } }[]
+    }>(res, request.signal, PER_ATTEMPT_TIMEOUT_MS)
     const parseMs = Date.now() - parseT0
+
+    if (bodyTimeout) {
+      const trace: OcrTrace = {
+        fileType: mime,
+        sizeBytes,
+        model,
+        retries,
+        upstreamStatus: 504,
+        durations: { modelMs, parseMs, totalMs: Date.now() - t0 },
+      }
+      console.info('[ocr-bill]', JSON.stringify(trace))
+      return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: 'Upstream body read timed out', trace })
+    }
+
+    if (!out || !out.candidates || !out.candidates.length) {
+      // Malformed upstream envelope on HTTP 200 -> typed unreadable
+      const trace: OcrTrace = {
+        fileType: mime,
+        sizeBytes,
+        model,
+        retries,
+        upstreamStatus: res.status,
+        durations: { modelMs, parseMs, totalMs: Date.now() - t0 },
+      }
+      console.info('[ocr-bill]', JSON.stringify(trace))
+      return json(502, { error: 'unreadable', model, message: 'Invalid response envelope from upstream model', trace })
+    }
+
+    const text = out.candidates[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
 
     // A second opinion on a picture the first model found nothing in (owner, 6 Oct 2026:
     // "ลองไปใช้โมเดลอื่น"): the Workers AI reader looks at it too, and the answer with lines wins.
     let fallbackMs: number | undefined
     if (!lineCount(text) && env.AI && mime !== 'application/pdf') {
       const fbT0 = Date.now()
-      const second = await fallback(env.AI, image)
+      const second = await fallback(env.AI, image, request.signal)
       fallbackMs = Date.now() - fbT0
       if (lineCount(second)) {
         const trace: OcrTrace = {
@@ -191,7 +304,7 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
   let fallbackMs: number | undefined
   if (env.AI && mime !== 'application/pdf') {
     const fbT0 = Date.now()
-    const answer = await fallback(env.AI, image)
+    const answer = await fallback(env.AI, image, request.signal)
     fallbackMs = Date.now() - fbT0
     if (answer && lineCount(answer)) {
       const trace: OcrTrace = {
@@ -207,18 +320,23 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
     }
   }
 
-  const detail = res ? await errorDetail(res) : (lastErr instanceof Error ? lastErr.message : 'network error')
+  const detail = res ? await errorDetail(res) : lastErr instanceof Error ? lastErr.message : 'network error'
+  const isTimeout =
+    (lastErr instanceof DOMException && lastErr.name === 'TimeoutError') ||
+    (lastErr instanceof Error && /timeout/i.test(lastErr.message)) ||
+    res?.status === 504
+
   const trace: OcrTrace = {
     fileType: mime,
     sizeBytes,
     model,
     retries,
-    upstreamStatus: res?.status ?? (lastErr ? 504 : undefined),
+    upstreamStatus: res?.status ?? (isTimeout ? 504 : undefined),
     durations: { modelMs, fallbackMs, totalMs: Date.now() - t0 },
   }
   console.info('[ocr-bill]', JSON.stringify(trace))
 
-  if (lastErr || (res && res.status === 504)) {
+  if (isTimeout) {
     return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: detail, trace })
   }
   if (res && res.status === 429) {
@@ -255,7 +373,7 @@ function lineCount(answer: unknown): number {
 /** Set once per isolate when discovery replaces a retired default. */
 let chosenModel = ''
 
-function generate(key: string, model: string, mime: string, data: string): Promise<Response> {
+function generate(key: string, model: string, mime: string, data: string, signal?: AbortSignal): Promise<Response> {
   return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
@@ -263,41 +381,56 @@ function generate(key: string, model: string, mime: string, data: string): Promi
       contents: [{ role: 'user', parts: [{ text: PROMPT }, { inline_data: { mime_type: mime, data } }] }],
       generationConfig: { responseMimeType: 'application/json', temperature: 0 },
     }),
+    signal,
   })
 }
 
-async function discoverModel(key: string): Promise<string | null> {
+async function discoverModel(key: string, parentSignal?: AbortSignal): Promise<string | null> {
+  const { signal, cleanup } = createAttemptSignal(parentSignal, 10_000)
   try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key } })
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+      headers: { 'x-goog-api-key': key },
+      signal,
+    })
     if (!res.ok) return null
     const body = (await res.json()) as { models?: ListedModel[] }
     return pickReaderModel(body.models ?? [])
   } catch {
     return null
+  } finally {
+    cleanup()
   }
 }
 
 /** Google's own error text (never the key), cut short — enough to say what went wrong. */
 async function errorDetail(res: Response): Promise<string> {
   try {
-    const body = (await res.json()) as { error?: { message?: string; status?: string } }
-    return [body.error?.status, body.error?.message].filter(Boolean).join(': ').slice(0, 300)
+    const { data: body } = await safeReadJson<{ error?: { message?: string; status?: string } }>(res, undefined, 5_000)
+    if (!body?.error) return `HTTP ${res.status}`
+    return [body.error.status, body.error.message].filter(Boolean).join(': ').slice(0, 200)
   } catch {
-    return ''
+    return `HTTP ${res.status}`
   }
 }
 
 /** Gemini's free tier is out for the day/minute — ask Workers AI (10k neurons/day free) instead. */
-async function fallback(ai: Ai, image: string): Promise<unknown> {
+async function fallback(ai: Ai, image: string, parentSignal?: AbortSignal): Promise<unknown> {
+  const { signal, cleanup } = createAttemptSignal(parentSignal, 25_000)
   try {
-    const out = (await ai.run(FALLBACK_MODEL as Parameters<Ai['run']>[0], {
+    const runPromise = ai.run(FALLBACK_MODEL as Parameters<Ai['run']>[0], {
       messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, { type: 'image_url', image_url: { url: image } }] }],
       max_tokens: 2048,
       temperature: 0,
-    } as never)) as { response?: unknown }
+    } as never) as Promise<{ response?: unknown }>
+    const abortPromise = new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason ?? new DOMException('Timeout', 'TimeoutError')), { once: true })
+    })
+    const out = await Promise.race([runPromise, abortPromise])
     return out.response ?? ''
   } catch {
     return ''
+  } finally {
+    cleanup()
   }
 }
 
@@ -311,7 +444,7 @@ function reply(answer: unknown, model: string, trace?: OcrTrace): Response {
     if (from < 0 || to < from) throw new Error('no object')
     return json(200, { ...JSON.parse(text.slice(from, to + 1)), model, trace })
   } catch {
-    return json(502, { error: 'unreadable', model, message: text.slice(0, 200), trace })
+    return json(502, { error: 'unreadable', model, message: 'Invalid JSON response from model', trace })
   }
 }
 

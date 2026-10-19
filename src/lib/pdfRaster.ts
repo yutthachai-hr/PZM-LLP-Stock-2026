@@ -1,18 +1,29 @@
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { AppError } from '../i18n/AppError'
+
+export type PdfPage = {
+  getViewport: (params: { scale: number }) => { width: number; height: number }
+  render: (params: { canvasContext: unknown; viewport: unknown }) => {
+    promise: Promise<void>
+    cancel?: () => void
+  }
+}
 
 export type PdfDocument = {
   numPages: number
-  getPage: (pageNum: number) => Promise<{
-    getViewport: (params: { scale: number }) => { width: number; height: number }
-    render: (params: { canvasContext: unknown; viewport: unknown }) => {
-      promise: Promise<void>
-    }
-  }>
+  getPage: (pageNum: number) => Promise<PdfPage>
+  destroy?: () => Promise<void> | void
+}
+
+export type PdfLoadingTask = {
+  promise: Promise<PdfDocument>
+  destroy?: () => Promise<void> | void
 }
 
 export type PdfJsLib = {
-  getDocument: (src: { data: Uint8Array }) => {
-    promise: Promise<PdfDocument>
+  getDocument: (src: { data: Uint8Array }) => PdfLoadingTask
+  GlobalWorkerOptions?: {
+    workerSrc?: string
   }
 }
 
@@ -23,27 +34,20 @@ export function setPdfJsLoader(loader: (() => Promise<PdfJsLib>) | null) {
 }
 
 export const MAX_FALLBACK_PAGES = 5
+const MAX_DIMENSION = 2000
+const MAX_TOTAL_PIXELS = 4_000_000
 
 export async function getPdfJs(): Promise<PdfJsLib> {
   if (customLoader) return customLoader()
-  if (typeof window !== 'undefined' && (window as unknown as { pdfjsLib?: PdfJsLib }).pdfjsLib) {
-    return (window as unknown as { pdfjsLib: PdfJsLib }).pdfjsLib
+  try {
+    const pdfjs = await import('pdfjs-dist')
+    if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
+      pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
+    }
+    return pdfjs as unknown as PdfJsLib
+  } catch {
+    throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
   }
-  if (typeof document !== 'undefined') {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script')
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs'
-      script.type = 'module'
-      script.onload = () => {
-        const lib = (window as unknown as { pdfjsLib?: PdfJsLib }).pdfjsLib
-        if (lib) resolve(lib)
-        else reject(new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ'))
-      }
-      script.onerror = () => reject(new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ'))
-      document.head.appendChild(script)
-    })
-  }
-  throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
 }
 
 export async function renderPdfPagesToImages(
@@ -64,36 +68,85 @@ export async function renderPdfPagesToImages(
   if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
   const arrayBuffer = await file.arrayBuffer()
-  let doc: PdfDocument
+  let loadingTask: PdfLoadingTask | undefined
+  let doc: PdfDocument | undefined
   try {
-    doc = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise
-  } catch {
-    throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
-  }
+    try {
+      loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) })
+      doc = await loadingTask.promise
+    } catch {
+      throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
+    }
 
-  if (doc.numPages > maxPages) {
-    throw new AppError('การอ่านสำรองรองรับ PDF สูงสุด {n} หน้า — ลองส่งเฉพาะหน้าที่มีรายการ', { n: maxPages })
-  }
+    if (doc.numPages > maxPages) {
+      throw new AppError('การอ่านสำรองรองรับ PDF สูงสุด {n} หน้า — ลองส่งเฉพาะหน้าที่มีรายการ', { n: maxPages })
+    }
 
-  const images: string[] = []
-  for (let i = 1; i <= doc.numPages; i++) {
-    if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    const page = await doc.getPage(i)
-    const viewport = page.getViewport({ scale: 1.5 })
-    const canvas =
-      typeof document !== 'undefined'
-        ? document.createElement('canvas')
-        : (globalThis as unknown as { document?: Document })?.document?.createElement('canvas')
-    if (!canvas) throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
-    canvas.width = Math.round(viewport.width)
-    canvas.height = Math.round(viewport.height)
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    await page.render({ canvasContext: ctx, viewport }).promise
-    images.push(canvas.toDataURL('image/jpeg', 0.85))
-  }
+    const images: string[] = []
+    for (let i = 1; i <= doc.numPages; i++) {
+      if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+      const page = await doc.getPage(i)
+      const unscaled = page.getViewport({ scale: 1.0 })
+      let scale = 1.5
+      if (Math.max(unscaled.width, unscaled.height) * scale > MAX_DIMENSION) {
+        scale = MAX_DIMENSION / Math.max(unscaled.width, unscaled.height)
+      }
+      if (unscaled.width * scale * unscaled.height * scale > MAX_TOTAL_PIXELS) {
+        scale = Math.sqrt(MAX_TOTAL_PIXELS / (unscaled.width * unscaled.height))
+      }
+      const viewport = page.getViewport({ scale })
 
-  return images
+      const canvas =
+        typeof document !== 'undefined'
+          ? document.createElement('canvas')
+          : (globalThis as unknown as { document?: Document })?.document?.createElement('canvas')
+      if (!canvas) throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
+
+      canvas.width = Math.round(viewport.width)
+      canvas.height = Math.round(viewport.height)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        canvas.width = 0
+        canvas.height = 0
+        throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
+      }
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      const renderTask = page.render({ canvasContext: ctx, viewport })
+
+      let onAbort: (() => void) | undefined
+      const abortPromise = new Promise<never>((_, reject) => {
+        onAbort = () => {
+          try {
+            renderTask.cancel?.()
+          } catch {}
+          reject(new DOMException('Aborted', 'AbortError'))
+        }
+        if (options?.signal?.aborted) onAbort()
+        else options?.signal?.addEventListener('abort', onAbort, { once: true })
+      })
+
+      try {
+        await Promise.race([renderTask.promise, abortPromise])
+        images.push(canvas.toDataURL('image/jpeg', 0.85))
+      } finally {
+        if (onAbort && options?.signal) {
+          options.signal.removeEventListener('abort', onAbort)
+        }
+        // Release canvas memory immediately
+        canvas.width = 0
+        canvas.height = 0
+      }
+    }
+
+    return images
+  } finally {
+    try {
+      await doc?.destroy?.()
+    } catch {}
+    try {
+      await loadingTask?.destroy?.()
+    } catch {}
+  }
 }

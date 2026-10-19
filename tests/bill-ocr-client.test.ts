@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
-vi.mock('../src/services/poImages', () => ({ authHeader: async () => ({}) }))
+let authHeaderPromise: Promise<Record<string, string>> = Promise.resolve({})
+vi.mock('../src/services/poImages', () => ({ authHeader: () => authHeaderPromise }))
 
 import { cleanOcr } from '../src/lib/billOcr'
+import { pendingWriteCount } from '../src/backend/pendingWrites'
 import {
   ocrErrorMessage,
   readBillPhoto,
@@ -228,5 +230,163 @@ describe('client OCR resilience and TDD requirements', () => {
         /การอ่านสำรองรองรับ PDF สูงสุด 5 หน้า/,
       )
     })
+
+    test('multi-page PDF failure on subsequent page fails entire import with safe error rather than returning partial lines', async () => {
+      const mockGetPage = vi.fn().mockImplementation((_num: number) =>
+        Promise.resolve({
+          getViewport: () => ({ width: 100, height: 100 }),
+          render: () => ({ promise: Promise.resolve() }),
+        }),
+      )
+      const mockPdfJs: PdfJsLib = {
+        getDocument: () => ({
+          promise: Promise.resolve({
+            numPages: 2,
+            getPage: mockGetPage,
+          }),
+        }),
+      }
+      setPdfJsLoader(async () => mockPdfJs)
+
+      // Initial PDF call -> 503
+      // Page 1 -> 200 with 1 line
+      // Page 2 -> 500 error
+      fetchMock
+        .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'model_unavailable', upstreamStatus: 503 }), { status: 503 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ lines: [{ name: 'Page 1 line', qty: 1 }] }), { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'model_unavailable', upstreamStatus: 500 }), { status: 500 }))
+
+      const fakePdfFile = new File([new Uint8Array([37, 80, 68, 70])], 'fail-page2.pdf', { type: 'application/pdf' })
+
+      // Must fail entirely, NEVER return partial lines
+      await expect(readDocumentFile(fakePdfFile)).rejects.toThrow()
+    })
+  })
+
+  describe('comprehensive client cancellation, timeouts, and pendingWrites', () => {
+    test('cancellation during authHeader preparation rejects immediately and prevents fetch', async () => {
+      const controller = new AbortController()
+      let resolveAuth!: (val: Record<string, string>) => void
+      authHeaderPromise = new Promise((resolve) => {
+        resolveAuth = resolve
+      })
+
+      const promise = readBillPhoto('data:image/jpeg;base64,1234', { signal: controller.signal })
+
+      // Abort while authHeader is still resolving
+      controller.abort()
+
+      await expect(promise).rejects.toThrow(/Abort|aborted/i)
+      expect(fetchMock).not.toHaveBeenCalled()
+
+      resolveAuth({})
+    })
+
+    test('cancellation during body streaming rejects immediately', async () => {
+      const controller = new AbortController()
+
+      let bodyResolve!: (val: unknown) => void
+      const bodyPromise = new Promise((resolve) => {
+        bodyResolve = resolve
+      })
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () => bodyPromise,
+      } as unknown as Response)
+
+      const promise = readBillPhoto('data:image/jpeg;base64,1234', { signal: controller.signal })
+
+      // Headers arrived, but body is still reading; user hits Cancel
+      await new Promise((r) => setTimeout(r, 10))
+      controller.abort()
+
+      await expect(promise).rejects.toThrow(/Abort|aborted/i)
+      bodyResolve({ lines: [{ name: 'Should be ignored', qty: 99 }] })
+    })
+
+    test('single overall deadline bounds multi-page PDF fallback across all pages', async () => {
+      vi.useFakeTimers()
+      try {
+        const mockPdfJs: PdfJsLib = {
+          getDocument: () => ({
+            promise: Promise.resolve({
+              numPages: 2,
+              getPage: () => Promise.resolve({
+                getViewport: () => ({ width: 100, height: 100 }),
+                render: () => ({ promise: Promise.resolve() }),
+              }),
+            }),
+          }),
+        }
+        setPdfJsLoader(async () => mockPdfJs)
+
+        // Initial PDF fails with 503 after 20s
+        // Page 1 takes 25s
+        // Page 2 takes 25s (total 70s > 60s overall deadline)
+        fetchMock
+          .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'model_unavailable', upstreamStatus: 503 }), { status: 503 }))
+          .mockImplementation(() => new Promise((resolve) => {
+            setTimeout(() => {
+              resolve(new Response(JSON.stringify({ lines: [{ name: 'Item', qty: 1 }] }), { status: 200 }))
+            }, 25_000)
+          }))
+
+        const fakePdfFile = new File([new Uint8Array([37, 80, 68, 70])], 'timed-out.pdf', { type: 'application/pdf' })
+
+        const promise = readDocumentFile(fakePdfFile, { timeoutMs: 40_000 })
+        const assertion = expect(promise).rejects.toThrow(/หมดเวลา|upstream_timeout/i)
+
+        await vi.advanceTimersByTimeAsync(45_000)
+        await assertion
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    test('readDocumentFile tracks pendingWriteCount across the entire multi-page operation and leaves 0 on cancel', async () => {
+      const controller = new AbortController()
+
+      let resolveInitialFetch!: (res: Response) => void
+      fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveInitialFetch = resolve }))
+
+      const fakePdfFile = new File([new Uint8Array([37, 80, 68, 70])], 'invoice.pdf', { type: 'application/pdf' })
+
+      const promise = readDocumentFile(fakePdfFile, { signal: controller.signal })
+
+      // Pending write count should be 1 during the operation
+      expect(pendingWriteCount()).toBe(1)
+
+      // User hits Cancel
+      controller.abort()
+
+      await expect(promise).rejects.toThrow()
+
+      // Pending write count must return to 0 (no stuck count)
+      expect(pendingWriteCount()).toBe(0)
+
+      resolveInitialFetch(new Response('{}', { status: 500 }))
+    })
+
+    test('corrupted PDF throws typed pdf_unreadable error', async () => {
+      const mockPdfJs: PdfJsLib = {
+        getDocument: () => ({
+          promise: Promise.reject(new Error('Invalid PDF structure')),
+        }),
+      }
+      setPdfJsLoader(async () => mockPdfJs)
+
+      // Initial call with PDF fails with 503 -> enters raster fallback
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'model_unavailable', upstreamStatus: 503 }), { status: 503 }),
+      )
+
+      const corruptedFile = new File([new Uint8Array([0, 1, 2, 3])], 'corrupted.pdf', { type: 'application/pdf' })
+
+      await expect(readDocumentFile(corruptedFile)).rejects.toThrow(/ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหาย/)
+    })
   })
 })
+

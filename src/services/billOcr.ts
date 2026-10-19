@@ -69,11 +69,6 @@ export interface ReadOcrOptions {
 
 const DEFAULT_TIMEOUT_MS = 60_000
 
-export async function readBillPhoto(dataUrl: string, options?: ReadOcrOptions): Promise<OcrBill> {
-  // Not a write, but its answer fills a form: the brand switcher waits for it too.
-  return trackWrite(readBillPhotoNow(dataUrl, options))
-}
-
 export class OcrAppError extends AppError {
   kind: OcrErrorKind
   upstreamStatus?: number
@@ -88,52 +83,88 @@ export class OcrAppError extends AppError {
   }
 }
 
-async function readBillPhotoNow(dataUrl: string, options?: ReadOcrOptions): Promise<OcrBill> {
-  if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-
+function withDeadline<T>(
+  fn: (signal: AbortSignal) => Promise<T>,
+  options?: ReadOcrOptions,
+): Promise<T> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  const timeoutController = new AbortController()
-  const timer = setTimeout(() => timeoutController.abort(), timeoutMs)
+  const controller = new AbortController()
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+  }, timeoutMs)
 
-  let onAbort: (() => void) | undefined
+  let onCallerAbort: (() => void) | undefined
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      clearTimeout(timer)
+      controller.abort(options.signal.reason ?? new DOMException('Aborted', 'AbortError'))
+    } else {
+      onCallerAbort = () => {
+        clearTimeout(timer)
+        controller.abort(options.signal!.reason ?? new DOMException('Aborted', 'AbortError'))
+      }
+      options.signal.addEventListener('abort', onCallerAbort, { once: true })
+    }
+  }
+
   const abortPromise = new Promise<never>((_, reject) => {
-    onAbort = () => {
-      timeoutController.abort()
-      reject(new DOMException('Aborted', 'AbortError'))
-    }
-    if (options?.signal) {
-      if (options.signal.aborted) onAbort()
-      else options.signal.addEventListener('abort', onAbort, { once: true })
-    }
+    controller.signal.addEventListener(
+      'abort',
+      () => {
+        if (options?.signal?.aborted) {
+          reject(new DOMException('Aborted', 'AbortError'))
+        } else {
+          reject(new OcrAppError('upstream_timeout', ocrErrorMessage('upstream_timeout')))
+        }
+      },
+      { once: true },
+    )
   })
 
-  let res: Response
-  try {
-    const fetchPromise = fetch('/api/ocr-bill', {
-      method: 'POST',
-      headers: { ...(await authHeader()), 'content-type': 'application/json' },
-      body: JSON.stringify({ image: dataUrl }),
-      signal: timeoutController.signal,
-    })
-    res = await Promise.race([fetchPromise, abortPromise])
-  } catch (err) {
-    if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    if (timeoutController.signal.aborted) {
-      throw new OcrAppError('upstream_timeout', ocrErrorMessage('upstream_timeout'))
-    }
-    throw err
-  } finally {
+  return Promise.race([fn(controller.signal), abortPromise]).finally(() => {
     clearTimeout(timer)
-    if (options?.signal && onAbort) {
-      options.signal.removeEventListener('abort', onAbort)
+    if (options?.signal && onCallerAbort) {
+      options.signal.removeEventListener('abort', onCallerAbort)
     }
-  }
+  })
+}
+
+export async function readBillPhoto(dataUrl: string, options?: ReadOcrOptions): Promise<OcrBill> {
+  return trackWrite(withDeadline((signal) => readBillPhotoNow(dataUrl, signal), options))
+}
+
+async function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+    }),
+  ])
+}
+
+async function readBillPhotoNow(dataUrl: string, signal: AbortSignal): Promise<OcrBill> {
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+
+  const headers = await raceAbort(authHeader(), signal)
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+
+  const res = await raceAbort(
+    fetch('/api/ocr-bill', {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl }),
+      signal,
+    }),
+    signal,
+  )
 
   if (res.ok) {
-    return cleanOcr(await res.json())
+    const jsonBody = await raceAbort(res.json(), signal)
+    return cleanOcr(jsonBody)
   }
 
-  const body = (await res.json().catch(() => ({}))) as {
+  const body = (await raceAbort(res.json().catch(() => ({})), signal)) as {
     error?: string
     upstreamStatus?: number
     message?: string
@@ -185,17 +216,21 @@ const MAX_PDF_BYTES = 2_900_000
  * printed page, small enough to send from a phone on a weak signal.
  */
 export async function readDocumentFile(file: File, options?: ReadOcrOptions): Promise<OcrBill> {
-  if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  return trackWrite(withDeadline((signal) => readDocumentFileNow(file, signal), options))
+}
+
+async function readDocumentFileNow(file: File, signal: AbortSignal): Promise<OcrBill> {
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
 
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
     if (file.size > MAX_PDF_BYTES) {
       throw new OcrAppError('pdf_too_large', ocrErrorMessage('pdf_too_large'))
     }
-    const pdfDataUrl = await asDataUrl(file, 'application/pdf')
+    const pdfDataUrl = await raceAbort(asDataUrl(file, 'application/pdf'), signal)
     try {
-      return await readBillPhoto(pdfDataUrl, options)
+      return await readBillPhotoNow(pdfDataUrl, signal)
     } catch (err) {
-      if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
 
       // If Gemini fails transiently (503 model_unavailable, 504 upstream_timeout, 500),
       // render PDF pages to images and fallback to Workers AI via image path.
@@ -210,15 +245,23 @@ export async function readDocumentFile(file: File, options?: ReadOcrOptions): Pr
       if (!isTransient) throw err
 
       // Render PDF pages with pdf.js (lazy-loaded, capped to MAX_FALLBACK_PAGES)
-      const pageImages = await renderPdfPagesToImages(file, {
-        maxPages: MAX_FALLBACK_PAGES,
-        signal: options?.signal,
-      })
+      let pageImages: string[]
+      try {
+        pageImages = await renderPdfPagesToImages(file, {
+          maxPages: MAX_FALLBACK_PAGES,
+          signal,
+        })
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') throw e
+        if (e instanceof AppError) throw e
+        throw new OcrAppError('pdf_unreadable', ocrErrorMessage('pdf_unreadable'))
+      }
 
       const combined: OcrBill = { lines: [] }
       for (const pageImage of pageImages) {
-        if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-        const pageBill = await readBillPhoto(pageImage, options)
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+        // Each page must succeed. If any page fails, do NOT silently return incomplete lines!
+        const pageBill = await readBillPhotoNow(pageImage, signal)
         if (!combined.supplier && pageBill.supplier) combined.supplier = pageBill.supplier
         if (!combined.invoiceNo && pageBill.invoiceNo) combined.invoiceNo = pageBill.invoiceNo
         if (!combined.date && pageBill.date) combined.date = pageBill.date
@@ -232,7 +275,8 @@ export async function readDocumentFile(file: File, options?: ReadOcrOptions): Pr
   if (!file.type.startsWith('image/')) {
     throw new OcrAppError('invalid_format', ocrErrorMessage('invalid_format'))
   }
-  return readBillPhoto(await shrinkImage(file, 2000), options)
+  const shrunk = await raceAbort(shrinkImage(file, 2000), signal)
+  return readBillPhotoNow(shrunk, signal)
 }
 
 async function asDataUrl(file: Blob, type: string): Promise<string> {
