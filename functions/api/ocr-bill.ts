@@ -26,9 +26,39 @@ interface OcrEnv extends Env {
   AI?: Ai
 }
 
+export interface OcrTrace {
+  fileType: string
+  sizeBytes: number
+  model: string
+  retries: number
+  upstreamStatus?: number
+  durations: {
+    modelMs: number
+    fallbackMs?: number
+    parseMs?: number
+    totalMs: number
+  }
+}
+
 const MAX_IMAGE_CHARS = 4_000_000
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 const FALLBACK_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct'
+const MAX_RETRIES = 2
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function retryDelay(attempt: number): number {
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
+    return 0
+  }
+  const base = 500 * Math.pow(2, attempt)
+  const jitter = Math.floor(Math.random() * (base / 2))
+  return base + jitter
+}
+
+function isTransient(status: number): boolean {
+  return status === 503 || status === 500 || status === 504
+}
 
 const PROMPT = [
   'You read a document from a Thai restaurant business that lists products and quantities:',
@@ -44,6 +74,7 @@ const PROMPT = [
 ].join('\n')
 
 export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => {
+  const t0 = Date.now()
   const uid = (await verifyFirebaseToken(request.headers.get('authorization'))) ?? (demoKeyOk(request, env) ? 'demo' : null)
   if (!uid) return json(401, { error: 'unauthorized' })
   const key = (env.GEMINI_API_KEY ?? '').trim()
@@ -54,44 +85,153 @@ export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => 
     const body = (await request.json()) as { image?: unknown }
     image = typeof body.image === 'string' ? body.image : ''
   } catch {
-    return json(400, { error: 'bad request' })
+    return json(400, { error: 'bad_request' })
   }
   const m = image.match(/^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/)
-  if (!m) return json(415, { error: 'image or PDF data URL only' })
-  if (image.length > MAX_IMAGE_CHARS) return json(413, { error: 'too large' })
+  if (!m) return json(415, { error: 'invalid_format' })
+  if (image.length > MAX_IMAGE_CHARS) return json(413, { error: 'too_large' })
 
+  const mime = m[1]
+  const data = m[2]
+  const sizeBytes = Math.round(data.length * 0.75)
   const pinned = (env.GEMINI_MODEL ?? '').trim()
   let model = pinned || chosenModel || DEFAULT_MODEL
-  let res = await generate(key, model, m[1], m[2])
-  // The model was retired (Google answers 404 "no longer available"): ask which ones this key
-  // can use, take the newest stable Flash, remember it, try once more.
-  if (res.status === 404) {
-    const next = await discoverModel(key)
-    if (next && next !== model) {
-      chosenModel = next
-      model = next
-      res = await generate(key, model, m[1], m[2])
+
+  let res: Response | null = null
+  let retries = 0
+  let lastErr: unknown = null
+  let modelMs = 0
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      retries++
+      await sleep(retryDelay(attempt - 1))
     }
+    const attemptT0 = Date.now()
+    lastErr = null
+    try {
+      res = await generate(key, model, mime, data)
+      modelMs += Date.now() - attemptT0
+    } catch (err) {
+      modelMs += Date.now() - attemptT0
+      lastErr = err
+      res = null
+      if (attempt < MAX_RETRIES) continue
+      break
+    }
+
+    // The model was retired (Google answers 404 "no longer available"): ask which ones this key
+    // can use, take the newest stable Flash, remember it, try once more.
+    if (res.status === 404) {
+      const next = await discoverModel(key)
+      if (next && next !== model) {
+        chosenModel = next
+        model = next
+        const discoverT0 = Date.now()
+        try {
+          res = await generate(key, model, mime, data)
+          modelMs += Date.now() - discoverT0
+        } catch (err) {
+          modelMs += Date.now() - discoverT0
+          lastErr = err
+          res = null
+        }
+      }
+    }
+
+    if (res && res.ok) break
+    if (res && isTransient(res.status)) {
+      if (attempt < MAX_RETRIES) continue
+      break
+    }
+    // Non-transient errors (400, 401, 413, 415, 429) must never retry
+    break
   }
-  if (res.ok) {
+
+  if (res && res.ok) {
+    const parseT0 = Date.now()
     const out = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
     const text = out.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+    const parseMs = Date.now() - parseT0
+
     // A second opinion on a picture the first model found nothing in (owner, 6 Oct 2026:
     // "ลองไปใช้โมเดลอื่น"): the Workers AI reader looks at it too, and the answer with lines wins.
-    if (!lineCount(text) && env.AI && m[1] !== 'application/pdf') {
+    let fallbackMs: number | undefined
+    if (!lineCount(text) && env.AI && mime !== 'application/pdf') {
+      const fbT0 = Date.now()
       const second = await fallback(env.AI, image)
-      if (lineCount(second)) return reply(second, FALLBACK_MODEL)
+      fallbackMs = Date.now() - fbT0
+      if (lineCount(second)) {
+        const trace: OcrTrace = {
+          fileType: mime,
+          sizeBytes,
+          model: FALLBACK_MODEL,
+          retries,
+          upstreamStatus: res.status,
+          durations: { modelMs, fallbackMs, parseMs, totalMs: Date.now() - t0 },
+        }
+        console.info('[ocr-bill]', JSON.stringify(trace))
+        return reply(second, FALLBACK_MODEL, trace)
+      }
     }
-    return reply(text, model)
+
+    const trace: OcrTrace = {
+      fileType: mime,
+      sizeBytes,
+      model,
+      retries,
+      upstreamStatus: res.status,
+      durations: { modelMs, fallbackMs, parseMs, totalMs: Date.now() - t0 },
+    }
+    console.info('[ocr-bill]', JSON.stringify(trace))
+    return reply(text, model, trace)
   }
+
   // Any other failure: a picture still has the Workers AI reader; a PDF does not.
-  const detail = await errorDetail(res)
-  if (env.AI && m[1] !== 'application/pdf') {
+  let fallbackMs: number | undefined
+  if (env.AI && mime !== 'application/pdf') {
+    const fbT0 = Date.now()
     const answer = await fallback(env.AI, image)
-    if (answer) return reply(answer, FALLBACK_MODEL)
+    fallbackMs = Date.now() - fbT0
+    if (answer && lineCount(answer)) {
+      const trace: OcrTrace = {
+        fileType: mime,
+        sizeBytes,
+        model: FALLBACK_MODEL,
+        retries,
+        upstreamStatus: res?.status,
+        durations: { modelMs, fallbackMs, totalMs: Date.now() - t0 },
+      }
+      console.info('[ocr-bill]', JSON.stringify(trace))
+      return reply(answer, FALLBACK_MODEL, trace)
+    }
   }
-  if (res.status === 429) return json(429, { error: 'quota', model })
-  return json(502, { error: 'model', status: res.status, model, message: detail })
+
+  const detail = res ? await errorDetail(res) : (lastErr instanceof Error ? lastErr.message : 'network error')
+  const trace: OcrTrace = {
+    fileType: mime,
+    sizeBytes,
+    model,
+    retries,
+    upstreamStatus: res?.status ?? (lastErr ? 504 : undefined),
+    durations: { modelMs, fallbackMs, totalMs: Date.now() - t0 },
+  }
+  console.info('[ocr-bill]', JSON.stringify(trace))
+
+  if (lastErr || (res && res.status === 504)) {
+    return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: detail, trace })
+  }
+  if (res && res.status === 429) {
+    return json(429, { error: 'quota', upstreamStatus: 429, model, message: detail, trace })
+  }
+  if (res && res.status === 503) {
+    return json(503, { error: 'model_unavailable', upstreamStatus: 503, model, message: detail, trace })
+  }
+  if (res && res.status === 400) {
+    return json(400, { error: 'bad_request', upstreamStatus: 400, model, message: detail, trace })
+  }
+
+  return json(502, { error: 'model_unavailable', upstreamStatus: res?.status ?? 502, model, message: detail, trace })
 }
 
 /** How many rows an answer holds, however it was shaped — 0 for none or unreadable. */
@@ -161,17 +301,17 @@ async function fallback(ai: Ai, image: string): Promise<unknown> {
   }
 }
 
-function reply(answer: unknown, model: string): Response {
-  if (answer && typeof answer === 'object') return json(200, { ...(answer as object), model })
+function reply(answer: unknown, model: string, trace?: OcrTrace): Response {
+  if (answer && typeof answer === 'object') return json(200, { ...(answer as object), model, trace })
   const text = String(answer)
   // The JSON object, whatever the model wrapped around it (prose, ```json fences).
   const from = text.indexOf('{')
   const to = text.lastIndexOf('}')
   try {
     if (from < 0 || to < from) throw new Error('no object')
-    return json(200, { ...JSON.parse(text.slice(from, to + 1)), model })
+    return json(200, { ...JSON.parse(text.slice(from, to + 1)), model, trace })
   } catch {
-    return json(502, { error: 'unreadable', model, message: text.slice(0, 200) })
+    return json(502, { error: 'unreadable', model, message: text.slice(0, 200), trace })
   }
 }
 

@@ -366,20 +366,37 @@ export function ReceivePage() {
   // A bill read by AI (Automation Plan Phase 4): it only fills the form; the person checks.
   const [reading, setReading] = useState(false)
   const [ocr, setOcr] = useState<OcrFill | null>(null)
+  const ocrAbortRef = useRef<AbortController | null>(null)
+
+  function cancelReadBill() {
+    ocrAbortRef.current?.abort()
+    ocrAbortRef.current = null
+    setReading(false)
+  }
+
   async function readBill(file?: File) {
     if (!photo && !file) return
     setReading(true)
+    const controller = new AbortController()
+    ocrAbortRef.current = controller
     try {
-      const bill = file ? await readDocumentFile(file) : await readBillPhoto(photo!)
+      const bill = file
+        ? await readDocumentFile(file, { signal: controller.signal })
+        : await readBillPhoto(photo!, { signal: controller.signal })
+      if (controller.signal.aborted) return
       const filled = ocrFill(bill, ocrCandidates(bill), { draft: d, order, suppliers })
       const fromBill = filled.patch.supplierId
       patch({ ...filled.patch, ...(fromBill ? { supplierPick: fromBill === OTHER_SUPPLIER ? 'manual' : 'ocr' } : {}) })
       setOcr(filled)
       toast.success(t('AI อ่านบิลแล้ว — ใส่ให้ {n} รายการ ตรวจก่อนยืนยันทุกครั้ง', { n: filled.filled }))
     } catch (e) {
+      if (controller.signal.aborted) return
       toast.error(errText(e, t))
     } finally {
-      setReading(false)
+      if (ocrAbortRef.current === controller) {
+        ocrAbortRef.current = null
+        setReading(false)
+      }
     }
   }
 
@@ -534,6 +551,7 @@ export function ReceivePage() {
               invalid={{ supplier: tried && problem === 'noSupplier', invoice: tried && problem === 'noInvoice' }}
               onReadBill={billReaderAvailable() ? () => void readBill() : undefined}
               onReadFile={billReaderAvailable() ? (f) => void readBill(f) : undefined}
+              onCancelRead={cancelReadBill}
               reading={reading}
             />
           )}

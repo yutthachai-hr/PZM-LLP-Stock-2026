@@ -64,6 +64,7 @@ export function DocumentCard({
   invalid,
   onReadBill,
   onReadFile,
+  onCancelRead,
   reading,
 }: {
   /** The order's supplier, when receiving against one. */
@@ -89,6 +90,8 @@ export function DocumentCard({
   onReadBill?: () => void
   /** Read a bill from a file instead — a PDF from the supplier, or a saved picture (6 Oct 2026). */
   onReadFile?: (file: File) => void
+  /** Cancel an ongoing AI read */
+  onCancelRead?: () => void
   reading?: boolean
 }) {
   const t = useT()
@@ -210,6 +213,12 @@ export function DocumentCard({
                     {t('อ่านบิลจากไฟล์ (รูป / PDF)')}
                   </Button>
                 </>
+              )}
+              {reading && onCancelRead && (
+                <Button variant="secondary" onClick={onCancelRead} className="w-full sm:w-auto">
+                  <Icon name="x" size={16} />
+                  {t('ยกเลิก')}
+                </Button>
               )}
             </div>
           </Field>
