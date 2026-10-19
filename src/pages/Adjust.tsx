@@ -488,12 +488,18 @@ export function AdjustPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return
+                  if (e.key !== 'Enter' && e.key !== 'Tab') return
+                  // Shift+Tab stays the way out of the box; a bare Tab after a code is the
+                  // scanner's terminator, exactly as on the receipt rows (R19).
+                  if (e.key === 'Tab' && e.shiftKey) return
                   const raw = search.trim()
                   if (!raw) return
                   // Enter means "this is a code" (a wedge scanner ends with Enter). It is
                   // resolved exactly as a barcode; a human picks a product by clicking it.
                   e.preventDefault()
+                  // A refused code must not stay in the box: the next scan would append to it
+                  // and the pair is unknown for a reason that has nothing to do with the scan.
+                  setSearch('')
                   gate(raw)
                 }}
                 autoComplete="off"
