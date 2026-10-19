@@ -194,12 +194,24 @@ test('hidden tab race between render and passive effect flushes pauses timer det
         document.dispatchEvent(new Event('visibilitychange'))
       }
     }
+    const win = window as any
+    const origSetTimeout = win.setTimeout.bind(win)
+    win.setTimeout = function (fn: TimerHandler, delay?: number, ...args: any[]) {
+      const id = origSetTimeout(fn, delay, ...args)
+      if (delay === 3000 && document.hidden) {
+        win.setTimeout = origSetTimeout
+        win.__pwClock?.controller?.runFor(10_000)
+      }
+      return id
+    }
+    win.__restoreTestTimeout = () => { win.setTimeout = origSetTimeout }
   })
   await page.getByRole('button', { name: 'Save order', exact: true }).click()
   await expect(card(page)).toHaveCount(1)
   await page.clock.runFor(10_000)
   await expect(card(page)).toHaveCount(1)
   await page.evaluate(() => {
+    ;(window as any).__restoreTestTimeout?.()
     Object.defineProperty(document, 'hidden', { configurable: true, value: false })
     document.dispatchEvent(new Event('visibilitychange'))
   })

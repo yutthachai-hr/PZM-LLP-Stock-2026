@@ -16,48 +16,99 @@ export function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss:
   const root = useRef<HTMLElement>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
   const remaining = useRef(TOAST_DURATION[toast.kind])
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const startedAt = useRef<number | null>(null)
   const exitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const closing = useRef(false)
+  const hovered = useRef(false)
+  const focused = useRef(false)
   const [leaving, setLeaving] = useState(false)
-  const [hovered, setHovered] = useState(false)
-  const [focused, setFocused] = useState(false)
-  const [hidden, setHidden] = useState(() => typeof document !== 'undefined' ? document.hidden : false)
+
+  const isPaused = useCallback(() => {
+    return closing.current || hovered.current || focused.current || (typeof document !== 'undefined' && document.hidden)
+  }, [])
+
+  const pause = useCallback(() => {
+    clearTimeout(timer.current)
+    timer.current = undefined
+    if (startedAt.current !== null) {
+      remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt.current))
+      startedAt.current = null
+    }
+  }, [])
+
   const close = useCallback(() => {
     if (closing.current) return
     closing.current = true
+    pause()
     setLeaving(true)
     if (root.current?.contains(document.activeElement) && previousFocus.current?.isConnected) previousFocus.current.focus({ preventScroll: true })
     exitTimer.current = setTimeout(() => onDismiss(toast.id), 180)
-  }, [onDismiss, toast.id])
+  }, [onDismiss, pause, toast.id])
+
+  const autoDismiss = useCallback(() => {
+    timer.current = undefined
+    if (isPaused()) {
+      pause()
+      return
+    }
+    close()
+  }, [close, isPaused, pause])
+
+  const resume = useCallback(() => {
+    if (isPaused() || timer.current !== undefined) return
+    if (remaining.current <= 0) {
+      close()
+      return
+    }
+    startedAt.current = Date.now()
+    timer.current = setTimeout(autoDismiss, remaining.current)
+  }, [autoDismiss, close, isPaused])
+
   useEffect(() => {
-    const changed = () => setHidden(document.hidden)
-    document.addEventListener('visibilitychange', changed)
-    changed()
-    return () => document.removeEventListener('visibilitychange', changed)
-  }, [])
+    const onVisibility = () => {
+      if (typeof document !== 'undefined' && document.hidden) pause()
+      else resume()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    if (typeof document !== 'undefined' && document.hidden) pause()
+    else resume()
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      pause()
+    }
+  }, [pause, resume])
+
   useEffect(() => {
+    clearTimeout(timer.current)
+    timer.current = undefined
+    startedAt.current = null
     remaining.current = TOAST_DURATION[toast.kind]
     closing.current = false
     clearTimeout(exitTimer.current)
     setLeaving(false)
-  }, [toast.kind, toast.revision])
-  useEffect(() => {
-    if (hovered || focused || hidden || leaving) return
-    const started = Date.now()
-    const timer = setTimeout(close, remaining.current)
-    return () => { clearTimeout(timer); remaining.current = Math.max(0, remaining.current - (Date.now() - started)) }
-  }, [hovered, focused, hidden, leaving, close, toast.revision])
+    resume()
+  }, [resume, toast.kind, toast.revision])
+
   useEffect(() => () => clearTimeout(exitTimer.current), [])
+
   const ui = variant[toast.kind]
   // ponytail: keying text by revision forces DOM re-insertion for a11y re-announcement; upgrade to dedicated speech lane if queued utterances needed.
   return <article ref={root} data-toast data-toast-kind={toast.kind} data-toast-revision={toast.revision} data-leaving={leaving} aria-hidden={leaving || undefined}
     className="notice-card toast-card flex items-start gap-3 border border-line p-4"
-    onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+    onMouseEnter={() => { hovered.current = true; pause() }}
+    onMouseLeave={() => { hovered.current = false; resume() }}
     onFocusCapture={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) previousFocus.current = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null
-      setFocused(true)
+      focused.current = true
+      pause()
     }}
-    onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}
+    onBlurCapture={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        focused.current = false
+        resume()
+      }
+    }}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() } }}>
     <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${ui.color}`}><Icon name={ui.icon} size={19} /></span>
     <div className="min-w-0 flex-1">
