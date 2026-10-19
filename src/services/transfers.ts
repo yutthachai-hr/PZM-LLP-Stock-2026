@@ -236,8 +236,9 @@ export async function getTransfer(id: string): Promise<Transfer | null> {
   return scoped().getOne<Transfer>(COL.transfers, id)
 }
 
-export async function listTransfersInRange(from: number, to: number): Promise<Transfer[]> {
-  const rows = await scoped().getRange<Transfer>(COL.transfers, 'createdAt', from, to)
+export async function listTransfersInRange(from: number, to: number, brand?: BrandId): Promise<Transfer[]> {
+  const db = brand ? backend.forBrand(brand) : scoped()
+  const rows = await db.getRange<Transfer>(COL.transfers, 'createdAt', from, to)
   return rows.sort((a, b) => b.createdAt - a.createdAt)
 }
 

@@ -39,7 +39,8 @@ function mv(over: Partial<StockMovement>): StockMovement {
   } as StockMovement
 }
 
-const day = (n: number, hour = 9) => new Date(2026, 8, n, hour, 0, 0).getTime()
+// The business day is Bangkok's, regardless of the test runner/browser timezone.
+const day = (n: number, hour = 9) => Date.parse(`2026-09-${String(n).padStart(2, '0')}T${String(hour).padStart(2, '0')}:00:00+07:00`)
 
 describe('F39 — a running balance that starts where the stock actually was', () => {
   // Received 10 into the warehouse on the 1st, issued 3 out of it on the 5th.
@@ -100,7 +101,7 @@ describe('F39 — a running balance that starts where the stock actually was', (
 describe('F40 — a date range that means the days you picked', () => {
   test('a chosen day starts at midnight, not midday', () => {
     const ms = dateInputToMs('2026-09-08')
-    expect(new Date(ms).getHours()).toBe(0)
+    expect(ms).toBe(Date.parse('2026-09-08T00:00:00+07:00'))
     expect(startOfDayMs(day(8, 23))).toBe(dateInputToMs('2026-09-08'))
   })
 

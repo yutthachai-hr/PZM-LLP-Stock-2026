@@ -1,4 +1,4 @@
-import { getBrand, resolveCollection } from '../brand/brand'
+import { getBrand, resolveCollection, type BrandId } from '../brand/brand'
 import { FULL_EVERY_MS, readCopy, writeCopy } from './deviceStore'
 
 /**
@@ -81,13 +81,13 @@ interface Held<T> {
 }
 
 export function createRangeCache<T extends { id: string }>(opts: {
-  fetch: (from: number, to: number) => Promise<T[]>
+  fetch: (from: number, to: number, brand?: BrandId) => Promise<T[]>
   /** The field the range is on. */
   atOf: (row: T) => number
   /** Tie-break after the date, for a stable order. */
   compare?: (a: T, b: T) => number
   /** Rows whose `updatedAt` is at or after `since`, any date — what other devices changed. */
-  changedSince?: (since: number) => Promise<T[]>
+  changedSince?: (since: number, brand?: BrandId) => Promise<T[]>
   /**
    * Keep what was read on this device between sessions (deviceStore), under this collection
    * name: the next open reads only what changed (`changedSince`), and the whole of any span
@@ -121,7 +121,7 @@ export function createRangeCache<T extends { id: string }>(opts: {
       }),
     )
 
-  const copyKey = () => `range:${resolveCollection(opts.persist ?? '', getBrand())}`
+  const copyKey = (brand: BrandId) => `range:${resolveCollection(opts.persist ?? '', brand)}`
   interface Copy {
     v: 1
     spans: Span[]
@@ -129,10 +129,10 @@ export function createRangeCache<T extends { id: string }>(opts: {
     syncedAt: number
     fullAt: number
   }
-  async function hydrate(h: Held<T>): Promise<void> {
+  async function hydrate(h: Held<T>, brand: BrandId): Promise<void> {
     if (h.hydrated) return
     h.hydrated = true
-    const c = await readCopy<Copy>(copyKey())
+    const c = await readCopy<Copy>(copyKey(brand))
     if (!c || c.v !== 1 || now() - c.fullAt >= FULL_EVERY_MS) return
     for (const row of c.rows) if (!h.rows.has(row.id)) h.rows.set(row.id, row)
     for (const sp of c.spans) h.spans = addSpan(h.spans, sp)
@@ -140,31 +140,34 @@ export function createRangeCache<T extends { id: string }>(opts: {
     h.fullAt = c.fullAt
   }
   let saveTimer: ReturnType<typeof setTimeout> | null = null
-  function save(h: Held<T>): void {
+  function save(h: Held<T>, brand = getBrand()): void {
     if (!opts.persist) return
     if (saveTimer) clearTimeout(saveTimer)
-    const key = copyKey()
+    const key = copyKey(brand)
     saveTimer = setTimeout(() => {
       void writeCopy<Copy>(key, { v: 1, spans: h.spans, rows: [...h.rows.values()], syncedAt: h.syncedAt, fullAt: h.fullAt })
     }, 1500)
   }
 
-  async function catchUp(h: Held<T>): Promise<void> {
+  async function catchUp(h: Held<T>, brand: BrandId): Promise<void> {
     if (!opts.changedSince || !h.spans.length || now() - h.syncedAt < DELTA_EVERY_MS) return
     const since = h.syncedAt - DELTA_SKEW_MS
-    h.syncedAt = now()
-    const changed = await opts.changedSince(since)
+    const startedAt = now()
+    const changed = await opts.changedSince(since, brand)
     for (const row of changed) h.rows.set(row.id, row)
+    // A failed read must not hide a needed retry for another minute.
+    h.syncedAt = startedAt
     if (changed.length) announce()
   }
 
   return {
     fetchRange(from, to, o) {
+      const brand = getBrand()
       const h = mine()
       const run = h.queue.then(async () => {
-        await hydrate(h)
+        await hydrate(h, brand)
         if (o?.force) {
-          const rows = await opts.fetch(from, to)
+          const rows = await opts.fetch(from, to, brand)
           for (const [id, row] of h.rows) {
             const at = opts.atOf(row)
             if (at >= from && at <= to) h.rows.delete(id)
@@ -173,22 +176,22 @@ export function createRangeCache<T extends { id: string }>(opts: {
           h.spans = addSpan(h.spans, [from, to])
           if (!h.syncedAt) h.syncedAt = now()
           if (!h.fullAt) h.fullAt = now()
-          save(h)
+          save(h, brand)
           announce()
         } else {
           const missing = gaps(h.spans, from, to)
           const fresh = !h.spans.length
           for (const [a, b] of missing) {
-            const rows = await opts.fetch(a, b)
+            const rows = await opts.fetch(a, b, brand)
             for (const row of rows) h.rows.set(row.id, row)
             h.spans = addSpan(h.spans, [a, b])
           }
           if (fresh) {
             h.syncedAt = now()
             h.fullAt = now()
-          } else await catchUp(h)
+          } else await catchUp(h, brand)
           if (missing.length) announce()
-          save(h)
+          save(h, brand)
         }
         return within(h, from, to)
       })

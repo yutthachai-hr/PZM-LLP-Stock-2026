@@ -50,6 +50,8 @@ export interface SubscribeOptions {
 /** For one-shot reads: the read meter's label. */
 export interface ReadOptions {
   label?: string
+  /** Completeness-sensitive history must be acknowledged by the server, never offline cache. */
+  server?: boolean
 }
 
 export interface Backend {

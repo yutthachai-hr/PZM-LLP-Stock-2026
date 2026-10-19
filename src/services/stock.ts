@@ -15,7 +15,7 @@ import {
   type MovementEditField,
 } from '../types'
 import { genId } from '../lib/id'
-import { brandEpoch, getBrand } from '../brand/brand'
+import { brandEpoch, getBrand, type BrandId } from '../brand/brand'
 import { sameUnit } from '../lib/units'
 import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
 import { balancesFromLedger, filedUnit, levelId, levelRef, parseLevelId } from '../lib/levelKey'
@@ -565,26 +565,30 @@ export async function consumeStock(params: {
 /**
  * Every movement of one product — the Stock Card page's ledger (spec §2.7).
  *
- * One equality query on `productId`, the same read `rebuildProductLevels` makes: it costs
- * that product's rows, never the whole collection. Kept for the session per brand, so
- * going back and forth between products does not read the same rows twice; the screen
- * lays the live listener's rows over it, so anything filed or edited since is current.
+ * One server-acknowledged equality query, costing only that product's rows. Only concurrent
+ * requests share a promise: completed history is NOT kept for the session (an old edit/void
+ * outside the live week must appear on return). Screens retain their own complete result,
+ * refresh after local writes, on explicit retry, and on return after a minute away.
  */
-const ledgerCache = new Map<string, StockMovement[]>()
+const ledgerReads = new Map<string, Promise<StockMovement[]>>()
 
-export async function readProductLedger(productId: string, opts: { force?: boolean } = {}): Promise<StockMovement[]> {
+export function readProductLedger(productId: string, opts: { force?: boolean; brand?: BrandId } = {}): Promise<StockMovement[]> {
   requireId(productId, 'productId')
-  const key = `${getBrand()}::${productId}`
-  const hit = ledgerCache.get(key)
-  if (hit && !opts.force) return hit
-  const rows = (await scoped().getBy<StockMovement>(COL.movements, 'productId', productId)) ?? []
-  ledgerCache.set(key, rows)
-  return rows
+  const brand = opts.brand ?? getBrand()
+  const db = backend.forBrand(brand)
+  const key = `${brand}::${productId}`
+  const held = ledgerReads.get(key)
+  if (held && !opts.force) return held
+  const pending = db.getBy<StockMovement>(COL.movements, 'productId', productId, { server: true, label: 'movements.product.complete' })
+  ledgerReads.set(key, pending)
+  const clear = () => { if (ledgerReads.get(key) === pending) ledgerReads.delete(key) }
+  void pending.then(clear, clear)
+  return pending
 }
 
-/** Fetch movements in a date range on demand; nothing is subscribed. */
-export async function listMovementsInRange(from: number, to: number): Promise<StockMovement[]> {
-  return (await scoped().getRange<StockMovement>(COL.movements, 'date', from, to)) ?? []
+/** Closed backend range [from, to], pinned before the first await; nothing is subscribed. */
+export async function listMovementsInRange(from: number, to: number, opts: { brand?: BrandId; server?: boolean } = {}): Promise<StockMovement[]> {
+  return backend.forBrand(opts.brand ?? getBrand()).getRange<StockMovement>(COL.movements, 'date', from, to, { server: opts.server, label: 'movements.range' })
 }
 
 /** Fetch the proof photo attached to a movement document (by docNo). */
@@ -772,8 +776,13 @@ export async function planAdjust(
   }
 }
 
-export async function adjustStockLines(params: PlanAdjustParams): Promise<string> {
-  const scope = captureFilingScope()
+/**
+ * `scope` pins the brand when the caller awaits something between the person pressing save
+ * and this call (a backdated screen's fresh read): without it the brand is whichever is
+ * active once that await returns.
+ */
+export async function adjustStockLines({ scope: pinned, ...params }: PlanAdjustParams & { scope?: FilingScope }): Promise<string> {
+  const scope = pinned ?? captureFilingScope()
   return filing(scope, async (tx, file) => {
     const planned = await planAdjust(tx, params, file)
     return planned.commit()
