@@ -1018,6 +1018,8 @@ export const EN: Record<string, string> = {
   'หัวหน้าเพิ่ม': 'Added by manager',
   'เลือกผู้ขายเอง': 'Supplier chosen by hand',
   'หมายเหตุการอนุมัติ': 'Approval note',
+  '… (ดูหมายเหตุ {n})': '… (see note {n})',
+  'หมายเหตุฉบับเต็ม': 'Full notes',
   'จากรายการขอสั่งซื้อ': 'From a purchase request',
   'ค้นหาชื่อสินค้า / รหัสสินค้า': 'Search product name / code',
   'ไม่พบสินค้าที่ตรงกัน': 'No matching product',
