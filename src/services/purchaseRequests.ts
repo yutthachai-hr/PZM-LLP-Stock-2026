@@ -1,7 +1,7 @@
 import { backend } from '../backend'
 import { resolveFactor } from '../lib/uom'
 import type { TxContext } from '../backend/types'
-import { getBrand } from '../brand/brand'
+import { getBrand, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { canEditItems, canSkip, canTransition, isManager, liveItems } from '../lib/purchaseRequestStatus'
 import { sameUnit } from '../lib/units'
@@ -83,8 +83,9 @@ export async function getRequest(id: string): Promise<PurchaseRequest | null> {
 }
 
 /** Requests created in a window, newest first. */
-export async function listRequestsInRange(from: number, to: number): Promise<PurchaseRequest[]> {
-  const rows = await scoped().getRange<PurchaseRequest>(COL.purchaseRequests, 'createdAt', from, to)
+export async function listRequestsInRange(from: number, to: number, brand?: BrandId): Promise<PurchaseRequest[]> {
+  const db = brand ? backend.forBrand(brand) : scoped()
+  const rows = await db.getRange<PurchaseRequest>(COL.purchaseRequests, 'createdAt', from, to)
   return rows.sort((a, b) => b.createdAt - a.createdAt)
 }
 

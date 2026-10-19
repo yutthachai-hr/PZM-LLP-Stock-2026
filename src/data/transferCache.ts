@@ -6,7 +6,7 @@ import { COL } from '../types'
 
 /** Transfers by the day they were created, shared across screens without burning Firestore reads. */
 export const transferCache = createRangeCache<Transfer>({
-  fetch: listTransfersInRange,
+  fetch: (from, to, brand) => listTransfersInRange(from, to, brand),
   atOf: (t) => t.createdAt,
   changedSince: changedSince<Transfer>(COL.transfers, 'transfers.delta'),
   persist: COL.transfers,

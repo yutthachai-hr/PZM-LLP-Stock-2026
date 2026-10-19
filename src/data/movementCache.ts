@@ -6,8 +6,8 @@ import { COL } from '../types'
 
 /** Historical movements by date, cached for the session so repeated range queries don't re-read. */
 export const movementCache = createRangeCache<StockMovement>({
-  fetch: listMovementsInRange,
+  fetch: (from, to, brand) => listMovementsInRange(from, to, { brand, server: true }),
   atOf: (m) => m.date,
-  // Corrections to old rows (edit, void) stamp updatedAt; new rows land in the live week.
-  changedSince: changedSince<StockMovement>(COL.movements, 'movements.delta'),
+  // Backdated new rows need createdAt too: their business date may be outside the live week.
+  changedSince: changedSince<StockMovement>(COL.movements, 'movements.delta', ['createdAt', 'updatedAt']),
 })

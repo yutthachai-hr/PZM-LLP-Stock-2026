@@ -9,13 +9,25 @@ import { SubmitBar } from '../../components/keying/SubmitBar'
 import { useToast } from '../../components/Toast'
 import { AlertBanner, Button, Modal, SearchInput, blurOnWheel } from '../../components/ui'
 import { useData } from '../../data/DataContext'
-import { movementCache } from '../../data/movementCache'
+import { useBrand } from '../../brand/BrandContext'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import { balanceAtDayEnd } from '../../lib/ledger'
 import { countRows, monthBefore, monthlyCountId, postingPlan, resultsOf, type CountRow } from '../../lib/monthlyCount'
+import { mergeReportMovements } from '../../lib/reportHistory'
+import {
+  acceptRewind,
+  mayUseFigures,
+  rewindFailed,
+  rewindLoaded,
+  rewindLoading,
+  rewindRange,
+  rewindTicket,
+  type RewindState,
+} from '../../lib/monthlyHistory'
+import { captureFilingScope, listMovementsInRange } from '../../services/stock'
 import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
@@ -27,9 +39,6 @@ import { MonthLabel, StatusBadge } from './labels'
 
 type Edits = Record<string, number | null>
 type Filter = 'all' | 'diff' | 'big' | 'uncounted'
-
-/** Far enough ahead to catch a row dated forward; day-aligned so the cache keeps one key. */
-const horizon = () => bkkDayStart(Date.now()) + 400 * DAY_MS
 
 /**
  * One monthly count sheet (owner, 29 Sep 2026). Figures are typed in, kept on this device
@@ -92,28 +101,57 @@ export function MonthlyCountSheet() {
   }, [pending])
 
   // ---- the books at the end of the month's last day ----
+  // A count taken after the month closed is compared with the day-end books, so every
+  // movement dated after that day is subtracted. That read must be exhaustive (no horizon),
+  // acknowledged by the server (never a stale offline copy) and explicit about failing —
+  // an incomplete read must never be shown, exported or posted as a complete figure.
+  const { brand } = useBrand()
   const locationId = sheet?.locationId ?? ''
   const after = sheet ? sheet.countDate + DAY_MS : 0
   const backdated = !!sheet && after <= Date.now()
-  const [later, setLater] = useState<{ after: number; rows: StockMovement[] } | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const [rewind, setRewind] = useState<RewindState>({ status: 'idle' })
+  const ticket = rewindTicket(brand ?? '', after, attempt)
+
+  const readLater = useCallback(
+    () =>
+      listMovementsInRange(rewindRange(after).from, rewindRange(after).to, {
+        brand: brand ?? undefined,
+        server: true,
+      }),
+    [after, brand],
+  )
+
   useEffect(() => {
-    if (!backdated) return
-    let alive = true
-    movementCache
-      .fetchRange(after, horizon())
-      .then((rows) => alive && setLater({ after, rows }))
-      .catch((e) => toast.error(errText(e, t)))
-    return () => {
-      alive = false
+    if (!backdated) {
+      setRewind((cur) => (cur.status === 'idle' ? cur : { status: 'idle' }))
+      return
     }
-  }, [backdated, after, toast, t])
-  const ready = !backdated || later?.after === after
+    const mine = ticket
+    setRewind(rewindLoading(after, mine))
+    let live = true
+    readLater()
+      .then((rows) => {
+        if (live) setRewind((cur) => acceptRewind(cur, rewindLoaded(after, mine, rows)))
+      })
+      .catch((e) => {
+        if (!live) return
+        setRewind((cur) => acceptRewind(cur, rewindFailed(after, mine, errText(e, t))))
+        toast.error(errText(e, t))
+      })
+    return () => {
+      live = false
+    }
+  }, [backdated, after, ticket, readLater, toast, t])
+
+  /** A failed rewind is retried in place: same sheet, same cut, a fresh ticket. */
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+
+  const ready = mayUseFigures(backdated, rewind, ticket)
   const laterRows = useMemo(() => {
-    if (!backdated || later?.after !== after) return []
-    const byId = new Map(later.rows.map((m) => [m.id, m]))
-    for (const m of movements) byId.set(m.id, m)
-    return [...byId.values()]
-  }, [backdated, later, after, movements])
+    if (!backdated || !ready || rewind.status !== 'ready') return []
+    return mergeReportMovements(rewind.rows, movements)
+  }, [backdated, ready, rewind, movements])
   const systemAt = useCallback(
     (productId: string, rows: StockMovement[] = laterRows) =>
       !backdated ? qtyAt(locationId, productId) : balanceAtDayEnd(qtyAt(locationId, productId), rows, { productId, locationId }, after),
@@ -214,11 +252,9 @@ export function MonthlyCountSheet() {
   /** The books may have moved since the figures were read: read them again before confirming. */
   async function freshRows(): Promise<CountRow[]> {
     if (!backdated) return rows
-    const fresh = await movementCache.fetchRange(after, horizon(), { force: true })
-    const merged = new Map(fresh.map((m) => [m.id, m]))
-    for (const m of movements) merged.set(m.id, m)
-    const all = [...merged.values()]
-    setLater({ after, rows: fresh })
+    const fresh = await readLater()
+    setRewind((cur) => acceptRewind(cur, rewindLoaded(after, ticket, fresh)))
+    const all = mergeReportMovements(fresh, movements)
     return countRows({
       productIds,
       lines,
@@ -230,13 +266,20 @@ export function MonthlyCountSheet() {
 
   async function confirm(kind: 'record' | 'post') {
     if (!user || !sheet) return
+    // Owner's rule: the result is never computed from incomplete later movements.
+    if (!ready) {
+      toast.error(t('ยังอ่านยอด ณ สิ้นเดือนไม่ครบ — ยืนยันไม่ได้จนกว่าจะอ่านได้ครบ'))
+      return
+    }
+    // The brand this sheet was confirmed in, pinned before the fresh read below is awaited.
+    const scope = captureFilingScope()
     setBusy(true)
     try {
       const now = await freshRows()
       const results = resultsOf(now)
       const actor = { id: user.id, name: user.name }
       if (kind === 'record') {
-        await recordMonthlyCount({ id, results, actor })
+        await recordMonthlyCount({ id, results, actor, scope })
         toast.success(t('บันทึกผลนับไว้แล้ว — สต๊อกไม่ถูกปรับ'))
       } else {
         const parts = postingPlan(now, sheet.postedIds).map((part) =>
@@ -248,6 +291,7 @@ export function MonthlyCountSheet() {
           })),
         )
         const docs = await postMonthlyCount({
+          scope,
           id,
           parts,
           results,
@@ -363,6 +407,7 @@ export function MonthlyCountSheet() {
   const toPost = rows.filter((r) => r.diff).length
 
   async function download() {
+    if (!ready) return
     setExporting(true)
     try {
       const { exportExcel } = await import('../../lib/export')
@@ -483,7 +528,20 @@ export function MonthlyCountSheet() {
           <SearchInput value={query} onChange={setQuery} placeholder={t('ค้นหาสินค้า...')} className="w-full sm:ml-auto sm:w-72" />
         </div>
         {!ready ? (
-          <p className="px-5 py-6 text-sm text-ink-faint">{t('กำลังคำนวณยอด ณ สิ้นเดือน...')}</p>
+          backdated && rewind.status === 'error' ? (
+            <div className="px-5 py-6 text-sm">
+              <p className="font-medium text-danger">{rewind.message}</p>
+              <p className="mt-1 text-ink-faint">
+                {t('ยอด ณ สิ้นเดือนยังอ่านไม่ครบ — ตัวเลขในหน้านี้และยอดที่จะปรับจะไม่ถูกคิดจากข้อมูลที่ไม่ครบ และยังยืนยันไม่ได้')}
+              </p>
+              <Button variant="secondary" className="mt-3" onClick={retry}>
+                <Icon name="refresh" size={16} />
+                {t('ลองอ่านยอด ณ สิ้นเดือนอีกครั้ง')}
+              </Button>
+            </div>
+          ) : (
+            <p className="px-5 py-6 text-sm text-ink-faint">{t('กำลังคำนวณยอด ณ สิ้นเดือน...')}</p>
+          )
         ) : (
           <DataTable rows={shown} columns={columns} rowKey={(r) => r.productId} minWidth={820} empty={<p className="px-5 py-6 text-sm text-ink-faint">{t('ไม่มีรายการ')}</p>} />
         )}
@@ -494,11 +552,11 @@ export function MonthlyCountSheet() {
       {isManager && sheet.status !== 'posted' && (
         <div className="grid gap-2 md:hidden">
           {counting && (
-            <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
+            <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !ready || !summary?.counted || openQuestions > 0}>
               {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
             </Button>
           )}
-          <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
+          <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !ready || !summary?.counted || openQuestions > 0}>
             <Icon name="checkCircle" size={16} />
             {t('ยืนยันและปรับสต๊อก')}
           </Button>
@@ -515,11 +573,11 @@ export function MonthlyCountSheet() {
           {isManager && sheet.status !== 'posted' && (
             <span className="hidden gap-2 md:flex">
               {counting && (
-                <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
+                <Button variant="secondary" onClick={() => setAsking('record')} disabled={busy || !!pending || !monthOver || !ready || !summary?.counted || openQuestions > 0}>
                   {t('บันทึกผลนับไว้ดู (ไม่ปรับ)')}
                 </Button>
               )}
-              <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !summary?.counted || openQuestions > 0}>
+              <Button onClick={() => setAsking('post')} disabled={busy || !!pending || !monthOver || !ready || !summary?.counted || openQuestions > 0}>
                 <Icon name="checkCircle" size={16} />
                 {t('ยืนยันและปรับสต๊อก')}
               </Button>
@@ -529,6 +587,9 @@ export function MonthlyCountSheet() {
       )}
       {openQuestions > 0 && counting && (
         <p className="text-xs text-warn">{t('ยังมีคำถามจากไฟล์ {n} รายการ — ตอบให้ครบก่อนยืนยันใบนับ', { n: openQuestions })}</p>
+      )}
+      {isManager && backdated && !ready && (
+        <p className="text-xs text-warn">{t('ยอด ณ สิ้นเดือนยังอ่านไม่ครบ — ยืนยันได้เมื่ออ่านสำเร็จ (ลองใหม่ได้ที่รายการนับ)')}</p>
       )}
       {isManager && !monthOver && sheet.status !== 'posted' && (
         <p className="text-xs text-ink-faint">{t('ยืนยันได้ตั้งแต่วันสุดท้ายของเดือน ({date})', { date: dayLabel })}</p>
