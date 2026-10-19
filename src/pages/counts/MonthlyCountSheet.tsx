@@ -15,7 +15,16 @@ import { useT } from '../../i18n/I18nContext'
 import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import { balanceAtDayEnd } from '../../lib/ledger'
-import { countRows, monthBefore, monthlyCountId, postingPlan, resultsOf, type CountRow } from '../../lib/monthlyCount'
+import {
+  countExpectedLevels,
+  countRows,
+  monthBefore,
+  monthlyCountId,
+  postingPlan,
+  resultsOf,
+  toPostingParts,
+  type CountRow,
+} from '../../lib/monthlyCount'
 import { mergeReportMovements } from '../../lib/reportHistory'
 import {
   acceptRewind,
@@ -275,7 +284,7 @@ export function MonthlyCountSheet() {
     // The brand this sheet was confirmed in, pinned before the fresh read below is awaited.
     const scope = captureFilingScope()
     // Capture optimistic concurrency expected levels at submit time from this render
-    const expectedLevels = new Map(productIds.map((pid) => [pid, qtyAt(locationId, pid)]))
+    const expectedLevels = countExpectedLevels(productIds, lines, (pid) => qtyAt(locationId, pid))
     setBusy(true)
     try {
       const now = await freshRows()
@@ -285,15 +294,7 @@ export function MonthlyCountSheet() {
         await recordMonthlyCount({ id, results, actor, scope })
         toast.success(t('บันทึกผลนับไว้แล้ว — สต๊อกไม่ถูกปรับ'))
       } else {
-        const parts = postingPlan(now, sheet.postedIds).map((part) =>
-          part.map((r) => ({
-            productId: r.productId,
-            productName: byId.get(r.productId)?.name ?? r.productId,
-            unit: byId.get(r.productId)?.unitType ?? '',
-            diff: r.diff ?? 0,
-            expectedLevel: expectedLevels.get(r.productId),
-          })),
-        )
+        const parts = toPostingParts(postingPlan(now, sheet.postedIds), expectedLevels, byId)
         const docs = await postMonthlyCount({
           scope,
           id,

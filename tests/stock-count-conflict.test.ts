@@ -114,6 +114,33 @@ describe('Stock count stale-level conflict (P0 C-02)', () => {
     expect(adjMovements[0].docNo).toBe(docA)
   })
 
+  test('single document with two adjust lines: conflict on line 2 prevents partial write of line 1', async () => {
+    // Initial stock: p1 = 10, p2 = 20 at MAIN
+    expect(getLevel(MAIN, 'p1')).toBe(10)
+    expect(getLevel(MAIN, 'p2')).toBe(20)
+
+    const movementsBefore = raw('stockMovements').length
+
+    // Line 1: p1 matches expected level (10)
+    // Line 2: p2 has stale expected level (99 vs actual 20) -> conflicts
+    await expect(
+      adjustStockLines({
+        locationId: MAIN,
+        date: Date.now(),
+        actor: ACTOR,
+        lines: [
+          { productId: 'p1', productName: 'Bacon', unit: 'KG', direction: 'in', qty: 2, reason: 'count', expectedLevel: 10 },
+          { productId: 'p2', productName: 'Mozzarella', unit: 'KG', direction: 'in', qty: 5, reason: 'count', expectedLevel: 99 },
+        ],
+      }),
+    ).rejects.toThrow(StockLevelConflictError)
+
+    // Atomicity assertion: line 1 was NOT applied, line 2 was NOT applied, no partial write
+    expect(getLevel(MAIN, 'p1')).toBe(10)
+    expect(getLevel(MAIN, 'p2')).toBe(20)
+    expect(raw('stockMovements')).toHaveLength(movementsBefore)
+  })
+
   test('a receipt filed between figure capture and save', async () => {
     // Counter sees p1 at 10 KG
     const expected = 10
@@ -478,5 +505,44 @@ describe('Stock count stale-level conflict (P0 C-02)', () => {
     const finalSheet = raw('monthlyCounts').find((s) => s.id === sheetId) as unknown as MonthlyCount
     expect(finalSheet.status).toBe('posted')
     expect(finalSheet.postedIds).toEqual(expect.arrayContaining(['p1', 'p2']))
+  })
+
+  test('postMonthlyCount: product present in sheet.lines with captured expectedLevel detects conflict on level change', async () => {
+    const sheetId = 'sheet-monthly-untracked'
+    seed('monthlyCounts', [
+      {
+        id: sheetId,
+        locationId: MAIN,
+        month: '2026-09',
+        countDate: Date.UTC(2026, 8, 30),
+        status: 'counting',
+        lines: { p3: { qty: 35, by: 'u', byName: 'U', at: 1 } },
+        createdBy: ACTOR.id,
+        createdByName: ACTOR.name,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ])
+
+    // Level at MAIN for p3 starts at 30, but another device changed it to 33
+    seed('stockLevels', [
+      { id: `${MAIN}__p3`, locationId: MAIN, productId: 'p3', qty: 33, updatedAt: 2 },
+    ])
+
+    // Submit-time captured expectedLevel was 30 (stale vs actual 33)
+    await expect(
+      postMonthlyCount({
+        id: sheetId,
+        actor: ACTOR,
+        note: 'monthly count untracked product',
+        results: {},
+        parts: [
+          [{ productId: 'p3', productName: 'Tomato', unit: 'KG', diff: 5, expectedLevel: 30 }],
+        ],
+      }),
+    ).rejects.toThrow(StockLevelConflictError)
+
+    // Stock level untouched: still 33
+    expect(getLevel(MAIN, 'p3')).toBe(33)
   })
 })
