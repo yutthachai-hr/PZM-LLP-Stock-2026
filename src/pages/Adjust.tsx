@@ -249,7 +249,8 @@ export function AdjustPage() {
 
   function scanned(code: string) {
     setScanning(false)
-    gate(code)
+    // The camera decodes the printed code itself — no keyboard layout is involved.
+    gate(code, { literal: true })
   }
 
   const patch = (id: string, p: Partial<AdjRow>) => setRows((rs) => rs.map((r) => (r.productId === id ? { ...r, ...p } : r)))

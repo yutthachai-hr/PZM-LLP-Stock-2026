@@ -28,9 +28,10 @@ describe('normalizeScanToken', () => {
   })
 
   test('leading zeros survive the mapping', () => {
-    // 0 1 2 3 4 5 6 7 8 9 0 1 2 -> จ ๅ / _ ภ ถ ุ ึ ค ต จ ๅ /
-    expect(normalizeScanToken('จๅ/_ภถุึคตจๅ/')).toBe('0123456789012')
-    expect(resolveBarcode(products, normalizeScanToken('จๅ/_ภถุึคตจๅ/'))).toMatchObject({
+    // 0 1 2 3 4 5 6 7 8 9 0 1 2 -> จ ๅ / - ภ ถ ุ ึ ค ต จ ๅ /
+    // The measured Windows Kedmanee layout sends "-" for digit 3 (not "_").
+    expect(normalizeScanToken('จๅ/-ภถุึคตจๅ/')).toBe('0123456789012')
+    expect(resolveBarcode(products, normalizeScanToken('จๅ/-ภถุึคตจๅ/'))).toMatchObject({
       status: 'legacy_unverified',
       product: { id: 'zero' },
     })
@@ -38,8 +39,10 @@ describe('normalizeScanToken', () => {
 
   test('a US-typed code keeps its own punctuation', () => {
     // No Thai glyph, so nothing is translated — a real Code 128 with '-' is not a digit row.
+    // "_" is not a measured digit-row key either, so it is never translated.
     expect(normalizeScanToken('ABC-128')).toBe('ABC-128')
     expect(normalizeScanToken('885-123')).toBe('885-123')
+    expect(normalizeScanToken('885_123')).toBe('885_123')
     expect(normalizeScanToken('0123456789012')).toBe('0123456789012')
     expect(resolveBarcode(products, normalizeScanToken('ABC-128'))).toMatchObject({ status: 'legacy_unverified', product: { id: 'flour' } })
   })

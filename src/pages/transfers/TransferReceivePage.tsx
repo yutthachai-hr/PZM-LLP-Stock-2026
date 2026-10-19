@@ -141,9 +141,9 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     onIneligible: () => toast.error(t('ไม่พบสินค้านี้ในเอกสาร {docNo}', { docNo: transfer.docNo })),
   })
 
-  function found(code: string) {
+  function found(code: string, literal = false) {
     setScan('')
-    gate(code)
+    gate(code, { literal })
   }
 
   async function addPhoto(idx: number, file?: File) {
@@ -350,7 +350,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
         </Button>
       </FormActions>
 
-      <BarcodeScanner open={camera} onClose={() => setCamera(false)} onRead={(code) => { setCamera(false); found(code) }} title={t('สแกนบาร์โค้ดสินค้า')} />
+      <BarcodeScanner open={camera} onClose={() => setCamera(false)} onRead={(code) => { setCamera(false); found(code, true) }} title={t('สแกนบาร์โค้ดสินค้า')} />
     </FramePage>
   )
 }

@@ -79,26 +79,28 @@ export function resolveBarcode(products: readonly Product[], code: string): Barc
 }
 
 /**
- * What a Thai keyboard layout turns the digit row into (Kedmanee, unshifted). A keyboard-wedge
- * scanner reports key positions as if it were a US keyboard, so on a Thai layout the digits
- * arrive as these glyphs and every scan misses.
+ * What a Thai keyboard layout turns the digit row into (Kedmanee, unshifted), measured on the
+ * installed Windows layout HKL 0x41e041e with GetKeyboardLayoutList + MapVirtualKeyExW +
+ * ToUnicodeEx: 0=จ 1=ๅ 2=/ 3=- 4=ภ 5=ถ 6=ุ 7=ึ 8=ค 9=ต. A keyboard-wedge scanner reports key
+ * positions as if it were a US keyboard, so on a Thai layout the digits arrive as these glyphs
+ * and every scan misses.
  *
  * Only the digit row is mapped, key for key — there is no attempt to guess words out of Thai
- * text, and a token is translated only when EVERY character is one of these keys. That keeps
- * Latin codes, their punctuation, and Thai product names exactly as typed.
+ * text. A token is translated only when it contains at least one of the measured Thai glyphs
+ * AND every character is one of these keys; so an ASCII code keeps its own `-`, `/` and digits,
+ * and `_` (not a key on the measured layout) is never translated. Anything else stays literal.
  */
 const THAI_DIGIT_ROW: Record<string, string> = {
-  'ๅ': '1', '/': '2', '_': '3', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9',
-  'จ': '0', 'ข': '-', 'ช': '=',
+  'จ': '0', 'ๅ': '1', '/': '2', '-': '3', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9',
 }
-const THAI_DIGIT_ROW_KEY = /[ๅภถุึคตจขช]/
-const THAI_DIGIT_ROW_ONLY = /^[0-9ๅ/_ภถุึคตจขช]+$/
+const THAI_DIGIT_ROW_GLYPH = /[จๅภถุึคต]/
+const THAI_DIGIT_ROW_ONLY = /^[0-9จๅ/ภถุึคต-]+$/
 
 /** The exact text a scanner meant, whatever keyboard layout it typed through. */
 export function normalizeScanToken(raw: string): string {
   const s = raw.trim()
-  if (!THAI_DIGIT_ROW_KEY.test(s) || !THAI_DIGIT_ROW_ONLY.test(s)) return s
-  return s.replace(/[ๅ/_ภถุึคตจขช]/g, (c) => THAI_DIGIT_ROW[c] ?? c)
+  if (!THAI_DIGIT_ROW_GLYPH.test(s) || !THAI_DIGIT_ROW_ONLY.test(s)) return s
+  return s.replace(/[จๅ/ภถุึคต-]/g, (c) => THAI_DIGIT_ROW[c] ?? c)
 }
 
 /** The fields a product is searched by, including its barcode when it has one. */

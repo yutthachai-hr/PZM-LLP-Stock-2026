@@ -198,7 +198,8 @@ export function LineBuilder({
   /** A scan is a decision, not a suggestion: the line goes on as soon as it reads. */
   function scanned(code: string) {
     setScanning(false)
-    gate(code)
+    // The camera decodes the printed code itself — no keyboard layout is involved.
+    gate(code, { literal: true })
   }
 
   function sheetSubmit(e: QtyEntry) {

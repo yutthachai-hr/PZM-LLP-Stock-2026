@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { brandEpoch, getBrand } from '../brand/brand'
-import { decideScan } from './barcodeSelection'
+import { decideScan, type ScanDecision } from './barcodeSelection'
 import { normalizeScanToken } from './barcode'
 import { backend as defaultBackend } from '../backend'
 import type { Backend } from '../backend/types'
@@ -49,6 +49,31 @@ type VerifyResult =
     }
 
 /**
+ * Where a scan came from. A camera decodes the printed code itself, so its token is already
+ * literal and must never be re-read as a keyboard layout; a keyboard/token typed into a box
+ * may have been typed on a Thai layout, so it is allowed the digit-row translation.
+ */
+export interface ScanOrigin {
+  /** true for a camera-decoded code: no keyboard-layout translation. */
+  literal?: boolean
+}
+
+/**
+ * The literal token wins. A layout translation is only a fallback for a token that is unknown
+ * exactly as it arrived, and only when the translation is not itself unknown. A raw exact,
+ * duplicate or inactive outcome is never bypassed by a keyboard-layout guess.
+ */
+function decideToken(products: readonly Product[], raw: string, origin?: ScanOrigin): ScanDecision {
+  const decision = decideScan(products, raw)
+  if (origin?.literal) return decision
+  if (decision.kind !== 'reject' || decision.reason !== 'not_found') return decision
+  const mapped = normalizeScanToken(raw)
+  if (mapped === raw) return decision
+  const translated = decideScan(products, mapped)
+  return translated.kind === 'reject' && translated.reason === 'not_found' ? decision : translated
+}
+
+/**
  * The single scan entry point the screens share (R4/R3).
  *
  * Resolves the token against the full synced product array once acknowledged by the server,
@@ -58,7 +83,7 @@ type VerifyResult =
  * before prompting AND again at answer time before onAdd, guarding against remote duplicates,
  * hard-deletions, deactivations, and rebinds without reading the full catalog.
  */
-export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<void> {
+export function useScanGate(opts: ScanGateOptions): (code: string, origin?: ScanOrigin) => Promise<void> {
   const { confirm, toast, t } = opts
   const productsRef = useRef(opts.products)
   productsRef.current = opts.products
@@ -90,9 +115,9 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
   }, [])
 
   return useCallback(
-    async (code: string): Promise<void> => {
-      const theCode = normalizeScanToken(code)
-      if (!theCode) return
+    async (code: string, origin?: ScanOrigin): Promise<void> => {
+      const raw = code.trim()
+      if (!raw) return
 
       // Refuse safely while confirmation dialog is already pending (I1)
       if (isConfirmingRef.current) {
@@ -117,7 +142,7 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
       const scanScopeId = ++scanScopeCounter.current
       const be = (backendRef.current ?? defaultBackend).forBrand(brandAtScan)
 
-      const decision = decideScan(productsRef.current, theCode)
+      const decision = decideToken(productsRef.current, raw, origin)
 
       if (decision.kind === 'legacy') {
         if (isEligibleRef.current && !isEligibleRef.current(decision.product)) {
@@ -145,6 +170,15 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
             if (otherMatches.length > 0) {
               return { ok: false, reason: 'duplicate', duplicateCount: otherMatches.length + 1 }
             }
+            // A translated token must not swallow a code that exists literally, so the raw
+            // text is checked on the server too — including at answer time, against a catalog
+            // this session has not seen.
+            if (needle !== raw) {
+              const rawMatches = await be.getBy<Product>(COL.products, 'barcode', raw, { server: true })
+              if (rawMatches.length > 0) {
+                return { ok: false, reason: 'duplicate', duplicateCount: rawMatches.length + 1 }
+              }
+            }
             return { ok: true, product: targetDoc }
           } catch {
             return { ok: false, reason: 'read_error' }
@@ -156,13 +190,13 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
           if (res.reason === 'read_error') {
             toast.error(t('เชื่อมต่อฐานข้อมูลไม่ได้ — กรุณาลองใหม่อีกครั้ง'))
           } else if (res.reason === 'not_found' || res.reason === 'rebound') {
-            toast.error(t('ไม่พบบาร์โค้ด {code} ในระบบ', { code: theCode }))
+            toast.error(t('ไม่พบบาร์โค้ด {code} ในระบบ', { code: decision.code }))
           } else if (res.reason === 'inactive') {
             toast.error(t('สินค้าบาร์โค้ดนี้ถูกปิดใช้งานแล้ว: "{name}"', { name: res.inactiveName ?? '' }))
           } else if (res.reason === 'duplicate') {
             toast.error(
               t('บาร์โค้ด {code} ซ้ำกับสินค้า {n} รายการ — โปรดเลือกสินค้าด้วยตนเอง', {
-                code: theCode,
+                code: decision.code,
                 n: res.duplicateCount ?? 0,
               }),
             )
@@ -170,7 +204,7 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
         }
 
         // Authoritative verification before prompt
-        const verifiedBeforePrompt = await verifyServer(decision.product.id, theCode)
+        const verifiedBeforePrompt = await verifyServer(decision.product.id, decision.code)
 
         if (!mounted.current || brandEpoch() !== epochAtScan || getBrand() !== brandAtScan) return
         if (scanScopeId !== scanScopeCounter.current) return
@@ -201,7 +235,7 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
           if (scanScopeId !== scanScopeCounter.current) return
 
           // Authoritative verification re-checked at answer time
-          const verifiedAtAnswer = await verifyServer(decision.product.id, theCode)
+          const verifiedAtAnswer = await verifyServer(decision.product.id, decision.code)
 
           if (!mounted.current || brandEpoch() !== epochAtScan || getBrand() !== brandAtScan) return
           if (scanScopeId !== scanScopeCounter.current) return
