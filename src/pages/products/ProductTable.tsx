@@ -58,15 +58,32 @@ export function CostFigure({ p, t, showLabel }: { p: Product; t: TFn; showLabel?
       </span>
     )
   }
-  // The invoice hint rides in the tooltip only. Printed as a second line it wrapped the
-  // cost column to six lines at 1440 and pushed the Location column off the right edge.
-  const hint = getCostHint(p, t)
-  return (
-    <div className="inline-block whitespace-nowrap" title={hint?.tooltip}>
+  const figure = (
+    <>
       {showLabel && <span className="text-xs text-ink-faint">{t('ต้นทุน/หน่วย')}: </span>}
       <span className="num font-semibold text-ink">฿{fmtCostAmount(cost)}</span> {/* i18n-key */}
       <span className="text-xs font-normal text-ink-soft"> / {p.unitType}</span>
-    </div>
+    </>
+  )
+  const hint = getCostHint(p, t)
+  if (!hint) return <div className="inline-block whitespace-nowrap">{figure}</div>
+  // A printed second line wrapped the column to six lines at 1440 and pushed Location off the
+  // right edge, but a title reaches neither a touch reader nor a keyboard. So the phone card,
+  // which has the room, prints the words; the table keeps one line and puts the same words
+  // behind a native disclosure: Tab reaches the summary, Enter/Space or a tap opens it.
+  return (
+    <>
+      <div className="inline-block whitespace-nowrap md:hidden">{figure}</div>
+      <span className="mt-0.5 block whitespace-normal break-words text-xs font-normal text-ink-faint md:hidden">
+        {hint.text}
+      </span>
+      <details className="hidden text-left md:block">
+        <summary className="cursor-pointer whitespace-nowrap text-right">{figure}</summary>
+        <span className="mt-0.5 block max-w-[220px] whitespace-normal break-words text-xs font-normal text-ink-faint">
+          {hint.text}
+        </span>
+      </details>
+    </>
   )
 }
 
