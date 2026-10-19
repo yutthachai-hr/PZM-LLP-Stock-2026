@@ -10,6 +10,7 @@ import { fmtQty, formatThaiDateTime } from '../../lib/format'
 import type { Product } from '../../types'
 import type { TFn } from '../../i18n/I18nContext'
 import { STATE_LOOK, type StockState } from './productStatus'
+import { fmtCostAmount, getCostHint } from './productCostDisplay'
 
 /** One product as the list shows it, with everything the columns need worked out once. */
 export interface ProductRow {
@@ -44,6 +45,33 @@ export function QtyFigure({ r, t }: { r: ProductRow; t: TFn }) {
         </span>
       ))}
     </>
+  )
+}
+
+export function CostFigure({ p, t, showLabel }: { p: Product; t: TFn; showLabel?: boolean }) {
+  const cost = p.cost
+  if (cost === undefined || cost === null || !Number.isFinite(cost)) {
+    return (
+      <span className="text-xs text-ink-faint">
+        {showLabel && <span>{t('ต้นทุน/หน่วย')}: </span>}
+        {t('ยังไม่ระบุ')}
+      </span>
+    )
+  }
+  const hint = getCostHint(p, t)
+  return (
+    <div className="inline-block">
+      <div>
+        {showLabel && <span className="text-xs text-ink-faint">{t('ต้นทุน/หน่วย')}: </span>}
+        <span className="num font-semibold text-ink">฿{fmtCostAmount(cost)}</span> {/* i18n-key */}
+        <span className="text-xs font-normal text-ink-soft"> / {p.unitType}</span>
+      </div>
+      {hint && (
+        <span className="block text-xs font-normal text-ink-faint" title={hint.tooltip}>
+          {hint.text}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -95,6 +123,13 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       align: 'right',
       className: 'num',
       cell: (r) => <QtyFigure r={r} t={t} />,
+    },
+    {
+      key: 'cost',
+      header: t('ต้นทุน/หน่วย'),
+      align: 'right',
+      className: 'num',
+      cell: (r) => <CostFigure p={r.p} t={t} />,
     },
     { key: 'min', header: t('จุดสั่งซื้อ'), align: 'right', className: 'num text-ink-soft', cell: (r) => fmtQty(r.min) },
     {
@@ -208,6 +243,9 @@ export function ProductGrid({ rows, onOpen, t }: { rows: ProductRow[]; onOpen: (
                 </div>
                 <div className="text-xs text-ink-faint">
                   {t('จุดสั่งซื้อ')} {fmtQty(r.min)}
+                </div>
+                <div className="mt-1 text-xs text-ink-soft">
+                  <CostFigure p={r.p} t={t} showLabel />
                 </div>
               </div>
               <StatusChip tone={STATE_LOOK[r.state].tone} size="sm">
