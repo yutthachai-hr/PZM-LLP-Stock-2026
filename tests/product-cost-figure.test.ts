@@ -117,9 +117,22 @@ describe('CostFigure rendered output', () => {
 })
 
 describe('Products table columns at 1440', () => {
-  test('the Category column is 2xl-only, so it is no longer a 1440 column that costs Location', () => {
-    const category = productColumns(t, (id) => id, '').find((c) => c.key === 'category')
-    expect(category?.className).toContain('2xl:table-cell')
-    expect(category?.className).toContain('hidden')
+  // R19-E: 1440 fitted while 1536 did not, because 2xl brought back Category and Unit in a
+  // container that had only grown 96 px. They now wait for 3xl, where the columns fit.
+  test('the Category and Unit columns wait for 3xl, so they are not 1536 columns that cost Location', () => {
+    const columns = productColumns(t, (id) => id, '')
+    for (const key of ['category', 'unit']) {
+      const column = columns.find((c) => c.key === key)
+      expect(column?.className).toContain('hidden')
+      expect(column?.className).toContain('3xl:table-cell')
+      expect(column?.className).not.toContain('2xl:table-cell')
+      expect(column?.headerClassName).toContain('3xl:table-cell')
+    }
+  })
+
+  test('the Product column keeps one cap, so a wide screen does not widen the row past Location', () => {
+    const product = productColumns(t, (id) => id, '').find((c) => c.key === 'product')
+    expect(product?.className).toContain('md:max-w-[200px]')
+    expect(product?.className).not.toMatch(/2xl:|3xl:/)
   })
 })

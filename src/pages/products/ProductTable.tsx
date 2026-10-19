@@ -93,8 +93,10 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       key: 'product',
       header: t('สินค้า'),
       primary: true,
-      // Long catalogue names truncate rather than pushing the figures off the right edge.
-      className: 'md:max-w-[200px] 2xl:max-w-[340px]',
+      // Long catalogue names truncate rather than pushing the figures off the right edge. The
+      // cap holds at every width: a wider name column is what pushed Location outside the
+      // table's scroller at 1536 (R19-E measured 1352 px needed in a 1190 px container).
+      className: 'md:max-w-[200px]',
       cell: (r) => {
         const look = categoryIcon(r.p.category)
         return (
@@ -102,7 +104,8 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
             title={r.p.name}
             sub={
               <>
-                <span className="doc-no md:hidden">{r.p.sku} · </span>
+                {/* Below 3xl the SKU column is gone from the table, so it rides here. */}
+                <span className="doc-no 3xl:hidden">{r.p.sku} · </span>
                 {r.p.category} · {r.p.unitType}
                 {r.p.barcode ? <span className="doc-no"> · {r.p.barcode}</span> : null}
               </>
@@ -115,22 +118,32 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
         )
       },
     },
-    { key: 'sku', header: 'SKU', card: 'hidden', className: 'doc-no whitespace-nowrap text-ink-soft', cell: (r) => r.p.sku },
+    {
+      key: 'sku',
+      header: 'SKU',
+      card: 'hidden',
+      // The SKU costs ~150 px of the table, and the name's second line already carries it
+      // below 3xl (measured: 1193 px needed in a 1190 px container at 1536 without this gate).
+      className: 'doc-no hidden whitespace-nowrap text-ink-soft 3xl:table-cell',
+      headerClassName: 'hidden 3xl:table-cell',
+      cell: (r) => r.p.sku,
+    },
     {
       key: 'category',
       header: t('หมวดหมู่'),
       card: 'hidden',
-      // Below 2xl the category is already on the name's second line, so its own column can go.
-      className: 'hidden 2xl:table-cell',
-      headerClassName: 'hidden 2xl:table-cell',
+      // Below 3xl the category is already on the name's second line, so its own column can go.
+      // 1536/1600 cannot hold it: measured 1352 px needed in a 1190 px container.
+      className: 'hidden 3xl:table-cell',
+      headerClassName: 'hidden 3xl:table-cell',
       cell: (r) => (
         <StatusChip tone={categoryIcon(r.p.category).tone} icon={null} size="sm">
           {r.p.category}
         </StatusChip>
       ),
     },
-    // Below 2xl the unit rides in the name's second line, so its own column can go.
-    { key: 'unit', header: t('หน่วย'), card: 'hidden', className: 'hidden text-ink-soft 2xl:table-cell', headerClassName: 'hidden 2xl:table-cell', cell: (r) => r.p.unitType },
+    // Below 3xl the unit rides in the name's second line, so its own column can go.
+    { key: 'unit', header: t('หน่วย'), card: 'hidden', className: 'hidden text-ink-soft 3xl:table-cell', headerClassName: 'hidden 3xl:table-cell', cell: (r) => r.p.unitType },
     {
       key: 'qty',
       header: locId ? t('คงเหลือ') : t('คงเหลือรวม'),
