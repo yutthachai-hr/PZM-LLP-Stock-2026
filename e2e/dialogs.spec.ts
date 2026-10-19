@@ -29,6 +29,10 @@ async function editorWithConfirm(page: Page, size?: { width: number; height: num
   return { editor, confirm, opener }
 }
 
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 for (const view of [{ name: 'desktop', size: { width: 1440, height: 900 } }, { name: 'phone', size: { width: 375, height: 812 } }]) {
   test(`${view.name}: Escape closes only the confirmation; the editor stays, and focus goes back to the button that opened it`, async ({ browser }) => {
     await seedStage()

@@ -73,6 +73,10 @@ async function scenario(page: Page, name: string, path: string): Promise<void> {
   await record(name, page)
 }
 
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 let counts: Record<string, number> = {}
 
 test('read budget: everyday workflows on real data', async ({ browser }) => {

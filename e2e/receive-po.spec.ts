@@ -15,6 +15,10 @@ async function receiptsOf(poId: string) {
   return (await listDocs('stockMovements')).filter((m) => m.poId === poId && !m.voided)
 }
 
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 test('one device receives an order in full: one receipt, stock and order agree', async ({ browser }) => {
   await seedStage()
   const page = await signedIn(browser, 'staffA', '/receive?po=po1')
