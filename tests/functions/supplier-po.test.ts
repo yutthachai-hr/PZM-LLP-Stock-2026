@@ -470,12 +470,33 @@ describe('one confirmation, one notification', () => {
 
   test('6. five phones with five requestIds and five names: one confirmation', async () => {
     const token = await link()
-    const rs = await Promise.all(
-      [1, 2, 3, 4, 5].map((i) => answerLink(deps, token, { action: 'accept', name: `คนที่ ${i}`, requestId: `dup-dev-${i}` })),
-    )
-    expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409])
-    expect(supplierEntries()).toHaveLength(1)
-    expect(confirmed()).toHaveLength(1)
+    const expectedState = supplierStateOf(po())
+    const before = db.writes
+    let releaseLate: () => void
+    const barrier = new Promise<void>((r) => {
+      releaseLate = r
+    })
+    const realPatch = db.patchIf.bind(db)
+    db.patchIf = async (c, id, f, t) => {
+      const res = await realPatch(c, id, f, t)
+      if (c === 'purchaseOrders' && res) releaseLate()
+      return res
+    }
+    try {
+      const rs = await Promise.all([
+        answerLink(deps, token, { action: 'accept', name: 'คนที่ 1', requestId: 'dup-dev-1', expectedState }),
+        ...[2, 3, 4, 5].map(async (i) => {
+          await barrier
+          return answerLink(deps, token, { action: 'accept', name: `คนที่ ${i}`, requestId: `dup-dev-${i}`, expectedState })
+        }),
+      ])
+      expect(rs.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409])
+      expect(db.writes - before).toBe(2)
+      expect(supplierEntries()).toHaveLength(1)
+      expect(confirmed()).toHaveLength(1)
+    } finally {
+      db.patchIf = realPatch
+    }
   })
 
   test('7. a lost response: the retry (same id) and a reload (new id) both find it done', async () => {

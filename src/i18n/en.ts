@@ -6,6 +6,19 @@
 // Product names, SKUs and categories are DATA and are never translated.
 
 export const EN: Record<string, string> = {
+  'กำลังโหลดประวัติที่ขอ…': 'Loading the requested history…',
+  'โหลดประวัติไม่สำเร็จ — ยังยืนยันความครบถ้วนไม่ได้': 'History could not be loaded — completeness is unverified',
+  'ประวัติยังไม่ครบ — ไม่แสดงยอดสะสม': 'History is partial — running balances are unavailable',
+  'โหลดประวัติสินค้าครบแล้ว ({count} รายการ)': 'Full product history loaded ({count} records)',
+  'โหลดช่วงวันที่ที่ขอครบแล้ว ({count} รายการ)': 'Requested date range loaded ({count} records)',
+  'โหลดประวัติใหม่': 'Reload history',
+  'ลองใหม่': 'Try again',
+  'เวลาที่บันทึก': 'Recorded at',
+  'มีรายการหน่วยเดิมที่ยังไม่ได้แปลงหน่วย': 'History contains unconverted or differing units — combined balances are unavailable',
+  'ยังอ่านยอด ณ สิ้นเดือนไม่ครบ — ยืนยันไม่ได้จนกว่าจะอ่านได้ครบ': 'Month-end history is incomplete — confirmation is blocked until it is complete',
+  'ยอด ณ สิ้นเดือนยังอ่านไม่ครบ — ตัวเลขในหน้านี้และยอดที่จะปรับจะไม่ถูกคิดจากข้อมูลที่ไม่ครบ และยังยืนยันไม่ได้': 'Month-end history is incomplete — figures and adjustments are withheld and confirmation is blocked',
+  'ลองอ่านยอด ณ สิ้นเดือนอีกครั้ง': 'Retry month-end history',
+  'ยอด ณ สิ้นเดือนยังอ่านไม่ครบ — ยืนยันได้เมื่ออ่านสำเร็จ (ลองใหม่ได้ที่รายการนับ)': 'Month-end history is incomplete — confirm only after a successful read (retry in the count sheet)',
   // ---- generic actions / words -------------------------------------------------
   บันทึก: 'Save',
   ยกเลิก: 'Cancel',
@@ -1003,6 +1016,8 @@ export const EN: Record<string, string> = {
   'หัวหน้าเพิ่ม': 'Added by manager',
   'เลือกผู้ขายเอง': 'Supplier chosen by hand',
   'หมายเหตุการอนุมัติ': 'Approval note',
+  '… (ดูหมายเหตุ {n})': '… (see note {n})',
+  'หมายเหตุฉบับเต็ม': 'Full notes',
   'จากรายการขอสั่งซื้อ': 'From a purchase request',
   'ค้นหาชื่อสินค้า / รหัสสินค้า': 'Search product name / code',
   'ไม่พบสินค้าที่ตรงกัน': 'No matching product',

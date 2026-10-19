@@ -13,6 +13,11 @@ Copyright 2019 The Anuphan Project Authors (https://github.com/cadsondemak/Anuph
 Bundled here: Anuphan-Thai-Variable.woff2 (400..700), Anuphan-Latin-Variable.woff2 (400..700), Anuphan-Ext-Variable.woff2 (400..700).
 See LICENSE-Anuphan.txt.
 
+Sarabun — Version 2.000
+Copyright 2018 The Sarabun Project Authors (https://github.com/cadsondemak/Sarabun)
+Modified version bundled for PDF rendering: Sarabun PDF (SarabunPDF-Regular).
+See scripts/OFL-Sarabun.txt.
+
 Self-hosted rather than loaded from a CDN so the site keeps its
 "font-src 'self'" Content-Security-Policy without an exception.
 

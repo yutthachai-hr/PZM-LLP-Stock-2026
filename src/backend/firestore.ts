@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -177,7 +178,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       opts?: ReadOptions,
     ): Promise<T[]> {
       const c = resolve(collection)
-      const snap = await getDocs(
+      const snap = await (opts?.server ? getDocsFromServer : getDocs)(
         query(fbCollection(getDb(), c), where(field, '>=', from), where(field, '<=', to)),
       )
       noteReadOp({ label: opts?.label ?? `${collection}.range`, collection: c, kind: 'range', docs: snap.size, fromCache: snap.metadata.fromCache })
@@ -199,7 +200,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
       opts?: ReadOptions,
     ): Promise<T[]> {
       const c = resolve(collection)
-      const snap = await getDocs(query(fbCollection(getDb(), c), where(field, '==', value)))
+      const snap = await (opts?.server ? getDocsFromServer : getDocs)(query(fbCollection(getDb(), c), where(field, '==', value)))
       noteReadOp({ label: opts?.label ?? `${collection}.by.${field}`, collection: c, kind: 'by', docs: snap.size, fromCache: snap.metadata.fromCache })
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },

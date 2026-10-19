@@ -1,5 +1,5 @@
 import { backend } from '../backend'
-import { getBrand } from '../brand/brand'
+import { getBrand, type BrandId } from '../brand/brand'
 import { AppError } from '../i18n/AppError'
 import { createRangeCache } from '../data/rangeCache'
 import { COL, MESSAGE_DAYS, MESSAGE_MAX, type AppMessage } from '../types'
@@ -27,14 +27,17 @@ function scoped() {
 }
 
 export const messageCache = createRangeCache<AppMessage>({
-  fetch: async (from, to) => scoped().getRange<AppMessage>(COL.messages, 'createdAt', from, to),
+  fetch: async (from, to, brand) => {
+    const db = brand ? backend.forBrand(brand) : scoped()
+    return db.getRange<AppMessage>(COL.messages, 'createdAt', from, to)
+  },
   atOf: (m) => m.createdAt,
 })
 
 /** The window the board opens on: the last two weeks, deepened by "โหลดเพิ่ม". */
 export const DEFAULT_DAYS = 14
 
-export async function listMessages(days = DEFAULT_DAYS, opts: { force?: boolean } = {}): Promise<AppMessage[]> {
+export async function listMessages(days = DEFAULT_DAYS, opts: { force?: boolean; brand?: BrandId } = {}): Promise<AppMessage[]> {
   const now = Date.now()
   const rows = await messageCache.fetchRange(now - days * DAY, now + DAY, opts)
   return sortForBoard(rows)
