@@ -34,6 +34,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOptions | null>(null)
   const [typed, setTyped] = useState('')
   const resolver = useRef<(v: boolean) => void>(() => {})
+  const body = useRef<HTMLParagraphElement>(null)
 
   const confirm = useCallback<ConfirmFn>((options) => {
     setOpts(options)
@@ -45,6 +46,16 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   // Never carry a previous answer into the next dialog.
   useEffect(() => {
     if (opts) setTyped('')
+  }, [opts])
+
+  // Land the caret on the message, not on the ✕. A wedge scanner firing a second code while
+  // this question is open ends with Enter, and an Enter that lands on a focused button
+  // answers the question it was never meant to answer — it cancelled the pending scan
+  // silently (R19). Nothing here is focusable-with-activation, so a stray burst does nothing
+  // and the question stays open until a person answers it. (The phrase box auto-focuses
+  // itself; a dialog that asks for typing keeps that.)
+  useEffect(() => {
+    if (opts && !opts.typeToConfirm) body.current?.focus()
   }, [opts])
 
   const close = (result: boolean) => {
@@ -59,7 +70,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={confirm}>
       {children}
       <Modal open={!!opts} onClose={() => close(false)} title={opts?.title ?? t('ยืนยัน')} compact>
-        <p className="whitespace-pre-line text-sm text-ink-soft">{opts?.message}</p>
+        <p ref={body} tabIndex={-1} className="whitespace-pre-line text-sm text-ink-soft outline-none">
+          {opts?.message}
+        </p>
 
         {phrase && (
           <div className="mt-4">
