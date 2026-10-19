@@ -104,6 +104,6 @@ export function createRequestPdf(pr: PurchaseRequest, company: string, locationN
 }
 
 export async function exportRequestPdf(pr: PurchaseRequest, company: string, locationName: string, t: T): Promise<void> {
-  const doc = createRequestPdf(pr, company, locationName, t)
-  doc.save(`${pr.docNo}.pdf`)
+  const { generateAndDownloadRequestPdf } = await import('./requestPdfmakeExport')
+  await generateAndDownloadRequestPdf(pr, company, locationName, t)
 }
