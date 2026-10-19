@@ -6,7 +6,7 @@ import { COL } from '../types'
 
 /** Purchase requests by the day they were opened, shared by the calendar and the dashboard widget. */
 export const requestCache = createRangeCache<PurchaseRequest>({
-  fetch: listRequestsInRange,
+  fetch: (from, to, brand) => listRequestsInRange(from, to, brand),
   atOf: (r) => r.createdAt,
   changedSince: changedSince<PurchaseRequest>(COL.purchaseRequests, 'purchaseRequests.delta'),
   persist: COL.purchaseRequests,
