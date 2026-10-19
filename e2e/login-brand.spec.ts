@@ -96,6 +96,10 @@ async function catalogue(page: Page, brand: BrandId): Promise<string> {
   return page.locator('main').innerText()
 }
 
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 for (const [last, pick, width] of [
   ['pizza', 'lelapin', 1440],
   ['lelapin', 'pizza', 1440],
