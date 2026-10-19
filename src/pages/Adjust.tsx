@@ -12,7 +12,7 @@ import { ProductThumb } from '../components/ProductThumb'
 import { QtySheet } from '../components/QtySheet'
 import { KeyingSide } from '../components/keying/KeyingSide'
 import { SubmitBar } from '../components/keying/SubmitBar'
-import { adjustStockLines, captureFilingScope, listMovementsInRange, StockLevelConflictError, type AdjustLine } from '../services/stock'
+import { adjustStockLines, captureFilingScope, listMovementsInRange, StockLevelConflictError, MissingExpectedLevelError, type AdjustLine } from '../services/stock'
 import { deliver } from '../services/notifications'
 import { useScheduleConfig } from '../services/schedules'
 import { significance } from '../lib/inventoryRules/adjustments'
@@ -259,16 +259,26 @@ export function AdjustPage() {
     // Capture lines and optimistic concurrency expectedLevel at SUBMIT time from this render
     const lines: AdjustLine[] = toFile.map((r) => {
       const d = deltaOf(r, system(r.productId))
-      return {
+      const base = {
         productId: r.productId,
         productName: r.productName,
         unit: r.unit,
-        ...(r.mode === 'delta' && r.entryUnit && r.entryQty ? { entryUnit: r.entryUnit, entryQty: r.entryQty } : {}),
-        direction: d > 0 ? 'in' : 'out',
+        direction: d > 0 ? ('in' as const) : ('out' as const),
         qty: Math.abs(d),
         reason: r.reason,
         note: r.note?.trim() || undefined,
-        ...(r.mode === 'count' ? { expectedLevel: qtyAt(locationId, r.productId) } : {}),
+      }
+      if (r.mode === 'count') {
+        return {
+          ...base,
+          mode: 'count' as const,
+          expectedLevel: qtyAt(locationId, r.productId),
+        }
+      }
+      return {
+        ...base,
+        ...(r.entryUnit && r.entryQty ? { entryUnit: r.entryUnit, entryQty: r.entryQty } : {}),
+        mode: 'delta' as const,
       }
     })
     if (backdated) {
@@ -317,7 +327,7 @@ export function AdjustPage() {
       clearDraft()
       setTimeout(() => searchRef.current?.focus(), 0)
     } catch (e) {
-      if (e instanceof StockLevelConflictError) {
+      if (e instanceof StockLevelConflictError || e instanceof MissingExpectedLevelError) {
         toast.error(errText(e, t))
         return
       }

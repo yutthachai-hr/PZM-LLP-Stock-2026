@@ -27,6 +27,19 @@ function fillForMessage(key: string, vars?: Record<string, string | number>): st
   return key.replace(/\{(\w+)\}/g, (whole, k) => (vars[k] === undefined ? whole : String(vars[k])))
 }
 
+export class MissingExpectedLevelError extends AppError {
+  readonly productId?: string
+
+  constructor(productId?: string, productName?: string) {
+    const key = productName
+      ? 'ไม่พบยอดคงเหลือเดิมของสินค้า "{name}" ที่ใช้เปรียบเทียบตอนนับ — กรุณาตรวจยอดใหม่' // i18n-key
+      : 'ไม่พบยอดคงเหลือเดิมที่ใช้เปรียบเทียบตอนนับ — กรุณาตรวจยอดใหม่' // i18n-key
+    super(key, productName ? { name: productName } : undefined)
+    this.name = 'MissingExpectedLevelError'
+    this.productId = productId
+  }
+}
+
 /** Translates a caught error for display. Non-AppErrors fall back to their own message. */
 export function errText(e: unknown, t: TFn): string {
   if (e instanceof AppError) return t(e.key, e.vars)

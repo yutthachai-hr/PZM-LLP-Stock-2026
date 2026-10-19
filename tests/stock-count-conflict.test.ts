@@ -14,6 +14,7 @@ const {
   issueStock,
   captureFilingScope,
   StockLevelConflictError,
+  MissingExpectedLevelError,
   postCountAsOf,
 } = await import('../src/services/stock')
 const { postMonthlyCount } = await import('../src/services/monthlyCounts')
@@ -399,18 +400,65 @@ describe('Stock count stale-level conflict (P0 C-02)', () => {
     expect(getLevel(MAIN, 'p1')).toBe(13)
   })
 
-  test('no expectedLevel provided -> behaviour unchanged (backward compatible)', async () => {
-    // Legacy caller without expectedLevel
-    const docNo = await adjustStockLines({
-      locationId: MAIN,
-      date: Date.now(),
-      actor: ACTOR,
-      lines: [
-        { productId: 'p1', productName: 'Bacon', unit: 'KG', direction: 'out', qty: 4, reason: 'count' },
-      ],
-    })
-    expect(docNo).toMatch(/^ADJ-/)
-    expect(getLevel(MAIN, 'p1')).toBe(6)
+  test('count-mode adjustment line without expectedLevel must throw and write nothing', async () => {
+    expect(getLevel(MAIN, 'p1')).toBe(10)
+    const movementsBefore = raw('stockMovements').length
+
+    // Case 1: mode is 'count', expectedLevel omitted
+    await expect(
+      adjustStockLines({
+        locationId: MAIN,
+        date: Date.now(),
+        actor: ACTOR,
+        lines: [
+          { productId: 'p1', productName: 'Bacon', unit: 'KG', direction: 'out', qty: 4, reason: 'damage', mode: 'count' } as any,
+        ],
+      }),
+    ).rejects.toThrow(MissingExpectedLevelError)
+
+    // Case 2: reason is 'count' without explicit delta mode, expectedLevel omitted
+    await expect(
+      adjustStockLines({
+        locationId: MAIN,
+        date: Date.now(),
+        actor: ACTOR,
+        lines: [
+          { productId: 'p1', productName: 'Bacon', unit: 'KG', direction: 'out', qty: 4, reason: 'count' },
+        ],
+      }),
+    ).rejects.toThrow(MissingExpectedLevelError)
+
+    // Case 3: postMonthlyCount with a row missing expectedLevel must throw and write nothing
+    const sheetId = 'sheet-missing-expected'
+    seed('monthlyCounts', [
+      {
+        id: sheetId,
+        locationId: MAIN,
+        month: '2026-09',
+        countDate: Date.UTC(2026, 8, 30),
+        status: 'counting',
+        lines: { p1: { qty: 6, by: 'u', byName: 'U', at: 1 } },
+        createdBy: ACTOR.id,
+        createdByName: ACTOR.name,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ])
+    await expect(
+      postMonthlyCount({
+        id: sheetId,
+        actor: ACTOR,
+        note: 'count missing expected level',
+        results: {},
+        parts: [
+          [{ productId: 'p1', productName: 'Bacon', unit: 'KG', diff: -4, expectedLevel: undefined as any }],
+        ],
+      }),
+    ).rejects.toThrow(MissingExpectedLevelError)
+
+    // Verify atomicity & nothing written: level still 10, no movements
+    expect(getLevel(MAIN, 'p1')).toBe(10)
+    expect(raw('stockMovements')).toHaveLength(movementsBefore)
   })
 
   test('postCountAsOf checks expectedLevel when provided', async () => {

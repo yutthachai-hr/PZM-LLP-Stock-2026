@@ -668,12 +668,25 @@ export async function adjustStock(params: {
   })
 }
 
-/** One line of a multi-line adjustment: which way, how much (product's own unit), and why. */
-export interface AdjustLine extends MovementLine {
+export type AdjustMode = 'count' | 'delta'
+
+export interface BaseAdjustLine extends MovementLine {
   direction: 'in' | 'out'
   reason: string
+}
+
+export interface CountAdjustLine extends BaseAdjustLine {
+  mode: 'count'
+  expectedLevel: number
+}
+
+export interface DeltaAdjustLine extends BaseAdjustLine {
+  mode?: 'delta'
   expectedLevel?: number
 }
+
+/** One line of a multi-line adjustment: which way, how much (product's own unit), and why. */
+export type AdjustLine = CountAdjustLine | DeltaAdjustLine
 
 export interface StockLineConflict {
   productId: string
@@ -684,6 +697,8 @@ export interface StockLineConflict {
   actual: number
 }
 
+import { MissingExpectedLevelError } from '../i18n/AppError'
+export { MissingExpectedLevelError }
 export class StockLevelConflictError extends AppError {
   readonly conflicts: StockLineConflict[]
 
@@ -758,6 +773,7 @@ export async function planAdjust(
       line,
       direction: requireOneOf(raw.direction, ['in', 'out'] as const),
       reason: requireOneOf(raw.reason, reasons),
+      mode: raw.mode,
       expectedLevel: raw.expectedLevel,
     }
   })
@@ -782,6 +798,10 @@ export async function planAdjust(
   const conflicts: StockLineConflict[] = []
   for (let i = 0; i < lines.length; i++) {
     const x = lines[i]
+    const isCount = x.mode === 'count' || (!x.mode && x.reason === 'count')
+    if (isCount && x.expectedLevel === undefined) {
+      throw new MissingExpectedLevelError(x.line.productId, x.line.productName)
+    }
     if (x.expectedLevel !== undefined) {
       const cur = levels[i]?.qty ?? 0
       if (roundQty(cur) !== roundQty(x.expectedLevel)) {

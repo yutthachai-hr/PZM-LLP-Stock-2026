@@ -9,6 +9,7 @@ import {
   countExpectedLevels,
   countRows,
   isBig,
+  MissingExpectedLevelError,
   monthBefore,
   monthOf,
   monthlyCountId,
@@ -129,6 +130,23 @@ describe('countExpectedLevels and toPostingParts', () => {
     expect(importedRow).toBeDefined()
     expect(importedRow?.expectedLevel).toBeDefined()
     expect(importedRow?.expectedLevel).toBe(3)
+  })
+
+  test('toPostingParts refuses (throws MissingExpectedLevelError) when a row is absent from captured expectedLevels', () => {
+    const rows: CountRow[] = [
+      {
+        productId: 'p_untracked',
+        systemQty: 10,
+        countedQty: 8,
+        diff: -2,
+        value: -20,
+        big: false,
+      },
+    ]
+    const expectedLevels = new Map<string, number>() // p_untracked missing from map
+    const byId = new Map([['p_untracked', { name: 'P Untracked', unitType: 'KG' }]])
+
+    expect(() => toPostingParts(postingPlan(rows), expectedLevels, byId)).toThrow(MissingExpectedLevelError)
   })
 })
 

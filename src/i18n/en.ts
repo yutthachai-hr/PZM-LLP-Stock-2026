@@ -14,6 +14,8 @@ export const EN: Record<string, string> = {
   'โหลดประวัติใหม่': 'Reload history',
   'ยอดคงเหลือของ "{name}" เปลี่ยนไปแล้ว (ตอนนับ: {expected} {unit}, ล่าสุด: {actual} {unit}) — กรุณาตรวจยอดใหม่': 'The balance of "{name}" has changed (counted against: {expected} {unit}, now: {actual} {unit}) — please check the count again',
   'ยอดคงเหลือเปลี่ยนไปแล้ว {count} รายการ ({details}) — กรุณาตรวจยอดใหม่': 'Balances changed for {count} items ({details}) — please check the counts again',
+  'ไม่พบยอดคงเหลือเดิมของสินค้า "{name}" ที่ใช้เปรียบเทียบตอนนับ — กรุณาตรวจยอดใหม่': 'The previous balance of "{name}" for comparison could not be found — please check the count again',
+  'ไม่พบยอดคงเหลือเดิมที่ใช้เปรียบเทียบตอนนับ — กรุณาตรวจยอดใหม่': 'The previous balance for comparison could not be found — please check the count again',
   'ลองใหม่': 'Try again',
   'เวลาที่บันทึก': 'Recorded at',
   'มีรายการหน่วยเดิมที่ยังไม่ได้แปลงหน่วย': 'History contains unconverted or differing units — combined balances are unavailable',

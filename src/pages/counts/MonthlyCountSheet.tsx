@@ -36,7 +36,7 @@ import {
   rewindTicket,
   type RewindState,
 } from '../../lib/monthlyHistory'
-import { captureFilingScope, listMovementsInRange, StockLevelConflictError } from '../../services/stock'
+import { captureFilingScope, listMovementsInRange, StockLevelConflictError, MissingExpectedLevelError } from '../../services/stock'
 import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
@@ -311,10 +311,9 @@ export function MonthlyCountSheet() {
       setAsking(null)
       setSheet(await getMonthlyCount(id))
     } catch (e) {
-      if (e instanceof StockLevelConflictError) {
+      if (e instanceof StockLevelConflictError || e instanceof MissingExpectedLevelError) {
         setAsking(null)
         toast.error(errText(e, t))
-        setSheet(await getMonthlyCount(id).catch(() => sheet))
         return
       }
       toast.error(errText(e, t))

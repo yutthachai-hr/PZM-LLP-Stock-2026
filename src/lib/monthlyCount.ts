@@ -2,6 +2,9 @@ import type { MonthlyCountLine, MonthlyCountResult } from '../types'
 import { bkkDayStart, DAY_MS } from './inventoryRules/time'
 import { roundQty } from './validate'
 
+import { MissingExpectedLevelError } from '../i18n/AppError'
+export { MissingExpectedLevelError } from '../i18n/AppError'
+
 /**
  * The monthly count's arithmetic (owner, 29 Sep 2026), kept pure so it is tested alone.
  *
@@ -158,13 +161,19 @@ export function toPostingParts(
   byId: ReadonlyMap<string, { name?: string; unitType?: string }>,
 ): PostableCountAdjustment[][] {
   return parts.map((part) =>
-    part.map((r) => ({
-      productId: r.productId,
-      productName: byId.get(r.productId)?.name ?? r.productId,
-      unit: byId.get(r.productId)?.unitType ?? '',
-      diff: r.diff ?? 0,
-      expectedLevel: expectedLevels.get(r.productId) ?? 0,
-    })),
+    part.map((r) => {
+      const expected = expectedLevels.get(r.productId)
+      if (expected === undefined) {
+        throw new MissingExpectedLevelError(r.productId, byId.get(r.productId)?.name ?? r.productId)
+      }
+      return {
+        productId: r.productId,
+        productName: byId.get(r.productId)?.name ?? r.productId,
+        unit: byId.get(r.productId)?.unitType ?? '',
+        diff: r.diff ?? 0,
+        expectedLevel: expected,
+      }
+    }),
   )
 }
 
