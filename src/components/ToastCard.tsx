@@ -32,6 +32,7 @@ export function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss:
   useEffect(() => {
     const changed = () => setHidden(document.hidden)
     document.addEventListener('visibilitychange', changed)
+    changed()
     return () => document.removeEventListener('visibilitychange', changed)
   }, [])
   useEffect(() => {
