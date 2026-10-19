@@ -16,7 +16,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npx vite --mode demo --host 127.0.0.1 --port 5194 --strictPort',
+    command: 'node scripts/serve-ocr-test.mjs',
     url: 'http://127.0.0.1:5194/e2e/ocr-harness.html',
     reuseExistingServer: false,
     timeout: 30_000,

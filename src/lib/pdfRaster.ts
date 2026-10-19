@@ -50,6 +50,33 @@ export async function getPdfJs(): Promise<PdfJsLib> {
   }
 }
 
+function raceWithSignal<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+  onAbort?: () => void,
+): Promise<T> {
+  if (!signal) return promise
+  if (signal.aborted) {
+    try {
+      onAbort?.()
+    } catch {}
+    return Promise.reject(new DOMException('Aborted', 'AbortError'))
+  }
+  let listener: (() => void) | undefined
+  const abortPromise = new Promise<never>((_, reject) => {
+    listener = () => {
+      try {
+        onAbort?.()
+      } catch {}
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal.addEventListener('abort', listener, { once: true })
+  })
+  return Promise.race([promise, abortPromise]).finally(() => {
+    if (listener) signal.removeEventListener('abort', listener)
+  })
+}
+
 export async function renderPdfPagesToImages(
   file: Blob,
   options?: { maxPages?: number; signal?: AbortSignal },
@@ -59,22 +86,28 @@ export async function renderPdfPagesToImages(
 
   let pdfjs: PdfJsLib
   try {
-    pdfjs = await getPdfJs()
+    pdfjs = await raceWithSignal(getPdfJs(), options?.signal)
   } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e
     if (e instanceof AppError) throw e
     throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
   }
 
   if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
-  const arrayBuffer = await file.arrayBuffer()
+  const arrayBuffer = await raceWithSignal(file.arrayBuffer(), options?.signal)
   let loadingTask: PdfLoadingTask | undefined
   let doc: PdfDocument | undefined
   try {
     try {
       loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) })
-      doc = await loadingTask.promise
-    } catch {
+      doc = await raceWithSignal(loadingTask.promise, options?.signal, () => {
+        try {
+          loadingTask?.destroy?.()
+        } catch {}
+      })
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e
       throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
     }
 
@@ -85,14 +118,20 @@ export async function renderPdfPagesToImages(
     const images: string[] = []
     for (let i = 1; i <= doc.numPages; i++) {
       if (options?.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-      const page = await doc.getPage(i)
+      const page = await raceWithSignal(doc.getPage(i), options?.signal)
       const unscaled = page.getViewport({ scale: 1.0 })
+      if (!unscaled.width || !unscaled.height || unscaled.width <= 0 || unscaled.height <= 0) {
+        throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
+      }
       let scale = 1.5
       if (Math.max(unscaled.width, unscaled.height) * scale > MAX_DIMENSION) {
         scale = MAX_DIMENSION / Math.max(unscaled.width, unscaled.height)
       }
       if (unscaled.width * scale * unscaled.height * scale > MAX_TOTAL_PIXELS) {
         scale = Math.sqrt(MAX_TOTAL_PIXELS / (unscaled.width * unscaled.height))
+      }
+      if (!Number.isFinite(scale) || scale <= 0) {
+        throw new AppError('ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหายหรือมีรูปแบบที่ไม่รองรับ')
       }
       const viewport = page.getViewport({ scale })
 
@@ -129,7 +168,8 @@ export async function renderPdfPagesToImages(
 
       try {
         await Promise.race([renderTask.promise, abortPromise])
-        images.push(canvas.toDataURL('image/jpeg', 0.85))
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        images.push(dataUrl)
       } finally {
         if (onAbort && options?.signal) {
           options.signal.removeEventListener('abort', onAbort)
@@ -142,11 +182,16 @@ export async function renderPdfPagesToImages(
 
     return images
   } finally {
-    try {
-      await doc?.destroy?.()
-    } catch {}
-    try {
-      await loadingTask?.destroy?.()
-    } catch {}
+    const boundedDestroy = async (destroyable?: { destroy?: () => Promise<void> | void }) => {
+      if (!destroyable?.destroy) return
+      try {
+        await Promise.race([
+          Promise.resolve(destroyable.destroy()),
+          new Promise((resolve) => setTimeout(resolve, 500)),
+        ])
+      } catch {}
+    }
+    await boundedDestroy(doc)
+    await boundedDestroy(loadingTask)
   }
 }

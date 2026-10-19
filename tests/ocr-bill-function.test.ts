@@ -339,6 +339,132 @@ describe('functions/api/ocr-bill - server resilience and TDD requirements', () =
     expect(loggedPayload).not.toContain(TINY_IMAGE)
   })
 
+  test('valid 35s upstream response (observed normal 24-35s) succeeds without premature 30s cutoff', async () => {
+    vi.useFakeTimers()
+    try {
+      fetchMock.mockImplementation(() => {
+        return new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve(
+              new Response(
+                JSON.stringify({
+                  candidates: [
+                    {
+                      content: {
+                        parts: [
+                          {
+                            text: JSON.stringify({
+                              supplier: 'Normal 35s Bakery',
+                              invoiceNo: 'N35-1',
+                              lines: [{ name: 'Bread', qty: 2 }],
+                            }),
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+              ),
+            )
+          }, 35_000)
+        })
+      })
+
+      const requestPromise = onRequestPost({
+        request: makeRequest({ image: TINY_IMAGE }),
+        env: makeEnv(),
+        params: {},
+      } as unknown as Ctx)
+
+      await vi.advanceTimersByTimeAsync(36_000)
+
+      const res = await requestPromise
+      expect(res.status).toBe(200)
+      const data = (await res.json()) as { supplier: string }
+      expect(data.supplier).toBe('Normal 35s Bakery')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('success near deadline (headers at 70s) with stalled body aborts strictly at 75s aggregate budget without fresh 30s', async () => {
+    vi.useFakeTimers()
+    try {
+      // Headers arrive at 70s (within 75s budget)
+      fetchMock.mockImplementation(() => {
+        return new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers({ 'content-type': 'application/json' }),
+              // Body never resolves
+              json: () => new Promise<never>(() => {}),
+            } as unknown as Response)
+          }, 70_000)
+        })
+      })
+
+      const requestPromise = onRequestPost({
+        request: makeRequest({ image: TINY_IMAGE }),
+        env: makeEnv(),
+        params: {},
+      } as unknown as Ctx)
+
+      // Advance to 70s (headers arrive)
+      await vi.advanceTimersByTimeAsync(70_000)
+      // Advance to 76s (1s past aggregate 75s)
+      await vi.advanceTimersByTimeAsync(6_000)
+
+      const res = await requestPromise
+      expect(res.status).toBe(504)
+      const data = (await res.json()) as { error: string; trace?: { durations: { totalMs: number } } }
+      expect(data.error).toBe('upstream_timeout')
+      // Must not have waited for a fresh 30s (which would be 100s)!
+      expect(data.trace?.durations.totalMs).toBeLessThanOrEqual(76_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('hung Workers AI fallback after transient error terminates strictly within aggregate 75s budget', async () => {
+    vi.useFakeTimers()
+    try {
+      // Gemini immediately returns 503
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'overloaded' }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+
+      // Workers AI hangs forever (SDK ignores signal)
+      const mockAiRun = vi.fn().mockImplementation(() => new Promise<never>(() => {}))
+
+      const envWithAi = makeEnv({
+        AI: { run: mockAiRun },
+      })
+
+      const requestPromise = onRequestPost({
+        request: makeRequest({ image: TINY_IMAGE }),
+        env: envWithAi,
+        params: {},
+      } as unknown as Ctx)
+
+      // Advance past 75s aggregate budget
+      await vi.advanceTimersByTimeAsync(80_000)
+
+      const res = await requestPromise
+      expect(res.status).toBe(504)
+      const data = (await res.json()) as { error: string; trace?: { durations: { totalMs: number } } }
+      expect(data.error).toBe('upstream_timeout')
+      expect(data.trace?.durations.totalMs).toBeLessThanOrEqual(80_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('never-resolving upstream fetch times out within per-attempt budget and returns 504', async () => {
     vi.useFakeTimers()
     try {

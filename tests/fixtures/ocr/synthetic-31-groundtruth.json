@@ -1,0 +1,306 @@
+{
+  "metadata": {
+    "title": "ใบสั่งซื้อวัตถุดิบ (Synthetic Test Fixture)",
+    "columns": [
+      "ชื่อวัตถุดิบ",
+      "หน่วย",
+      "คงเหลือ",
+      "จำนวนสั่ง",
+      "เรียกเข้า"
+    ],
+    "totalRows": 31,
+    "page1Rows": 18,
+    "page2Rows": 13,
+    "numericRows": 28,
+    "manualRows": [
+      9,
+      17,
+      26
+    ],
+    "dates": {
+      "deliveryDate": "20-Oct-2026",
+      "requestDate": "23-Oct-2026"
+    }
+  },
+  "rows": [
+    {
+      "index": 1,
+      "name": "Mozzarella Cheese Block (Anchor 20kg/ctn)",
+      "unit": "Carton",
+      "stock": "3.0",
+      "orderQty": "5.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 2,
+      "name": "แป้งสาลีสำหรับทำพิซซ่า ตรายานอวกาศ (Pizza Flour 25kg)",
+      "unit": "Bag",
+      "stock": "12.0",
+      "orderQty": "10.0",
+      "inbound": "5.0",
+      "isManual": false
+    },
+    {
+      "index": 3,
+      "name": "Italian Peeled Tomato Polpa in Juice 2.5kg",
+      "unit": "Can",
+      "stock": "8.0",
+      "orderQty": "12.0",
+      "inbound": "6.0",
+      "isManual": false
+    },
+    {
+      "index": 4,
+      "name": "ไส้กรอกหมูคูโรบูตะรมควันสไลซ์ (Smoked Kurobuta Pork)",
+      "unit": "Pack",
+      "stock": "4.5",
+      "orderQty": "8.0",
+      "inbound": "4.0",
+      "isManual": false
+    },
+    {
+      "index": 5,
+      "name": "Extra Virgin Olive Oil 5L (Monini)",
+      "unit": "Tin",
+      "stock": "2.0",
+      "orderQty": "3.0",
+      "inbound": "1.0",
+      "isManual": false
+    },
+    {
+      "index": 6,
+      "name": "แฮมสไลซ์เกรดพรีเมียม (Cooked Ham Slice 1kg)",
+      "unit": "Pack",
+      "stock": "5.0",
+      "orderQty": "6.0",
+      "inbound": "3.0",
+      "isManual": false
+    },
+    {
+      "index": 7,
+      "name": "Dry Yeast 500g (Saf-Instant Red)",
+      "unit": "Pack",
+      "stock": "6.0",
+      "orderQty": "4.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 8,
+      "name": "ใบโหระพาอิตาเลียนสด (Fresh Sweet Basil)",
+      "unit": "KG",
+      "stock": "1.2",
+      "orderQty": "2.5",
+      "inbound": "1.0",
+      "isManual": false
+    },
+    {
+      "index": 9,
+      "name": "พริกหวานสามสีรวม (Mixed Bell Peppers Tri-color)",
+      "unit": "KG",
+      "stock": "4.0",
+      "orderQty": "-",
+      "inbound": "0.0",
+      "isManual": true
+    },
+    {
+      "index": 10,
+      "name": "Mushroom Champignon Fresh Brown 1kg",
+      "unit": "Pack",
+      "stock": "3.0",
+      "orderQty": "7.0",
+      "inbound": "3.0",
+      "isManual": false
+    },
+    {
+      "index": 11,
+      "name": "พริกชี้ฟ้าแดงสดคัดเกรด (Red Chili Fresh)",
+      "unit": "KG",
+      "stock": "0.8",
+      "orderQty": "1.5",
+      "inbound": "0.5",
+      "isManual": false
+    },
+    {
+      "index": 12,
+      "name": "Black Olives Pitted Sliced in Brine 3kg",
+      "unit": "Can",
+      "stock": "2.0",
+      "orderQty": "4.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 13,
+      "name": "หัวหอมใหญ่ปอกเปลือก (Peeled Yellow Onion)",
+      "unit": "KG",
+      "stock": "15.0",
+      "orderQty": "20.0",
+      "inbound": "10.0",
+      "isManual": false
+    },
+    {
+      "index": 14,
+      "name": "กระเทียมจีนกลีบใหญ่ปอก (Peeled Garlic Cloves)",
+      "unit": "KG",
+      "stock": "6.0",
+      "orderQty": "5.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 15,
+      "name": "Gorgonzola Piccante Cheese DOP 1.5kg",
+      "unit": "Pack",
+      "stock": "1.5",
+      "orderQty": "2.0",
+      "inbound": "1.0",
+      "isManual": false
+    },
+    {
+      "index": 16,
+      "name": "Pepperoni Slices 1kg (Pork Sausage)",
+      "unit": "Pack",
+      "stock": "7.0",
+      "orderQty": "15.0",
+      "inbound": "5.0",
+      "isManual": false
+    },
+    {
+      "index": 17,
+      "name": "พาร์มาแฮมบ่ม 18 เดือน (Prosciutto di Parma 18m)",
+      "unit": "Pack",
+      "stock": "2.0",
+      "orderQty": "ตาม",
+      "inbound": "1.0",
+      "isManual": true
+    },
+    {
+      "index": 18,
+      "name": "Sea Salt Fine Grain 1kg (เกลือสมุทร)",
+      "unit": "Pack",
+      "stock": "10.0",
+      "orderQty": "8.0",
+      "inbound": "4.0",
+      "isManual": false
+    },
+    {
+      "index": 19,
+      "name": "Bacon Bits Smoked 1kg (เบคอนบิทส์)",
+      "unit": "Pack",
+      "stock": "5.0",
+      "orderQty": "6.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 20,
+      "name": "สับปะรดหั่นชิ้นในน้ำเชื่อม (Pineapple Tidbits 3kg)",
+      "unit": "Can",
+      "stock": "4.0",
+      "orderQty": "4.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 21,
+      "name": "Oregano Dried Flakes 500g",
+      "unit": "Pack",
+      "stock": "3.0",
+      "orderQty": "2.0",
+      "inbound": "1.0",
+      "isManual": false
+    },
+    {
+      "index": 22,
+      "name": "ผักร็อกเก็ตป่าสด (Fresh Wild Rocket)",
+      "unit": "KG",
+      "stock": "0.9",
+      "orderQty": "3.0",
+      "inbound": "1.5",
+      "isManual": false
+    },
+    {
+      "index": 23,
+      "name": "ชีสพาร์เมซานขูดผง (Grated Parmesan Cheese 1kg)",
+      "unit": "Pack",
+      "stock": "4.0",
+      "orderQty": "6.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 24,
+      "name": "White Truffle Oil 250ml (น้ำมันเห็ดทรัฟเฟิลขาว)",
+      "unit": "Bottle",
+      "stock": "1.0",
+      "orderQty": "2.0",
+      "inbound": "1.0",
+      "isManual": false
+    },
+    {
+      "index": 25,
+      "name": "เนยสดชนิดจืด (Unsalted Butter 5kg)",
+      "unit": "Block",
+      "stock": "2.0",
+      "orderQty": "3.0",
+      "inbound": "1.0",
+      "isManual": false
+    },
+    {
+      "index": 26,
+      "name": "ครีมชีสแท้ (Cream Cheese Philadelphia 2kg)",
+      "unit": "Pack",
+      "stock": "1.0",
+      "orderQty": "ตาม",
+      "inbound": "0.5",
+      "isManual": true
+    },
+    {
+      "index": 27,
+      "name": "หอยลายต้มสุกแช่แข็ง (Frozen Clam Meat 1kg)",
+      "unit": "Pack",
+      "stock": "3.0",
+      "orderQty": "5.0",
+      "inbound": "2.0",
+      "isManual": false
+    },
+    {
+      "index": 28,
+      "name": "กุ้งขาวแกะเปลือกไว้หาง (Frozen White Shrimp 1kg)",
+      "unit": "Pack",
+      "stock": "6.0",
+      "orderQty": "8.0",
+      "inbound": "4.0",
+      "isManual": false
+    },
+    {
+      "index": 29,
+      "name": "ปลาหมึกวงแช่แข็ง (Frozen Squid Ring 1kg)",
+      "unit": "Pack",
+      "stock": "4.0",
+      "orderQty": "6.0",
+      "inbound": "3.0",
+      "isManual": false
+    },
+    {
+      "index": 30,
+      "name": "น้ำตาลทรายขาวบริสุทธิ์ (Pure Refined Sugar 1kg)",
+      "unit": "Pack",
+      "stock": "15.0",
+      "orderQty": "10.0",
+      "inbound": "5.0",
+      "isManual": false
+    },
+    {
+      "index": 31,
+      "name": "ซอสมะเขือเทศเข้มข้น (Tomato Paste Tin 800g)",
+      "unit": "Can",
+      "stock": "6.0",
+      "orderQty": "12.0",
+      "inbound": "4.0",
+      "isManual": false
+    }
+  ]
+}

@@ -3,15 +3,25 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 const CSP_HEADER =
-  "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://profile.line-scdn.net https://static.line-scdn.net; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://api.line.me https://liff.line.me https://access.line.me https://static.line-scdn.net https://liffsdk.line-scdn.net https://api.open-meteo.com ws://127.0.0.1:5194; frame-src https://liff.line.me https://access.line.me https://static.line-scdn.net; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://access.line.me; frame-ancestors 'none';"
+  "default-src 'self'; script-src 'self' https://static.line-scdn.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://profile.line-scdn.net https://static.line-scdn.net; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://api.line.me https://liff.line.me https://access.line.me https://static.line-scdn.net https://liffsdk.line-scdn.net https://api.open-meteo.com; frame-src https://liff.line.me https://access.line.me https://static.line-scdn.net; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://access.line.me; frame-ancestors 'none'; upgrade-insecure-requests"
 
 test.describe('real browser OCR fallback under production CSP', () => {
   test('renders synthetic PDF via fallback under strict production CSP', async ({ page }) => {
     const cspErrors: string[] = []
+    const loadedWorkerUrls: string[] = []
     page.on('console', (msg) => {
       const text = msg.text()
+      console.log('BROWSER CONSOLE:', text)
       if (text.includes('Content Security Policy') || text.includes('Refused to load') || text.includes('violates')) {
         cspErrors.push(text)
+      }
+    })
+    page.on('pageerror', (err) => {
+      console.log('BROWSER PAGEERROR:', err)
+    })
+    page.on('request', (req) => {
+      if (req.url().includes('pdf.worker')) {
+        loadedWorkerUrls.push(req.url())
       }
     })
 
@@ -63,14 +73,20 @@ test.describe('real browser OCR fallback under production CSP', () => {
     await page.goto('/e2e/ocr-harness.html')
     await expect(page.getByTestId('ocr-status')).toHaveText('idle')
 
-    const textPdfPath = path.resolve('C:/Users/Yutthachai/pzm-mission-control-20261014/docs/mission/successor-4c98c132/pdf-ocr/fixtures/synthetic-text-small.pdf')
+    const textPdfPath = path.resolve(process.cwd(), 'tests/fixtures/ocr/synthetic-31-text.pdf')
     expect(fs.existsSync(textPdfPath), `fixture must exist at ${textPdfPath}`).toBe(true)
 
     // Upload the synthetic text PDF into the harness
     await page.getByTestId('ocr-input').setInputFiles(textPdfPath)
 
     // Wait for reading to complete
-    await expect(page.getByTestId('ocr-status')).toHaveText('success', { timeout: 20_000 })
+    try {
+      await expect(page.getByTestId('ocr-status')).toHaveText('success', { timeout: 20_000 })
+    } catch (e) {
+      const errText = await page.getByTestId('ocr-error').innerText().catch(() => 'no error text')
+      console.log('TEST FAILURE ERROR TEXT:', errText)
+      throw e
+    }
     expect(cspErrors).toHaveLength(0)
 
     const resultText = await page.getByTestId('ocr-result').innerText()
@@ -78,14 +94,26 @@ test.describe('real browser OCR fallback under production CSP', () => {
     expect(parsed.supplier).toBe('Synthetic Supplier Co.')
     expect(parsed.lines.length).toBeGreaterThan(0)
     expect(requestedImages.length).toBeGreaterThan(0)
+    expect(loadedWorkerUrls.length).toBeGreaterThan(0)
+    expect(loadedWorkerUrls[0]).toMatch(/^http:\/\/127\.0\.0\.1:5194\/assets\/pdf\.worker-.*\.mjs$/)
   })
 
   test('renders synthetic scanned PDF via fallback under strict production CSP', async ({ page }) => {
     const cspErrors: string[] = []
+    const loadedWorkerUrls: string[] = []
     page.on('console', (msg) => {
       const text = msg.text()
+      console.log('BROWSER CONSOLE:', text)
       if (text.includes('Content Security Policy') || text.includes('Refused to load') || text.includes('violates')) {
         cspErrors.push(text)
+      }
+    })
+    page.on('pageerror', (err) => {
+      console.log('BROWSER PAGEERROR:', err)
+    })
+    page.on('request', (req) => {
+      if (req.url().includes('pdf.worker')) {
+        loadedWorkerUrls.push(req.url())
       }
     })
 
@@ -131,7 +159,7 @@ test.describe('real browser OCR fallback under production CSP', () => {
     await page.goto('/e2e/ocr-harness.html')
     await expect(page.getByTestId('ocr-status')).toHaveText('idle')
 
-    const scanPdfPath = path.resolve('C:/Users/Yutthachai/pzm-mission-control-20261014/docs/mission/successor-4c98c132/pdf-ocr/fixtures/synthetic-scan-small.pdf')
+    const scanPdfPath = path.resolve(process.cwd(), 'tests/fixtures/ocr/synthetic-31-scan.pdf')
     expect(fs.existsSync(scanPdfPath), `fixture must exist at ${scanPdfPath}`).toBe(true)
 
     await page.getByTestId('ocr-input').setInputFiles(scanPdfPath)
@@ -142,5 +170,7 @@ test.describe('real browser OCR fallback under production CSP', () => {
     const parsed = JSON.parse(resultText)
     expect(parsed.supplier).toBe('Scan Supplier Co.')
     expect(parsed.lines.length).toBeGreaterThan(0)
+    expect(loadedWorkerUrls.length).toBeGreaterThan(0)
+    expect(loadedWorkerUrls[0]).toMatch(/^http:\/\/127\.0\.0\.1:5194\/assets\/pdf\.worker-.*\.mjs$/)
   })
 })

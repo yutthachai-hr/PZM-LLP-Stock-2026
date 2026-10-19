@@ -6,6 +6,8 @@ vi.mock('../src/services/poImages', () => ({ authHeader: () => authHeaderPromise
 import { cleanOcr } from '../src/lib/billOcr'
 import { pendingWriteCount } from '../src/backend/pendingWrites'
 import {
+  DEFAULT_HTTP_TIMEOUT_MS,
+  DEFAULT_PDF_TIMEOUT_MS,
   ocrErrorMessage,
   readBillPhoto,
   readDocumentFile,
@@ -200,6 +202,169 @@ describe('client OCR resilience and TDD requirements', () => {
       expect(fetchMock).toHaveBeenCalledTimes(3)
     })
 
+    test('large scanned PDF (4.3MB 2-page) bypasses direct Gemini upload and succeeds via local raster fallback', async () => {
+      const mockGetPage = vi.fn().mockImplementation((_num: number) =>
+        Promise.resolve({
+          getViewport: () => ({ width: 1200, height: 1800 }),
+          render: (_params: { canvasContext: { fillRect: () => void; drawImage?: () => void } }) => {
+            return { promise: Promise.resolve() }
+          },
+        }),
+      )
+      const mockPdfJs: PdfJsLib = {
+        getDocument: () => ({
+          promise: Promise.resolve({
+            numPages: 2,
+            getPage: mockGetPage,
+          }),
+        }),
+      }
+      setPdfJsLoader(async () => mockPdfJs)
+
+      // Both page calls succeed via image path
+      fetchMock
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              supplier: 'Large Scan Bakery Ltd.',
+              invoiceNo: 'LS-001',
+              date: '2026-10-20',
+              lines: [{ name: 'Mozzarella 20kg', qty: 5, unit: 'Carton' }],
+              model: '@cf/meta/llama-4-scout-17b-16e-instruct',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              lines: [{ name: 'Pizza Flour 25kg', qty: 10, unit: 'Bag' }],
+              model: '@cf/meta/llama-4-scout-17b-16e-instruct',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        )
+
+      // Create synthetic 4.3 MB PDF file (4.3 * 1024 * 1024 = 4_508_876 bytes)
+      const largeBytes = new Uint8Array(4_500_000)
+      largeBytes[0] = 37 // %
+      largeBytes[1] = 80 // P
+      largeBytes[2] = 68 // D
+      largeBytes[3] = 70 // F
+      const largePdfFile = new File([largeBytes], 'synthetic-large-scan-4.3mb.pdf', {
+        type: 'application/pdf',
+      })
+
+      const bill = await readDocumentFile(largePdfFile)
+
+      expect(bill.supplier).toBe('Large Scan Bakery Ltd.')
+      expect(bill.lines).toHaveLength(2)
+      expect(bill.lines[0]).toEqual({ name: 'Mozzarella 20kg', qty: 5, unit: 'Carton' })
+      expect(bill.lines[1]).toEqual({ name: 'Pizza Flour 25kg', qty: 10, unit: 'Bag' })
+
+      // Verify ZERO direct raw PDF calls to Gemini (bypassed raw upload)
+      // Only 2 rendered page image POSTs
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      for (const call of fetchMock.mock.calls) {
+        const body = JSON.parse(call[1]?.body as string)
+        expect(body.image).toMatch(/^data:image\/jpeg;base64,/)
+        expect(body.image.length).toBeLessThanOrEqual(4_000_000)
+      }
+    })
+
+    test('PDF exceeding local capacity (> 20MB) is rejected immediately with pdf_too_large', async () => {
+      // 21 MB file
+      const hugeBytes = new Uint8Array(21 * 1024 * 1024)
+      hugeBytes[0] = 37; hugeBytes[1] = 80; hugeBytes[2] = 68; hugeBytes[3] = 70
+      const hugePdfFile = new File([hugeBytes], 'huge.pdf', { type: 'application/pdf' })
+
+      await expect(readDocumentFile(hugePdfFile)).rejects.toThrow(
+        /ไฟล์ PDF ใหญ่เกินไป/,
+      )
+    })
+
+    test('cancellation while loadingTask.promise is pending immediately destroys task and aborts', async () => {
+      const controller = new AbortController()
+      let docPromiseReject!: (err: unknown) => void
+      const docPromise = new Promise<never>((_, reject) => {
+        docPromiseReject = reject
+      })
+      const mockDestroy = vi.fn().mockReturnValue(Promise.resolve())
+
+      const mockPdfJs: PdfJsLib = {
+        getDocument: () => ({
+          promise: docPromise,
+          destroy: mockDestroy,
+        }),
+      }
+      setPdfJsLoader(async () => mockPdfJs)
+
+      // Initial call with PDF fails with 503 -> starts PDF loading
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'model_unavailable', upstreamStatus: 503 }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+
+      const fakePdfFile = new File([new Uint8Array([37, 80, 68, 70])], 'invoice.pdf', {
+        type: 'application/pdf',
+      })
+
+      const readPromise = readDocumentFile(fakePdfFile, { signal: controller.signal })
+
+      // Wait a tick for fallback to enter getDocument
+      await new Promise((r) => setTimeout(r, 10))
+
+      // User cancels while loadingTask is pending
+      controller.abort()
+
+      await expect(readPromise).rejects.toThrow(/Abort|aborted/i)
+      expect(mockDestroy).toHaveBeenCalled()
+
+      docPromiseReject(new Error('cleaning up'))
+    })
+
+    test('hanging destroy does not block cancellation or operation indefinitely', async () => {
+      const controller = new AbortController()
+      const mockDestroy = vi.fn().mockReturnValue(new Promise(() => {})) // Never resolves!
+
+      const mockPdfJs: PdfJsLib = {
+        getDocument: () => ({
+          promise: Promise.resolve({
+            numPages: 1,
+            getPage: () => Promise.resolve({
+              getViewport: () => ({ width: 100, height: 100 }),
+              render: () => ({ promise: Promise.resolve() }),
+            }),
+            destroy: mockDestroy,
+          }),
+          destroy: mockDestroy,
+        }),
+      }
+      setPdfJsLoader(async () => mockPdfJs)
+
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'model_unavailable', upstreamStatus: 503 }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+
+      const fakePdfFile = new File([new Uint8Array([37, 80, 68, 70])], 'invoice.pdf', {
+        type: 'application/pdf',
+      })
+
+      const readPromise = readDocumentFile(fakePdfFile, { signal: controller.signal })
+      await new Promise((r) => setTimeout(r, 10))
+      controller.abort()
+
+      // Should reject promptly despite hanging destroy()
+      const t0 = Date.now()
+      await expect(readPromise).rejects.toThrow(/Abort|aborted/i)
+      expect(Date.now() - t0).toBeLessThan(2000)
+    })
+
     test('refuses PDF fallback if PDF exceeds stated page limit (> 5 pages)', async () => {
       const mockPdfJs: PdfJsLib = {
         getDocument: () => ({
@@ -386,6 +551,43 @@ describe('client OCR resilience and TDD requirements', () => {
       const corruptedFile = new File([new Uint8Array([0, 1, 2, 3])], 'corrupted.pdf', { type: 'application/pdf' })
 
       await expect(readDocumentFile(corruptedFile)).rejects.toThrow(/ไม่สามารถอ่านไฟล์ PDF ได้ — ไฟล์อาจเสียหาย/)
+    })
+
+    test('reconciles default timeouts: 85s for HTTP photo and 150s for PDF', async () => {
+      expect(DEFAULT_HTTP_TIMEOUT_MS).toBe(85_000)
+      expect(DEFAULT_PDF_TIMEOUT_MS).toBe(150_000)
+
+      vi.useFakeTimers()
+      try {
+        fetchMock.mockImplementation(() => new Promise(() => {}))
+
+        // 1. Photo call should not time out at 60s, but should time out at 85s
+        const photoPromise = readBillPhoto('data:image/jpeg;base64,1234')
+        let photoFailed = false
+        photoPromise.catch(() => { photoFailed = true })
+
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(photoFailed).toBe(false)
+
+        await vi.advanceTimersByTimeAsync(26_000)
+        expect(photoFailed).toBe(true)
+        await expect(photoPromise).rejects.toThrow(/หมดเวลา|upstream_timeout/i)
+
+        // 2. PDF call should not time out at 85s, but should time out at 150s
+        const pdfFile = new File([new Uint8Array([37, 80, 68, 70])], 'doc.pdf', { type: 'application/pdf' })
+        const pdfPromise = readDocumentFile(pdfFile)
+        let pdfFailed = false
+        pdfPromise.catch(() => { pdfFailed = true })
+
+        await vi.advanceTimersByTimeAsync(86_000)
+        expect(pdfFailed).toBe(false)
+
+        await vi.advanceTimersByTimeAsync(65_000)
+        expect(pdfFailed).toBe(true)
+        await expect(pdfPromise).rejects.toThrow(/หมดเวลา|upstream_timeout/i)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

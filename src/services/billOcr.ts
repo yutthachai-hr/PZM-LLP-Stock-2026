@@ -67,7 +67,8 @@ export interface ReadOcrOptions {
   timeoutMs?: number
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000
+export const DEFAULT_HTTP_TIMEOUT_MS = 85_000
+export const DEFAULT_PDF_TIMEOUT_MS = 150_000
 
 export class OcrAppError extends AppError {
   kind: OcrErrorKind
@@ -86,8 +87,9 @@ export class OcrAppError extends AppError {
 function withDeadline<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   options?: ReadOcrOptions,
+  defaultTimeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS,
 ): Promise<T> {
-  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const timeoutMs = options?.timeoutMs ?? defaultTimeoutMs
   const controller = new AbortController()
   const timer = setTimeout(() => {
     controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
@@ -130,7 +132,7 @@ function withDeadline<T>(
 }
 
 export async function readBillPhoto(dataUrl: string, options?: ReadOcrOptions): Promise<OcrBill> {
-  return trackWrite(withDeadline((signal) => readBillPhotoNow(dataUrl, signal), options))
+  return trackWrite(withDeadline((signal) => readBillPhotoNow(dataUrl, signal), options, DEFAULT_HTTP_TIMEOUT_MS))
 }
 
 async function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -207,8 +209,10 @@ async function readBillPhotoNow(dataUrl: string, signal: AbortSignal): Promise<O
   throw err
 }
 
-/** The endpoint takes about 4 MB of base64: a PDF up to this size goes as it is. */
-const MAX_PDF_BYTES = 2_900_000
+/** The direct Gemini endpoint takes about 4 MB of base64: a PDF up to this size goes directly. */
+export const MAX_DIRECT_PDF_BYTES = 2_900_000
+/** Bounded local file size limit for browser rasterization (20 MB). */
+export const MAX_LOCAL_PDF_BYTES = 20_000_000
 
 /**
  * Any document a person picks — a photo, a screenshot, a PDF — read by the same model
@@ -216,35 +220,21 @@ const MAX_PDF_BYTES = 2_900_000
  * printed page, small enough to send from a phone on a weak signal.
  */
 export async function readDocumentFile(file: File, options?: ReadOcrOptions): Promise<OcrBill> {
-  return trackWrite(withDeadline((signal) => readDocumentFileNow(file, signal), options))
+  const defaultTimeout = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+    ? DEFAULT_PDF_TIMEOUT_MS
+    : DEFAULT_HTTP_TIMEOUT_MS
+  return trackWrite(withDeadline((signal) => readDocumentFileNow(file, signal), options, defaultTimeout))
 }
 
 async function readDocumentFileNow(file: File, signal: AbortSignal): Promise<OcrBill> {
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
 
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
-    if (file.size > MAX_PDF_BYTES) {
+    if (file.size > MAX_LOCAL_PDF_BYTES) {
       throw new OcrAppError('pdf_too_large', ocrErrorMessage('pdf_too_large'))
     }
-    const pdfDataUrl = await raceAbort(asDataUrl(file, 'application/pdf'), signal)
-    try {
-      return await readBillPhotoNow(pdfDataUrl, signal)
-    } catch (err) {
-      if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
 
-      // If Gemini fails transiently (503 model_unavailable, 504 upstream_timeout, 500),
-      // render PDF pages to images and fallback to Workers AI via image path.
-      const isTransient =
-        err instanceof OcrAppError &&
-        (err.kind === 'model_unavailable' ||
-          err.kind === 'upstream_timeout' ||
-          err.upstreamStatus === 503 ||
-          err.upstreamStatus === 504 ||
-          err.upstreamStatus === 500)
-
-      if (!isTransient) throw err
-
-      // Render PDF pages with pdf.js (lazy-loaded, capped to MAX_FALLBACK_PAGES)
+    const renderAndReadPages = async (): Promise<OcrBill> => {
       let pageImages: string[]
       try {
         pageImages = await renderPdfPagesToImages(file, {
@@ -269,6 +259,32 @@ async function readDocumentFileNow(file: File, signal: AbortSignal): Promise<Ocr
         combined.lines.push(...pageBill.lines)
       }
       return combined
+    }
+
+    // Large PDF (> 2.9 MB): bypass raw Gemini upload, render locally first
+    if (file.size > MAX_DIRECT_PDF_BYTES) {
+      return renderAndReadPages()
+    }
+
+    const pdfDataUrl = await raceAbort(asDataUrl(file, 'application/pdf'), signal)
+    try {
+      return await readBillPhotoNow(pdfDataUrl, signal)
+    } catch (err) {
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+
+      // If Gemini fails transiently (503 model_unavailable, 504 upstream_timeout, 500),
+      // render PDF pages to images and fallback to Workers AI via image path.
+      const isTransient =
+        err instanceof OcrAppError &&
+        (err.kind === 'model_unavailable' ||
+          err.kind === 'upstream_timeout' ||
+          err.upstreamStatus === 503 ||
+          err.upstreamStatus === 504 ||
+          err.upstreamStatus === 500)
+
+      if (!isTransient) throw err
+
+      return renderAndReadPages()
     }
   }
 

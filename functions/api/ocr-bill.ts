@@ -44,7 +44,7 @@ const MAX_IMAGE_CHARS = 4_000_000
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 const FALLBACK_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct'
 const MAX_RETRIES = 2
-const PER_ATTEMPT_TIMEOUT_MS = 30_000
+const PER_ATTEMPT_TIMEOUT_MS = 40_000
 const AGGREGATE_TIMEOUT_MS = 75_000
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -136,220 +136,290 @@ const PROMPT = [
 
 export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => {
   const t0 = Date.now()
-  const uid = (await verifyFirebaseToken(request.headers.get('authorization'))) ?? (demoKeyOk(request, env) ? 'demo' : null)
-  if (!uid) return json(401, { error: 'unauthorized' })
-  const key = (env.GEMINI_API_KEY ?? '').trim()
-  if (!key) return json(503, { error: 'not_configured' })
+  const deadline = t0 + AGGREGATE_TIMEOUT_MS
+  const getRemainingMs = () => deadline - Date.now()
 
-  let image = ''
-  try {
-    const body = (await request.json()) as { image?: unknown }
-    image = typeof body.image === 'string' ? body.image : ''
-  } catch {
-    return json(400, { error: 'bad_request' })
-  }
-  const m = image.match(/^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/)
-  if (!m) return json(415, { error: 'invalid_format' })
-  if (image.length > MAX_IMAGE_CHARS) return json(413, { error: 'too_large' })
+  const serverController = new AbortController()
+  const serverTimer = setTimeout(() => {
+    serverController.abort(new DOMException('Aggregate timeout', 'TimeoutError'))
+  }, AGGREGATE_TIMEOUT_MS)
 
-  const mime = m[1]
-  const data = m[2]
-  const sizeBytes = Math.round(data.length * 0.75)
-  const pinned = (env.GEMINI_MODEL ?? '').trim()
-  let model = pinned || chosenModel || DEFAULT_MODEL
-
-  let res: Response | null = null
-  let retries = 0
-  let lastErr: unknown = null
-  let modelMs = 0
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const elapsed = Date.now() - t0
-    if (elapsed >= AGGREGATE_TIMEOUT_MS) {
-      lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-      break
+  let onClientAbort: (() => void) | undefined
+  if (request.signal) {
+    if (request.signal.aborted) {
+      serverController.abort(request.signal.reason)
+    } else {
+      onClientAbort = () => serverController.abort(request.signal.reason)
+      request.signal.addEventListener('abort', onClientAbort, { once: true })
     }
-    if (attempt > 0) {
-      retries++
-      const delay = retryDelay(attempt - 1)
-      if (elapsed + delay >= AGGREGATE_TIMEOUT_MS) {
+  }
+
+  try {
+    const uid = (await verifyFirebaseToken(request.headers.get('authorization'))) ?? (demoKeyOk(request, env) ? 'demo' : null)
+    if (!uid) return json(401, { error: 'unauthorized' })
+    const key = (env.GEMINI_API_KEY ?? '').trim()
+    if (!key) return json(503, { error: 'not_configured' })
+
+    let image = ''
+    try {
+      const body = (await request.json()) as { image?: unknown }
+      image = typeof body.image === 'string' ? body.image : ''
+    } catch {
+      return json(400, { error: 'bad_request' })
+    }
+    const m = image.match(/^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/)
+    if (!m) return json(415, { error: 'invalid_format' })
+    if (image.length > MAX_IMAGE_CHARS) return json(413, { error: 'too_large' })
+
+    const mime = m[1]
+    const data = m[2]
+    const sizeBytes = Math.round(data.length * 0.75)
+    const pinned = (env.GEMINI_MODEL ?? '').trim()
+    let model = pinned || chosenModel || DEFAULT_MODEL
+
+    let res: Response | null = null
+    let retries = 0
+    let lastErr: unknown = null
+    let modelMs = 0
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (getRemainingMs() <= 0) {
         lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
         break
       }
-      await sleep(delay)
-    }
-
-    const remainingBudget = Math.max(1_000, AGGREGATE_TIMEOUT_MS - (Date.now() - t0))
-    const attemptBudget = Math.min(PER_ATTEMPT_TIMEOUT_MS, remainingBudget)
-    const { signal: attemptSignal, cleanup: cleanupAttempt } = createAttemptSignal(request.signal, attemptBudget)
-    const attemptT0 = Date.now()
-    lastErr = null
-
-    try {
-      res = await generate(key, model, mime, data, attemptSignal)
-      modelMs += Date.now() - attemptT0
-    } catch (err) {
-      modelMs += Date.now() - attemptT0
-      lastErr = err
-      res = null
-      cleanupAttempt()
-      if (attempt < MAX_RETRIES && Date.now() - t0 < AGGREGATE_TIMEOUT_MS) continue
-      break
-    } finally {
-      cleanupAttempt()
-    }
-
-    // The model was retired (Google answers 404 "no longer available"): ask which ones this key
-    // can use, take the newest stable Flash, remember it, try once more.
-    if (res.status === 404) {
-      const next = await discoverModel(key, request.signal)
-      if (next && next !== model) {
-        chosenModel = next
-        model = next
-        const discoverBudget = Math.min(PER_ATTEMPT_TIMEOUT_MS, Math.max(1_000, AGGREGATE_TIMEOUT_MS - (Date.now() - t0)))
-        const { signal: discoverSignal, cleanup: cleanupDiscover } = createAttemptSignal(request.signal, discoverBudget)
-        const discoverT0 = Date.now()
-        try {
-          res = await generate(key, model, mime, data, discoverSignal)
-          modelMs += Date.now() - discoverT0
-        } catch (err) {
-          modelMs += Date.now() - discoverT0
-          lastErr = err
-          res = null
-        } finally {
-          cleanupDiscover()
+      if (attempt > 0) {
+        retries++
+        const delay = retryDelay(attempt - 1)
+        if (delay >= getRemainingMs()) {
+          lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+          break
+        }
+        await sleep(delay)
+        if (getRemainingMs() <= 0) {
+          lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+          break
         }
       }
-    }
 
-    if (res && res.ok) break
-    if (res && isTransient(res.status)) {
-      if (attempt < MAX_RETRIES && Date.now() - t0 < AGGREGATE_TIMEOUT_MS) continue
+      const attemptBudget = Math.min(PER_ATTEMPT_TIMEOUT_MS, getRemainingMs())
+      if (attemptBudget <= 0) {
+        lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+        break
+      }
+      const { signal: attemptSignal, cleanup: cleanupAttempt } = createAttemptSignal(serverController.signal, attemptBudget)
+      const attemptT0 = Date.now()
+      lastErr = null
+
+      try {
+        res = await generate(key, model, mime, data, attemptSignal)
+        modelMs += Date.now() - attemptT0
+      } catch (err) {
+        modelMs += Date.now() - attemptT0
+        lastErr = err
+        res = null
+        cleanupAttempt()
+        if (attempt < MAX_RETRIES && getRemainingMs() > 0) continue
+        break
+      } finally {
+        cleanupAttempt()
+      }
+
+      // The model was retired (Google answers 404 "no longer available"): ask which ones this key
+      // can use, take the newest stable Flash, remember it, try once more.
+      if (res.status === 404) {
+        const discoverBudget = Math.min(PER_ATTEMPT_TIMEOUT_MS, getRemainingMs())
+        if (discoverBudget <= 0) {
+          lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+          break
+        }
+        const next = await discoverModel(key, serverController.signal, discoverBudget)
+        if (next && next !== model) {
+          chosenModel = next
+          model = next
+          const retryBudget = Math.min(PER_ATTEMPT_TIMEOUT_MS, getRemainingMs())
+          if (retryBudget <= 0) {
+            lastErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+            break
+          }
+          const { signal: discoverSignal, cleanup: cleanupDiscover } = createAttemptSignal(serverController.signal, retryBudget)
+          const discoverT0 = Date.now()
+          try {
+            res = await generate(key, model, mime, data, discoverSignal)
+            modelMs += Date.now() - discoverT0
+          } catch (err) {
+            modelMs += Date.now() - discoverT0
+            lastErr = err
+            res = null
+          } finally {
+            cleanupDiscover()
+          }
+        }
+      }
+
+      if (res && res.ok) break
+      if (res && isTransient(res.status)) {
+        if (attempt < MAX_RETRIES && getRemainingMs() > 0) continue
+        break
+      }
+      // Non-transient errors (400, 401, 413, 415, 429) must never retry
       break
     }
-    // Non-transient errors (400, 401, 413, 415, 429) must never retry
-    break
-  }
 
-  if (res && res.ok) {
-    const parseT0 = Date.now()
-    const { data: out, isTimeout: bodyTimeout } = await safeReadJson<{
-      candidates?: { content?: { parts?: { text?: string }[] } }[]
-    }>(res, request.signal, PER_ATTEMPT_TIMEOUT_MS)
-    const parseMs = Date.now() - parseT0
-
-    if (bodyTimeout) {
-      const trace: OcrTrace = {
-        fileType: mime,
-        sizeBytes,
-        model,
-        retries,
-        upstreamStatus: 504,
-        durations: { modelMs, parseMs, totalMs: Date.now() - t0 },
+    if (res && res.ok) {
+      const parseT0 = Date.now()
+      const remaining = getRemainingMs()
+      if (remaining <= 0) {
+        const trace: OcrTrace = {
+          fileType: mime,
+          sizeBytes,
+          model,
+          retries,
+          upstreamStatus: 504,
+          durations: { modelMs, parseMs: 0, totalMs: Date.now() - t0 },
+        }
+        console.info('[ocr-bill]', JSON.stringify(trace))
+        return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: 'Upstream body read timed out', trace })
       }
-      console.info('[ocr-bill]', JSON.stringify(trace))
-      return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: 'Upstream body read timed out', trace })
-    }
 
-    if (!out || !out.candidates || !out.candidates.length) {
-      // Malformed upstream envelope on HTTP 200 -> typed unreadable
+      const { data: out, isTimeout: bodyTimeout } = await safeReadJson<{
+        candidates?: { content?: { parts?: { text?: string }[] } }[]
+      }>(res, serverController.signal, Math.min(PER_ATTEMPT_TIMEOUT_MS, remaining))
+      const parseMs = Date.now() - parseT0
+
+      if (bodyTimeout || getRemainingMs() <= 0) {
+        const trace: OcrTrace = {
+          fileType: mime,
+          sizeBytes,
+          model,
+          retries,
+          upstreamStatus: 504,
+          durations: { modelMs, parseMs, totalMs: Date.now() - t0 },
+        }
+        console.info('[ocr-bill]', JSON.stringify(trace))
+        return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: 'Upstream body read timed out', trace })
+      }
+
+      if (!out || !out.candidates || !out.candidates.length) {
+        // Malformed upstream envelope on HTTP 200 -> typed unreadable
+        const trace: OcrTrace = {
+          fileType: mime,
+          sizeBytes,
+          model,
+          retries,
+          upstreamStatus: res.status,
+          durations: { modelMs, parseMs, totalMs: Date.now() - t0 },
+        }
+        console.info('[ocr-bill]', JSON.stringify(trace))
+        return json(502, { error: 'unreadable', model, message: 'Invalid response envelope from upstream model', trace })
+      }
+
+      const text = out.candidates[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+
+      // A second opinion on a picture the first model found nothing in
+      let fallbackMs: number | undefined
+      if (!lineCount(text) && env.AI && mime !== 'application/pdf') {
+        const fbBudget = Math.min(25_000, getRemainingMs())
+        if (fbBudget <= 0) {
+          lastErr = new DOMException('Aggregate timeout', 'TimeoutError')
+        } else {
+          const fbT0 = Date.now()
+          const { answer: second, timedOut } = await fallback(env.AI, image, serverController.signal, fbBudget)
+          fallbackMs = Date.now() - fbT0
+          if (timedOut) {
+            lastErr = new DOMException('Aggregate timeout', 'TimeoutError')
+          } else if (lineCount(second)) {
+            const trace: OcrTrace = {
+              fileType: mime,
+              sizeBytes,
+              model: FALLBACK_MODEL,
+              retries,
+              upstreamStatus: res.status,
+              durations: { modelMs, fallbackMs, parseMs, totalMs: Date.now() - t0 },
+            }
+            console.info('[ocr-bill]', JSON.stringify(trace))
+            return reply(second, FALLBACK_MODEL, trace)
+          }
+        }
+      }
+
       const trace: OcrTrace = {
         fileType: mime,
         sizeBytes,
         model,
         retries,
         upstreamStatus: res.status,
-        durations: { modelMs, parseMs, totalMs: Date.now() - t0 },
+        durations: { modelMs, fallbackMs, parseMs, totalMs: Date.now() - t0 },
       }
       console.info('[ocr-bill]', JSON.stringify(trace))
-      return json(502, { error: 'unreadable', model, message: 'Invalid response envelope from upstream model', trace })
+      return reply(text, model, trace)
     }
 
-    const text = out.candidates[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
-
-    // A second opinion on a picture the first model found nothing in (owner, 6 Oct 2026:
-    // "ลองไปใช้โมเดลอื่น"): the Workers AI reader looks at it too, and the answer with lines wins.
+    // Any other failure: a picture still has the Workers AI reader; a PDF does not.
     let fallbackMs: number | undefined
-    if (!lineCount(text) && env.AI && mime !== 'application/pdf') {
-      const fbT0 = Date.now()
-      const second = await fallback(env.AI, image, request.signal)
-      fallbackMs = Date.now() - fbT0
-      if (lineCount(second)) {
-        const trace: OcrTrace = {
-          fileType: mime,
-          sizeBytes,
-          model: FALLBACK_MODEL,
-          retries,
-          upstreamStatus: res.status,
-          durations: { modelMs, fallbackMs, parseMs, totalMs: Date.now() - t0 },
+    if (env.AI && mime !== 'application/pdf') {
+      const fbBudget = Math.min(25_000, getRemainingMs())
+      if (fbBudget <= 0) {
+        lastErr = new DOMException('Aggregate timeout', 'TimeoutError')
+      } else {
+        const fbT0 = Date.now()
+        const { answer, timedOut } = await fallback(env.AI, image, serverController.signal, fbBudget)
+        fallbackMs = Date.now() - fbT0
+        if (timedOut) {
+          lastErr = new DOMException('Aggregate timeout', 'TimeoutError')
+        } else if (answer && lineCount(answer)) {
+          const trace: OcrTrace = {
+            fileType: mime,
+            sizeBytes,
+            model: FALLBACK_MODEL,
+            retries,
+            upstreamStatus: res?.status,
+            durations: { modelMs, fallbackMs, totalMs: Date.now() - t0 },
+          }
+          console.info('[ocr-bill]', JSON.stringify(trace))
+          return reply(answer, FALLBACK_MODEL, trace)
         }
-        console.info('[ocr-bill]', JSON.stringify(trace))
-        return reply(second, FALLBACK_MODEL, trace)
       }
     }
+
+    const remainingForError = Math.min(5000, Math.max(0, getRemainingMs()))
+    const detail = res ? await errorDetail(res, remainingForError) : lastErr instanceof Error ? lastErr.message : 'network error'
+    const isTimeout =
+      (lastErr instanceof DOMException && lastErr.name === 'TimeoutError') ||
+      (lastErr instanceof Error && /timeout/i.test(lastErr.message)) ||
+      serverController.signal.aborted ||
+      getRemainingMs() <= 0 ||
+      res?.status === 504
 
     const trace: OcrTrace = {
       fileType: mime,
       sizeBytes,
       model,
       retries,
-      upstreamStatus: res.status,
-      durations: { modelMs, fallbackMs, parseMs, totalMs: Date.now() - t0 },
+      upstreamStatus: res?.status ?? (isTimeout ? 504 : undefined),
+      durations: { modelMs, fallbackMs, totalMs: Date.now() - t0 },
     }
     console.info('[ocr-bill]', JSON.stringify(trace))
-    return reply(text, model, trace)
-  }
 
-  // Any other failure: a picture still has the Workers AI reader; a PDF does not.
-  let fallbackMs: number | undefined
-  if (env.AI && mime !== 'application/pdf') {
-    const fbT0 = Date.now()
-    const answer = await fallback(env.AI, image, request.signal)
-    fallbackMs = Date.now() - fbT0
-    if (answer && lineCount(answer)) {
-      const trace: OcrTrace = {
-        fileType: mime,
-        sizeBytes,
-        model: FALLBACK_MODEL,
-        retries,
-        upstreamStatus: res?.status,
-        durations: { modelMs, fallbackMs, totalMs: Date.now() - t0 },
-      }
-      console.info('[ocr-bill]', JSON.stringify(trace))
-      return reply(answer, FALLBACK_MODEL, trace)
+    if (isTimeout) {
+      return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: detail, trace })
+    }
+    if (res && res.status === 429) {
+      return json(429, { error: 'quota', upstreamStatus: 429, model, message: detail, trace })
+    }
+    if (res && res.status === 503) {
+      return json(503, { error: 'model_unavailable', upstreamStatus: 503, model, message: detail, trace })
+    }
+    if (res && res.status === 400) {
+      return json(400, { error: 'bad_request', upstreamStatus: 400, model, message: detail, trace })
+    }
+
+    return json(502, { error: 'model_unavailable', upstreamStatus: res?.status ?? 502, model, message: detail, trace })
+  } finally {
+    clearTimeout(serverTimer)
+    if (request.signal && onClientAbort) {
+      request.signal.removeEventListener('abort', onClientAbort)
     }
   }
-
-  const detail = res ? await errorDetail(res) : lastErr instanceof Error ? lastErr.message : 'network error'
-  const isTimeout =
-    (lastErr instanceof DOMException && lastErr.name === 'TimeoutError') ||
-    (lastErr instanceof Error && /timeout/i.test(lastErr.message)) ||
-    res?.status === 504
-
-  const trace: OcrTrace = {
-    fileType: mime,
-    sizeBytes,
-    model,
-    retries,
-    upstreamStatus: res?.status ?? (isTimeout ? 504 : undefined),
-    durations: { modelMs, fallbackMs, totalMs: Date.now() - t0 },
-  }
-  console.info('[ocr-bill]', JSON.stringify(trace))
-
-  if (isTimeout) {
-    return json(504, { error: 'upstream_timeout', upstreamStatus: 504, model, message: detail, trace })
-  }
-  if (res && res.status === 429) {
-    return json(429, { error: 'quota', upstreamStatus: 429, model, message: detail, trace })
-  }
-  if (res && res.status === 503) {
-    return json(503, { error: 'model_unavailable', upstreamStatus: 503, model, message: detail, trace })
-  }
-  if (res && res.status === 400) {
-    return json(400, { error: 'bad_request', upstreamStatus: 400, model, message: detail, trace })
-  }
-
-  return json(502, { error: 'model_unavailable', upstreamStatus: res?.status ?? 502, model, message: detail, trace })
 }
 
 /** How many rows an answer holds, however it was shaped — 0 for none or unreadable. */
@@ -385,8 +455,8 @@ function generate(key: string, model: string, mime: string, data: string, signal
   })
 }
 
-async function discoverModel(key: string, parentSignal?: AbortSignal): Promise<string | null> {
-  const { signal, cleanup } = createAttemptSignal(parentSignal, 10_000)
+async function discoverModel(key: string, parentSignal?: AbortSignal, maxMs = 10_000): Promise<string | null> {
+  const { signal, cleanup } = createAttemptSignal(parentSignal, maxMs)
   try {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
       headers: { 'x-goog-api-key': key },
@@ -403,9 +473,9 @@ async function discoverModel(key: string, parentSignal?: AbortSignal): Promise<s
 }
 
 /** Google's own error text (never the key), cut short — enough to say what went wrong. */
-async function errorDetail(res: Response): Promise<string> {
+async function errorDetail(res: Response, maxMs = 5000): Promise<string> {
   try {
-    const { data: body } = await safeReadJson<{ error?: { message?: string; status?: string } }>(res, undefined, 5_000)
+    const { data: body } = await safeReadJson<{ error?: { message?: string; status?: string } }>(res, undefined, maxMs)
     if (!body?.error) return `HTTP ${res.status}`
     return [body.error.status, body.error.message].filter(Boolean).join(': ').slice(0, 200)
   } catch {
@@ -414,8 +484,13 @@ async function errorDetail(res: Response): Promise<string> {
 }
 
 /** Gemini's free tier is out for the day/minute — ask Workers AI (10k neurons/day free) instead. */
-async function fallback(ai: Ai, image: string, parentSignal?: AbortSignal): Promise<unknown> {
-  const { signal, cleanup } = createAttemptSignal(parentSignal, 25_000)
+async function fallback(
+  ai: Ai,
+  image: string,
+  parentSignal?: AbortSignal,
+  maxMs = 25_000,
+): Promise<{ answer: unknown; timedOut: boolean }> {
+  const { signal, cleanup } = createAttemptSignal(parentSignal, maxMs)
   try {
     const runPromise = ai.run(FALLBACK_MODEL as Parameters<Ai['run']>[0], {
       messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, { type: 'image_url', image_url: { url: image } }] }],
@@ -426,9 +501,13 @@ async function fallback(ai: Ai, image: string, parentSignal?: AbortSignal): Prom
       signal.addEventListener('abort', () => reject(signal.reason ?? new DOMException('Timeout', 'TimeoutError')), { once: true })
     })
     const out = await Promise.race([runPromise, abortPromise])
-    return out.response ?? ''
-  } catch {
-    return ''
+    return { answer: out.response ?? '', timedOut: false }
+  } catch (err) {
+    const isTimeout =
+      signal.aborted ||
+      (err instanceof DOMException && err.name === 'TimeoutError') ||
+      (err instanceof Error && /timeout/i.test(err.message))
+    return { answer: '', timedOut: Boolean(isTimeout) }
   } finally {
     cleanup()
   }
