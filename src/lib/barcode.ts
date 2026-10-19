@@ -78,6 +78,29 @@ export function resolveBarcode(products: readonly Product[], code: string): Barc
   return { status: 'not_found', code: needle }
 }
 
+/**
+ * What a Thai keyboard layout turns the digit row into (Kedmanee, unshifted). A keyboard-wedge
+ * scanner reports key positions as if it were a US keyboard, so on a Thai layout the digits
+ * arrive as these glyphs and every scan misses.
+ *
+ * Only the digit row is mapped, key for key — there is no attempt to guess words out of Thai
+ * text, and a token is translated only when EVERY character is one of these keys. That keeps
+ * Latin codes, their punctuation, and Thai product names exactly as typed.
+ */
+const THAI_DIGIT_ROW: Record<string, string> = {
+  'ๅ': '1', '/': '2', '_': '3', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9',
+  'จ': '0', 'ข': '-', 'ช': '=',
+}
+const THAI_DIGIT_ROW_KEY = /[ๅภถุึคตจขช]/
+const THAI_DIGIT_ROW_ONLY = /^[0-9ๅ/_ภถุึคตจขช]+$/
+
+/** The exact text a scanner meant, whatever keyboard layout it typed through. */
+export function normalizeScanToken(raw: string): string {
+  const s = raw.trim()
+  if (!THAI_DIGIT_ROW_KEY.test(s) || !THAI_DIGIT_ROW_ONLY.test(s)) return s
+  return s.replace(/[ๅ/_ภถุึคตจขช]/g, (c) => THAI_DIGIT_ROW[c] ?? c)
+}
+
 /** The fields a product is searched by, including its barcode when it has one. */
 export function searchFields(p: Product): (string | undefined)[] {
   return [p.name, p.sku, p.barcode]

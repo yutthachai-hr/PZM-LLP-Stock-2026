@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { brandEpoch, getBrand } from '../brand/brand'
 import { decideScan } from './barcodeSelection'
+import { normalizeScanToken } from './barcode'
 import { backend as defaultBackend } from '../backend'
 import type { Backend } from '../backend/types'
 import { COL, type Product } from '../types'
@@ -90,7 +91,7 @@ export function useScanGate(opts: ScanGateOptions): (code: string) => Promise<vo
 
   return useCallback(
     async (code: string): Promise<void> => {
-      const theCode = code.trim()
+      const theCode = normalizeScanToken(code)
       if (!theCode) return
 
       // Refuse safely while confirmation dialog is already pending (I1)

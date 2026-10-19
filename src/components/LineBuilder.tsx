@@ -290,13 +290,19 @@ export function LineBuilder({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key !== 'Enter') return
+            if (e.key !== 'Enter' && e.key !== 'Tab') return
+            // Shift+Tab stays the way out of the box; a bare Tab after a code is the scanner's
+            // terminator, exactly as Enter is.
+            if (e.key === 'Tab' && e.shiftKey) return
             const raw = search.trim()
             if (!raw) return
             // Enter means "this is a code". A hardware wedge scanner and a human typing in
             // the same box cannot be told apart, so it is resolved exactly as a barcode and
             // never as a loose name or an SKU; a human picks a product by clicking it.
             e.preventDefault()
+            // A code that is refused must not stay in the box: the next scan appends to it and
+            // the pair is then unknown for a reason that has nothing to do with the scan (R18).
+            setSearch('')
             gate(raw)
           }}
           autoComplete="off"
