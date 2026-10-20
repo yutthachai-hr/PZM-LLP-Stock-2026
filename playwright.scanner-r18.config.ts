@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['scanner-sim.r18.spec.ts', 'scanner-sim.r19.spec.ts'],
+  testMatch: ['scanner-sim.r18.demo.ts', 'scanner-sim.r19.demo.ts'],
   workers: 1,
   retries: 0,
   timeout: 45_000,

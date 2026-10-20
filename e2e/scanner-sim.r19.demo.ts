@@ -210,8 +210,28 @@ test('Receipt 2: Tab on half-typed text is a refused code, never a name pick', a
   await expect(page.locator('input[type="number"]')).toHaveCount(0)
 })
 
-// ---- Transfer receive: the third caller 9da0c0c touched ---------------------------------
+test('Receipt 3: Tab, Shift+Tab and Escape still belong to the confirmation', async ({ page }) => {
+  await stage(page)
+  await openReceipt(page)
+  const input = receiptInput(page)
+  await input.focus()
 
+  await typeCode(page, '8851111222222')
+  const box = dialog(page)
+  await expect(box).toContainText('TOMATO SAUCE')
+
+  // The dialog owns the keyboard: four Tabs and three Shift+Tabs must never leave it.
+  for (const key of ['Tab', 'Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
+    await page.keyboard.press(key)
+    expect(await box.evaluate((el) => el.contains(document.activeElement)), key).toBe(true)
+  }
+
+  await page.keyboard.press('Escape')
+  await expect(box).not.toBeVisible()
+  await expect(page.locator('input[type="number"]')).toHaveCount(0)
+})
+
+// ---- Transfer receive: the third caller 9da0c0c touched ---------------------------------
 test('Transfer 1: Enter on a document code marks that line; an unknown code is refused', async ({ page }, testInfo) => {
   await stage(page)
   await openTransfer(page)
