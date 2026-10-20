@@ -140,13 +140,18 @@ export function createRangeCache<T extends { id: string }>(opts: {
     h.fullAt = c.fullAt
   }
   let saveTimer: ReturnType<typeof setTimeout> | null = null
-  function save(h: Held<T>, brand = getBrand()): void {
+  // Reads are batched into one write of the device copy. A user's own write is not: the screen
+  // already shows it, and a reload inside the batching window came back to the old copy - and
+  // its sync time, so the catch-up was skipped and the old state stayed up (R21-D).
+  function save(h: Held<T>, brand = getBrand(), immediately = false): void {
     if (!opts.persist) return
     if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = null
     const key = copyKey(brand)
-    saveTimer = setTimeout(() => {
+    const write = () =>
       void writeCopy<Copy>(key, { v: 1, spans: h.spans, rows: [...h.rows.values()], syncedAt: h.syncedAt, fullAt: h.fullAt })
-    }, 1500)
+    if (immediately) write()
+    else saveTimer = setTimeout(write, 1500)
   }
 
   async function catchUp(h: Held<T>, brand: BrandId): Promise<void> {
@@ -208,13 +213,13 @@ export function createRangeCache<T extends { id: string }>(opts: {
     patch(row) {
       const h = mine()
       h.rows.set(row.id, row)
-      save(h)
+      save(h, getBrand(), true)
       announce()
     },
     remove(id) {
       const h = mine()
       h.rows.delete(id)
-      save(h)
+      save(h, getBrand(), true)
       announce()
     },
     subscribe(fn) {
