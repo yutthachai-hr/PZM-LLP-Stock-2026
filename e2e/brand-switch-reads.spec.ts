@@ -51,6 +51,10 @@ async function load(file: string) {
   return docs.length
 }
 
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 test('reads per brand switch, real Pizza Mania and Le Lapin data', async ({ browser }) => {
   await resetEmulators()
   const loaded = { pizza: await load(PIZZA!), lelapin: await load(LELAPIN!) }

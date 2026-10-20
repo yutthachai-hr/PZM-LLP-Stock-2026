@@ -46,6 +46,10 @@ async function switchTo(page: Page, brand: keyof typeof brands) {
   await expect(page.locator('main')).toBeVisible()
 }
 
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 test('notifications written while switching brands stay with their own brand', async ({ browser }) => {
   test.setTimeout(180_000)
   await stage()
