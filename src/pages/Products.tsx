@@ -459,7 +459,9 @@ export function ProductsPage() {
                   rows={pageRows}
                   columns={columns}
                   rowKey={(r) => r.p.id}
-                  minWidth={880}
+                  minWidth={0}
+                  cardsUntil="lg"
+                  compactTablet
                   onRowClick={(r) => navigate(`/products/${encodeURIComponent(r.p.id)}/card`)}
                   selection={{ selected, onChange: setSelected }}
                   rowMenu={(r) =>

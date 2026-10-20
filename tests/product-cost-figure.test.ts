@@ -130,9 +130,12 @@ describe('Products table columns at 1440', () => {
     }
   })
 
-  test('the Product column keeps one cap, so a wide screen does not widen the row past Location', () => {
-    const product = productColumns(t, (id) => id, '').find((c) => c.key === 'product')
+  test('option C gives the Product name room while deferring Last updated to a wide screen', () => {
+    const columns = productColumns(t, (id) => id, '')
+    const product = columns.find((c) => c.key === 'product')
+    const updated = columns.find((c) => c.key === 'updated')
     expect(product?.className).toContain('md:max-w-[200px]')
-    expect(product?.className).not.toMatch(/2xl:|3xl:/)
+    expect(product?.className).toContain('2xl:max-w-[340px]')
+    expect(updated?.headerClassName).toBe('hidden 3xl:table-cell')
   })
 })

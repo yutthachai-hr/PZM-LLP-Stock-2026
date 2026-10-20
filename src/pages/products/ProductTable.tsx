@@ -73,11 +73,11 @@ export function CostFigure({ p, t, showLabel }: { p: Product; t: TFn; showLabel?
   // behind a native disclosure: Tab reaches the summary, Enter/Space or a tap opens it.
   return (
     <>
-      <div className="inline-block whitespace-nowrap md:hidden">{figure}</div>
-      <span className="mt-0.5 block whitespace-normal break-words text-xs font-normal text-ink-faint md:hidden">
+      <div className="inline-block whitespace-nowrap lg:hidden">{figure}</div>
+      <span className="mt-0.5 block whitespace-normal break-words text-xs font-normal text-ink-faint lg:hidden">
         {hint.text}
       </span>
-      <details className="hidden text-left md:block">
+      <details className="hidden text-left lg:block">
         <summary className="cursor-pointer whitespace-nowrap text-right">{figure}</summary>
         <span className="mt-0.5 block max-w-[220px] whitespace-normal break-words text-xs font-normal text-ink-faint">
           {hint.text}
@@ -93,19 +93,19 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       key: 'product',
       header: t('สินค้า'),
       primary: true,
-      // Long catalogue names truncate rather than pushing the figures off the right edge. The
-      // cap holds at every width: a wider name column is what pushed Location outside the
-      // table's scroller at 1536 (R19-E measured 1352 px needed in a 1190 px container).
-      className: 'md:max-w-[200px]',
+      // Option C: use the space released by Last updated for readable product names.
+      // Smaller tablets use complete cards; the desktop name wraps instead of clipping.
+      className: 'md:max-w-[200px] xl:max-w-[280px] 2xl:max-w-[340px]',
       cell: (r) => {
         const look = categoryIcon(r.p.category)
         return (
           <ItemCell
             title={r.p.name}
+            wrap
             sub={
               <>
                 {/* Below 3xl the SKU column is gone from the table, so it rides here. */}
-                <span className="doc-no 3xl:hidden">{r.p.sku} · </span>
+                <span className="doc-no block text-ink-soft 3xl:hidden">{r.p.sku}</span>
                 {r.p.category} · {r.p.unitType}
                 {r.p.barcode ? <span className="doc-no"> · {r.p.barcode}</span> : null}
               </>
@@ -191,8 +191,8 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       key: 'updated',
       header: t('อัปเดตล่าสุด'),
       card: 'hidden',
-      className: 'hidden whitespace-nowrap text-xs text-ink-soft 2xl:table-cell',
-      headerClassName: 'hidden 2xl:table-cell',
+      className: 'hidden whitespace-nowrap text-xs text-ink-soft 3xl:table-cell',
+      headerClassName: 'hidden 3xl:table-cell',
       cell: (r) => (r.updatedAt ? formatThaiDateTime(r.updatedAt) : '–'),
     },
   ]
