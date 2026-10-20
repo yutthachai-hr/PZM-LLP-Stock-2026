@@ -191,6 +191,7 @@ test('an unsaved receiving form is named first; cancel keeps it, switching keeps
   await expect(trigger(page)).toHaveAccessibleName(/Le Lapin/)
   // Back in Pizza Mania the receipt is still there.
   await switchTo(page, /Pizza Mania/)
+  await expect(trigger(page)).toHaveAccessibleName(/Pizza Mania/)
   await open(page, '/receive')
   await expect(page.getByText('FLOUR').first()).toBeVisible()
 })

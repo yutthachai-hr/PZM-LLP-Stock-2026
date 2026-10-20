@@ -164,6 +164,19 @@ test.describe('reduced motion', () => {
     await expect(radios(page)).toHaveCount(3)
     const anims = await group(page).locator('.brand-orb-float, .brand-orb-face, .brand-orb-pulse').evaluateAll((els) => els.map((e) => getComputedStyle(e).animationName))
     expect(new Set(anims)).toEqual(new Set(['none']))
+    await page.evaluate(() => document.fonts.ready)
+    await expect
+      .poll(() =>
+        faces(page).evaluateAll(async (els) => {
+          const read = () => els.map((e) => e.getBoundingClientRect().top).join('|')
+          const frame = () => new Promise((ok) => requestAnimationFrame(ok))
+          const before = read()
+          await frame()
+          await frame()
+          return before === read()
+        }),
+      )
+      .toBe(true)
     const s = await sampleTops(page, 1200)
     for (let k = 0; k < 3; k++) expect(range(track(s, k))).toBeLessThan(0.5)
     const lapin = group(page).getByRole('radio', { name: /Le Lapin/ })
