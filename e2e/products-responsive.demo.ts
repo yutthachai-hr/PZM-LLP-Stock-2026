@@ -14,17 +14,20 @@ import { readFileSync } from 'node:fs'
 const WIDTHS = [1024, 1280, 1366, 1440, 1536, 1600, 1840, 1920]
 const INVOICE = '฿360.00 / Carton (×24)'
 
-async function stage(page: Page, lang: 'th' | 'en') {
+async function stage(page: Page, lang: 'th' | 'en', brand: 'pizza' | 'lelapin' | 'rnd' = 'pizza') {
   await page.addInitScript(
-    ({ l }) => {
+    ({ l, brand }) => {
       if (localStorage.getItem('products-responsive-fixture')) return
       localStorage.setItem('products-responsive-fixture', '1')
       const now = Date.now()
-      const store = (name: string, rows: Record<string, unknown>) => localStorage.setItem(`pmstock:v1:${name}`, JSON.stringify(rows))
+      const prefix = brand === 'pizza' ? '' : `${brand}__`
+      // Users and the session are shared; catalogue collections live under the brand's prefix.
+      const store = (name: string, rows: Record<string, unknown>, shared = false) =>
+        localStorage.setItem(`pmstock:v1:${shared ? '' : prefix}${name}`, JSON.stringify(rows))
       const user = { id: 'resp-user', email: 'demo@inventory-pzm.local', name: 'Responsive QA', role: 'admin', active: true, createdAt: now }
-      store('users', { 'resp-user': user })
+      store('users', { 'resp-user': user }, true)
       localStorage.setItem('pmstock:v1:session', user.id)
-      localStorage.setItem('pmstock:v1:lastBrand', 'pizza')
+      localStorage.setItem('pmstock:v1:lastBrand', brand)
       store('locations', { wh: { id: 'wh', name: 'สาขาหลัก Main Warehouse', active: true, type: 'warehouse', createdAt: now } })
       const base = { category: 'Sauce', minStock: 0, hasImage: false, active: true, createdAt: now, updatedAt: now }
       store('products', {
@@ -46,7 +49,7 @@ async function stage(page: Page, lang: 'th' | 'en') {
       localStorage.setItem('pmstock:lang', l)
       localStorage.setItem('pzm:products:view', 'table')
     },
-    { l: lang },
+    { l: lang, brand },
   )
   await page.goto('/products')
   // Semantic readiness: the seeded row and a cost figure have painted.
@@ -156,4 +159,25 @@ for (const lang of ['th', 'en'] as const) {
     // DOM semantics and keyboard focus are automated evidence, not a physical screen-reader run.
     await expect(invoice.locator('summary')).toHaveAccessibleName(/15\.00/)
   })
+}
+// R23: the other brands carry their own name, mark and palette in the frame; the table must fit
+// and keep the full product name and SKU for each, not just Pizza Mania.
+for (const brand of ['lelapin', 'rnd'] as const) {
+  for (const lang of ['th', 'en'] as const) {
+    test(`${brand}: the table fits and keeps name and SKU at desktop widths (${lang})`, async ({ page }, info) => {
+      await page.setViewportSize({ width: 1280, height: 960 })
+      await stage(page, lang, brand)
+      const broken: string[] = []
+      for (const width of [1280, 1440, 1536, 1920]) {
+        await page.setViewportSize({ width, height: 960 })
+        const m = await measure(page)
+        if (m.scrollWidth > m.clientWidth) broken.push(`${width}px: table needs ${m.scrollWidth}px in ${m.clientWidth}px`)
+        const row = page.locator('[data-row-key="long"]:visible').first()
+        await expect(row).toContainText('PZS-01-05-001')
+        await expect(row).toContainText('(LONG CATALOGUE NAME FOR THE RESPONSIVE ROW)')
+        await page.screenshot({ path: info.outputPath(`products-${brand}-${lang}-${width}.png`) })
+      }
+      expect(broken, `${brand} ${lang}`).toEqual([])
+    })
+  }
 }
