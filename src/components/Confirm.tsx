@@ -10,6 +10,9 @@ import {
 import { Button, Input, Modal } from './ui'
 import { useT } from '../i18n/I18nContext'
 
+/** shortcut: a guessed window, not a measured scanner gap; calibrate on the shop's scanners (HUMAN_PENDING). */
+const SCAN_BURST_MS = 400
+
 /** Callers pass text that is already translated — they have t() in hand at the call site. */
 interface ConfirmOptions {
   title?: string
@@ -56,6 +59,26 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   // itself; a dialog that asks for typing keeps that.)
   useEffect(() => {
     if (opts && !opts.typeToConfirm) body.current?.focus()
+  }, [opts])
+
+  // A wedge scanner ending its codes in Tab walks focus ✕ -> Cancel -> answer in two bursts, and
+  // the next Enter presses the answer (R29). While a question is open, a Tab that follows typed
+  // characters within a burst window is swallowed; a person's deliberate Tab, a click, and the
+  // phrase box of a typed confirmation are untouched.
+  useEffect(() => {
+    if (!opts) return
+    let typedAt = -Infinity
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) typedAt = e.timeStamp
+      else if (e.key === 'Tab' && e.timeStamp - typedAt < SCAN_BURST_MS) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
   }, [opts])
 
   const close = (result: boolean) => {
