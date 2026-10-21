@@ -1,5 +1,7 @@
 import type { Line } from '../../components/LineBuilder'
-import type { ExperimentalLine } from '../../services/experimentalReceipt'
+import type { ExperimentalLine, ExperimentalReceiptInput } from '../../services/experimentalReceipt'
+import { isKnownOtherSupplier } from '../../lib/otherItem'
+import type { Supplier } from '../../types'
 import { roundQty } from '../../lib/validate'
 import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
 
@@ -128,12 +130,43 @@ export function kitchenProblem(lines: readonly Line[]): ReceiptProblem | null {
   return null
 }
 
-export function manualProblem(lines: readonly Line[], supplierName: string, invoiceNo: string): ReceiptProblem | null {
-  if (lines.length === 0) return 'noLines'
+export function manualProblem(lines: readonly Line[], supplierName: string, invoiceNo: string, extraCount = 0): ReceiptProblem | null {
+  if (lines.length + extraCount === 0) return 'noLines'
   if (lines.some((l) => !(l.qty > 0))) return 'badQty'
   if (!supplierName.trim()) return 'noSupplier'
   if (!invoiceNo.trim()) return 'noInvoice'
   return null
+}
+
+/** R&D experimental receiving is opt-in: brand rnd, manual mode and a real OTHER supplier record.
+ *  The typed `__other` sentinel is never a supplier record, so it can never unlock this. */
+export function experimentalEligible(
+  mode: Mode,
+  brand: string,
+  supplier: Pick<Supplier, 'id' | 'name' | 'active'> | null | undefined,
+): boolean {
+  return mode === 'manual' && brand === 'rnd' && isKnownOtherSupplier(supplier)
+}
+
+/** The frozen commit request for one experimental receipt; the server rechecks every authority. */
+export function experimentalInput(
+  d: ReceiptDraft,
+  base: { operationId: string; toLocationId: string; date: number; docDate: number; photoDataUrl?: string },
+): ExperimentalReceiptInput {
+  return {
+    brand: 'rnd',
+    mode: 'manual',
+    operationId: base.operationId,
+    supplierId: d.supplierId,
+    toLocationId: base.toLocationId,
+    date: base.date,
+    docDate: base.docDate,
+    invoiceNo: d.invoiceNo,
+    note: d.note.trim() || undefined,
+    photoDataUrl: base.photoDataUrl,
+    lines: d.lines,
+    experimental: d.experimental ?? [],
+  }
 }
 
 /** One bill's worth of a draft this screen saved before it went PO-first. */

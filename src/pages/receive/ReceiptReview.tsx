@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
+import type { ExperimentalLine } from '../../services/experimentalReceipt'
 import { SectionCard, StatusChip } from '../../components/frame'
 import { Button, Modal, Textarea } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { fmtQty, formatThaiDate } from '../../lib/format'
 import { useT } from '../../i18n/I18nContext'
 import type { DuplicateDoc } from '../../services/receiptDocs'
+import { ExperimentalRows } from './ExperimentalItems'
 import { DuplicateWarning } from './DocumentCard'
 
 /** What the review, the side panel and the success view all describe. */
@@ -126,6 +128,7 @@ export function ReviewModal({
   busy,
   onBack,
   onConfirm,
+  experimental,
 }: {
   /** Made in-house: there is no bill, so no bill number, bill date or bill photo to show. */
   kitchen?: boolean
@@ -141,6 +144,8 @@ export function ReviewModal({
   busy: boolean
   onBack: () => void
   onConfirm: () => void
+  /** R&D experimental rows are listed so the person reviews every line they are filing. */
+  experimental?: ExperimentalLine[]
 }) {
   const t = useT()
   const blocked = busy || (canCloseShort && closeShort && !closeReason.trim())
@@ -189,6 +194,13 @@ export function ReviewModal({
         )}
 
         {duplicate && <DuplicateWarning dup={duplicate} />}
+
+        {experimental && (
+          <div>
+            <h3 className="mb-2 text-sm font-bold text-ink">{t('สินค้าทดลอง')}</h3>
+            <ExperimentalRows items={experimental} />
+          </div>
+        )}
 
         {exceptions.length > 0 && (
           <div>

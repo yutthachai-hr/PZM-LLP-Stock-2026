@@ -99,7 +99,8 @@ describe('every Pages Function is behind the guard', () => {
   const all = routes()
   test('the routes found on disk are the known privileged surface', () => {
     // Production `main`'s functions (early-release line): no /api/stock or /api/client-error here yet.
-    expect(all.map(urlOf).sort()).toEqual(['/a/sample-token', '/api/ocr-bill', '/api/po-image', '/api/supplier-po/decide', '/api/supplier-po/link', '/api/supplier/sample-token', '/po/sample-token'])
+    // /api/rnd-experimental-receive: R25's narrow experimental receive command (default-off in production).
+    expect(all.map(urlOf).sort()).toEqual(['/a/sample-token', '/api/ocr-bill', '/api/po-image', '/api/rnd-experimental-receive', '/api/supplier-po/decide', '/api/supplier-po/link', '/api/supplier/sample-token', '/po/sample-token'])
   })
   test('each route directory has a _middleware.ts that is the guard', async () => {
     const tops = new Set(all.map((f) => relative(join(ROOT, 'functions'), f).split(sep)[0]))
