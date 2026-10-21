@@ -264,7 +264,9 @@ export function SupplierConfirmPage() {
   // The date already standing (agreed, or waiting for approval): picking it again changes nothing.
   const standing = v.pending?.date ?? v.agreedDate
   const sameAsStanding = !!date && date === standing && !v.rejection
-  const autoHint = v.autoUntil
+  // The date asked for has gone by and nothing current is agreed or waiting: say so, and ask for a real date.
+  const askedGone = !!v.requestedDate && v.requestedDate < v.today && !v.pending && !(v.agreedDate && v.agreedDate >= v.today)
+  const autoHint = v.autoUntil && v.autoUntil >= v.today
     ? t('เลือกได้ถึง {date} ระบบอัปเดตทันที — หลังจากนั้นต้องรอฝ่ายจัดซื้ออนุมัติ', { date: label(v.autoUntil) })
     : null
   const shareText = done
@@ -318,6 +320,15 @@ export function SupplierConfirmPage() {
           )}
         </dl>
       </Card>
+
+      {askedGone && (
+        <Card className="border-warn/30 bg-warn-soft p-4 text-sm">
+          <div role="status">
+            <p className="font-medium text-ink">{t('วันส่งที่ขอไว้ ({date}) ผ่านมาแล้ว', { date: label(v.requestedDate!) })}</p>
+            <p className="mt-1 text-ink-soft">{t('กรุณาเลือกวันที่จะส่งได้จริง — ถ้าเลื่อนเกินกำหนด ฝ่ายจัดซื้อจะอนุมัติก่อน')}</p>
+          </div>
+        </Card>
+      )}
 
       {v.rejection && v.status !== 'pending_date_approval' && (
         <Card className="border-out/30 bg-out-soft p-4 text-sm">
@@ -400,7 +411,8 @@ export function SupplierConfirmPage() {
               disabled={busy || needsRefresh}
               onClick={() => {
                 setMode('pick')
-                setDate(v.pending?.date ?? v.confirmedDate ?? v.requestedDate ?? v.today)
+                const start = v.pending?.date ?? v.confirmedDate ?? v.requestedDate ?? v.today
+                setDate(start < v.today ? v.today : start)
                 setError(null)
               }}
             >

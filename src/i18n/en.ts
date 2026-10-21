@@ -3034,6 +3034,8 @@ export const EN: Record<string, string> = {
   '✅ {supplier} ยืนยันส่งสินค้า {docNo} ({company}) วันที่ {date}': '✅ {supplier} confirms delivery of {docNo} ({company}) on {date}',
   'ใบสั่งซื้อจาก': 'Purchase order from',
   'เลขที่ใบสั่งซื้อ': 'PO number',
+  'วันส่งที่ขอไว้ ({date}) ผ่านมาแล้ว': 'The requested delivery date ({date}) has passed',
+  'กรุณาเลือกวันที่จะส่งได้จริง — ถ้าเลื่อนเกินกำหนด ฝ่ายจัดซื้อจะอนุมัติก่อน': 'Please choose the date you can actually deliver — a date beyond the allowed range waits for purchasing to approve',
   'วันที่ขอให้ส่ง': 'Requested delivery',
   'วันส่งที่ยืนยัน': 'Confirmed delivery',
   'วันที่ขอเลื่อน': 'Proposed new date',

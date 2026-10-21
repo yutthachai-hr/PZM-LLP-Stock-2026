@@ -610,7 +610,8 @@ export interface SupplierLinkState {
   rev: number
   issuedAt: number
   issuedBy: string
-  /** Hard cap; the link also dies at the end of the delivery day (see linkActiveUntil). */
+  /** Historical: the time signed into the token. Not a limit since 21 Oct 2026 — a link lives
+   *  until its order is received, cancelled or amended (linkProblem). Kept so old links verify. */
   expiresAt: number
   openedAt?: number
 }
@@ -795,7 +796,8 @@ export interface InventorySettings {
    * never before today — apply on their own. Absent on settings saved before it existed.
    */
   supplierMaxPostponeDays?: number
-  /** The longest a supplier link lives, in days, whatever the delivery date says. */
+  /** Historical (no longer shown or enforced since 21 Oct 2026): sets only the timestamp signed into a
+   *  new supplier token. A link now lives until its order is received, cancelled or amended. */
   supplierLinkTtlDays?: number
   updatedBy?: string
   updatedAt: number
