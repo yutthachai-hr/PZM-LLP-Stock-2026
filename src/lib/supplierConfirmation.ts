@@ -526,7 +526,9 @@ export type BadgeColor = 'slate' | 'red' | 'green' | 'amber' | 'blue'
 
 const BADGES: Record<SupplierConfirmationStatus, { label: string; color: BadgeColor }> = {
   waiting: { label: 'รอผู้ขายยืนยัน', color: 'amber' }, // i18n-key
-  confirmed: { label: 'ผู้ขายยืนยันแล้ว', color: 'green' }, // i18n-key
+  // Not green: green on an order row is LINE's ("sent"), and a supplier's answer must never
+  // be mistaken for the share going out, or the other way round (owner, 17 Oct 2026).
+  confirmed: { label: 'ผู้ขายยืนยันแล้ว', color: 'slate' }, // i18n-key
   changed: { label: 'ผู้ขายเปลี่ยนวันส่ง', color: 'blue' }, // i18n-key
   pending_date_approval: { label: 'รออนุมัติวันส่ง', color: 'red' }, // i18n-key
 }
