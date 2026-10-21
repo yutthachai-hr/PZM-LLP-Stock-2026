@@ -17,7 +17,8 @@ export interface SupplierClaims {
   poId: string
   supplierId: string
   version: number
-  /** Hard expiry, ms epoch. */
+  /** Signed into every token (wire `e`). Since 21 Oct 2026 the order-scoped supplier endpoint
+   *  ignores it — the order's own lifecycle decides — but it stays signed so old links verify. */
   expMs: number
 }
 
@@ -74,6 +75,17 @@ export async function signSupplierToken(c: SupplierClaims, secret: string): Prom
  * secret, an expired token or plain rubbish alike. Callers answer every null the same way.
  */
 export async function verifySupplierToken(token: string, secret: string, now: number): Promise<SupplierClaims | null> {
+  const c = await verifySupplierSignature(token, secret)
+  return c && now <= c.expMs ? c : null
+}
+
+/**
+ * The claims of a token this server signed, without the time check — for the order-scoped
+ * supplier endpoint only, which then requires the current order to still match the claims
+ * (brand, order, supplier, link version, revision) and to be open, on every read and inside
+ * every write. Everything else about the token is checked exactly as verifySupplierToken does.
+ */
+export async function verifySupplierSignature(token: string, secret: string): Promise<SupplierClaims | null> {
   if (!secret || secret.length < MIN_SECRET_LENGTH || typeof token !== 'string' || token.length > 400) return null
   const parts = token.split('.')
   if (parts.length !== 3 || parts[0] !== 'v1') return null
@@ -91,6 +103,5 @@ export async function verifySupplierToken(token: string, secret: string, now: nu
   if (!Number.isInteger(w.k) || !Number.isInteger(w.e)) return null
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(w.o) || !/^[A-Za-z0-9_-]{1,64}$/.test(w.s)) return null
   const expMs = w.e * 1000
-  if (now > expMs) return null
   return { brand: w.b === 'l' ? 'lelapin' : w.b === 'r' ? 'rnd' : 'pizza', poId: w.o, supplierId: w.s, version: w.k, expMs }
 }
