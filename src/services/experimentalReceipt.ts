@@ -61,7 +61,7 @@ export function validateExperimentalInput(raw: unknown): ExperimentalReceiptInpu
     if (!l || Object.keys(l).some(k=>!['draftId','parentId','name','spec','qty','unit','expectedBaseQty','existingProductId','note'].includes(k))) return refuse('invalid')
     if (!idOk(l.draftId) || drafts.has(l.draftId) || !idOk(l.parentId) || (l.existingProductId !== undefined && !idOk(l.existingProductId))) return refuse('invalid')
     drafts.add(l.draftId)
-    if (!textOk(l.name,300) || otherTextKey(l.name).length<2 || !textOk(l.spec,300) || !textOk(l.unit,60) || !l.unit.trim() || (l.note !== undefined && !textOk(l.note,2000))) return refuse('invalid')
+    if (!textOk(l.name,300) || otherTextKey(l.name).length<2 || !textOk(l.spec,300) || !textOk(l.unit,20) || !l.unit.trim() || (l.note !== undefined && !textOk(l.note,2000))) return refuse('invalid')
     requireQty(l.qty,l.name); requireQty(l.expectedBaseQty,l.name)
   }
   for (const l of p.lines) {

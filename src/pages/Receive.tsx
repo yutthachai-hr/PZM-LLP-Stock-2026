@@ -172,7 +172,7 @@ export function ReceivePage() {
   // R&D experimental rows are an opt-in affordance of a real OTHER supplier in brand rnd (receive/receipt.ts).
   // An OTHER-category placeholder picked in the normal builder opens the experimental form instead of an ordinary line.
   const { brand } = useBrand()
-  const xpEligible = experimentalEligible(d.mode, brand ?? '', suppliers.find((s) => s.id === supplierId))
+  const xpEligible = experimentalEligible(d.mode, brand ?? '', suppliers.find((s) => s.id === supplierId), user?.role)
   const [xpRequest, setXpRequest] = useState<string | null>(null)
 
   // Smart supplier resolution (owner, 7 Oct 2026), from what is already in memory — no read.

@@ -293,8 +293,9 @@ service cloud.firestore {
         && d.keys().hasOnly([
           'id', 'sku', 'name', 'barcode', 'category', 'unit', 'unitType', 'minStock', 'cost',
           'costHistory', 'unitConversions', 'supplierId', 'alternateSupplierIds',
-          'hasImage', 'active', 'createdAt', 'updatedAt'
+          'hasImage', 'active', 'createdAt', 'updatedAt', 'experimental'
         ])
+        && (!('experimental' in d) || validExperimental(d.experimental))
         && text(d.sku, 100) && text(d.name, 300) && text(d.category, 100)
         // The number on the box (22 Sep 2026). Uniqueness is checked by the app before it
         // writes — a rule cannot query the collection — so this only pins the shape.
@@ -317,6 +318,22 @@ service cloud.firestore {
             || (d.alternateSupplierIds is list && d.alternateSupplierIds.size() <= 10))
         && d.hasImage is bool && d.active is bool
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
+    }
+
+    // R&D experimental provenance (R25). Only the trusted receive endpoint (service account)
+    // creates it; clients keep it byte-for-byte (experimentalKept) while maintaining the item.
+    function validExperimental(e) {
+      return e is map
+        && e.keys().hasAll(['parentId', 'spec', 'status', 'createdBy', 'createdByName'])
+        && e.keys().hasOnly(['parentId', 'spec', 'status', 'createdBy', 'createdByName'])
+        && text(e.parentId, 200) && text(e.spec, 300) && e.status in ['pending']
+        && text(e.createdBy, 200) && text(e.createdByName, 300);
+    }
+
+    function experimentalKept(d, fresh) {
+      return fresh || !('experimental' in resource.data)
+        ? !('experimental' in d)
+        : 'experimental' in d && d.experimental == resource.data.experimental;
     }
 
     function validLocation(d) {
@@ -913,7 +930,7 @@ service cloud.firestore {
         : k == 'recipes' ? validRecipe(d)
         : k == 'companyProfile' ? validCompanyProfile(docId, d)
         : k == 'counters' ? validCounter(d)
-        : k == 'products' ? validProduct(d)
+        : k == 'products' ? validProduct(d) && experimentalKept(d, fresh)
         : k == 'locations' ? validLocation(d)
         : k == 'notes' ? validNote(d)
         : k == 'productMinOverrides' ? validMinOverride(d)

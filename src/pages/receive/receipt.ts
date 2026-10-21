@@ -1,7 +1,7 @@
 import type { Line } from '../../components/LineBuilder'
 import type { ExperimentalLine, ExperimentalReceiptInput } from '../../services/experimentalReceipt'
 import { isKnownOtherSupplier } from '../../lib/otherItem'
-import type { Supplier } from '../../types'
+import type { Role, Supplier } from '../../types'
 import { roundQty } from '../../lib/validate'
 import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
 
@@ -144,8 +144,10 @@ export function experimentalEligible(
   mode: Mode,
   brand: string,
   supplier: Pick<Supplier, 'id' | 'name' | 'active'> | null | undefined,
+  role: Role | undefined,
 ): boolean {
-  return mode === 'manual' && brand === 'rnd' && isKnownOtherSupplier(supplier)
+  // Admin-only like the server's catalogue authority (experimentalReceipt.ts).
+  return role === 'admin' && mode === 'manual' && brand === 'rnd' && isKnownOtherSupplier(supplier)
 }
 
 /** The frozen commit request for one experimental receipt; the server rechecks every authority. */

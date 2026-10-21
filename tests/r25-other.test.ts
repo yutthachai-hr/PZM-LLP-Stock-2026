@@ -91,3 +91,8 @@ test('replay after a reload lost the photo returns the first result: the photo i
   expect(raw('rnd__stockMovements')).toHaveLength(1)
   await expect(receiveExperimental(db, { ...input(), invoiceNo: 'EDITED' }, 'admin')).rejects.toMatchObject({ code: 'operation_conflict' })
 })
+test('an experimental unit longer than the product rule allows is refused before any write', async () => {
+  const p = input(); p.experimental = [{ ...line(), unit: 'x'.repeat(21) }]
+  await expect(receiveExperimental(db, p, 'admin')).rejects.toMatchObject({ code: 'invalid' })
+  expect(raw('rnd__products')).toHaveLength(1)
+})

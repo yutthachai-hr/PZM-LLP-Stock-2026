@@ -3,11 +3,8 @@ import { trackWrite } from '../backend/pendingWrites'
 import { authHeader } from './poImages'
 import { receiveExperimental, ExperimentalReceiptError, type ExperimentalReceiptInput, type ExperimentalReceiptResult } from './experimentalReceipt'
 
-/** Known refusal permits editing; an unknown outcome keeps the frozen operation for retry. */
-export class ExperimentalClientError extends Error {
- code:string; unknownOutcome:boolean
- constructor(code:string,unknownOutcome:boolean){super(code);this.code=code;this.unknownOutcome=unknownOutcome}
-}
+import { ExperimentalClientError } from './experimentalErrors'
+export { ExperimentalClientError }
 export function submitExperimental(input:ExperimentalReceiptInput,uid:string):Promise<ExperimentalReceiptResult>{
  return trackWrite((async()=>{
   if(BACKEND_MODE!=='cloud'){
