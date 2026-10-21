@@ -12,7 +12,7 @@ import { bkkAtTime, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/tim
 import { supplierStateOf } from '../../src/lib/supplierConfirmation'
 import type { PurchaseOrder } from '../../src/types'
 
-const SECRET = 'test-secret-0123456789-abcdefghijklmnop'
+const SECRET = 'k'.repeat(40) // a fake signing key for synthetic links, not a credential
 const OCT16 = bkkAtTime(bkkDayStart(Date.UTC(2026, 9, 16, 3)), '09:00')
 const day = (n: number) => bkkDayStart(OCT16) + n * DAY_MS
 const OCT21 = bkkAtTime(day(5), '14:00')
@@ -134,7 +134,7 @@ describe('a link ends with its order, its version or its supplier', () => {
     await mint()
     const v = po().supplierLink!.version
     const claims = { brand: 'pizza' as const, poId: 'po2', supplierId: 's1', version: v, expMs: OCT16 - DAY_MS }
-    const wrongKey = await signSupplierToken(claims, 'another-secret-0123456789-abcdefghijk')
+    const wrongKey = await signSupplierToken(claims, 'w'.repeat(40))
     const genuine = await signSupplierToken(claims, SECRET)
     const [h, , sig] = genuine.split('.')
     const otherPayload = (await signSupplierToken({ ...claims, poId: 'po9' }, SECRET)).split('.')[1]
@@ -180,7 +180,7 @@ describe('only the order-scoped endpoint ignores the token timestamp', () => {
     const t = await signSupplierToken(claims, SECRET)
     expect(await verifySupplierToken(t, SECRET, OCT21)).toBeNull()
     expect(await verifySupplierSignature(t, SECRET)).toMatchObject({ poId: 'po2', version: 1 })
-    expect(await verifySupplierSignature(t, 'another-secret-0123456789-abcdefghijk')).toBeNull()
+    expect(await verifySupplierSignature(t, 'w'.repeat(40))).toBeNull()
     expect(await verifySupplierSignature(t.slice(0, -2) + 'AA', SECRET)).toBeNull()
   })
 })

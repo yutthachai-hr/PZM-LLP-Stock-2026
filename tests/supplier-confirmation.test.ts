@@ -22,7 +22,7 @@ import {
   supplierTimeline,
   supplierStateOf,
 } from '../src/lib/supplierConfirmation'
-import { bkkAtTime, bkkDayEnd, bkkDayStart, DAY_MS } from '../src/lib/inventoryRules/time'
+import { bkkAtTime, bkkDayStart, DAY_MS } from '../src/lib/inventoryRules/time'
 import type { DeliveryDateChange, PurchaseOrder } from '../src/types'
 
 // Monday 2026-10-05, 10:00 Bangkok.

@@ -11,8 +11,8 @@ import type { SupplierConfirmationStatus } from '../types'
  * link is the credential, and the server checks it on every call.
  *
  * One job: say "yes, that date" or pick another. Opening the page changes nothing (link
- * previews open links too); only the buttons do. The link keeps working until the delivery
- * day, so a supplier can change their mind and every answer is kept on the order.
+ * previews open links too); only the buttons do. The link keeps working until the order is
+ * received, cancelled or amended, so a supplier can change their mind and every answer is kept.
  */
 
 interface View {
@@ -336,7 +336,8 @@ export function SupplierConfirmPage() {
             {t('ฝ่ายจัดซื้อไม่อนุมัติวันที่ {date}', { date: label(v.rejection.date) })}
           </p>
           {v.rejection.reason && <p className="mt-1 text-ink-soft">{v.rejection.reason}</p>}
-          <p className="mt-1 text-ink-soft">{t('กรุณายืนยันวันที่ขอ หรือเลือกวันอื่น')}</p>
+          {/* A passed asked-for date cannot be accepted (askedGone card above): ask for another only. */}
+          <p className="mt-1 text-ink-soft">{askedGone ? t('กรุณาเลือกวันอื่น') : t('กรุณายืนยันวันที่ขอ หรือเลือกวันอื่น')}</p>
         </Card>
       )}
 
@@ -359,7 +360,7 @@ export function SupplierConfirmPage() {
           >
             {t('แชร์การยืนยันเข้ากลุ่ม LINE')}
           </a>
-          <p className="mt-2 text-xs text-ink-soft">{t('เปลี่ยนวันได้อีกจนถึงวันส่ง ผ่านลิงก์เดิมนี้')}</p>
+          <p className="mt-2 text-xs text-ink-soft">{t('เปลี่ยนวันได้อีกจนกว่าจะรับของครบ ผ่านลิงก์เดิมนี้')}</p>
         </Card>
       )}
 
