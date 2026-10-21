@@ -164,17 +164,23 @@ for (const lang of ['th', 'en'] as const) {
 // and keep the full product name and SKU for each, not just Pizza Mania.
 for (const brand of ['lelapin', 'rnd'] as const) {
   for (const lang of ['th', 'en'] as const) {
-    test(`${brand}: the table fits and keeps name and SKU at desktop widths (${lang})`, async ({ page }, info) => {
+    test(`${brand}: cards and table keep selectable SKU and full name (${lang})`, async ({ page }, info) => {
       await page.setViewportSize({ width: 1280, height: 960 })
       await stage(page, lang, brand)
       const broken: string[] = []
-      for (const width of [1280, 1440, 1536, 1920]) {
+      for (const width of [390, 768, 1024, 1280, 1440, 1536, 1920]) {
         await page.setViewportSize({ width, height: 960 })
-        const m = await measure(page)
-        if (m.scrollWidth > m.clientWidth) broken.push(`${width}px: table needs ${m.scrollWidth}px in ${m.clientWidth}px`)
+        if (width >= 1024) {
+          const m = await measure(page)
+          if (m.scrollWidth > m.clientWidth) broken.push(`${width}px: table needs ${m.scrollWidth}px in ${m.clientWidth}px`)
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
         const row = page.locator('[data-row-key="long"]:visible').first()
         await expect(row).toContainText('PZS-01-05-001')
         await expect(row).toContainText('(LONG CATALOGUE NAME FOR THE RESPONSIVE ROW)')
+        const sku = row.getByText('PZS-01-05-001', { exact: true }).filter({ visible: true }).first()
+        expect(await sku.evaluate(el => getComputedStyle(el).userSelect)).not.toBe('none')
+        expect(await sku.evaluate(el => { const r = document.createRange(); r.selectNodeContents(el); return r.toString() })).toBe('PZS-01-05-001')
         await page.screenshot({ path: info.outputPath(`products-${brand}-${lang}-${width}.png`) })
       }
       expect(broken, `${brand} ${lang}`).toEqual([])
