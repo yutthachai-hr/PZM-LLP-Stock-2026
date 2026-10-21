@@ -10,7 +10,6 @@ import {
   issueLink,
   isReplay,
   lastRejection,
-  linkActiveUntil,
   linkProblem,
   msToDateKey,
   openLink,
@@ -23,7 +22,7 @@ import {
 import { supplierAnswerDraft, supplierDecisionDraft, supplierOpenedDraft, toDoc } from '../../src/lib/inventoryRules/notifications'
 import { DAY_MS } from '../../src/lib/inventoryRules/time'
 import { brandCollection, type ServerStore } from './serverStore'
-import { signSupplierToken, verifySupplierToken, type SupplierClaims, type TokenBrand } from './supplierToken'
+import { signSupplierToken, verifySupplierSignature, type SupplierClaims, type TokenBrand } from './supplierToken'
 
 /**
  * The supplier-confirmation endpoints as plain functions over injected dependencies, so the
@@ -139,13 +138,13 @@ export async function mintLink(deps: Deps, authorization: string | null, body: u
     expMs: res.reply.expiresAt,
   }
   const token = await signSupplierToken(claims, deps.secret)
-  return ok({ url: `${deps.origin}/supplier/po/${token}`, token, expiresAt: res.reply.expiresAt, order: res.order })
+  return ok({ url: `${deps.origin}/supplier/po/${token}`, token, order: res.order })
 }
 
 // -------------------------------------------------------------- the supplier page ----
 
 /** What the supplier's page shows. No prices, no people, nothing about other orders. */
-export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDays: number, now: number, tokenExp: number) {
+export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDays: number, now: number) {
   const requested = requestedOf(o)
   const confirmed = o.confirmedDeliveryDate
   const rejection = lastRejection(o)
@@ -171,12 +170,12 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     today: msToDateKey(now),
     /** The last date that applies at once; later ones wait for approval. */
     autoUntil: requested === undefined ? null : msToDateKey(requested + maxPostponeDays * DAY_MS),
-    activeUntil: linkActiveUntil(o, tokenExp),
   }
 }
 
+/** Order-scoped: the token's timestamp is not a limit here; linkProblem on the current order is (owner, 21 Oct 2026). */
 async function claimsFor(deps: Deps, token: string): Promise<SupplierClaims | null> {
-  return verifySupplierToken(token, deps.secret, deps.now())
+  return verifySupplierSignature(token, deps.secret)
 }
 
 export async function viewLink(deps: Deps, token: string): Promise<Reply> {
@@ -186,7 +185,7 @@ export async function viewLink(deps: Deps, token: string): Promise<Reply> {
   const got = await deps.store.get<PurchaseOrder>(col, claims.poId)
   if (!got) return NOT_FOUND
   const now = deps.now()
-  const problem = linkProblem(got.doc, claims, now)
+  const problem = linkProblem(got.doc, claims)
   if (problem === 'mismatch') return NOT_FOUND
   if (problem) return fail(410, problem, { docNo: got.doc.docNo, company: COMPANY[claims.brand] })
 
@@ -205,7 +204,7 @@ export async function viewLink(deps: Deps, token: string): Promise<Reply> {
     }
   }
   const { maxPostponeDays } = await settingsOf(deps.store, claims.brand)
-  return ok({ view: supplierView(order, claims.brand, maxPostponeDays, now, claims.expMs) })
+  return ok({ view: supplierView(order, claims.brand, maxPostponeDays, now) })
 }
 
 export async function answerLink(deps: Deps, token: string, body: unknown): Promise<Reply> {
@@ -224,7 +223,7 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
   // order already says what it says. Either way nobody is told again.
   type Answer = { replayed: true; unchanged: boolean } | { replayed: false; outcome: RespondOutcome; change: DeliveryDateChange }
   const res = await writeOrder<Answer>(deps, col, claims.poId, (o) => {
-    const problem = linkProblem(o, claims, now)
+    const problem = linkProblem(o, claims)
     if (problem === 'mismatch') return NOT_FOUND
     if (problem) return fail(410, problem)
     // A committed request survives a lost response, even if the state has since moved.
@@ -261,7 +260,7 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
     replayed: reply.replayed,
     unchanged: reply.replayed ? reply.unchanged : false,
     outcome: reply.replayed ? null : reply.outcome,
-    view: supplierView(res.order, claims.brand, maxPostponeDays, now, claims.expMs),
+    view: supplierView(res.order, claims.brand, maxPostponeDays, now),
   })
 }
 

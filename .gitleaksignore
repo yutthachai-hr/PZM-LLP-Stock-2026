@@ -1,0 +1,4 @@
+# Exact gitleaks fingerprints only (commit:file:rule:line). Each entry is a fake test fixture,
+# never a credential; any other finding still fails the `secrets` job.
+# PR #42 first commit: the synthetic HMAC key for supplier-link tests (since replaced by 'k'.repeat(40)).
+e2c18780661e5f541656b02a6c8da64664973a3e:tests/functions/supplier-link-lifecycle.test.ts:generic-api-key:15
