@@ -302,8 +302,8 @@ export function ReceivePage() {
 
   async function confirm() {
     if (confirmingRef.current) return
+    const actor = { id: user!.id, name: user!.name } // before the latch, so a throw cannot leave it set
     confirmingRef.current = true
-    const actor = { id: user!.id, name: user!.name }
     setBusy(true)
     try {
       if (order) {

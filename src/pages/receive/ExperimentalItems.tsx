@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Product } from '../../types'
-import type { ExperimentalLine } from '../../services/experimentalReceipt'
+import { EXPERIMENTAL_MAX_LINES, type ExperimentalLine } from '../../services/experimentalReceipt'
 import { isOtherPlaceholder, otherTextKey } from '../../lib/otherItem'
 import { entryFor } from '../../lib/uom'
 import { requireQty } from '../../lib/validate'
@@ -36,7 +36,7 @@ export function ExperimentalItems({products,items,onChange,requestedParentId,onC
   }catch(e){setError(errText(e,t))}
  }
  return <div className="mt-4 space-y-3 border-t border-line pt-4" data-testid="experimental-items">
-  <div className="flex flex-wrap items-end gap-3"><Field label={t('หมวด OTHER')} className="min-w-0 flex-1"><Select aria-label={t('หมวด OTHER')} value={parent?.id??''} onChange={e=>setParentId(e.target.value)}>{parents.map(p=><option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</Select></Field><Button variant="secondary" disabled={!parent||items.length>=30} onClick={()=>start()}>{t('+ เพิ่มสินค้าทดลอง')}</Button></div>
+  <div className="flex flex-wrap items-end gap-3"><Field label={t('หมวด OTHER')} className="min-w-0 flex-1"><Select aria-label={t('หมวด OTHER')} value={parent?.id??''} onChange={e=>setParentId(e.target.value)}>{parents.map(p=><option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</Select></Field><Button variant="secondary" disabled={!parent||items.length>=EXPERIMENTAL_MAX_LINES} onClick={()=>start()}>{t('+ เพิ่มสินค้าทดลอง')}</Button></div>
   <p className="text-xs text-ink-soft">{t('สินค้าทดลองแยกยอดจากหมวดเดิม — ยังไม่บันทึกจนกดยืนยันรับเข้าคลัง')}</p>
   {items.length>0&&<><ExperimentalRows items={items}/><div className="flex flex-wrap gap-2">{items.map(l=><Button key={l.draftId} variant="secondary" onClick={()=>onChange(items.filter(x=>x.draftId!==l.draftId))} aria-label={t('ลบสินค้าทดลอง {name}',{name:l.name})}>{t('ลบสินค้าทดลอง {name}',{name:l.name})}</Button>)}</div></>}
   {open&&parent&&<Modal open title={t('เพิ่มสินค้าทดลอง')} onClose={()=>setOpen(false)} footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={()=>setOpen(false)}>{t('ยกเลิก')}</Button><Button onClick={add}>{t('เพิ่มในร่างใบรับ')}</Button></div>}>

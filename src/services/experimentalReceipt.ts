@@ -35,6 +35,9 @@ export interface ExperimentalReceiptResult {
   docNo: string
   products: { draftId: string; productId: string; sku: string; name: string; unit: string }[]
 }
+/** Lines one trusted request can read within a Pages invocation's subrequest budget. */
+export const EXPERIMENTAL_MAX_LINES = 6
+
 export class ExperimentalReceiptError extends Error {
   code: string
   constructor(code: string, message = code) { super(message); this.name = 'ExperimentalReceiptError'; this.code = code }
@@ -54,7 +57,9 @@ export function validateExperimentalInput(raw: unknown): ExperimentalReceiptInpu
   if (typeof p.operationId !== 'string' || !/^[0-9a-f-]{36}$/i.test(p.operationId)) return refuse('invalid')
   if (!textOk(p.invoiceNo,100) || !p.invoiceNo.trim() || (p.note !== undefined && !textOk(p.note,2000))) return refuse('invalid')
   requireEpochMs(p.date); requireEpochMs(p.docDate)
-  if (!Array.isArray(p.lines) || !Array.isArray(p.experimental) || p.experimental.length<1 || p.lines.length+p.experimental.length>30) return refuse('invalid')
+  if (!Array.isArray(p.lines) || !Array.isArray(p.experimental) || p.experimental.length<1) return refuse('invalid')
+  // shortcut: each tx.get is one REST subrequest (~8 + 5 per line); 6 lines stays under Pages' 50. Lift after batched reads.
+  if (p.lines.length+p.experimental.length>EXPERIMENTAL_MAX_LINES) return refuse('too_large')
   if (p.photoDataUrl !== undefined && (!textOk(p.photoDataUrl,1_000_000) || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.photoDataUrl))) return refuse('invalid')
   const drafts = new Set<string>()
   for (const l of p.experimental) {

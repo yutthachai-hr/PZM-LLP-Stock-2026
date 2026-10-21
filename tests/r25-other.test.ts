@@ -96,3 +96,9 @@ test('an experimental unit longer than the product rule allows is refused before
   await expect(receiveExperimental(db, p, 'admin')).rejects.toMatchObject({ code: 'invalid' })
   expect(raw('rnd__products')).toHaveLength(1)
 })
+test('a receipt larger than one Pages request can read is refused as too large, never as an unknown outcome', async () => {
+  const many = (n: number) => { const p = input(); p.experimental = Array.from({ length: n }, (_, i) => ({ ...line(`Synthetic item ${i}`, `draft-${i}`) })); return p }
+  await expect(receiveExperimental(db, many(7), 'admin')).rejects.toMatchObject({ code: 'too_large' })
+  expect(raw('rnd__stockMovements')).toEqual([])
+  expect((await receiveExperimental(db, many(6), 'admin')).products).toHaveLength(6)
+})
