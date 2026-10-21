@@ -114,6 +114,8 @@ export function ReceivePage() {
   // the link was read (StrictMode re-runs effects; the brand or the person can resolve
   // late), so the link is held here and laid over whatever comes back.
   const linkRef = useRef<string | null>(null)
+  // `busy` is state, so two taps in one frame both see it false; this ref refuses the second at once.
+  const confirmingRef = useRef(false)
   const withLink = useCallback((r: ReceiptDraft): ReceiptDraft => {
     const id = linkRef.current
     return id ? { ...r, mode: 'po', poId: id, entries: r.poId === id ? r.entries : {} } : r
@@ -290,6 +292,8 @@ export function ReceivePage() {
       return toast.error(problemText(problem))
     }
     if (!toLocationId) return toast.error(t('เลือกคลังปลายทาง'))
+    // Rows keyed under R&D + OTHER are hidden once the mode or supplier changes; never drop or misfile them.
+    if (d.experimental?.length && !xpEligible) return toast.error(t('มีสินค้าทดลองในร่าง — รับได้เฉพาะ "รับนอกใบสั่งซื้อ" กับผู้ขาย OTHER ของ R&D กลับไปเลือกให้ถูก หรือลบรายการทดลองก่อน'))
     if (!kitchen) await checkDuplicate()
     setCloseShort(false)
     setCloseReason('')
@@ -297,6 +301,8 @@ export function ReceivePage() {
   }
 
   async function confirm() {
+    if (confirmingRef.current) return
+    confirmingRef.current = true
     const actor = { id: user!.id, name: user!.name }
     setBusy(true)
     try {
@@ -366,6 +372,7 @@ export function ReceivePage() {
     } catch (e) {
       toast.error(t('บันทึกไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
+      confirmingRef.current = false
       setBusy(false)
     }
   }

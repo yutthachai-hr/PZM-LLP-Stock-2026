@@ -75,7 +75,8 @@ export function validateExperimentalInput(raw: unknown): ExperimentalReceiptInpu
 export async function receiveExperimental(db: Transactional, raw: ExperimentalReceiptInput, uid: string): Promise<ExperimentalReceiptResult> {
   const input = validateExperimentalInput(raw)
   if (!idOk(uid)) return refuse('forbidden')
-  const fingerprint = await otherHash(JSON.stringify(input))
+  // The photo is an attachment the draft never keeps, so a replay after a reload must not depend on it.
+  const fingerprint = await otherHash(JSON.stringify({ ...input, photoDataUrl: undefined }))
   const opKey = 'rnd_receipt_'+await otherHash(uid+'|'+input.operationId)
   const keys = await Promise.all(input.experimental.map(l=>otherHash(otherIdentity(input.supplierId,l.parentId,l.name,l.spec,l.unit))))
   return db.transaction(async tx => {

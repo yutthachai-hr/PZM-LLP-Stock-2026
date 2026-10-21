@@ -3141,6 +3141,7 @@ export const EN: Record<string, string> = {
   'หมวด OTHER': 'OTHER category',
   '+ เพิ่มสินค้าทดลอง': '+ Add experimental item',
   'สินค้าทดลองแยกยอดจากหมวดเดิม — ยังไม่บันทึกจนกดยืนยันรับเข้าคลัง': 'Experimental items are tracked separately from the parent category — nothing is saved until you confirm the receipt',
+  'มีสินค้าทดลองในร่าง — รับได้เฉพาะ "รับนอกใบสั่งซื้อ" กับผู้ขาย OTHER ของ R&D กลับไปเลือกให้ถูก หรือลบรายการทดลองก่อน': 'This draft has experimental items — they can only be received under "Receive without PO" from the R&D OTHER supplier. Switch back, or remove the experimental items first',
   'ลบสินค้าทดลอง {name}': 'Remove experimental item {name}',
   'เพิ่มสินค้าทดลอง': 'Add experimental item',
   'เพิ่มในร่างใบรับ': 'Add to receipt draft',

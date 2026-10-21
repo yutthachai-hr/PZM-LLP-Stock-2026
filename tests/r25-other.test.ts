@@ -84,3 +84,10 @@ test('unrepresentable quantity and stale reviewed conversion refuse',async()=>{
  const p=input();p.experimental[0].qty=0.0001;await expect(receiveExperimental(db,p,'admin')).rejects.toThrow()
  p.experimental[0]={...line(),expectedBaseQty:99};await expect(receiveExperimental(db,p,'admin')).rejects.toThrow()
 })
+test('replay after a reload lost the photo returns the first result: the photo is not part of the operation', async () => {
+  const first = await receiveExperimental(db, { ...input(), photoDataUrl: 'data:image/jpeg;base64,AAAA' }, 'admin')
+  const again = await receiveExperimental(db, input(), 'admin') // the draft never keeps the photo
+  expect(again).toEqual(first)
+  expect(raw('rnd__stockMovements')).toHaveLength(1)
+  await expect(receiveExperimental(db, { ...input(), invoiceNo: 'EDITED' }, 'admin')).rejects.toMatchObject({ code: 'operation_conflict' })
+})
