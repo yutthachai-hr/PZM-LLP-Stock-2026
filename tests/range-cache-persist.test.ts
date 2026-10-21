@@ -7,10 +7,16 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 const copies = new Map<string, unknown>()
+// A device write that has not finished yet: the test holds it open to see who waits for it.
+let writeGate: Promise<void> = Promise.resolve()
 vi.mock('../src/data/deviceStore', () => ({
   FULL_EVERY_MS: 24 * 60 * 60_000,
   readCopy: async (key: string) => (copies.has(key) ? structuredClone(copies.get(key)) : null),
-  writeCopy: async (key: string, value: unknown) => void copies.set(key, structuredClone(value)),
+  writeCopy: async (key: string, value: unknown) => {
+    const snapshot = structuredClone(value)
+    await writeGate
+    copies.set(key, snapshot)
+  },
 }))
 
 const { createRangeCache } = await import('../src/data/rangeCache')
@@ -51,7 +57,15 @@ test('patchFields merges into the held row and resolves after the device write',
   await cache.fetchRange(0, 10_000, { force: true })
   server[0] = { id: 'po1', at: 1_000, state: 'received' }
   await cache.fetchRange(0, 10_000, { force: true }) // another device received it
-  const merged = await cache.patchFields('po1', { state: 'received' })
+  let release!: () => void
+  writeGate = new Promise((r) => (release = r))
+  let settled = false
+  const pending = cache.patchFields('po1', { state: 'received' }).then((row) => ((settled = true), row))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(settled).toBe(false) // still waiting on the device write
+  release()
+  writeGate = Promise.resolve()
+  const merged = await pending
   expect(merged).toMatchObject({ id: 'po1', state: 'received' })
   expect(await cache.patchFields('missing', { state: 'x' })).toBeUndefined()
   const after = makeCache()
