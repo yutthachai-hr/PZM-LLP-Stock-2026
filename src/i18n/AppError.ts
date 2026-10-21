@@ -1,4 +1,5 @@
-import type { TFn } from './I18nContext'
+// Structural translator contract: services are also compiled without React/DOM on Pages.
+type TFn = (thai: string, vars?: Record<string, string | number>) => string
 
 /**
  * An error whose message is a translation key plus its values, so services can report

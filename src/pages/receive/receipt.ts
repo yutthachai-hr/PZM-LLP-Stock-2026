@@ -1,4 +1,5 @@
 import type { Line } from '../../components/LineBuilder'
+import type { ExperimentalLine } from '../../services/experimentalReceipt'
 import { roundQty } from '../../lib/validate'
 import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
 
@@ -146,6 +147,9 @@ const PICKS: readonly SupplierPick[] = ['', 'auto', 'ocr', 'manual']
 
 /** Everything the screen keeps across leaving it (lib/useDraft). The photo never is. */
 export interface ReceiptDraft {
+  /** Local-only proposals. No catalogue/stock record exists until final confirmation. */
+  experimental?: ExperimentalLine[]
+  experimentalOperationId?: string
   mode: Mode
   poId: string
   entries: Record<string, PoLineEntry>
@@ -175,8 +179,8 @@ export function emptyDraft(): ReceiptDraft {
 }
 
 /** Whether a draft holds anything someone keyed. */
-export function draftIsEmpty(d: Pick<ReceiptDraft, 'poId' | 'lines' | 'invoiceNo' | 'note' | 'queue'>): boolean {
-  return !d.poId && d.lines.length === 0 && !d.invoiceNo.trim() && !d.note.trim() && d.queue.length === 0
+export function draftIsEmpty(d: Pick<ReceiptDraft, 'poId' | 'lines' | 'invoiceNo' | 'note' | 'queue' | 'experimental'>): boolean {
+  return !d.poId && d.lines.length === 0 && !(d.experimental?.length) && !d.invoiceNo.trim() && !d.note.trim() && d.queue.length === 0
 }
 
 function isLine(x: unknown): x is Line {
@@ -248,6 +252,8 @@ export function restoreReceipt(saved: unknown): ReceiptDraft {
       note: str(d.note),
       lines: linesOf(d.lines),
       queue: billsOf(d.queue),
+      ...(Array.isArray(d.experimental) ? { experimental: d.experimental.slice(0,30).filter((x): x is ExperimentalLine => !!x && typeof x === 'object' && typeof x.draftId === 'string' && typeof x.parentId === 'string' && typeof x.name === 'string' && typeof x.spec === 'string' && typeof x.unit === 'string' && typeof x.qty === 'number' && typeof x.expectedBaseQty === 'number') } : {}),
+      ...(typeof d.experimentalOperationId === 'string' ? { experimentalOperationId: d.experimentalOperationId } : {}),
     }
   }
   if (typeof d.note === 'string' || Array.isArray(d.lines)) {

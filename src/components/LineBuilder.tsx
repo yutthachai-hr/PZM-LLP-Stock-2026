@@ -63,6 +63,7 @@ export function LineBuilder({
   lineNotes = false,
   importable = false,
   rankFirst,
+  onSelectProduct,
 }: {
   products: Product[]
   lines: Line[]
@@ -89,6 +90,8 @@ export function LineBuilder({
    * products on top (lib/supplierResolution.ts supplierRank). Nothing is filtered out.
    */
   rankFirst?: (p: Product) => number
+  /** Receive-only optional interception; ordinary selection/dedup is unchanged. */
+  onSelectProduct?: (p: Product) => boolean
 }) {
   const t = useT()
   // Arriving from the quick menu's "import a file" (?import=1) opens the import at once.
@@ -139,6 +142,7 @@ export function LineBuilder({
   }, [search, products, lines, phone, usage, rankFirst])
 
   function addProduct(p: Product) {
+    if (onSelectProduct?.(p)) { setSearch(''); return }
     if (phone) {
       setSearch('')
       setSheetFor(p)

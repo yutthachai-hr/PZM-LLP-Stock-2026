@@ -87,6 +87,8 @@ export interface Product {
   cost?: number
   /** Every price ever stated, newest last (kept to the last MAX_COST_HISTORY). */
   costHistory?: CostEntry[]
+  /** R&D provisional identity, created atomically with its first receipt; not a category SKU. */
+  experimental?: { parentId: string; spec: string; status: 'pending'; createdBy: string; createdByName: string }
   /**
    * The rates this product is keyed at — "1 ลัง = 288 EA": one `label` is `size` of the
    * product's own unit.

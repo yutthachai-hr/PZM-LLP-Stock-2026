@@ -1,4 +1,5 @@
 import { backend } from '../backend'
+import { planReceive, type ReceiveParams } from './receivePlan'
 import { noteWritten } from '../data/recentWrites'
 import { DELETE_FIELD, type Backend, type TxContext } from '../backend/types'
 import { AppError } from '../i18n/AppError'
@@ -274,109 +275,10 @@ export interface ReceiptDoc {
   poDocNo?: string
 }
 
-/** Only the fields that carry something — Firestore stores no empty strings for us. */
-function docFields(doc: ReceiptDoc | undefined): Partial<StockMovement> {
-  if (!doc) return {}
-  const out: Partial<StockMovement> = {}
-  const text = (v: string | undefined) => (v && v.trim() ? v.trim() : undefined)
-  const supplierId = text(doc.supplierId)
-  const supplierName = text(doc.supplierName)
-  const invoiceNo = text(doc.invoiceNo)
-  const poId = text(doc.poId)
-  const poDocNo = text(doc.poDocNo)
-  if (supplierId) out.supplierId = supplierId
-  if (supplierName) out.supplierName = supplierName
-  if (invoiceNo) out.invoiceNo = invoiceNo
-  if (doc.docDate !== undefined) {
-    requireEpochMs(doc.docDate)
-    out.docDate = doc.docDate
-  }
-  if (poId) out.poId = poId
-  if (poDocNo) out.poDocNo = poDocNo
-  return out
-}
-
-export async function receiveStock(params: {
-  lines: MovementLine[]
-  toLocationId: string
-  date: number
-  actor: Actor
-  note?: string
-  /** The receipt's paperwork, stamped on every row it files. */
-  doc?: ReceiptDoc
-  /**
-   * A photo of the supplier's document, in the same commit as the stock — the rule
-   * `consumeStock` learnt the hard way: a photo written afterwards can fail with the
-   * stock already moved, and saving again moves it twice.
-   */
-  photoDataUrl?: string
-  /**
-   * Another document that changes in the same commit as the stock — the order a delivery
-   * checks in against (audit D1). `read` runs with the other reads and may throw to refuse;
-   * `write` runs with the writes. A conflicting commit runs both again, so the check sees
-   * what the other device wrote.
-   */
-  alongside?: {
-    read: (tx: TxContext) => Promise<void>
-    write: (tx: TxContext, docNo: string) => void
-  }
-}): Promise<string> {
-  const { toLocationId, date, actor, note, photoDataUrl, alongside } = params
-  const lines = mergeLines(params.lines)
-  requireEpochMs(date)
-  requireId(toLocationId, 'toLocationId')
-  const paperwork = docFields(params.doc)
+/** Shared planner keeps normal and experimental receipt ledger/balance semantics identical. */
+export async function receiveStock(params: ReceiveParams): Promise<string> {
   const scope = captureFilingScope()
-
-  return filing(scope, async (tx, file) => {
-    // ---- reads ----
-    await requireMasterData(
-      tx,
-      lines.map((l) => l.productId),
-      [toLocationId],
-    )
-    const counter = await tx.get<{ value: number }>(COL.counters, 'receive')
-    const seq = (counter?.value ?? 0) + 1
-    const levels = await Promise.all(
-      lines.map((l) => tx.get<StockLevel>(COL.stockLevels, levelRef(toLocationId, l).id)),
-    )
-    await alongside?.read(tx)
-    // ---- writes ----
-    const docNo = makeDocNo('receive', seq)
-    tx.set(COL.counters, 'receive', { value: seq })
-    alongside?.write(tx, docNo)
-    const now = Date.now()
-    if (photoDataUrl) {
-      tx.set(COL.movementImages, docNo, { dataUrl: photoDataUrl })
-    }
-    lines.forEach((l, i) => {
-      const cur = levels[i]?.qty ?? 0
-      tx.set(
-        COL.stockLevels,
-        levelRef(toLocationId, l).id,
-        levelDoc(toLocationId, l.productId, cur + l.qty, actor, now, levelRef(toLocationId, l).unit),
-      )
-      const mv: Omit<StockMovement, 'id'> = {
-        docNo,
-        type: 'receive',
-        productId: l.productId,
-        productName: l.productName,
-        unit: l.unit,
-        ...keyedFields(l),
-        qty: l.qty,
-        toLocationId,
-        ...(l.note ?? note ? { note: l.note ?? note } : {}),
-        ...paperwork,
-        ...(photoDataUrl ? { hasPhoto: true } : {}),
-        date,
-        byUserId: actor.id,
-        byUserName: actor.name,
-        createdAt: now,
-      }
-      file(mv)
-    })
-    return docNo
-  })
+  return filing(scope, async (tx, file) => (await planReceive(tx, params, file)).commit())
 }
 
 export interface PlanIssueParams {

@@ -18,12 +18,8 @@ export type { QueryFilter, QueryOp, QuerySpec } from './querySpec'
  */
 export const DELETE_FIELD = Symbol('delete-field')
 
-export interface TxContext {
-  get<T = Record<string, unknown>>(collection: string, id: string): Promise<T | null>
-  set(collection: string, id: string, data: Record<string, unknown>): void
-  update(collection: string, id: string, patch: Record<string, unknown>): void
-  delete(collection: string, id: string): void
-}
+import type { TxContext } from './tx'
+export type { TxContext } from './tx'
 
 /**
  * Restricts a subscription to documents whose numeric `field` is at or after `value`.
