@@ -58,9 +58,12 @@ test('a Tab-terminated scanner burst cannot answer a danger confirmation', async
   const page = await signedIn(browser, 'admin')
   const { editor, question } = await deleteQuestion(page)
 
-  // Two codes, each with its Tab suffix, then an Enter (the next scan's suffix, or a person).
+  // Three codes, each with its Tab suffix (message -> x -> Cancel -> answer without the fix),
+  // then an Enter: the next scan's suffix, or a person.
   await burst(page, '8851111222222', 'Tab')
   await burst(page, '8853333444444', 'Tab')
+  await burst(page, '8855555666666', 'Tab')
+  await expect(question.getByRole('button', { name: /^ลบ/ })).not.toBeFocused()
   await page.keyboard.press('Enter')
 
   await expect(question).toBeVisible()
@@ -75,7 +78,10 @@ test('a person can still reach and press the answer with the keyboard', async ({
   await seedStage()
   const page = await signedIn(browser, 'admin')
   const { question } = await deleteQuestion(page)
-  await page.waitForTimeout(600) // a person, not a burst
+  // A stray key typed at the question, then a pause: the burst window must have closed, so a
+  // deliberate Tab works again (a wider window would fail here).
+  await page.keyboard.press('x')
+  await page.waitForTimeout(600)
   const answer = question.getByRole('button', { name: /^ลบ/ })
   for (let i = 0; i < 4 && !(await answer.evaluate((b) => b === document.activeElement)); i++) {
     await page.keyboard.press('Tab')
