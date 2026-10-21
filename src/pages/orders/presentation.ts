@@ -41,6 +41,7 @@ export function presentOrderStatus(order: PurchaseOrder, late: boolean): OrderPr
     pending ? 'ผู้ขายเสนอเปลี่ยนวันส่ง' : null, // i18n-key
     late ? 'เกินกำหนดรับของ' : null, // i18n-key
     partial ? 'รับบางส่วน' : null, // i18n-key
+    resend ? 'ต้องส่ง PO ใหม่' : null, // i18n-key
   ].filter((label): label is string => !!label && label !== primary.label)
   return {
     primary, secondary,

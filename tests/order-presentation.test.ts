@@ -76,3 +76,11 @@ describe('order presentation, not business eligibility', () => {
     expect(frozen).toEqual({ ...order, supplierConfirmationStatus: 'confirmed' })
   })
 })
+
+describe('R29: an order that needs resending says so on its row, not only on the LINE badge', () => {
+  it('lists "ต้องส่ง PO ใหม่" whenever the sheet the supplier holds is out of date', () => {
+    const result = presentOrderStatus({ ...partial, ...revised, receipts: partial.receipts, supplierConfirmationStatus: 'pending_date_approval' }, true)
+    expect(result.secondary).toContain('ต้องส่ง PO ใหม่')
+    expect(presentOrderStatus(order, false).secondary).not.toContain('ต้องส่ง PO ใหม่')
+  })
+})

@@ -25,9 +25,10 @@ export function createOutcomeTracker() {
     observe(order: PurchaseOrder) {
       seen.set(order.id, newer(seen.get(order.id), order)!)
     },
-    /** The order as it stands once `written` has landed on it. */
-    afterWrite(order: PurchaseOrder, written: SharePatch): PurchaseOrder {
-      const next = { ...newer(order, seen.get(order.id))!, ...written }
+    /** The order as it stands once `written` has landed on it. `held` is the device cache's
+     *  row: it wins ties, so a receipt or cancellation filed elsewhere is not overwritten. */
+    afterWrite(order: PurchaseOrder, written: SharePatch, held?: PurchaseOrder): PurchaseOrder {
+      const next = { ...newer(newer(order, seen.get(order.id)), held)!, ...written }
       seen.set(order.id, next)
       return next
     },

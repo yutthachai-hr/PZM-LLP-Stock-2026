@@ -28,6 +28,9 @@ export interface RangeCache<T extends { id: string }> {
   hasRange(from: number, to: number): boolean
   /** Fold a created or changed row in. */
   patch(row: T): void
+  /** Fold written fields into the row held now (never a whole stale row); resolves once the
+   *  device copy holds it. Undefined when the row is not held. */
+  patchFields(id: string, fields: Partial<T>): Promise<T | undefined>
   remove(id: string): void
   subscribe(fn: () => void): () => void
   clear(): void
@@ -143,15 +146,15 @@ export function createRangeCache<T extends { id: string }>(opts: {
   // Reads are batched into one write of the device copy. A user's own write is not: the screen
   // already shows it, and a reload inside the batching window came back to the old copy - and
   // its sync time, so the catch-up was skipped and the old state stayed up (R21-D).
-  function save(h: Held<T>, brand = getBrand(), immediately = false): void {
-    if (!opts.persist) return
+  function save(h: Held<T>, brand = getBrand(), immediately = false): Promise<void> {
+    if (!opts.persist) return Promise.resolve()
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = null
     const key = copyKey(brand)
-    const write = () =>
-      void writeCopy<Copy>(key, { v: 1, spans: h.spans, rows: [...h.rows.values()], syncedAt: h.syncedAt, fullAt: h.fullAt })
-    if (immediately) write()
-    else saveTimer = setTimeout(write, 1500)
+    const write = () => writeCopy<Copy>(key, { v: 1, spans: h.spans, rows: [...h.rows.values()], syncedAt: h.syncedAt, fullAt: h.fullAt })
+    if (immediately) return write().catch(() => undefined)
+    saveTimer = setTimeout(() => void write(), 1500)
+    return Promise.resolve()
   }
 
   async function catchUp(h: Held<T>, brand: BrandId): Promise<void> {
@@ -213,13 +216,23 @@ export function createRangeCache<T extends { id: string }>(opts: {
     patch(row) {
       const h = mine()
       h.rows.set(row.id, row)
-      save(h, getBrand(), true)
+      void save(h, getBrand(), true)
       announce()
+    },
+    async patchFields(id, fields) {
+      const h = mine()
+      const held = h.rows.get(id)
+      if (!held) return undefined
+      const next = { ...held, ...fields, id } as T
+      h.rows.set(id, next)
+      announce()
+      await save(h, getBrand(), true)
+      return next
     },
     remove(id) {
       const h = mine()
       h.rows.delete(id)
-      save(h, getBrand(), true)
+      void save(h, getBrand(), true)
       announce()
     },
     subscribe(fn) {

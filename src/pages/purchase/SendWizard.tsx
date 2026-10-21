@@ -130,9 +130,10 @@ export function SendWizard({
       if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
       // Exactly what was written, so the list, the sheet and the batch agree at once — and
       // the device's copy too, so coming back to the list does not show the old badge.
-      const next = tracker.afterWrite(order, written)
+      // Only the written fields go into the device cache, onto the row it holds now (R29).
+      const held = getBrand() === brand ? await orderCache.patchFields(order.id, written) : undefined
+      const next = tracker.afterWrite(order, written, held)
       setPatchedOrders((prev) => ({ ...prev, [next.id]: next }))
-      if (getBrand() === brand) orderCache.patch(next)
       await onStatus(next)
     } finally {
       recording.current = false

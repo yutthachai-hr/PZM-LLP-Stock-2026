@@ -43,3 +43,18 @@ test('a patched row survives a reload that comes straight after it', async () =>
   const rows = await after.fetchRange(0, 10_000)
   expect(rows.find((r) => r.id === 'po1')?.state).toBe('sent')
 })
+
+// R29 (PR30 review #1/#2): a share write folds its fields into the row the cache holds now,
+// and the caller can wait until the device copy holds it.
+test('patchFields merges into the held row and resolves after the device write', async () => {
+  const cache = makeCache()
+  await cache.fetchRange(0, 10_000, { force: true })
+  server[0] = { id: 'po1', at: 1_000, state: 'received' }
+  await cache.fetchRange(0, 10_000, { force: true }) // another device received it
+  const merged = await cache.patchFields('po1', { state: 'received' })
+  expect(merged).toMatchObject({ id: 'po1', state: 'received' })
+  expect(await cache.patchFields('missing', { state: 'x' })).toBeUndefined()
+  const after = makeCache()
+  expect((await after.fetchRange(0, 10_000)).find((r) => r.id === 'po1')?.state).toBe('received')
+  server[0] = { id: 'po1', at: 1_000, state: 'resend' }
+})

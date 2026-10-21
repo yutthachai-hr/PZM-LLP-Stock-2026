@@ -146,3 +146,24 @@ describe('send wizard: the order after an outcome', () => {
     expect(lineStateOf(merged[0])).toBe('sent')
   })
 })
+
+// R29 (PR30 review #1): while the wizard was open another device received the goods. The
+// device's cache holds that newer row; recording "sent" must land on it, not bring back the
+// wizard's stale copy (status ordered, no receipt).
+describe('a recorded outcome lands on the newest copy the device holds', () => {
+  test('a receipt filed elsewhere survives the share write', () => {
+    const tracker = createOutcomeTracker()
+    const received = { ...linked, status: 'received', receipts: [{ docNo: 'RC-1' }], updatedAt: 300 } as unknown as PurchaseOrder
+    const written: SharePatch = { shareStatus: 'sent', sentAt: 400, sentBy: 'u1', sentByName: 'Nok', updatedAt: 400 }
+    const next = tracker.afterWrite(linked, written, received)
+    expect(next.status).toBe('received')
+    expect(next.receipts).toHaveLength(1)
+    expect(next.shareStatus).toBe('sent')
+  })
+  test('a supplier answer seen only by the wizard is not lost to an older cached row', () => {
+    const tracker = createOutcomeTracker()
+    const answered = { ...linked, supplierConfirmationStatus: 'confirmed', supplierActivity: [...linked.supplierActivity!, { id: 'a2', at: 350, kind: 'accepted', byName: 'S' }] } as unknown as PurchaseOrder
+    const next = tracker.afterWrite(answered, { shareStatus: 'sent', updatedAt: 400 }, linked)
+    expect(next.supplierConfirmationStatus).toBe('confirmed')
+  })
+})
