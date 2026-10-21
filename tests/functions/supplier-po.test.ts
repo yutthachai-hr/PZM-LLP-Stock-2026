@@ -189,10 +189,10 @@ describe('GET /api/supplier/<token>', () => {
       expect(await viewLink(deps, t)).toEqual({ status: 404, body: { error: 'not_found' } })
     }
   })
-  test('a link that has run out, or an order that closed, says so', async () => {
+  test('time does not end a link (owner, 21 Oct 2026); an order that closed says so', async () => {
     const token = await link()
-    clock = day(4)
-    expect((await viewLink(deps, token)).status).toBe(410)
+    clock = day(40) // past the delivery day and the old 30-day token cap
+    expect((await viewLink(deps, token)).status).toBe(200)
     clock = NOW
     db.touch('purchaseOrders', 'po1', { status: 'received' })
     expect((await viewLink(deps, token)).body).toMatchObject({ error: 'closed', docNo: 'PO-00007' })

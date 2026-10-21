@@ -11,8 +11,8 @@ import type { SupplierConfirmationStatus } from '../types'
  * link is the credential, and the server checks it on every call.
  *
  * One job: say "yes, that date" or pick another. Opening the page changes nothing (link
- * previews open links too); only the buttons do. The link keeps working until the delivery
- * day, so a supplier can change their mind and every answer is kept on the order.
+ * previews open links too); only the buttons do. The link keeps working until the order is
+ * received, cancelled or amended, so a supplier can change their mind and every answer is kept.
  */
 
 interface View {
@@ -264,7 +264,9 @@ export function SupplierConfirmPage() {
   // The date already standing (agreed, or waiting for approval): picking it again changes nothing.
   const standing = v.pending?.date ?? v.agreedDate
   const sameAsStanding = !!date && date === standing && !v.rejection
-  const autoHint = v.autoUntil
+  // The date asked for has gone by and nothing current is agreed or waiting: say so, and ask for a real date.
+  const askedGone = !!v.requestedDate && v.requestedDate < v.today && !v.pending && !(v.agreedDate && v.agreedDate >= v.today)
+  const autoHint = v.autoUntil && v.autoUntil >= v.today
     ? t('เลือกได้ถึง {date} ระบบอัปเดตทันที — หลังจากนั้นต้องรอฝ่ายจัดซื้ออนุมัติ', { date: label(v.autoUntil) })
     : null
   const shareText = done
@@ -319,13 +321,23 @@ export function SupplierConfirmPage() {
         </dl>
       </Card>
 
+      {askedGone && (
+        <Card className="border-warn/30 bg-warn-soft p-4 text-sm">
+          <div role="status">
+            <p className="font-medium text-ink">{t('วันส่งที่ขอไว้ ({date}) ผ่านมาแล้ว', { date: label(v.requestedDate!) })}</p>
+            <p className="mt-1 text-ink-soft">{t('กรุณาเลือกวันที่จะส่งได้จริง — ถ้าเลื่อนเกินกำหนด ฝ่ายจัดซื้อจะอนุมัติก่อน')}</p>
+          </div>
+        </Card>
+      )}
+
       {v.rejection && v.status !== 'pending_date_approval' && (
         <Card className="border-out/30 bg-out-soft p-4 text-sm">
           <p className="font-medium text-out">
             {t('ฝ่ายจัดซื้อไม่อนุมัติวันที่ {date}', { date: label(v.rejection.date) })}
           </p>
           {v.rejection.reason && <p className="mt-1 text-ink-soft">{v.rejection.reason}</p>}
-          <p className="mt-1 text-ink-soft">{t('กรุณายืนยันวันที่ขอ หรือเลือกวันอื่น')}</p>
+          {/* A passed asked-for date cannot be accepted (askedGone card above): ask for another only. */}
+          <p className="mt-1 text-ink-soft">{askedGone ? t('กรุณาเลือกวันอื่น') : t('กรุณายืนยันวันที่ขอ หรือเลือกวันอื่น')}</p>
         </Card>
       )}
 
@@ -348,7 +360,7 @@ export function SupplierConfirmPage() {
           >
             {t('แชร์การยืนยันเข้ากลุ่ม LINE')}
           </a>
-          <p className="mt-2 text-xs text-ink-soft">{t('เปลี่ยนวันได้อีกจนถึงวันส่ง ผ่านลิงก์เดิมนี้')}</p>
+          <p className="mt-2 text-xs text-ink-soft">{t('เปลี่ยนวันได้อีกจนกว่าจะรับของครบ ผ่านลิงก์เดิมนี้')}</p>
         </Card>
       )}
 
@@ -400,7 +412,8 @@ export function SupplierConfirmPage() {
               disabled={busy || needsRefresh}
               onClick={() => {
                 setMode('pick')
-                setDate(v.pending?.date ?? v.confirmedDate ?? v.requestedDate ?? v.today)
+                const start = v.pending?.date ?? v.confirmedDate ?? v.requestedDate ?? v.today
+                setDate(start < v.today ? v.today : start)
                 setError(null)
               }}
             >
