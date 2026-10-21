@@ -17,6 +17,7 @@ import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
 import { searchFields } from '../lib/barcode'
 import { useScanGate } from '../lib/useScanGate'
+import { shouldScanOnTab } from '../lib/barcodeSelection'
 import { BarcodeScanner } from './BarcodeScanner'
 import { useToast } from './Toast'
 import { useConfirm } from './Confirm'
@@ -297,6 +298,7 @@ export function LineBuilder({
             if (e.key === 'Tab' && e.shiftKey) return
             const raw = search.trim()
             if (!raw) return
+            if (e.key === 'Tab' && !shouldScanOnTab(products, raw, matches.length > 0)) return
             // Enter means "this is a code". A hardware wedge scanner and a human typing in
             // the same box cannot be told apart, so it is resolved exactly as a barcode and
             // never as a loose name or an SKU; a human picks a product by clicking it.

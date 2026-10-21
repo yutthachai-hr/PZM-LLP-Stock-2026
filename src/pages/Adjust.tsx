@@ -41,6 +41,7 @@ import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
 import { searchFields } from '../lib/barcode'
 import { useScanGate } from '../lib/useScanGate'
+import { shouldScanOnTab } from '../lib/barcodeSelection'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { useConfirm } from '../components/Confirm'
 import { useViewport } from '../lib/viewport'
@@ -494,6 +495,7 @@ export function AdjustPage() {
                   if (e.key === 'Tab' && e.shiftKey) return
                   const raw = search.trim()
                   if (!raw) return
+                  if (e.key === 'Tab' && !shouldScanOnTab(products, raw, matches.length > 0)) return
                   // Enter means "this is a code" (a wedge scanner ends with Enter). It is
                   // resolved exactly as a barcode; a human picks a product by clicking it.
                   e.preventDefault()

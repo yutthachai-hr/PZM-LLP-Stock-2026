@@ -114,18 +114,20 @@ test('Adjust 2: Tab ends a scan exactly like Enter', async ({ page }, testInfo) 
   await expect(page.locator('input[type="number"]')).toHaveCount(2)
 })
 
-test('Adjust 3: Tab on half-typed search text is a refused code, never a fuzzy pick', async ({ page }) => {
+test('Adjust 3: Tab on a partial name navigates, never adds a fuzzy pick', async ({ page }) => {
   await stage(page)
   await openAdjust(page)
   const input = adjustInput(page)
   await input.focus()
 
-  // "TOMATO" is a name, not a code: the lookup is exact-barcode or nothing (no name fallback).
+  // R23 keyboard regression: Tab leaves a partial search intact. No scan is accepted and
+  // no product is added; Enter still submits a code through exact-only resolution.
   await page.keyboard.type('TOMATO', { delay: 5 })
   await page.keyboard.press('Tab')
   await expect(dialog(page)).not.toBeVisible()
-  await expect(page.getByText('ไม่พบบาร์โค้ด TOMATO ในระบบ')).toBeVisible()
-  await expect(input).toHaveValue('')
+  await expect(page.getByText('ไม่พบบาร์โค้ด TOMATO ในระบบ')).toHaveCount(0)
+  await expect(input).toHaveValue('TOMATO')
+  await expect(input).not.toBeFocused()
   await expect(page.locator('input[type="number"]')).toHaveCount(0)
 })
 
@@ -196,17 +198,19 @@ test('Receipt 1: a scan burst with its terminator while the confirmation is open
   await expect(page.locator('main')).not.toContainText('MOZZARELLA CHEESE')
 })
 
-test('Receipt 2: Tab on half-typed text is a refused code, never a name pick', async ({ page }) => {
+test('Receipt 2: Tab on a partial name navigates, never adds a name pick', async ({ page }) => {
   await stage(page)
   await openReceipt(page)
   const input = receiptInput(page)
   await input.focus()
 
+  // Same R23 keyboard-navigation contract as Adjust 3; no fuzzy insertion is permitted.
   await page.keyboard.type('TOMATO', { delay: 5 })
   await page.keyboard.press('Tab')
   await expect(dialog(page)).not.toBeVisible()
-  await expect(page.getByText('ไม่พบบาร์โค้ด TOMATO ในระบบ')).toBeVisible()
-  await expect(input).toHaveValue('')
+  await expect(page.getByText('ไม่พบบาร์โค้ด TOMATO ในระบบ')).toHaveCount(0)
+  await expect(input).toHaveValue('TOMATO')
+  await expect(input).not.toBeFocused()
   await expect(page.locator('input[type="number"]')).toHaveCount(0)
 })
 

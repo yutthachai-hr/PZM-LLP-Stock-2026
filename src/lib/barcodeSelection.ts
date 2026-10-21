@@ -1,5 +1,5 @@
 import type { Product } from '../types'
-import { resolveBarcode } from './barcode'
+import { normalizeScanToken, resolveBarcode } from './barcode'
 
 /**
  * The one place a scanned/typed token is turned into an action, shared by every screen that
@@ -40,6 +40,19 @@ export function decideScan(products: readonly Product[], code: string): ScanDeci
     default:
       return { kind: 'reject', reason: 'empty', code: '' }
   }
+}
+
+/** A search box also accepts scanner Tab terminators. When the text is only a partial
+ * name/SKU match, leave Tab to normal keyboard navigation instead of erasing the query.
+ * Known literal/mapped codes (including inactive or duplicate claims) still go through the
+ * fail-closed scan gate; this helper never selects a product or grants verification. */
+export function shouldScanOnTab(products: readonly Product[], code: string, hasSuggestions: boolean): boolean {
+  if (!hasSuggestions) return true
+  const unknown = (token: string) => {
+    const d = decideScan(products, token)
+    return d.kind === 'reject' && d.reason === 'not_found'
+  }
+  return !unknown(code) || !unknown(normalizeScanToken(code))
 }
 
 /**
