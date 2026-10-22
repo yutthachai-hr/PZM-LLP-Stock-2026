@@ -99,7 +99,7 @@ for (const lang of ['th', 'en'] as const) {
     expect(broken, `Products table does not fit at: ${broken.join('; ')}`).toEqual([])
   })
 
-  test(`grid disclosure is independent of product navigation and stays readable on a phone (${lang})`, async ({ page }) => {
+  test(`grid disclosure is independent of product navigation and stays readable on a phone (${lang})`, async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 960 })
     await stage(page, lang)
     await page.getByRole('button', { name: /มุมมองการ์ด|Card view/ }).click()
@@ -108,11 +108,27 @@ for (const lang of ['th', 'en'] as const) {
     await expect(card).toContainText('PZS-01-06-001')
     await expect(card).toContainText('฿15.00')
     const disclosure = card.locator('details')
-    await disclosure.locator('summary').focus()
-    await page.keyboard.press('Enter')
-    await expect(disclosure).toHaveAttribute('open', '')
-    await expect(page).toHaveURL(/\/products$/)
-    await expect(disclosure).toContainText(INVOICE)
+    for (const width of [1440, 768, 1023]) {
+      await page.setViewportSize({ width, height: 960 })
+      const summary = disclosure.locator('summary')
+      await expect(summary).toBeVisible()
+      await expect(disclosure).not.toHaveAttribute('open', '')
+      await summary.focus()
+      await expect(summary).toBeFocused()
+      await page.keyboard.press('Enter')
+      await expect(disclosure).toHaveAttribute('open', '')
+      await expect(disclosure.getByText(INVOICE, { exact: false })).toBeVisible()
+      await expect(page).toHaveURL(/\/products$/)
+      await page.screenshot({ path: info.outputPath(`products-grid-${lang}-${width}-open.png`) })
+      await summary.click()
+      await expect(disclosure).not.toHaveAttribute('open', '')
+      await summary.click()
+      await expect(disclosure).toHaveAttribute('open', '')
+      await expect(page).toHaveURL(/\/products$/)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await page.keyboard.press('Enter')
+      await expect(disclosure).not.toHaveAttribute('open', '')
+    }
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(card.getByText(INVOICE, { exact: false }).first()).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -140,17 +156,28 @@ for (const lang of ['th', 'en'] as const) {
   // actions are reachable on a tablet as they are on main; the table scrolls sideways if it must.
   test(`a tablet keeps row selection and Excel export (${lang})`, async ({ page }, info) => {
     await stage(page, lang)
-    await page.setViewportSize({ width: 768, height: 1024 })
     const row = scroller(page).locator('[data-row-key="invoice"]')
-    await expect(row).toBeVisible()
-    await expect(row).toContainText('PZS-01-06-001')
-    await row.getByRole('checkbox').check()
-    await expect(page.getByRole('button', { name: /ส่งออก Excel|Export Excel/ })).toBeVisible()
-    // The cost cell is one line with its disclosure from md, like the desktop table, and the
-    // page itself never scrolls sideways (the table scroller may).
-    await expect(row.locator('details summary')).toBeVisible()
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    await page.screenshot({ path: info.outputPath(`products-${lang}-768-selected.png`) })
+    for (const width of [768, 1023]) {
+      await page.setViewportSize({ width, height: 1024 })
+      await expect(row).toBeVisible()
+      await expect(row).toContainText('PZS-01-06-001')
+      await row.getByRole('checkbox').check()
+      await expect(page.getByRole('button', { name: /ส่งออก Excel|Export Excel/ })).toBeVisible()
+      // The page never scrolls sideways (the table scroller may); both tablet bounds keep
+      // the invoice hint keyboard/tap-accessible without navigating to the product.
+      const disclosure = row.locator('details')
+      const summary = disclosure.locator('summary')
+      await expect(summary).toBeVisible()
+      await summary.focus()
+      await page.keyboard.press('Enter')
+      await expect(disclosure).toHaveAttribute('open', '')
+      await expect(disclosure.getByText(INVOICE, { exact: false })).toBeVisible()
+      await expect(page).toHaveURL(/\/products$/)
+      await page.screenshot({ path: info.outputPath(`products-${lang}-${width}-selected.png`) })
+      await summary.click()
+      await expect(disclosure).not.toHaveAttribute('open', '')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    }
   })
 
   test(`phone cards keep the name, SKU and invoice hint (${lang})`, async ({ page }, info) => {
