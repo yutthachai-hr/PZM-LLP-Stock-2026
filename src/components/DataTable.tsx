@@ -51,7 +51,6 @@ export function DataTable<T>({
   rowKey,
   empty,
   minWidth = 640,
-  cardsUntil = 'md',
   compactTablet = false,
   maxHeight,
   onRowClick,
@@ -67,8 +66,6 @@ export function DataTable<T>({
   empty?: ReactNode
   /** Width below which the desktop table scrolls sideways rather than crushing columns. */
   minWidth?: number
-  /** Keep reference-rich rows as cards on smaller tablets rather than hiding their fields. */
-  cardsUntil?: 'md' | 'lg'
   /** Reduce horizontal cell padding below desktop width without hiding any values. */
   compactTablet?: boolean
   /** e.g. 'calc(100vh-260px)'. Omit for a table that grows with the page. */
@@ -138,7 +135,7 @@ export function DataTable<T>({
   return (
     <>
       {/* Phone: one card per row. */}
-      <div className={`divide-y divide-line ${cardsUntil === 'lg' ? 'lg:hidden' : 'md:hidden'}`}>
+      <div className="divide-y divide-line md:hidden">
         {rows.map((row) => (
           <div
             key={rowKey(row)}
@@ -170,7 +167,7 @@ export function DataTable<T>({
 
       {/* Tablet and up: the table. */}
       <div
-        className={`hidden overflow-auto ${cardsUntil === 'lg' ? 'lg:block' : 'md:block'}`}
+        className="hidden overflow-auto md:block"
         style={maxHeight ? { maxHeight } : undefined}
       >
         <table className="w-full text-sm" style={{ minWidth }}>

@@ -90,6 +90,10 @@ for (const lang of ['th', 'en'] as const) {
       if (!location) broken.push(`${width}px (${lang}): Location header missing`)
       else if (location.right > m.boxRight + 1) broken.push(`${width}px (${lang}): Location header right ${location.right} outside container ${m.boxRight}`)
       if (m.scrollWidth > m.clientWidth) broken.push(`${width}px (${lang}): table needs ${m.scrollWidth}px in a ${m.clientWidth}px container`)
+      // The SKU has its own column only from 3xl (1840); below it rides in the name's second line.
+      const skuHead = m.heads.some((h) => h.visible && /^SKU$/i.test(h.text.trim()))
+      if (width >= 1840 && !skuHead) broken.push(`${width}px (${lang}): SKU column did not come back at 3xl`)
+      if (width < 1840 && skuHead) broken.push(`${width}px (${lang}): SKU column shown below 3xl`)
       await page.screenshot({ path: info.outputPath(`products-${lang}-${width}.png`) })
     }
     expect(broken, `Products table does not fit at: ${broken.join('; ')}`).toEqual([])
@@ -132,9 +136,22 @@ for (const lang of ['th', 'en'] as const) {
     await expect(details.locator('time[dateTime]').first()).toBeVisible()
   })
 
-  test(`phone and small-tablet cards keep the name, SKU and invoice hint (${lang})`, async ({ page }, info) => {
+  // R34 review F1: from 768 the table (with selection) returns, so Excel export and the bulk
+  // actions are reachable on a tablet as they are on main; the table scrolls sideways if it must.
+  test(`a tablet keeps row selection and Excel export (${lang})`, async ({ page }, info) => {
     await stage(page, lang)
-    for (const width of [390, 768]) {
+    await page.setViewportSize({ width: 768, height: 1024 })
+    const row = scroller(page).locator('[data-row-key="invoice"]')
+    await expect(row).toBeVisible()
+    await expect(row).toContainText('PZS-01-06-001')
+    await row.getByRole('checkbox').check()
+    await expect(page.getByRole('button', { name: /ส่งออก Excel|Export Excel/ })).toBeVisible()
+    await page.screenshot({ path: info.outputPath(`products-${lang}-768-selected.png`) })
+  })
+
+  test(`phone cards keep the name, SKU and invoice hint (${lang})`, async ({ page }, info) => {
+    await stage(page, lang)
+    for (const width of [390]) {
       await page.setViewportSize({ width, height: 960 })
       const card = page.locator('[data-row-key="invoice"]:visible').first()
       await expect(card).toBeVisible()

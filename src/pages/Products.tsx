@@ -460,7 +460,6 @@ export function ProductsPage() {
                   columns={columns}
                   rowKey={(r) => r.p.id}
                   minWidth={0}
-                  cardsUntil="lg"
                   compactTablet
                   onRowClick={(r) => navigate(`/products/${encodeURIComponent(r.p.id)}/card`)}
                   selection={{ selected, onChange: setSelected }}
