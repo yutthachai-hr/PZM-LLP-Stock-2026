@@ -50,7 +50,12 @@ async function approvedOrder(brand: keyof typeof COLLECTION) {
       return route.fulfill({ status: r.status, json: r.body })
     })
   }
-  return { token, attach, posts, order }
+  // Purchasing amends the quantity only (owner, 22 Oct 2026): a new link for the revised order.
+  async function reviseQty() {
+    db.touch(COLLECTION[brand], 'po3', { revision: 1, revisions: [{ rev: 1, at: NOW, by: 'staff1', byName: 'Nok', reason: 'more', changes: [{ kind: 'qty', productName: 'มอสซาเรลล่า', unit: 'kg', from: 10, to: 12 }] }] })
+    return (await mintLink(deps, 'Bearer staff1', { brand, poId: 'po3' })).body.token as string
+  }
+  return { token, attach, posts, order, reviseQty }
 }
 
 test.use({ viewport: { width: 375, height: 812 }, userAgent: LINE_UA })
@@ -89,3 +94,21 @@ test('an explicit request for another date still works and follows the approval 
   expect(s.order().supplierConfirmationStatus).toBe('pending_date_approval')
   expect(s.order().confirmedDeliveryDate).toBe(day(4)) // the approved date stands while it waits
 })
+
+for (const lang of ['th', 'en'] as const) {
+  test(`${lang}: after a quantity-only revision the supplier acknowledges it and the approved date stands`, async ({ page }) => {
+    const s = await approvedOrder('pizza')
+    const revised = await s.reviseQty()
+    expect(s.order()).toMatchObject({ supplierConfirmationStatus: 'waiting', requestedDeliveryDate: day(4), confirmedDeliveryDate: day(4) })
+    await s.attach(page)
+    await page.goto(`/supplier/po/${revised}`)
+    if (lang === 'en') await page.getByRole('button', { name: 'EN' }).click()
+    const accept = page.getByRole('button', { name: lang === 'th' ? /^✅ ยืนยันส่งวันที่/ : /^✅ Accept / })
+    await expect(accept).toHaveCount(1)
+    await accept.click()
+    await expect.poll(() => s.order().supplierConfirmationStatus).toBe('confirmed')
+    expect(s.posts).toHaveLength(1)
+    expect(s.order()).toMatchObject({ confirmedDeliveryDate: day(4), expectedAt: day(4), requestedDeliveryDate: day(4) })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
+}
