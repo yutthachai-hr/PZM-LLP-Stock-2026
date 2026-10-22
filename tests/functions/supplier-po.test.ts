@@ -307,8 +307,9 @@ describe('supplier tabs must confirm the state they actually saw', () => {
       }
       return patch(col, id, fields, time)
     }
-    // Accepting the requested date would withdraw P, too; neither action may race blindly.
-    const r = await postAnswer(deps, token, { action: 'accept', requestId: 'stale-race-loser', expectedState })
+    // An in-range proposal would withdraw P, too; no answer may race blindly. (Before PO-00003 this
+    // used 'accept', which is now refused outright while an approved date stands, before any write.)
+    const r = await postAnswer(deps, token, { action: 'propose', date: '2026-10-09', requestId: 'stale-race-loser', expectedState })
     expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
     expect(po().pendingDeliveryDate?.date).toBe(day(7))
     expect(po().deliveryDateHistory!.some((h) => h.requestId === 'stale-race-loser')).toBe(false)
@@ -645,5 +646,38 @@ describe('POST /api/supplier-po/revoke (R30)', () => {
     clock = day(9)
     expect(await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).toMatchObject({ status: 422, body: { error: 'past' } })
     expect(po().pendingDeliveryDate?.changeId).toBe(changeId)
+  })
+})
+
+describe('P0 PO-00003: an approved date stands at the endpoint', () => {
+  async function approvedFar() {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', name: 'MMP', requestId: 'po3-e-propose' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    expect((await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).status).toBe(200)
+    return token
+  }
+  test('reopening the link shows the approved date as agreed and says purchasing approved it', async () => {
+    const token = await approvedFar()
+    const view = (await viewLink(deps, token)).body.view as Record<string, unknown>
+    expect(view).toMatchObject({ requestedDate: '2026-10-08', agreedDate: '2026-10-12', confirmedDate: '2026-10-12', agreedByPurchasing: true })
+  })
+  test('a fresh "accept" of the requested date is refused and changes nothing, rings nothing', async () => {
+    const token = await approvedFar()
+    const before = structuredClone(po())
+    const bell = notes().length
+    const r = await answerLink(deps, token, { action: 'accept', requestId: 'po3-e-stale-accept' })
+    expect(r).toEqual({ status: 422, body: { error: 'agreed' } })
+    expect(po()).toEqual(before)
+    expect(notes()).toHaveLength(bell)
+  })
+  test('a page loaded before the approval cannot write its stale answer', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'po3-e-propose-2' })
+    const seen = ((await viewLink(deps, token)).body.view as { expectedState: string }).expectedState
+    await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId: po().pendingDeliveryDate!.changeId, decision: 'approve' })
+    const r = await postAnswer(deps, token, { action: 'accept', requestId: 'po3-e-old-tab', expectedState: seen })
+    expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect(po().confirmedDeliveryDate).toBe(day(7))
   })
 })

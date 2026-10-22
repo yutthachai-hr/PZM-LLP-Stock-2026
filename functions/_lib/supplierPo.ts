@@ -1,5 +1,6 @@
 import type { AppUser, DeliveryDateChange, InventorySettings, PurchaseOrder } from '../../src/types'
 import {
+  agreedByPurchasing,
   agreedDateOf,
   applyPatch,
   dateKeyToMs,
@@ -184,6 +185,8 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     confirmedDate: key(confirmed),
     /** The date agreed on this link, still standing under a waiting date or a refusal. */
     agreedDate: key(agreedDateOf(o)),
+    /** The agreed date is purchasing's approval of the supplier's own proposal: nothing to confirm again. */
+    agreedByPurchasing: agreedByPurchasing(o),
     effectiveDate: key(effectiveDeliveryOf(o)),
     pending: o.pendingDeliveryDate ? { date: key(o.pendingDeliveryDate.date), note: o.pendingDeliveryDate.note ?? null } : null,
     rejection: rejection ? { date: key(rejection.to), reason: rejection.note ?? '' } : null,

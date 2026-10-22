@@ -53,6 +53,18 @@ export function effectiveDeliveryOf(o: PurchaseOrder): number | undefined {
   return o.confirmedDeliveryDate ?? requestedOf(o)
 }
 
+/** Whether the date that stands now was set by a manager/admin approving the supplier's proposal. */
+export function agreedByPurchasing(o: PurchaseOrder): boolean {
+  const agreed = agreedDateOf(o)
+  if (agreed === undefined) return false
+  const h = o.deliveryDateHistory ?? []
+  for (let i = h.length - 1; i >= 0; i--) {
+    const { action, to } = h[i]
+    if (action === 'accepted' || action === 'autoApplied' || action === 'approved') return action === 'approved' && to !== undefined && bkkDayStart(to) === agreed
+  }
+  return false
+}
+
 /**
  * The Bangkok day the supplier and we agree on now: the last date accepted, applied within
  * the range or approved by a หัวหน้า on this link. It still stands while a newer date waits
@@ -320,7 +332,7 @@ export type RespondResult =
       change: DeliveryDateChange
       supersededChangeId?: string
     }
-  | { ok: false; error: 'invalid' | 'past' | 'tooFar' | 'noRequestedDate' | 'full' }
+  | { ok: false; error: 'invalid' | 'past' | 'tooFar' | 'noRequestedDate' | 'full' | 'agreed' }
 
 /** Trim, strip control characters, cut to length; empty means none. */
 export function cleanText(s: unknown, max: number): string | undefined {
@@ -352,6 +364,11 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
   let mode: 'auto' | 'needsApproval'
   if (input.action === 'accept') {
     if (requested === undefined) return { ok: false, error: 'noRequestedDate' }
+    // A different date already stands (approved by purchasing, or the supplier's own change):
+    // "accept" means the date asked for, so it would silently undo that agreement (PO-00003,
+    // 22 Oct 2026). Moving off the agreed date is an explicit proposal, never this button.
+    const agreed = agreedDateOf(o)
+    if (agreed !== undefined && agreed !== bkkDayStart(requested)) return { ok: false, error: 'agreed' }
     if (bkkDayStart(requested) < bkkDayStart(ctx.now)) return { ok: false, error: 'past' }
     target = bkkDayStart(requested)
     mode = 'auto'

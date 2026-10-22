@@ -79,7 +79,7 @@ describe('state filters and their counts', () => {
     expect(ids('')).toHaveLength(rows.length)
   })
   it('counts are the same predicates over the rows given — nothing all-time', () => {
-    expect(stateFilterCounts(rows, (o) => late.has(o.id))).toEqual({ unsent: 4, supplierWaiting: 1, resend: 1, late: 1 })
-    expect(stateFilterCounts([], () => false)).toEqual({ unsent: 0, supplierWaiting: 0, resend: 0, late: 0 })
+    expect(stateFilterCounts(rows, (o) => late.has(o.id))).toEqual({ datePending: 0, unsent: 4, supplierWaiting: 1, resend: 1, late: 1 })
+    expect(stateFilterCounts([], () => false)).toEqual({ datePending: 0, unsent: 0, supplierWaiting: 0, resend: 0, late: 0 })
   })
 })
