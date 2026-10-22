@@ -48,9 +48,46 @@ export function requestedOf(o: PurchaseOrder): number | undefined {
   return o.requestedDeliveryDate ?? o.expectedAt
 }
 
+/**
+ * Purchasing's own latest ask: the date the approval range is measured from. A link that re-asks
+ * the approved date after a quantity-only revision is the system's, not purchasing's, so it never
+ * widens what a supplier may change without approval (owner, 22 Oct 2026; PR #48 review).
+ */
+export function rangeAnchorOf(o: PurchaseOrder): number | undefined {
+  const h = o.deliveryDateHistory ?? []
+  for (let i = h.length - 1; i >= 0; i--) {
+    if (h[i].action !== 'requested' || h[i].source === 'system') continue
+    return h[i].to
+  }
+  return requestedOf(o)
+}
+
+/** The last day a supplier's change applies at once; later ones wait for approval. */
+export function supplierAutoUntil(o: PurchaseOrder, maxPostponeDays: number): number | undefined {
+  const anchor = rangeAnchorOf(o)
+  if (anchor === undefined) return undefined
+  const until = bkkDayStart(anchor) + Math.max(0, Math.floor(maxPostponeDays)) * DAY_MS
+  // Acknowledging this link's date or explicitly bringing it earlier stays automatic; a
+  // quantity revision never adds postponement days to purchasing's approved date.
+  const asked = requestedOf(o)
+  return asked === undefined ? until : Math.max(until, bkkDayStart(asked))
+}
+
 /** When the goods are now expected: what was agreed, else what was asked. */
 export function effectiveDeliveryOf(o: PurchaseOrder): number | undefined {
   return o.confirmedDeliveryDate ?? requestedOf(o)
+}
+
+/** Whether the date that stands now was set by a manager/admin approving the supplier's proposal. */
+export function agreedByPurchasing(o: PurchaseOrder): boolean {
+  const agreed = agreedDateOf(o)
+  if (agreed === undefined) return false
+  const h = o.deliveryDateHistory ?? []
+  for (let i = h.length - 1; i >= 0; i--) {
+    const { action, to } = h[i]
+    if (action === 'accepted' || action === 'autoApplied' || action === 'approved') return action === 'approved' && to !== undefined && bkkDayStart(to) === agreed
+  }
+  return false
 }
 
 /**
@@ -195,6 +232,8 @@ export interface IssueContext {
   actor: Actor
   ttlDays: number
   makeId: () => string
+  /** Take the link back: a new version for the same, unchanged order (R30). */
+  reissue?: boolean
 }
 
 export type IssueResult =
@@ -211,7 +250,7 @@ export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
   if (!orderTakesAnswers(o)) return { ok: false, error: 'notOpen' }
   const rev = o.revision ?? 0
   const link = o.supplierLink
-  if (link && link.rev === rev) {
+  if (link && link.rev === rev && !ctx.reissue) {
     return { ok: true, patch: null, version: link.version, expiresAt: link.expiresAt }
   }
 
@@ -258,12 +297,20 @@ export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
         to: o.expectedAt,
         ...by,
       })
+    } else if (o.expectedAt !== undefined && requestedOf(o) !== o.expectedAt) {
+      // The date stands (an approval or an in-range change moved expectedAt to it): a revision
+      // that left the date alone asks for that date, never the one first asked (PO-00003, owner
+      // 22 Oct 2026). The agreement is kept; another date is an explicit proposal.
+      history.push({ id: ctx.makeId(), at: ctx.now, source: 'system', action: 'requested', from: requestedOf(o), to: o.expectedAt, ...by })
+      patch.requestedDeliveryDate = o.expectedAt
     }
     history.push({ id: ctx.makeId(), at: ctx.now, source: 'system', action: 'reset', ...by })
     activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'reset', ...by })
     patch.supplierConfirmationStatus = 'waiting'
   }
 
+  // Same order, same answer: only the link the supplier holds is replaced.
+  if (ctx.reissue && link && link.rev === rev) activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkRevoked', ...by })
   activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkIssued', ...by })
   patch.supplierLink = { version, rev, issuedAt: ctx.now, issuedBy: ctx.actor.id ?? ctx.actor.name, expiresAt }
   patch.deliveryDateHistory = history.slice(-SUPPLIER_LIST_MAX)
@@ -316,7 +363,7 @@ export type RespondResult =
       change: DeliveryDateChange
       supersededChangeId?: string
     }
-  | { ok: false; error: 'invalid' | 'past' | 'tooFar' | 'noRequestedDate' | 'full' }
+  | { ok: false; error: 'invalid' | 'past' | 'tooFar' | 'noRequestedDate' | 'full' | 'agreed' }
 
 /** Trim, strip control characters, cut to length; empty means none. */
 export function cleanText(s: unknown, max: number): string | undefined {
@@ -348,21 +395,27 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
   let mode: 'auto' | 'needsApproval'
   if (input.action === 'accept') {
     if (requested === undefined) return { ok: false, error: 'noRequestedDate' }
+    // A different date already stands (approved by purchasing, or the supplier's own change):
+    // "accept" means the date asked for, so it would silently undo that agreement (PO-00003,
+    // 22 Oct 2026). Moving off the agreed date is an explicit proposal, never this button.
+    const agreed = agreedDateOf(o)
+    if (agreed !== undefined && agreed !== bkkDayStart(requested)) return { ok: false, error: 'agreed' }
     if (bkkDayStart(requested) < bkkDayStart(ctx.now)) return { ok: false, error: 'past' }
     target = bkkDayStart(requested)
     mode = 'auto'
   } else {
     const v = evaluateProposal({
-      requested,
+      requested: rangeAnchorOf(o),
       proposed: input.date ?? null,
       now: ctx.now,
       maxPostponeDays: ctx.maxPostponeDays,
     })
     if (!v.ok) return { ok: false, error: v.error }
     target = bkkDayStart(input.date as number)
-    // The date agreed was within the range or approved already: going back to it from a
-    // waiting date, or answering a refusal with it, is not asked for a second time.
-    mode = target === agreedDateOf(o) ? 'auto' : v.mode
+    // The date agreed was within the range or approved already, or is the date this link asks
+    // for: going back to it, or answering a refusal with it, is not asked for a second time.
+    const until = supplierAutoUntil(o, ctx.maxPostponeDays)
+    mode = target === agreedDateOf(o) || until === undefined || target <= until ? 'auto' : 'needsApproval'
   }
 
   // Before the room check: an answer that changes nothing needs no room.
@@ -454,7 +507,7 @@ export interface DecideInput {
 
 export type DecideResult =
   | { ok: true; patch: SupplierPatch; change: DeliveryDateChange; date: number }
-  | { ok: false; error: 'stale' | 'reasonRequired' }
+  | { ok: false; error: 'stale' | 'reasonRequired' | 'past' }
 
 /**
  * A หัวหน้า or admin decides a date beyond the range. Approving applies it exactly as an
@@ -466,6 +519,8 @@ export function decide(o: PurchaseOrder, input: DecideInput, actor: Actor, now: 
   if (!pending || pending.changeId !== input.changeId || o.status !== 'ordered') return { ok: false, error: 'stale' }
   const reason = cleanText(input.reason, SUPPLIER_NOTE_MAX)
   if (input.decision === 'reject' && !reason) return { ok: false, error: 'reasonRequired' }
+  // A date that has gone by while it waited is never applied; refusing it still works (R30).
+  if (input.decision === 'approve' && bkkDayStart(pending.date) < bkkDayStart(now)) return { ok: false, error: 'past' }
 
   const requested = requestedOf(o)
   const before = effectiveDeliveryOf(o)
@@ -526,7 +581,9 @@ export type BadgeColor = 'slate' | 'red' | 'green' | 'amber' | 'blue'
 
 const BADGES: Record<SupplierConfirmationStatus, { label: string; color: BadgeColor }> = {
   waiting: { label: 'รอผู้ขายยืนยัน', color: 'amber' }, // i18n-key
-  confirmed: { label: 'ผู้ขายยืนยันแล้ว', color: 'green' }, // i18n-key
+  // Not green: green on an order row is LINE's ("sent"), and a supplier's answer must never
+  // be mistaken for the share going out, or the other way round (owner, 17 Oct 2026).
+  confirmed: { label: 'ผู้ขายยืนยันแล้ว', color: 'slate' }, // i18n-key
   changed: { label: 'ผู้ขายเปลี่ยนวันส่ง', color: 'blue' }, // i18n-key
   pending_date_approval: { label: 'รออนุมัติวันส่ง', color: 'red' }, // i18n-key
 }

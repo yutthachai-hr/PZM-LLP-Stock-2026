@@ -18,6 +18,7 @@ export function ItemCell({
   icon = 'box',
   tone = 'slate',
   avatar,
+  wrap = false,
 }: {
   title: ReactNode
   sub?: ReactNode
@@ -29,6 +30,8 @@ export function ItemCell({
   tone?: Tone
   /** Letters in a circle instead of a picture — a supplier, a person. */
   avatar?: string
+  /** Products may show the full name and SKU when reference columns are folded away. */
+  wrap?: boolean
 }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -45,8 +48,8 @@ export function ItemCell({
       )}
       <div className="min-w-0">
         {/* Two lines on a phone card, where the name is the heading; one line in a table row. */}
-        <div className="line-clamp-2 font-semibold leading-snug text-ink md:truncate">{title}</div>
-        {sub && <div className="truncate text-xs text-ink-faint">{sub}</div>}
+        <div className={`${wrap ? 'whitespace-normal break-words' : 'line-clamp-2 md:truncate'} font-semibold leading-snug text-ink`}>{title}</div>
+        {sub && <div className={`${wrap ? 'whitespace-normal break-words' : 'truncate'} text-xs text-ink-faint`}>{sub}</div>}
       </div>
     </div>
   )

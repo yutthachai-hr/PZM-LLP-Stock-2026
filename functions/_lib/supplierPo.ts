@@ -1,6 +1,8 @@
 import type { AppUser, DeliveryDateChange, InventorySettings, PurchaseOrder } from '../../src/types'
 import {
+  agreedByPurchasing,
   agreedDateOf,
+  supplierAutoUntil,
   applyPatch,
   dateKeyToMs,
   decide,
@@ -20,7 +22,6 @@ import {
   type SupplierPatch,
 } from '../../src/lib/supplierConfirmation'
 import { supplierAnswerDraft, supplierDecisionDraft, supplierOpenedDraft, toDoc } from '../../src/lib/inventoryRules/notifications'
-import { DAY_MS } from '../../src/lib/inventoryRules/time'
 import { brandCollection, type ServerStore } from './serverStore'
 import { signSupplierToken, verifySupplierSignature, type SupplierClaims, type TokenBrand } from './supplierToken'
 
@@ -141,6 +142,29 @@ export async function mintLink(deps: Deps, authorization: string | null, body: u
   return ok({ url: `${deps.origin}/supplier/po/${token}`, token, order: res.order })
 }
 
+/**
+ * POST /api/supplier-po/revoke { brand, poId } — a หัวหน้า/admin takes a leaked link back. The
+ * order and the supplier's answer are untouched; the old URL answers like any superseded link.
+ */
+export async function revokeLink(deps: Deps, authorization: string | null, body: unknown): Promise<Reply> {
+  const user = await caller(deps, authorization)
+  if (!user) return fail(401, 'unauthorized')
+  if (user.role !== 'admin' && user.role !== 'manager') return fail(403, 'forbidden')
+  const { brand, poId } = (body ?? {}) as { brand?: unknown; poId?: unknown }
+  if (!isBrand(brand) || !isId(poId)) return fail(400, 'bad_request')
+  const { ttlDays } = await settingsOf(deps.store, brand)
+  const now = deps.now()
+  const res = await writeOrder(deps, brandCollection(brand, 'purchaseOrders'), poId, (o) => {
+    if (!o.supplierLink) return fail(409, 'no_link')
+    const r = issueLink(o, { now, actor: { id: user.id, name: user.name }, ttlDays, makeId: deps.makeId, reissue: true })
+    if (!r.ok) return fail(409, 'not_open')
+    return { patch: r.patch, reply: { version: r.version, expiresAt: r.expiresAt } }
+  })
+  if (isReply(res)) return res
+  const token = await signSupplierToken({ brand, poId, supplierId: res.order.supplierId, version: res.reply.version, expMs: res.reply.expiresAt }, deps.secret)
+  return ok({ url: `${deps.origin}/supplier/po/${token}`, token, order: res.order })
+}
+
 // -------------------------------------------------------------- the supplier page ----
 
 /** What the supplier's page shows. No prices, no people, nothing about other orders. */
@@ -161,6 +185,8 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     confirmedDate: key(confirmed),
     /** The date agreed on this link, still standing under a waiting date or a refusal. */
     agreedDate: key(agreedDateOf(o)),
+    /** The agreed date is purchasing's approval of the supplier's own proposal: nothing to confirm again. */
+    agreedByPurchasing: agreedByPurchasing(o),
     effectiveDate: key(effectiveDeliveryOf(o)),
     pending: o.pendingDeliveryDate ? { date: key(o.pendingDeliveryDate.date), note: o.pendingDeliveryDate.note ?? null } : null,
     rejection: rejection ? { date: key(rejection.to), reason: rejection.note ?? '' } : null,
@@ -169,7 +195,7 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     maxPostponeDays,
     today: msToDateKey(now),
     /** The last date that applies at once; later ones wait for approval. */
-    autoUntil: requested === undefined ? null : msToDateKey(requested + maxPostponeDays * DAY_MS),
+    autoUntil: key(supplierAutoUntil(o, maxPostponeDays)),
   }
 }
 

@@ -37,6 +37,24 @@ export async function supplierLink(order: PurchaseOrder): Promise<{ url: string;
   )
 }
 
+/** A หัวหน้า/admin takes a leaked link back; the order keeps its answer. Throws the server's error code. */
+export async function revokeSupplierLink(order: PurchaseOrder): Promise<{ url: string; order: PurchaseOrder }> {
+  const brand = getBrand()
+  return trackWrite(
+    (async () => {
+      const res = await fetch('/api/supplier-po/revoke', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ brand, poId: order.id }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { url?: string; order?: PurchaseOrder; error?: string }
+      if (!res.ok || !body.order || !body.url) throw new Error(body.error ?? `http_${res.status}`)
+      if (getBrand() === brand) orderCache.patch(body.order)
+      return { url: body.url, order: body.order }
+    })(),
+  )
+}
+
 /** A หัวหน้า/admin approves or refuses a date beyond the range. Throws the server's error code. */
 export async function decideSupplierDate(
   order: PurchaseOrder,

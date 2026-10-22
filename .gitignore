@@ -54,3 +54,7 @@ dist-demo
 
 # Cloudflare local secrets (wrangler pages dev)
 .dev.vars
+
+# Python bytecode from local tooling (never project files)
+__pycache__/
+*.pyc

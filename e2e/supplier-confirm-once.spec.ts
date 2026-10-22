@@ -182,14 +182,18 @@ test('an unseen pending proposal survives a stale phone; refresh permits intenti
   await s.attach(page)
   await page.goto(`/supplier/po/${s.token}`)
   await expect(page.getByText('วันส่งที่ยืนยัน', { exact: true })).toBeVisible()
-  // This phone can still accept the originally requested date, unaware of the other phone.
-  const oldAccept = page.getByRole('button', { name: /^✅ ยืนยันส่งวันที่/ })
+  // Since PO-00003 (22 Oct 2026) an approved date offers no "confirm the requested date": this
+  // phone starts an explicit change instead, unaware of the other phone.
+  await expect(page.getByRole('button', { name: /^✅ ยืนยันส่งวันที่/ })).toHaveCount(0)
+  await page.getByRole('button', { name: /ขอเปลี่ยนวันส่งอีกครั้ง/ }).click()
+  await page.locator('input[type="date"]').fill(msToDateKey(day(3)))
+  const oldAccept = page.getByRole('button', { name: 'ยืนยันวันที่เลือก' })
   const other = await browser.newContext({ viewport: { width: 375, height: 812 } })
   try {
     const phone2 = await other.newPage()
     await s.attach(phone2)
     await phone2.goto(`/supplier/po/${s.token}`)
-    await phone2.getByRole('button', { name: /เลือกวันส่งอื่น/ }).click()
+    await phone2.getByRole('button', { name: /ขอเปลี่ยนวันส่งอีกครั้ง/ }).click()
     await phone2.locator('input[type="date"]').fill(msToDateKey(day(7)))
     await phone2.getByRole('button', { name: 'ยืนยันวันที่เลือก' }).click()
     await expect(phone2.getByText(/^ส่งคำขอเลื่อนเป็นวันที่/)).toBeVisible()
@@ -203,7 +207,7 @@ test('an unseen pending proposal survives a stale phone; refresh permits intenti
     await page.getByRole('button', { name: 'โหลดข้อมูลล่าสุด' }).click()
     await expect(page.getByText('วันที่ขอเลื่อน', { exact: true })).toBeVisible()
     expect(s.posts).toHaveLength(postCount)
-    await page.getByRole('button', { name: /เลือกวันส่งอื่น/ }).click()
+    if (!(await page.locator('input[type="date"]').isVisible())) await page.getByRole('button', { name: /ขอเปลี่ยนวันส่งอีกครั้ง/ }).click()
     await page.locator('input[type="date"]').fill(msToDateKey(day(6)))
     await expect(page.getByText('วันที่นี้เกินช่วงที่ตกลง จะต้องรอฝ่ายจัดซื้ออนุมัติก่อน')).toHaveCount(0)
     await page.getByRole('button', { name: 'ยืนยันวันที่เลือก' }).click()

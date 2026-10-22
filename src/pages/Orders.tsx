@@ -10,7 +10,7 @@ import { ORDER_UPDATED } from '../data/useSupplierRefresh'
 import { useToast } from '../components/Toast'
 import { DataTable } from '../components/DataTable'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
-import { Icon } from '../components/Icon'
+import { Icon, type IconName } from '../components/Icon'
 import { ReasonModal } from './requests/ReasonModal'
 import {
   AlertBanner,
@@ -40,7 +40,6 @@ import {
   createPurchaseOrder,
   expectedDeliveryAt,
   getPurchaseOrder,
-  needsResend,
   overdueOrders,
   summariseBySupplier,
 } from '../services/purchaseOrders'
@@ -53,7 +52,8 @@ import { SendWizard } from './purchase/SendWizard'
 import { LineImportModal } from '../components/import/LineImportModal'
 import { DeliveryRiskCard, SupplierConfirmationPanel } from './purchase/SupplierConfirmationPanel'
 import { requestedOf } from '../lib/supplierConfirmation'
-import { presentOrderStatus } from './orders/presentation'
+import { QUICK_FILTERS, matchesStateFilter, presentOrderStatus, stateFilterCounts, type OrderStateFilter, type QuickFilter } from './orders/presentation'
+import { LineBadge } from './orders/LineBadge'
 import { RowMenu, type RowMenuItem } from '../components/frame/RowMenu'
 import { RESUME_PARAM } from '../share/liffResume'
 import { useDraft } from '../lib/useDraft'
@@ -200,8 +200,7 @@ export function OrdersPage() {
   const [sendingMany, setSendingMany] = useState<PurchaseOrder[] | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [supplierFilter, setSupplierFilter] = useState('')
-  type StateFilter = '' | 'late' | 'sent' | 'unsent' | 'draft' | 'supplierWaiting' | 'datePending'
-  const [stateFilter, setStateFilter] = useState<StateFilter>('')
+  const [stateFilter, setStateFilter] = useState<OrderStateFilter>('')
 
   const load = useCallback(async (force = false) => {
     setLoading(true)
@@ -301,17 +300,19 @@ export function OrdersPage() {
     return base
       .filter((o) => !(lateOnly && tab === 'open') || lateIds.has(o.id))
       .filter((o) => !supplierFilter || o.supplierId === supplierFilter)
-      .filter((o) => {
-        if (!stateFilter) return true
-        if (stateFilter === 'late') return lateIds.has(o.id)
-        if (stateFilter === 'draft') return o.status === 'draft'
-        if (stateFilter === 'supplierWaiting') return o.status === 'ordered' && o.supplierConfirmationStatus === 'waiting'
-        if (stateFilter === 'datePending') return o.status === 'ordered' && o.supplierConfirmationStatus === 'pending_date_approval'
-        if (stateFilter === 'sent') return o.shareStatus === 'sent' && !needsResend(o)
-        return o.status === 'ordered' && (o.shareStatus !== 'sent' || needsResend(o))
-      })
+      .filter((o) => matchesStateFilter(o, stateFilter, lateIds.has(o.id)))
       .filter((o) => !q || looseMatch([o.supplierName, o.docNo, ...o.lines.map((l) => l.productName)], q))
   }, [tab, open, received, cancelled, search, lateOnly, lateIds, supplierFilter, stateFilter])
+  // The quick filters' counts: the open orders already loaded for this window, narrowed by
+  // the search and supplier as the list is — so a count is what a tap will show, and never
+  // an all-time total. No read of its own.
+  const quickCounts = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const base = open
+      .filter((o) => !supplierFilter || o.supplierId === supplierFilter)
+      .filter((o) => !q || looseMatch([o.supplierName, o.docNo, ...o.lines.map((l) => l.productName)], q))
+    return stateFilterCounts(base, (o) => lateIds.has(o.id))
+  }, [open, search, supplierFilter, lateIds])
   const paged = usePaged(filtered, 20, `${tab}|${search}|${lateOnly}|${days}|${supplierFilter}|${stateFilter}`)
   const supplierOptions = useMemo(() => {
     const m = new Map<string, string>()
@@ -551,6 +552,9 @@ export function OrdersPage() {
             onChange={(k) => {
               setTab(k)
               setLateOnly(false)
+              // LINE states only exist on open orders; carried over, the filter would empty
+              // the received and cancelled lists with nothing on screen to say why.
+              setStateFilter('')
               setSelected(new Set())
             }}
             chips={tabItems.map((x) => ({ key: x.key, label: x.label }))}
@@ -605,11 +609,12 @@ export function OrdersPage() {
           {tab === 'open' && (
             <label className="block min-w-0">
               <span className="mb-1 block text-xs font-medium text-ink-soft">{t('สถานะ')}</span>
-              <Select value={stateFilter} onChange={(e) => setStateFilter(e.target.value as StateFilter)}>
+              <Select value={stateFilter} onChange={(e) => setStateFilter(e.target.value as OrderStateFilter)}>
                 <option value="">{t('สถานะทั้งหมด')}</option>
                 <option value="late">{t('ล่าช้า')}</option>
                 <option value="sent">{t('ส่งเข้า LINE แล้ว')}</option>
                 <option value="unsent">{t('ยังไม่ได้ส่ง LINE')}</option>
+                <option value="resend">{t('ต้องส่ง PO ใหม่')}</option>
                 <option value="draft">{t('ร่าง — รออนุมัติ')}</option>
                 <option value="supplierWaiting">{t('รอผู้ขายยืนยัน')}</option>
                 <option value="datePending">{t('รออนุมัติวันส่ง')}</option>
@@ -626,6 +631,17 @@ export function OrdersPage() {
             {t('รีเซ็ต')}
           </Button>
           </div>
+          {tab === 'open' && (
+            <QuickFilters
+              counts={quickCounts}
+              days={days}
+              value={stateFilter}
+              onChange={(f) => {
+                setStateFilter(f)
+                setLateOnly(false)
+              }}
+            />
+          )}
         </Card>
       )}
 
@@ -788,12 +804,79 @@ function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: P
   )
 }
 
+const QUICK_LABEL: Record<QuickFilter, string> = {
+  datePending: 'รออนุมัติวันส่ง', // i18n-key
+  unsent: 'ยังไม่ส่ง LINE', // i18n-key
+  supplierWaiting: 'รอผู้ขายยืนยัน', // i18n-key
+  resend: 'ต้องส่ง PO ใหม่', // i18n-key
+  late: 'เกินกำหนดรับของ', // i18n-key
+}
+
+/**
+ * One tap to the five lists someone chases every morning. The counts are the orders loaded
+ * for the window on screen, and say so — they are not all-time totals.
+ */
+function QuickFilters({
+  counts,
+  days,
+  value,
+  onChange,
+}: {
+  counts: Record<QuickFilter, number>
+  days: number
+  value: OrderStateFilter
+  onChange: (f: OrderStateFilter) => void
+}) {
+  const t = useT()
+  return (
+    // Two by two on a phone, where five chips in a row do not fit and one per line wastes
+    // the screen; a single row from tablets up.
+    <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center" role="group" aria-label={t('ตัวกรองด่วน')}>
+      {QUICK_FILTERS.map((f) => {
+        const on = value === f
+        const loud = (f === 'datePending' || f === 'resend' || f === 'late') && counts[f] > 0
+        return (
+          <button
+            key={f}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? '' : f)}
+            className={`inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-full px-2 text-center text-sm font-medium leading-tight ring-1 ring-inset outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-brand md:min-h-9 md:whitespace-nowrap md:px-3 ${
+              on ? 'bg-brand-soft text-brand ring-brand/40' : 'bg-surface text-ink-soft ring-line-strong hover:bg-sunken'
+            }`}
+          >
+            {t(QUICK_LABEL[f])}
+            <span className={`num ${loud ? 'font-bold text-out' : 'font-semibold text-ink'}`}>({counts[f]})</span>
+          </button>
+        )
+      })}
+      <span className="col-span-2 text-xs text-ink-faint">{t('นับเฉพาะใบใน {days} วันล่าสุด', { days })}</span>
+    </div>
+  )
+}
+
+const SUPPLIER_ICON: Record<string, IconName> = {
+  waiting: 'clock',
+  confirmed: 'checkCircle',
+  changed: 'calendar',
+  pending_date_approval: 'calendar',
+}
+
 function OrderStatus({ order, late }: { order: PurchaseOrder; late: boolean }) {
   const t = useT()
   const status = presentOrderStatus(order, late)
+  const supplierState = status.primary.supplier ? order.supplierConfirmationStatus : undefined
   return (
     <div className="space-y-1" data-urgency={status.urgency}>
-      <Badge color={status.primary.color}>{t(status.primary.label)}</Badge>
+      {/* Two facts, two badges: what is happening with the goods or the supplier's answer,
+          and — separately — whether LINE has the current sheet. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge color={status.primary.color} data-supplier-state={supplierState}>
+          {supplierState && <Icon name={SUPPLIER_ICON[supplierState]} size={13} />}
+          {t(status.primary.label)}
+        </Badge>
+        <LineBadge order={order} />
+      </div>
       {status.secondary.length > 0 && (
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs leading-relaxed text-ink-soft">
           {status.secondary.map((label) => <span key={label}>{t(label)}</span>)}
@@ -1413,6 +1496,7 @@ function OrderSheet({
   return (
     <Modal open onClose={onClose} title={t('ใบสั่งซื้อ {docNo}', { docNo: order.docNo })}>
       <div className="space-y-3">
+        <LineBadge order={order} detailed />
         <SheetLangToggle value={sheetLang} onChange={setSheetLang} />
         <PoSheet order={order} locationName={locationName} company={company} ref={sheet} lang={sheetLang} />
         {order.status === 'ordered' && <DeliveryRiskCard order={order} />}

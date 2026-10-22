@@ -96,6 +96,10 @@
     sans-serif;
   --font-login: 'Anuphan', 'LINE Seed Sans TH', system-ui, sans-serif;
 
+  /* Wider than 2xl (1536): the width at which the Products table has room for its reference
+     columns (Category, Unit) as well as Location. Measured, not guessed — R19-E. */
+  --breakpoint-3xl: 1840px;
+
   /* Surfaces and text. Industrial slate: quiet, so the numbers carry the page. */
   --color-canvas: #f1f5f9;
   --color-surface: #ffffff;
@@ -117,6 +121,13 @@
   --color-in-soft: #ecfdf5;
   --color-out: #be123c;
   --color-out-soft: #fff1f2;
+
+  /* LINE's own green, kept for one fact: the order's sheet went out on LINE. Not `in` —
+     a supplier's answer or a receipt must never read as "sent". Text #046b30 on the
+     #e7f8ee tint measures 6.0:1; the ring is LINE's brand green #06c755. */
+  --color-chat: #046b30;
+  --color-chat-soft: #e7f8ee;
+  --color-chat-ring: #06c755;
 
   /* Reserved for states, never for direction. Destructive actions are told
      apart from outbound stock by their FORM — a filled button — not by hue. */
