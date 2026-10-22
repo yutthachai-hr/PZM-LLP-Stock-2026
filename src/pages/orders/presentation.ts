@@ -66,12 +66,13 @@ export function matchesStateFilter(order: PurchaseOrder, filter: OrderStateFilte
   return line === 'unsent' || line === 'awaitingConfirm' || line === 'failed' || line === 'skipped'
 }
 
-export const QUICK_FILTERS = ['unsent', 'supplierWaiting', 'resend', 'late'] as const
+// A date waiting for a manager's decision is first: the supplier is waiting on us (22 Oct 2026).
+export const QUICK_FILTERS = ['datePending', 'unsent', 'supplierWaiting', 'resend', 'late'] as const
 export type QuickFilter = (typeof QUICK_FILTERS)[number]
 
 /** How many of the given rows each quick filter would show — the rows loaded, not all time. */
 export function stateFilterCounts(orders: readonly PurchaseOrder[], isLate: (o: PurchaseOrder) => boolean): Record<QuickFilter, number> {
-  const counts = { unsent: 0, supplierWaiting: 0, resend: 0, late: 0 }
+  const counts = { datePending: 0, unsent: 0, supplierWaiting: 0, resend: 0, late: 0 }
   for (const o of orders) for (const f of QUICK_FILTERS) if (matchesStateFilter(o, f, isLate(o))) counts[f]++
   return counts
 }
