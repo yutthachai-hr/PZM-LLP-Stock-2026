@@ -22,10 +22,12 @@ export interface ReceiveParams {
   alongside?: { read: (tx: TxContext) => Promise<void>; write: (tx: TxContext, docNo: string) => void }
 }
 
+/** The unit keyed, when it differs from the product's own — what the movement records. */
 export function keyedUnit(x: { unit: string; entryUnit?: string }): string | undefined {
   const u = (x.entryUnit ?? '').trim()
   return u && !sameUnit(u, x.unit) ? u : undefined
 }
+/** The entryUnit/entryQty pair to write on a movement, or nothing for a base-unit row. */
 export function keyedFields(x: { unit: string; entryUnit?: string; entryQty?: number }): { entryUnit: string; entryQty: number } | Record<string, never> {
   const u = keyedUnit(x)
   return u && x.entryQty !== undefined ? { entryUnit: u, entryQty: x.entryQty } : {}

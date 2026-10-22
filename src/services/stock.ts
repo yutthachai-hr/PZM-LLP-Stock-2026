@@ -74,10 +74,6 @@ const PREFIX: Record<MovementType, string> = {
   consume: 'CS',
 }
 
-/** The unit keyed, when it differs from the product's own — what the movement records. */
-
-/** The entryUnit/entryQty pair to write on a movement, or nothing for a base-unit row. */
-
 /** "สต๊อกไม่พอ" with the base balance, and what was keyed when that differs. */
 function shortMessage(l: MovementLine, avail: number): AppError {
   const keyed = keyedUnit(l)
