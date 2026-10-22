@@ -529,3 +529,41 @@ describe('the same answer again is not a new event', () => {
     expect(r.ok && !r.replayed && r.outcome).toBe('changed')
   })
 })
+
+// R30 (owner P0-B): a leaked link can be taken back without amending the order.
+describe('taking a link back (reissue)', () => {
+  test('bumps the version without a revision or a reset; the old version no longer speaks', () => {
+    const o = applyPatch(linked(), (() => { const r = respond(linked(), { action: 'accept', requestId: 'req-before-revoke' }, ctx); if (!r.ok || r.replayed) throw new Error(); return r.patch })())
+    const r = issueLink(o, { now: NOW + 1000, actor, ttlDays: 30, makeId, reissue: true })
+    if (!r.ok || !r.patch) throw new Error('no reissue')
+    const next = applyPatch(o, r.patch)
+    expect(r.version).toBe(2)
+    expect(next.revision ?? 0).toBe(0)
+    expect(next.supplierConfirmationStatus).toBe('confirmed') // the answer already given stands
+    expect(next.supplierActivity?.slice(-2).map((a) => a.kind)).toEqual(['linkRevoked', 'linkIssued'])
+    expect(linkProblem(next, { supplierId: 's1', version: 1 })).toBe('mismatch')
+    expect(linkProblem(next, { supplierId: 's1', version: 2 })).toBeNull()
+  })
+  test('a part-received order still owed can take its link back', () => {
+    const o = { ...linked(), receipts: [{ docNo: 'R', date: NOW, invoiceNo: 'i', byId: 'u', byName: 'u', lines: [] }] }
+    expect(issueLink(o, { now: NOW, actor, ttlDays: 30, makeId, reissue: true })).toMatchObject({ ok: true, version: 2 })
+  })
+  test('a closed order has nothing to take back', () => {
+    for (const status of ['received', 'cancelled', 'draft'] as const) {
+      expect(issueLink({ ...linked(), status }, { now: NOW, actor, ttlDays: 30, makeId, reissue: true })).toEqual({ ok: false, error: 'notOpen' })
+    }
+  })
+})
+
+describe('approving a waiting date that has already gone by (R30)', () => {
+  test('is refused as past; refusing it still works', () => {
+    const o = linked()
+    const p = respond(o, { action: 'propose', date: day(9), requestId: 'req-late-decide' }, ctx)
+    if (!p.ok || p.replayed) throw new Error()
+    const waiting = applyPatch(o, p.patch)
+    const changeId = waiting.pendingDeliveryDate!.changeId
+    expect(decide(waiting, { changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, day(12), makeId)).toEqual({ ok: false, error: 'past' })
+    expect(decide(waiting, { changeId, decision: 'reject', reason: 'too late' }, { id: 'm1', name: 'Boss' }, day(12), makeId)).toMatchObject({ ok: true })
+    expect(decide(waiting, { changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, day(9), makeId)).toMatchObject({ ok: true }) // the day itself is fine
+  })
+})
