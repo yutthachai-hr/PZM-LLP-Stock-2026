@@ -3,7 +3,7 @@
 //   firebase emulators:exec --only firestore --project demo-r33-stock "vitest run --config vitest.rules.config.ts tests/functions/r33-stock-command.emulator.test.ts"
 import { beforeEach, describe, expect, test } from 'vitest'
 import { handleStockCommand, runStockCommand, type StockCommandDeps } from '../../functions/_lib/stockCommand'
-import { stockCommandStore, type StockBrand } from '../../functions/_lib/stockCommandStore'
+import { StockConflict, stockCommandStore, type StockBrand } from '../../functions/_lib/stockCommandStore'
 import { decodeFields, encodeFields } from '../../worker/src/codec'
 
 const project = 'demo-r33-stock'
@@ -244,6 +244,91 @@ test('F4: expectedRev fences the whole brand ledger; a matching one files', asyn
   await expect(runStockCommand(deps(), { ...adjust(), expectedRev: -1 }, 'u2')).rejects.toMatchObject({ code: 'invalid' })
 })
 
+describe('historical rows and rebase conflicts', () => {
+  test('S5: a historical movement collision aborts the entire commit, not just the audit row', async () => {
+    await runStockCommand(deps(), adjust(), 'u1')
+    const [original] = await list('stockMovements')
+    await expect(deps().store('pizza').transaction(async (tx) => {
+      const level = await tx.get<Record<string, unknown>>('stockLevels', 'wh__p1')
+      tx.set('stockLevels', 'wh__p1', { ...level, qty: 99 })
+      tx.set('stockMovements', original.id as string, { ...original, qty: 99, byUserId: 'boss' })
+    })).rejects.toBeInstanceOf(StockConflict)
+    expect(commits).toBe(6) // original + five failed create-only attempts
+    expect(await levelOf()).toBe(13)
+    expect(await list('stockMovements')).toEqual([original])
+    expect((await list('meta')).find((m) => m.id === 'stockLedger_pizza')?.value).toBe(1)
+  })
+
+  test('the trusted adapter cannot update or delete a historical movement', async () => {
+    await runStockCommand(deps(), adjust(), 'u1')
+    const [original] = await list('stockMovements')
+    for (const action of ['update', 'delete'] as const) {
+      await expect(deps().store('pizza').transaction(async (tx) => {
+        if (action === 'update') tx.update('stockMovements', original.id as string, { qty: 99 })
+        else tx.delete('stockMovements', original.id as string)
+      })).rejects.toThrow(`${action} not allowed`)
+    }
+    expect(commits).toBe(1)
+    expect(await list('stockMovements')).toEqual([original])
+    expect(await levelOf()).toBe(13)
+  })
+
+  test('a master-unit change during commit fences the old-unit command on retry', async () => {
+    // Inject the changed master, not a claim that the legacy rebase writer was migrated.
+    beforeCommit = () => put('products/p1', { id: 'p1', name: 'Flour', unit: 'Gram', unitType: 'g', active: true })
+    await expect(runStockCommand(deps(), adjust(), 'u1')).rejects.toMatchObject({ code: 'invalid' })
+    expect(commits).toBe(1)
+    expect(await levelOf()).toBe(10)
+    expect(await list('stockMovements')).toHaveLength(0)
+    expect(await list('meta')).toHaveLength(0)
+    expect(await list('counters')).toHaveLength(0)
+  })
+})
+
+describe('live site authorization', () => {
+  test.each(['adjust', 'count'])('%s outside the live assignment is refused without writes', async (command) => {
+    await put('users/u1', { name: 'Staff One', role: 'staff', active: true, siteIds: ['other'] })
+    await expect(runStockCommand(deps(), command === 'adjust' ? adjust() : count(7, 10), 'u1')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(commits).toBe(0)
+    expect(await levelOf()).toBe(10)
+    expect(await list('meta')).toHaveLength(0)
+    expect(await list('counters')).toHaveLength(0)
+    expect(await list('stockMovements')).toHaveLength(0)
+  })
+
+  test.each([
+    { role: 'staff', siteIds: ['wh'] },
+    { role: 'staff', siteIds: [] },
+    { role: 'manager', siteIds: ['other'] },
+    { role: 'admin', siteIds: ['other'] },
+  ])('preserves existing grants: $role $siteIds', async (grant) => {
+    await put('users/u1', { name: 'Staff One', active: true, ...grant })
+    expect(await runStockCommand(deps(), adjust(), 'u1')).toMatchObject({ ledgerRev: 1 })
+    expect(await levelOf()).toBe(13)
+  })
+
+  test('site reassignment during commit is fenced; retry is forbidden with no partial writes', async () => {
+    beforeCommit = () => put('users/u1', { name: 'Staff One', role: 'staff', active: true, siteIds: ['other'] })
+    await expect(runStockCommand(deps(), adjust(), 'u1')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(commits).toBe(1)
+    expect(await levelOf()).toBe(10)
+    expect(await list('meta')).toHaveLength(0)
+    expect(await list('counters')).toHaveLength(0)
+    expect(await list('stockMovements')).toHaveLength(0)
+  })
+
+  test('a lost-response replay cannot bypass a later site reassignment', async () => {
+    const cmd = adjust()
+    loseResponse = true
+    await expect(runStockCommand(deps(), cmd, 'u1')).rejects.toThrow(/response lost/)
+    await put('users/u1', { name: 'Staff One', role: 'staff', active: true, siteIds: ['other'] })
+    await expect(runStockCommand(deps(), cmd, 'u1')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(commits).toBe(1)
+    expect(await levelOf()).toBe(13)
+    expect(await list('stockMovements')).toHaveLength(1)
+  })
+})
+
 // S2 (R34): stock leaves a branch for transit only through a real transfer a manager approves.
 describe('transferApprove', () => {
   const transfer = (over: Record<string, unknown> = {}) => ({
@@ -295,6 +380,16 @@ describe('transferApprove', () => {
     expect(await qtyAt('transit')).toBe(4)
   })
 
+  test('a role downgrade cannot recover a manager-only receipt, even with unrestricted sites', async () => {
+    const cmd = approve()
+    await runStockCommand(deps(), cmd, 'm1')
+    await put('users/m1', { name: 'Manager One', role: 'staff', active: true, siteIds: [] })
+    await expect(runStockCommand(deps(), cmd, 'm1')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(commits).toBe(1)
+    expect(await qtyAt('transit')).toBe(4)
+    expect(await list('stockMovements')).toHaveLength(1)
+  })
+
   test('a transfer line naming another unit, or a client-made unit conversion, is refused', async () => {
     await put('transfers/t1', transfer({ items: [{ idx: 0, productId: 'p1', productName: 'Flour', unit: 'ลัง', requestedQty: 4, dispatchQty: 4 }] }))
     await expect(runStockCommand(deps(), approve(), 'm1')).rejects.toMatchObject({ code: 'invalid' })
@@ -332,6 +427,21 @@ describe('poApprove', () => {
     expect(await runStockCommand(deps(), approvePo(), 'u1')).toEqual({ docNo: null, ledgerRev: 0, replayed: false })
     expect(await po()).toMatchObject({ status: 'ordered', approvedBy: 'u1', approvedByName: 'Staff One', approvedAt: DATE, orderedAt: DATE, createdBy: 'u2', docNo: 'PO-00001' })
     expect((await list('meta')).some((m) => m.id === 'stockLedger_pizza')).toBe(false)
+  })
+
+  test('staff may approve only a PO in their live site assignment, including on replay', async () => {
+    await put('users/u1', { name: 'Staff One', role: 'staff', active: true, siteIds: ['other'] })
+    const cmd = approvePo()
+    await expect(runStockCommand(deps(), cmd, 'u1')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(commits).toBe(0)
+    expect((await po()).status).toBe('draft')
+    expect(await list('meta')).toHaveLength(0)
+    await put('users/u1', { name: 'Staff One', role: 'staff', active: true, siteIds: ['wh'] })
+    await runStockCommand(deps(), cmd, 'u1')
+    await put('users/u1', { name: 'Staff One', role: 'staff', active: true, siteIds: ['other'] })
+    await expect(runStockCommand(deps(), cmd, 'u1')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(commits).toBe(1)
+    expect((await po()).approvedBy).toBe('u1')
   })
 
   test('a client cannot supply approvedAt, approvedBy or status', async () => {

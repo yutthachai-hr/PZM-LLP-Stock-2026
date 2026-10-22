@@ -8,7 +8,7 @@ import { planAdjust, type AdjustLine } from '../../src/services/adjustPlan'
 import { levelId } from '../../src/lib/levelKey'
 import { requireCountQty, roundQty } from '../../src/lib/validate'
 import { COL, type AppUser, type Product, type PurchaseOrder, type StockLevel, type StockMovement, type Transfer } from '../../src/types'
-import { isManager, liveItems } from '../../src/lib/transferStatus'
+import { canUserAccessBranch, isManager, liveItems } from '../../src/lib/transferStatus'
 import { planApproveTransfer } from '../../src/services/transferPlan'
 import { sameUnit } from '../../src/lib/units'
 import { StockConflict, type StockBrand } from './stockCommandStore'
@@ -135,6 +135,24 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
     const revoked = await tx.get(COL.revokedUsers, uid)
     if (!user?.active || revoked || !deps.brandAllowed(user, brand)) throw new StockCommandError('forbidden')
 
+    // Replays recover an outcome, not an old grant: authorize live sites/role before receipts.
+    const requireSite = (locationId: string) => {
+      if (!canUserAccessBranch(user, locationId)) throw new StockCommandError('forbidden')
+    }
+    if (input.command === 'poApprove') {
+      const po = await tx.get<PurchaseOrder>(COL.purchaseOrders, input.payload.poId)
+      if (!po) throw new AppError('ไม่พบใบสั่งซื้อ')
+      requireSite(po.locationId)
+    } else if (input.command === 'transferApprove') {
+      if (!isManager(user.role)) throw new StockCommandError('forbidden')
+      const t = await tx.get<Transfer>(COL.transfers, input.payload.transferId)
+      if (!t) throw new AppError('ไม่พบเอกสาร')
+      requireSite(t.fromLocationId)
+      requireSite(t.toLocationId)
+    } else {
+      requireSite(input.payload.locationId)
+    }
+
     // A lost response is recovered by the same operation ID; the same ID with other content is a mistake.
     const receipt = await tx.get<{ fingerprint: string; result: { docNo: string | null; ledgerRev: number } }>(COL.meta, opKey)
     if (receipt) {
@@ -167,7 +185,6 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
     if (input.command === 'transferApprove') {
       // S2: stock leaves a branch for transit only through a real transfer, in the state and
       // revision the manager saw, approved by a manager the server knows.
-      if (!isManager(user.role)) throw new StockCommandError('forbidden')
       const { transferId, expectedRevision, note } = input.payload
       const t = await tx.get<Transfer>(COL.transfers, transferId)
       if (t) {
