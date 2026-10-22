@@ -58,3 +58,23 @@ executed, steps skipped and why, and the evidence (tool calls, test output). Fol
 similar practice without reading the skill is not skill use.
 
 All CI, release and security gates in `HANDOFF.md` and `.github/workflows/` still apply.
+
+## Agent skills
+
+Pstack remains the coordinator. Before using Matt Pocock skills, read
+`docs/agents/skill-workflow.md` for routing, collision handling and delegation adaptation.
+MAIN keeps the Owner-selected Pi model; skills do not select or change model routes.
+
+### Issue tracker
+
+GitHub Issues in this repository; see `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Reuse existing labels and issue-body readiness states; see `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context, lazy glossary/ADR creation; see `docs/agents/domain.md`.
+
+Installation provenance and remaining activation gates: `docs/agents/matt-skills-installation.md`.
