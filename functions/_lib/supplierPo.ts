@@ -1,6 +1,8 @@
 import type { AppUser, DeliveryDateChange, InventorySettings, PurchaseOrder } from '../../src/types'
 import {
+  agreedByPurchasing,
   agreedDateOf,
+  supplierAutoUntil,
   applyPatch,
   dateKeyToMs,
   decide,
@@ -20,7 +22,6 @@ import {
   type SupplierPatch,
 } from '../../src/lib/supplierConfirmation'
 import { supplierAnswerDraft, supplierDecisionDraft, supplierOpenedDraft, toDoc } from '../../src/lib/inventoryRules/notifications'
-import { DAY_MS } from '../../src/lib/inventoryRules/time'
 import { brandCollection, type ServerStore } from './serverStore'
 import { signSupplierToken, verifySupplierSignature, type SupplierClaims, type TokenBrand } from './supplierToken'
 
@@ -184,6 +185,8 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     confirmedDate: key(confirmed),
     /** The date agreed on this link, still standing under a waiting date or a refusal. */
     agreedDate: key(agreedDateOf(o)),
+    /** The agreed date is purchasing's approval of the supplier's own proposal: nothing to confirm again. */
+    agreedByPurchasing: agreedByPurchasing(o),
     effectiveDate: key(effectiveDeliveryOf(o)),
     pending: o.pendingDeliveryDate ? { date: key(o.pendingDeliveryDate.date), note: o.pendingDeliveryDate.note ?? null } : null,
     rejection: rejection ? { date: key(rejection.to), reason: rejection.note ?? '' } : null,
@@ -192,7 +195,7 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     maxPostponeDays,
     today: msToDateKey(now),
     /** The last date that applies at once; later ones wait for approval. */
-    autoUntil: requested === undefined ? null : msToDateKey(requested + maxPostponeDays * DAY_MS),
+    autoUntil: key(supplierAutoUntil(o, maxPostponeDays)),
   }
 }
 
