@@ -225,7 +225,8 @@ service cloud.firestore {
           'fromLocationId', 'toLocationId', 'note', 'reason', 'hasPhoto',
           'supplierId', 'supplierName', 'invoiceNo', 'docDate', 'poId', 'poDocNo',
           'date', 'byUserId', 'byUserName', 'createdAt',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'transferId'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided', 'transferId',
+          'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'
         ])
         && d.type in ['receive', 'issue', 'adjust', 'consume']
         && text(d.docNo, 40) && text(d.productId, 200) && text(d.productName, 300)
@@ -253,6 +254,11 @@ service cloud.firestore {
         && (!('poId' in d) || text(d.poId, 200))
         && (!('poDocNo' in d) || text(d.poDocNo, 40))
         && (!('voided' in d) || d.voided is bool)
+        // Why, who and when it was cancelled; how they may be written is voidedHonestly().
+        && (!('voidReason' in d) || text(d.voidReason, 500))
+        && (!('voidedAt' in d) || epochMs(d.voidedAt))
+        && (!('voidedBy' in d) || text(d.voidedBy, 200))
+        && (!('voidedByName' in d) || text(d.voidedByName, 200))
         && (!('transferId' in d) || text(d.transferId, 200))
         && (!('fromLocationId' in d) || text(d.fromLocationId, 200))
         && (!('toLocationId' in d) || text(d.toLocationId, 200))
@@ -984,7 +990,7 @@ service cloud.firestore {
           && request.resource.data.status == 'draft'
         : k != 'stockMovements' || (
           request.resource.data.byUserId == request.auth.uid
-          && !('voided' in request.resource.data)
+          && !request.resource.data.keys().hasAny(['voided', 'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'])
           && !('updatedBy' in request.resource.data)
           // Moving stock between two sites in one step is a manager's (owner, 24 Sep 2026);
           // staff move it through a transfer, whose rows name it.
@@ -1277,9 +1283,11 @@ service cloud.firestore {
       // the document's quantities are what explain them.
       return !('transferId' in resource.data) && editedKeys().hasOnly([
           'qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit', 'fromLocationId', 'toLocationId',
-          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided'
+          'edits', 'updatedBy', 'updatedByName', 'updatedAt', 'voided',
+          'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'
         ])
-        && (!editedKeys().hasAny(['voided']) || roleIsAdmin())
+        && (!editedKeys().hasAny(['voided', 'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'])
+            || voidedHonestly())
         && (!('updatedBy' in request.resource.data)
             || request.resource.data.updatedBy == request.auth.uid)
         // Changing what a row says means appending to its history, in the caller's own name.
@@ -1288,6 +1296,27 @@ service cloud.firestore {
         && (!editedKeys().hasAny(['qty', 'entryQty', 'date', 'note', 'unit', 'entryUnit',
                                   'fromLocationId', 'toLocationId'])
             || appendedOwnEdit());
+    }
+
+    /**
+     * Cancelling a movement (owner P0, 22 Oct 2026): an admin decision, made once, in the
+     * caller's own name, with a reason — all four facts written together with `voided`.
+     * Nothing un-cancels a row or rewrites its reason afterwards, and a row cancelled before
+     * reasons existed cannot have one invented for it. The balance reversal is the client's
+     * transaction; proving it here needs the trusted server (r33 stock-command prototype).
+     */
+    function voidedHonestly() {
+      let d = request.resource.data;
+      return roleIsAdmin()
+        && resource.data.get('voided', false) == false
+        && d.voided == true
+        && editedKeys().hasAll(['voided', 'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'])
+        && d.voidReason is string
+        && d.voidReason.trim().size() > 0
+        && d.voidReason.size() <= 500
+        && d.voidedBy == request.auth.uid
+        && epochMs(d.voidedAt)
+        && text(d.voidedByName, 200);
     }
 
     /**

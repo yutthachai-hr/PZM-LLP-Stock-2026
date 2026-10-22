@@ -25,6 +25,7 @@ import { hasMixedLegacyUnits, mergeReportMovements } from '../lib/reportHistory'
 import type { MovementType } from '../types'
 import { STATE_LOOK, stockState } from './products/productStatus'
 import { movementNote } from '../lib/receiptLabel'
+import { voidSummary } from '../lib/voidAudit'
 
 /**
  * ประวัติ/Stock Card for one product (owner's mock-up 06, spec §2.7): what it is and where it
@@ -102,7 +103,20 @@ export function StockCardPage() {
     return r
   }, [card])
 
-  const rows = useMemo(() => [...card.rows].reverse(), [card])
+  // Voided rows carry no balance, so the ledger leaves them out; they are listed beside it (same
+  // filters, no quantities) so why, who and when each was cancelled stays on the card.
+  const rows = useMemo(() => {
+    const { from, to, valid } = dayRange(fromStr, toStr)
+    const voided: StockCardRow[] =
+      valid === false
+        ? []
+        : all
+            .filter((m) => m.voided && m.date >= from && m.date < to)
+            .filter((m) => !locationId || m.fromLocationId === locationId || m.toLocationId === locationId)
+            .filter((m) => !typeFilter || m.type === typeFilter)
+            .map((movement) => ({ movement, inQty: 0, outQty: 0, balance: null }))
+    return [...card.rows, ...voided].sort((a, b) => b.movement.date - a.movement.date || b.movement.createdAt - a.movement.createdAt)
+  }, [card, all, fromStr, toStr, locationId, typeFilter])
   const siteName = (lid?: string) => (lid ? (locations.find((l) => l.id === lid)?.name ?? '') : '')
 
   const columns = useMemo<Column<StockCardRow>[]>(
@@ -119,7 +133,7 @@ export function StockCardPage() {
         key: 'type',
         header: t('การเคลื่อนไหว'),
         cell: (r) => (
-          <StatusChip tone={TYPE_COLOR[r.movement.type]} icon={r.inQty > 0 ? 'arrowDown' : 'arrowUp'} size="sm">
+          <StatusChip tone={TYPE_COLOR[r.movement.type]} icon={r.movement.voided ? 'xCircle' : r.inQty > 0 ? 'arrowDown' : 'arrowUp'} size="sm">
             {t(TYPE_LABEL[r.movement.type])}
           </StatusChip>
         ),
@@ -141,7 +155,18 @@ export function StockCardPage() {
         ),
       },
       { key: 'by', header: t('ผู้บันทึก'), className: 'text-ink-soft', cell: (r) => r.movement.byUserName },
-      { key: 'note', header: t('หมายเหตุ'), className: 'text-xs text-ink-soft', cell: (r) => movementNote(r.movement, t) },
+      {
+        key: 'note',
+        header: t('หมายเหตุ'),
+        className: 'text-xs text-ink-soft',
+        cell: (r) => (
+          <>
+            {movementNote(r.movement, t)}
+            {/* inline-block: the struck-through row must not strike out why it was cancelled */}
+            {r.movement.voided && <span className="mt-0.5 inline-block text-danger">{voidSummary(r.movement, t, formatThaiDateTime)}</span>}
+          </>
+        ),
+      },
     ],
     [t, hasLegacy],
   )
@@ -172,6 +197,7 @@ export function StockCardPage() {
     [t('สาขา')]: [siteName(r.movement.fromLocationId), siteName(r.movement.toLocationId)].filter(Boolean).join(' → '),
     [t('ผู้บันทึก')]: r.movement.byUserName,
     [t('หมายเหตุ')]: movementNote(r.movement, t),
+    [t('การยกเลิก')]: voidSummary(r.movement, t, formatThaiDateTime),
   }))
   const fileBase = `stock-card-${product.sku}`
 

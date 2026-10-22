@@ -7,7 +7,6 @@ import { HistoryReadNotice } from '../components/HistoryReadNotice'
 import { LedgerWindowNotice } from '../components/LedgerWindowNotice'
 import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../components/Toast'
-import { useConfirm } from '../components/Confirm'
 import {
   Badge,
   Button,
@@ -24,7 +23,9 @@ import { voidMovement, getMovementImage } from '../services/stock'
 import { EditMovementModal } from '../components/movements/EditMovementModal'
 import { TYPE_COLOR, TYPE_LABEL } from '../components/movements/labels'
 import { SiteChip, SiteSelect } from '../components/SiteChip'
-import { fmtQty, formatThaiDate, dayRange } from '../lib/format'
+import { fmtQty, formatThaiDate, formatThaiDateTime, dayRange } from '../lib/format'
+import { VOID_REASON_MAX, voidSummary } from '../lib/voidAudit'
+import { ReasonModal } from './requests/ReasonModal'
 import { effectAt, effectOverall, stockCard } from '../lib/ledger'
 import { hasMixedLegacyUnits, mergeReportMovements } from '../lib/reportHistory'
 import { breakdown, describeQty } from '../lib/uom'
@@ -81,7 +82,6 @@ export function MovementsPage() {
   const { user } = useAuth()
   const { brand } = useBrand()
   const toast = useToast() // i18n-key
-  const confirm = useConfirm()
   const isAdmin = user?.role === 'admin'
 
   // Arriving from the top-bar search or a low-stock link: the point of that link is the
@@ -198,17 +198,18 @@ export function MovementsPage() {
     [rows, voidedRows, docFilter],
   )
 
-  async function doVoid(m: StockMovement) {
-    const ok = await confirm({
-      title: t("ยกเลิกรายการ"),
-      message: t('ยกเลิกรายการ {docNo} ({name})? ระบบจะคืนยอดสต๊อกกลับ', { docNo: m.docNo, name: m.productName, }),
-      danger: true,
-      confirmText: t("ยกเลิกรายการ"),
-    })
-    if (!ok) return
+  // Cancelling asks why (owner P0, 22 Oct 2026). The modal keeps the typed reason if the save
+  // fails, and closes only once the cancellation is filed.
+  const [voiding, setVoiding] = useState<StockMovement | null>(null)
+  function doVoid(m: StockMovement) {
+    setVoiding(m)
+  }
+  async function confirmVoid(reason: string) {
+    if (!voiding) return
     try {
-      await voidMovement(m.id, { id: user!.id, name: user!.name })
+      await voidMovement(voiding.id, { id: user!.id, name: user!.name }, reason)
       toast.success(t("ยกเลิกรายการแล้ว (คืนสต๊อก)"))
+      setVoiding(null)
     } catch (e) {
       toast.error(t("ทำรายการไม่สำเร็จ:") + ' ' + errText(e, t))
     }
@@ -266,6 +267,7 @@ export function MovementsPage() {
           <>
             <Badge color={TYPE_COLOR[m.type]}>{t(TYPE_LABEL[m.type])}</Badge>
             {m.voided && <span className="ml-1 text-xs">{t('(ยกเลิก)')}</span>}
+            {m.voided && <div className="mt-1 max-w-xs whitespace-normal text-xs text-ink-soft">{voidSummary(m, t, formatThaiDateTime)}</div>}
           </>
         ),
       },
@@ -368,7 +370,7 @@ export function MovementsPage() {
       },
     )
     return list
-    // doVoid closes over the toast/confirm helpers, which are stable for the page's life.
+    // doVoid only opens the reason modal (a stable state setter).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, locationId, stockCardMode, balances, isAdmin, productById])
 
@@ -471,6 +473,17 @@ export function MovementsPage() {
 
       {editing && <EditMovementModal movement={editing} onClose={() => setEditing(null)} />}
       {photoDoc && <PhotoModal docNo={photoDoc} onClose={() => setPhotoDoc(null)} />}
+      {voiding && (
+        <ReasonModal
+          title={t("ยกเลิกรายการ")}
+          message={t('ยกเลิกรายการ {docNo} ({name})? ระบบจะคืนยอดสต๊อกกลับ', { docNo: voiding.docNo, name: voiding.productName })}
+          confirmText={t("ยกเลิกรายการ")}
+          danger
+          maxLength={VOID_REASON_MAX}
+          onClose={() => setVoiding(null)}
+          onConfirm={confirmVoid}
+        />
+      )}
     </FramePage>
   )
 }

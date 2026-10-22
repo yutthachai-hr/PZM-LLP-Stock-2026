@@ -181,8 +181,11 @@ describe('F02 — the ledger records who, and keeps it', () => {
   })
 
   test('voiding is an admin decision, whatever the UI shows', async () => {
-    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), { voided: true }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true }))
+    const cancel = (uid: string) => ({ voided: true, voidReason: 'keyed twice', voidedAt: now(), voidedBy: uid, voidedByName: uid })
+    await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), cancel(STAFF)))
+    // An old client's bare cancellation, with no reason, is refused (owner P0, 22 Oct 2026).
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true }))
+    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), cancel(ADMIN)))
   })
 
   test('a movement still cannot be deleted by anyone', async () => {
