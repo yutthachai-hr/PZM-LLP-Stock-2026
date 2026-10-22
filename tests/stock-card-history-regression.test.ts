@@ -60,6 +60,8 @@ vi.mock('../src/data/DataContext', () => ({
     rawLocations: [{ id: 'loc-1', name: 'Main Kitchen' }],
     locationById: (id: string) => ({ id, name: 'Main Kitchen' }),
     qtyAt: () => 20,
+    companyQty: () => 20,
+    transitQty: () => 0,
     minFor: () => 10,
     movements: mockMovements,
     loading: mockLoading,

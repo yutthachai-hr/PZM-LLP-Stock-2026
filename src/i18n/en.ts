@@ -2175,6 +2175,8 @@ export const EN: Record<string, string> = {
   'จาก {from} มา {to} · {n} รายการ': 'From {from} to {to} · {n} items',
   '{by} รายงานปัญหาการรับของที่ {to}': '{by} reported a delivery issue at {to}',
   'ระหว่างขนส่ง': 'In transit',
+  'รวมระหว่างขนส่ง {qty} {unit}': 'Incl. {qty} {unit} in transit',
+  'อิงต้นทุนที่กรอก · รวมระหว่างขนส่ง ฿ {value}': 'Based on entered cost · incl. ฿ {value} in transit',
   'กำลังตรวจรับ': 'Receiving',
   'มีผลต่าง/ปัญหา': 'Discrepancy',
   'รออนุมัติผลต่าง': 'Pending discrepancy approval',

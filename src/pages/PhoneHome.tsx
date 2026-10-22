@@ -31,7 +31,7 @@ export function PhoneHome() {
   const t = useT()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { products, locations, qtyAt, minFor, tracksProduct } = useData()
+  const { products, locations, qtyAt, companyQty, minFor, tracksProduct } = useData()
   const [now] = useState(() => Date.now())
   const range = useMemo(() => ({ from: bkkDayStart(now) - 7 * DAY_MS, to: bkkDayEnd(now) + 14 * DAY_MS }), [now])
   const feed = useCalendarFeed(range, now)
@@ -54,12 +54,13 @@ export function PhoneHome() {
   const byCategory = useMemo(() => {
     const map = new Map<string, number>()
     for (const p of products) {
-      const q = locations.reduce((sum, l) => sum + qtyAt(l.id, p.id), 0)
+      // What the company owns, goods in transit included (lib/inventoryRules/stockView.ts).
+      const q = companyQty(p.id)
       const v = q * (p.cost ?? 0)
       if (v > 0) map.set(p.category, (map.get(p.category) ?? 0) + v)
     }
     return [...map.entries()].map(([category, value]) => ({ category, value: Math.round(value) })).sort((a, b) => b.value - a.value)
-  }, [products, locations, qtyAt])
+  }, [products, companyQty])
   const [allCategories, setAllCategories] = useState(false)
   const shownCategories = allCategories ? byCategory : byCategory.slice(0, 6)
   const maxValue = byCategory[0]?.value ?? 0

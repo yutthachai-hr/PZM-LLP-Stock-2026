@@ -116,7 +116,7 @@ function DeskDashboard() {
           label={t('มูลค่าสินค้าคงคลัง')}
           value={`฿ ${fmtMoney(f.value)}`} /* ฿ is a currency symbol — i18n-key */
           trend={valueTrend && !valueTrend.flat ? { text: valueTrend.text, up: valueTrend.up, suffix: t('จาก 7 วันก่อน') } : undefined}
-          hint={t('อิงต้นทุนที่กรอก')}
+          hint={f.transitValue > 0 ? t('อิงต้นทุนที่กรอก · รวมระหว่างขนส่ง ฿ {value}', { value: fmtMoney(f.transitValue) }) : t('อิงต้นทุนที่กรอก')}
           to="/reports"
         />
       </StatRow>

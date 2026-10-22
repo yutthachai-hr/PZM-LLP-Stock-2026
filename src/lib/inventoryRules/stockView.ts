@@ -1,4 +1,4 @@
-import type { MinOverride, Product, StockLevel, StockLocation } from '../../types'
+import { TRANSIT_LOCATION_ID, type MinOverride, type Product, type StockLevel, type StockLocation } from '../../types'
 
 /**
  * Balances, minimums and "has this location ever kept it", from the raw documents.
@@ -13,11 +13,22 @@ export interface StockView {
   tracksProduct: (locationId: string, productId: string) => boolean
 }
 
+/** The stock buckets (owner, 22 Oct 2026): branch (qtyAt, available), in transit, company total. */
+export interface StockBuckets {
+  /** Shipped between our own sites and not yet received: still the company's, at no branch. */
+  transitQty: (productId: string) => number
+  /**
+   * Company total: every site plus in transit. An internal transfer alone never changes it.
+   * Transit is added once whether or not the caller's locations list includes it.
+   */
+  companyQty: (productId: string) => number
+}
+
 export function stockView(input: {
   locations: readonly StockLocation[]
   levels: readonly StockLevel[]
   minOverrides: readonly MinOverride[]
-}): StockView {
+}): StockView & StockBuckets {
   const { locations, levels, minOverrides } = input
   // Only the product's own unit. A row for a unit someone keyed carries the same
   // locationId and productId, so keying this map on those alone would let a Pack balance
@@ -38,8 +49,12 @@ export function stockView(input: {
         (a, b) =>
           (a.type === 'warehouse' ? 0 : 1) - (b.type === 'warehouse' ? 0 : 1) || (a.createdAt ?? 0) - (b.createdAt ?? 0),
       )[0]?.id ?? ''
+  const qtyAt = (locationId: string, productId: string) => levelMap.get(`${locationId}__${productId}`) ?? 0
+  const sites = locations.filter((l) => l.id !== TRANSIT_LOCATION_ID && l.type !== 'transit')
   return {
-    qtyAt: (locationId, productId) => levelMap.get(`${locationId}__${productId}`) ?? 0,
+    qtyAt,
+    transitQty: (productId) => qtyAt(TRANSIT_LOCATION_ID, productId),
+    companyQty: (productId) => sites.reduce((sum, l) => sum + qtyAt(l.id, productId), 0) + qtyAt(TRANSIT_LOCATION_ID, productId),
     minFor: (product, locationId) => overrideMap.get(`${locationId}__${product.id}`) ?? product.minStock ?? 0,
     tracksProduct: (locationId, productId) =>
       stockedAt.has(`${locationId}__${productId}`) || (!stockedAnywhere.has(productId) && locationId === home),

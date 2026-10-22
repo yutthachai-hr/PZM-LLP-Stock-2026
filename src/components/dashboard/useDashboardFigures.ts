@@ -26,7 +26,7 @@ const VALUE_LOOKBACK_DAYS = 7
 
 export function useDashboardFigures(now: number) {
   const { user } = useAuth()
-  const { products, locations, qtyAt, minFor, tracksProduct, movements, movementsFrom } = useData()
+  const { products, locations, qtyAt, transitQty, minFor, tracksProduct, movements, movementsFrom } = useData()
   // ponytail: 7-day lookback fits inside RECENT_DAYS; add wider lookback on demand if requested.
   const [requests, setRequests] = useState<PurchaseRequest[] | null>(null)
   const [orders, setOrders] = useState<PurchaseOrder[] | null>(null)
@@ -76,7 +76,11 @@ export function useDashboardFigures(now: number) {
         }
         return { location, stocked, low: low.filter((s) => s.location.id === location.id).length, value }
       })
-    const value = branches.reduce((s, b) => s + b.value, 0)
+    // Goods between our sites are still the company's: in the total, shown on their own. This is
+    // also what keeps the seven-day comparison honest, since valueAsOf counts a dispatch as 0.
+    let transitValue = 0
+    for (const p of products) if (p.active !== false) transitValue += Math.max(0, transitQty(p.id)) * (p.cost ?? 0)
+    const value = branches.reduce((s, b) => s + b.value, 0) + transitValue
     const valueBefore = valueAsOf(value, movements, today - VALUE_LOOKBACK_DAYS * DAY_MS, movementsFrom, costOf)
 
     const pendingRequests = requests?.filter((r) => r.status === 'pendingApproval').length ?? null
@@ -90,11 +94,12 @@ export function useDashboardFigures(now: number) {
       outCount,
       branches,
       value,
+      transitValue,
       valueBefore,
       pendingRequests,
       weekly: dailyActivity(movements, today, 7),
       requests: requests ?? [],
       orders: orders ?? [],
     }
-  }, [now, products, locations, qtyAt, minFor, tracksProduct, movements, movementsFrom, requests, orders])
+  }, [now, products, locations, qtyAt, transitQty, minFor, tracksProduct, movements, movementsFrom, requests, orders])
 }

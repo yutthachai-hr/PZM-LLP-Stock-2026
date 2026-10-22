@@ -37,7 +37,7 @@ import { movementNote } from '../lib/receiptLabel'
 export function StockCardPage() {
   const t = useT()
   const { id = '' } = useParams()
-  const { productById, locations, qtyAt, minFor, movements, loading } = useData()
+  const { productById, locations, qtyAt, companyQty, transitQty, minFor, movements, loading } = useData()
   // Product history is read on demand (readProductLedger), overlaid with the live 7-day window.
   const { brand } = useBrand()
   const product = productById(id)
@@ -76,7 +76,10 @@ export function StockCardPage() {
   }, [ledgerLoading, ledger, all, id, locationId, fromStr, toStr, typeFilter, error])
 
   const hasLegacy = useMemo(() => hasMixedLegacyUnits(all), [all])
-  const current = product ? (locationId ? qtyAt(locationId, product.id) : locations.reduce((s, l) => s + qtyAt(l.id, product.id), 0)) : 0
+  // All sites is the company total, goods in transit included: the same figure the all-sites
+  // ledger below arrives at, since a transfer between our sites moves nothing overall.
+  const current = product ? (locationId ? qtyAt(locationId, product.id) : companyQty(product.id)) : 0
+  const inTransit = product && !locationId ? transitQty(product.id) : 0
   const min = product ? (locationId ? minFor(product, locationId) : product.minStock) : 0
   const cost = product ? (product.cost ?? currentCost(product.costHistory ?? []) ?? 0) : 0
   const state = stockState(current, min)
@@ -221,6 +224,7 @@ export function StockCardPage() {
               <div>
                 <dt className="text-xs text-ink-faint">{t('ยอดคงเหลือปัจจุบัน')}</dt>
                 <dd className="num text-lg font-bold text-ink">{fmtQty(current)} {unit}</dd>
+                {inTransit > 0 && <dd className="num text-xs text-ink-faint">{t('รวมระหว่างขนส่ง {qty} {unit}', { qty: fmtQty(inTransit), unit })}</dd>}
               </div>
               <div>
                 <dt className="text-xs text-ink-faint">{t('คลัง')}</dt>
