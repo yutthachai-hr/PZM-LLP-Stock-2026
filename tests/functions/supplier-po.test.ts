@@ -6,7 +6,7 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 import { memoryServerStore } from '../../functions/_lib/memoryStore'
 import { assertServerWrite, brandCollection } from '../../functions/_lib/serverStore'
-import { answerLink as postAnswer, decideDate, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
+import { answerLink as postAnswer, decideDate, mintLink, revokeLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
 import { signSupplierToken, verifySupplierToken } from '../../functions/_lib/supplierToken'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/time'
 import type { PurchaseOrder } from '../../src/types'
@@ -189,10 +189,10 @@ describe('GET /api/supplier/<token>', () => {
       expect(await viewLink(deps, t)).toEqual({ status: 404, body: { error: 'not_found' } })
     }
   })
-  test('a link that has run out, or an order that closed, says so', async () => {
+  test('time does not end a link (owner, 21 Oct 2026); an order that closed says so', async () => {
     const token = await link()
-    clock = day(4)
-    expect((await viewLink(deps, token)).status).toBe(410)
+    clock = day(40) // past the delivery day and the old 30-day token cap
+    expect((await viewLink(deps, token)).status).toBe(200)
     clock = NOW
     db.touch('purchaseOrders', 'po1', { status: 'received' })
     expect((await viewLink(deps, token)).body).toMatchObject({ error: 'closed', docNo: 'PO-00007' })
@@ -307,8 +307,9 @@ describe('supplier tabs must confirm the state they actually saw', () => {
       }
       return patch(col, id, fields, time)
     }
-    // Accepting the requested date would withdraw P, too; neither action may race blindly.
-    const r = await postAnswer(deps, token, { action: 'accept', requestId: 'stale-race-loser', expectedState })
+    // An in-range proposal would withdraw P, too; no answer may race blindly. (Before PO-00003 this
+    // used 'accept', which is now refused outright while an approved date stands, before any write.)
+    const r = await postAnswer(deps, token, { action: 'propose', date: '2026-10-09', requestId: 'stale-race-loser', expectedState })
     expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
     expect(po().pendingDeliveryDate?.date).toBe(day(7))
     expect(po().deliveryDateHistory!.some((h) => h.requestId === 'stale-race-loser')).toBe(false)
@@ -611,5 +612,114 @@ describe('one confirmation, one notification', () => {
     expect(r.body).toMatchObject({ replayed: false, outcome: 'changed', view: { status: 'changed', confirmedDate: '2026-10-11', agreedDate: '2026-10-11', pending: null } })
     expect(po().pendingDeliveryDate).toBeUndefined()
     expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(2)
+  })
+})
+
+describe('POST /api/supplier-po/revoke (R30)', () => {
+  test('a หัวหน้า takes the link back: the leaked URL is dead, a new one works, the answer stands', async () => {
+    const old = await link()
+    await answerLink(deps, old, { action: 'accept', requestId: 'req-before-revoke' })
+    const r = await revokeLink(deps, auth('boss'), { brand: 'pizza', poId: 'po1' })
+    expect(r.status).toBe(200)
+    expect(po().supplierLink?.version).toBe(2)
+    expect(po().revision ?? 0).toBe(0)
+    expect(po().supplierConfirmationStatus).toBe('confirmed')
+    expect(await viewLink(deps, old)).toEqual({ status: 404, body: { error: 'not_found' } })
+    expect((await answerLink(deps, old, { action: 'propose', date: '2026-10-12', requestId: 'req-old-after-revoke' })).status).toBe(404)
+    expect((await viewLink(deps, r.body.token as string)).status).toBe(200)
+    expect(po().supplierActivity?.find((a) => a.kind === 'linkRevoked')).toMatchObject({ byName: 'Boss' })
+  })
+  test('staff, signed-out, a closed order or an order with no link are refused, writing nothing', async () => {
+    expect((await revokeLink(deps, null, { brand: 'pizza', poId: 'po1' })).status).toBe(401)
+    expect((await revokeLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })).status).toBe(403)
+    expect((await revokeLink(deps, auth('boss'), { brand: 'pizza', poId: 'po1' })).status).toBe(409) // no link yet
+    const token = await link()
+    db.touch('purchaseOrders', 'po1', { status: 'received' })
+    expect((await revokeLink(deps, auth('boss'), { brand: 'pizza', poId: 'po1' })).status).toBe(409)
+    expect(po().supplierLink?.version).toBe(1)
+    expect((await viewLink(deps, token)).status).toBe(410)
+  })
+  test('a past waiting date cannot be approved through the endpoint', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', name: 'Somchai', requestId: 'req-past-decide' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    clock = day(9)
+    expect(await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).toMatchObject({ status: 422, body: { error: 'past' } })
+    expect(po().pendingDeliveryDate?.changeId).toBe(changeId)
+  })
+})
+
+describe('P0 PO-00003: an approved date stands at the endpoint', () => {
+  async function approvedFar() {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', name: 'MMP', requestId: 'po3-e-propose' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    expect((await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).status).toBe(200)
+    return token
+  }
+  test('reopening the link shows the approved date as agreed and says purchasing approved it', async () => {
+    const token = await approvedFar()
+    const view = (await viewLink(deps, token)).body.view as Record<string, unknown>
+    expect(view).toMatchObject({ requestedDate: '2026-10-08', agreedDate: '2026-10-12', confirmedDate: '2026-10-12', agreedByPurchasing: true })
+  })
+  test('a fresh "accept" of the requested date is refused and changes nothing, rings nothing', async () => {
+    const token = await approvedFar()
+    const before = structuredClone(po())
+    const bell = notes().length
+    const r = await answerLink(deps, token, { action: 'accept', requestId: 'po3-e-stale-accept' })
+    expect(r).toEqual({ status: 422, body: { error: 'agreed' } })
+    expect(po()).toEqual(before)
+    expect(notes()).toHaveLength(bell)
+  })
+  test('a page loaded before the approval cannot write its stale answer', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', requestId: 'po3-e-propose-2' })
+    const seen = ((await viewLink(deps, token)).body.view as { expectedState: string }).expectedState
+    await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId: po().pendingDeliveryDate!.changeId, decision: 'approve' })
+    const r = await postAnswer(deps, token, { action: 'accept', requestId: 'po3-e-old-tab', expectedState: seen })
+    expect(r).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect(po().confirmedDeliveryDate).toBe(day(7))
+  })
+
+  // Owner, 22 Oct 2026: a quantity-only revision keeps the approved date; the supplier
+  // acknowledges the new quantity on the new link without the date moving.
+  const qtyRevision = () =>
+    db.touch('purchaseOrders', 'po1', { revision: 1, revisions: [{ rev: 1, at: NOW, by: 'staff1', byName: 'Nok', reason: 'more', changes: [{ kind: 'qty', productName: 'BACON', unit: 'แพ็ค', from: 4, to: 6 }] }] })
+  test('after a quantity-only revision the new link asks for the approved date and its acknowledgement keeps it', async () => {
+    const old = await approvedFar()
+    qtyRevision()
+    const next = await link()
+    expect(next).not.toBe(old)
+    const view = (await viewLink(deps, next)).body.view as Record<string, unknown>
+    expect(view).toMatchObject({ status: 'waiting', requestedDate: '2026-10-12', confirmedDate: '2026-10-12', autoUntil: '2026-10-12' })
+    const r = await answerLink(deps, next, { action: 'accept', name: 'MMP', requestId: 'po3-q-ack' })
+    expect(r.body).toMatchObject({ replayed: false, outcome: 'confirmed' })
+    expect(po()).toMatchObject({ supplierConfirmationStatus: 'confirmed', confirmedDeliveryDate: day(7), expectedAt: day(7) })
+    // A lost response retried, and a second tap under a new id: nothing more is written or heard.
+    const after = structuredClone(po())
+    const bell = notes().length
+    expect((await answerLink(deps, next, { action: 'accept', requestId: 'po3-q-ack' })).body).toMatchObject({ replayed: true })
+    expect((await answerLink(deps, next, { action: 'accept', requestId: 'po3-q-ack-2' })).body).toMatchObject({ replayed: true, unchanged: true })
+    expect(po()).toEqual(after)
+    expect(notes()).toHaveLength(bell)
+    // The link from before the revision is gone.
+    expect((await viewLink(deps, old)).status).toBe(404)
+  })
+  test('two phones acknowledging the revised link at once land one confirmation of the approved date', async () => {
+    await approvedFar()
+    qtyRevision()
+    const next = await link()
+    const rs = await Promise.all(['po3-q-ack-a', 'po3-q-ack-b'].map((requestId) => answerLink(deps, next, { action: 'accept', requestId })))
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 409])
+    expect(po()).toMatchObject({ supplierConfirmationStatus: 'confirmed', confirmedDeliveryDate: day(7), expectedAt: day(7) })
+  })
+  test('a tab opened before the revision cannot acknowledge it', async () => {
+    await approvedFar()
+    const token = await link()
+    const seen = ((await viewLink(deps, token)).body.view as { expectedState: string }).expectedState
+    qtyRevision()
+    const next = await link()
+    expect(await postAnswer(deps, next, { action: 'accept', requestId: 'po3-q-old', expectedState: seen })).toEqual({ status: 409, body: { error: 'stale_state' } })
+    expect(po()).toMatchObject({ supplierConfirmationStatus: 'waiting', confirmedDeliveryDate: day(7) })
   })
 })

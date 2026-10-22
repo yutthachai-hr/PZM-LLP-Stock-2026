@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PurchaseOrder, SupplierConfirmationStatus } from '../src/types'
-import { presentOrderStatus } from '../src/pages/orders/presentation'
+import { presentOrderStatus, QUICK_FILTERS, stateFilterCounts } from '../src/pages/orders/presentation'
 
 const order: PurchaseOrder = {
   id: 'one', docNo: 'PO-00001', supplierId: 'supplier', supplierName: 'Supplier',
@@ -21,7 +21,8 @@ describe('order presentation, not business eligibility', () => {
   it('does not invent supplier confirmation from a successful LINE send', () => {
     const result = presentOrderStatus({ ...order, shareStatus: 'sent' }, false)
     expect(result.primary.label).toBe('สั่งแล้ว')
-    expect(result.secondary).toContain('ส่งเข้า LINE แล้ว')
+    // LINE is its own badge now (lineStatus.ts), not a line of status text.
+    expect(result.secondary).not.toContain('ส่งเข้า LINE แล้ว')
     expect(result.secondary).not.toContain('ผู้ขายยืนยันแล้ว')
   })
   it('keeps supplier confirmation visible when overdue takes priority', () => {
@@ -39,8 +40,10 @@ describe('order presentation, not business eligibility', () => {
   })
   it('recommends resend without hiding pending date approval or partial receipt', () => {
     const result = presentOrderStatus({ ...partial, ...revised, receipts: partial.receipts, supplierConfirmationStatus: 'pending_date_approval' }, true)
-    expect(result.primary.label).toBe('ต้องส่ง PO ใหม่')
-    expect(result.secondary).toEqual(expect.arrayContaining(['รออนุมัติวันส่ง', 'เกินกำหนดรับของ', 'รับบางส่วน']))
+    // The resend shows on the LINE badge; the operational badge keeps the date decision.
+    expect(result.primary.label).toBe('รออนุมัติวันส่ง')
+    expect(result.secondary).toEqual(expect.arrayContaining(['เกินกำหนดรับของ', 'รับบางส่วน']))
+    expect(result.urgency).toBe('urgent')
     expect(result.nextAction).toBe('resend')
   })
   it('recommends review of a pending date, not an automatic approval', () => {
@@ -71,5 +74,25 @@ describe('order presentation, not business eligibility', () => {
     const frozen = Object.freeze({ ...order, supplierConfirmationStatus: 'confirmed' as const })
     expect(presentOrderStatus(frozen, false).primary.label).toBe('ผู้ขายยืนยันแล้ว')
     expect(frozen).toEqual({ ...order, supplierConfirmationStatus: 'confirmed' })
+  })
+})
+
+describe('R29: an order that needs resending says so on its row, not only on the LINE badge', () => {
+  it('lists "ต้องส่ง PO ใหม่" whenever the sheet the supplier holds is out of date', () => {
+    const result = presentOrderStatus({ ...partial, ...revised, receipts: partial.receipts, supplierConfirmationStatus: 'pending_date_approval' }, true)
+    expect(result.secondary).toContain('ต้องส่ง PO ใหม่')
+    expect(presentOrderStatus(order, false).secondary).not.toContain('ต้องส่ง PO ใหม่')
+  })
+})
+
+describe('P0 (22 Oct 2026): orders waiting for a delivery-date decision are one tap away', () => {
+  it('is the first quick filter and counts only the loaded orders that wait', () => {
+    expect(QUICK_FILTERS[0]).toBe('datePending')
+    const waiting = { ...order, id: 'w', supplierConfirmationStatus: 'pending_date_approval' } as PurchaseOrder
+    const decided = { ...order, id: 'd', supplierConfirmationStatus: 'changed' } as PurchaseOrder
+    const draftWaiting = { ...waiting, id: 'x', status: 'draft' } as PurchaseOrder
+    expect(stateFilterCounts([waiting, decided, draftWaiting], () => false).datePending).toBe(1)
+    // After approval the same order no longer counts (the list row is replaced by the server's copy).
+    expect(stateFilterCounts([{ ...waiting, supplierConfirmationStatus: 'changed' } as PurchaseOrder], () => false).datePending).toBe(0)
   })
 })

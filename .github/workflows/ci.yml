@@ -145,6 +145,8 @@ jobs:
         run: npx playwright test -c playwright.toast.config.ts
       - name: OCR PDF fallback under production CSP on an isolated demo
         run: npx playwright test -c playwright.ocr.config.ts
+      - name: Product pricing, accessible grid and responsive SKU on isolated demo
+        run: npx playwright test -c playwright.products-responsive.config.ts
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with: { name: e2e-results, path: e2e-results, retention-days: 14 }
