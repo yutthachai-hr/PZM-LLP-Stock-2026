@@ -179,6 +179,91 @@ test('a two-page order resumes at the page not yet shared after a reload', async
   await expect(wizard.getByText('รูปที่ 2 จาก 2')).toBeVisible()
 })
 
+test('reload during an unresolved share with a failed opened write asks, never silently resends', async ({ page }) => {
+  await stage(page)
+  const wizard = await openWizard(page, 'po1')
+  await expect(wizard.getByRole('button', { name: 'แชร์รูป' })).toBeEnabled()
+  await page.evaluate(() => {
+    const save = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key === 'pmstock:v1:purchaseOrders') throw new DOMException('quota', 'QuotaExceededError')
+      save.call(this, key, value)
+    }
+    Object.defineProperty(navigator, 'share', { configurable: true, value: () => {
+      ;(window as unknown as { __share: ShareLog }).__share.calls++
+      return new Promise<void>(() => {})
+    } })
+  })
+  await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
+  await expect.poll(async () => (await shareLog(page)).calls).toBe(1)
+  await page.reload()
+  const resumed = await openWizard(page, 'po1')
+  await expect(resumed.getByText('ส่งใน LINE เรียบร้อยหรือไม่?', { exact: true })).toBeVisible()
+  expect((await shareLog(page)).calls).toBe(0)
+  expect(await orderCount(page)).toBe(2)
+})
+
+test('reload on an uncertain first page asks about that page, not the whole multi-page PO', async ({ page }) => {
+  await stage(page)
+  const wizard = await openWizard(page, 'big')
+  await expect(wizard.getByRole('button', { name: 'แชร์รูป' })).toBeEnabled()
+  await page.evaluate(() => Object.defineProperty(navigator, 'share', { configurable: true, value: () => new Promise<void>(() => {}) }))
+  await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
+  await expect.poll(async () => (await stored(page, 'big')).shareStatus).toBe('shareOpened')
+  await page.reload()
+  const resumed = await openWizard(page, 'big')
+  await expect(resumed.getByText('ส่งใน LINE เรียบร้อยหรือไม่?', { exact: true })).toBeVisible()
+  await resumed.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
+  await expect(resumed.getByText('รูปที่ 2 จาก 2', { exact: true })).toBeVisible()
+  expect((await stored(page, 'big')).shareStatus).not.toBe('sent')
+  expect((await shareLog(page)).calls).toBe(0)
+})
+
+test('a persisted confirmed-delivery receipt offers status-only recovery, never another share', async ({ page }) => {
+  await stage(page)
+  // Synthetic persisted SDK-confirmed receipt, not a real LINE delivery or physical-device test.
+  await page.evaluate(() => {
+    const o = JSON.parse(localStorage.getItem('pmstock:v1:purchaseOrders')!).po1
+    const fp = JSON.stringify([o.id, o.revision ?? 0, o.expectedAt ?? 0, o.note ?? '', o.lines.map((l: { productId: string; orderedQty: number; unit: string }) => [l.productId, l.orderedQty, l.unit])])
+    localStorage.setItem('pmstock:v1:send-progress', JSON.stringify({ 'pizza:send-user:po1': { page: 0, at: Date.now(), fp, attempt: { page: 0, version: 1, confirmed: true } } }))
+  })
+  await page.reload()
+  const wizard = await openWizard(page, 'po1')
+  await expect(wizard.getByText('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ', { exact: true })).toBeVisible()
+  await expect(wizard.getByRole('button', { name: 'แชร์รูป' })).toBeDisabled()
+  await wizard.getByRole('button', { name: 'บันทึกสถานะอีกครั้ง' }).click()
+  await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
+  expect((await shareLog(page)).calls).toBe(0)
+  expect(await orderCount(page)).toBe(2)
+})
+
+test('a brand switch while the LIFF picker is open cannot stamp another brand sent', async ({ page }) => {
+  // Wizard contract stub only: no real LIFF login, image upload, chat or supplier message.
+  await page.route('**/src/share/index.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: `
+    export { statusFor } from '/src/share/PurchaseShareProvider.ts';
+    export async function pickShareProvider() {
+      return { id: 'line-liff', label: 'ส่ง LINE', needsHosting: false,
+        share: () => new Promise(resolve => { window.__finishPicker = resolve; }) };
+    }
+  ` }))
+  await stage(page)
+  const wizard = await openWizard(page, 'po1')
+  await expect(wizard.getByRole('button', { name: 'ส่ง LINE', exact: true })).toBeEnabled()
+  await wizard.getByRole('button', { name: 'ส่ง LINE', exact: true }).click()
+  await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('shareOpened')
+  await page.evaluate(async () => {
+    const orders = JSON.parse(localStorage.getItem('pmstock:v1:purchaseOrders')!)
+    localStorage.setItem('pmstock:v1:lelapin__purchaseOrders', JSON.stringify(orders))
+    const path = '/src/brand/brand.ts'
+    const brand = await import(/* @vite-ignore */ path)
+    brand.setActiveBrand('lelapin')
+    ;(window as unknown as { __finishPicker: (o: string) => void }).__finishPicker('sent')
+  })
+  await expect(wizard.getByText('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ', { exact: true }).or(wizard.getByText('ส่งครบทุกรายแล้ว', { exact: true }))).toBeVisible()
+  expect((await stored(page, 'po1')).shareStatus).not.toBe('sent')
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('pmstock:v1:lelapin__purchaseOrders')!).po1.shareStatus)).not.toBe('sent')
+})
+
 test('the tap only shares: tap-to-share stays short on a slow phone CPU', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CPU throttling needs the Chromium DevTools protocol')
   await stage(page, {

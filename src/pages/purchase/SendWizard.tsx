@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
-import { brandDef, getBrand } from '../../brand/brand'
+import { brandDef, brandEpoch, getBrand } from '../../brand/brand'
 import { orderCache } from '../../data/orderCache'
 import { LineBadge } from '../orders/LineBadge'
 import { createOutcomeTracker, mergeWizardOrders } from './outcomeOrder'
@@ -12,7 +12,7 @@ import { useSuppliers } from '../../services/suppliers'
 import { PoSheet, SheetLangToggle } from '../../components/PoSheet'
 import { Badge, Button, Modal } from '../../components/ui'
 import { translatorFor, useI18n, useT, type Lang, type TFn } from '../../i18n/I18nContext'
-import { errText } from '../../i18n/AppError'
+import { AppError, errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
 import { imageHostAvailable, uploadPoImage, type HostedImage } from '../../services/poImages'
 import { setShareStatus, type SharePatch } from '../../services/purchaseOrders'
@@ -24,7 +24,7 @@ import { pickShareProvider, type PurchaseShareProvider } from '../../share'
 import { liffNeedsLogin } from '../../share/lineLiffProvider'
 import { isStandalone } from '../../share/liffResume'
 import type { PurchaseOrder } from '../../types'
-import { clearPageProgress, orderFingerprint, pageToResume, savePageProgress, type ProgressScope } from './sendProgress'
+import { beginShareAttempt, clearPageProgress, clearShareAttempt, confirmShareAttempt, orderFingerprint, pageToResume, savePageProgress, shareToRecover, type ProgressScope } from './sendProgress'
 import { settleShare } from './shareSettle'
 
 /**
@@ -75,6 +75,7 @@ export function SendWizard({
   const toast = useToast()
   const { user } = useAuth()
   const { brand } = useBrand()
+  const openedInEpoch = useRef(brandEpoch()).current
   const { locationById } = useData()
   const company = brand ? brandDef(brand).name : ''
   // Which LINE group each supplier's orders go to (owner, 2 Oct 2026). The list is read once
@@ -108,7 +109,7 @@ export function SendWizard({
   // A share that failed: what went wrong, and the ways forward (retry, download, copy, later).
   const [failure, setFailure] = useState('')
   // LINE confirmed the message went but the order could not be updated: save again, never resend.
-  const [unsaved, setUnsaved] = useState<{ version: number; error: string } | null>(null)
+  const [unsaved, setUnsaved] = useState<{ order: PurchaseOrder; version: number; error: string } | null>(null)
   const progressFp = useRef('')
   // A second tap while the share sheet is opening opens nothing (stops before React re-renders).
   const sharing = useRef(false)
@@ -145,10 +146,15 @@ export function SendWizard({
     // Back after the page was dropped while LINE was in front: a multi-page order goes on from
     // the page not yet shared; an order whose share sheet was opened asks whether it went,
     // instead of quietly starting the send again.
-    const resumeAt = first && user ? pageToResume(scopeOf(first), paginateLines(first.lines).length) : 0
+    const count = first ? paginateLines(first.lines).length : 0
+    const attempt = first && user ? shareToRecover(scopeOf(first), count) : null
+    const nextPage = !!attempt?.confirmed && attempt.page < count - 1
+    const resumeAt = attempt ? attempt.page + (nextPage ? 1 : 0) : first && user ? pageToResume(scopeOf(first), count) : 0
+    if (nextPage && first) savePageProgress(scopeOf(first), resumeAt)
     progressFp.current = first ? orderFingerprint(first) : ''
     setPageIdx(resumeAt)
-    setAskOutcome(!!first && resumeAt === 0 && first.shareStatus === 'shareOpened')
+    setUnsaved(first && attempt?.confirmed && !nextPage ? { order: first, version: attempt.version, error: t('บันทึกสถานะไม่สำเร็จ') } : null)
+    setAskOutcome(attempt ? !attempt.confirmed : !!first && resumeAt === 0 && first.shareStatus === 'shareOpened')
   }, [pendingKey])
 
   // Always the order as it now stands: its status fields move while it is being sent.
@@ -178,11 +184,12 @@ export function SendWizard({
 
   async function record(order: PurchaseOrder, status: 'shareOpened' | 'sent' | 'skipped' | 'failed', version?: number) {
     if (!user || recording.current) return
+    if (brandEpoch() !== openedInEpoch) throw new AppError('บริบทการส่งเปลี่ยนแล้ว — กรุณาเปิดใบสั่งซื้อใหม่')
     recording.current = true
     setRecordingNow(true)
     try {
       const brand = getBrand()
-      const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
+      const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version, order.revision ?? 0)
       if (status === 'sent' || status === 'skipped') {
         doneHere.current.add(order.id)
         clearPageProgress(scopeOf(order))
@@ -275,12 +282,23 @@ export function SendWizard({
     setFailure('')
     const order = current
     const isLast = pageIdx === pages.length - 1
+    const scope = scopeOf(order)
+    if (!beginShareAttempt(scope, pageIdx, p.version)) {
+      sharing.current = false
+      setBusy('')
+      setFailure(t('บันทึกความคืบหน้าการส่งไม่ได้ — โปรดเปิดที่เก็บข้อมูลของเบราว์เซอร์ก่อนส่ง'))
+      return
+    }
     let shared: ReturnType<PurchaseShareProvider['share']>
     try {
       shared = provider.share({ subject: { kind: 'order', id: order.id }, file: p.file, hosted: p.hosted, caption: p.caption, card: p.card })
     } catch (e) {
       shared = Promise.reject(e)
     }
+    shared = shared.then((outcome) => {
+      if (outcome === 'sent') confirmShareAttempt(scope)
+      return outcome
+    })
     // Opened is still written, just after the share sheet was asked for rather than before.
     const opened = order.shareStatus !== 'shareOpened' ? record(order, 'shareOpened') : Promise.resolve()
     void (async () => {
@@ -301,15 +319,25 @@ export function SendWizard({
           // The share sheet told us nothing. Ask the one person who knows.
           setAskOutcome(true)
         } else if (settled.kind === 'sentUnsaved') {
-          setUnsaved({ version: p.version, error: errText(settled.error, t) })
+          setUnsaved({ order, version: p.version, error: errText(settled.error, t) })
         } else if (settled.kind === 'failed') {
+          clearShareAttempt(scope)
           setFailure(errText(settled.error, t))
-        }
+        } else if (settled.kind === 'cancelled') clearShareAttempt(scope)
       } finally {
         sharing.current = false
         setBusy('')
       }
     })()
+  }
+
+  function confirmPage() {
+    if (!current) return
+    if (pageIdx < pages.length - 1) {
+      savePageProgress(scopeOf(current), pageIdx + 1)
+      setPageIdx(pageIdx + 1)
+      setAskOutcome(false)
+    } else void confirmSent(current, (current.imageVersion ?? 0) + 1)
   }
 
   async function confirmSent(order: PurchaseOrder, version: number) {
@@ -414,7 +442,7 @@ export function SendWizard({
             <p className="mb-2 text-ink">
               <strong>{t('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ')}</strong> — {t('ห้ามส่งซ้ำ')} ({unsaved.error})
             </p>
-            <Button onClick={() => void confirmSent(current, unsaved.version)} disabled={recordingNow}>
+            <Button onClick={() => void confirmSent(unsaved.order, unsaved.version)} disabled={recordingNow}>
               {t('บันทึกสถานะอีกครั้ง')}
             </Button>
           </div>
@@ -444,7 +472,7 @@ export function SendWizard({
           <div className="rounded-lg border border-line bg-sunken p-3">
             <p className="mb-2 text-sm text-ink">{t('ส่งใน LINE เรียบร้อยหรือไม่?')}</p>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void confirmSent(current, (current.imageVersion ?? 0) + 1)} disabled={recordingNow}>
+              <Button onClick={confirmPage} disabled={recordingNow}>
                 <Icon name="check" size={16} />
                 {t('ส่งแล้ว')}
               </Button>

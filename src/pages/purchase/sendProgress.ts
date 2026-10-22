@@ -12,7 +12,8 @@ import type { PurchaseOrder } from '../../types'
 const KEY = 'pmstock:v1:send-progress'
 const TTL_MS = 86_400_000
 
-type Progress = Record<string, { page: number; at: number; fp: string }>
+interface ShareAttempt { page: number; version: number; confirmed: boolean }
+type Progress = Record<string, { page: number; at: number; fp: string; attempt?: ShareAttempt }>
 
 export interface ProgressScope {
   brand: string
@@ -29,17 +30,19 @@ export function orderFingerprint(o: Pick<PurchaseOrder, 'id' | 'lines'> & Partia
 
 function read(): Progress {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '{}') as Progress
+    const value: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Progress : {}
   } catch {
     return {}
   }
 }
 
-function write(p: Progress): void {
+function write(p: Progress): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(p))
+    return true
   } catch {
-    /* private mode: progress is a convenience, the order status is the record */
+    return false
   }
 }
 
@@ -54,9 +57,41 @@ export function pageToResume(s: ProgressScope, pages: number, now = Date.now()):
 
 export function savePageProgress(s: ProgressScope, page: number, now = Date.now()): void {
   const all = read()
-  for (const [k, v] of Object.entries(all)) if (now - v.at > TTL_MS) delete all[k]
+  for (const [k, v] of Object.entries(all)) if (!v || (now - v.at > TTL_MS && !v.attempt)) delete all[k]
   all[key(s)] = { page, at: now, fp: s.fingerprint }
   write(all)
+}
+
+/** Journal the uncertain hand-off synchronously, before leaving the app for LINE. */
+export function beginShareAttempt(s: ProgressScope, page: number, version: number, now = Date.now()): boolean {
+  const all = read()
+  all[key(s)] = { page, at: now, fp: s.fingerprint, attempt: { page, version, confirmed: false } }
+  return write(all)
+}
+
+// An unresolved send never expires: elapsed time does not prove LINE failed to deliver it.
+export function shareToRecover(s: ProgressScope, pages: number): ShareAttempt | null {
+  const p = read()[key(s)]
+  const a = p?.attempt
+  if (!p || p.fp !== s.fingerprint || !Number.isFinite(p.at) || !a || !Number.isInteger(a.page) || a.page < 0 || a.page >= pages || !Number.isInteger(a.version) || a.version < 1 || typeof a.confirmed !== 'boolean') return null
+  return a
+}
+
+export function confirmShareAttempt(s: ProgressScope): void {
+  const all = read()
+  const p = all[key(s)]
+  if (p?.fp === s.fingerprint && p.attempt) {
+    p.attempt.confirmed = true
+    write(all)
+  }
+}
+
+export function clearShareAttempt(s: ProgressScope): void {
+  const all = read()
+  if (all[key(s)]?.attempt) {
+    delete all[key(s)].attempt
+    write(all)
+  }
 }
 
 export function clearPageProgress(s: ProgressScope): void {

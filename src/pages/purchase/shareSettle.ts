@@ -23,16 +23,18 @@ export async function settleShare(p: {
   recordSent: () => Promise<void>
   recordFailed: () => Promise<void>
 }): Promise<Settled> {
+  // The picker may stay open for minutes; observe a concurrent write rejection immediately.
+  const opened = p.opened.catch(() => {})
   let outcome: ShareOutcome
   try {
     outcome = await p.shared
   } catch (error) {
-    await p.opened.catch(() => {})
+    await opened
     await p.recordFailed().catch(() => {})
     return { kind: 'failed', error }
   }
   // Settle the opened write before any later write; its own failure changes nothing below.
-  await p.opened.catch(() => {})
+  await opened
   if (outcome === 'cancelled') return { kind: 'cancelled' }
   if (!p.isLast) return { kind: 'nextPage' }
   // Only LINE's own success report is taken as sent; the share sheet asks the person.

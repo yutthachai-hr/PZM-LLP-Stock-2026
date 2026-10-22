@@ -333,6 +333,7 @@ export async function setShareStatus(
   status: PurchaseShareStatus,
   actor: { id: string; name: string },
   imageVersion?: number,
+  expectedRevision?: number,
 ): Promise<SharePatch> {
   const now = Date.now()
   const patch: SharePatch = { shareStatus: status, updatedAt: now }
@@ -343,7 +344,13 @@ export async function setShareStatus(
     patch.sentByName = actor.name
     if (imageVersion !== undefined) patch.imageVersion = imageVersion
   }
-  await scoped().update(COL.purchaseOrders, id, { ...patch })
+  const db = scoped()
+  if (expectedRevision === undefined) await db.update(COL.purchaseOrders, id, { ...patch })
+  else await db.transaction(async (tx) => {
+    const current = await tx.get<PurchaseOrder>(COL.purchaseOrders, id)
+    if (!current || (current.revision ?? 0) !== expectedRevision) throw new AppError('ใบสั่งซื้อถูกแก้ไขแล้ว — กรุณาเปิดใหม่ก่อนบันทึกสถานะ')
+    tx.update(COL.purchaseOrders, id, { ...patch })
+  })
   // The screen that called this still holds the pre-write order. Hand back exactly what was
   // written, so its LINE badge, "needs resend" and who-sent-it change without a reload (UX-0005).
   return patch

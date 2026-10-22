@@ -722,6 +722,15 @@ describe('a draft order', () => {
 })
 
 describe('where the sheet has got to', () => {
+  test('a send of an old revision cannot mark the amended order sent', async () => {
+    const id = await placeOrder()
+    await memoryBackend.update('purchaseOrders', id, { revision: 1 })
+    await expect(setShareStatus(id, 'sent', ACTOR, 1, 0)).rejects.toThrow()
+    expect(orders().find((o) => o.id === id)!.shareStatus).not.toBe('sent')
+    await setShareStatus(id, 'sent', ACTOR, 2, 1)
+    expect(orders().find((o) => o.id === id)!.shareStatus).toBe('sent')
+  })
+
   test('opening the share screen and LINE confirming are two different facts', async () => {
     const id = await placeOrder()
     await setShareStatus(id, 'shareOpened', ACTOR)

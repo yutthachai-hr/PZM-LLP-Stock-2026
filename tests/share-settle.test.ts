@@ -17,6 +17,20 @@ function run(o: { outcome?: ShareOutcome; shareError?: Error; opened?: () => Pro
 }
 
 describe('settling a share', () => {
+  test('observes an opened-write rejection while the LINE picker is still pending', async () => {
+    let finish!: (outcome: ShareOutcome) => void
+    const shared = new Promise<ShareOutcome>((resolve) => { finish = resolve })
+    const recordSent = vi.fn(ok)
+    const recordFailed = vi.fn(ok)
+    const settled = settleShare({ shared, opened: fail(), isLast: true, recordSent, recordFailed })
+    // A human choosing a chat lasts longer than the event loop's unhandled-rejection check.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    finish('sent')
+    expect(await settled).toEqual({ kind: 'sent' })
+    expect(recordSent).toHaveBeenCalledTimes(1)
+    expect(recordFailed).not.toHaveBeenCalled()
+  })
+
   test('LINE confirmed and every write landed: sent', async () => {
     const r = run({ outcome: 'sent' })
     expect(await r.p).toEqual({ kind: 'sent' })

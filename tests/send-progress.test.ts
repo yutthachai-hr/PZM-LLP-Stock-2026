@@ -1,7 +1,7 @@
 // Multi-page PO send progress survives a reload — but only for the same order content and the
 // same person (R38 review finding A: an amended PO must not resume past its revised page 1).
 import { beforeEach, describe, expect, test } from 'vitest'
-import { clearPageProgress, orderFingerprint, pageToResume, savePageProgress } from '../src/pages/purchase/sendProgress'
+import { beginShareAttempt, clearPageProgress, clearShareAttempt, confirmShareAttempt, orderFingerprint, pageToResume, savePageProgress, shareToRecover } from '../src/pages/purchase/sendProgress'
 
 const store = new Map<string, string>()
 beforeEach(() => {
@@ -52,7 +52,41 @@ describe('send progress', () => {
   })
 
   test('unreadable storage is no progress, not a crash', () => {
-    store.set('pmstock:v1:send-progress', '{not json')
-    expect(pageToResume(scope(), 3)).toBe(0)
+    for (const value of ['{not json', 'null', '[]', '5']) {
+      store.set('pmstock:v1:send-progress', value)
+      expect(pageToResume(scope(), 3)).toBe(0)
+      expect(shareToRecover(scope(), 3)).toBeNull()
+    }
+  })
+
+  test('an unresolved hand-off survives reload even after a day; expiry is not proof it was unsent', () => {
+    expect(beginShareAttempt(scope(), 1, 4, 1000)).toBe(true)
+    expect(shareToRecover(scope(), 3)).toEqual({ page: 1, version: 4, confirmed: false })
+    savePageProgress(scope({ orderId: 'other' }), 1, 86_402_000)
+    expect(shareToRecover(scope(), 3)).not.toBeNull()
+    clearShareAttempt(scope())
+    expect(shareToRecover(scope(), 3)).toBeNull()
+  })
+
+  test('confirmed delivery is distinguishable from an uncertain opened picker, and scope is isolated', () => {
+    beginShareAttempt(scope(), 0, 2)
+    confirmShareAttempt(scope())
+    expect(shareToRecover(scope(), 1)).toEqual({ page: 0, version: 2, confirmed: true })
+    for (const other of [scope({ userId: 'other' }), scope({ brand: 'lelapin' }), scope({}, order({ revision: 1 }))]) expect(shareToRecover(other, 1)).toBeNull()
+    savePageProgress(scope(), 1)
+    expect(shareToRecover(scope(), 3)).toBeNull()
+    expect(pageToResume(scope(), 3)).toBe(1)
+  })
+
+  test('cannot journal a hand-off when storage fails', () => {
+    localStorage.setItem = () => { throw new Error('no storage') }
+    expect(beginShareAttempt(scope(), 0, 1)).toBe(false)
+  })
+
+  test('malformed attempt cannot claim confirmed delivery or a nonexistent page', () => {
+    for (const attempt of [{ page: 3, version: 1, confirmed: true }, { page: 0, version: 1, confirmed: 'yes' }, { page: 0, version: 0, confirmed: true }]) {
+      store.set('pmstock:v1:send-progress', JSON.stringify({ 'pizza:u1:po1': { page: 0, at: Date.now(), fp: scope().fingerprint, attempt } }))
+      expect(shareToRecover(scope(), 2)).toBeNull()
+    }
   })
 })
