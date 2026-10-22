@@ -2,6 +2,7 @@ import type { AppUser, DeliveryDateChange, InventorySettings, PurchaseOrder } fr
 import {
   agreedByPurchasing,
   agreedDateOf,
+  supplierAutoUntil,
   applyPatch,
   dateKeyToMs,
   decide,
@@ -21,7 +22,6 @@ import {
   type SupplierPatch,
 } from '../../src/lib/supplierConfirmation'
 import { supplierAnswerDraft, supplierDecisionDraft, supplierOpenedDraft, toDoc } from '../../src/lib/inventoryRules/notifications'
-import { DAY_MS } from '../../src/lib/inventoryRules/time'
 import { brandCollection, type ServerStore } from './serverStore'
 import { signSupplierToken, verifySupplierSignature, type SupplierClaims, type TokenBrand } from './supplierToken'
 
@@ -195,7 +195,7 @@ export function supplierView(o: PurchaseOrder, brand: TokenBrand, maxPostponeDay
     maxPostponeDays,
     today: msToDateKey(now),
     /** The last date that applies at once; later ones wait for approval. */
-    autoUntil: requested === undefined ? null : msToDateKey(requested + maxPostponeDays * DAY_MS),
+    autoUntil: key(supplierAutoUntil(o, maxPostponeDays)),
   }
 }
 
