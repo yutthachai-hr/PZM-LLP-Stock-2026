@@ -28,10 +28,11 @@ import { looseMatch } from '../lib/search'
 import { ProductEditor } from './products/ProductEditor'
 import { ProductStats } from './products/ProductStats'
 import { ProductGrid, productColumns, productMenu, type ProductRow } from './products/ProductTable'
-import { STATE_LOOK, stockState, type StockState } from './products/productStatus'
+import { stockState, type StockState } from './products/productStatus'
+import { compareProductCost, mapProductExportRow } from './products/productCostDisplay'
 
 type StatusFilter = 'all' | StockState | 'in' | 'hidden'
-type SortKey = 'name-asc' | 'name-desc' | 'sku-asc' | 'sku-desc' | 'qty-desc' | 'qty-asc' | 'updated-desc'
+type SortKey = 'name-asc' | 'name-desc' | 'sku-asc' | 'sku-desc' | 'qty-desc' | 'qty-asc' | 'cost-desc' | 'cost-asc' | 'updated-desc'
 type View = 'table' | 'grid'
 
 const SORTS: { value: SortKey; label: string }[] = [
@@ -41,6 +42,8 @@ const SORTS: { value: SortKey; label: string }[] = [
   { value: 'sku-desc', label: 'รหัสสินค้า มาก→น้อย' }, // i18n-key
   { value: 'qty-desc', label: 'คงเหลือ มาก→น้อย' }, // i18n-key
   { value: 'qty-asc', label: 'คงเหลือ น้อย→มาก' }, // i18n-key
+  { value: 'cost-desc', label: 'ต้นทุน มาก→น้อย' }, // i18n-key
+  { value: 'cost-asc', label: 'ต้นทุน น้อย→มาก' }, // i18n-key
   { value: 'updated-desc', label: 'อัปเดตล่าสุดก่อน' }, // i18n-key
 ]
 
@@ -188,6 +191,10 @@ export function ProductsPage() {
           return b.qty - a.qty || byName(a, b)
         case 'qty-asc':
           return a.qty - b.qty || byName(a, b)
+        case 'cost-desc':
+          return compareProductCost(a.p.cost, b.p.cost, 'desc') || byName(a, b)
+        case 'cost-asc':
+          return compareProductCost(a.p.cost, b.p.cost, 'asc') || byName(a, b)
         case 'updated-desc':
           return b.updatedAt - a.updatedAt || byName(a, b)
         default:
@@ -250,16 +257,7 @@ export function ProductsPage() {
     setExporting(true)
     try {
       const { exportExcel } = await import('../lib/export')
-      const rows = (chosen.length ? chosen : filtered).map((r) => ({
-        [t('รหัสสินค้า')]: r.p.sku,
-        [t('ชื่อสินค้า')]: r.p.name,
-        [t('หมวดหมู่')]: r.p.category,
-        [t('หน่วย')]: r.p.unitType,
-        [t('คงเหลือ')]: r.qty,
-        [t('จุดสั่งซื้อ')]: r.min,
-        [t('สถานะ')]: r.p.active === false ? t('ที่ซ่อนไว้') : t(STATE_LOOK[r.state].label),
-        [t('คลังสินค้า')]: locId ? siteName(locId) : r.sites.map(siteName).join(', '),
-      }))
+      const rows = (chosen.length ? chosen : filtered).map((r) => mapProductExportRow(r, t, locId, siteName))
       await exportExcel(`products-${new Date().toISOString().slice(0, 10)}`, t('สินค้าคงคลัง'), rows)
     } catch (e) {
       toast.error(errText(e, t))
@@ -461,7 +459,8 @@ export function ProductsPage() {
                   rows={pageRows}
                   columns={columns}
                   rowKey={(r) => r.p.id}
-                  minWidth={960}
+                  minWidth={0}
+                  compactTablet
                   onRowClick={(r) => navigate(`/products/${encodeURIComponent(r.p.id)}/card`)}
                   selection={{ selected, onChange: setSelected }}
                   rowMenu={(r) =>

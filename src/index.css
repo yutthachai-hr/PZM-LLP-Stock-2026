@@ -96,6 +96,10 @@
     sans-serif;
   --font-login: 'Anuphan', 'LINE Seed Sans TH', system-ui, sans-serif;
 
+  /* Wider than 2xl (1536): the width at which the Products table has room for its reference
+     columns (Category, Unit) as well as Location. Measured, not guessed — R19-E. */
+  --breakpoint-3xl: 1840px;
+
   /* Surfaces and text. Industrial slate: quiet, so the numbers carry the page. */
   --color-canvas: #f1f5f9;
   --color-surface: #ffffff;
