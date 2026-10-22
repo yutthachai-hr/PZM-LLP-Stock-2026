@@ -14,7 +14,7 @@ import { Badge, Button, Modal } from '../../components/ui'
 import { translatorFor, useI18n, useT, type Lang, type TFn } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
-import { imageHostAvailable, uploadPoImage } from '../../services/poImages'
+import { imageHostAvailable, uploadPoImage, type HostedImage } from '../../services/poImages'
 import { setShareStatus } from '../../services/purchaseOrders'
 import { deliver } from '../../services/notifications'
 import { poSentDraft } from '../../lib/inventoryRules/notifications'
@@ -24,6 +24,23 @@ import { pickShareProvider, statusFor, type PurchaseShareProvider } from '../../
 import { liffNeedsLogin } from '../../share/lineLiffProvider'
 import { isStandalone } from '../../share/liffResume'
 import type { PurchaseOrder } from '../../types'
+import { clearPageProgress, pageToResume, savePageProgress } from './sendProgress'
+
+/**
+ * Everything a share needs, made before the tap (owner P0, 22 Oct 2026). The share sheet and
+ * LINE's picker (a window, outside LINE) need the tap that asked for them to still be "active";
+ * rendering a sheet took 3.6 s at 4x CPU and 43 s at 16x in R36 measurements, all inside the
+ * tap. Now the tap only shares; `key` ties the payload to what it shows, so an order revised
+ * while the wizard is open is prepared again rather than sent stale.
+ */
+interface Prepared {
+  key: string
+  file: File
+  hosted?: HostedImage
+  caption: string
+  card?: { altText: string; contents: Record<string, unknown> }
+  version: number
+}
 
 /**
  * "ส่ง LINE ทั้งหมด": one supplier at a time, in order, until the list is done.
@@ -80,6 +97,13 @@ export function SendWizard({
   const [sheetLang, setSheetLang] = useState<Lang>(screenLang)
   const [busy, setBusy] = useState<'' | 'render' | 'share'>('')
   const [askOutcome, setAskOutcome] = useState(false)
+  const [prepared, setPrepared] = useState<Prepared | null>(null)
+  const [prepareError, setPrepareError] = useState('')
+  const [prepareTick, setPrepareTick] = useState(0)
+  // A share that failed: what went wrong, and the ways forward (retry, download, copy, later).
+  const [failure, setFailure] = useState('')
+  // A second tap while the share sheet is opening opens nothing (stops before React re-renders).
+  const sharing = useRef(false)
   // One outcome is written at a time. A double tap on "sent" or "skip" used to write the
   // order twice and ring the bell twice; the ref stops the second tap before React can
   // re-render, the state greys the buttons out for the person.
@@ -107,9 +131,15 @@ export function SendWizard({
   const pendingRef = useRef(pending)
   pendingRef.current = pending
   useEffect(() => {
-    setCurrentId(pendingRef.current[0]?.id ?? null)
-    setPageIdx(0)
-    setAskOutcome(false)
+    const first = pendingRef.current[0]
+    setCurrentId(first?.id ?? null)
+    setFailure('')
+    // Back after the page was dropped while LINE was in front: a multi-page order goes on from
+    // the page not yet shared; an order whose share sheet was opened asks whether it went,
+    // instead of quietly starting the send again.
+    const resumeAt = first ? pageToResume(getBrand(), first.id, paginateLines(first.lines).length) : 0
+    setPageIdx(resumeAt)
+    setAskOutcome(!!first && resumeAt === 0 && first.shareStatus === 'shareOpened')
   }, [pendingKey])
 
   // Always the order as it now stands: its status fields move while it is being sent.
@@ -125,7 +155,10 @@ export function SendWizard({
     try {
       const brand = getBrand()
       const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
-      if (status === 'sent' || status === 'skipped') doneHere.current.add(order.id)
+      if (status === 'sent' || status === 'skipped') {
+        doneHere.current.add(order.id)
+        clearPageProgress(brand, order.id)
+      }
       // The bell's record that it went (info, no popup); best effort like every deliver().
       if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
       // Exactly what was written, so the list, the sheet and the batch agree at once — and
@@ -141,69 +174,131 @@ export function SendWizard({
     }
   }
 
-  async function send() {
-    if (!current || !sheet.current || !provider || !user) return
-    const page = { n: pageIdx + 1, of: pages.length }
+  // What the sheet shows; the order's status fields move while it is being sent and are not part of it.
+  const payloadKey = current && provider
+    ? JSON.stringify([current.id, current.revision ?? 0, current.expectedAt ?? 0, current.note ?? '', current.lines.map((l) => [l.productId, l.orderedQty, l.unit]), pageIdx, sheetLang, provider.id])
+    : ''
+
+  // Prepare: render (and, for LINE, host) the picture and fetch the supplier link, in the background.
+  useEffect(() => {
+    if (!payloadKey || !current || !provider || askOutcome) return
+    let stale = false
+    setPrepared((p) => (p?.key === payloadKey ? p : null))
+    setPrepareError('')
+    void (async () => {
+      // Let the sheet for this page and language paint before it is captured.
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+      if (stale || !sheet.current) return
+      const page = { n: pageIdx + 1, of: pages.length }
+      try {
+        setBusy('render')
+        const original = await renderElementToJpeg(sheet.current, { scale: 2 })
+        const file = new File([original], sheetFileName(current.docNo, page), { type: 'image/jpeg' })
+        const version = (current.imageVersion ?? 0) + 1
+        let hosted: HostedImage | undefined
+        if (provider.needsHosting) {
+          if (!imageHostAvailable()) throw new Error(t('เครื่องนี้ยังไม่ได้ตั้งค่าที่เก็บรูปสำหรับส่ง LINE'))
+          const preview = await renderElementToJpeg(sheet.current, { scale: 1, quality: 0.8 })
+          hosted = await uploadPoImage({ poId: current.id, original, preview, version })
+        }
+        // The new-order message and the supplier's confirmation link go with the first page
+        // (5 Oct 2026): text, then the [ยืนยันวันจัดส่ง] card, then the sheet. Still the
+        // person's own LINE through the picker — which takes plain text only, so a real @All
+        // mention cannot be made here and none is faked as text. No link (not set up yet,
+        // or offline) → the sheet goes out exactly as before.
+        const link = pageIdx === 0 ? await supplierLink(current) : null
+        if (stale) return
+        if (link) tracker.observe(link.order)
+        const st = translatorFor(sheetLang)
+        const asked = requestedOf(link?.order ?? current)
+        const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''
+        const caption = link
+          ? newOrderMessage(st, {
+              company,
+              docNo: current.docNo + pageTag,
+              supplier: current.supplierName,
+              date: asked !== undefined ? supplierDateLabel(asked, sheetLang) : undefined,
+              url: link.url,
+            })
+          : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + pageTag
+        setPrepared({ key: payloadKey, file, hosted, caption, card: link ? confirmCard(link.url, current.docNo, st) : undefined, version })
+      } catch (e) {
+        if (!stale) setPrepareError(errText(e, t))
+      } finally {
+        if (!stale) setBusy('')
+      }
+    })()
+    return () => {
+      stale = true
+    }
+    // `current` is read through payloadKey: re-preparing on every status write would re-upload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payloadKey, prepareTick, askOutcome])
+
+  // Share: the first thing the tap does. Status writes and the outcome follow the share sheet.
+  function send() {
+    if (!current || !provider || !user || sharing.current) return
+    const p = prepared
+    if (!p || p.key !== payloadKey) return
+    sharing.current = true
+    setBusy('share')
+    setFailure('')
+    const order = current
     const isLast = pageIdx === pages.length - 1
+    let shared: ReturnType<PurchaseShareProvider['share']>
     try {
-      setBusy('render')
-      const original = await renderElementToJpeg(sheet.current, { scale: 2 })
-      const file = new File([original], sheetFileName(current.docNo, page), { type: 'image/jpeg' })
-      const version = (current.imageVersion ?? 0) + 1
-      let hosted
-      if (provider.needsHosting) {
-        if (!imageHostAvailable()) throw new Error(t('เครื่องนี้ยังไม่ได้ตั้งค่าที่เก็บรูปสำหรับส่ง LINE'))
-        const preview = await renderElementToJpeg(sheet.current, { scale: 1, quality: 0.8 })
-        hosted = await uploadPoImage({ poId: current.id, original, preview, version })
+      shared = provider.share({ subject: { kind: 'order', id: order.id }, file: p.file, hosted: p.hosted, caption: p.caption, card: p.card })
+    } catch (e) {
+      shared = Promise.reject(e)
+    }
+    // Opened is still written, just after the share sheet was asked for rather than before.
+    const opened = order.shareStatus !== 'shareOpened' ? record(order, 'shareOpened') : Promise.resolve()
+    void (async () => {
+      try {
+        const outcome = await shared
+        await opened
+        if (outcome === 'cancelled') return
+        if (!isLast) {
+          // More pages of the same order: stay on it, move to the next page, and remember that.
+          savePageProgress(getBrand(), order.id, pageIdx + 1)
+          setPageIdx(pageIdx + 1)
+          return
+        }
+        if (statusFor(outcome) === 'sent') {
+          // Only LINE's own success report is taken as sent.
+          await record(order, 'sent', p.version)
+        } else {
+          // The share sheet told us nothing. Ask the one person who knows.
+          setAskOutcome(true)
+        }
+      } catch (e) {
+        await opened.catch(() => {})
+        setFailure(errText(e, t))
+        await record(order, 'failed').catch(() => {})
+      } finally {
+        sharing.current = false
+        setBusy('')
       }
-      // Opened is written before the picker, so a tab closed mid-way still shows the
-      // truth: this one was started and not finished.
-      if (current.shareStatus !== 'shareOpened') await record(current, 'shareOpened')
-      // The new-order message and the supplier's confirmation link go with the first page
-      // (5 Oct 2026): text, then the [ยืนยันวันจัดส่ง] card, then the sheet. Still the
-      // person's own LINE through the picker — which takes plain text only, so a real @All
-      // mention cannot be made here and none is faked as text. No link (not set up yet,
-      // or offline) → the sheet goes out exactly as before.
-      const link = pageIdx === 0 ? await supplierLink(current) : null
-      if (link) tracker.observe(link.order)
-      const st = translatorFor(sheetLang)
-      const asked = requestedOf(link?.order ?? current)
-      const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''
-      const caption = link
-        ? newOrderMessage(st, {
-            company,
-            docNo: current.docNo + pageTag,
-            supplier: current.supplierName,
-            date: asked !== undefined ? supplierDateLabel(asked, sheetLang) : undefined,
-            url: link.url,
-          })
-        : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + pageTag
-      setBusy('share')
-      const outcome = await provider.share({
-        subject: { kind: 'order', id: current.id },
-        file,
-        hosted,
-        caption,
-        card: link ? confirmCard(link.url, current.docNo, st) : undefined,
-      })
-      if (outcome === 'cancelled') return
-      if (!isLast) {
-        // More pages of the same order: stay on it, move to the next page.
-        setPageIdx(pageIdx + 1)
-        return
-      }
-      const status = statusFor(outcome)
-      if (status === 'sent') {
-        await record(current, 'sent', version)
-      } else {
-        // The share sheet told us nothing. Ask the one person who knows.
-        setAskOutcome(true)
-      }
+    })()
+  }
+
+  function downloadPicture() {
+    if (!prepared) return
+    const url = URL.createObjectURL(prepared.file)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = prepared.file.name
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+
+  async function copyMessage() {
+    if (!prepared) return
+    try {
+      await navigator.clipboard.writeText(prepared.caption)
+      toast.success(t('คัดลอกข้อความแล้ว'))
     } catch (e) {
       toast.error(errText(e, t))
-      await record(current, 'failed').catch(() => {})
-    } finally {
-      setBusy('')
     }
   }
 
@@ -266,6 +361,35 @@ export function SendWizard({
           id="send-sheet"
           lang={sheetLang}
         />
+        {prepareError && !askOutcome && (
+          <div role="alert" className="rounded-lg border border-danger/40 bg-danger-soft p-3 text-sm text-danger">
+            <p className="mb-2">{t('เตรียมรูปไม่สำเร็จ: {e}', { e: prepareError })}</p>
+            <Button variant="secondary" onClick={() => setPrepareTick((n) => n + 1)}>
+              {t('ลองเตรียมใหม่')}
+            </Button>
+          </div>
+        )}
+        {failure && !askOutcome && (
+          <div role="group" aria-label={t('ส่งไม่สำเร็จ')} className="rounded-lg border border-danger/40 bg-danger-soft p-3">
+            <p className="mb-2 text-sm text-danger">
+              <strong>{t('ส่งไม่สำเร็จ')}</strong> — {failure}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => send()} disabled={!!busy || !prepared}>
+                {t('ลองอีกครั้ง')}
+              </Button>
+              <Button variant="secondary" onClick={downloadPicture} disabled={!prepared}>
+                {t('ดาวน์โหลดรูป')}
+              </Button>
+              <Button variant="secondary" onClick={() => void copyMessage()} disabled={!prepared}>
+                {t('คัดลอกข้อความ')}
+              </Button>
+              <Button variant="secondary" onClick={onClose}>
+                {t('ไว้ส่งทีหลัง')}
+              </Button>
+            </div>
+          </div>
+        )}
         {askOutcome ? (
           <div className="rounded-lg border border-line bg-sunken p-3">
             <p className="mb-2 text-sm text-ink">{t('ส่งใน LINE เรียบร้อยหรือไม่?')}</p>
@@ -274,7 +398,7 @@ export function SendWizard({
                 <Icon name="check" size={16} />
                 {t('ส่งแล้ว')}
               </Button>
-              <Button variant="secondary" onClick={() => setAskOutcome(false)}>
+              <Button variant="secondary" onClick={() => setAskOutcome(false)} disabled={recordingNow}>
                 {t('ยังไม่ได้ส่ง — ลองอีกครั้ง')}
               </Button>
             </div>
@@ -287,10 +411,10 @@ export function SendWizard({
             <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow}>
               {t('ข้าม')}
             </Button>
-            <Button onClick={() => void send()} disabled={!!busy || !provider}>
+            <Button onClick={() => send()} disabled={!!busy || !provider || !prepared || prepared.key !== payloadKey}>
               <Icon name="share" size={16} />
               {busy === 'render'
-                ? t('กำลังสร้างรูป...')
+                ? t('กำลังเตรียมรูป…')
                 : busy === 'share'
                   ? t('กำลังเปิด LINE...')
                   : provider
