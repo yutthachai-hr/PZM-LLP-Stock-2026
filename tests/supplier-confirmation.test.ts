@@ -539,7 +539,8 @@ describe('the same answer again is not a new event', () => {
     const o = approvedThenQtyRevised()
     const r = respond(o, { action: 'propose', date: day(11), requestId: 'req-dup42' }, ctx)
     expect(r.ok && !r.replayed && r.outcome).toBe('pending')
-    expect(supplierAutoUntil(o, 2)).toBe(day(5))
+    // Earlier dates and the acknowledged date apply, but later dates do not gain a new window.
+    expect(supplierAutoUntil(o, 2)).toBe(day(9))
   })
 
   test('acknowledging a quantity-only revision keeps the approved date', () => {
@@ -547,6 +548,24 @@ describe('the same answer again is not a new event', () => {
     o = apply(o, { action: 'accept', requestId: 'req-dup37' })
     expect(o).toMatchObject({ supplierConfirmationStatus: 'confirmed', confirmedDeliveryDate: day(9), expectedAt: day(9) })
     expect(respond(o, { action: 'accept', requestId: 'req-dup38' }, ctx)).toEqual(UNCHANGED)
+  })
+
+  test('after a quantity-only revision an earlier explicit date still applies without approval', () => {
+    const o = approvedThenQtyRevised()
+    const r = respond(o, { action: 'propose', date: day(7), requestId: 'req-earlier-qty' }, ctx)
+    expect(r.ok && !r.replayed && r.outcome).toBe('changed')
+  })
+
+  test('successive quantity revisions never replace the purchasing range anchor', () => {
+    let o = approvedThenQtyRevised()
+    o = apply(o, { action: 'propose', date: day(5), requestId: 'req-qty-earlier' })
+    o = { ...o, revision: 2, revisions: [...o.revisions!, { rev: 2, at: NOW + 2, by: actor.id, byName: actor.name, reason: 'more again', changes: [{ kind: 'qty', productName: 'BACON', unit: 'แพ็ค', from: 6, to: 8 }] }] }
+    const l = issueLink(o, { now: NOW + 3, actor, ttlDays: 30, makeId })
+    if (!l.ok || !l.patch) throw new Error()
+    o = applyPatch(o, l.patch)
+    expect(supplierAutoUntil(o, 2)).toBe(day(5))
+    const r = respond(o, { action: 'propose', date: day(11), requestId: 'req-qty-later' }, ctx)
+    expect(r.ok && !r.replayed && r.outcome).toBe('pending')
   })
 
   test('after a quantity-only revision, another date is an explicit proposal through the normal approval', () => {

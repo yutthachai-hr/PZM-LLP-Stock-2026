@@ -56,8 +56,8 @@ export function requestedOf(o: PurchaseOrder): number | undefined {
 export function rangeAnchorOf(o: PurchaseOrder): number | undefined {
   const h = o.deliveryDateHistory ?? []
   for (let i = h.length - 1; i >= 0; i--) {
-    if (h[i].action !== 'requested') continue
-    return h[i].source === 'system' ? h[i].from : h[i].to
+    if (h[i].action !== 'requested' || h[i].source === 'system') continue
+    return h[i].to
   }
   return requestedOf(o)
 }
@@ -65,7 +65,12 @@ export function rangeAnchorOf(o: PurchaseOrder): number | undefined {
 /** The last day a supplier's change applies at once; later ones wait for approval. */
 export function supplierAutoUntil(o: PurchaseOrder, maxPostponeDays: number): number | undefined {
   const anchor = rangeAnchorOf(o)
-  return anchor === undefined ? undefined : bkkDayStart(anchor) + Math.max(0, Math.floor(maxPostponeDays)) * DAY_MS
+  if (anchor === undefined) return undefined
+  const until = bkkDayStart(anchor) + Math.max(0, Math.floor(maxPostponeDays)) * DAY_MS
+  // Acknowledging this link's date or explicitly bringing it earlier stays automatic; a
+  // quantity revision never adds postponement days to purchasing's approved date.
+  const asked = requestedOf(o)
+  return asked === undefined ? until : Math.max(until, bkkDayStart(asked))
 }
 
 /** When the goods are now expected: what was agreed, else what was asked. */
@@ -409,7 +414,8 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
     target = bkkDayStart(input.date as number)
     // The date agreed was within the range or approved already, or is the date this link asks
     // for: going back to it, or answering a refusal with it, is not asked for a second time.
-    mode = target === agreedDateOf(o) || (requested !== undefined && target === bkkDayStart(requested)) ? 'auto' : v.mode
+    const until = supplierAutoUntil(o, ctx.maxPostponeDays)
+    mode = target === agreedDateOf(o) || until === undefined || target <= until ? 'auto' : 'needsApproval'
   }
 
   // Before the room check: an answer that changes nothing needs no room.

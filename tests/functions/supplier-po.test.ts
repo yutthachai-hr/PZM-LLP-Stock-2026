@@ -691,7 +691,7 @@ describe('P0 PO-00003: an approved date stands at the endpoint', () => {
     const next = await link()
     expect(next).not.toBe(old)
     const view = (await viewLink(deps, next)).body.view as Record<string, unknown>
-    expect(view).toMatchObject({ status: 'waiting', requestedDate: '2026-10-12', confirmedDate: '2026-10-12' })
+    expect(view).toMatchObject({ status: 'waiting', requestedDate: '2026-10-12', confirmedDate: '2026-10-12', autoUntil: '2026-10-12' })
     const r = await answerLink(deps, next, { action: 'accept', name: 'MMP', requestId: 'po3-q-ack' })
     expect(r.body).toMatchObject({ replayed: false, outcome: 'confirmed' })
     expect(po()).toMatchObject({ supplierConfirmationStatus: 'confirmed', confirmedDeliveryDate: day(7), expectedAt: day(7) })

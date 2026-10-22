@@ -22,7 +22,6 @@ import {
   type SupplierPatch,
 } from '../../src/lib/supplierConfirmation'
 import { supplierAnswerDraft, supplierDecisionDraft, supplierOpenedDraft, toDoc } from '../../src/lib/inventoryRules/notifications'
-import { DAY_MS } from '../../src/lib/inventoryRules/time'
 import { brandCollection, type ServerStore } from './serverStore'
 import { signSupplierToken, verifySupplierSignature, type SupplierClaims, type TokenBrand } from './supplierToken'
 
