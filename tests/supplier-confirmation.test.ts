@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from 'vitest'
 import {
+  agreedDateOf,
   applyPatch,
   confirmationBadge,
   dateKeyToMs,
@@ -424,9 +425,13 @@ describe('the same answer again is not a new event', () => {
     let o = apply(linked(), { action: 'accept', requestId: 'req-dup13' })
     o = apply(o, { action: 'propose', date: day(4), requestId: 'req-dup14' })
     expect(o.supplierConfirmationStatus).toBe('changed')
-    o = apply(o, { action: 'accept', requestId: 'req-dup15' })
+    // Back to the date asked for is an explicit proposal: 'accept' would silently undo the date
+    // that now stands, so it is refused (PO-00003, 22 Oct 2026).
+    expect(respond(o, { action: 'accept', requestId: 'req-dup15' }, ctx)).toEqual({ ok: false, error: 'agreed' })
+    o = apply(o, { action: 'propose', date: day(3), requestId: 'req-dup15' })
     expect(o.supplierConfirmationStatus).toBe('confirmed')
-    expect(o.deliveryDateHistory!.filter((h) => h.source === 'supplier').map((h) => h.action)).toEqual(['accepted', 'autoApplied', 'accepted'])
+    // The way back is recorded as what it was: an explicit change the range applied.
+    expect(o.deliveryDateHistory!.filter((h) => h.source === 'supplier').map((h) => h.action)).toEqual(['accepted', 'autoApplied', 'autoApplied'])
   })
 
   test('an answer to a date waiting for approval replaces it, even with the date agreed before', () => {
@@ -565,5 +570,69 @@ describe('approving a waiting date that has already gone by (R30)', () => {
     expect(decide(waiting, { changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, day(12), makeId)).toEqual({ ok: false, error: 'past' })
     expect(decide(waiting, { changeId, decision: 'reject', reason: 'too late' }, { id: 'm1', name: 'Boss' }, day(12), makeId)).toMatchObject({ ok: true })
     expect(decide(waiting, { changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, day(9), makeId)).toMatchObject({ ok: true }) // the day itself is fine
+  })
+})
+
+// P0 (owner, 22 Oct 2026) — Pizza Mania / MMP / PO-00003: the supplier proposed 26 Oct against
+// a requested 22 Oct, purchasing approved 26 Oct, and six minutes later the supplier pressed the
+// page's "confirm 22 Oct" — which moved the agreed date back to 22. Here day(3) plays 22 Oct and
+// day(7) plays 26 Oct (beyond the 2-day range, so it needs approval).
+describe('an approved date stands until an explicit new change (PO-00003)', () => {
+  const boss = { id: 'm1', name: 'Boss' }
+  const step = (o: PurchaseOrder, input: Parameters<typeof respond>[1], c = ctx) => {
+    const r = respond(o, input, c)
+    if (!r.ok || r.replayed) throw new Error(`expected a new answer, got ${JSON.stringify(r)}`)
+    return applyPatch(o, r.patch)
+  }
+  const approved = () => {
+    const o = step(linked(), { action: 'propose', date: day(7), requestId: 'po3-propose' })
+    const r = decide(o, { changeId: o.pendingDeliveryDate!.changeId, decision: 'approve' }, boss, NOW, makeId)
+    if (!r.ok) throw new Error('approve failed')
+    return applyPatch(o, r.patch)
+  }
+
+  test('approval finalizes the proposed date; the requested date stays as history', () => {
+    const o = approved()
+    expect(o.confirmedDeliveryDate).toBe(day(7))
+    expect(o.expectedAt).toBe(day(7))
+    expect(o.requestedDeliveryDate).toBe(day(3))
+    expect(o.supplierConfirmationStatus).toBe('changed')
+    expect(agreedDateOf(o)).toBe(day(7))
+  })
+  test('a stale "accept the requested date" cannot overwrite the approved date', () => {
+    const o = approved()
+    const r = respond(o, { action: 'accept', requestId: 'po3-stale-accept' }, ctx)
+    expect(r).toEqual({ ok: false, error: 'agreed' })
+  })
+  test('the same refusal again creates nothing either', () => {
+    const o = approved()
+    expect(respond(o, { action: 'accept', requestId: 'po3-stale-accept-2' }, ctx)).toEqual({ ok: false, error: 'agreed' })
+    expect(o.deliveryDateHistory!.map((h) => h.action)).toEqual(['requested', 'proposed', 'approved'])
+  })
+  test('an explicit new proposal still follows the normal policy (earlier applies, later waits)', () => {
+    const earlier = step(approved(), { action: 'propose', date: day(3), requestId: 'po3-back-to-22' })
+    expect(earlier.confirmedDeliveryDate).toBe(day(3))
+    expect(earlier.supplierConfirmationStatus).toBe('confirmed')
+    const later = step(approved(), { action: 'propose', date: day(9), requestId: 'po3-to-28' })
+    expect(later.supplierConfirmationStatus).toBe('pending_date_approval')
+    expect(later.confirmedDeliveryDate).toBe(day(7)) // the agreement stands while it waits
+  })
+  test('refusing a newer proposal keeps the approved agreement', () => {
+    const o = step(approved(), { action: 'propose', date: day(9), requestId: 'po3-to-28b' })
+    const r = decide(o, { changeId: o.pendingDeliveryDate!.changeId, decision: 'reject', reason: 'no' }, boss, NOW, makeId)
+    if (!r.ok) throw new Error()
+    const next = applyPatch(o, r.patch)
+    expect(next.confirmedDeliveryDate).toBe(day(7))
+    expect(agreedDateOf(next)).toBe(day(7))
+    expect(respond(next, { action: 'accept', requestId: 'po3-accept-after-reject' }, ctx)).toEqual({ ok: false, error: 'agreed' })
+  })
+  test('approving the same change twice is refused as stale, writing nothing', () => {
+    const o = approved()
+    expect(decide(o, { changeId: 'anything', decision: 'approve' }, boss, NOW, makeId)).toEqual({ ok: false, error: 'stale' })
+  })
+  test('accept still works when nothing different stands (first answer, or the agreement is the requested date)', () => {
+    const first = step(linked(), { action: 'accept', requestId: 'po3-first-accept' })
+    expect(first.confirmedDeliveryDate).toBe(day(3))
+    expect(respond(first, { action: 'accept', requestId: 'po3-first-accept-again' }, ctx)).toEqual({ ok: true, replayed: true, unchanged: true })
   })
 })
