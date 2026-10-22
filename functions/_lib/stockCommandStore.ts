@@ -8,8 +8,8 @@ import { brandCollection } from './serverStore'
 
 export type StockBrand = 'pizza' | 'lelapin' | 'rnd'
 
-const readable = new Set(['users', 'revokedUsers', 'meta', 'products', 'locations', 'counters', 'stockLevels', 'transfers'])
-const writable = new Set(['meta', 'counters', 'stockLevels', 'stockMovements', 'transfers'])
+const readable = new Set(['users', 'revokedUsers', 'meta', 'products', 'locations', 'counters', 'stockLevels', 'transfers', 'purchaseOrders'])
+const writable = new Set(['meta', 'counters', 'stockLevels', 'stockMovements', 'transfers', 'purchaseOrders'])
 const ATTEMPTS = 5
 const safeId = (s: string) => /^[A-Za-z0-9_\-]{1,200}$/.test(s)
 

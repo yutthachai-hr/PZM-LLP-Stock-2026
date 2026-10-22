@@ -7,7 +7,7 @@ import { AppError } from '../../src/i18n/AppError'
 import { planAdjust, type AdjustLine } from '../../src/services/adjustPlan'
 import { levelId } from '../../src/lib/levelKey'
 import { requireCountQty, roundQty } from '../../src/lib/validate'
-import { COL, type AppUser, type Product, type StockLevel, type StockMovement, type Transfer } from '../../src/types'
+import { COL, type AppUser, type Product, type PurchaseOrder, type StockLevel, type StockMovement, type Transfer } from '../../src/types'
 import { isManager, liveItems } from '../../src/lib/transferStatus'
 import { planApproveTransfer } from '../../src/services/transferPlan'
 import { sameUnit } from '../../src/lib/units'
@@ -34,6 +34,7 @@ type Input = Envelope &
     | { command: 'adjust'; payload: { locationId: string; date: number; note: string | null; lines: AdjustLine[] } }
     | { command: 'count'; payload: { locationId: string; date: number; note: string | null; lines: CountLine[] } }
     | { command: 'transferApprove'; payload: { transferId: string; expectedRevision: number; note: string | null } }
+    | { command: 'poApprove'; payload: { poId: string } }
   )
 
 export interface StockCommandResult {
@@ -68,11 +69,15 @@ export function parseStockCommand(raw: unknown): Input {
   if (!isObj(raw) || !isObj(raw.payload)) throw bad()
   const { command, brand, operationId, expectedRev, payload } = raw
   if (Object.keys(raw).some((k) => !['command', 'brand', 'operationId', 'expectedRev', 'payload'].includes(k))) throw bad()
-  if (command !== 'adjust' && command !== 'count' && command !== 'transferApprove') throw bad()
+  if (command !== 'adjust' && command !== 'count' && command !== 'transferApprove' && command !== 'poApprove') throw bad()
   if (!BRANDS.includes(brand as StockBrand)) throw bad()
   if (typeof operationId !== 'string' || !UUID.test(operationId)) throw bad()
   if (expectedRev !== undefined && !(Number.isSafeInteger(expectedRev) && (expectedRev as number) >= 0)) throw bad()
   const envelopeOf = (): Envelope => ({ brand: brand as StockBrand, operationId, expectedRev: (expectedRev as number | undefined) ?? null })
+  if (command === 'poApprove') {
+    if (Object.keys(payload).some((k) => k !== 'poId') || !str(payload.poId, 200) || !/^[A-Za-z0-9_-]+$/.test(payload.poId as string)) throw bad()
+    return { command, ...envelopeOf(), payload: { poId: payload.poId as string } }
+  }
   if (command === 'transferApprove') {
     // shortcut: no line edits at approval on the trusted path; the manager approves the lines as
     // submitted. Accept an items list (with the same checks as the browser) when a screen needs it.
@@ -148,6 +153,16 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
       return { docNo, ledgerRev, replayed: false }
     }
     const file = (mv: Omit<StockMovement, 'id'>) => tx.set(COL.movements, crypto.randomUUID().replace(/-/g, ''), mv as Record<string, unknown>)
+
+    if (input.command === 'poApprove') {
+      // B4/approvedAt: who approved and when are the server's to write, from the live user and
+      // its own clock. Who may approve is unchanged (any active user, as the browser allows).
+      const po = await tx.get<PurchaseOrder>(COL.purchaseOrders, input.payload.poId)
+      if (!po) throw new AppError('ไม่พบใบสั่งซื้อ')
+      if (po.status !== 'draft') throw new StockCommandError('stale', { status: po.status })
+      tx.set(COL.purchaseOrders, po.id, { ...po, status: 'ordered', orderedAt: now, approvedBy: uid, approvedByName: user.name, approvedAt: now, updatedAt: now })
+      return finish(null)
+    }
 
     if (input.command === 'transferApprove') {
       // S2: stock leaves a branch for transit only through a real transfer, in the state and

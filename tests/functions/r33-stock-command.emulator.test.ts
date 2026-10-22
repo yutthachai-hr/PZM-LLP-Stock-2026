@@ -318,3 +318,46 @@ describe('transferApprove', () => {
     expect(await qtyAt('transit')).toBe(4)
   })
 })
+
+// B4 / approvedAt (R34): the server writes who approved an order and when.
+describe('poApprove', () => {
+  const draft = { id: 'po1', docNo: 'PO-00001', status: 'draft', supplierId: 's1', supplierName: 'MMP', locationId: 'wh', orderedAt: DATE - 86_400_000, lines: [{ productId: 'p1', productName: 'Flour', unit: 'kg', orderedQty: 5 }], batchId: 'b1', createdBy: 'u2', createdByName: 'Staff Two', createdAt: DATE - 86_400_000, updatedAt: DATE - 86_400_000 }
+  const approvePo = (over: Record<string, unknown> = {}) => ({ command: 'poApprove', brand: 'pizza', operationId: opId(), payload: { poId: 'po1', ...over } })
+  const po = async () => (await list('purchaseOrders')).find((o) => o.id === 'po1')!
+  beforeEach(async () => {
+    await put('purchaseOrders/po1', draft)
+  })
+
+  test('a draft becomes an order stamped with the live user and the server clock; stock ledger untouched', async () => {
+    expect(await runStockCommand(deps(), approvePo(), 'u1')).toEqual({ docNo: null, ledgerRev: 0, replayed: false })
+    expect(await po()).toMatchObject({ status: 'ordered', approvedBy: 'u1', approvedByName: 'Staff One', approvedAt: DATE, orderedAt: DATE, createdBy: 'u2', docNo: 'PO-00001' })
+    expect((await list('meta')).some((m) => m.id === 'stockLedger_pizza')).toBe(false)
+  })
+
+  test('a client cannot supply approvedAt, approvedBy or status', async () => {
+    for (const extra of [{ approvedAt: 1 }, { approvedBy: 'boss' }, { status: 'ordered' }]) {
+      await expect(runStockCommand(deps(), approvePo(extra), 'u1')).rejects.toMatchObject({ code: 'invalid' })
+    }
+    expect(commits).toBe(0)
+    expect((await po()).status).toBe('draft')
+  })
+
+  test('an order already placed is stale; the same approval retried replays; a revoked user is refused', async () => {
+    const cmd = approvePo()
+    await runStockCommand(deps(), cmd, 'u1')
+    expect(await runStockCommand(deps(), cmd, 'u1')).toMatchObject({ replayed: true })
+    await expect(runStockCommand(deps(), approvePo(), 'u2')).rejects.toMatchObject({ code: 'stale', detail: { status: 'ordered' } })
+    expect((await po()).approvedBy).toBe('u1')
+    await put('purchaseOrders/po1', draft)
+    await put('revokedUsers/u2', { id: 'u2' })
+    await expect(runStockCommand(deps(), approvePo(), 'u2')).rejects.toMatchObject({ code: 'forbidden' })
+    expect((await po()).status).toBe('draft')
+  })
+
+  test('cross-brand: another brand\'s order is not reachable through this brand', async () => {
+    await put('lelapin__purchaseOrders/po1', { ...draft })
+    await runStockCommand(deps(), approvePo(), 'u1')
+    expect((await list('lelapin__purchaseOrders'))[0].status).toBe('draft')
+    await expect(runStockCommand(deps(['pizza']), { ...approvePo(), brand: 'lelapin' }, 'u1')).rejects.toMatchObject({ code: 'forbidden' })
+  })
+})
