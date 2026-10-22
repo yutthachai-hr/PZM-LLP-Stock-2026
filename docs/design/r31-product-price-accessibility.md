@@ -12,9 +12,9 @@ is invalid. Each grid card is now an article with its navigation button and a si
 disclosure. The table's disclosure and the cost/format/export calculation remain unchanged.
 
 Browser RED: both TH/EN new tests found1 visible `button details` where0 is required.
-Browser GREEN:14/14 isolated demo tests now pass, covering:
+Browser GREEN: 14/14 at R31; 16/16 after the R34 tablet fix (merged in #37); the tablet test also checks the one-line cost disclosure and page width, covering:
 - independent keyboard-opened grid disclosure without navigation; product button still navigates;
--390px grid readability/overflow and phone/small-tablet card invoice hint;
+-390px grid readability/overflow and phone card invoice hint; from 768 (md) the table with row selection and Excel export (R34 review F1);
 - all3 brands, TH/EN, practical1440/1536 desktop widths and the wider breakpoint curve;
 - selectable/searchable/sortable SKU, visible Location header, name wrapping;
 - numeric Excel export and accessible summary naming.
