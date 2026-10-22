@@ -509,7 +509,9 @@ describe('the same answer again is not a new event', () => {
     expect(respond(applyPatch(o, (r as { patch: Parameters<typeof applyPatch>[1] }).patch), { action: 'propose', date: day(9), requestId: 'req-dup35' }, ctx)).toEqual(UNCHANGED)
   })
 
-  test('after an amendment, the far date approved before needs approval again', () => {
+  // PO-00003 shape (owner, 22 Oct 2026): asked 22 Oct, supplier proposed 26 Oct, purchasing
+  // approved it; then only a quantity changed. The approved date stands on the revised link.
+  const approvedThenQtyRevised = () => {
     let o = apply(linked(), { action: 'propose', date: day(9), requestId: 'req-dup36' })
     const ok = decide(o, { changeId: o.pendingDeliveryDate!.changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, NOW, makeId)
     if (!ok.ok) throw new Error()
@@ -517,14 +519,42 @@ describe('the same answer again is not a new event', () => {
     o = { ...o, revision: 1, revisions: [{ rev: 1, at: NOW, by: 'u1', byName: 'Nok', reason: 'more', changes: [{ kind: 'qty', productName: 'BACON', unit: 'แพ็ค', from: 4, to: 6 }] }] }
     const l = issueLink(o, { now: NOW + 1, actor, ttlDays: 30, makeId })
     if (!l.ok || !l.patch) throw new Error()
+    return applyPatch(o, l.patch)
+  }
+
+  test('a quantity-only revision asks the supplier for the approved date, not the one first asked', () => {
+    const o = approvedThenQtyRevised()
+    expect(o).toMatchObject({ supplierConfirmationStatus: 'waiting', requestedDeliveryDate: day(9), confirmedDeliveryDate: day(9), expectedAt: day(9) })
+  })
+
+  test('acknowledging a quantity-only revision keeps the approved date', () => {
+    let o = approvedThenQtyRevised()
+    o = apply(o, { action: 'accept', requestId: 'req-dup37' })
+    expect(o).toMatchObject({ supplierConfirmationStatus: 'confirmed', confirmedDeliveryDate: day(9), expectedAt: day(9) })
+    expect(respond(o, { action: 'accept', requestId: 'req-dup38' }, ctx)).toEqual(UNCHANGED)
+  })
+
+  test('after a quantity-only revision, another date is an explicit proposal through the normal approval', () => {
+    let o = approvedThenQtyRevised()
+    // Beyond the range from the date that stands: waits for a manager, the approved date stays.
+    o = apply(o, { action: 'propose', date: day(13), requestId: 'req-dup39' })
+    expect(o).toMatchObject({ supplierConfirmationStatus: 'pending_date_approval', confirmedDeliveryDate: day(9), expectedAt: day(9) })
+    // Answering with the approved date withdraws the far one without asking again.
+    const back = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup40' }, ctx)
+    expect(back.ok && !back.replayed && back.outcome).not.toBe('pending')
+  })
+
+  test('a revision that amends the date still asks for the new date and clears the old agreement', () => {
+    let o = apply(linked(), { action: 'propose', date: day(9), requestId: 'req-dup41' })
+    const ok = decide(o, { changeId: o.pendingDeliveryDate!.changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, NOW, makeId)
+    if (!ok.ok) throw new Error()
+    o = applyPatch(o, ok.patch)
+    o = { ...o, expectedAt: day(5), revision: 1, revisions: [{ rev: 1, at: NOW, by: 'u1', byName: 'Nok', reason: 'sooner', changes: [{ kind: 'expectedAt', from: day(9), to: day(5) }] }] } as PurchaseOrder
+    const l = issueLink(o, { now: NOW + 1, actor, ttlDays: 30, makeId })
+    if (!l.ok || !l.patch) throw new Error()
     o = applyPatch(o, l.patch)
-    expect(o.confirmedDeliveryDate).toBe(day(9)) // kept by the reset, but no longer agreed
-    const r = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup37' }, ctx)
-    expect(r.ok && !r.replayed && r.outcome).toBe('pending')
-    // Nor once another far date waits on the new link.
-    o = apply(o, { action: 'propose', date: day(12), requestId: 'req-dup38' })
-    const again = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup39' }, ctx)
-    expect(again.ok && !again.replayed && again.outcome).toBe('pending')
+    expect(o).toMatchObject({ supplierConfirmationStatus: 'waiting', requestedDeliveryDate: day(5) })
+    expect(o.confirmedDeliveryDate).toBeUndefined()
   })
 
   test('a date waiting for approval that the range now allows applies at once', () => {

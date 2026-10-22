@@ -272,6 +272,12 @@ export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
         to: o.expectedAt,
         ...by,
       })
+    } else if (o.expectedAt !== undefined && requestedOf(o) !== o.expectedAt) {
+      // The date stands (an approval or an in-range change moved expectedAt to it): a revision
+      // that left the date alone asks for that date, never the one first asked (PO-00003, owner
+      // 22 Oct 2026). The agreement is kept; another date is an explicit proposal.
+      history.push({ id: ctx.makeId(), at: ctx.now, source: 'system', action: 'requested', from: requestedOf(o), to: o.expectedAt, ...by })
+      patch.requestedDeliveryDate = o.expectedAt
     }
     history.push({ id: ctx.makeId(), at: ctx.now, source: 'system', action: 'reset', ...by })
     activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'reset', ...by })
