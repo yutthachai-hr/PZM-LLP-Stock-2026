@@ -744,6 +744,22 @@ describe('where the sheet has got to', () => {
     expect(written.sentAt).toBe(o.sentAt)
     expect(needsResend({ ...o, ...written })).toBe(false)
   })
+
+  test('hands back exactly what it wrote — who sent it too — and writes nothing new', async () => {
+    const id = await placeOrder()
+    const before = orders().find((x) => x.id === id)!
+    const opened = await setShareStatus(id, 'shareOpened', ACTOR)
+    const afterOpen = orders().find((x) => x.id === id)!
+    expect(opened).toEqual({ shareStatus: 'shareOpened', shareOpenedAt: afterOpen.shareOpenedAt, updatedAt: afterOpen.updatedAt })
+    const sent = await setShareStatus(id, 'sent', ACTOR, 3)
+    const after = orders().find((x) => x.id === id)!
+    expect(sent).toEqual({ shareStatus: 'sent', sentAt: after.sentAt, sentBy: 'uid-staff', sentByName: 'Staff', imageVersion: 3, updatedAt: after.updatedAt })
+    // The fields on the document are the ones this function has always written, no more.
+    const added = Object.keys(after).filter((k) => !(k in before)).sort()
+    expect(added).toEqual(['imageVersion', 'sentAt', 'sentBy', 'sentByName', 'shareOpenedAt', 'shareStatus'])
+    // The screen's copy, merged with what came back, is the stored order.
+    expect({ ...before, ...opened, ...sent }).toEqual(after)
+  })
 })
 
 test('one product keyed twice in the same unit is one line with the sum', async () => {

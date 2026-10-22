@@ -88,6 +88,10 @@ async function server() {
 
 test.use({ viewport: { width: 390, height: 844 } })
 
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close()
+})
+
 test('the supplier confirms once: a double tap sends one answer, and the page does not offer it again', async ({ page }) => {
   const { token, posts, notes, attach } = await server()
   await attach(page)
