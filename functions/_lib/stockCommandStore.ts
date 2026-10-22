@@ -10,6 +10,7 @@ export type StockBrand = 'pizza' | 'lelapin' | 'rnd'
 
 const readable = new Set(['users', 'revokedUsers', 'meta', 'products', 'locations', 'counters', 'stockLevels'])
 const writable = new Set(['meta', 'counters', 'stockLevels', 'stockMovements'])
+const ATTEMPTS = 5
 const safeId = (s: string) => /^[A-Za-z0-9_\-]{1,200}$/.test(s)
 
 export class StockConflict extends Error {
@@ -55,7 +56,7 @@ export function stockCommandStore(
 
   return {
     async transaction<R>(run: (tx: TxContext) => Promise<R>): Promise<R> {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
         const reads = new Map<string, { doc: Record<string, unknown> | null; precondition: Record<string, unknown> }>()
         const writes = new Map<string, Record<string, unknown>>()
         let writing = false
@@ -121,7 +122,11 @@ export function stockCommandStore(
           await call(':commit', { writes: all })
           return result
         } catch (e) {
-          if (e instanceof StockConflict && attempt < 2) continue
+          if (e instanceof StockConflict && attempt < ATTEMPTS - 1) {
+            // Two writers that collided collide again at once; back off with jitter so the winner commits.
+            await new Promise((r) => setTimeout(r, 20 * 2 ** attempt + Math.random() * 20))
+            continue
+          }
           throw e
         }
       }

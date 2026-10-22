@@ -7,7 +7,8 @@ import { AppError } from '../../src/i18n/AppError'
 import { planAdjust, type AdjustLine } from '../../src/services/adjustPlan'
 import { levelId } from '../../src/lib/levelKey'
 import { requireCountQty, roundQty } from '../../src/lib/validate'
-import { COL, type AppUser, type StockLevel } from '../../src/types'
+import { COL, type AppUser, type Product, type StockLevel } from '../../src/types'
+import { sameUnit } from '../../src/lib/units'
 import { StockConflict, type StockBrand } from './stockCommandStore'
 
 const BRANDS: readonly StockBrand[] = ['pizza', 'lelapin', 'rnd']
@@ -25,9 +26,12 @@ export interface StockCommandDeps {
 }
 
 type CountLine = { productId: string; productName: string; unit: string; countedQty: number; expectedQty: number }
-type Input =
-  | { command: 'adjust'; brand: StockBrand; operationId: string; payload: { locationId: string; date: number; note?: string; lines: AdjustLine[] } }
-  | { command: 'count'; brand: StockBrand; operationId: string; payload: { locationId: string; date: number; note?: string; lines: CountLine[] } }
+type Envelope = { brand: StockBrand; operationId: string; expectedRev: number | null }
+type Input = Envelope &
+  (
+    | { command: 'adjust'; payload: { locationId: string; date: number; note: string | null; lines: AdjustLine[] } }
+    | { command: 'count'; payload: { locationId: string; date: number; note: string | null; lines: CountLine[] } }
+  )
 
 export interface StockCommandResult {
   docNo: string | null
@@ -49,27 +53,43 @@ const str = (v: unknown, max: number) => typeof v === 'string' && v.length > 0 &
 const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
-/** Parse once at the boundary; unknown keys are refused, not ignored. */
+/**
+ * Parse once at the boundary; unknown keys are refused, not ignored. The result is rebuilt in a
+ * fixed key order, so its JSON is canonical: the same request in another key order replays.
+ * shortcut: base-unit lines only (no entryUnit/entryQty), so the server never trusts a client's
+ * unit conversion; add server-side conversion from the product's unitConversions before a
+ * screen that keys other units is switched over.
+ */
 export function parseStockCommand(raw: unknown): Input {
   const bad = () => new StockCommandError('invalid')
   if (!isObj(raw) || !isObj(raw.payload)) throw bad()
-  const { command, brand, operationId, payload } = raw
-  if (Object.keys(raw).some((k) => !['command', 'brand', 'operationId', 'payload'].includes(k))) throw bad()
+  const { command, brand, operationId, expectedRev, payload } = raw
+  if (Object.keys(raw).some((k) => !['command', 'brand', 'operationId', 'expectedRev', 'payload'].includes(k))) throw bad()
   if (command !== 'adjust' && command !== 'count') throw bad()
   if (!BRANDS.includes(brand as StockBrand)) throw bad()
   if (typeof operationId !== 'string' || !UUID.test(operationId)) throw bad()
+  if (expectedRev !== undefined && !(Number.isSafeInteger(expectedRev) && (expectedRev as number) >= 0)) throw bad()
   const { locationId, date, note, lines } = payload
   if (Object.keys(payload).some((k) => !['locationId', 'date', 'note', 'lines'].includes(k))) throw bad()
   if (!str(locationId, 200) || !num(date) || (note !== undefined && !str(note, 2000))) throw bad()
   if (!Array.isArray(lines) || lines.length === 0 || lines.length > 50) throw bad()
   const common = ['productId', 'productName', 'unit']
-  const keys = command === 'adjust' ? [...common, 'entryUnit', 'entryQty', 'qty', 'note', 'direction', 'reason'] : [...common, 'countedQty', 'expectedQty']
+  const keys = command === 'adjust' ? [...common, 'qty', 'note', 'direction', 'reason'] : [...common, 'countedQty', 'expectedQty']
   for (const l of lines) {
     if (!isObj(l) || Object.keys(l).some((k) => !keys.includes(k))) throw bad()
     if (!str(l.productId, 200) || !str(l.productName, 300) || !str(l.unit, 40)) throw bad()
     if (command === 'count' && !(num(l.countedQty) && num(l.expectedQty))) throw bad()
+    if (command === 'adjust' && !(num(l.qty) && str(l.direction, 10) && str(l.reason, 60) && (l.note === undefined || str(l.note, 2000)))) throw bad()
   }
-  return raw as Input
+  const envelope: Envelope = { brand: brand as StockBrand, operationId, expectedRev: (expectedRev as number | undefined) ?? null }
+  const head = { locationId: locationId as string, date: date as number, note: (note as string | undefined) ?? null }
+  const rows = lines as Record<string, unknown>[]
+  if (command === 'count') {
+    const counted = rows.map((l) => ({ productId: l.productId, productName: l.productName, unit: l.unit, countedQty: l.countedQty, expectedQty: l.expectedQty }) as CountLine)
+    return { command, ...envelope, payload: { ...head, lines: counted } }
+  }
+  const adjusted = rows.map((l) => ({ productId: l.productId, productName: l.productName, unit: l.unit, qty: l.qty, direction: l.direction, reason: l.reason, ...(l.note === undefined ? {} : { note: l.note }) }) as AdjustLine)
+  return { command, ...envelope, payload: { ...head, lines: adjusted } }
 }
 
 async function sha256(s: string): Promise<string> {
@@ -82,6 +102,7 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
   const { brand } = input
   const opKey = 'stockop_' + (await sha256(`${uid}|${brand}|${input.operationId}`))
   const ledgerKey = `stockLedger_${brand}`
+  // Canonical by construction (parseStockCommand). expectedRev is a precondition, not content.
   const fingerprint = await sha256(JSON.stringify([input.command, brand, input.payload]))
 
   return deps.store(brand).transaction(async (tx) => {
@@ -102,12 +123,25 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
       return { ...receipt.result, replayed: true }
     }
     const rev = (await tx.get<{ value: number }>(COL.meta, ledgerKey))?.value ?? 0
+    // The brand's ledger moved since the caller looked: whatever it meant to file is unknown.
+    if (input.expectedRev !== null && input.expectedRev !== rev) throw new StockCommandError('stale', { expectedRev: input.expectedRev, ledgerRev: rev })
     const actor = { id: uid, name: user.name }
-    const { locationId, date, note } = input.payload
+    const { locationId, date } = input.payload
+    const note = input.payload.note ?? undefined
+
+    // The product master decides unit and name; a line naming another unit would file a
+    // phantom balance row that the count fence never read. A mismatch is a bad client.
+    const masters = await Promise.all(input.payload.lines.map((l) => tx.get<Product>(COL.products, l.productId)))
+    input.payload.lines.forEach((l, i) => {
+      const p = masters[i]
+      if (p && !sameUnit(l.unit, p.unitType)) throw new StockCommandError('invalid', { productId: l.productId, unit: p.unitType })
+    })
+    const named = <L extends { productId: string; productName: string; unit: string }>(l: L, i: number): L =>
+      masters[i] ? { ...l, productName: masters[i]!.name, unit: masters[i]!.unitType } : l
 
     let lines: AdjustLine[]
     if (input.command === 'adjust') {
-      lines = input.payload.lines
+      lines = input.payload.lines.map(named)
     } else {
       // A count states what the shelf held when the person saw `expectedQty` on screen. If the
       // balance has moved since, the difference they meant is unknown: refuse, never overwrite.
@@ -120,7 +154,8 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
       lines = input.payload.lines.flatMap((l, i): AdjustLine[] => {
         const delta = roundQty(requireCountQty(l.countedQty) - (levels[i]?.qty ?? 0))
         if (delta === 0) return []
-        return [{ productId: l.productId, productName: l.productName, unit: l.unit, qty: Math.abs(delta), direction: delta > 0 ? 'in' : 'out', reason: 'count' }]
+        const m = named(l, i)
+        return [{ productId: m.productId, productName: m.productName, unit: m.unit, qty: Math.abs(delta), direction: delta > 0 ? 'in' : 'out', reason: 'count' }]
       })
     }
 
@@ -176,7 +211,8 @@ export async function handleStockCommand(request: Request, deps: StockCommandDep
       return json({ error: e.code, ...(e.detail ? { detail: e.detail } : {}) }, status)
     }
     if (e instanceof AppError) return json({ error: 'refused', message: e.message }, 422)
-    if (e instanceof StockConflict) return json({ error: 'conflict' }, 409)
+    // Busy, not wrong: safe to resend with the same operationId (unlike stale/operation_conflict).
+    if (e instanceof StockConflict) return json({ error: 'conflict', retryable: true }, 409)
     // A lost database response may already have committed: retry with the same operationId.
     return json({ error: 'unknown_outcome' }, 503)
   }

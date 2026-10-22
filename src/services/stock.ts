@@ -7,7 +7,6 @@ import {
   COL,
   ADJUST_REASONS,
   type StockMovement,
-  type MovementType,
   type Product,
   type AppUser,
   type StockLevel,
@@ -18,7 +17,7 @@ import { genId } from '../lib/id'
 import { brandEpoch, getBrand, type BrandId } from '../brand/brand'
 import { sameUnit } from '../lib/units'
 import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
-import { balancesFromLedger, filedUnit, levelId, levelRef, parseLevelId } from '../lib/levelKey'
+import { balancesFromLedger, levelId, levelRef, parseLevelId } from '../lib/levelKey'
 export { balancesFromLedger, parseLevelId } from '../lib/levelKey'
 import {
   QTY_STEP,
@@ -67,55 +66,7 @@ interface Actor {
   name: string
 }
 
-const PREFIX: Record<MovementType, string> = {
-  receive: 'RC',
-  issue: 'IS',
-  adjust: 'ADJ',
-  consume: 'CS',
-}
-
-/** "สต๊อกไม่พอ" with the base balance, and what was keyed when that differs. */
-function shortMessage(l: MovementLine, avail: number): AppError {
-  const keyed = keyedUnit(l)
-  if (keyed && l.entryQty !== undefined) {
-    return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit}) — {entryQty} {entryUnit} = {need} {unit}', {
-      name: l.productName, qty: avail, unit: l.unit, entryQty: l.entryQty, entryUnit: keyed, need: l.qty,
-    })
-  }
-  return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
-}
-
-/**
- * The cached balance document.
- *
- * `updatedBy` is not decoration: the security rules require it to equal the caller's uid.
- * Balances are the one thing the rules cannot prove correct — that needs a trusted server
- * comparing every write against the ledger, and the free plan has no room for one — so the
- * next best thing is that every balance in the database names whoever last wrote it.
- */
-export function levelDoc(
-  locationId: string,
-  productId: string,
-  qty: number,
-  actor: Actor,
-  now: number,
-  unit?: string,
-): Record<string, unknown> {
-  return {
-    productId,
-    locationId,
-    // Omitted for the product's own unit, so rows written before units were selectable keep
-    // exactly the shape they have.
-    ...(unit ? { unit } : {}),
-    qty: roundQty(qty),
-    updatedAt: now,
-    updatedBy: actor.id,
-  }
-}
-
-export function makeDocNo(type: MovementType, seq: number): string {
-  return `${PREFIX[type]}-${String(seq).padStart(5, '0')}`
-}
+export { levelDoc, makeDocNo } from './movementDoc'
 
 /** The backend for the brand this operation belongs to, fixed for its whole lifetime. */
 function scoped(): Backend {
@@ -480,6 +431,7 @@ export async function adjustStock(params: {
 
 export { planAdjust, type AdjustLine, type PlanAdjustParams, type PlannedAdjust } from './adjustPlan'
 import { planAdjust, type PlanAdjustParams } from './adjustPlan'
+import { levelDoc, makeDocNo, shortMessage } from './movementDoc'
 
 /**
  * `scope` pins the brand when the caller awaits something between the person pressing save

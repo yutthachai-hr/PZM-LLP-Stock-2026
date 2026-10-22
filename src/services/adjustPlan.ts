@@ -3,28 +3,14 @@
 import type { TxContext } from '../backend/tx'
 import { AppError } from '../i18n/AppError'
 import { ADJUST_REASONS, COL, type StockLevel, type StockMovement } from '../types'
-import { filedUnit, levelRef } from '../lib/levelKey'
+import { levelRef } from '../lib/levelKey'
 import { requireEpochMs, requireId, requireOneOf, roundQty } from '../lib/validate'
-import { keyedFields, keyedUnit, mergeLines, requireMasterData, type MovementLine } from './receivePlan'
+import { keyedFields, mergeLines, requireMasterData, type MovementLine } from './receivePlan'
+import { levelDoc, makeDocNo, shortMessage } from './movementDoc'
 
 interface Actor {
   id: string
   name: string
-}
-
-function shortMessage(l: MovementLine, avail: number): AppError {
-  const keyed = keyedUnit(l)
-  if (keyed && l.entryQty !== undefined) {
-    return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit}) — {entryQty} {entryUnit} = {need} {unit}', {
-      name: l.productName, qty: avail, unit: l.unit, entryQty: l.entryQty, entryUnit: keyed, need: l.qty,
-    })
-  }
-  return new AppError('สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})', { name: l.productName, qty: avail, unit: filedUnit(l) })
-}
-
-/** The cached balance row, as levelDoc in stock.ts writes it. */
-function levelRow(locationId: string, productId: string, qty: number, actor: Actor, now: number, unit?: string) {
-  return { productId, locationId, ...(unit ? { unit } : {}), qty: roundQty(qty), updatedAt: now, updatedBy: actor.id }
 }
 
 /** One line of a multi-line adjustment: which way, how much (product's own unit), and why. */
@@ -102,7 +88,7 @@ export async function planAdjust(
   })
 
   // ---- writes ----
-  const docNo = `ADJ-${String(seq).padStart(5, '0')}`
+  const docNo = makeDocNo('adjust', seq)
   return {
     docNo,
     commit: () => {
@@ -110,7 +96,7 @@ export async function planAdjust(
       const now = Date.now()
       lines.forEach(({ line, direction, reason }, i) => {
         const ref = levelRef(locationId, line)
-        tx.set(COL.stockLevels, ref.id, levelRow(locationId, line.productId, next[i], actor, now, ref.unit))
+        tx.set(COL.stockLevels, ref.id, levelDoc(locationId, line.productId, next[i], actor, now, ref.unit))
         const mv: Omit<StockMovement, 'id'> = {
           docNo,
           type: 'adjust',

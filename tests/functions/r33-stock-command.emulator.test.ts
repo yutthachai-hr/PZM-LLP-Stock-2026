@@ -73,7 +73,7 @@ beforeEach(async () => {
   await put('users/u1', { name: 'Staff One', role: 'staff', active: true })
   await put('users/u2', { name: 'Staff Two', role: 'staff', active: true })
   for (const prefix of ['', 'lelapin__']) {
-    await put(`${prefix}products/p1`, { id: 'p1', name: 'Flour', unit: 'kg', active: true })
+    await put(`${prefix}products/p1`, { id: 'p1', name: 'Flour', unit: 'Kilogram', unitType: 'kg', active: true })
     await put(`${prefix}locations/wh`, { id: 'wh', name: 'WH', active: true })
     await put(`${prefix}stockLevels/wh__p1`, { id: 'wh__p1', productId: 'p1', locationId: 'wh', qty: 10, updatedAt: DATE, updatedBy: 'seed' })
   }
@@ -164,7 +164,7 @@ test.each(['inactive', 'revoked'])('a user made %s between read and commit is re
 })
 
 test('a product retired between read and commit fails the commit and the retry refuses it', async () => {
-  beforeCommit = () => put('products/p1', { id: 'p1', name: 'Flour', unit: 'kg', active: false })
+  beforeCommit = () => put('products/p1', { id: 'p1', name: 'Flour', unit: 'Kilogram', unitType: 'kg', active: false })
   await expect(runStockCommand(deps(), adjust(), 'u1')).rejects.toThrow(/ถูกปิดใช้งาน/)
   expect(await list('stockMovements')).toHaveLength(0)
 })
@@ -195,4 +195,51 @@ test('the endpoint is off by default, needs a verified user, and bounds the body
   const res = await handleStockCommand(req(JSON.stringify(adjust())), on)
   expect(res.status).toBe(200)
   expect(await res.json()).toMatchObject({ docNo: 'ADJ-00001', ledgerRev: 1 })
+})
+
+// R33 review (DeepSeek) F1-F4.
+test('F1: the same request with its keys in another order replays instead of conflicting', async () => {
+  const cmd = adjust()
+  const first = await runStockCommand(deps(), cmd, 'u1')
+  const [line] = cmd.payload.lines
+  const reordered = {
+    payload: { lines: [{ reason: line.reason, direction: line.direction, qty: line.qty, unit: line.unit, productName: line.productName, productId: line.productId }], date: DATE, locationId: 'wh' },
+    operationId: cmd.operationId,
+    brand: 'pizza',
+    command: 'adjust',
+  }
+  expect(await runStockCommand(deps(), reordered, 'u1')).toEqual({ ...first, replayed: true })
+  expect(await list('stockMovements')).toHaveLength(1)
+})
+
+test('F2: a line naming another unit is refused; a forged product name is replaced by the master', async () => {
+  const wrongUnit = { productId: 'p1', productName: 'Flour', unit: 'ลัง', countedQty: 7, expectedQty: 10 }
+  await expect(runStockCommand(deps(), { ...count(7, 10), payload: { locationId: 'wh', date: DATE, lines: [wrongUnit] } }, 'u1')).rejects.toMatchObject({ code: 'invalid' })
+  expect(commits).toBe(0)
+  expect((await list('stockLevels')).map((l) => l.id)).toEqual(['wh__p1'])
+  const forged = { productId: 'p1', productName: 'Caviar', unit: 'kg', qty: 1, direction: 'in', reason: 'found' }
+  await runStockCommand(deps(), adjust({ payload: { locationId: 'wh', date: DATE, lines: [forged] } }), 'u1')
+  expect((await list('stockMovements'))[0]).toMatchObject({ productName: 'Flour', unit: 'kg' })
+  const keyed = { ...forged, entryUnit: 'ลัง', entryQty: 1 }
+  await expect(runStockCommand(deps(), adjust({ payload: { locationId: 'wh', date: DATE, lines: [keyed] } }), 'u1')).rejects.toMatchObject({ code: 'invalid' })
+})
+
+test('F3: a burst of ten adjustments keeps ledger, counter, movements and balance in step', async () => {
+  const rs = await Promise.allSettled(Array.from({ length: 10 }, () => runStockCommand(deps(), adjust(), 'u1')))
+  const ok = rs.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof runStockCommand>>> => r.status === 'fulfilled')
+  // Anything that did not land must be the retryable conflict, never a half-written filing.
+  for (const r of rs) if (r.status === 'rejected') expect(r.reason?.message).toBe('STOCK_CONFLICT')
+  expect(ok.length).toBeGreaterThan(0)
+  expect(new Set(ok.map((r) => r.value.docNo)).size).toBe(ok.length)
+  expect((await list('meta')).find((m) => m.id === 'stockLedger_pizza')?.value).toBe(ok.length)
+  expect((await list('counters')).find((c) => c.id === 'adjust')?.value).toBe(ok.length)
+  expect(await list('stockMovements')).toHaveLength(ok.length)
+  expect(await levelOf()).toBe(10 + 3 * ok.length)
+})
+
+test('F4: expectedRev fences the whole brand ledger; a matching one files', async () => {
+  await runStockCommand(deps(), adjust(), 'u1') // ledgerRev 1
+  await expect(runStockCommand(deps(), { ...adjust(), expectedRev: 0 }, 'u2')).rejects.toMatchObject({ code: 'stale', detail: { expectedRev: 0, ledgerRev: 1 } })
+  expect(await runStockCommand(deps(), { ...adjust(), expectedRev: 1 }, 'u2')).toMatchObject({ ledgerRev: 2, replayed: false })
+  await expect(runStockCommand(deps(), { ...adjust(), expectedRev: -1 }, 'u2')).rejects.toMatchObject({ code: 'invalid' })
 })
