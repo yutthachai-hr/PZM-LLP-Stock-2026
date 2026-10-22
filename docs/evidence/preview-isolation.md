@@ -70,7 +70,7 @@ Built with `CF_PAGES=1 CF_PAGES_BRANCH=integration/ops-os-rc1`. Served with
 | `POST /api/ocr-bill` | 503 |
 | `GET /api/po-image?k=x`, `POST /api/po-image` | 503 |
 | `GET` / `POST /api/supplier/abc` | 503 |
-| `POST /api/supplier-po/decide`, `POST /api/supplier-po/link` | 503 |
+| `POST /api/supplier-po/decide`, `POST /api/supplier-po/link`, `POST /api/supplier-po/revoke` | 503 |
 | `GET /a/abc`, `GET /po/abc` | 503 |
 | `POST /api/client-error` (empty body) | 400 from the handler (expected: allowed, validates its input) |
 

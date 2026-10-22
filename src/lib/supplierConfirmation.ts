@@ -5,7 +5,7 @@ import type {
   SupplierConfirmationStatus,
   SupplierIdentity,
 } from '../types'
-import { bkkDayEnd, bkkDayStart, bkkDaysBetween, BKK_OFFSET_MS, DAY_MS } from './inventoryRules/time'
+import { bkkDayStart, bkkDaysBetween, BKK_OFFSET_MS, DAY_MS } from './inventoryRules/time'
 
 /**
  * The supplier's answer to a delivery date (5 Oct 2026), as pure rules.
@@ -31,6 +31,7 @@ export const SUPPLIER_NAME_MAX = 60
 export const SUPPLIER_FAR_DAYS = 120
 
 export const DEFAULT_MAX_POSTPONE_DAYS = 2
+/** Only sets the timestamp signed into a new token; the order's lifecycle decides validity. */
 export const DEFAULT_LINK_TTL_DAYS = 30
 
 export type SupplierPatch = { [K in keyof PurchaseOrder]?: PurchaseOrder[K] | null }
@@ -166,32 +167,26 @@ export function evaluateProposal(p: {
 // --------------------------------------------------------------------- link ----
 
 /**
- * The last instant the link answers: its hard cap, and the end of the delivery day — the
- * agreed one, or a proposed later one still waiting. With no date at all, the cap alone.
+ * Whether the order still takes supplier answers: placed and not yet fully received, closed
+ * short or cancelled. A part receipt leaves the order `ordered` while goods are still owed, so
+ * its link stays open (owner, 21 Oct 2026). Time alone never closes a link.
  */
-export function linkActiveUntil(o: PurchaseOrder, tokenExpMs: number): number {
-  const cap = Math.min(tokenExpMs, o.supplierLink?.expiresAt ?? tokenExpMs)
-  const dates = [effectiveDeliveryOf(o), o.pendingDeliveryDate?.date].filter((d): d is number => d !== undefined)
-  if (!dates.length) return cap
-  return Math.min(cap, bkkDayEnd(Math.max(...dates)))
+export function orderTakesAnswers(o: PurchaseOrder): boolean {
+  return o.status === 'ordered'
 }
 
-export type LinkProblem = 'mismatch' | 'expired' | 'closed'
+export type LinkProblem = 'mismatch' | 'closed'
 
 /**
- * Whether a link (already proven to be ours by its signature) still speaks for this order.
- * A received, part-received or cancelled order takes no answers; a link from before the
- * last re-issue is dead.
+ * Whether a link (already proven to be ours by its signature) still speaks for this order:
+ * the same supplier, link version and order revision, and the order still open. A link
+ * lives as long as its order (owner, 21 Oct 2026: PO-00002 opened 16 Oct was refused as
+ * expired on 21 Oct) — no delivery-day or token-age limit.
  */
-export function linkProblem(
-  o: PurchaseOrder,
-  claims: { supplierId: string; version: number; expMs: number },
-  now: number,
-): LinkProblem | null {
+export function linkProblem(o: PurchaseOrder, claims: { supplierId: string; version: number }): LinkProblem | null {
   const link = o.supplierLink
   if (!link || link.version !== claims.version || link.rev !== (o.revision ?? 0) || o.supplierId !== claims.supplierId) return 'mismatch'
-  if (o.status !== 'ordered' || (o.receipts?.length ?? 0) > 0) return 'closed'
-  if (now > linkActiveUntil(o, claims.expMs)) return 'expired'
+  if (!orderTakesAnswers(o)) return 'closed'
   return null
 }
 
@@ -200,6 +195,8 @@ export interface IssueContext {
   actor: Actor
   ttlDays: number
   makeId: () => string
+  /** Take the link back: a new version for the same, unchanged order (R30). */
+  reissue?: boolean
 }
 
 export type IssueResult =
@@ -207,16 +204,16 @@ export type IssueResult =
   | { ok: false; error: 'notOpen' }
 
 /**
- * The link to send with the sheet. The same link while the order is unchanged and the link
- * alive — sending the sheet twice gives the supplier one link, not two that disagree. A new
- * version once the order was amended (which also resets the answer: an amended order has
- * to be confirmed again) or the old link lapsed.
+ * The link to send with the sheet. The same link while the order is unchanged — sending the
+ * sheet twice, or weeks later, gives the supplier the one link they already have. A new
+ * version only once the order was amended (which also resets the answer: an amended order
+ * has to be confirmed again). Elapsed time never re-issues.
  */
 export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
-  if (o.status !== 'ordered' || (o.receipts?.length ?? 0) > 0) return { ok: false, error: 'notOpen' }
+  if (!orderTakesAnswers(o)) return { ok: false, error: 'notOpen' }
   const rev = o.revision ?? 0
   const link = o.supplierLink
-  if (link && link.rev === rev && linkActiveUntil(o, link.expiresAt) > ctx.now) {
+  if (link && link.rev === rev && !ctx.reissue) {
     return { ok: true, patch: null, version: link.version, expiresAt: link.expiresAt }
   }
 
@@ -269,6 +266,8 @@ export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
     patch.supplierConfirmationStatus = 'waiting'
   }
 
+  // Same order, same answer: only the link the supplier holds is replaced.
+  if (ctx.reissue && link && link.rev === rev) activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkRevoked', ...by })
   activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkIssued', ...by })
   patch.supplierLink = { version, rev, issuedAt: ctx.now, issuedBy: ctx.actor.id ?? ctx.actor.name, expiresAt }
   patch.deliveryDateHistory = history.slice(-SUPPLIER_LIST_MAX)
@@ -459,7 +458,7 @@ export interface DecideInput {
 
 export type DecideResult =
   | { ok: true; patch: SupplierPatch; change: DeliveryDateChange; date: number }
-  | { ok: false; error: 'stale' | 'reasonRequired' }
+  | { ok: false; error: 'stale' | 'reasonRequired' | 'past' }
 
 /**
  * A หัวหน้า or admin decides a date beyond the range. Approving applies it exactly as an
@@ -471,6 +470,8 @@ export function decide(o: PurchaseOrder, input: DecideInput, actor: Actor, now: 
   if (!pending || pending.changeId !== input.changeId || o.status !== 'ordered') return { ok: false, error: 'stale' }
   const reason = cleanText(input.reason, SUPPLIER_NOTE_MAX)
   if (input.decision === 'reject' && !reason) return { ok: false, error: 'reasonRequired' }
+  // A date that has gone by while it waited is never applied; refusing it still works (R30).
+  if (input.decision === 'approve' && bkkDayStart(pending.date) < bkkDayStart(now)) return { ok: false, error: 'past' }
 
   const requested = requestedOf(o)
   const before = effectiveDeliveryOf(o)
@@ -531,7 +532,9 @@ export type BadgeColor = 'slate' | 'red' | 'green' | 'amber' | 'blue'
 
 const BADGES: Record<SupplierConfirmationStatus, { label: string; color: BadgeColor }> = {
   waiting: { label: 'รอผู้ขายยืนยัน', color: 'amber' }, // i18n-key
-  confirmed: { label: 'ผู้ขายยืนยันแล้ว', color: 'green' }, // i18n-key
+  // Not green: green on an order row is LINE's ("sent"), and a supplier's answer must never
+  // be mistaken for the share going out, or the other way round (owner, 17 Oct 2026).
+  confirmed: { label: 'ผู้ขายยืนยันแล้ว', color: 'slate' }, // i18n-key
   changed: { label: 'ผู้ขายเปลี่ยนวันส่ง', color: 'blue' }, // i18n-key
   pending_date_approval: { label: 'รออนุมัติวันส่ง', color: 'red' }, // i18n-key
 }

@@ -13,7 +13,6 @@ import {
   isReplay,
   issueLink,
   lastRejection,
-  linkActiveUntil,
   linkProblem,
   msToDateKey,
   openLink,
@@ -23,7 +22,7 @@ import {
   supplierTimeline,
   supplierStateOf,
 } from '../src/lib/supplierConfirmation'
-import { bkkAtTime, bkkDayEnd, bkkDayStart, DAY_MS } from '../src/lib/inventoryRules/time'
+import { bkkAtTime, bkkDayStart, DAY_MS } from '../src/lib/inventoryRules/time'
 import type { DeliveryDateChange, PurchaseOrder } from '../src/types'
 
 // Monday 2026-10-05, 10:00 Bangkok.
@@ -79,7 +78,7 @@ describe('the state a supplier tab saw', () => {
   test('an amendment kills the old link immediately, before another link is minted', () => {
     const o = linked()
     const c = { supplierId: o.supplierId, version: o.supplierLink!.version, expMs: o.supplierLink!.expiresAt }
-    expect(linkProblem({ ...o, revision: 1 }, c, NOW)).toBe('mismatch')
+    expect(linkProblem({ ...o, revision: 1 }, c)).toBe('mismatch')
     expect(supplierStateOf({ ...o, revision: 1 })).not.toBe(supplierStateOf(o))
   })
 })
@@ -147,10 +146,16 @@ describe('issuing the link', () => {
     })
   })
 
-  test('a draft, a received or a part-received order gets no link', () => {
-    for (const o of [order({ status: 'draft' }), order({ status: 'received' }), order({ receipts: [{ docNo: 'R', date: NOW, invoiceNo: 'i', byId: 'u', byName: 'u', lines: [] }] })]) {
+  test('a draft, a received or a cancelled order gets no link', () => {
+    for (const o of [order({ status: 'draft' }), order({ status: 'received' }), order({ status: 'cancelled' })]) {
       expect(issueLink(o, { now: NOW, actor, ttlDays: 30, makeId })).toEqual({ ok: false, error: 'notOpen' })
     }
+  })
+
+  // Owner, 21 Oct 2026: goods still owed after a part receipt keep the order, and its link, open.
+  test('a part-received order still owed keeps the same link', () => {
+    const o = { ...linked(), receipts: [{ docNo: 'R', date: NOW, invoiceNo: 'i', byId: 'u', byName: 'u', lines: [] }] }
+    expect(issueLink(o, { now: NOW + 40 * DAY_MS, actor, ttlDays: 30, makeId })).toMatchObject({ ok: true, patch: null, version: 1 })
   })
 
   test('an amended order gets a new link and must be confirmed again', () => {
@@ -167,7 +172,7 @@ describe('issuing the link', () => {
     expect(next.supplierConfirmationStatus).toBe('waiting')
     expect(next.requestedDeliveryDate).toBe(day(3))
     expect(next.confirmedDeliveryDate).toBe(day(3)) // the date itself was not touched
-    expect(linkProblem(next, { supplierId: 's1', version: 1, expMs: NOW + DAY_MS * 30 }, NOW)).toBe('mismatch')
+    expect(linkProblem(next, { supplierId: 's1', version: 1 })).toBe('mismatch')
   })
 
   test('an amendment that moves the date asks for the new one; the old is in the history', () => {
@@ -341,30 +346,25 @@ describe('a หัวหน้า decides a date beyond the range', () => {
   })
 })
 
-describe('how long the link answers', () => {
-  test('until the end of the delivery day, within its cap', () => {
-    const o = linked()
-    expect(linkActiveUntil(o, NOW + 30 * DAY_MS)).toBe(bkkDayEnd(day(3)))
-    expect(linkProblem(o, { supplierId: 's1', version: 1, expMs: NOW + 30 * DAY_MS }, bkkDayEnd(day(3)))).toBeNull()
-    expect(linkProblem(o, { supplierId: 's1', version: 1, expMs: NOW + 30 * DAY_MS }, bkkDayEnd(day(3)) + 1)).toBe('expired')
-  })
-  test('a later date waiting for approval keeps it open until then', () => {
+describe('how long the link answers: as long as its order is open (owner, 21 Oct 2026)', () => {
+  test('past the delivery day, past a waiting date and past the old 30-day cap it still speaks for the order', () => {
     let o = linked()
     const r = respond(o, { action: 'propose', date: day(9), requestId: 'req-r' }, ctx)
     if (!r.ok || r.replayed) throw new Error()
     o = applyPatch(o, r.patch)
-    expect(linkActiveUntil(o, NOW + 30 * DAY_MS)).toBe(bkkDayEnd(day(9)))
+    expect(linkProblem(o, { supplierId: 's1', version: 1 })).toBeNull()
+    expect(linkProblem(linked({ expectedAt: undefined }), { supplierId: 's1', version: 1 })).toBeNull()
   })
-  test('no date at all: the cap alone', () => {
-    const o = linked({ expectedAt: undefined })
-    expect(linkActiveUntil(o, NOW + 30 * DAY_MS)).toBe(NOW + 30 * DAY_MS)
+  test('the same link is handed out again however late, without a new version', () => {
+    const o = linked()
+    expect(issueLink(o, { now: NOW + 90 * DAY_MS, actor, ttlDays: 30, makeId })).toMatchObject({ ok: true, patch: null, version: 1 })
   })
   test('a different supplier, a received or a cancelled order', () => {
     const o = linked()
     const claims = { supplierId: 's1', version: 1, expMs: NOW + 30 * DAY_MS }
-    expect(linkProblem(o, { ...claims, supplierId: 's2' }, NOW)).toBe('mismatch')
-    expect(linkProblem({ ...o, status: 'cancelled' }, claims, NOW)).toBe('closed')
-    expect(linkProblem({ ...o, status: 'received' }, claims, NOW)).toBe('closed')
+    expect(linkProblem(o, { ...claims, supplierId: 's2' })).toBe('mismatch')
+    expect(linkProblem({ ...o, status: 'cancelled' }, claims)).toBe('closed')
+    expect(linkProblem({ ...o, status: 'received' }, claims)).toBe('closed')
   })
 })
 
@@ -527,5 +527,43 @@ describe('the same answer again is not a new event', () => {
     expect(o.supplierConfirmationStatus).toBe('pending_date_approval')
     const r = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup29' }, { ...ctx, maxPostponeDays: 7 })
     expect(r.ok && !r.replayed && r.outcome).toBe('changed')
+  })
+})
+
+// R30 (owner P0-B): a leaked link can be taken back without amending the order.
+describe('taking a link back (reissue)', () => {
+  test('bumps the version without a revision or a reset; the old version no longer speaks', () => {
+    const o = applyPatch(linked(), (() => { const r = respond(linked(), { action: 'accept', requestId: 'req-before-revoke' }, ctx); if (!r.ok || r.replayed) throw new Error(); return r.patch })())
+    const r = issueLink(o, { now: NOW + 1000, actor, ttlDays: 30, makeId, reissue: true })
+    if (!r.ok || !r.patch) throw new Error('no reissue')
+    const next = applyPatch(o, r.patch)
+    expect(r.version).toBe(2)
+    expect(next.revision ?? 0).toBe(0)
+    expect(next.supplierConfirmationStatus).toBe('confirmed') // the answer already given stands
+    expect(next.supplierActivity?.slice(-2).map((a) => a.kind)).toEqual(['linkRevoked', 'linkIssued'])
+    expect(linkProblem(next, { supplierId: 's1', version: 1 })).toBe('mismatch')
+    expect(linkProblem(next, { supplierId: 's1', version: 2 })).toBeNull()
+  })
+  test('a part-received order still owed can take its link back', () => {
+    const o = { ...linked(), receipts: [{ docNo: 'R', date: NOW, invoiceNo: 'i', byId: 'u', byName: 'u', lines: [] }] }
+    expect(issueLink(o, { now: NOW, actor, ttlDays: 30, makeId, reissue: true })).toMatchObject({ ok: true, version: 2 })
+  })
+  test('a closed order has nothing to take back', () => {
+    for (const status of ['received', 'cancelled', 'draft'] as const) {
+      expect(issueLink({ ...linked(), status }, { now: NOW, actor, ttlDays: 30, makeId, reissue: true })).toEqual({ ok: false, error: 'notOpen' })
+    }
+  })
+})
+
+describe('approving a waiting date that has already gone by (R30)', () => {
+  test('is refused as past; refusing it still works', () => {
+    const o = linked()
+    const p = respond(o, { action: 'propose', date: day(9), requestId: 'req-late-decide' }, ctx)
+    if (!p.ok || p.replayed) throw new Error()
+    const waiting = applyPatch(o, p.patch)
+    const changeId = waiting.pendingDeliveryDate!.changeId
+    expect(decide(waiting, { changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, day(12), makeId)).toEqual({ ok: false, error: 'past' })
+    expect(decide(waiting, { changeId, decision: 'reject', reason: 'too late' }, { id: 'm1', name: 'Boss' }, day(12), makeId)).toMatchObject({ ok: true })
+    expect(decide(waiting, { changeId, decision: 'approve' }, { id: 'm1', name: 'Boss' }, day(9), makeId)).toMatchObject({ ok: true }) // the day itself is fine
   })
 })
