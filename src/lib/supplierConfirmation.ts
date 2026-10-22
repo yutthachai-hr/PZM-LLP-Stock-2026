@@ -195,6 +195,8 @@ export interface IssueContext {
   actor: Actor
   ttlDays: number
   makeId: () => string
+  /** Take the link back: a new version for the same, unchanged order (R30). */
+  reissue?: boolean
 }
 
 export type IssueResult =
@@ -211,7 +213,7 @@ export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
   if (!orderTakesAnswers(o)) return { ok: false, error: 'notOpen' }
   const rev = o.revision ?? 0
   const link = o.supplierLink
-  if (link && link.rev === rev) {
+  if (link && link.rev === rev && !ctx.reissue) {
     return { ok: true, patch: null, version: link.version, expiresAt: link.expiresAt }
   }
 
@@ -264,6 +266,8 @@ export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
     patch.supplierConfirmationStatus = 'waiting'
   }
 
+  // Same order, same answer: only the link the supplier holds is replaced.
+  if (ctx.reissue && link && link.rev === rev) activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkRevoked', ...by })
   activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkIssued', ...by })
   patch.supplierLink = { version, rev, issuedAt: ctx.now, issuedBy: ctx.actor.id ?? ctx.actor.name, expiresAt }
   patch.deliveryDateHistory = history.slice(-SUPPLIER_LIST_MAX)
@@ -454,7 +458,7 @@ export interface DecideInput {
 
 export type DecideResult =
   | { ok: true; patch: SupplierPatch; change: DeliveryDateChange; date: number }
-  | { ok: false; error: 'stale' | 'reasonRequired' }
+  | { ok: false; error: 'stale' | 'reasonRequired' | 'past' }
 
 /**
  * A หัวหน้า or admin decides a date beyond the range. Approving applies it exactly as an
@@ -466,6 +470,8 @@ export function decide(o: PurchaseOrder, input: DecideInput, actor: Actor, now: 
   if (!pending || pending.changeId !== input.changeId || o.status !== 'ordered') return { ok: false, error: 'stale' }
   const reason = cleanText(input.reason, SUPPLIER_NOTE_MAX)
   if (input.decision === 'reject' && !reason) return { ok: false, error: 'reasonRequired' }
+  // A date that has gone by while it waited is never applied; refusing it still works (R30).
+  if (input.decision === 'approve' && pending.date < bkkDayStart(now)) return { ok: false, error: 'past' }
 
   const requested = requestedOf(o)
   const before = effectiveDeliveryOf(o)

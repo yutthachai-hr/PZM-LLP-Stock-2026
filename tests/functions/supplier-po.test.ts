@@ -6,7 +6,7 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 import { memoryServerStore } from '../../functions/_lib/memoryStore'
 import { assertServerWrite, brandCollection } from '../../functions/_lib/serverStore'
-import { answerLink as postAnswer, decideDate, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
+import { answerLink as postAnswer, decideDate, mintLink, revokeLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
 import { signSupplierToken, verifySupplierToken } from '../../functions/_lib/supplierToken'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/time'
 import type { PurchaseOrder } from '../../src/types'
@@ -611,5 +611,39 @@ describe('one confirmation, one notification', () => {
     expect(r.body).toMatchObject({ replayed: false, outcome: 'changed', view: { status: 'changed', confirmedDate: '2026-10-11', agreedDate: '2026-10-11', pending: null } })
     expect(po().pendingDeliveryDate).toBeUndefined()
     expect(notes().filter((x) => x.kind === 'supplierDatePending')).toHaveLength(2)
+  })
+})
+
+describe('POST /api/supplier-po/revoke (R30)', () => {
+  test('a หัวหน้า takes the link back: the leaked URL is dead, a new one works, the answer stands', async () => {
+    const old = await link()
+    await answerLink(deps, old, { action: 'accept', requestId: 'req-before-revoke' })
+    const r = await revokeLink(deps, auth('boss'), { brand: 'pizza', poId: 'po1' })
+    expect(r.status).toBe(200)
+    expect(po().supplierLink?.version).toBe(2)
+    expect(po().revision ?? 0).toBe(0)
+    expect(po().supplierConfirmationStatus).toBe('confirmed')
+    expect(await viewLink(deps, old)).toEqual({ status: 404, body: { error: 'not_found' } })
+    expect((await answerLink(deps, old, { action: 'propose', date: '2026-10-12', requestId: 'req-old-after-revoke' })).status).toBe(404)
+    expect((await viewLink(deps, r.body.token as string)).status).toBe(200)
+    expect(po().supplierActivity?.find((a) => a.kind === 'linkRevoked')).toMatchObject({ byName: 'Boss' })
+  })
+  test('staff, signed-out, a closed order or an order with no link are refused, writing nothing', async () => {
+    expect((await revokeLink(deps, null, { brand: 'pizza', poId: 'po1' })).status).toBe(401)
+    expect((await revokeLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })).status).toBe(403)
+    expect((await revokeLink(deps, auth('boss'), { brand: 'pizza', poId: 'po1' })).status).toBe(409) // no link yet
+    const token = await link()
+    db.touch('purchaseOrders', 'po1', { status: 'received' })
+    expect((await revokeLink(deps, auth('boss'), { brand: 'pizza', poId: 'po1' })).status).toBe(409)
+    expect(po().supplierLink?.version).toBe(1)
+    expect((await viewLink(deps, token)).status).toBe(410)
+  })
+  test('a past waiting date cannot be approved through the endpoint', async () => {
+    const token = await link()
+    await answerLink(deps, token, { action: 'propose', date: '2026-10-12', name: 'Somchai', requestId: 'req-past-decide' })
+    const changeId = po().pendingDeliveryDate!.changeId
+    clock = day(9)
+    expect(await decideDate(deps, auth('boss'), { brand: 'pizza', poId: 'po1', changeId, decision: 'approve' })).toMatchObject({ status: 422, body: { error: 'past' } })
+    expect(po().pendingDeliveryDate?.changeId).toBe(changeId)
   })
 })

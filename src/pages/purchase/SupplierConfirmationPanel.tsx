@@ -7,7 +7,8 @@ import { Badge, Button } from '../../components/ui'
 import { useT, type TFn } from '../../i18n/I18nContext'
 import { formatThaiDate, formatThaiDateTime } from '../../lib/format'
 import { confirmationBadge, requestedOf, supplierTimeline } from '../../lib/supplierConfirmation'
-import { decideSupplierDate, supplierLink } from '../../services/supplierConfirmation'
+import { decideSupplierDate, revokeSupplierLink, supplierLink } from '../../services/supplierConfirmation'
+import { useConfirm } from '../../components/Confirm'
 import type { PurchaseOrder, SupplierActivity } from '../../types'
 import { ReasonModal } from '../requests/ReasonModal'
 import { useSupplierIntel } from '../../data/useSupplierIntel'
@@ -29,6 +30,7 @@ export function SupplierConfirmationPanel({
   const t = useT()
   const toast = useToast()
   const { user } = useAuth()
+  const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
   const [rejecting, setRejecting] = useState(false)
   const badge = confirmationBadge(order)
@@ -50,7 +52,13 @@ export function SupplierConfirmationPanel({
       toast.success(decision === 'approve' ? t('อนุมัติวันส่งใหม่แล้ว') : t('ไม่อนุมัติวันส่งใหม่แล้ว'))
     } catch (e) {
       const code = e instanceof Error ? e.message : ''
-      toast.error(code === 'stale' ? t('ผู้ขายเปลี่ยนคำตอบแล้ว — เปิดใบนี้ใหม่') : t('บันทึกไม่สำเร็จ ลองอีกครั้ง'))
+      toast.error(
+        code === 'stale'
+          ? t('ผู้ขายเปลี่ยนคำตอบแล้ว — เปิดใบนี้ใหม่')
+          : code === 'past'
+            ? t('วันที่ผู้ขายขอเลื่อนผ่านมาแล้ว — กดไม่อนุมัติ แล้วให้ผู้ขายเลือกวันใหม่')
+            : t('บันทึกไม่สำเร็จ ลองอีกครั้ง'),
+      )
     } finally {
       setBusy(false)
     }
@@ -69,6 +77,27 @@ export function SupplierConfirmationPanel({
       toast.success(t('คัดลอกลิงก์ยืนยันของผู้ขายแล้ว'))
     } catch {
       toast.error(t('คัดลอกไม่สำเร็จ'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function revoke() {
+    const ok = await confirm({
+      title: t('ยกเลิกลิงก์เดิมของผู้ขาย'),
+      message: t('ลิงก์ที่ส่งไปแล้วจะใช้ไม่ได้ทันที คำตอบเดิมของผู้ขายยังอยู่ ระบบจะคัดลอกลิงก์ใหม่ให้ส่งผู้ขายอีกครั้ง'),
+      confirmText: t('ยกเลิกและออกลิงก์ใหม่'),
+      danger: true,
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const link = await revokeSupplierLink(order)
+      onChanged(link.order)
+      await navigator.clipboard.writeText(link.url).catch(() => undefined)
+      toast.success(t('ยกเลิกลิงก์เดิมแล้ว — คัดลอกลิงก์ใหม่ไว้ให้แล้ว'))
+    } catch {
+      toast.error(t('ยกเลิกลิงก์ไม่สำเร็จ ลองอีกครั้ง'))
     } finally {
       setBusy(false)
     }
@@ -133,6 +162,11 @@ export function SupplierConfirmationPanel({
           {t('คัดลอกลิงก์ยืนยันของผู้ขาย')}
         </Button>
       )}
+      {order.status === 'ordered' && !serverless && canDecide && order.supplierLink && (
+        <Button size="sm" variant="secondary" disabled={busy} onClick={() => void revoke()}>
+          {t('ยกเลิกลิงก์เดิมและออกลิงก์ใหม่')}
+        </Button>
+      )}
 
       {timeline.length > 0 && (
         <ol className="space-y-1 border-t border-line pt-2">
@@ -171,6 +205,8 @@ export function describeActivity(a: SupplierActivity, t: TFn): string {
   switch (a.kind) {
     case 'linkIssued':
       return t('{who} ส่งลิงก์ยืนยันให้ผู้ขาย', { who })
+    case 'linkRevoked':
+      return t('{who} ยกเลิกลิงก์เดิมของผู้ขาย', { who })
     case 'opened':
       return t('ผู้ขายเปิดลิงก์')
     case 'accepted':

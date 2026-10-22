@@ -618,6 +618,8 @@ export interface SupplierLinkState {
 
 export type SupplierActivityKind =
   | 'linkIssued'
+  /** A หัวหน้า took a leaked link back: its version no longer speaks (R30). */
+  | 'linkRevoked'
   | 'opened'
   | 'accepted'
   | 'proposed'
