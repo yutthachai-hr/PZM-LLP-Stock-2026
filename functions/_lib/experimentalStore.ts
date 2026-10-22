@@ -25,18 +25,33 @@ export function experimentalRestStore(projectId:string, token:()=>Promise<string
   for(let attempt=0;attempt<3;attempt++){
    const reads=new Map<string,{doc:Record<string,unknown>|null;precondition:Record<string,unknown>}>(),writes=new Map<string,Record<string,unknown>>()
    let writing=false
+   async function prefetch(documents:readonly {collection:string;id:string}[]){
+    if(writing)throw Error('read after write')
+    const pending=new Map<string,string>()
+    for(const {collection,id}of documents){
+     if(!readable.has(collection))throw Error('read not allowed')
+     const name=doc(collection,id)
+     if(!reads.has(name))pending.set(name,id)
+    }
+    if(!pending.size)return
+    if(pending.size>200)throw Error('read budget exceeded')
+    const rows=await call(':batchGet',{documents:[...pending.keys()]}) as {found?:{name:string;fields?:Record<string,FsValue>;updateTime:string};missing?:string}[]
+    if(!Array.isArray(rows))throw Error('invalid read response')
+    const resolved=new Map<string,{doc:Record<string,unknown>|null;precondition:Record<string,unknown>}>()
+    for(const row of rows){
+     const found=row?.found,name=found?.name??row?.missing
+     if(!name||!pending.has(name)||resolved.has(name)||(found&&row.missing))throw Error('invalid read response')
+     if(found&&(typeof found.updateTime!=='string'||!found.updateTime))throw Error('missing read precondition')
+     resolved.set(name,{doc:found?{...decodeFields(found.fields??{}),id:pending.get(name)!}:null,precondition:found?{updateTime:found.updateTime}:{exists:false}})
+    }
+    if(resolved.size!==pending.size)throw Error('invalid read response')
+    for(const [name,value]of resolved)reads.set(name,value)
+   }
    const tx:TxContext={
+    prefetch,
     async get<T>(c:string,id:string){
-     if(writing)throw Error('read after write')
-     if(!readable.has(c))throw Error('read not allowed')
-     const name=doc(c,id),held=reads.get(name)
-     if(held)return held.doc as T|null
-     const rows=await call(':batchGet',{documents:[name]}) as {found?:{fields?:Record<string,FsValue>;updateTime:string};missing?:string}[]
-     const found=rows.find(x=>x.found)?.found
-     const value=found?{...decodeFields(found.fields??{}),id}:null
-     if(found&&!found.updateTime)throw Error('missing read precondition')
-     reads.set(name,{doc:value,precondition:found?{updateTime:found.updateTime}:{exists:false}})
-     return value as T|null
+     await prefetch([{collection:c,id}])
+     return reads.get(doc(c,id))!.doc as T|null
     },
     set(c,id,data){
      writing=true

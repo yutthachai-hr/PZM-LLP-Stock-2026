@@ -52,7 +52,7 @@ test('REST adapter commits written AND read-only preconditions atomically in rnd
  expect(writes.find(w=>w.verify?.endsWith('/revokedUsers/admin'))?.currentDocument).toEqual({exists:false})
 })
 test('REST read-only replay does not send an empty commit',async()=>{
- const f=vi.fn<typeof fetch>(async()=>Response.json([{missing:'x'}]));const s=experimentalRestStore('demo-r25',async()=> 'synthetic',f)
+ const f=vi.fn<typeof fetch>(async(_url,init)=>Response.json(JSON.parse(String(init?.body)).documents.map((name:string)=>({missing:name}))));const s=experimentalRestStore('demo-r25',async()=> 'synthetic',f)
  await s.transaction(tx=>tx.get('users','admin'));expect(f).toHaveBeenCalledTimes(1)
 })
 test('REST adapter denies arbitrary collections, paths, updates and deletes',async()=>{
@@ -66,8 +66,8 @@ test('REST adapter denies arbitrary collections, paths, updates and deletes',asy
 })
 test('conflicting read-only authority is re-read before any retry can commit',async()=>{
  let attempts=0,reads=0
- const f:typeof fetch=async(url)=>{
-  if(String(url).endsWith(':batchGet'))return Response.json([{found:{fields:encodeFields({active:++reads===1}),updateTime:String(reads)}}])
+ const f:typeof fetch=async(url,init)=>{
+  if(String(url).endsWith(':batchGet'))return Response.json(JSON.parse(String(init?.body)).documents.map((name:string)=>name.endsWith('/users/admin')?{found:{name,fields:encodeFields({active:++reads===1}),updateTime:String(reads)}}:{missing:name}))
   attempts++;return Response.json({error:{status:'ABORTED'}},{status:409})
  }
  const s=experimentalRestStore('demo-r25',async()=> 'synthetic',f)

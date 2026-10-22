@@ -4,6 +4,7 @@ import { COL, type AppUser, type Product, type Supplier, type StockMovement } fr
 import { isKnownOtherSupplier, isOtherPlaceholder, makeOtherSku, otherHash, otherIdentity, otherTextKey } from '../lib/otherItem'
 import { entryFor } from '../lib/uom'
 import { sameUnit } from '../lib/units'
+import { levelRef } from '../lib/levelKey'
 import { requireEpochMs, requireQty } from '../lib/validate'
 
 export interface ExperimentalLine {
@@ -35,8 +36,8 @@ export interface ExperimentalReceiptResult {
   docNo: string
   products: { draftId: string; productId: string; sku: string; name: string; unit: string }[]
 }
-/** Lines one trusted request can read within a Pages invocation's subrequest budget. */
-export const EXPERIMENTAL_MAX_LINES = 6
+/** Four batched read phases; 50 lines keep all document preconditions below the500-write cap. */
+export const EXPERIMENTAL_MAX_LINES = 50
 
 export class ExperimentalReceiptError extends Error {
   code: string
@@ -58,7 +59,6 @@ export function validateExperimentalInput(raw: unknown): ExperimentalReceiptInpu
   if (!textOk(p.invoiceNo,100) || !p.invoiceNo.trim() || (p.note !== undefined && !textOk(p.note,2000))) return refuse('invalid')
   requireEpochMs(p.date); requireEpochMs(p.docDate)
   if (!Array.isArray(p.lines) || !Array.isArray(p.experimental) || p.experimental.length<1) return refuse('invalid')
-  // shortcut: each tx.get is one REST subrequest (~8 + 5 per line); 6 lines stays under Pages' 50. Lift after batched reads.
   if (p.lines.length+p.experimental.length>EXPERIMENTAL_MAX_LINES) return refuse('too_large')
   if (p.photoDataUrl !== undefined && (!textOk(p.photoDataUrl,1_000_000) || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.photoDataUrl))) return refuse('invalid')
   const drafts = new Set<string>()
@@ -85,6 +85,7 @@ export async function receiveExperimental(db: Transactional, raw: ExperimentalRe
   const opKey = 'rnd_receipt_'+await otherHash(uid+'|'+input.operationId)
   const keys = await Promise.all(input.experimental.map(l=>otherHash(otherIdentity(input.supplierId,l.parentId,l.name,l.spec,l.unit))))
   return db.transaction(async tx => {
+    await tx.prefetch?.([{collection:COL.users,id:uid},{collection:COL.revokedUsers,id:uid},{collection:COL.meta,id:opKey}])
     const user = await tx.get<AppUser>(COL.users,uid)
     const revoked = await tx.get(COL.revokedUsers,uid)
     // Main catalogue authority is admin-only. Do not import PR1's broader proposal roles.
@@ -94,11 +95,24 @@ export async function receiveExperimental(db: Transactional, raw: ExperimentalRe
       if (prior.fingerprint !== fingerprint) return refuse('operation_conflict','operation payload changed')
       return prior.result
     }
+    await tx.prefetch?.([
+      {collection:COL.suppliers,id:input.supplierId},{collection:COL.counters,id:'otherSku'},{collection:COL.counters,id:'receive'},{collection:COL.locations,id:input.toLocationId},
+      ...input.experimental.flatMap((l,i)=>[{collection:COL.products,id:l.parentId},{collection:COL.meta,id:'rnd_other_key_'+keys[i]},...(l.existingProductId?[{collection:COL.products,id:l.existingProductId}]:[])]),
+      ...input.lines.map(l=>({collection:COL.products,id:l.productId})),
+    ])
     const supplier = await tx.get<Supplier>(COL.suppliers,input.supplierId)
     if (!isKnownOtherSupplier(supplier)) return refuse('ineligible')
     const counter = await tx.get<{value:number}>(COL.counters,'otherSku')
     let seq = counter?.value ?? 0
-    if (!Number.isSafeInteger(seq) || seq<0 || seq>=999_999_999) return refuse('collision')
+    if (!Number.isSafeInteger(seq) || seq<0 || seq>=999_999_999 || seq+input.experimental.filter(l=>!l.existingProductId).length>999_999_999) return refuse('collision')
+    if(tx.prefetch){
+      const held=await Promise.all(keys.map(key=>tx.get<{productId:string}>(COL.meta,'rnd_other_key_'+key)))
+      let candidate=seq
+      await tx.prefetch([
+        ...input.experimental.filter(l=>!l.existingProductId).map(()=>({collection:COL.products,id:'rnd_other_'+String(++candidate).padStart(6,'0')})),
+        ...held.flatMap(c=>c&&idOk(c.productId)?[{collection:COL.products,id:c.productId}]:[]),
+      ])
+    }
     const planned = new Map<string,Product>(), products: ExperimentalReceiptResult['products'] = [], claims: {id:string;productId:string;sku:string}[] = [], stock: MovementLine[] = []
     const seen = new Set<string>()
     for (let i=0;i<input.experimental.length;i++) {
@@ -144,6 +158,7 @@ export async function receiveExperimental(db: Transactional, raw: ExperimentalRe
     // The regular stock engine owns every balance and movement calculation.
     let index=0
     const file=(mv:Omit<StockMovement,'id'>)=>tx.set(COL.movements,opKey+'_'+index++,mv as Record<string,unknown>)
+    await tx.prefetch?.(stock.flatMap((l,i)=>[{collection:COL.stockLevels,id:levelRef(input.toLocationId,l).id},{collection:COL.movements,id:opKey+'_'+i}]))
     const plan=await planReceive(tx,{lines:stock,toLocationId:input.toLocationId,date:input.date,actor:{id:uid,name:user.name},note:input.note,doc:{supplierId:supplier!.id,supplierName:supplier!.name,invoiceNo:input.invoiceNo,docDate:input.docDate},photoDataUrl:input.photoDataUrl},file,planned)
     for (let i=0;i<plan.lines.length;i++) if (await tx.get(COL.movements,opKey+'_'+i)) return refuse('operation_conflict','operation receipt missing for existing movement')
     const receiptCounter=await tx.get<{value:number}>(COL.counters,'receive')
