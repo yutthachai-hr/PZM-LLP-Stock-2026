@@ -198,7 +198,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       else list.unshift(row)
     }
     // The same rule the cron Worker applies — see lib/inventoryRules/stockView.ts.
-    const view = stockView({ locations, levels, minOverrides })
+    const view = stockView({ locations: rawLocations, levels, minOverrides })
 
     return {
       products,

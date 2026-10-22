@@ -24,6 +24,7 @@ import { useBrand } from '../brand/BrandContext'
 import { brandDef } from '../brand/brand'
 import { DataTable, type Column } from '../components/DataTable'
 import { TRANSIT_LOCATION_ID, type MovementType, type StockMovement } from '../types'
+import { transitLocationIds } from '../lib/inventoryRules/stockView'
 import { useT, type TFn } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { movementNote } from '../lib/receiptLabel'
@@ -95,9 +96,9 @@ export function ReportsPage() {
     movements: liveMovements,
     products,
     locations,
+    rawLocations,
     locationById,
     qtyAt,
-    transitQty,
     qtyByUnit,
     minFor,
     loading,
@@ -239,12 +240,13 @@ export function ReportsPage() {
       // All locations: goods between our sites are the company's too, on a line of their own
       // (also on an as-of day when they were on the road then and have arrived since).
       if (!locationId) {
-        const qty = at(TRANSIT_LOCATION_ID, p.id, '', transitQty(p.id))
+        // Rewind each transit site's own delta before aggregating, not just the canonical one.
+        const qty = [...transitLocationIds(rawLocations)].reduce((sum, id) => sum + at(id, p.id, '', qtyAt(id, p.id)), 0)
         if (qty !== 0) rows.push({ name: p.name, category: p.category, locationId: TRANSIT_LOCATION_ID, locationName: t('ระหว่างขนส่ง'), qty, unit: p.unitType, min: null, value: qty * (p.cost ?? 0) })
       }
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit))
-  }, [mode, completeness.mayCalculate, products, locations, productId, locationId, qtyAt, transitQty, qtyByUnit, minFor, rewind, t])
+  }, [mode, completeness.mayCalculate, products, locations, rawLocations, productId, locationId, qtyAt, qtyByUnit, minFor, rewind, t])
 
   const branchName = locationId ? (locationById(locationId)?.name ?? '') : t("ทุกคลัง")
   const productName = productId
@@ -309,7 +311,7 @@ export function ReportsPage() {
         [t("หน่วย")]: r.unit,
         [t("ขั้นต่ำ")]: r.min ?? '',
         [t("สถานะ")]: snapshotStatus(r, t),
-        [t("มูลค่า")]: r.value === null ? '' : Math.round(r.value),
+        [t("มูลค่า")]: r.value ?? '',
       }))
       await exportReportsExcel(t('รายงานสต๊อกคงเหลือ_{ts}', { ts: Date.now() }), 'Stock', rows, t, toast, setBusy)
     }

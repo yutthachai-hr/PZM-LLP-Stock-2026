@@ -37,7 +37,7 @@ export function CostReport() {
 
   const rows = useMemo<Row[]>(() => {
     return products
-      .filter((p) => p.active !== false)
+      .filter((p) => p.active !== false || companyQty(p.id) !== 0)
       .map((p) => {
         const hist = [...(p.costHistory ?? [])].sort((a, b) => b.effectiveAt - a.effectiveAt || b.at - a.at)
         const latest = hist[0]
@@ -48,7 +48,7 @@ export function CostReport() {
       .filter((r) => looseMatch([r.p.name, r.p.sku, r.p.category], q))
       .filter((r) => (filter === 'changed' ? r.changes >= 2 : filter === 'nocost' ? r.p.cost === undefined : true))
       .sort((a, b) => (b.latest?.at ?? 0) - (a.latest?.at ?? 0) || a.p.name.localeCompare(b.p.name))
-  }, [products, q, filter])
+  }, [products, q, filter, companyQty])
 
   // Valuation is what the company owns: every site plus goods in transit, shown separately.
   const onHand = (p: Product) => companyQty(p.id)
@@ -139,8 +139,9 @@ export function CostReport() {
       const out: Record<string, string | number>[] = []
       for (const r of rows) {
         const hist = [...(r.p.costHistory ?? [])].sort((a, b) => a.effectiveAt - b.effectiveAt)
+        const balances = { [t('คงเหลือ')]: fmtQty(onHand(r.p)), [t('ระหว่างขนส่ง')]: fmtQty(transitQty(r.p.id)) }
         if (hist.length === 0) {
-          out.push({ [t('สินค้า')]: r.p.name, SKU: r.p.sku, [t('หมวดหมู่')]: r.p.category, [t('หน่วย')]: r.p.unitType, [t('ต้นทุนตอนนี้')]: r.p.cost ?? '' })
+          out.push({ [t('สินค้า')]: r.p.name, SKU: r.p.sku, [t('หมวดหมู่')]: r.p.category, [t('หน่วย')]: r.p.unitType, [t('ต้นทุนตอนนี้')]: r.p.cost ?? '', ...balances })
           continue
         }
         for (const h of hist) {
@@ -155,8 +156,7 @@ export function CostReport() {
             [t('ต้นทุน/หน่วยหลัก')]: h.cost,
             [t('โดย')]: h.byName,
             [t('หมายเหตุ')]: h.note ?? '',
-            [t('คงเหลือ')]: fmtQty(onHand(r.p)),
-            [t('ระหว่างขนส่ง')]: fmtQty(transitQty(r.p.id)),
+            ...balances,
           })
         }
       }

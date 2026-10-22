@@ -24,6 +24,10 @@ export interface StockBuckets {
   companyQty: (productId: string) => number
 }
 
+export function transitLocationIds(locations: readonly StockLocation[]): Set<string> {
+  return new Set([TRANSIT_LOCATION_ID, ...locations.filter((l) => l.type === 'transit').map((l) => l.id)])
+}
+
 export function stockView(input: {
   locations: readonly StockLocation[]
   levels: readonly StockLevel[]
@@ -40,23 +44,41 @@ export function stockView(input: {
   // that has since fallen to zero, which is exactly when a shortage matters.
   const stockedAt = new Set(levels.map((l) => `${l.locationId}__${l.productId}`))
   const stockedAnywhere = new Set(levels.map((l) => l.productId))
+  const transitIds = transitLocationIds(locations)
+  const sites = locations.filter((l) => !transitIds.has(l.id))
   // One place to chase something nobody has ever received: the main warehouse. Picked by
   // type rather than by name, and the oldest of them, so it does not move about.
   const home =
-    [...locations]
+    [...sites]
       .filter((l) => l.active !== false)
       .sort(
         (a, b) =>
           (a.type === 'warehouse' ? 0 : 1) - (b.type === 'warehouse' ? 0 : 1) || (a.createdAt ?? 0) - (b.createdAt ?? 0),
       )[0]?.id ?? ''
   const qtyAt = (locationId: string, productId: string) => levelMap.get(`${locationId}__${productId}`) ?? 0
-  const sites = locations.filter((l) => l.id !== TRANSIT_LOCATION_ID && l.type !== 'transit')
+  // The canonical transit location plus any other document marked type transit. Every screen
+  // hides all of them from branch availability, so a balance at a second one must still be
+  // accounted for somewhere: dropping it would silently dispose of company stock.
+  const transitQty = (productId: string) => {
+    let sum = 0
+    for (const id of transitIds) sum += qtyAt(id, productId)
+    return sum
+  }
   return {
     qtyAt,
-    transitQty: (productId) => qtyAt(TRANSIT_LOCATION_ID, productId),
-    companyQty: (productId) => sites.reduce((sum, l) => sum + qtyAt(l.id, productId), 0) + qtyAt(TRANSIT_LOCATION_ID, productId),
+    transitQty,
+    companyQty: (productId) => sites.reduce((sum, l) => sum + qtyAt(l.id, productId), 0) + transitQty(productId),
     minFor: (product, locationId) => overrideMap.get(`${locationId}__${product.id}`) ?? product.minStock ?? 0,
     tracksProduct: (locationId, productId) =>
       stockedAt.has(`${locationId}__${productId}`) || (!stockedAnywhere.has(productId) && locationId === home),
   }
+}
+
+/**
+ * What the company owns, in baht: every product on the catalogue times its cost. Closing a site
+ * or hiding a product does not dispose of what is on the shelf, so no `active` filter is applied
+ * here — that is the whole point of a company figure as opposed to a branch one.
+ */
+export function stockValue(products: readonly Product[], qty: (productId: string) => number): number {
+  return products.reduce((sum, p) => sum + qty(p.id) * (p.cost ?? 0), 0)
 }

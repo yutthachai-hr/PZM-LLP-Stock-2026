@@ -1,3 +1,4 @@
+import { stockValue } from '../../lib/inventoryRules/stockView'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -78,14 +79,8 @@ export function useDashboardFigures(now: number) {
       })
     // Goods between our sites are still the company's: in the total, shown on their own. This is
     // also what keeps the seven-day comparison honest, since valueAsOf counts a dispatch as 0.
-    let transitValue = 0
-    let value = 0
-    for (const p of products) {
-      if (p.active === false) continue
-      transitValue += transitQty(p.id) * (p.cost ?? 0)
-      // Closing a site does not dispose of its remaining inventory.
-      value += companyQty(p.id) * (p.cost ?? 0)
-    }
+    const transitValue = stockValue(products, transitQty)
+    const value = stockValue(products, companyQty)
     const valueBefore = valueAsOf(value, movements, today - VALUE_LOOKBACK_DAYS * DAY_MS, movementsFrom, costOf)
 
     const pendingRequests = requests?.filter((r) => r.status === 'pendingApproval').length ?? null

@@ -1,3 +1,4 @@
+import { stockValue } from '../../lib/inventoryRules/stockView'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useData, useLedgerWindow } from '../../data/DataContext'
@@ -66,6 +67,12 @@ export function ReportsOverview() {
         .filter((p) => !supplierId || p.supplierId === supplierId)
         .map((p) => p.id),
     )
+    // The company figure covers the catalogue the filters select, not only the products still
+    // shown as active: hiding a product does not dispose of its stock.
+    const owned = products
+      .filter((p) => !category || p.category === category)
+      .filter((p) => !supplierId || p.supplierId === supplierId)
+    const ownedIds = new Set(owned.map((p) => p.id))
     const byId = new Map(products.map((p) => [p.id, p]))
     const sites = locationId ? locations.filter((l) => l.id === locationId) : locations.filter((l) => l.active !== false)
     const siteIds = new Set(sites.map((l) => l.id))
@@ -86,13 +93,11 @@ export function ReportsOverview() {
       return v
     }
     const siteValues = sites.map((l) => ({ location: l, value: valueAt(l.id) }))
-    const transitValue = locationId ? 0 : [...inProducts].reduce((sum, id) => sum + transitQty(id) * cost(id), 0)
-    const valueNow = locationId
-      ? siteValues.reduce((s, x) => s + x.value, 0)
-      : [...inProducts].reduce((sum, id) => sum + companyQty(id) * cost(id), 0)
+    const transitValue = locationId ? 0 : stockValue(owned, transitQty)
+    const valueNow = locationId ? siteValues.reduce((s, x) => s + x.value, 0) : stockValue(owned, companyQty)
     // Company comparisons include transit-only losses/receipts and closed sites, not just the
     // active branch rows shown below. For a selected branch, preserve its scoped comparison.
-    const valueMovements = locationId ? scoped : movements.filter((m) => !m.voided && inProducts.has(m.productId))
+    const valueMovements = locationId ? scoped : movements.filter((m) => !m.voided && ownedIds.has(m.productId))
     const valueBefore = valueAsOf(valueNow, valueMovements, from, movementsFrom, cost, locationId ? siteIds : undefined)
 
     const low = shortages({ products: products.filter((p) => inProducts.has(p.id)), locations: sites, qtyAt, minFor, tracksProduct })

@@ -162,8 +162,9 @@ export function ProductsPage() {
   }, [activeRows])
 
   // The list and availability filters stay per-site; its company valuation includes transit.
-  const value = useMemo(() => activeRows.reduce((s, r) => s + (locId ? Math.max(0, r.qty) : companyQty(r.p.id)) * (r.p.cost ?? 0), 0), [activeRows, locId, companyQty])
-  const transitValue = useMemo(() => locId ? 0 : activeRows.reduce((s, r) => s + transitQty(r.p.id) * (r.p.cost ?? 0), 0), [activeRows, locId, transitQty])
+  // The tile is ownership, so a product hidden from the list still counts: only the rows filter.
+  const value = useMemo(() => allRows.reduce((s, r) => s + (locId ? Math.max(0, r.qty) : companyQty(r.p.id)) * (r.p.cost ?? 0), 0), [allRows, locId, companyQty])
+  const transitValue = useMemo(() => locId ? 0 : allRows.reduce((s, r) => s + transitQty(r.p.id) * (r.p.cost ?? 0), 0), [allRows, locId, transitQty])
   const valueBefore = useMemo(() => {
     const costs = new Map(products.map((p) => [p.id, p.cost ?? 0]))
     const scope = locId ? new Set([locId]) : undefined
