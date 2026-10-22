@@ -46,7 +46,7 @@ export function PageHero({
         {subtitle && <p className="mt-1 text-sm text-ink-soft">{subtitle}</p>}
       </div>
       {actions && (
-        <div className="flex w-full shrink-0 flex-wrap gap-2 md:w-auto md:justify-end">{actions}</div>
+        <div className="flex w-full max-w-full shrink-0 flex-wrap gap-2 md:w-auto md:justify-end">{actions}</div>
       )}
     </div>
   )
