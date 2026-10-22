@@ -471,7 +471,7 @@ export function decide(o: PurchaseOrder, input: DecideInput, actor: Actor, now: 
   const reason = cleanText(input.reason, SUPPLIER_NOTE_MAX)
   if (input.decision === 'reject' && !reason) return { ok: false, error: 'reasonRequired' }
   // A date that has gone by while it waited is never applied; refusing it still works (R30).
-  if (input.decision === 'approve' && pending.date < bkkDayStart(now)) return { ok: false, error: 'past' }
+  if (input.decision === 'approve' && bkkDayStart(pending.date) < bkkDayStart(now)) return { ok: false, error: 'past' }
 
   const requested = requestedOf(o)
   const before = effectiveDeliveryOf(o)

@@ -94,8 +94,13 @@ export function SupplierConfirmationPanel({
     try {
       const link = await revokeSupplierLink(order)
       onChanged(link.order)
-      await navigator.clipboard.writeText(link.url).catch(() => undefined)
-      toast.success(t('ยกเลิกลิงก์เดิมแล้ว — คัดลอกลิงก์ใหม่ไว้ให้แล้ว'))
+      try {
+        await navigator.clipboard.writeText(link.url)
+        toast.success(t('ยกเลิกลิงก์เดิมแล้ว — คัดลอกลิงก์ใหม่ไว้ให้แล้ว'))
+      } catch {
+        // The old link is already dead: say so, and point at the copy button for the new one.
+        toast.error(t('ยกเลิกลิงก์เดิมแล้ว แต่คัดลอกลิงก์ใหม่ไม่ได้ — กด "คัดลอกลิงก์ยืนยันของผู้ขาย" อีกครั้ง'))
+      }
     } catch {
       toast.error(t('ยกเลิกลิงก์ไม่สำเร็จ ลองอีกครั้ง'))
     } finally {

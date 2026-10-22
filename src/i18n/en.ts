@@ -2980,6 +2980,7 @@ export const EN: Record<string, string> = {
   "ยกเลิกลิงก์ไม่สำเร็จ ลองอีกครั้ง": "Could not revoke the link — try again",
   "ยกเลิกลิงก์เดิมและออกลิงก์ใหม่": "Revoke link and issue a new one",
   "{who} ยกเลิกลิงก์เดิมของผู้ขาย": "{who} revoked the supplier's link",
+  "ยกเลิกลิงก์เดิมแล้ว แต่คัดลอกลิงก์ใหม่ไม่ได้ — กด \"คัดลอกลิงก์ยืนยันของผู้ขาย\" อีกครั้ง": "Old link revoked, but the new link could not be copied — press \"Copy supplier confirmation link\" again",
   "คัดลอกลิงก์ยืนยันของผู้ขาย": "Copy supplier confirmation link",
   "ไม่อนุมัติวันส่งใหม่": "Refuse new delivery date",
   "ผู้ขายจะเห็นเหตุผลนี้เมื่อเปิดลิงก์อีกครั้ง": "The supplier sees this reason the next time they open the link",
