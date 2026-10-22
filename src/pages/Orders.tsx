@@ -805,6 +805,7 @@ function CancelledTable({ rows, onOpen }: { rows: PurchaseOrder[]; onOpen: (o: P
 }
 
 const QUICK_LABEL: Record<QuickFilter, string> = {
+  datePending: 'รออนุมัติวันส่ง', // i18n-key
   unsent: 'ยังไม่ส่ง LINE', // i18n-key
   supplierWaiting: 'รอผู้ขายยืนยัน', // i18n-key
   resend: 'ต้องส่ง PO ใหม่', // i18n-key
@@ -812,7 +813,7 @@ const QUICK_LABEL: Record<QuickFilter, string> = {
 }
 
 /**
- * One tap to the four lists someone chases every morning. The counts are the orders loaded
+ * One tap to the five lists someone chases every morning. The counts are the orders loaded
  * for the window on screen, and say so — they are not all-time totals.
  */
 function QuickFilters({
@@ -828,12 +829,12 @@ function QuickFilters({
 }) {
   const t = useT()
   return (
-    // Two by two on a phone, where four chips in a row do not fit and one per line wastes
+    // Two by two on a phone, where five chips in a row do not fit and one per line wastes
     // the screen; a single row from tablets up.
     <div className="mt-3 grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center" role="group" aria-label={t('ตัวกรองด่วน')}>
       {QUICK_FILTERS.map((f) => {
         const on = value === f
-        const loud = (f === 'resend' || f === 'late') && counts[f] > 0
+        const loud = (f === 'datePending' || f === 'resend' || f === 'late') && counts[f] > 0
         return (
           <button
             key={f}
