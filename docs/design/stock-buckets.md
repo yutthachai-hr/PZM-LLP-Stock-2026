@@ -5,7 +5,13 @@
 | Branch (available) | `qtyAt(site, product)`; never includes transit | branch views, low stock, issue/transfer availability (unchanged) |
 | In transit | `transitQty(product)` = balance at `locations/transit` | shown on its own line wherever a company figure is shown |
 | Reserved | not applicable: the app has no reservation concept | — |
-| Company total | `companyQty(product)` = every site + in transit, transit counted once even if the caller's location list includes it | Stock Card (all sites), Cost Report valuation, Dashboard value, PhoneHome category value, TopBar search, Reports snapshot (all locations) |
+| Company total | `companyQty(product)` = every site (including inactive sites) + in transit, counted once | Stock Card (headline/value/trend), Products value tile (all sites), Cost Report, Reports Overview, Dashboard value, PhoneHome category value, TopBar search, Reports snapshot |
+
+Stock Card's low/out badge uses available site stock, not the transit-inclusive headline.
+Negative transit is an integrity anomaly, not inventory disposal: retain it in accounting and show
+its line (not only positive transit), rather than silently clamping one screen but not another.
+`transit` is the canonical id created by `ensureTransitLocation`; other ids with type transit
+remain unsupported and must be investigated, not silently used for branch availability.
 
 One definition: `stockView` in `src/lib/inventoryRules/stockView.ts`, exposed by `DataContext`.
 
@@ -25,5 +31,9 @@ own total, the trend series and the valuation comparison.
 
 ## Not changed
 
-No data, schema, Rules or Worker change; no backfill. The cron Worker's low-stock rule still
-reads per-site balances. Products list totals remain per-site (operational "where is it").
+No data, schema, Rules or Worker change; no backfill. Products list rows/status and purchase
+request snapshots remain per-site availability (operational "where is it"), not company ownership.
+The Worker currently passes unfiltered locations into inventoryInsights: transit reorder advice
+is a pre-existing audit finding, not fixed or claimed safe by this UI PR. Track it separately.
+An over-receipt from an under-recorded dispatch belongs to DISPATCH_WRONG (source -> destination,
+company unchanged); APPROVED_ADJUSTMENT is for genuinely found stock and increases company stock.

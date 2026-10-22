@@ -64,7 +64,7 @@ function readView(): View {
 export function ProductsPage() {
   const t = useT()
   const navigate = useNavigate()
-  const { products, locations, qtyAt, qtyByUnit, minFor, tracksProduct, levels, movements, movementsFrom, loading } = useData()
+  const { products, locations, qtyAt, companyQty, transitQty, qtyByUnit, minFor, tracksProduct, levels, movements, movementsFrom, loading } = useData()
   // ponytail: 7-day lookback fits inside RECENT_DAYS without widening global subscription.
   const { user } = useAuth()
   const { brand } = useBrand()
@@ -158,7 +158,9 @@ export function ProductsPage() {
     return c
   }, [activeRows])
 
-  const value = useMemo(() => activeRows.reduce((s, r) => s + Math.max(0, r.qty) * (r.p.cost ?? 0), 0), [activeRows])
+  // The list and availability filters stay per-site; its company valuation includes transit.
+  const value = useMemo(() => activeRows.reduce((s, r) => s + (locId ? Math.max(0, r.qty) : companyQty(r.p.id)) * (r.p.cost ?? 0), 0), [activeRows, locId, companyQty])
+  const transitValue = useMemo(() => locId ? 0 : activeRows.reduce((s, r) => s + transitQty(r.p.id) * (r.p.cost ?? 0), 0), [activeRows, locId, transitQty])
   const valueBefore = useMemo(() => {
     const costs = new Map(products.map((p) => [p.id, p.cost ?? 0]))
     const scope = locId ? new Set([locId]) : undefined
@@ -369,6 +371,7 @@ export function ProductsPage() {
         hidden={hiddenCount}
         counts={counts}
         value={value}
+        transitValue={transitValue}
         valueBefore={valueBefore}
         selected={status === 'normal' || status === 'low' || status === 'out' ? status : null}
         onSelect={(s) => setStatus(s ?? 'all')}

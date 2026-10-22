@@ -54,6 +54,17 @@ describe('stock buckets through a transfer', () => {
     expect(buckets(movements, [site('wh'), site('br'), transit]).company).toBe(10)
   })
 
+  test('closing a site does not remove company-owned stock', () => {
+    const movements = [received, dispatched]
+    expect(buckets(movements, [{ ...site('wh'), active: false }, site('br')])).toEqual({ wh: 6, br: 0, inTransit: 4, company: 10 })
+  })
+
+  test('negative transit remains visible in the accounting total, never silently clamped', () => {
+    const movements = [received, mv(1, 2, TRANSIT_LOCATION_ID, undefined)]
+    expect(buckets(movements)).toEqual({ wh: 10, br: 0, inTransit: -2, company: 8 })
+    expect(ledgerTotal(movements)).toBe(8)
+  })
+
   test('goods lost in transit leave the company total; only that leaves it', () => {
     const lost = mv(2, 1, TRANSIT_LOCATION_ID, undefined)
     expect(buckets([received, dispatched, lost])).toEqual({ wh: 6, br: 0, inTransit: 3, company: 9 })

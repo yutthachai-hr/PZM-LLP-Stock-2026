@@ -259,7 +259,7 @@ export function TopBar({ title }: { title: string }) {
                       <span className="num shrink-0 text-right text-sm font-semibold text-ink">
                         {fmtQty(total)}
                         <span className="ml-1 text-xs font-normal text-ink-faint">{product.unitType}</span>
-                        {inTransit > 0 && (
+                        {inTransit !== 0 && (
                           <span className="block text-[11px] font-normal text-ink-faint">{t('รวมระหว่างขนส่ง {qty} {unit}', { qty: fmtQty(inTransit), unit: product.unitType })}</span>
                         )}
                       </span>

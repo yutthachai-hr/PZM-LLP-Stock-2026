@@ -29,7 +29,7 @@ const DEFAULT_DAYS = 14
 
 export function ReportsOverview() {
   const t = useT()
-  const { movements, movementsFrom, products, locations, qtyAt, minFor, tracksProduct } = useData()
+  const { movements, movementsFrom, products, locations, qtyAt, companyQty, transitQty, minFor, tracksProduct } = useData()
   // Every figure here is compared with the period before it.
   useLedgerWindow()
   const suppliers = useSuppliers()
@@ -86,8 +86,14 @@ export function ReportsOverview() {
       return v
     }
     const siteValues = sites.map((l) => ({ location: l, value: valueAt(l.id) }))
-    const valueNow = siteValues.reduce((s, x) => s + x.value, 0)
-    const valueBefore = valueAsOf(valueNow, scoped, from, movementsFrom, cost, siteIds)
+    const transitValue = locationId ? 0 : [...inProducts].reduce((sum, id) => sum + transitQty(id) * cost(id), 0)
+    const valueNow = locationId
+      ? siteValues.reduce((s, x) => s + x.value, 0)
+      : [...inProducts].reduce((sum, id) => sum + companyQty(id) * cost(id), 0)
+    // Company comparisons include transit-only losses/receipts and closed sites, not just the
+    // active branch rows shown below. For a selected branch, preserve its scoped comparison.
+    const valueMovements = locationId ? scoped : movements.filter((m) => !m.voided && inProducts.has(m.productId))
+    const valueBefore = valueAsOf(valueNow, valueMovements, from, movementsFrom, cost, locationId ? siteIds : undefined)
 
     const low = shortages({ products: products.filter((p) => inProducts.has(p.id)), locations: sites, qtyAt, minFor, tracksProduct })
 
@@ -144,6 +150,7 @@ export function ReportsOverview() {
       usedNow: usedNow.length,
       usedBefore,
       valueNow,
+      transitValue,
       valueBefore,
       low: [...low].sort((a, b) => a.qty / a.min - b.qty / b.min),
       trend: perDay.map((p) => {
@@ -164,7 +171,7 @@ export function ReportsOverview() {
         lowCount: low.length,
       }),
     }
-  }, [fromStr, toStr, locationId, category, supplierId, movements, movementsFrom, products, locations, qtyAt, minFor, tracksProduct, t])
+  }, [fromStr, toStr, locationId, category, supplierId, movements, movementsFrom, products, locations, qtyAt, companyQty, transitQty, minFor, tracksProduct, t])
 
   const trend = (now: number, before: number | null, goodWhenUp = true) => {
     if (before === null) return undefined
@@ -285,7 +292,7 @@ export function ReportsOverview() {
           label={t('มูลค่าสินค้าคงคลัง')}
           value={`฿ ${fmtMoney(r.valueNow)}`} /* ฿ is a currency symbol — i18n-key */
           trend={valueTrend && !valueTrend.flat ? { text: valueTrend.text, up: valueTrend.up, suffix: t('จากต้นช่วง') } : undefined}
-          hint={t('อิงต้นทุนที่กรอก')}
+          hint={r.transitValue !== 0 ? t('อิงต้นทุนที่กรอก · รวมระหว่างขนส่ง ฿ {value}', { value: fmtMoney(r.transitValue) }) : t('อิงต้นทุนที่กรอก')}
         />
         <StatTile icon="warning" tone="red" valueTone={r.low.length ? 'red' : undefined} label={t('สินค้าคงเหลือน้อย')} value={r.low.length} unit={t('รายการ')} hint={t('ต่ำกว่าหรือเท่าขั้นต่ำ')} />
       </StatRow>

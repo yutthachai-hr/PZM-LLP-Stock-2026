@@ -31,7 +31,7 @@ export function PhoneHome() {
   const t = useT()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { products, locations, qtyAt, companyQty, minFor, tracksProduct } = useData()
+  const { products, locations, qtyAt, companyQty, transitQty, minFor, tracksProduct } = useData()
   const [now] = useState(() => Date.now())
   const range = useMemo(() => ({ from: bkkDayStart(now) - 7 * DAY_MS, to: bkkDayEnd(now) + 14 * DAY_MS }), [now])
   const feed = useCalendarFeed(range, now)
@@ -61,6 +61,7 @@ export function PhoneHome() {
     }
     return [...map.entries()].map(([category, value]) => ({ category, value: Math.round(value) })).sort((a, b) => b.value - a.value)
   }, [products, companyQty])
+  const transitValue = products.reduce((sum, p) => sum + transitQty(p.id) * (p.cost ?? 0), 0)
   const [allCategories, setAllCategories] = useState(false)
   const shownCategories = allCategories ? byCategory : byCategory.slice(0, 6)
   const maxValue = byCategory[0]?.value ?? 0
@@ -115,6 +116,9 @@ export function PhoneHome() {
         startOpen
       />
 
+      {transitValue !== 0 && (
+        <p className="text-xs text-ink-soft">{t('อิงต้นทุนที่กรอก · รวมระหว่างขนส่ง ฿ {value}', { value: fmtMoney(transitValue) })}</p>
+      )}
       {byCategory.length > 0 && (
         <Card className="p-4">
           <div className="mb-3 flex items-baseline justify-between gap-2">
