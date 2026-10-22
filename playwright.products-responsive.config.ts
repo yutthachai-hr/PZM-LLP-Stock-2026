@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 /**
  * Products table responsive regression, demo mode: browser storage only, no emulator ports, no
- * live data. Not CI-wired — the demo specs each own their port and are run by name.
+ * live data. CI runs this configuration explicitly; the suite owns its isolated demo port.
  * Port 5198 is the R19-E lease.
  */
 export default defineConfig({

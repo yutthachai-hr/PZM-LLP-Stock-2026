@@ -95,6 +95,27 @@ for (const lang of ['th', 'en'] as const) {
     expect(broken, `Products table does not fit at: ${broken.join('; ')}`).toEqual([])
   })
 
+  test(`grid disclosure is independent of product navigation and stays readable on a phone (${lang})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 960 })
+    await stage(page, lang)
+    await page.getByRole('button', { name: /มุมมองการ์ด|Card view/ }).click()
+    await expect(page.locator('button details:visible')).toHaveCount(0)
+    const card = page.getByRole('article', { name: '04 Sample Product (Carton Invoice Hint)', exact: true })
+    await expect(card).toContainText('PZS-01-06-001')
+    await expect(card).toContainText('฿15.00')
+    const disclosure = card.locator('details')
+    await disclosure.locator('summary').focus()
+    await page.keyboard.press('Enter')
+    await expect(disclosure).toHaveAttribute('open', '')
+    await expect(page).toHaveURL(/\/products$/)
+    await expect(disclosure).toContainText(INVOICE)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(card.getByText(INVOICE, { exact: false }).first()).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await card.getByRole('button').click()
+    await expect(page).toHaveURL(/\/products\/invoice\/card$/)
+  })
+
   test(`option C keeps names and SKU readable and moves update metadata to details (${lang})`, async ({ page }) => {
     await stage(page, lang)
     await page.setViewportSize({ width: 1536, height: 960 })

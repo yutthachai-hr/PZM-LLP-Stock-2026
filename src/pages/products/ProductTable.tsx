@@ -244,11 +244,11 @@ export function ProductGrid({ rows, onOpen, t }: { rows: ProductRow[]; onOpen: (
       {rows.map((r) => {
         const look = categoryIcon(r.p.category)
         return (
+          <article key={r.p.id} aria-label={r.p.name} className={`${frameCard} flex flex-col gap-3 p-4 transition-colors hover:border-line-strong`}>
           <button
-            key={r.p.id}
             type="button"
             onClick={() => onOpen(r.p)}
-            className={`${frameCard} flex cursor-pointer flex-col gap-3 p-4 text-left outline-none transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-brand/40`}
+            className="flex cursor-pointer flex-col gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
           >
             <div className="flex items-start gap-3">
               {r.p.hasImage ? (
@@ -272,15 +272,16 @@ export function ProductGrid({ rows, onOpen, t }: { rows: ProductRow[]; onOpen: (
                 <div className="text-xs text-ink-faint">
                   {t('จุดสั่งซื้อ')} {fmtQty(r.min)}
                 </div>
-                <div className="mt-1 text-xs text-ink-soft">
-                  <CostFigure p={r.p} t={t} showLabel />
-                </div>
               </div>
               <StatusChip tone={STATE_LOOK[r.state].tone} size="sm">
                 {t(STATE_LOOK[r.state].label)}
               </StatusChip>
             </div>
           </button>
+          <div className="text-xs text-ink-soft">
+            <CostFigure p={r.p} t={t} showLabel />
+          </div>
+          </article>
         )
       })}
     </div>
