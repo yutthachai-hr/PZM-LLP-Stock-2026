@@ -3,9 +3,9 @@
 //
 //   npm run test:rules
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
-import { afterAll, beforeAll, beforeEach, describe, test } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
 
 let env: RulesTestEnvironment
 const ADMIN = 'uid-admin'
@@ -49,6 +49,25 @@ const voidPatch = (uid: string, over: Record<string, unknown> = {}) => ({
 })
 
 describe.each(COLLECTIONS)('%s', (c) => {
+  test('SECURITY: metadata-only cancellation without balance reversal must be denied', async () => {
+    const levels = c.replace('stockMovements', 'stockLevels')
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), levels, 'wh__p1'), {
+        productId: 'p1', locationId: 'wh', qty: 5, updatedBy: STAFF, updatedAt: now(),
+      })
+    })
+    const decision = await updateDoc(doc(as(ADMIN), c, 'm1'), voidPatch(ADMIN)).then(
+      () => 'ALLOW',
+      (error) => { if (error.code === 'permission-denied') return 'DENY'; throw error },
+    )
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const voided = (await getDoc(doc(ctx.firestore(), c, 'm1'))).data()?.voided ?? false
+      const qty = (await getDoc(doc(ctx.firestore(), levels, 'wh__p1'))).data()?.qty
+      // A receipt of 5 must not disappear from the ledger while its cached balance stays 5.
+      expect({ decision, voided, qty }).toEqual({ decision: 'DENY', voided: false, qty: 5 })
+    })
+  })
+
   test('an admin cancels with a reason, in their own name', async () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), c, 'm1'), voidPatch(ADMIN)))
   })
