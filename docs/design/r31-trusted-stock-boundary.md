@@ -35,8 +35,11 @@ On current main: own-author valid movement with/without revision increment ALLOW
 historical actor DENY. Current-admin-signed rebuilt balance ALLOW; historical `updatedBy`
 DENY. INTEG requires the revision increment for the own-author movement, then ALLOW.
 Both also allow the known S1 fake-balance write when the writer increments ledgerRev.
-Nine assertions pass on each ruleset. This is characterization, not a security fix or proof
-that Production restore has been exercised. No real restore was attempted.
+Fresh characterization additionally confirms S2 phantom-transfer issue, S5 historical quantity
+edit without a matching level change, B4 direct ordered-PO creation in all3 brand namespaces,
+and independent approvedAt rewriting. Fifteen assertions pass on each ruleset. B4 characterizes
+a direct-command-boundary bypass, not a new decision to prohibit deliberate staff PO approval.
+This is characterization, not a security fix or proof of a Production restore. No real restore.
 
 ## Proposed contract, not a published API
 
@@ -98,7 +101,8 @@ PhaseC: migrate one command/caller cohort at a time through approved flags. Acco
 clients before Rules tightening; endpoints alone do not close direct writes. Owner approval of
 rollout/Rules/schema/auth changes is separate from ordinary application PR authorization.
 
-Outstanding matrix: S1 (fresh characterization above), S2 forged transfers, S5 historical edits,
-B4 ordered PO create, issues41/36 stale count/rebase/import, cross-brand access, catalogue/PO
-race and counter/revision integrity. R30 receipts for these are prior evidence, not fresh passes.
+Basic S1/S2/S5/B4 and approvedAt characterizations are fresh above, including absence of a brand
+grant on direct PO writes. Outstanding matrix: issues41/36 stale count/rebase/import, actual
+server cross-brand denial, catalogue/PO race and broader counter/revision integrity. Older R30
+receipts for these remain prior evidence, not fresh passes.
 R25 restore-provenance behavior is an unmerged candidate, not a substitute for the admin restore.

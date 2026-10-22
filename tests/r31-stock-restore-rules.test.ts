@@ -1,5 +1,5 @@
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest'
 
@@ -68,6 +68,37 @@ test('old probe balance omitted the required current-writer field', async () => 
   const { updatedBy: _, ...bad } = level(ADMIN)
   await assertFails(setDoc(doc(db, 'stockLevels/loc1__p1'), bad))
 })
+test('known S2 hole: a phantom transfer ID admits a cross-location issue', async () => {
+  const db = env.authenticatedContext(HISTORICAL).firestore()
+  const batch = writeBatch(db)
+  batch.set(doc(db, 'stockMovements/m1'), { ...movement(HISTORICAL), type: 'issue', fromLocationId: 'loc1', toLocationId: 'loc2', transferId: 'does-not-exist' })
+  batch.set(doc(db, 'counters/ledgerRev'), { id: 'ledgerRev', value: 1 })
+  await assertSucceeds(batch.commit())
+  expect((await getDoc(doc(db, 'transfers/does-not-exist'))).exists()).toBe(false)
+})
+test('known S5 hole: a signed historical quantity edit needs no matching balance adjustment', async () => {
+  await env.withSecurityRulesDisabled(async ctx => setDoc(doc(ctx.firestore(), 'stockMovements/m1'), movement(HISTORICAL)))
+  const db = env.authenticatedContext(HISTORICAL).firestore()
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'stockMovements/m1'), { qty: 999, edits: [{ by: HISTORICAL, byName: 'Staff', at: NOW + 1, changed: ['qty'] }], updatedBy: HISTORICAL, updatedByName: 'Staff', updatedAt: NOW + 1 })
+  batch.set(doc(db, 'counters/ledgerRev'), { id: 'ledgerRev', value: 1 })
+  await assertSucceeds(batch.commit())
+  expect((await getDoc(doc(db, 'stockMovements/m1'))).data()?.qty).toBe(999)
+  expect((await getDoc(doc(db, 'stockLevels/loc1__p1'))).exists()).toBe(false)
+})
+const order = () => ({ id: 'po1', docNo: 'PO-00001', supplierId: 'sup1', supplierName: 'Synthetic supplier', status: 'ordered', locationId: 'loc1', orderedAt: NOW, lines: [{ productId: 'p1', productName: 'Synthetic product', unit: 'KG', orderedQty: 5 }], createdBy: HISTORICAL, createdByName: 'Staff', createdAt: NOW, updatedAt: NOW })
+test.each(['purchaseOrders', 'lelapin__purchaseOrders', 'rnd__purchaseOrders'])('known B4 boundary gap: direct ordered create in %s has no trusted command or brand grant', async collection => {
+  const db = env.authenticatedContext(HISTORICAL).firestore()
+  await assertSucceeds(setDoc(doc(db, collection + '/po1'), order()))
+  expect((await getDoc(doc(db, collection + '/po1'))).data()?.status).toBe('ordered')
+})
+test('known approval timestamp gap: an approved PO timestamp can be rewritten independently', async () => {
+  const db = env.authenticatedContext(HISTORICAL).firestore()
+  await assertSucceeds(setDoc(doc(db, 'purchaseOrders/po1'), { ...order(), approvedBy: HISTORICAL, approvedByName: 'Staff', approvedAt: NOW }))
+  await assertSucceeds(updateDoc(doc(db, 'purchaseOrders/po1'), { approvedAt: NOW - 86_400_000, updatedAt: NOW + 1 }))
+  expect((await getDoc(doc(db, 'purchaseOrders/po1'))).data()?.approvedAt).toBe(NOW - 86_400_000)
+})
+
 test('known S1 hole: an active writer can invent a balance even while incrementing ledgerRev', async () => {
   const db = env.authenticatedContext(HISTORICAL).firestore()
   const batch = writeBatch(db)
