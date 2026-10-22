@@ -117,6 +117,8 @@ export async function seedInitialData(): Promise<SeedResult> {
 export async function resetCatalog(): Promise<ResetResult> {
   const brand = getBrand()
   const existing = await backend.getAll<Product>(COL.products)
+  // deleteProduct refuses experimental items (R25); refuse here first, never half-wipe the catalogue.
+  if (existing.some((p) => p.experimental)) throw new AppError('สินค้าทดลองลบไม่ได้ — ปิดใช้งานแทน เพื่อเก็บที่มาของรายการไว้')
   for (const p of existing) await deleteProduct(p.id)
   return { removed: existing.length, imported: await importCatalog(brand) }
 }

@@ -30,6 +30,15 @@ export function keyedFields(x: { unit: string; entryUnit?: string; entryQty?: nu
   const u = keyedUnit(x)
   return u && x.entryQty !== undefined ? { entryUnit: u, entryQty: x.entryQty } : {}
 }
+/**
+ * Collapse a document's lines to one entry per product, validating as it goes.
+ *
+ * Two lines for the same product used to be two independent reads of the same balance and
+ * two writes of it, so the second overwrote the first: receiving 2 and 3 of one product
+ * left a balance of 3, and issuing 7 and 7 against a balance of 10 passed the availability
+ * check twice. The UI's line builder happens to prevent duplicates; that is not where this
+ * belongs.
+ */
 export function mergeLines(lines: MovementLine[]): MovementLine[] {
   if (lines.length === 0) throw new AppError('ไม่มีรายการสินค้า')
   const byProduct = new Map<string, MovementLine>()
@@ -49,6 +58,17 @@ export function mergeLines(lines: MovementLine[]): MovementLine[] {
   }
   return [...byProduct.values()]
 }
+/**
+ * Read the master data a document refers to, inside the transaction, and refuse anything
+ * pointing at a product or location that is gone or retired.
+ *
+ * A form held open while someone else deletes a location keeps the old id in its state, so
+ * without this the movement and the balance are written against master data that no longer
+ * exists — they show up in reports with a blank name and cannot be corrected from the UI.
+ *
+ * It costs one read per product plus one per location. That is the price of the movement
+ * being about something real.
+ */
 export async function requireMasterData(tx: TxContext, productIds: string[], locationIds: string[], planned?: ReadonlyMap<string, Product>): Promise<void> {
   const products = await Promise.all(productIds.map(async id => [id, planned?.get(id) ?? await tx.get<Product>(COL.products, id)] as const))
   const locations = await Promise.all(locationIds.map(async id => [id, await tx.get<StockLocation>(COL.locations, id)] as const))

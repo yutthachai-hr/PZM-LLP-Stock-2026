@@ -123,6 +123,15 @@ describe('deleting an experimental item (R25 M2)', () => {
     expect(raw('products')).toHaveLength(1)
     expect(raw('stockLevels')).toHaveLength(1)
   })
+  test('clearing the catalogue with an experimental item refuses before deleting anything', async () => {
+    const { seed } = await import('./helpers/memory-backend')
+    const { resetCatalog } = await import('../src/services/seed')
+    const experimental = { parentId: 'cheese-other', spec: '200 g', status: 'pending', createdBy: 'uid-admin', createdByName: 'Admin' }
+    const ordinary = await createProduct(BASE)
+    seed('products', [{ ...BASE, id: 'rnd_other_000001', sku: 'RND-000001', hasImage: false, active: true, createdAt: 1, updatedAt: 1, experimental }])
+    await expect(resetCatalog()).rejects.toThrow(/ทดลอง/)
+    expect((raw('products') as { id: string }[]).map((p) => p.id).sort()).toEqual([ordinary, 'rnd_other_000001'].sort())
+  })
   test('an ordinary product still deletes with its balances', async () => {
     const { seed } = await import('./helpers/memory-backend')
     const { deleteProduct } = await import('../src/services/products')
