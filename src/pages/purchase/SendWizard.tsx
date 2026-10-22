@@ -15,16 +15,17 @@ import { translatorFor, useI18n, useT, type Lang, type TFn } from '../../i18n/I1
 import { errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
 import { imageHostAvailable, uploadPoImage, type HostedImage } from '../../services/poImages'
-import { setShareStatus } from '../../services/purchaseOrders'
+import { setShareStatus, type SharePatch } from '../../services/purchaseOrders'
 import { deliver } from '../../services/notifications'
 import { poSentDraft } from '../../lib/inventoryRules/notifications'
 import { supplierLink } from '../../services/supplierConfirmation'
 import { requestedOf, supplierDateLabel } from '../../lib/supplierConfirmation'
-import { pickShareProvider, statusFor, type PurchaseShareProvider } from '../../share'
+import { pickShareProvider, type PurchaseShareProvider } from '../../share'
 import { liffNeedsLogin } from '../../share/lineLiffProvider'
 import { isStandalone } from '../../share/liffResume'
 import type { PurchaseOrder } from '../../types'
-import { clearPageProgress, pageToResume, savePageProgress } from './sendProgress'
+import { clearPageProgress, orderFingerprint, pageToResume, savePageProgress, type ProgressScope } from './sendProgress'
+import { settleShare } from './shareSettle'
 
 /**
  * Everything a share needs, made before the tap (owner P0, 22 Oct 2026). The share sheet and
@@ -81,7 +82,11 @@ export function SendWizard({
   const suppliers = useSuppliers()
 
   // ponytail: keep local map of patched orders in wizard state so completion summary and rows reflect outcome immediately
-  const [patchedOrders, setPatchedOrders] = useState<Record<string, PurchaseOrder>>({})
+  // Only the status fields this wizard wrote: a full copy here would hide an amendment that
+  // arrives afterwards (R38 review: the sheet showed Rev.1 with the old quantities).
+  const [patchedOrders, setPatchedOrders] = useState<Record<string, SharePatch>>({})
+  const ordersRef = useRef(orders)
+  ordersRef.current = orders
   const effectiveOrders = useMemo(() => mergeWizardOrders(orders, patchedOrders), [orders, patchedOrders])
 
   // Once an order has been sent (or skipped) in THIS wizard it is done; `resend` only
@@ -102,6 +107,9 @@ export function SendWizard({
   const [prepareTick, setPrepareTick] = useState(0)
   // A share that failed: what went wrong, and the ways forward (retry, download, copy, later).
   const [failure, setFailure] = useState('')
+  // LINE confirmed the message went but the order could not be updated: save again, never resend.
+  const [unsaved, setUnsaved] = useState<{ version: number; error: string } | null>(null)
+  const progressFp = useRef('')
   // A second tap while the share sheet is opening opens nothing (stops before React re-renders).
   const sharing = useRef(false)
   // One outcome is written at a time. A double tap on "sent" or "skip" used to write the
@@ -137,16 +145,36 @@ export function SendWizard({
     // Back after the page was dropped while LINE was in front: a multi-page order goes on from
     // the page not yet shared; an order whose share sheet was opened asks whether it went,
     // instead of quietly starting the send again.
-    const resumeAt = first ? pageToResume(getBrand(), first.id, paginateLines(first.lines).length) : 0
+    const resumeAt = first && user ? pageToResume(scopeOf(first), paginateLines(first.lines).length) : 0
+    progressFp.current = first ? orderFingerprint(first) : ''
     setPageIdx(resumeAt)
     setAskOutcome(!!first && resumeAt === 0 && first.shareStatus === 'shareOpened')
   }, [pendingKey])
 
   // Always the order as it now stands: its status fields move while it is being sent.
   const current = currentId ? (effectiveOrders.find((o) => o.id === currentId) ?? null) : null
+
+  // The order content the pages shared so far belong to (R38 review, finding A). If the order is
+  // amended mid-send — or a fresher copy arrives after the wizard resumed from a cached one — the
+  // pages already shared are of the old order: start again at page 1 rather than skip the change.
+  const currentFp = current ? orderFingerprint(current) : ''
+  useEffect(() => {
+    if (!current || !currentFp) return
+    if (progressFp.current && currentFp !== progressFp.current && pageIdx > 0) {
+      clearPageProgress(scopeOf(current))
+      setPageIdx(0)
+      toast.info(t('ใบสั่งซื้อถูกแก้ไขระหว่างส่ง — เริ่มส่งใหม่ที่รูปที่ 1'))
+    }
+    progressFp.current = currentFp
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFp])
   const pages = useMemo(() => (current ? paginateLines(current.lines) : []), [current])
   const doneCount = effectiveOrders.length - pending.length
   const position = doneCount + 1
+
+  function scopeOf(order: PurchaseOrder): ProgressScope {
+    return { brand: getBrand(), userId: user?.id ?? '', orderId: order.id, fingerprint: orderFingerprint(order) }
+  }
 
   async function record(order: PurchaseOrder, status: 'shareOpened' | 'sent' | 'skipped' | 'failed', version?: number) {
     if (!user || recording.current) return
@@ -157,7 +185,7 @@ export function SendWizard({
       const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
       if (status === 'sent' || status === 'skipped') {
         doneHere.current.add(order.id)
-        clearPageProgress(brand, order.id)
+        clearPageProgress(scopeOf(order))
       }
       // The bell's record that it went (info, no popup); best effort like every deliver().
       if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
@@ -165,8 +193,10 @@ export function SendWizard({
       // the device's copy too, so coming back to the list does not show the old badge.
       // Only the written fields go into the device cache, onto the row it holds now (R29).
       const held = getBrand() === brand ? await orderCache.patchFields(order.id, written) : undefined
-      const next = tracker.afterWrite(order, written, held)
-      setPatchedOrders((prev) => ({ ...prev, [next.id]: next }))
+      // Built on the order as the parent holds it now, so the caller's row keeps any amendment.
+      const base = ordersRef.current.find((o) => o.id === order.id) ?? order
+      const next = tracker.afterWrite(base, written, held)
+      setPatchedOrders((prev) => ({ ...prev, [order.id]: { ...prev[order.id], ...written } }))
       await onStatus(next)
     } finally {
       recording.current = false
@@ -255,31 +285,41 @@ export function SendWizard({
     const opened = order.shareStatus !== 'shareOpened' ? record(order, 'shareOpened') : Promise.resolve()
     void (async () => {
       try {
-        const outcome = await shared
-        await opened
-        if (outcome === 'cancelled') return
-        if (!isLast) {
+        const settled = await settleShare({
+          shared,
+          opened,
+          isLast,
+          recordSent: () => record(order, 'sent', p.version),
+          recordFailed: () => record(order, 'failed'),
+        })
+        if (settled.kind === 'nextPage') {
           // More pages of the same order: stay on it, move to the next page, and remember that.
-          savePageProgress(getBrand(), order.id, pageIdx + 1)
+          savePageProgress(scopeOf(order), pageIdx + 1)
+          progressFp.current = orderFingerprint(order)
           setPageIdx(pageIdx + 1)
-          return
-        }
-        if (statusFor(outcome) === 'sent') {
-          // Only LINE's own success report is taken as sent.
-          await record(order, 'sent', p.version)
-        } else {
+        } else if (settled.kind === 'ask') {
           // The share sheet told us nothing. Ask the one person who knows.
           setAskOutcome(true)
+        } else if (settled.kind === 'sentUnsaved') {
+          setUnsaved({ version: p.version, error: errText(settled.error, t) })
+        } else if (settled.kind === 'failed') {
+          setFailure(errText(settled.error, t))
         }
-      } catch (e) {
-        await opened.catch(() => {})
-        setFailure(errText(e, t))
-        await record(order, 'failed').catch(() => {})
       } finally {
         sharing.current = false
         setBusy('')
       }
     })()
+  }
+
+  async function confirmSent(order: PurchaseOrder, version: number) {
+    try {
+      await record(order, 'sent', version)
+      setUnsaved(null)
+    } catch (e) {
+      // The message went; only the record failed. Keep this question on screen to try again.
+      toast.error(t('บันทึกสถานะไม่สำเร็จ: {e}', { e: errText(e, t) }))
+    }
   }
 
   function downloadPicture() {
@@ -369,7 +409,17 @@ export function SendWizard({
             </Button>
           </div>
         )}
-        {failure && !askOutcome && (
+        {unsaved && (
+          <div role="alert" className="rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm">
+            <p className="mb-2 text-ink">
+              <strong>{t('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ')}</strong> — {t('ห้ามส่งซ้ำ')} ({unsaved.error})
+            </p>
+            <Button onClick={() => void confirmSent(current, unsaved.version)} disabled={recordingNow}>
+              {t('บันทึกสถานะอีกครั้ง')}
+            </Button>
+          </div>
+        )}
+        {failure && !askOutcome && !unsaved && (
           <div role="group" aria-label={t('ส่งไม่สำเร็จ')} className="rounded-lg border border-danger/40 bg-danger-soft p-3">
             <p className="mb-2 text-sm text-danger">
               <strong>{t('ส่งไม่สำเร็จ')}</strong> — {failure}
@@ -394,7 +444,7 @@ export function SendWizard({
           <div className="rounded-lg border border-line bg-sunken p-3">
             <p className="mb-2 text-sm text-ink">{t('ส่งใน LINE เรียบร้อยหรือไม่?')}</p>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void record(current, 'sent', (current.imageVersion ?? 0) + 1)} disabled={recordingNow}>
+              <Button onClick={() => void confirmSent(current, (current.imageVersion ?? 0) + 1)} disabled={recordingNow}>
                 <Icon name="check" size={16} />
                 {t('ส่งแล้ว')}
               </Button>
@@ -411,7 +461,7 @@ export function SendWizard({
             <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow}>
               {t('ข้าม')}
             </Button>
-            <Button onClick={() => send()} disabled={!!busy || !provider || !prepared || prepared.key !== payloadKey}>
+            <Button onClick={() => send()} disabled={!!busy || !!unsaved || !provider || !prepared || prepared.key !== payloadKey}>
               <Icon name="share" size={16} />
               {busy === 'render'
                 ? t('กำลังเตรียมรูป…')

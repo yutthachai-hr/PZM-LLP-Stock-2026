@@ -55,6 +55,21 @@ describe('the LINE (LIFF) provider', () => {
     expect(statusFor(out)).toBe('sent')
   })
 
+  // R38: once the SDK is up (it is initialised when the wizard opens, by isAvailable), the tap
+  // reaches the picker without waiting on a timer or the network — the activation is still live.
+  test('the picker is called before any timer fires once the SDK is ready', async () => {
+    await lineLiffProvider.isAvailable()
+    let timerFired = false
+    setTimeout(() => (timerFired = true), 0)
+    const pending = lineLiffProvider.share(payload())
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sdk.shareTargetPicker).toHaveBeenCalledTimes(1)
+    expect(timerFired).toBe(false)
+    await pending
+  })
+
   test('a closed picker is cancelled, and records nothing', async () => {
     sdk.shareTargetPicker.mockResolvedValueOnce(undefined)
     const out = await lineLiffProvider.share(payload())

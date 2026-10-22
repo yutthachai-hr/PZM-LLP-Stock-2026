@@ -198,6 +198,10 @@ export function OrdersPage() {
   // Several orders to LINE in one go — ticked in the list (owner's mock-up 09); the wizard
   // walks them one supplier at a time, as it does for a request's orders.
   const [sendingMany, setSendingMany] = useState<PurchaseOrder[] | null>(null)
+  // The wizard is handed the order as the list now holds it, not the copy captured at the tap:
+  // an amendment arriving mid-send (another device, the device cache catching up after a reload)
+  // must reach the sheet being shared (R38 review, finding A).
+  const live = (o: PurchaseOrder) => orders.find((x) => x.id === o.id) ?? o
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [supplierFilter, setSupplierFilter] = useState('')
   const [stateFilter, setStateFilter] = useState<OrderStateFilter>('')
@@ -722,7 +726,7 @@ export function OrdersPage() {
       )}
       {sendingMany && (
         <SendWizard
-          orders={sendingMany}
+          orders={sendingMany.map(live)}
           resend
           onStatus={async (o) => setOrders((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))}
           onClose={() => {
@@ -733,7 +737,7 @@ export function OrdersPage() {
       )}
       {sending && (
         <SendWizard
-          orders={[sending]}
+          orders={[live(sending)]}
           resend
           onStatus={async (o) => setOrders((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))}
           onClose={() => setSending(null)}

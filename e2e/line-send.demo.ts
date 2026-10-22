@@ -207,3 +207,81 @@ test('the tap only shares: tap-to-share stays short on a slow phone CPU', async 
   // R36 measurement before this change: 10.3 s at 8x for 30 lines, all of it inside the tap.
   expect(ms).toBeLessThan(1_000)
 })
+
+// R38 review, finding A: progress belongs to the order as it was, and to the person sending it.
+async function sharePageOne(page: Page) {
+  const wizard = await openWizard(page, 'big')
+  await expect(wizard.getByText('รูปที่ 1 จาก 2')).toBeVisible()
+  await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
+  await expect(wizard.getByText('รูปที่ 2 จาก 2')).toBeVisible()
+}
+
+test('an order amended while it is being sent goes back to page 1', async ({ page }) => {
+  await stage(page)
+  await sharePageOne(page)
+  const wizard = page.getByRole('dialog')
+  // The app's own live-update event (data/useSupplierRefresh.ts), as when an amendment or a
+  // supplier answer arrives while the page is open.
+  await page.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem('pmstock:v1:purchaseOrders')!)
+    const next = { ...all.big, revision: 1, updatedAt: Date.now(), lines: all.big.lines.map((l: { orderedQty: number }, i: number) => (i === 0 ? { ...l, orderedQty: 99 } : l)) }
+    window.dispatchEvent(new CustomEvent('pzm:order-updated', { detail: next }))
+  })
+  await expect(wizard.getByText('รูปที่ 1 จาก 2')).toBeVisible()
+  await expect(page.getByText('ใบสั่งซื้อถูกแก้ไขระหว่างส่ง — เริ่มส่งใหม่ที่รูปที่ 1')).toBeVisible()
+  // The sheet now shows the amended line, and that is what the next tap shares.
+  await expect(wizard.locator('#send-sheet')).toContainText('99')
+})
+
+test('a status-only update during a multi-page send keeps the page', async ({ page }) => {
+  await stage(page)
+  await sharePageOne(page)
+  await page.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem('pmstock:v1:purchaseOrders')!)
+    window.dispatchEvent(new CustomEvent('pzm:order-updated', { detail: { ...all.big, supplierConfirmationStatus: 'waiting', updatedAt: Date.now() } }))
+  })
+  await page.waitForTimeout(500)
+  await expect(page.getByRole('dialog').getByText('รูปที่ 2 จาก 2')).toBeVisible()
+})
+
+test('another person on the same device starts at page 1', async ({ page }) => {
+  await stage(page)
+  await sharePageOne(page)
+  await page.evaluate(() => {
+    const users = JSON.parse(localStorage.getItem('pmstock:v1:users')!)
+    users['other-user'] = { ...users['send-user'], id: 'other-user', name: 'Other QA' }
+    localStorage.setItem('pmstock:v1:users', JSON.stringify(users))
+    localStorage.setItem('pmstock:v1:session', 'other-user')
+  })
+  await page.reload()
+  const wizard = await openWizard(page, 'big')
+  await expect(wizard.getByText('รูปที่ 1 จาก 2')).toBeVisible()
+})
+
+// R38 review, finding B: a status write that fails while the share sheet is open is not a failed send.
+test('a status write that fails during the share does not mark the order failed', async ({ page }) => {
+  await stage(page)
+  await page.addInitScript(() => {
+    const real = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if ((window as unknown as { __blockOrders?: boolean }).__blockOrders && /^pmstock:v1:purchaseOrders$/.test(key)) throw new DOMException('quota', 'QuotaExceededError')
+      return real.call(this, key, value)
+    }
+  })
+  await page.reload()
+  const wizard = await openWizard(page, 'po1')
+  const share = wizard.getByRole('button', { name: 'แชร์รูป' })
+  await expect(share).toBeEnabled()
+  await page.evaluate(() => ((window as unknown as { __blockOrders: boolean }).__blockOrders = true))
+  await share.click()
+  await expect(wizard.getByText('ส่งใน LINE เรียบร้อยหรือไม่?')).toBeVisible()
+  await expect(wizard.getByRole('group', { name: 'ส่งไม่สำเร็จ' })).toHaveCount(0)
+  expect((await stored(page, 'po1')).shareStatus).toBeUndefined()
+  // The person confirms while writes still fail: the question stays, nothing is lost.
+  await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
+  await expect(wizard.getByText('ส่งใน LINE เรียบร้อยหรือไม่?')).toBeVisible()
+  await page.evaluate(() => ((window as unknown as { __blockOrders: boolean }).__blockOrders = false))
+  await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
+  await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
+  expect((await shareLog(page)).calls).toBe(1)
+})
