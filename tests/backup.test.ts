@@ -457,3 +457,28 @@ describe('branch transfers (logistics)', () => {
     expect(counters.get('transfer')).toBe(12)
   })
 })
+
+describe('R25 M4: an experimental item cannot be re-minted by a client restore', () => {
+  const EXPERIMENTAL = {
+    id: 'rnd_other_000001', sku: 'RND-000001', name: 'Synthetic Smoked Cheese', category: 'CHEESE', unit: 'Pack', unitType: 'Pack', supplierId: 'other',
+    minStock: 0, hasImage: false, active: true, createdAt: 1, updatedAt: 1,
+    experimental: { parentId: 'cheese-other', spec: '200 g', status: 'pending', createdBy: 'uid-admin', createdByName: 'Admin' },
+  }
+  test('comes back as a plain product, counted, and the restore finishes', async () => {
+    seed('products', [EXPERIMENTAL])
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    resetMemory()
+    const r = await restoreBackup(file, RESTORE_MODES.repair)
+    const back = raw('products').find((p) => p.id === 'rnd_other_000001') as Record<string, unknown>
+    expect(back.name).toBe('Synthetic Smoked Cheese')
+    expect('experimental' in back).toBe(false)
+    expect(r.downgraded).toBe(1)
+  })
+  test('does not overwrite provenance the database already holds', async () => {
+    seed('products', [EXPERIMENTAL])
+    const file = parseBackup(JSON.stringify(await buildBackup('Owner')))
+    const r = await restoreBackup(file, RESTORE_MODES.overwrite)
+    expect((raw('products').find((p) => p.id === 'rnd_other_000001') as { experimental: unknown }).experimental).toEqual(EXPERIMENTAL.experimental)
+    expect(r.downgraded).toBe(0)
+  })
+})

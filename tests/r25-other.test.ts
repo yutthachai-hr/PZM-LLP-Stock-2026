@@ -102,3 +102,19 @@ test('a receipt larger than one Pages request can read is refused as too large, 
   expect(raw('rnd__stockMovements')).toEqual([])
   expect((await receiveExperimental(db, many(6), 'admin')).products).toHaveLength(6)
 })
+
+test('R25 M3: a claim left behind by a deleted item does not refuse that identity forever', async () => {
+  const first = await receiveExperimental(db, input(), 'admin')
+  const gone = first.products[0].productId
+  await db.remove('products', gone) // deleted outside the app (console), which no rule can stop
+  const second = await receiveExperimental(db, { ...input(), operationId: '33333333-3333-4333-8333-333333333333' }, 'admin')
+  expect(second.products[0].productId).not.toBe(gone)
+  const claim = raw('meta').find((m) => String(m.id).startsWith('rnd_other_key_'))!
+  expect(claim.productId).toBe(second.products[0].productId)
+})
+test('R25 M3: a live claim still refuses the identity, with nothing written', async () => {
+  await receiveExperimental(db, input(), 'admin')
+  const before = snapshot()
+  await expect(receiveExperimental(db, { ...input(), operationId: '44444444-4444-4444-8444-444444444444' }, 'admin')).rejects.toMatchObject({ code: 'existing' })
+  expect(snapshot()).toEqual(before)
+})

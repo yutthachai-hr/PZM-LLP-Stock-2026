@@ -4,7 +4,7 @@
 //
 //   npm run test:rules
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, setDoc, updateDoc } from 'firebase/firestore'
+import { deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, test } from 'vitest'
 
@@ -37,6 +37,8 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users', ADMIN), { name: 'Admin', role: 'admin', active: true })
     await setDoc(doc(db, 'users', STAFF), { name: 'Staff', role: 'staff', active: true })
     await setDoc(doc(db, PATH), item()) // as the trusted endpoint filed it
+    const { experimental: _none, ...plain } = item({ id: 'plain_1', sku: 'PL-1', name: 'Plain Product' })
+    await setDoc(doc(db, 'rnd__products/plain_1'), plain)
   })
 })
 const as = (uid: string) => doc(env.authenticatedContext(uid).firestore(), PATH)
@@ -62,5 +64,15 @@ describe('maintaining a server-created R&D experimental item', () => {
   })
   test('unit type stays within the product limit', async () => {
     await assertFails(updateDoc(as(ADMIN), { unitType: 'x'.repeat(21), updatedAt: ts() }))
+  })
+})
+
+describe('an experimental item is deactivated, never deleted (R25 M2)', () => {
+  test('neither admin nor staff can delete it', async () => {
+    await assertFails(deleteDoc(as(ADMIN)))
+    await assertFails(deleteDoc(as(STAFF)))
+  })
+  test('an ordinary product is still the admin\'s to delete', async () => {
+    await assertSucceeds(deleteDoc(doc(env.authenticatedContext(ADMIN).firestore(), 'rnd__products/plain_1')))
   })
 })

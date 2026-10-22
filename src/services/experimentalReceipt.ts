@@ -107,13 +107,17 @@ export async function receiveExperimental(db: Transactional, raw: ExperimentalRe
       if (!parent || !isOtherPlaceholder(parent)) return refuse('ineligible')
       const claimId='rnd_other_key_'+keys[i]
       const claim=await tx.get<{productId:string;sku:string}>(COL.meta,claimId)
+      // A claim can outlive its item (deleted from the console, which no rule stops). Only a claim
+      // whose experimental item still exists refuses this identity; a stale one is rewritten below.
+      const claimed=claim&&idOk(claim.productId)?await tx.get<Product>(COL.products,claim.productId):null
+      const liveClaim=claimed?.experimental?claim:null
       let p: Product
       if (l.existingProductId) {
         const existing=await tx.get<Product>(COL.products,l.existingProductId)
         if (!existing || existing.active===false || existing.experimental?.parentId!==parent.id || existing.supplierId!==supplier!.id || otherTextKey(existing.name)!==otherTextKey(l.name) || otherTextKey(existing.experimental.spec)!==otherTextKey(l.spec) || existing.category!==parent.category) return refuse('stale')
         p=existing
       } else {
-        if (claim) return refuse('existing','existing experimental item: '+claim.productId)
+        if (liveClaim) return refuse('existing','existing experimental item: '+liveClaim.productId)
         seq++
         const id='rnd_other_'+String(seq).padStart(6,'0')
         if (await tx.get(COL.products,id)) return refuse('collision')

@@ -3150,6 +3150,8 @@ export const EN: Record<string, string> = {
   'ระบบรับสินค้าทดลองยังไม่เปิดใช้งาน — ติดต่อแอดมิน': 'Experimental receiving is not switched on yet — contact an admin',
   'ใบรับนี้ใหญ่เกินไป — ลดรูปหรือจำนวนรายการ': 'This receipt is too large — use a smaller photo or fewer lines',
   'บันทึกสินค้าทดลองไม่สำเร็จ ({code})': 'Could not save the experimental items ({code})',
+  'สินค้าทดลองลบไม่ได้ — ปิดใช้งานแทน เพื่อเก็บที่มาของรายการไว้': 'An experimental item cannot be deleted — deactivate it instead so its origin is kept',
+  'สินค้าทดลอง {n} รายการกลับมาเป็นสินค้าปกติ — ที่มาของรายการกู้คืนไม่ได้': '{n} experimental items came back as ordinary products — their origin cannot be restored',
   'สินค้าทดลองแยกยอดจากหมวดเดิม — ยังไม่บันทึกจนกดยืนยันรับเข้าคลัง': 'Experimental items are tracked separately from the parent category — nothing is saved until you confirm the receipt',
   'มีสินค้าทดลองในร่าง — รับได้เฉพาะ "รับนอกใบสั่งซื้อ" กับผู้ขาย OTHER ของ R&D กลับไปเลือกให้ถูก หรือลบรายการทดลองก่อน': 'This draft has experimental items — they can only be received under "Receive without PO" from the R&D OTHER supplier. Switch back, or remove the experimental items first',
   'ลบสินค้าทดลอง {name}': 'Remove experimental item {name}',

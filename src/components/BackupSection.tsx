@@ -106,7 +106,8 @@ export function BackupSection() {
     try {
       const r = await restoreBackup(parsed, mode)
       toast.success(
-        t('กู้คืนแล้ว: เขียนใหม่ {written} รายการ, คงเดิม {kept} รายการ, สร้างยอดใหม่ {rebuilt} รายการ, ข้าม {skipped} รายการ', { written: r.written, kept: r.kept, rebuilt: r.rebuilt, skipped: r.skipped, }),
+        t('กู้คืนแล้ว: เขียนใหม่ {written} รายการ, คงเดิม {kept} รายการ, สร้างยอดใหม่ {rebuilt} รายการ, ข้าม {skipped} รายการ', { written: r.written, kept: r.kept, rebuilt: r.rebuilt, skipped: r.skipped, }) +
+          (r.downgraded ? ' ' + t('สินค้าทดลอง {n} รายการกลับมาเป็นสินค้าปกติ — ที่มาของรายการกู้คืนไม่ได้', { n: r.downgraded }) : ''),
       )
     } catch (err) {
       // A restore is idempotent, so the honest advice after a failure is to run it again.

@@ -460,6 +460,8 @@ export interface RestoreResult {
   rebuilt: number
   /** documents the database would not accept, or that are never restored */
   skipped: number
+  /** R&D experimental items restored as plain products: their provenance is server-minted only */
+  downgraded: number
 }
 
 /**
@@ -498,6 +500,7 @@ export async function restoreBackup(
   let written = 0
   let kept = 0
   let skipped = 0
+  let downgraded = 0
 
   for (const name of COLLECTIONS) {
     const docs = b.data[name] ?? []
@@ -521,8 +524,21 @@ export async function restoreBackup(
         kept++
         continue
       }
+      // R25: only the trusted receive endpoint mints `experimental`; a client create carrying it is
+      // refused and would abandon the restore. Fresh copies come back plain (counted); a copy the
+      // database already holds keeps its own provenance.
+      let write: Record<string, unknown> = rest
+      if (name === COL.products && 'experimental' in rest) {
+        if (present) {
+          kept++
+          continue
+        }
+        const { experimental: _minted, ...plain } = rest
+        write = plain
+        downgraded++
+      }
       try {
-        await db.set(name, id, rest)
+        await db.set(name, id, write)
         written++
       } catch (e) {
         if (!BEST_EFFORT.includes(name)) throw e
@@ -533,7 +549,7 @@ export async function restoreBackup(
   }
 
   const rebuilt = await rebuildDerived(db)
-  return { written, kept, rebuilt, skipped }
+  return { written, kept, rebuilt, skipped, downgraded }
 }
 
 /**

@@ -166,6 +166,8 @@ export async function addConversion(
 }
 
 export async function deleteProduct(id: string): Promise<void> {
+  // R25: an experimental item's document is its only provenance; it is deactivated, never deleted.
+  if ((await backend.getOne<Product>(COL.products, id))?.experimental) throw new AppError('สินค้าทดลองลบไม่ได้ — ปิดใช้งานแทน เพื่อเก็บที่มาของรายการไว้')
   // Remove product + image + cached balances. Movements keep denormalised names for history.
   const levels = await backend.getAll<StockLevel>(COL.stockLevels)
   await Promise.all(
