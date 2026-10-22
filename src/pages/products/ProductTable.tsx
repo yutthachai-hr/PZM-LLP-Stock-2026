@@ -73,11 +73,11 @@ export function CostFigure({ p, t, showLabel }: { p: Product; t: TFn; showLabel?
   // behind a native disclosure: Tab reaches the summary, Enter/Space or a tap opens it.
   return (
     <>
-      <div className="inline-block whitespace-nowrap lg:hidden">{figure}</div>
-      <span className="mt-0.5 block whitespace-normal break-words text-xs font-normal text-ink-faint lg:hidden">
+      <div className="inline-block whitespace-nowrap md:hidden">{figure}</div>
+      <span className="mt-0.5 block whitespace-normal break-words text-xs font-normal text-ink-faint md:hidden">
         {hint.text}
       </span>
-      <details className="hidden text-left lg:block">
+      <details className="hidden text-left md:block">
         <summary className="cursor-pointer whitespace-nowrap text-right">{figure}</summary>
         <span className="mt-0.5 block max-w-[220px] whitespace-normal break-words text-xs font-normal text-ink-faint">
           {hint.text}

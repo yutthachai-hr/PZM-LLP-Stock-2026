@@ -146,20 +146,22 @@ for (const lang of ['th', 'en'] as const) {
     await expect(row).toContainText('PZS-01-06-001')
     await row.getByRole('checkbox').check()
     await expect(page.getByRole('button', { name: /ส่งออก Excel|Export Excel/ })).toBeVisible()
+    // The cost cell is one line with its disclosure from md, like the desktop table, and the
+    // page itself never scrolls sideways (the table scroller may).
+    await expect(row.locator('details summary')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await page.screenshot({ path: info.outputPath(`products-${lang}-768-selected.png`) })
   })
 
   test(`phone cards keep the name, SKU and invoice hint (${lang})`, async ({ page }, info) => {
     await stage(page, lang)
-    for (const width of [390]) {
-      await page.setViewportSize({ width, height: 960 })
-      const card = page.locator('[data-row-key="invoice"]:visible').first()
-      await expect(card).toBeVisible()
-      await expect(card.getByText(INVOICE, { exact: false }).first()).toBeVisible()
-      await expect(card).toContainText('PZS-01-06-001')
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-      await page.screenshot({ path: info.outputPath(`products-${lang}-${width}.png`) })
-    }
+    await page.setViewportSize({ width: 390, height: 960 })
+    const card = page.locator('[data-row-key="invoice"]:visible').first()
+    await expect(card).toBeVisible()
+    await expect(card.getByText(INVOICE, { exact: false }).first()).toBeVisible()
+    await expect(card).toContainText('PZS-01-06-001')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.screenshot({ path: info.outputPath(`products-${lang}-390.png`) })
   })
 
   test(`SKU search/sort and numeric Excel export survive the folded columns (${lang})`, async ({ page }, info) => {
