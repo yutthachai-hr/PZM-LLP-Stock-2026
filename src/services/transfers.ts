@@ -21,6 +21,7 @@ import { genId } from '../lib/id'
 import { roundQty } from '../lib/validate'
 import { padSeq, takeSeq } from './sequence'
 import { captureFilingScope, filing, planAdjust, planIssue, type MovementLine } from './stock'
+import { checkItems, clean, entry, lineChanges, planApproveTransfer, writeTransfer as write } from './transferPlan'
 import {
   COL,
   OVER_RESOLUTIONS,
@@ -35,7 +36,6 @@ import {
   type StockMovement,
   type Transfer,
   type TransferDiscrepancy,
-  type TransferHistoryEntry,
   type TransferItem,
   type TransferLegKind,
   type TransferMisroute,
@@ -87,35 +87,13 @@ export interface Actor {
   siteIds?: string[]
 }
 
-const MAX_ITEMS = 200
-const MAX_HISTORY = 500
 
 function scoped(): Backend {
   return backend.forBrand(getBrand())
 }
 
-function entry(actor: Actor, action: string, extra: Partial<TransferHistoryEntry> = {}): TransferHistoryEntry {
-  const kept = Object.fromEntries(Object.entries(extra).filter(([, v]) => v !== undefined))
-  return { at: Date.now(), by: actor.id, byName: actor.name, action, ...kept }
-}
 
-/** Firestore refuses `undefined` anywhere in a document, however deep. */
-function clean<T>(value: T): T {
-  if (Array.isArray(value)) return value.map(clean) as unknown as T
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([, v]) => v !== undefined)
-        .map(([k, v]) => [k, clean(v)]),
-    ) as T
-  }
-  return value
-}
 
-function write(tx: TxContext, t: Transfer): void {
-  const { id, ...data } = clean({ ...t, history: t.history.slice(-MAX_HISTORY) })
-  tx.set(COL.transfers, id, data as Record<string, unknown>)
-}
 
 const docNoOf = (seq: number) => `TR-${padSeq(seq, 5)}`
 const sum = (xs: number[]) => roundQty(xs.reduce((a, b) => a + b, 0))
@@ -288,56 +266,8 @@ export async function transferMovements(ids: string[]): Promise<StockMovement[]>
 
 // ---------------------------------------------------------------- lines ----
 
-function checkItems(items: TransferItem[]): TransferItem[] {
-  if (items.length > MAX_ITEMS) throw new AppError('รายการสินค้าเกิน {n} บรรทัด', { n: MAX_ITEMS })
-  const seen = new Set<string>()
-  for (const i of liveItems(items)) {
-    if (!i.productId) throw new AppError('ไม่พบสินค้า')
-    if (seen.has(i.productId)) throw new AppError('สินค้า "{name}" อยู่ในใบนี้มากกว่า 1 บรรทัด', { name: i.productName })
-    seen.add(i.productId)
-    const qty = i.dispatchQty ?? i.requestedQty
-    if (!(typeof qty === 'number' && Number.isFinite(qty) && qty > 0)) {
-      throw new AppError('จำนวนของ "{name}" ต้องมากกว่า 0', { name: i.productName })
-    }
-  }
-  return items.map((i, idx) => ({ ...i, idx: i.idx ?? idx }))
-}
 
-const qtyText = (qty: number | null | undefined, unit: string, entryQty?: number, entryUnit?: string) =>
-  entryUnit && entryQty !== undefined ? `${entryQty} ${entryUnit} (${qty ?? '-'} ${unit})` : `${qty ?? '-'} ${unit}`
 
-/**
- * One history entry per line that changed, with the old and new values — the audit the
- * owner asked for ("qty changed", "unit changed", "item added", "item removed").
- */
-function lineChanges(before: TransferItem[], after: TransferItem[], actor: Actor, field: 'requested' | 'dispatch'): TransferHistoryEntry[] {
-  const out: TransferHistoryEntry[] = []
-  const prev = new Map(before.map((i) => [i.idx, i]))
-  const qtyOf = (i: TransferItem) => (field === 'dispatch' ? i.dispatchQty : i.requestedQty)
-  const unitOf = (i: TransferItem) => (field === 'dispatch' ? i.dispatchEntryUnit : i.requestedEntryUnit)
-  const entryOf = (i: TransferItem) => (field === 'dispatch' ? i.dispatchEntryQty : i.requestedEntryQty)
-  for (const i of after) {
-    const p = prev.get(i.idx)
-    if (!p) {
-      out.push(entry(actor, 'itemAdded', { note: `${i.productName} ${qtyText(qtyOf(i), i.unit, entryOf(i), unitOf(i))}`, newQty: qtyOf(i) ?? undefined }))
-      continue
-    }
-    if (i.removed && !p.removed) {
-      out.push(entry(actor, 'itemRemoved', { note: i.productName, reason: i.removed.reason, oldQty: qtyOf(p) ?? undefined }))
-      continue
-    }
-    if ((unitOf(p) ?? '') !== (unitOf(i) ?? '')) {
-      out.push(entry(actor, 'unitChanged', { note: i.productName, diff: { from: unitOf(p) ?? i.unit, to: unitOf(i) ?? i.unit } }))
-    }
-    if (qtyOf(p) !== qtyOf(i) || entryOf(p) !== entryOf(i)) {
-      out.push(entry(actor, 'qtyChanged', { note: i.productName, oldQty: qtyOf(p) ?? undefined, newQty: qtyOf(i) ?? undefined }))
-    }
-  }
-  for (const p of before) {
-    if (!after.some((i) => i.idx === p.idx)) out.push(entry(actor, 'itemRemoved', { note: p.productName, oldQty: qtyOf(p) ?? undefined }))
-  }
-  return out
-}
 
 // ---------------------------------------------------------------- lifecycle ----
 
@@ -493,56 +423,7 @@ export async function reviewTransfer(params: {
     })
   }
 
-  const approved = await filing(scope, async (tx, file) => {
-    // ---- reads ----
-    const cur = guard(await tx.get<Transfer>(COL.transfers, transferId))
-    const transit = await tx.get<StockLocation>(COL.locations, TRANSIT_LOCATION_ID)
-    if (!transit) throw new AppError('ยังไม่ได้เปิดใช้ระบบส่งสินค้า (ไม่พบคลังระหว่างขนส่ง)')
-    const reviewItems = checkItems(items ?? cur.items)
-    const live = liveItems(reviewItems)
-    if (live.length === 0) throw new AppError('ไม่มีรายการสินค้าที่อนุมัติ')
-    const latest = await Promise.all(
-      live.map((i) => tx.get<StockLevel>(COL.stockLevels, `${cur.fromLocationId}__${i.productId}`)),
-    )
-    const lines: MovementLine[] = live.map((i) => ({
-      productId: i.productId,
-      productName: i.productName,
-      unit: i.unit,
-      qty: i.dispatchQty,
-      ...(i.dispatchEntryUnit && i.dispatchEntryQty ? { entryUnit: i.dispatchEntryUnit, entryQty: i.dispatchEntryQty } : {}),
-    }))
-    const planned = await planIssue(
-      tx,
-      { lines, fromLocationId: cur.fromLocationId, toLocationId: TRANSIT_LOCATION_ID, date: cur.dispatchDate, actor, note: cur.note, transferId },
-      file,
-    )
-    // ---- writes ----
-    const docNo = planned.commit()
-    const now = Date.now()
-    const stockAt = new Map(live.map((i, n) => [i.idx, latest[n]?.qty ?? 0]))
-    const finalItems = reviewItems.map((i) =>
-      i.removed ? i : { ...i, stockAtApprove: stockAt.get(i.idx), inTransitQty: i.dispatchQty },
-    )
-    const updated: Transfer = {
-      ...cur,
-      id: transferId,
-      status: 'inTransit',
-      approvedBy: actor.id,
-      approvedByName: actor.name,
-      approvedAt: now,
-      dispatchMovementDocNo: docNo,
-      items: finalItems,
-      updatedAt: now,
-      history: [
-        ...cur.history,
-        ...(items ? lineChanges(cur.items, reviewItems, actor, 'dispatch') : []),
-        entry(actor, 'approved', { fromStatus: cur.status, toStatus: 'inTransit', note: note?.trim() || undefined }),
-        entry(actor, 'movedToTransit', { note: docNo }),
-      ],
-    }
-    write(tx, updated)
-    return clean(updated)
-  })
+  const approved = await filing(scope, (tx, file) => planApproveTransfer(tx, { transferId, expectedRevision, actor, note, items }, file))
   const locations = await db.getAll<StockLocation>(COL.locations)
   const locName = (id: string | undefined) => locations.find((l) => l.id === id)?.name ?? ''
   await deliver(transferArrivingDraft(approved, locName), actor)

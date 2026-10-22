@@ -1,7 +1,7 @@
 // R33 trusted stock command against a real Firestore (emulator), through the REST adapter the
 // Pages Function would use. Synthetic data only.
 //   firebase emulators:exec --only firestore --project demo-r33-stock "vitest run --config vitest.rules.config.ts tests/functions/r33-stock-command.emulator.test.ts"
-import { beforeEach, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test } from 'vitest'
 import { handleStockCommand, runStockCommand, type StockCommandDeps } from '../../functions/_lib/stockCommand'
 import { stockCommandStore, type StockBrand } from '../../functions/_lib/stockCommandStore'
 import { decodeFields, encodeFields } from '../../worker/src/codec'
@@ -242,4 +242,79 @@ test('F4: expectedRev fences the whole brand ledger; a matching one files', asyn
   await expect(runStockCommand(deps(), { ...adjust(), expectedRev: 0 }, 'u2')).rejects.toMatchObject({ code: 'stale', detail: { expectedRev: 0, ledgerRev: 1 } })
   expect(await runStockCommand(deps(), { ...adjust(), expectedRev: 1 }, 'u2')).toMatchObject({ ledgerRev: 2, replayed: false })
   await expect(runStockCommand(deps(), { ...adjust(), expectedRev: -1 }, 'u2')).rejects.toMatchObject({ code: 'invalid' })
+})
+
+// S2 (R34): stock leaves a branch for transit only through a real transfer a manager approves.
+describe('transferApprove', () => {
+  const transfer = (over: Record<string, unknown> = {}) => ({
+    id: 't1', docNo: 'TR-00001', status: 'pendingApproval', revision: 1, fromLocationId: 'wh', toLocationId: 'br', dispatchDate: DATE,
+    items: [{ idx: 0, productId: 'p1', productName: 'Flour', unit: 'kg', requestedQty: 4, dispatchQty: 4 }],
+    history: [], createdAt: DATE, updatedAt: DATE, ...over,
+  })
+  const approve = (over: Record<string, unknown> = {}) => ({ command: 'transferApprove', brand: 'pizza', operationId: opId(), payload: { transferId: 't1', expectedRevision: 1, ...over } })
+  const qtyAt = async (loc: string) => (await list('stockLevels')).find((l) => l.id === `${loc}__p1`)?.qty ?? 0
+  beforeEach(async () => {
+    await put('users/m1', { name: 'Manager One', role: 'manager', active: true })
+    await put('locations/transit', { id: 'transit', name: 'In transit', type: 'transit', active: true })
+    await put('locations/br', { id: 'br', name: 'Branch', active: true })
+    await put('transfers/t1', transfer())
+  })
+
+  test('a manager approval moves the dispatch qty into transit in one commit; the company total does not change', async () => {
+    const r = await runStockCommand(deps(), approve(), 'm1')
+    expect(r).toMatchObject({ docNo: 'IS-00001', ledgerRev: 1, replayed: false })
+    expect(await qtyAt('wh')).toBe(6)
+    expect(await qtyAt('transit')).toBe(4)
+    expect((await qtyAt('wh')) + (await qtyAt('transit'))).toBe(10)
+    const [mv] = await list('stockMovements')
+    expect(mv).toMatchObject({ type: 'issue', fromLocationId: 'wh', toLocationId: 'transit', transferId: 't1', qty: 4, byUserId: 'm1', byUserName: 'Manager One' })
+    const [t] = await list('transfers')
+    expect(t).toMatchObject({ status: 'inTransit', approvedBy: 'm1', dispatchMovementDocNo: 'IS-00001' })
+    expect((t.items as { inTransitQty: number }[])[0].inTransitQty).toBe(4)
+  })
+
+  test('staff cannot approve; nothing is written', async () => {
+    await expect(runStockCommand(deps(), approve(), 'u1')).rejects.toMatchObject({ code: 'forbidden' })
+    expect(commits).toBe(0)
+  })
+
+  test('a stale revision, an approved transfer or a transfer that does not exist is refused whole', async () => {
+    await expect(runStockCommand(deps(), approve({ expectedRevision: 0 }), 'm1')).rejects.toThrow(/โหลดใหม่/)
+    await expect(runStockCommand(deps(), approve({ transferId: 'ghost' }), 'm1')).rejects.toThrow(/ไม่พบเอกสาร/)
+    await runStockCommand(deps(), approve(), 'm1')
+    await expect(runStockCommand(deps(), approve(), 'm1')).rejects.toThrow(/สถานะรออนุมัติ/)
+    expect(await list('stockMovements')).toHaveLength(1)
+    expect(await qtyAt('transit')).toBe(4)
+  })
+
+  test('the same approval retried replays; it never dispatches twice', async () => {
+    const cmd = approve()
+    loseResponse = true
+    await expect(runStockCommand(deps(), cmd, 'm1')).rejects.toThrow(/response lost/)
+    expect(await runStockCommand(deps(), cmd, 'm1')).toMatchObject({ docNo: 'IS-00001', replayed: true })
+    expect(await qtyAt('transit')).toBe(4)
+  })
+
+  test('a transfer line naming another unit, or a client-made unit conversion, is refused', async () => {
+    await put('transfers/t1', transfer({ items: [{ idx: 0, productId: 'p1', productName: 'Flour', unit: 'ลัง', requestedQty: 4, dispatchQty: 4 }] }))
+    await expect(runStockCommand(deps(), approve(), 'm1')).rejects.toMatchObject({ code: 'invalid' })
+    await put('transfers/t1', transfer({ items: [{ idx: 0, productId: 'p1', productName: 'Flour', unit: 'kg', requestedQty: 4, dispatchQty: 400, dispatchEntryUnit: 'ลัง', dispatchEntryQty: 1 }] }))
+    await expect(runStockCommand(deps(), approve(), 'm1')).rejects.toMatchObject({ code: 'invalid' })
+    expect(commits).toBe(0)
+  })
+
+  test('dispatching more than the source holds is refused', async () => {
+    await put('transfers/t1', transfer({ items: [{ idx: 0, productId: 'p1', productName: 'Flour', unit: 'kg', requestedQty: 11, dispatchQty: 11 }] }))
+    await expect(runStockCommand(deps(), approve(), 'm1')).rejects.toThrow(/สต๊อกไม่พอ/)
+    expect(await list('stockMovements')).toHaveLength(0)
+  })
+
+  test('two managers approving at once dispatch once', async () => {
+    await put('users/m2', { name: 'Manager Two', role: 'admin', active: true })
+    const rs = await Promise.allSettled([runStockCommand(deps(), approve(), 'm1'), runStockCommand(deps(), approve(), 'm2')])
+    expect(rs.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(await list('stockMovements')).toHaveLength(1)
+    expect(await qtyAt('wh')).toBe(6)
+    expect(await qtyAt('transit')).toBe(4)
+  })
 })

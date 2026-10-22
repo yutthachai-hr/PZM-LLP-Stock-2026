@@ -7,7 +7,9 @@ import { AppError } from '../../src/i18n/AppError'
 import { planAdjust, type AdjustLine } from '../../src/services/adjustPlan'
 import { levelId } from '../../src/lib/levelKey'
 import { requireCountQty, roundQty } from '../../src/lib/validate'
-import { COL, type AppUser, type Product, type StockLevel } from '../../src/types'
+import { COL, type AppUser, type Product, type StockLevel, type StockMovement, type Transfer } from '../../src/types'
+import { isManager, liveItems } from '../../src/lib/transferStatus'
+import { planApproveTransfer } from '../../src/services/transferPlan'
 import { sameUnit } from '../../src/lib/units'
 import { StockConflict, type StockBrand } from './stockCommandStore'
 
@@ -31,6 +33,7 @@ type Input = Envelope &
   (
     | { command: 'adjust'; payload: { locationId: string; date: number; note: string | null; lines: AdjustLine[] } }
     | { command: 'count'; payload: { locationId: string; date: number; note: string | null; lines: CountLine[] } }
+    | { command: 'transferApprove'; payload: { transferId: string; expectedRevision: number; note: string | null } }
   )
 
 export interface StockCommandResult {
@@ -65,10 +68,21 @@ export function parseStockCommand(raw: unknown): Input {
   if (!isObj(raw) || !isObj(raw.payload)) throw bad()
   const { command, brand, operationId, expectedRev, payload } = raw
   if (Object.keys(raw).some((k) => !['command', 'brand', 'operationId', 'expectedRev', 'payload'].includes(k))) throw bad()
-  if (command !== 'adjust' && command !== 'count') throw bad()
+  if (command !== 'adjust' && command !== 'count' && command !== 'transferApprove') throw bad()
   if (!BRANDS.includes(brand as StockBrand)) throw bad()
   if (typeof operationId !== 'string' || !UUID.test(operationId)) throw bad()
   if (expectedRev !== undefined && !(Number.isSafeInteger(expectedRev) && (expectedRev as number) >= 0)) throw bad()
+  const envelopeOf = (): Envelope => ({ brand: brand as StockBrand, operationId, expectedRev: (expectedRev as number | undefined) ?? null })
+  if (command === 'transferApprove') {
+    // shortcut: no line edits at approval on the trusted path; the manager approves the lines as
+    // submitted. Accept an items list (with the same checks as the browser) when a screen needs it.
+    const { transferId, expectedRevision, note } = payload
+    if (Object.keys(payload).some((k) => !['transferId', 'expectedRevision', 'note'].includes(k))) throw bad()
+    if (!str(transferId, 200) || !/^[A-Za-z0-9_-]+$/.test(transferId as string)) throw bad()
+    if (!(Number.isSafeInteger(expectedRevision) && (expectedRevision as number) >= 0)) throw bad()
+    if (note !== undefined && !str(note, 2000)) throw bad()
+    return { command, ...envelopeOf(), payload: { transferId: transferId as string, expectedRevision: expectedRevision as number, note: (note as string | undefined) ?? null } }
+  }
   const { locationId, date, note, lines } = payload
   if (Object.keys(payload).some((k) => !['locationId', 'date', 'note', 'lines'].includes(k))) throw bad()
   if (!str(locationId, 200) || !num(date) || (note !== undefined && !str(note, 2000))) throw bad()
@@ -81,7 +95,7 @@ export function parseStockCommand(raw: unknown): Input {
     if (command === 'count' && !(num(l.countedQty) && num(l.expectedQty))) throw bad()
     if (command === 'adjust' && !(num(l.qty) && str(l.direction, 10) && str(l.reason, 60) && (l.note === undefined || str(l.note, 2000)))) throw bad()
   }
-  const envelope: Envelope = { brand: brand as StockBrand, operationId, expectedRev: (expectedRev as number | undefined) ?? null }
+  const envelope = envelopeOf()
   const head = { locationId: locationId as string, date: date as number, note: (note as string | undefined) ?? null }
   const rows = lines as Record<string, unknown>[]
   if (command === 'count') {
@@ -126,6 +140,34 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
     // The brand's ledger moved since the caller looked: whatever it meant to file is unknown.
     if (input.expectedRev !== null && input.expectedRev !== rev) throw new StockCommandError('stale', { expectedRev: input.expectedRev, ledgerRev: rev })
     const actor = { id: uid, name: user.name }
+    const now = deps.now()
+    const finish = (docNo: string | null) => {
+      const ledgerRev = docNo ? rev + 1 : rev
+      if (docNo) tx.set(COL.meta, ledgerKey, { value: ledgerRev, updatedAt: now, updatedBy: uid })
+      tx.set(COL.meta, opKey, { uid, brand, command: input.command, fingerprint, result: { docNo, ledgerRev }, createdAt: now })
+      return { docNo, ledgerRev, replayed: false }
+    }
+    const file = (mv: Omit<StockMovement, 'id'>) => tx.set(COL.movements, crypto.randomUUID().replace(/-/g, ''), mv as Record<string, unknown>)
+
+    if (input.command === 'transferApprove') {
+      // S2: stock leaves a branch for transit only through a real transfer, in the state and
+      // revision the manager saw, approved by a manager the server knows.
+      if (!isManager(user.role)) throw new StockCommandError('forbidden')
+      const { transferId, expectedRevision, note } = input.payload
+      const t = await tx.get<Transfer>(COL.transfers, transferId)
+      if (t) {
+        const items = liveItems(t.items)
+        const masters = await Promise.all(items.map((i) => tx.get<Product>(COL.products, i.productId)))
+        items.forEach((i, n) => {
+          const p = masters[n]
+          // Same rule as adjust/count: the master's unit, and no client-made unit conversion.
+          if ((p && !sameUnit(i.unit, p.unitType)) || i.dispatchEntryUnit) throw new StockCommandError('invalid', { productId: i.productId })
+        })
+      }
+      const approved = await planApproveTransfer(tx, { transferId, expectedRevision, actor: { ...actor, role: user.role }, note: note ?? undefined }, file)
+      return finish(approved.dispatchMovementDocNo ?? null)
+    }
+
     const { locationId, date } = input.payload
     const note = input.payload.note ?? undefined
 
@@ -160,15 +202,8 @@ export async function runStockCommand(deps: Pick<StockCommandDeps, 'store' | 'br
     }
 
     let docNo: string | null = null
-    if (lines.length) {
-      const planned = await planAdjust(tx, { lines, locationId, date, actor, note }, (mv) => tx.set(COL.movements, crypto.randomUUID().replace(/-/g, ''), mv as Record<string, unknown>))
-      docNo = planned.commit()
-    }
-    const now = deps.now()
-    const ledgerRev = docNo ? rev + 1 : rev
-    if (docNo) tx.set(COL.meta, ledgerKey, { value: ledgerRev, updatedAt: now, updatedBy: uid })
-    tx.set(COL.meta, opKey, { uid, brand, command: input.command, fingerprint, result: { docNo, ledgerRev }, createdAt: now })
-    return { docNo, ledgerRev, replayed: false }
+    if (lines.length) docNo = (await planAdjust(tx, { lines, locationId, date, actor, note }, file)).commit()
+    return finish(docNo)
   })
 }
 

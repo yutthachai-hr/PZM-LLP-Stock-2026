@@ -8,8 +8,8 @@ import { brandCollection } from './serverStore'
 
 export type StockBrand = 'pizza' | 'lelapin' | 'rnd'
 
-const readable = new Set(['users', 'revokedUsers', 'meta', 'products', 'locations', 'counters', 'stockLevels'])
-const writable = new Set(['meta', 'counters', 'stockLevels', 'stockMovements'])
+const readable = new Set(['users', 'revokedUsers', 'meta', 'products', 'locations', 'counters', 'stockLevels', 'transfers'])
+const writable = new Set(['meta', 'counters', 'stockLevels', 'stockMovements', 'transfers'])
 const ATTEMPTS = 5
 const safeId = (s: string) => /^[A-Za-z0-9_\-]{1,200}$/.test(s)
 
@@ -96,8 +96,8 @@ export function stockCommandStore(
           set(c, id, data) {
             writing = true
             if (!writable.has(c)) throw Error(`write not allowed: ${c}`)
-            if (c === 'counters' && id !== 'adjust') throw Error('counter not allowed')
-            if (c === 'stockMovements' && data.type !== 'adjust') throw Error('movement type not allowed')
+            if (c === 'counters' && id !== 'adjust' && id !== 'issue') throw Error('counter not allowed')
+            if (c === 'stockMovements' && data.type !== 'adjust' && data.type !== 'issue') throw Error('movement type not allowed')
             const n = name(c, id)
             const prior = reads.get(n)
             // Balances, counters and meta are read-modify-write; a movement is always a new row.
