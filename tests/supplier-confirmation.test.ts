@@ -20,6 +20,7 @@ import {
   requestedOf,
   respond,
   SUPPLIER_LIST_MAX,
+  supplierAutoUntil,
   supplierTimeline,
   supplierStateOf,
 } from '../src/lib/supplierConfirmation'
@@ -525,6 +526,20 @@ describe('the same answer again is not a new event', () => {
   test('a quantity-only revision asks the supplier for the approved date, not the one first asked', () => {
     const o = approvedThenQtyRevised()
     expect(o).toMatchObject({ supplierConfirmationStatus: 'waiting', requestedDeliveryDate: day(9), confirmedDeliveryDate: day(9), expectedAt: day(9) })
+    // Recorded as the system's re-ask, then the reset, so the trail says why the date asked moved.
+    expect(o.deliveryDateHistory!.slice(-2)).toMatchObject([
+      { source: 'system', action: 'requested', from: day(3), to: day(9) },
+      { source: 'system', action: 'reset' },
+    ])
+  })
+
+  test('after a quantity-only revision the approval range is still measured from purchasing\'s ask', () => {
+    // maxPostponeDays 2 from the 22nd (day 3): the 28th (day 11) needed approval before the
+    // revision, and a quantity change must not let it through on its own.
+    const o = approvedThenQtyRevised()
+    const r = respond(o, { action: 'propose', date: day(11), requestId: 'req-dup42' }, ctx)
+    expect(r.ok && !r.replayed && r.outcome).toBe('pending')
+    expect(supplierAutoUntil(o, 2)).toBe(day(5))
   })
 
   test('acknowledging a quantity-only revision keeps the approved date', () => {
@@ -555,6 +570,12 @@ describe('the same answer again is not a new event', () => {
     o = applyPatch(o, l.patch)
     expect(o).toMatchObject({ supplierConfirmationStatus: 'waiting', requestedDeliveryDate: day(5) })
     expect(o.confirmedDeliveryDate).toBeUndefined()
+    // The far date approved under the old ask needs approval again under the new one.
+    const far = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup43' }, ctx)
+    expect(far.ok && !far.replayed && far.outcome).toBe('pending')
+    o = apply(o, { action: 'propose', date: day(12), requestId: 'req-dup44' })
+    const again = respond(o, { action: 'propose', date: day(9), requestId: 'req-dup45' }, ctx)
+    expect(again.ok && !again.replayed && again.outcome).toBe('pending')
   })
 
   test('a date waiting for approval that the range now allows applies at once', () => {

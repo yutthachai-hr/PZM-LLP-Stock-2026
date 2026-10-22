@@ -48,6 +48,26 @@ export function requestedOf(o: PurchaseOrder): number | undefined {
   return o.requestedDeliveryDate ?? o.expectedAt
 }
 
+/**
+ * Purchasing's own latest ask: the date the approval range is measured from. A link that re-asks
+ * the approved date after a quantity-only revision is the system's, not purchasing's, so it never
+ * widens what a supplier may change without approval (owner, 22 Oct 2026; PR #48 review).
+ */
+export function rangeAnchorOf(o: PurchaseOrder): number | undefined {
+  const h = o.deliveryDateHistory ?? []
+  for (let i = h.length - 1; i >= 0; i--) {
+    if (h[i].action !== 'requested') continue
+    return h[i].source === 'system' ? h[i].from : h[i].to
+  }
+  return requestedOf(o)
+}
+
+/** The last day a supplier's change applies at once; later ones wait for approval. */
+export function supplierAutoUntil(o: PurchaseOrder, maxPostponeDays: number): number | undefined {
+  const anchor = rangeAnchorOf(o)
+  return anchor === undefined ? undefined : bkkDayStart(anchor) + Math.max(0, Math.floor(maxPostponeDays)) * DAY_MS
+}
+
 /** When the goods are now expected: what was agreed, else what was asked. */
 export function effectiveDeliveryOf(o: PurchaseOrder): number | undefined {
   return o.confirmedDeliveryDate ?? requestedOf(o)
@@ -380,16 +400,16 @@ export function respond(o: PurchaseOrder, input: RespondInput, ctx: RespondConte
     mode = 'auto'
   } else {
     const v = evaluateProposal({
-      requested,
+      requested: rangeAnchorOf(o),
       proposed: input.date ?? null,
       now: ctx.now,
       maxPostponeDays: ctx.maxPostponeDays,
     })
     if (!v.ok) return { ok: false, error: v.error }
     target = bkkDayStart(input.date as number)
-    // The date agreed was within the range or approved already: going back to it from a
-    // waiting date, or answering a refusal with it, is not asked for a second time.
-    mode = target === agreedDateOf(o) ? 'auto' : v.mode
+    // The date agreed was within the range or approved already, or is the date this link asks
+    // for: going back to it, or answering a refusal with it, is not asked for a second time.
+    mode = target === agreedDateOf(o) || (requested !== undefined && target === bkkDayStart(requested)) ? 'auto' : v.mode
   }
 
   // Before the room check: an answer that changes nothing needs no room.
