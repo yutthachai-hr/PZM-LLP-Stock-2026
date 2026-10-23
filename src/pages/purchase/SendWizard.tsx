@@ -315,6 +315,13 @@ export function SendWizard({
     } catch (e) {
       shared = Promise.reject(e)
     }
+    if (provider.leftForLogin?.()) {
+      // LINE Login after all (it lapsed since the screen was drawn): not a send, keep nothing.
+      clearShareAttempt(scope)
+      sharing.current = false
+      setBusy('')
+      return
+    }
     shared = shared.then((outcome) => {
       if (outcome === 'sent') confirmShareAttempt(scope)
       return outcome

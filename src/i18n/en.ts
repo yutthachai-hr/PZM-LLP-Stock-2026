@@ -1617,6 +1617,8 @@ export const EN: Record<string, string> = {
   'ใบที่เลือกส่งครบแล้ว': 'The selected orders have all been sent.',
   'ส่งใบสั่งซื้อค้างอยู่ ส่งแล้ว {done} จาก {n} ใบ': 'Unfinished send: {done} of {n} orders sent',
   'ส่งต่อ': 'Continue',
+  'การเข้าสู่ระบบ LINE หมดอายุ — กด "เชื่อมต่อ LINE" แล้วส่งอีกครั้ง': 'Your LINE sign-in expired — tap "Connect LINE" and send again',
+  'ตรวจสถานะใบสั่งซื้อไม่ได้ — ลองกด "ส่งต่อ" อีกครั้ง ({e})': 'Could not check the orders — tap "Continue" again ({e})',
   'เลิกส่งชุดนี้': 'Drop this send',
   'คัดลอกลิงก์แล้ว — วางในแชทเดียวกับรูป': 'Link copied — paste it in the same chat as the picture',
   'ส่งทั้งรูปและลิงก์ในแชทผู้ขายแล้วหรือยัง?': 'Did both the picture and the link go to the supplier’s chat?',

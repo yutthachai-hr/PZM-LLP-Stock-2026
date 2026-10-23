@@ -136,6 +136,23 @@ describe('the LINE (LIFF) provider', () => {
       vi.unstubAllGlobals()
     })
 
+    // R40 review: the wizard must know, in the same tick, that this share() left for LINE Login,
+    // so no attempt or "opened" is kept for it — even if login lapsed after needsLogin() said no.
+    test('a share that leaves for LINE Login says so synchronously; a real share does not', async () => {
+      vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev' })
+      await lineLiffProvider.isAvailable()
+      sdk.isLoggedIn.mockReturnValue(false)
+      const left = lineLiffProvider.share(payload())
+      expect(lineLiffProvider.leftForLogin?.()).toBe(true)
+      expect(await left).toBe('cancelled')
+      expect(sdk.shareTargetPicker).not.toHaveBeenCalled()
+      sdk.isLoggedIn.mockReturnValue(true)
+      const sent = lineLiffProvider.share(payload())
+      expect(lineLiffProvider.leftForLogin?.()).toBe(false)
+      expect(await sent).toBe('sent')
+      vi.unstubAllGlobals()
+    })
+
     test('the LIFF address for a home-screen hand-over carries the batch too', () => {
       vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev' })
       expect(liffUrl('o1', RESUME_PARAM, '1.S1.1800000000000.o1~o2')).toBe('https://liff.line.me/1234567890-abcdefgh/orders?send=o1&brand=pizza&batch=1.S1.1800000000000.o1~o2')

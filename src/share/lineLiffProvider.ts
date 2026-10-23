@@ -54,6 +54,8 @@ type Liff = typeof import('@line/liff').default
 let ready: Promise<Liff> | null = null
 // The SDK once init has finished, for the synchronous questions a tap asks (needsLogin).
 let loaded: Liff | null = null
+// Whether the last share() went to LINE Login instead (R40 review: decided before any await).
+let left = false
 
 async function liff(): Promise<Liff> {
   if (!ready) {
@@ -100,42 +102,61 @@ export const lineLiffProvider: PurchaseShareProvider = {
     if (loaded) toLineLogin(loaded, subject)
   },
 
-  async share(payload: SharePayload): Promise<ShareOutcome> {
-    const sdk = await liff()
-    if (!sdk.isLoggedIn()) {
-      toLineLogin(sdk, payload.subject)
-      return 'cancelled'
-    }
-    if (!sdk.isApiAvailable('shareTargetPicker')) {
-      throw new AppError('LINE รุ่นนี้หรือการตั้งค่า LIFF ยังไม่รองรับการเลือกผู้รับ')
-    }
-    if (payload.file && !payload.hosted) throw new AppError('ยังไม่มีรูปสำหรับส่ง')
-    // A card (the daily digest) goes on its own: its rows are the links.
-    if (payload.flex) {
-      const sent = await sdk.shareTargetPicker([{ type: 'flex', altText: payload.flex.altText, contents: payload.flex.contents as never }], { isMultiple: true })
-      return sent && sent.status === 'success' ? 'sent' : 'cancelled'
-    }
-    // The caption first, then the picture — what the supplier sees is the same as when
-    // the sheet is shared from a phone, where the share sheet carries the title itself.
-    // A text-only announcement is the caption alone.
-    const result = await sdk.shareTargetPicker(
-      [
-        { type: 'text', text: payload.caption },
-        ...(payload.card ? [{ type: 'flex' as const, altText: payload.card.altText, contents: payload.card.contents as never }] : []),
-        ...(payload.hosted
-          ? [
-              {
-                type: 'image' as const,
-                originalContentUrl: payload.hosted.url,
-                previewImageUrl: payload.hosted.previewUrl,
-              },
-            ]
-          : []),
-      ],
-      { isMultiple: true },
-    )
-    return result && result.status === 'success' ? 'sent' : 'cancelled'
+  leftForLogin() {
+    return left
   },
+
+  share(payload: SharePayload): Promise<ShareOutcome> {
+    left = false
+    // Signed out: LINE Login, decided in this tick so the caller can see it and keep nothing.
+    if (loaded && !loaded.isLoggedIn()) {
+      left = true
+      toLineLogin(loaded, payload.subject)
+      return Promise.resolve('cancelled')
+    }
+    return shareSignedIn(payload, !loaded)
+  },
+}
+
+async function shareSignedIn(payload: SharePayload, mayRedirect: boolean): Promise<ShareOutcome> {
+  const sdk = await liff()
+  if (!sdk.isLoggedIn()) {
+    // Passed the signed-in check a moment ago: never leave the page now, after the caller may
+    // have recorded the attempt. Say so; the next tap connects LINE again.
+    if (!mayRedirect) throw new AppError('การเข้าสู่ระบบ LINE หมดอายุ — กด "เชื่อมต่อ LINE" แล้วส่งอีกครั้ง')
+    // Only when share() ran before the SDK was ever loaded (not the wizard's path).
+    toLineLogin(sdk, payload.subject)
+    return 'cancelled'
+  }
+  if (!sdk.isApiAvailable('shareTargetPicker')) {
+    throw new AppError('LINE รุ่นนี้หรือการตั้งค่า LIFF ยังไม่รองรับการเลือกผู้รับ')
+  }
+  if (payload.file && !payload.hosted) throw new AppError('ยังไม่มีรูปสำหรับส่ง')
+  // A card (the daily digest) goes on its own: its rows are the links.
+  if (payload.flex) {
+    const sent = await sdk.shareTargetPicker([{ type: 'flex', altText: payload.flex.altText, contents: payload.flex.contents as never }], { isMultiple: true })
+    return sent && sent.status === 'success' ? 'sent' : 'cancelled'
+  }
+  // The caption first, then the picture — what the supplier sees is the same as when
+  // the sheet is shared from a phone, where the share sheet carries the title itself.
+  // A text-only announcement is the caption alone.
+  const result = await sdk.shareTargetPicker(
+    [
+      { type: 'text', text: payload.caption },
+      ...(payload.card ? [{ type: 'flex' as const, altText: payload.card.altText, contents: payload.card.contents as never }] : []),
+      ...(payload.hosted
+        ? [
+            {
+              type: 'image' as const,
+              originalContentUrl: payload.hosted.url,
+              previewImageUrl: payload.hosted.previewUrl,
+            },
+          ]
+        : []),
+    ],
+    { isMultiple: true },
+  )
+  return result && result.status === 'success' ? 'sent' : 'cancelled'
 }
 
 /** LINE Login, or the LINE app from a home-screen app; back to `subject` either way. Not a send. */

@@ -79,6 +79,8 @@ export interface PurchaseShareProvider {
   needsLogin?(): boolean
   /** Off to LINE Login (or to the LINE app from a home-screen app), back to `subject`. Writes nothing. */
   connect?(subject: ShareSubject): void
+  /** True straight after a share() call that left for LINE Login instead of sharing (same tick). */
+  leftForLogin?(): boolean
 }
 
 /** The order status an outcome is recorded as, or null when nothing should be written. */

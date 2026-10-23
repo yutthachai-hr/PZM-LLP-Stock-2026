@@ -56,7 +56,7 @@ import { QUICK_FILTERS, matchesStateFilter, presentOrderStatus, stateFilterCount
 import { LineBadge } from './orders/LineBadge'
 import { RowMenu, type RowMenuItem } from '../components/frame/RowMenu'
 import { BATCH_PARAM, RESUME_PARAM } from '../share/liffResume'
-import { activeSession, clearSession, decodeSession, queueFor, saveSession, sessionDone, startSession, type SendSession } from './purchase/sendSession'
+import { activeSession, clearSession, decodeSession, queueFor, saveSession, sessionDone, sessionFinished, startSession, type SendSession } from './purchase/sendSession'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
 import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
@@ -261,7 +261,19 @@ export function OrdersPage() {
   // Open a session on each order as the server holds it now, not the list's cached copy: another
   // device may have sent, cancelled or amended one meanwhile (R40 P0). One read per order (≤ 50).
   const openBatch = useCallback(async (s: SendSession) => {
-    const fresh = (await Promise.all(s.orderIds.map((id) => getPurchaseOrder(id).catch(() => null)))).filter((o): o is PurchaseOrder => !!o)
+    let fresh: PurchaseOrder[]
+    try {
+      // An order that cannot be read must not drop out of the batch unseen (R40 review): no
+      // wizard until every one was read; one that no longer exists is simply not there.
+      fresh = (await Promise.all(s.orderIds.map((id) => getPurchaseOrder(id)))).filter((o): o is PurchaseOrder => !!o)
+    } catch (e) {
+      if (mounted.current) toast.error(t('ตรวจสถานะใบสั่งซื้อไม่ได้ — ลองกด "ส่งต่อ" อีกครั้ง ({e})', { e: errText(e, t) }))
+      if (mounted.current && getBrand() === s.brand) {
+        saveSession(s)
+        setLeftover(s)
+      }
+      return
+    }
     if (!mounted.current || getBrand() !== s.brand) return
     for (const o of fresh) orderCache.patch(o)
     setOrders((cur) => cur.map((o) => fresh.find((f) => f.id === o.id) ?? o))
@@ -269,7 +281,7 @@ export function OrdersPage() {
     saveSession(s)
     setLeftover(null)
     setBatch(s)
-  }, [orders])
+  }, [orders, toast, t])
 
   // Back from LINE Login (or opened in LINE) with ?batch=: the whole session, at its next supplier.
   // Otherwise an unfinished session this person left on this device is offered, not forced.
@@ -279,8 +291,7 @@ export function OrdersPage() {
     if (raw) {
       const s = decodeSession(raw, brand)
       const next = new URLSearchParams(params)
-      next.delete(BATCH_PARAM)
-      next.delete(RESUME_PARAM)
+      for (const p of [BATCH_PARAM, RESUME_PARAM, 'po', 'receive']) next.delete(p)
       setParams(next, { replace: true })
       if (s) void openBatch({ ...s, userId: user.id })
       else toast.error(t('ลิงก์ส่งต่อไม่ถูกต้องหรือหมดอายุ — เลือกใบสั่งซื้อใหม่'))
@@ -808,7 +819,7 @@ export function OrdersPage() {
           }}
           onClose={() => {
             // Finished: forgotten. Put aside: offered again ("continue") until it is finished.
-            if (sessionOrders(batch).every((o) => sessionDone(o, batch))) clearSession(batch)
+            if (sessionFinished(batch, sessionOrders(batch))) clearSession(batch)
             setBatch(null)
             setSelected(new Set())
           }}

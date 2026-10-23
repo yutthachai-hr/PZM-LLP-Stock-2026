@@ -54,6 +54,14 @@ export function sessionDone(o: PurchaseOrder, s: SendSession): boolean {
   return o.status !== 'ordered' || delivered(o) || (o.shareStatus === 'skipped' && (o.updatedAt ?? 0) >= s.startedAt)
 }
 
+/** Every order of the session was read and is done — only then may the session be forgotten. */
+export function sessionFinished(s: SendSession, orders: PurchaseOrder[]): boolean {
+  return s.orderIds.every((id) => {
+    const o = orders.find((x) => x.id === id)
+    return !!o && sessionDone(o, s)
+  })
+}
+
 /** `1.<id>.<startedAt>.<a~b~c>`, or '' when an id cannot travel in a URL as it is. */
 export function encodeSession(s: SendSession): string {
   if (!ID.test(s.id) || !s.orderIds.length || !s.orderIds.every((id) => ID.test(id))) return ''
@@ -86,6 +94,7 @@ export function activeSession(brand: BrandId, userId: string, now = Date.now()):
   try {
     const s = JSON.parse(localStorage.getItem(key(brand, userId)) ?? 'null') as SendSession | null
     if (!s || s.v !== 1 || s.brand !== brand || s.userId !== userId || !Array.isArray(s.orderIds)) return null
+    if (!ID.test(s.id) || !s.orderIds.length || s.orderIds.length > MAX_ORDERS || !s.orderIds.every((id) => ID.test(id))) return null
     return now - s.startedAt > MAX_AGE_MS ? null : s
   } catch {
     return null
