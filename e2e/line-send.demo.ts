@@ -103,7 +103,9 @@ test('the share sheet opening is not proof of delivery: only the person confirms
   await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
   await expect(wizard.getByText('ส่งใน LINE เรียบร้อยหรือไม่?')).toBeVisible()
   expect((await stored(page, 'po1')).shareStatus).toBe('shareOpened')
-  expect((await shareLog(page)).texts[0]).toContain('PO-LS-001')
+  // R40 P0 (mode B): the picture goes alone — text beside a file was kept or dropped by the target
+  // app as it pleased; the message and link are copied as their own steps (see the tests below).
+  expect((await shareLog(page)).texts[0]).toBe('')
   await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
   await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
 })
@@ -371,4 +373,141 @@ test('a status write that fails during the share does not mark the order failed'
   await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
   await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
   expect((await shareLog(page)).calls).toBe(1)
+})
+
+// ---- R40 P0: several POs in one go, on the phone as much as on the desk ----------------------
+// Synthetic orders for three suppliers; demo storage only, no real LINE, no supplier message.
+
+function batchOrders(extra: Record<string, Record<string, unknown>> = {}) {
+  const now = Date.now(), day = 86_400_000
+  const po = (id: string, docNo: string, supplier: string, i: number) => ({
+    id, docNo, supplierId: 'sup', supplierName: supplier, locationId: 'wh', status: 'ordered',
+    orderedAt: now - day - i * 1000, expectedAt: now + day,
+    lines: [{ productId: 'p0', productName: 'ITEM 0', unit: 'KG', orderedQty: 1, receivedQty: 0 }],
+    createdBy: 'send-user', createdByName: 'Send QA', createdAt: now - day, updatedAt: now - day,
+    ...extra[id],
+  })
+  // QA SUPPLIER is what stage() waits for on the list.
+  return { 'po-a': po('po-a', 'PO-B-001', 'QA SUPPLIER', 0), 'po-b': po('po-b', 'PO-B-002', 'SUPPLIER B', 1), 'po-c': po('po-c', 'PO-B-003', 'SUPPLIER C', 2) }
+}
+
+async function startBatch(page: Page, ids: string[]) {
+  for (const id of ids) await row(page, id).getByRole('checkbox', { name: 'เลือกแถวนี้' }).check()
+  await page.getByRole('button', { name: `ส่ง LINE (${ids.length} ใบ)` }).click()
+  return page.getByRole('dialog')
+}
+
+// A LIFF contract stub (no SDK, no login page): signed out until connect() comes back, the way
+// LINE Login does — to the URL the app itself builds for the round trip.
+const LIFF_STUB = `
+  export { statusFor } from '/src/share/PurchaseShareProvider.ts';
+  import { resumeUrl } from '/src/share/liffResume.ts';
+  const signedIn = () => sessionStorage.getItem('stub-line') === '1';
+  const log = () => (window.__liff ??= JSON.parse(sessionStorage.getItem('stub-liff-log') ?? '[]'));
+  const keep = () => sessionStorage.setItem('stub-liff-log', JSON.stringify(log()));
+  export async function pickShareProvider() {
+    return { id: 'line-liff', label: 'ส่ง LINE', needsHosting: false,
+      needsLogin: () => !signedIn(),
+      connect(subject) { sessionStorage.setItem('stub-line', '1'); location.href = resumeUrl(subject.id, 'send', subject.batch); },
+      async share(p) {
+        if (!signedIn()) { location.href = resumeUrl(p.subject.id, 'send', p.subject.batch); return 'cancelled'; }
+        log().push(p.subject.id); keep(); return 'sent';
+      } };
+  }`
+
+test('a batch goes on at the next supplier after a reload, and never offers a sent one again', async ({ page }) => {
+  await stage(page, { orders: batchOrders() })
+  let wizard = await startBatch(page, ['po-a', 'po-b', 'po-c'])
+  await expect(wizard.getByText('QA SUPPLIER', { exact: true }).first()).toBeVisible()
+  await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
+  await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
+  await expect(wizard.getByText('SUPPLIER B', { exact: true }).first()).toBeVisible()
+  expect((await shareLog(page)).calls).toBe(1) // the stub's log lives in the page; read before reloading
+  await page.reload()
+  await page.getByRole('button', { name: 'ส่งต่อ', exact: true }).click()
+  wizard = page.getByRole('dialog')
+  await expect(wizard.getByText('SUPPLIER B', { exact: true }).first()).toBeVisible()
+  await expect(wizard.getByText('QA SUPPLIER', { exact: true })).toHaveCount(0)
+  expect((await stored(page, 'po-a')).shareStatus).toBe('sent')
+})
+
+test('LINE Login mid-batch is not a send: the batch comes back whole, then one tap per supplier, each once', async ({ page }) => {
+  await page.route('**/src/share/index.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: LIFF_STUB }))
+  await stage(page, { orders: batchOrders() })
+  let wizard = await startBatch(page, ['po-a', 'po-b', 'po-c'])
+  await wizard.getByRole('button', { name: 'เชื่อมต่อ LINE' }).click()
+  await page.waitForURL(/batch=/)
+  wizard = page.getByRole('dialog')
+  await expect(wizard.getByText('QA SUPPLIER', { exact: true }).first()).toBeVisible()
+  await expect(wizard.getByText('ส่งใบสั่งซื้อ 1 / 3')).toBeVisible()
+  // The login round trip wrote nothing and left no half-sent attempt behind.
+  expect((await stored(page, 'po-a')).shareStatus).toBeUndefined()
+  expect(await page.evaluate(() => localStorage.getItem('pmstock:v1:send-progress') ?? '{}')).not.toContain('attempt')
+  for (const next of ['SUPPLIER B', 'SUPPLIER C']) {
+    await wizard.getByRole('button', { name: 'ส่ง LINE', exact: true }).click()
+    await expect(wizard.getByText(next, { exact: true }).first()).toBeVisible()
+  }
+  await wizard.getByRole('button', { name: 'ส่ง LINE', exact: true }).click()
+  await expect(wizard.getByText('ส่งครบทุกรายแล้ว', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('stub-liff-log') ?? '[]'))).toEqual(['po-a', 'po-b', 'po-c'])
+})
+
+test('a batch with one PO already sent starts at the first unsent one', async ({ page }) => {
+  await stage(page, { orders: batchOrders({ 'po-a': { shareStatus: 'sent', sentAt: Date.now() - 1000 } }) })
+  const wizard = await startBatch(page, ['po-a', 'po-b', 'po-c'])
+  await expect(wizard.getByText('SUPPLIER B', { exact: true }).first()).toBeVisible()
+  await expect(wizard.getByText('ส่งใบสั่งซื้อ 1 / 2')).toBeVisible()
+})
+
+test('phone share sheet: the picture goes alone; the confirmation link is copied for the same chat', async ({ page }) => {
+  await page.route('**/src/services/supplierConfirmation.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: `
+    export async function supplierLink(order) { return { url: 'https://example.test/s/qa-link', order }; }
+    export async function revokeSupplierLink() { throw new Error('stub'); }
+    export async function decideSupplierDate() { throw new Error('stub'); }
+  ` }))
+  await page.addInitScript(() => {
+    const w = window as unknown as { __clip: string[] }
+    w.__clip = []
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (s: string) => void w.__clip.push(s) } })
+  })
+  await stage(page)
+  const wizard = await openWizard(page, 'po1')
+  await wizard.getByRole('button', { name: 'คัดลอกลิงก์ยืนยันวันส่ง' }).click()
+  expect(await page.evaluate(() => (window as unknown as { __clip: string[] }).__clip)).toEqual(['https://example.test/s/qa-link'])
+  await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
+  expect((await shareLog(page)).texts.join('')).not.toContain('example.test')
+  await expect(wizard.getByText('ส่งทั้งรูปและลิงก์ในแชทผู้ขายแล้วหรือยัง?')).toBeVisible()
+  await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
+  await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
+})
+
+test('a LINE Login redirect is never recorded as opened, sent or attempted', async ({ page }) => {
+  await page.route('**/src/share/index.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: LIFF_STUB }))
+  await stage(page)
+  const wizard = await openWizard(page, 'po1')
+  // Whatever the signed-out screen offers — the old "ส่ง LINE" or "เชื่อมต่อ LINE" — press it.
+  await wizard.getByRole('button', { name: /^(ส่ง LINE|เชื่อมต่อ LINE)$/ }).click()
+  await page.waitForURL(/[?&](send|batch)=/)
+  await expect(page.locator('main')).toBeVisible()
+  await page.waitForTimeout(500)
+  expect((await stored(page, 'po1')).shareStatus).toBeUndefined()
+  expect(await page.evaluate(() => localStorage.getItem('pmstock:v1:send-progress') ?? '{}')).not.toContain('attempt')
+})
+
+test('an order cancelled while its batch was put aside is not offered when the batch continues', async ({ page }) => {
+  await stage(page, { orders: batchOrders() })
+  const wizard = await startBatch(page, ['po-a', 'po-b', 'po-c'])
+  await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
+  await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
+  await expect(wizard.getByText('SUPPLIER B', { exact: true }).first()).toBeVisible()
+  await wizard.getByRole('button', { name: 'พักไว้ก่อน' }).click()
+  await page.evaluate(() => {
+    const all = JSON.parse(localStorage.getItem('pmstock:v1:purchaseOrders')!)
+    Object.assign(all['po-b'], { status: 'cancelled', cancelledAt: Date.now(), updatedAt: Date.now() }) // as a real cancel writes it
+    localStorage.setItem('pmstock:v1:purchaseOrders', JSON.stringify(all))
+  })
+  await page.reload()
+  await page.getByRole('button', { name: 'ส่งต่อ', exact: true }).click()
+  await expect(page.getByRole('dialog').getByText('SUPPLIER C', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('dialog').getByText('SUPPLIER B', { exact: true })).toHaveCount(0)
 })

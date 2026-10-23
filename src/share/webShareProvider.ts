@@ -37,7 +37,10 @@ export const webShareProvider: PurchaseShareProvider = {
     }
     if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: payload.caption, text: payload.caption })
+        // The picture alone (R40 P0): LINE and other targets keep or drop text beside a file as
+        // they please, so the supplier link went missing unseen. The wizard copies the link and
+        // the message as their own steps; a combined share returns only after real-device proof.
+        await navigator.share({ files: [file] })
         return 'shareOpened'
       } catch (e) {
         if ((e as { name?: string }).name === 'AbortError') return 'cancelled'

@@ -21,11 +21,11 @@ import { poSentDraft } from '../../lib/inventoryRules/notifications'
 import { supplierLink } from '../../services/supplierConfirmation'
 import { requestedOf, supplierDateLabel } from '../../lib/supplierConfirmation'
 import { pickShareProvider, type PurchaseShareProvider } from '../../share'
-import { liffNeedsLogin } from '../../share/lineLiffProvider'
 import { isStandalone } from '../../share/liffResume'
 import type { PurchaseOrder } from '../../types'
 import { beginShareAttempt, clearPageProgress, clearShareAttempt, confirmShareAttempt, orderFingerprint, pageToResume, savePageProgress, shareToRecover, type ProgressScope } from './sendProgress'
 import { settleShare } from './shareSettle'
+import { encodeSession, sessionDone, type SendSession } from './sendSession'
 
 /**
  * Everything a share needs, made before the tap (owner P0, 22 Oct 2026). The share sheet and
@@ -40,6 +40,8 @@ interface Prepared {
   hosted?: HostedImage
   caption: string
   card?: { altText: string; contents: Record<string, unknown> }
+  /** The supplier's confirmation link, for copying into the chat as its own message (R40). */
+  link?: string
   version: number
 }
 
@@ -61,6 +63,7 @@ export function SendWizard({
   onStatus,
   onClose,
   resend = false,
+  session,
 }: {
   /** The batch's placed orders, in the order they should be sent. */
   orders: PurchaseOrder[]
@@ -69,6 +72,11 @@ export function SendWizard({
   onClose: () => void
   /** Send again even if already marked sent — a corrected order, or one sent from the list. */
   resend?: boolean
+  /**
+   * Several orders as one session (R40 P0): what is finished is read from the orders, so a
+   * reload or LINE Login picks up at the next supplier and never offers a delivered one again.
+   */
+  session?: SendSession
 }) {
   const t = useT()
   const { lang: screenLang } = useI18n()
@@ -94,8 +102,11 @@ export function SendWizard({
   // decides whether one that was already sent before the wizard opened is offered again.
   const doneHere = useRef(new Set<string>())
   const pending = useMemo(
-    () => effectiveOrders.filter((o) => !doneHere.current.has(o.id) && (resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'))),
-    [effectiveOrders, resend],
+    () =>
+      effectiveOrders.filter(
+        (o) => !doneHere.current.has(o.id) && (session ? !sessionDone(o, session) : resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped')),
+      ),
+    [effectiveOrders, resend, session],
   )
   const [provider, setProvider] = useState<PurchaseShareProvider | null>(null)
   const [currentId, setCurrentId] = useState<string | null>(pending[0]?.id ?? null)
@@ -124,13 +135,15 @@ export function SendWizard({
   const [recordingNow, setRecordingNow] = useState(false)
   const sheet = useRef<HTMLDivElement>(null)
 
+  // LIFF before LINE Login: the button connects LINE instead of sharing (R40 P0, finding C).
   const [needsLogin, setNeedsLogin] = useState(false)
   useEffect(() => {
-    void pickShareProvider().then(async (p) => {
+    void pickShareProvider().then((p) => {
       setProvider(p)
-      if (p.id === 'line-liff') setNeedsLogin(await liffNeedsLogin())
+      setNeedsLogin(p.needsLogin?.() ?? false)
     })
   }, [])
+  const batch = session ? encodeSession(session) || undefined : undefined
 
   // Follow the list as orders get their status: the current one is the first still pending.
   // Keyed on WHICH orders are pending, not on the array: the parent re-renders while a
@@ -258,7 +271,7 @@ export function SendWizard({
               url: link.url,
             })
           : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + pageTag
-        setPrepared({ key: payloadKey, file, hosted, caption, card: link ? confirmCard(link.url, current.docNo, st) : undefined, version })
+        setPrepared({ key: payloadKey, file, hosted, caption, card: link ? confirmCard(link.url, current.docNo, st) : undefined, link: link?.url, version })
       } catch (e) {
         if (!stale) setPrepareError(errText(e, t))
       } finally {
@@ -273,8 +286,15 @@ export function SendWizard({
   }, [payloadKey, prepareTick, askOutcome])
 
   // Share: the first thing the tap does. Status writes and the outcome follow the share sheet.
+  // LINE Login, then back to this order (and batch). Not a share: no attempt, no status (R40 P0).
+  function connect() {
+    if (!current || !provider?.connect) return
+    provider.connect({ kind: 'order', id: current.id, batch })
+  }
+
   function send() {
     if (!current || !provider || !user || sharing.current) return
+    if (provider.needsLogin?.()) return connect()
     const p = prepared
     if (!p || p.key !== payloadKey) return
     sharing.current = true
@@ -291,7 +311,7 @@ export function SendWizard({
     }
     let shared: ReturnType<PurchaseShareProvider['share']>
     try {
-      shared = provider.share({ subject: { kind: 'order', id: order.id }, file: p.file, hosted: p.hosted, caption: p.caption, card: p.card })
+      shared = provider.share({ subject: { kind: 'order', id: order.id, batch }, file: p.file, hosted: p.hosted, caption: p.caption, card: p.card })
     } catch (e) {
       shared = Promise.reject(e)
     }
@@ -365,6 +385,17 @@ export function SendWizard({
     try {
       await navigator.clipboard.writeText(prepared.caption)
       toast.success(t('คัดลอกข้อความแล้ว'))
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
+  }
+
+  // Called straight from the tap: Safari only lets the clipboard be written inside one.
+  async function copyLink() {
+    if (!prepared?.link) return
+    try {
+      await navigator.clipboard.writeText(prepared.link)
+      toast.success(t('คัดลอกลิงก์แล้ว — วางในแชทเดียวกับรูป'))
     } catch (e) {
       toast.error(errText(e, t))
     }
@@ -475,7 +506,9 @@ export function SendWizard({
         )}
         {askOutcome ? (
           <div className="rounded-lg border border-line bg-sunken p-3">
-            <p className="mb-2 text-sm text-ink">{t('ส่งใน LINE เรียบร้อยหรือไม่?')}</p>
+            <p className="mb-2 text-sm text-ink">
+              {provider?.id === 'web-share' && prepared?.link ? t('ส่งทั้งรูปและลิงก์ในแชทผู้ขายแล้วหรือยัง?') : t('ส่งใน LINE เรียบร้อยหรือไม่?')}
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button onClick={confirmPage} disabled={recordingNow}>
                 <Icon name="check" size={16} />
@@ -487,6 +520,32 @@ export function SendWizard({
             </div>
           </div>
         ) : (
+          <>
+          {provider?.id === 'web-share' && !unsaved && (
+            // The phone's share sheet cannot be trusted to carry the link beside the picture: the
+            // picture, then the link, as two steps into the same chat (R40 P0, mode B).
+            <div className="rounded-lg border border-line bg-sunken p-3 text-sm">
+              <ol className="mb-2 list-decimal space-y-1 pl-5 text-ink">
+                <li>{t('แชร์รูปไปที่แชท LINE ของผู้ขาย')}</li>
+                {prepared?.link && <li>{t('คัดลอกลิงก์ยืนยันวันส่ง แล้ววางในแชทเดียวกัน')}</li>}
+                <li>{t('กลับมาที่นี่แล้วยืนยันว่าส่งแล้ว')}</li>
+              </ol>
+              <div className="flex flex-wrap gap-2">
+                {prepared?.link && (
+                  <Button variant="secondary" className="min-h-11" onClick={() => void copyLink()}>
+                    <Icon name="clipboardList" size={16} />
+                    {t('คัดลอกลิงก์ยืนยันวันส่ง')}
+                  </Button>
+                )}
+                <Button variant="secondary" className="min-h-11" onClick={() => void copyMessage()} disabled={!prepared}>
+                  {t('คัดลอกข้อความ')}
+                </Button>
+                <Button variant="secondary" className="min-h-11" onClick={downloadPicture} disabled={!prepared}>
+                  {t('ดาวน์โหลดรูป')}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="secondary" onClick={onClose} disabled={!!busy}>
               {t('พักไว้ก่อน')}
@@ -494,7 +553,13 @@ export function SendWizard({
             <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow || !!unsaved}>
               {t('ข้าม')}
             </Button>
-            <Button onClick={() => send()} disabled={!!busy || !!unsaved || !provider || !prepared || prepared.key !== payloadKey}>
+            {needsLogin ? (
+              <Button className="min-h-11" onClick={connect} disabled={!!busy || !!unsaved}>
+                <Icon name="share" size={16} />
+                {t('เชื่อมต่อ LINE')}
+              </Button>
+            ) : (
+            <Button className="min-h-11" onClick={() => send()} disabled={!!busy || !!unsaved || !provider || !prepared || prepared.key !== payloadKey}>
               <Icon name="share" size={16} />
               {busy === 'render'
                 ? t('กำลังเตรียมรูป…')
@@ -504,14 +569,16 @@ export function SendWizard({
                     ? t(provider.label)
                     : t('กำลังเตรียม…')}
             </Button>
+            )}
           </div>
+          </>
         )}
         <p className="text-xs text-ink-faint">
           {provider?.id === 'line-liff'
             ? needsLogin
               ? isStandalone()
-                ? t('ครั้งแรกจะเปิดใบนี้ในแอป LINE ให้ (แอปจากหน้าจอโฮมเข้าสู่ระบบ LINE เองไม่ได้) — กด "ส่ง LINE" ที่นั่นอีกครั้ง')
-                : t('ครั้งแรกจะพาไปเข้าสู่ระบบ LINE แล้วกลับมาที่ใบนี้ — กด "ส่ง LINE" อีกครั้งเพื่อเลือกแชท')
+                ? t('แอปจากหน้าจอโฮมเข้าสู่ระบบ LINE เองไม่ได้ — กด "เชื่อมต่อ LINE" ระบบจะเปิดรายการส่งนี้ในแอป LINE แล้วส่งต่อได้ที่นั่น')
+                : t('เชื่อมต่อ LINE ครั้งเดียว แล้วกลับมาที่รายการส่งนี้ — จากนั้นกด "ส่ง LINE" ครั้งเดียวต่อผู้ขาย')
               : t('กด "ส่ง LINE" → เลือกแชทของผู้ขาย → ส่ง แล้วกลับมาที่นี่ ระบบจะไปรายถัดไปเอง')
             : t('เครื่องนี้ไม่มี LINE (LIFF) — จะเปิดเมนูแชร์ของเครื่องแทน เลือก LINE แล้วเลือกแชทของผู้ขาย')}
         </p>

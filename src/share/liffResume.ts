@@ -26,6 +26,9 @@ export const DIGEST_PARAM = 'digest'
 
 export type ResumeParam = typeof RESUME_PARAM | typeof ANNOUNCE_PARAM | typeof DIGEST_PARAM
 
+/** A multi-order send travelling beside `send=` (pages/purchase/sendSession), R40 P0. */
+export const BATCH_PARAM = 'batch'
+
 /**
  * Which brand the order belongs to, carried alongside it.
  *
@@ -37,18 +40,20 @@ export type ResumeParam = typeof RESUME_PARAM | typeof ANNOUNCE_PARAM | typeof D
 export const RESUME_BRAND_PARAM = 'brand'
 
 /** The same page with `?send=<orderId>`, as an absolute URL (none outside a browser). */
-export function resumeUrl(orderId: string, param: ResumeParam = RESUME_PARAM): string | undefined {
+export function resumeUrl(orderId: string, param: ResumeParam = RESUME_PARAM, batch?: string): string | undefined {
   if (typeof location === 'undefined') return undefined
   const u = new URL(location.href)
   u.searchParams.set(param, orderId)
   u.searchParams.set(RESUME_BRAND_PARAM, getBrand())
+  if (batch) u.searchParams.set(BATCH_PARAM, batch)
+  else u.searchParams.delete(BATCH_PARAM)
   return u.toString()
 }
 
 /** The LIFF address of the same page — opens it inside the LINE app, already signed in. */
-export function liffUrl(orderId: string, param: ResumeParam = RESUME_PARAM): string {
+export function liffUrl(orderId: string, param: ResumeParam = RESUME_PARAM, batch?: string): string {
   const path = typeof location === 'undefined' ? '' : location.pathname.replace(/^\//, '')
-  const q = `${param}=${encodeURIComponent(orderId)}&${RESUME_BRAND_PARAM}=${getBrand()}`
+  const q = `${param}=${encodeURIComponent(orderId)}&${RESUME_BRAND_PARAM}=${getBrand()}` + (batch ? `&${BATCH_PARAM}=${encodeURIComponent(batch)}` : '')
   return `https://liff.line.me/${liffId()}/${path}?${q}`
 }
 

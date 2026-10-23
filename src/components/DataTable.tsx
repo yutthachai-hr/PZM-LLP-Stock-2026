@@ -83,7 +83,12 @@ export function DataTable<T>({
    * Tablet and up only: on a phone card the box took the room the name needed, and acting
    * on twenty products at once is a desk job.
    */
-  selection?: { selected: ReadonlySet<string>; onChange: (next: Set<string>) => void }
+  selection?: {
+    selected: ReadonlySet<string>
+    onChange: (next: Set<string>) => void
+    /** Also on the phone cards (R40 P0: purchase orders are sent from phones). */
+    phone?: boolean
+  }
   /** The `⋮` menu at the end of each row (and at the top right of each phone card). */
   rowMenu?: (row: T) => RowMenuItem[]
 }) {
@@ -146,6 +151,18 @@ export function DataTable<T>({
             onClick={onRowClick ? (event) => activate(event, row) : undefined}
           >
             <div className="flex items-start justify-between gap-3">
+              {selection?.phone && (
+                // A 44px target around the box; the card's own tap still opens the row.
+                <label className="-my-2 -ml-2 flex min-h-11 min-w-11 shrink-0 items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    className={box}
+                    checked={selection.selected.has(rowKey(row))}
+                    onChange={() => toggle(rowKey(row))}
+                    aria-label={t('เลือกแถวนี้')}
+                  />
+                </label>
+              )}
               <div className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-ink">{title.cell(row)}</div>
               {value && <div className="num shrink-0 text-right text-lg font-bold text-ink">{value.cell(row)}</div>}
               {rowMenu && <RowMenu items={rowMenu(row)} />}

@@ -1,6 +1,6 @@
 import { AppError } from '../i18n/AppError'
 import { ANNOUNCE_PARAM, DIGEST_PARAM, RESUME_PARAM, handedOverToLine, isStandalone, liffUrl, rememberHandOver, resumeUrl } from './liffResume'
-import type { PurchaseShareProvider, SharePayload, ShareOutcome } from './PurchaseShareProvider'
+import type { PurchaseShareProvider, SharePayload, ShareOutcome, ShareSubject } from './PurchaseShareProvider'
 
 /**
  * Sending the sheet from the person's own LINE account, through LIFF's share target picker.
@@ -52,6 +52,8 @@ export function liffId(): string {
 type Liff = typeof import('@line/liff').default
 
 let ready: Promise<Liff> | null = null
+// The SDK once init has finished, for the synchronous questions a tap asks (needsLogin).
+let loaded: Liff | null = null
 
 async function liff(): Promise<Liff> {
   if (!ready) {
@@ -60,6 +62,7 @@ async function liff(): Promise<Liff> {
       if (!id) throw new AppError('เครื่องนี้ยังไม่ได้ตั้งค่า LINE (LIFF)')
       const { default: sdk } = await import('@line/liff')
       await sdk.init({ liffId: id })
+      loaded = sdk
       return sdk
     })().catch((e) => {
       ready = null
@@ -67,20 +70,6 @@ async function liff(): Promise<Liff> {
     })
   }
   return ready
-}
-
-/**
- * Whether the first "ส่ง LINE" will leave the page for LINE Login (an ordinary browser,
- * not yet signed in) — so the screen can say so before it happens.
- */
-export async function liffNeedsLogin(): Promise<boolean> {
-  if (!liffId()) return false
-  try {
-    const sdk = await liff()
-    return !sdk.isInClient() && !sdk.isLoggedIn()
-  } catch {
-    return false
-  }
 }
 
 export const lineLiffProvider: PurchaseShareProvider = {
@@ -103,29 +92,18 @@ export const lineLiffProvider: PurchaseShareProvider = {
     }
   },
 
+  needsLogin() {
+    return !!loaded && !loaded.isInClient() && !loaded.isLoggedIn()
+  },
+
+  connect(subject: ShareSubject) {
+    if (loaded) toLineLogin(loaded, subject)
+  },
+
   async share(payload: SharePayload): Promise<ShareOutcome> {
     const sdk = await liff()
-    const { id } = payload.subject
-    const param =
-      payload.subject.kind === 'announcement' ? ANNOUNCE_PARAM : payload.subject.kind === 'digest' ? DIGEST_PARAM : RESUME_PARAM
     if (!sdk.isLoggedIn()) {
-      // A home-screen app cannot finish a login round trip (the browser it comes back in
-      // is not the app), so the same page is opened inside LINE, where LIFF is signed in
-      // already and the picker just works (share/liffResume.ts).
-      //
-      // Only ever once, and never from inside LINE itself. Both guards are there because
-      // the hand-over used to fire inside LINE's own browser — which re-opened the page it
-      // was already on, so every tap reloaded and nothing was ever sent (owner's recording,
-      // 23 Sep 2026). Inside LINE, and on the way back from a hand-over that did not take,
-      // LINE Login is the way forward: it works in any webview that keeps cookies.
-      if (!sdk.isInClient() && isStandalone() && !handedOverToLine(id)) {
-        rememberHandOver(id)
-        location.href = liffUrl(id, param)
-        return 'cancelled'
-      }
-      // Off to LINE Login and back to this very page with ?send=<order>, which reopens the
-      // wizard on that order (share/liffResume.ts) — the tap is not lost across the trip.
-      sdk.login({ redirectUri: resumeUrl(id, param) })
+      toLineLogin(sdk, payload.subject)
       return 'cancelled'
     }
     if (!sdk.isApiAvailable('shareTargetPicker')) {
@@ -158,4 +136,27 @@ export const lineLiffProvider: PurchaseShareProvider = {
     )
     return result && result.status === 'success' ? 'sent' : 'cancelled'
   },
+}
+
+/** LINE Login, or the LINE app from a home-screen app; back to `subject` either way. Not a send. */
+function toLineLogin(sdk: Liff, subject: ShareSubject): void {
+  const { id, batch } = subject
+  const param = subject.kind === 'announcement' ? ANNOUNCE_PARAM : subject.kind === 'digest' ? DIGEST_PARAM : RESUME_PARAM
+  // A home-screen app cannot finish a login round trip (the browser it comes back in
+  // is not the app), so the same page is opened inside LINE, where LIFF is signed in
+  // already and the picker just works (share/liffResume.ts).
+  //
+  // Only ever once, and never from inside LINE itself. Both guards are there because
+  // the hand-over used to fire inside LINE's own browser — which re-opened the page it
+  // was already on, so every tap reloaded and nothing was ever sent (owner's recording,
+  // 23 Sep 2026). Inside LINE, and on the way back from a hand-over that did not take,
+  // LINE Login is the way forward: it works in any webview that keeps cookies.
+  if (!sdk.isInClient() && isStandalone() && !handedOverToLine(id)) {
+    rememberHandOver(id)
+    location.href = liffUrl(id, param, batch)
+    return
+  }
+  // Off to LINE Login and back to this very page with ?send=<order> (and ?batch= for several),
+  // which reopens the wizard there (share/liffResume.ts) — nothing is lost across the trip.
+  sdk.login({ redirectUri: resumeUrl(id, param, batch) })
 }
