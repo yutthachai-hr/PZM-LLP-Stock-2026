@@ -52,7 +52,7 @@ export function TopBar({ title }: { title: string }) {
   const t = useT()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { products, locations, qtyAt, minFor, tracksProduct, movements, movementsFrom } = useData()
+  const { products, locations, qtyAt, companyQty, transitQty, minFor, tracksProduct, movements, movementsFrom } = useData()
   // Only if a screen has read them already: the bar is on every screen, so it never reads.
   const suppliers = useLoadedSuppliers()
   const [q, setQ] = useState('')
@@ -225,7 +225,8 @@ export function TopBar({ title }: { title: string }) {
             results.map((hit: SearchHit, i) => {
               const head = i === 0 || results[i - 1].group !== hit.group
               const product = hit.productId ? products.find((p) => p.id === hit.productId) : undefined
-              const total = product ? locations.reduce((sum, l) => sum + qtyAt(l.id, product.id), 0) : 0
+              const total = product ? companyQty(product.id) : 0
+              const inTransit = product ? transitQty(product.id) : 0
               return (
                 <div key={hit.key} role="presentation">
                   {head && (
@@ -258,6 +259,9 @@ export function TopBar({ title }: { title: string }) {
                       <span className="num shrink-0 text-right text-sm font-semibold text-ink">
                         {fmtQty(total)}
                         <span className="ml-1 text-xs font-normal text-ink-faint">{product.unitType}</span>
+                        {inTransit !== 0 && (
+                          <span className="block text-[11px] font-normal text-ink-faint">{t('รวมระหว่างขนส่ง {qty} {unit}', { qty: fmtQty(inTransit), unit: product.unitType })}</span>
+                        )}
                       </span>
                     )}
                   </button>

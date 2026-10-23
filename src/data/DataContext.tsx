@@ -55,6 +55,10 @@ interface DataState {
   productById: (id: string) => Product | undefined
   locationById: (id: string) => StockLocation | undefined
   qtyAt: (locationId: string, productId: string) => number
+  /** Shipped between our sites and not yet received (lib/inventoryRules/stockView.ts). */
+  transitQty: (productId: string) => number
+  /** Every site plus in transit: what the company owns. An internal transfer never changes it. */
+  companyQty: (productId: string) => number
   /**
    * Every unit this product has a non-zero balance in at this location, base unit first.
    *
@@ -194,7 +198,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       else list.unshift(row)
     }
     // The same rule the cron Worker applies — see lib/inventoryRules/stockView.ts.
-    const view = stockView({ locations, levels, minOverrides })
+    const view = stockView({ locations: rawLocations, levels, minOverrides })
 
     return {
       products,
@@ -213,6 +217,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       productById: (id) => productMap.get(id),
       locationById: (id) => locationMap.get(id),
       qtyAt: view.qtyAt,
+      transitQty: view.transitQty,
+      companyQty: view.companyQty,
       qtyByUnit: (locationId, productId) => byUnit.get(`${locationId}__${productId}`) ?? [],
       minFor: view.minFor,
       tracksProduct: view.tracksProduct,
