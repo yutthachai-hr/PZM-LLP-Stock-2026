@@ -500,7 +500,7 @@ export function ReportsPage() {
   const snapshotColumns = useMemo<Column<SnapshotRow>[]>(
     () => [
       { key: 'product', header: t('สินค้า'), primary: true, cell: (r) => r.name },
-      { key: 'location', header: t('คลัง'), className: 'text-ink-soft', cell: (r) => <SiteChip locationId={r.locationId} /> },
+      { key: 'location', header: t('คลัง'), className: 'text-ink-soft', cell: (r) => <SiteChip locationId={r.locationId} fallback={r.locationName} /> },
       {
         key: 'qty',
         card: 'value',

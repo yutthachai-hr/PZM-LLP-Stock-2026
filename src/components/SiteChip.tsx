@@ -15,11 +15,11 @@ export function useSiteTone(): (locationId: string | undefined) => string {
   return (id) => (id ? (tones.get(id) ?? 'bg-sunken text-ink-soft') : 'bg-sunken text-ink-soft')
 }
 
-export function SiteChip({ locationId, className = '' }: { locationId: string | undefined; className?: string }) {
+export function SiteChip({ locationId, fallback, className = '' }: { locationId: string | undefined; fallback?: string; className?: string }) {
   const { locationById } = useData()
   const tone = useSiteTone()
   if (!locationId) return null
-  const name = locationById(locationId)?.name ?? '—'
+  const name = locationById(locationId)?.name ?? fallback ?? '—'
   return (
     <span className={`inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${tone(locationId)} ${className}`}>
       <span className="truncate">{name}</span>

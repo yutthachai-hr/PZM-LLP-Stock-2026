@@ -34,6 +34,8 @@ async function stage(page: Page) {
       if (localStorage.getItem('stock-transit-fixture')) return
       localStorage.setItem('stock-transit-fixture', '1')
       const now = Date.now()
+      // Today in Bangkok, never yesterday: the as-of test rewinds exactly this row (R40 review).
+      const today = Math.max(now - 60_000, Math.floor((now + 7 * 3_600_000) / 86_400_000) * 86_400_000 - 7 * 3_600_000 + 1)
       const store = (name: string, rows: Record<string, unknown>) =>
         localStorage.setItem(`pmstock:v1:${name}`, JSON.stringify(rows))
       const user = { id: 'transit-user', email: 'demo@inventory-pzm.local', name: 'Transit QA', role: 'admin', active: true, createdAt: now }
@@ -60,7 +62,7 @@ async function stage(page: Page) {
       ] as const) levels[`${locationId}__${productId}`] = { id: `${locationId}__${productId}`, locationId, productId, qty, updatedAt: now, updatedBy: user.id }
       store('stockLevels', levels)
       store('stockMovements', {
-        imported: { id: 'imported', docNo: 'IS-QA-001', type: 'issue', productId: 'p1', productName: 'QA Flour', unit: 'KG', qty: 2, fromLocationId: 'transit-b', toLocationId: 'br', date: now - 60_000, createdAt: now - 60_000, byUserId: user.id, byUserName: user.name },
+        imported: { id: 'imported', docNo: 'IS-QA-001', type: 'issue', productId: 'p1', productName: 'QA Flour', unit: 'KG', qty: 2, fromLocationId: 'transit-b', toLocationId: 'br', date: today, createdAt: today, byUserId: user.id, byUserName: user.name },
       })
       localStorage.setItem('pmstock:lang', 'en')
       localStorage.setItem('pzm:products:view', 'table')
@@ -175,4 +177,44 @@ test('costs: hidden stock remains owned, and no-history Excel rows retain stock 
   const rows = await excelRows(page, info)
   expect.soft(rows.find(r => r.SKU === 'QA-001')).toMatchObject({ 'On hand': '24', 'In transit': '5' })
   expect.soft(rows.find(r => r.SKU === 'QA-003')).toMatchObject({ 'On hand': '6', 'In transit': '0' })
+})
+
+test('reports overview: the branch table says what the company figure adds, so the two reconcile', async ({ page }) => {
+  await stage(page)
+  await page.goto('/reports')
+  // Tile 914.06 vs open-branch rows 558.75: the gap is transit, the closed branch and the hidden product.
+  await expect(page.locator('main')).toContainText('Open branches only. The company value above also counts goods in transit, closed branches and hidden products.')
+})
+
+test('snapshot: with only an imported transit location, the transit line still names its location', async ({ page }) => {
+  await stage(page)
+  await page.addInitScript(() => {
+    const locations = JSON.parse(localStorage.getItem('pmstock:v1:locations')!)
+    delete locations.transit
+    localStorage.setItem('pmstock:v1:locations', JSON.stringify(locations))
+    const levels = JSON.parse(localStorage.getItem('pmstock:v1:stockLevels')!)
+    delete levels.transit__p1
+    delete levels.transit__p2
+    localStorage.setItem('pmstock:v1:stockLevels', JSON.stringify(levels))
+  })
+  await page.goto('/reports')
+  await page.getByRole('button', { name: 'Stock on hand', exact: true }).click()
+  const row = page.locator('tbody tr').filter({ hasText: 'QA Flour' }).filter({ hasText: 'In transit' })
+  await expect(row).toHaveCount(1)
+  await expect(row.getByRole('cell', { name: '2 KG', exact: true })).toBeVisible()
+})
+
+test('costs: a product with no cost history still shows what is in transit', async ({ page }) => {
+  await stage(page)
+  await page.addInitScript(() => {
+    const products = JSON.parse(localStorage.getItem('pmstock:v1:products')!)
+    products.nocost = { ...products.p1, id: 'nocost', sku: 'QA-004', name: 'QA Yeast (no cost)', cost: undefined }
+    localStorage.setItem('pmstock:v1:products', JSON.stringify(products))
+    const levels = JSON.parse(localStorage.getItem('pmstock:v1:stockLevels')!)
+    levels['transit-b__nocost'] = { ...levels['transit-b__p1'], id: 'transit-b__nocost', productId: 'nocost', qty: 4 }
+    localStorage.setItem('pmstock:v1:stockLevels', JSON.stringify(levels))
+  })
+  await page.goto('/reports')
+  await page.getByRole('button', { name: 'Costs', exact: true }).click()
+  await expect(page.locator('tbody tr[data-row-key="nocost"]')).toContainText('Incl. 4 KG in transit')
 })

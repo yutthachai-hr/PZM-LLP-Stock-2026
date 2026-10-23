@@ -115,17 +115,15 @@ export function CostReport() {
         align: 'right',
         className: 'num',
         card: 'hidden',
-        cell: (r) =>
-          r.p.cost !== undefined ? (
-            <>
-              {`฿${fmtMoney(onHand(r.p) * r.p.cost)}`}{/* ฿ is a currency symbol — i18n-key */}
-              {transitQty(r.p.id) !== 0 && (
-                <div className="text-xs text-ink-faint">{t('รวมระหว่างขนส่ง {qty} {unit}', { qty: fmtQty(transitQty(r.p.id)), unit: r.p.unitType })}</div>
-              )}
-            </>
-          ) : (
-            ''
-          ),
+        cell: (r) => (
+          <>
+            {r.p.cost !== undefined && `฿${fmtMoney(onHand(r.p) * r.p.cost)}`}{/* ฿ is a currency symbol — i18n-key */}
+            {/* Shown without a cost too: stock in transit stays visible (R40 review). */}
+            {transitQty(r.p.id) !== 0 && (
+              <div className="text-xs text-ink-faint">{t('รวมระหว่างขนส่ง {qty} {unit}', { qty: fmtQty(transitQty(r.p.id)), unit: r.p.unitType })}</div>
+            )}
+          </>
+        ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -387,6 +387,10 @@ export function ReportsOverview() {
                 </tr>
               </tfoot>
             </table>
+            {/* The company tile counts more than these rows; say so where the totals differ (R40 review). */}
+            {!locationId && Math.abs(totals.value - r.valueNow) >= 0.005 && (
+              <p className="mt-2 text-xs text-ink-faint">{t('เฉพาะสาขาที่เปิดอยู่ มูลค่าบริษัทด้านบนรวมของระหว่างขนส่ง สาขาที่ปิด และสินค้าที่ซ่อนไว้ด้วย')}</p>
+            )}
           </div>
         </SectionCard>
 
