@@ -371,8 +371,13 @@ export function SendWizard({
   }
 
   async function skip() {
-    if (!current) return
-    await record(current, 'skipped')
+    // A delivered-but-unsaved page must not become "skipped": that drops its receipt (R40 review).
+    if (!current || unsaved) return
+    try {
+      await record(current, 'skipped')
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
   }
 
   if (!current) {
@@ -486,7 +491,7 @@ export function SendWizard({
             <Button variant="secondary" onClick={onClose} disabled={!!busy}>
               {t('พักไว้ก่อน')}
             </Button>
-            <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow}>
+            <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow || !!unsaved}>
               {t('ข้าม')}
             </Button>
             <Button onClick={() => send()} disabled={!!busy || !!unsaved || !provider || !prepared || prepared.key !== payloadKey}>

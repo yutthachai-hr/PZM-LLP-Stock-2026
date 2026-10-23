@@ -231,6 +231,8 @@ test('a persisted confirmed-delivery receipt offers status-only recovery, never 
   const wizard = await openWizard(page, 'po1')
   await expect(wizard.getByText('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ', { exact: true })).toBeVisible()
   await expect(wizard.getByRole('button', { name: 'แชร์รูป' })).toBeDisabled()
+  // R40 review A1: skipping here would mark a delivered PO skipped and drop its receipt.
+  await expect(wizard.getByRole('button', { name: 'ข้าม', exact: true })).toBeDisabled()
   await wizard.getByRole('button', { name: 'บันทึกสถานะอีกครั้ง' }).click()
   await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
   expect((await shareLog(page)).calls).toBe(0)
