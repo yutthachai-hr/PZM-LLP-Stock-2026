@@ -37,7 +37,7 @@ import { movementNote } from '../lib/receiptLabel'
 export function StockCardPage() {
   const t = useT()
   const { id = '' } = useParams()
-  const { productById, locations, qtyAt, minFor, movements, loading } = useData()
+  const { productById, locations, qtyAt, companyQty, transitQty, minFor, movements, loading } = useData()
   // Product history is read on demand (readProductLedger), overlaid with the live 7-day window.
   const { brand } = useBrand()
   const product = productById(id)
@@ -76,10 +76,15 @@ export function StockCardPage() {
   }, [ledgerLoading, ledger, all, id, locationId, fromStr, toStr, typeFilter, error])
 
   const hasLegacy = useMemo(() => hasMixedLegacyUnits(all), [all])
-  const current = product ? (locationId ? qtyAt(locationId, product.id) : locations.reduce((s, l) => s + qtyAt(l.id, product.id), 0)) : 0
+  // All sites is the company total, goods in transit included: the same figure the all-sites
+  // ledger below arrives at after legacy units are converted; internal transfers net to zero.
+  const current = product ? (locationId ? qtyAt(locationId, product.id) : companyQty(product.id)) : 0
+  const inTransit = product && !locationId ? transitQty(product.id) : 0
   const min = product ? (locationId ? minFor(product, locationId) : product.minStock) : 0
   const cost = product ? (product.cost ?? currentCost(product.costHistory ?? []) ?? 0) : 0
-  const state = stockState(current, min)
+  // On the road is company-owned, not available to issue at a branch.
+  const available = product && !locationId ? current - transitQty(product.id) : current
+  const state = stockState(available, min)
   const series = useMemo(
     () => (product && !ledgerLoading && !error && !hasLegacy ? balanceSeries(all, { productId: product.id, current, today, days: trendDays, locationId: locationId || undefined }) : []),
     [all, product, ledgerLoading, error, hasLegacy, current, today, trendDays, locationId],
@@ -221,6 +226,7 @@ export function StockCardPage() {
               <div>
                 <dt className="text-xs text-ink-faint">{t('ยอดคงเหลือปัจจุบัน')}</dt>
                 <dd className="num text-lg font-bold text-ink">{fmtQty(current)} {unit}</dd>
+                {inTransit !== 0 && <dd className="num text-xs text-ink-faint">{t('รวมระหว่างขนส่ง {qty} {unit}', { qty: fmtQty(inTransit), unit })}</dd>}
               </div>
               <div>
                 <dt className="text-xs text-ink-faint">{t('คลัง')}</dt>
@@ -237,7 +243,7 @@ export function StockCardPage() {
           </div>
           <div className="rounded-xl border border-line px-4 py-3 xl:min-w-36">
             <div className="text-xs text-ink-faint">{t('มูลค่าสินค้าคงเหลือ')}</div>
-            <div className="num text-xl font-bold text-ink">฿ {fmtMoney(Math.max(0, current) * cost)}</div> {/* i18n-key */}
+            <div className="num text-xl font-bold text-ink">฿ {fmtMoney(current * cost)}</div> {/* i18n-key */}
             <div className="text-xs text-ink-faint">({fmtQty(current)} {unit})</div>
           </div>
           <div className={`col-span-2 flex items-center gap-3 rounded-xl px-4 py-3 sm:col-span-1 xl:min-w-44 ${toneIcon[STATE_LOOK[state].tone]}`}>
