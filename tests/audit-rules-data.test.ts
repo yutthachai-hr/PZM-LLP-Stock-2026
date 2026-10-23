@@ -13,7 +13,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, test } from 'vitest'
 
@@ -185,7 +185,14 @@ describe('F02 — the ledger records who, and keeps it', () => {
     await assertFails(updateDoc(doc(as(STAFF), 'stockMovements', 'mv1'), cancel(STAFF)))
     // An old client's bare cancellation, with no reason, is refused (owner P0, 22 Oct 2026).
     await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), { voided: true }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), cancel(ADMIN)))
+    // Accepted only with the receipt's 5 taken back off its balance in the same commit (R40).
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements', 'mv1'), cancel(ADMIN)))
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'stockLevels', 'loc1__p1'), level({ qty: 5 })))
+    const fs = as(ADMIN)
+    const b = writeBatch(fs)
+    b.update(doc(fs, 'stockMovements', 'mv1'), cancel(ADMIN))
+    b.set(doc(fs, 'stockLevels', 'loc1__p1'), level({ qty: 0, updatedBy: ADMIN }))
+    await assertSucceeds(b.commit())
   })
 
   test('a movement still cannot be deleted by anyone', async () => {

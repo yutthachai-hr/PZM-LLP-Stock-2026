@@ -3,7 +3,7 @@
 //
 //   npm run test:rules
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
 
@@ -47,6 +47,21 @@ const voidPatch = (uid: string, over: Record<string, unknown> = {}) => ({
   voided: true, voidReason: 'keyed twice', voidedAt: now(), voidedBy: uid, voidedByName: 'Owner',
   updatedBy: uid, updatedByName: 'Owner', updatedAt: now(), ...over,
 })
+// What the app's voidMovement commits (R40): the cancellation and the receipt's 5 taken back off
+// its balance, together. A cancellation without the reversal is refused (see the SECURITY test).
+const cancel = (uid: string, c: string, over: Record<string, unknown> = {}) => {
+  const db = as(uid)
+  const b = writeBatch(db)
+  b.update(doc(db, c, 'm1'), voidPatch(uid, over))
+  b.set(doc(db, c.replace('stockMovements', 'stockLevels'), 'wh__p1'), { id: 'wh__p1', productId: 'p1', locationId: 'wh', qty: 0, updatedAt: now(), updatedBy: uid })
+  return b.commit()
+}
+
+const seedBalance = (c: string) => env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), c.replace('stockMovements', 'stockLevels'), 'wh__p1'), {
+    id: 'wh__p1', productId: 'p1', locationId: 'wh', qty: 5, updatedBy: STAFF, updatedAt: now(),
+  })
+})
 
 describe.each(COLLECTIONS)('%s', (c) => {
   test('SECURITY: metadata-only cancellation without balance reversal must be denied', async () => {
@@ -69,7 +84,8 @@ describe.each(COLLECTIONS)('%s', (c) => {
   })
 
   test('an admin cancels with a reason, in their own name', async () => {
-    await assertSucceeds(updateDoc(doc(as(ADMIN), c, 'm1'), voidPatch(ADMIN)))
+    await seedBalance(c)
+    await assertSucceeds(cancel(ADMIN, c))
   })
 
   test('an old client cancelling without a reason is refused', async () => {
@@ -93,7 +109,8 @@ describe.each(COLLECTIONS)('%s', (c) => {
   })
 
   test('the reason cannot be added, rewritten or un-cancelled afterwards', async () => {
-    await assertSucceeds(updateDoc(doc(as(ADMIN), c, 'm1'), voidPatch(ADMIN)))
+    await seedBalance(c)
+    await assertSucceeds(cancel(ADMIN, c))
     await assertFails(updateDoc(doc(as(ADMIN2), c, 'm1'), { voidReason: 'something nicer', updatedBy: ADMIN2, updatedAt: now() }))
     await assertFails(updateDoc(doc(as(ADMIN2), c, 'm1'), voidPatch(ADMIN2)))
     await assertFails(updateDoc(doc(as(ADMIN), c, 'm1'), { voided: false, updatedBy: ADMIN, updatedAt: now() }))

@@ -39,3 +39,22 @@ The original app/Rules coupling also remains: old Production Rules reject the ne
 ## Skill evidence
 
 `tdd` loaded yes: C:/Users/Yutthachai/.agents/skills/tdd/SKILL.md. Steps 1–4 executed using the existing emulator harness and a narrow direct-write regression; steps 5–6 deliberately blocked pending atomic-boundary design/review, not represented as a completed fix. systematic-debugging and verification-before-completion used to distinguish harness failures from the final behavioral RED. No independent security approval claimed.
+
+## R40 closure candidate (local branch `r40/void-getafter`, not deployed)
+
+`voidedHonestly(name)` now also requires, in the same commit, that every balance the row filed to moves back by exactly its quantity: `from` +qty, `to` −qty. The balance is keyed like `levelRef` (a legacy `entryUnit`-without-`entryQty` row keeps its `#Unit` balance), a missing balance counts as 0, and the tolerance is below 0.001 because the client rounds to 0.001. A cancellation may change only its own eight fields.
+
+There was no expression budget left for this. Firestore allows 1000 evaluated expressions per request, and re-validating the whole frozen movement on every void used nearly all of it. Even string building alone was refused. So `validShape` now skips `movementCore` for a cancel-only update, the same remedy the file applied to purchase requests on 17 Sep, and `voidedHonestly` checks the fields a cancellation writes.
+
+Evidence:
+- `tests/void-atomic.emulator.test.ts` drives the shipped `receiveStock`/`issueStock`/`voidMovement` through the real adapter, transaction and Rules on both brands.
+- RED: 8 adversarial direct writes allowed. GREEN: 16/16 plus `void-reason-rules` 24/24.
+- Full Rules/emulator suite: 267/268. The one failure is `supplier-po` "five phones" lock timeout, which also fails 2/2 on the baseline Rules (pre-existing contention).
+- Negative control: neutralizing only the comparison turns all 10 SECURITY cases RED.
+- Old tests that expected a metadata-only cancellation to succeed now cancel atomically and also assert that the metadata-only form is refused.
+
+Not closed by this:
+- An admin can still pair a cancellation with a matching but untrue balance write. Ledger and cache then agree, but only the trusted server proves the balance itself.
+- Restore cannot recreate cancelled rows through the client (pre-existing on main).
+- Combined PR46+PR51 Rules suite not run.
+- Independent security review and an Owner Rules window are still required.

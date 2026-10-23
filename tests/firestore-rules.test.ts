@@ -11,7 +11,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection, writeBatch } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
 
@@ -692,7 +692,14 @@ describe('the ledger is append-only', () => {
     const cancel = (uid: string) => ({ voided: true, voidReason: 'keyed twice', voidedAt: ts(), voidedBy: uid, voidedByName: uid })
     await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), cancel(STAFF)))
     await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true }))
-    await assertSucceeds(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), cancel(ADMIN)))
+    // Accepted only with the 9 taken back off the balance in the same commit (R40).
+    await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), cancel(ADMIN)))
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'stockLevels/loc1__p1'), level('loc1__p1', STAFF, { qty: 9 })))
+    const fs = as(ADMIN)
+    const b = writeBatch(fs)
+    b.update(doc(fs, 'stockMovements/m1'), cancel(ADMIN))
+    b.set(doc(fs, 'stockLevels/loc1__p1'), level('loc1__p1', ADMIN, { qty: 0 }))
+    await assertSucceeds(b.commit())
   })
 
   test('a correction has to name the person making it, and cannot lose the ones before', async () => {

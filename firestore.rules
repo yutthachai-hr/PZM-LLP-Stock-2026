@@ -909,7 +909,9 @@ service cloud.firestore {
     function validShape(name, docId, d, fresh) {
       let k = kind(name);
       return d.id == docId && (
-        k == 'stockMovements' ? movementCore(d)
+        // A cancellation changes only its own fields; the frozen rest was checked at birth, and
+        // re-checking it left no budget for proving the balance moved back (R40).
+        k == 'stockMovements' ? (fresh || !cancelOnly() ? movementCore(d) : true)
         : k == 'stockLevels' ? validLevel(d)
         : k == 'transfers' ? (fresh ? validTransfer(d) : validTransferEdit(d))
         : k == 'purchaseRequests' ? (fresh ? validRequest(d) : validRequestEdit(d))
@@ -1016,7 +1018,7 @@ service cloud.firestore {
         // Confirming a spelling again replaces the whole alias, signed by whoever did it.
         : k == 'productAliases'
         ? request.resource.data.createdBy == request.auth.uid
-        : k == 'stockMovements' ? movementEdit()
+        : k == 'stockMovements' ? movementEdit(name)
         : k == 'messages' ? messageEdit()
         : k == 'announcements' ? announcementEdit()
         : k == 'recipes' ? recipeEdit()
@@ -1278,7 +1280,7 @@ service cloud.firestore {
       );
     }
 
-    function movementEdit() {
+    function movementEdit(name) {
       // A transfer's rows are corrected through the transfer (a resolution), never in place:
       // the document's quantities are what explain them.
       return !('transferId' in resource.data) && editedKeys().hasOnly([
@@ -1287,7 +1289,7 @@ service cloud.firestore {
           'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'
         ])
         && (!editedKeys().hasAny(['voided', 'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'])
-            || voidedHonestly())
+            || voidedHonestly(name))
         && (!('updatedBy' in request.resource.data)
             || request.resource.data.updatedBy == request.auth.uid)
         // Changing what a row says means appending to its history, in the caller's own name.
@@ -1302,21 +1304,50 @@ service cloud.firestore {
      * Cancelling a movement (owner P0, 22 Oct 2026): an admin decision, made once, in the
      * caller's own name, with a reason — all four facts written together with `voided`.
      * Nothing un-cancels a row or rewrites its reason afterwards, and a row cancelled before
-     * reasons existed cannot have one invented for it. The balance reversal is the client's
-     * transaction; proving it here needs the trusted server (r33 stock-command prototype).
+     * reasons existed cannot have one invented for it.
+     *
+     * And never on its own (R38 security hold, R40): each balance the row moved must move
+     * back by exactly its quantity in the same commit, so the ledger and the cached balance
+     * cannot part. What this cannot prove is that the balance was right to begin with; that
+     * still needs the trusted server (r33 stock-command prototype).
      */
-    function voidedHonestly() {
+    function cancelOnly() {
+      return editedKeys().hasAny(['voided']) && editedKeys().hasOnly(['voided', 'voidReason',
+        'voidedAt', 'voidedBy', 'voidedByName', 'updatedBy', 'updatedByName', 'updatedAt']);
+    }
+
+    function voidedHonestly(name) {
       let d = request.resource.data;
+      let m = resource.data;
       return roleIsAdmin()
-        && resource.data.get('voided', false) == false
+        && m.get('voided', false) == false
         && d.voided == true
         && editedKeys().hasAll(['voided', 'voidReason', 'voidedAt', 'voidedBy', 'voidedByName'])
+        && cancelOnly()
+        && (!('updatedByName' in d) || text(d.updatedByName, 200))
+        && (!('updatedAt' in d) || epochMs(d.updatedAt))
+        && (!('fromLocationId' in m) || balanceMovedBack(name, m, m.fromLocationId, m.qty))
+        && (!('toLocationId' in m) || balanceMovedBack(name, m, m.toLocationId, -m.qty))
         && d.voidReason is string
         && d.voidReason.trim().size() > 0
         && d.voidReason.size() <= 500
         && d.voidedBy == request.auth.uid
         && epochMs(d.voidedAt)
         && text(d.voidedByName, 200);
+    }
+
+    /**
+     * The balance row `m` filed to at `loc` (lib/levelKey.ts levelRef: a legacy row —
+     * entryUnit without entryQty — keeps its own `#Unit` balance) ends this commit `delta`
+     * away from where it started. A missing row started at 0. The client rounds to 0.001.
+     */
+    function balanceMovedBack(name, m, loc, delta) {
+      let eu = m.get('entryUnit', '');
+      let filed = eu is string && eu.trim() != '' && !('entryQty' in m) ? eu.trim() : m.unit;
+      let id = loc + '__' + m.productId + (filed == m.unit.trim() ? '' : '#' + filed);
+      let p = /databases/$(database)/documents/$(name.replace('stockMovements$', 'stockLevels'))/$(id);
+      let before = exists(p) ? get(p).data.qty : 0;
+      return math.abs(getAfter(p).data.qty - (before + delta)) < 0.001;
     }
 
     /**
