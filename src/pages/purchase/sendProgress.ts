@@ -23,9 +23,28 @@ export interface ProgressScope {
   fingerprint: string
 }
 
-/** What the sheet shows; status fields (shareStatus, sentAt, updatedAt…) are deliberately out. */
+/**
+ * What the sheet shows; status fields (shareStatus, sentAt, updatedAt…) are deliberately out.
+ * Stored as a digest so a shared device keeps no readable note or lines (R40). Synchronous because
+ * the attempt is journalled in the same tick as the share hand-off; crypto.subtle is async.
+ */
 export function orderFingerprint(o: Pick<PurchaseOrder, 'id' | 'lines'> & Partial<Pick<PurchaseOrder, 'revision' | 'expectedAt' | 'note'>>): string {
-  return JSON.stringify([o.id, o.revision ?? 0, o.expectedAt ?? 0, o.note ?? '', o.lines.map((l) => [l.productId, l.orderedQty, l.unit])])
+  const text = JSON.stringify([o.id, o.revision ?? 0, o.expectedAt ?? 0, o.note ?? '', o.lines.map((l) => [l.productId, l.orderedQty, l.unit])])
+  return digest(text, 0) + digest(text, 1)
+}
+
+// shortcut: fast unkeyed hash (cyrb53 ×2, ~106 bits); guessable content can be confirmed offline, upgrade to a keyed digest if device forensics enters the threat model.
+function digest(s: string, seed: number): string {
+  let h1 = 0xdeadbeef ^ seed
+  let h2 = 0x41c6ce57 ^ seed
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 2654435761)
+    h2 = Math.imul(h2 ^ c, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36).padStart(11, '0')
 }
 
 function read(): Progress {

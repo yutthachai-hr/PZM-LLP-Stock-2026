@@ -35,6 +35,15 @@ describe('send progress', () => {
     }
   })
 
+  test('the device keeps no readable order content, only an opaque fingerprint (R40, shared devices)', () => {
+    const secret = order({ note: 'deliver to back door, call Somchai', lines: [{ productId: 'flour-24kg', orderedQty: 37, unit: 'KG' }] })
+    savePageProgress(scope({}, secret), 1, 1000)
+    beginShareAttempt(scope({}, secret), 1, 1, 1000)
+    const stored = [...store.values()].join('\n')
+    for (const leak of ['back door', 'Somchai', 'flour-24kg', '"KG"']) expect(stored).not.toContain(leak)
+    expect(pageToResume(scope({}, secret), 3, 2000)).toBe(1)
+  })
+
   test('another person on the same device starts at page 1', () => {
     savePageProgress(scope(), 1, 1000)
     expect(pageToResume(scope({ userId: 'u2' }), 3, 2000)).toBe(0)

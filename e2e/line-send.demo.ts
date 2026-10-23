@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { orderFingerprint } from '../src/pages/purchase/sendProgress'
 
 /**
  * P0 (owner, 22 Oct 2026): "ส่ง PO เข้า LINE บนมือถือ/แท็บเล็ต บางครั้งกดแล้วไม่ไป".
@@ -222,11 +223,10 @@ test('reload on an uncertain first page asks about that page, not the whole mult
 test('a persisted confirmed-delivery receipt offers status-only recovery, never another share', async ({ page }) => {
   await stage(page)
   // Synthetic persisted SDK-confirmed receipt, not a real LINE delivery or physical-device test.
-  await page.evaluate(() => {
-    const o = JSON.parse(localStorage.getItem('pmstock:v1:purchaseOrders')!).po1
-    const fp = JSON.stringify([o.id, o.revision ?? 0, o.expectedAt ?? 0, o.note ?? '', o.lines.map((l: { productId: string; orderedQty: number; unit: string }) => [l.productId, l.orderedQty, l.unit])])
+  const fp = orderFingerprint(await page.evaluate(() => JSON.parse(localStorage.getItem('pmstock:v1:purchaseOrders')!).po1))
+  await page.evaluate((fp) => {
     localStorage.setItem('pmstock:v1:send-progress', JSON.stringify({ 'pizza:send-user:po1': { page: 0, at: Date.now(), fp, attempt: { page: 0, version: 1, confirmed: true } } }))
-  })
+  }, fp)
   await page.reload()
   const wizard = await openWizard(page, 'po1')
   await expect(wizard.getByText('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ', { exact: true })).toBeVisible()
