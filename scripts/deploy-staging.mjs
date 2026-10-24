@@ -41,11 +41,12 @@ const env = { ...process.env, DEPLOY_TIER: 'staging', VITE_STAGING_FIREBASE_CONF
 for (const k of ['CF_PAGES', 'CF_PAGES_BRANCH', 'VITE_DEMO_MODE', 'VITE_USE_EMULATOR']) delete env[k]
 sh('npm', ['run', '-s', 'build'], { cwd: ROOT, env })
 
-// 4. The bundle carries the staging project and was built as staging.
+// 4. The bundle carries the staging project. That it is a staging build is guaranteed by
+// buildTier() in vite.config.ts, which throws unless the staging config is valid; the tier
+// itself is inlined and folded by the minifier, so no text search could prove it (R67 review).
 const assets = join(ROOT, 'dist/assets')
 const js = readdirSync(assets).filter((f) => f.endsWith('.js')).map((f) => readFileSync(join(assets, f), 'utf8')).join('\n')
 if (!js.includes(project)) fail('the built bundle does not carry the staging project')
-if (!/VITE_DEPLOY_TIER["']?\s*:\s*["']staging["']|["']staging["']/.test(js)) fail('the built bundle is not a staging build')
 
 // 5. Assemble an upload directory whose wrangler.toml is the staging one.
 rmSync(OUT, { recursive: true, force: true })

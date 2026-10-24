@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { buildTier, firebaseProjectFor, PRODUCTION_PROJECT, stagingWebProject } from '../src/lib/deployTier'
+import { buildTier, firebaseProjectFor, functionTier, PRODUCTION_PROJECT, PRODUCTION_WEB_API_KEY, stagingWebProject } from '../src/lib/deployTier'
 
 const ROOT = join(__dirname, '..')
 const web = (project: string, over: Record<string, unknown> = {}) =>
@@ -28,8 +28,23 @@ describe('the staging web config', () => {
     ['production auth domain', web('pzm-stock-staging', { authDomain: `${PRODUCTION_PROJECT}.firebaseapp.com` })],
     ['production bucket', web('pzm-stock-staging', { storageBucket: `${PRODUCTION_PROJECT}.firebasestorage.app` })],
     ['production sender id', web('pzm-stock-staging', { messagingSenderId: '789071579161' })],
+    // R67 review (PR #59): JSON escapes decode to production after a text search.
+    // The escape is in the JSON text itself, so JSON.parse decodes it back to production.
+    ['production id written with a JSON escape', web(PRODUCTION_PROJECT).split('x5').join('x\\u0035')],
+    ['production number written with a JSON escape', web('pzm-stock-staging', { appId: '1:789071579161:web:x' }).replace('789071579161', '789\\u003071579161')],
+    ['production id in capitals', web('PZM-STOCK-X5')],
+    ['production auth domain in capitals', web('pzm-stock-staging', { authDomain: 'PZM-Stock-X5.firebaseapp.com' })],
+    // Sign-in goes to the project of the API key: production's key would reach production Auth.
+    ['the production web API key', web('pzm-stock-staging', { apiKey: PRODUCTION_WEB_API_KEY })],
+    ['a project id Firebase would never issue', web('Pzm_Staging')],
   ])('refused: %s', (_, value) => {
     expect(stagingWebProject(value)).toBeNull()
+  })
+
+  test('the production identifiers it refuses are the ones the app ships', async () => {
+    const src = readFileSync(join(ROOT, 'src/firebase/config.ts'), 'utf8')
+    expect(src).toContain(`apiKey: '${PRODUCTION_WEB_API_KEY}'`)
+    expect(src).toContain(`projectId: '${PRODUCTION_PROJECT}'`)
   })
 })
 
@@ -90,6 +105,11 @@ describe('which Firebase project a function trusts', () => {
   test('a complete staging environment: its own project', () => {
     expect(firebaseProjectFor(at('pzmstock-staging.pages.dev'), STG_ENV)).toBe('pzm-stock-staging')
     expect(firebaseProjectFor('http://localhost:8788/api/ocr-bill', STG_ENV)).toBe('pzm-stock-staging')
+  })
+  test('a production project id in other letters is still production', () => {
+    const upper = { ...STG_ENV, FIREBASE_PROJECT_ID: 'PZM-STOCK-X5', FIREBASE_SERVICE_ACCOUNT: sa('PZM-STOCK-X5') }
+    expect(functionTier('pzmstock-staging.pages.dev', upper)).toBe('preview')
+    expect(firebaseProjectFor(at('pzmstock-staging.pages.dev'), upper)).toBeNull()
   })
   test('anything else trusts no project (a preview, an incomplete or production-keyed staging)', () => {
     expect(firebaseProjectFor(at('pzmstock-staging.pages.dev'), {})).toBeNull()

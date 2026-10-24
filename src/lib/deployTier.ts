@@ -19,8 +19,10 @@
 export const PRODUCTION_BRANCH = 'main'
 /** The live Firebase project. A staging tier must name a different one. */
 export const PRODUCTION_PROJECT = 'pzm-stock-x5'
-/** Its project number (public, in the production web config); a staging config must not carry it. */
+/** Its project number and web API key (both public, in the production web config); a staging
+ *  config must carry neither — sign-in goes to the project of the API key. */
 const PRODUCTION_PROJECT_NUMBER = '789071579161'
+export const PRODUCTION_WEB_API_KEY = 'AIzaSyB2cQL0G-OLibdoe5HPAhTJhmHnmLQCLlo'
 /** Production hosts. A custom domain is added through the PRODUCTION_HOSTS variable (production env only). */
 export const PRODUCTION_HOSTS: readonly string[] = ['pzmstock.pages.dev']
 
@@ -116,9 +118,9 @@ export function stagingAllowed(env: FunctionEnv): boolean {
   if ((env.DEPLOY_TIER ?? '').trim() !== 'staging') return false
   if ((env.PRODUCTION_HOSTS ?? '').trim()) return false
   const project = (env.FIREBASE_PROJECT_ID ?? '').trim()
-  if (!project || project === PRODUCTION_PROJECT) return false
+  if (!project || project.toLowerCase() === PRODUCTION_PROJECT) return false
   const saProject = serviceAccountProject(env.FIREBASE_SERVICE_ACCOUNT)
-  if (!saProject || saProject === PRODUCTION_PROJECT) return false
+  if (!saProject || saProject.toLowerCase() === PRODUCTION_PROJECT) return false
   return saProject === project
 }
 
@@ -137,17 +139,23 @@ export function functionTier(hostname: string, env: FunctionEnv): FunctionTier {
  * that names nothing of production (project id, auth domain, bucket, project number).
  */
 export function stagingWebProject(json: string | undefined): string | null {
-  if (!json || json.includes(PRODUCTION_PROJECT) || json.includes(PRODUCTION_PROJECT_NUMBER)) return null
-  let c: Record<string, unknown>
+  if (!json) return null
+  let c: unknown
   try {
     c = JSON.parse(json)
   } catch {
     return null
   }
-  if (!c || typeof c !== 'object') return null
-  const str = (k: string) => (typeof c[k] === 'string' ? (c[k] as string).trim() : '')
-  if (!str('apiKey') || !str('authDomain') || !str('appId') || !str('projectId')) return null
-  return str('projectId')
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return null
+  const o = c as Record<string, unknown>
+  // Judged on the parsed values, never the text: a JSON escape (`x\u0035`) or other capitals
+  // would otherwise decode to production after the check (R67 review of PR #59).
+  const values = Object.values(o).map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
+  if (values.some((v) => v.includes(PRODUCTION_PROJECT) || v.includes(PRODUCTION_PROJECT_NUMBER) || v === PRODUCTION_WEB_API_KEY.toLowerCase())) return null
+  const str = (k: string) => (typeof o[k] === 'string' ? (o[k] as string).trim() : '')
+  if (!str('apiKey') || !str('authDomain') || !str('appId')) return null
+  // The shape of an id Firebase issues: lowercase letters, digits and hyphens, 6–30 long.
+  return /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(str('projectId')) ? str('projectId') : null
 }
 
 /**
