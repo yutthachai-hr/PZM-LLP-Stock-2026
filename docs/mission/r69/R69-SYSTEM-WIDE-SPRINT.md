@@ -2,6 +2,8 @@
 
 24 ต.ค. 2026 · Release HOLD ไม่เท่ากับงานหาย · R70 อนุญาต hosted7ตัวแล้ว
 
+**สถานะล่าสุดหลังแก้reviewfindings/รวมราคา/ตรวจpinneddependencies ดู [R69-FINAL-INTEGRATION.md](R69-FINAL-INTEGRATION.md). ตารางด้านล่างเก็บcheckpointก่อนfinalintegration ไม่สวมว่าsourceเริ่มต้นผ่านตั้งแต่แรก**
+
 ## 1. สิ่งที่ Owner ยืนยันแล้ว (manual evidence)
 
 - **Release A PASS:** Adminเปิดใช้งานLogistics/transitได้จริง OwnerยืนยันในR69 ไม่ใช่แค่ผลemulator
@@ -34,7 +36,7 @@ GitcanonicalfullSHAsตรวจจากobjectsก่อนpublish ไม่ใ
 - สองmutations (`/logistics/...`และcutoffboguspath) ต้องFAIL ทั้งauthorและreviewerทดสอบแล้ว ไม่ใช่testที่เงียบเพราะไม่เกิดevent
 - Reviewครอบคลุมnotification drafts/evaluation, activityLog, sidebarLive, globalSearch, quick/navactions; รายละเอียดfile:lineอยู่ในreport
 - UIreproคลิกlegacyTR-00001แล้วต้องอยู่`/transfers/tr-fixture`, ไม่ใช่`/`, ต้องเห็นTR-00001ในmain และreadหลังnavigationสำเร็จ
-- MAINตรวจdiff`94ff0bc..1651548 -- src`ว่างและรัน119focusedซ้ำผ่าน (`pr55-contract-integration.log`)
+- MAINตรวจdiff`94ff0bc..1651548 -- src`ว่างและรัน119focusedซ้ำผ่าน (`pr55-contract-integration.txt` (สำเนาrawlogสำหรับpublish))
 - PR55ใหม่`1651548aef5337d7caf786a081aefd7ee9a19a9a`; sourcefixยังไม่ได้merge/deployProduction จึงไม่อ้างว่าOwnerProductionbugหายแล้ว
 
 ## 4. ราคา — พบbugจริงจึงHOLDก่อนสร้างPR

@@ -1,0 +1,9 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-r63-notif
+
+
+ Test Files  3 passed (3)
+      Tests  119 passed (119)
+   Start at  23:19:38
+   Duration  426ms (transform 65%, import 24%, tests 9%, worker 2%)
+

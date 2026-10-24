@@ -16,14 +16,14 @@ Artifact: `concurrency-detailed.json` (read-only OpenCode SQLite + 9Router usage
 | สิ่งที่วัด | ผล |
 |---|---|
 | Seven T3 child tasks | ทุกตัว accepted เป็น `running/working` โดย explicit target Gemini |
-| Peak sessions มี model request ค้างพร้อมกัน (ตัดช่วงทำtoolsออก) | **7** ที่ **15:59:49Z** (22:59:49 น. กรุงเทพฯ) |
+| Peak sessions มี model request ค้างพร้อมกัน (ตัดช่วงทำtoolsออก) | **7** ที่ **15:59:49.755Z** (22:59:49 น. กรุงเทพฯ) |
 | Conservative token-emission overlap | **4** ที่ **16:04:09.612Z** — earliest content-part.created ถึง end-of-stream |
 | Peak in-flight local model requests | **7** (`assistant.time.created`→`time.streamed`; streamedคือจบstream ไม่ใช่firsttoken) |
 | งานซ้อนเวลากันครบ7 | 01รอบ2 + 02รอบ1 + 03รอบ2 + 04 + 05 + 06 + 07 |
 | Queue | ไม่พบ T3 task ค้าง queued ใน snapshot ที่ตรวจ; ไม่มีตัวเลข queue ภายใน 9Router/Google ให้ยืนยันว่าเป็น 0 |
 | Provider ceiling | พิสูจน์ว่าเส้นทางที่ใช้อยู่รองรับอย่างน้อย7; **ไม่ทราบเพดานสูงสุดของ upstream Google** |
 
-เวลาจบราย session, start/end ISO, worktree และ counters อยู่ใน JSON พร้อม `peakRequestEvidence` เจ็ดrequestที่คร่อมเวลาเดียวกัน ไม่ใช่นับจำนวน assignments แล้วอ้าง PASS
+เวลาจบราย session, start/end ISO, worktree และ counters อยู่ใน JSON พร้อม `peakRequestEvidence` เจ็ดrequestที่คร่อมเวลาเดียวกัน ไม่ใช่นับจำนวน assignments แล้วอ้าง PASS. จุดpeakแรกมีcommoninterval **15:59:49.755–49.809Z (54ms)**; เป็นpeakของOpenCodemodel-requestlifecycle ไม่ใช่หลักฐานว่าmaintain7ตลอดเวลา หรือpackettraceของ7requestที่Googleเริ่มประมวลผลพร้อมกัน (ช่วงก่อนfirsttokenอาจมีqueue/setupอยู่)
 
 **แก้ไขวิธีวัดอย่างเปิดเผย:** snapshotแรก `concurrency-snapshot-1601Z.json` ใช้created→completed ซึ่งรวมเวลาทำtools จึงถูก supersede โดย `concurrency-detailed.json` ที่ใช้created→streamed หลังตรวจtimeของcontent/toolจริงแล้ว ตัวเลข15:59:47Zเดิมเป็นsession/tool-inclusive overlap ไม่ใช่exactmodel-onlypeak ส่วนstreamed→completedเป็นช่วงหลังmodelstreamจบ ไม่ใช่ช่วงtokenstreaming จึงถอนข้อสรุป"7tokenstreamsพร้อมกัน"ที่เคยคำนวณระหว่างเตรียมรายงาน หลักฐานที่ถูกต้องคือ7in-flight modelrequests, 4conservativeemissionwindows; ไม่ได้พิสูจน์7GPUexecutionsภายในGoogleซึ่งมองไม่เห็น
 การเพิ่ม concurrency ไม่อนุมัติ merge/deploy/Production writes ใด ๆ
