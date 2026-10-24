@@ -27,6 +27,7 @@ export function canonicalLink(link: unknown): string | null {
   } catch {
     return null
   }
+  if (path.length > 1) path = path.replace(/\/+$/, '')
   if (path === '/logistics') path = '/transfers'
   else if (/^\/logistics\/[^/]+$/.test(path)) path = path.replace('/logistics/', '/transfers/')
   if (!NOTIFICATION_ROUTES.some((p) => matchPath({ path: p, end: true, caseSensitive: true }, path))) return null

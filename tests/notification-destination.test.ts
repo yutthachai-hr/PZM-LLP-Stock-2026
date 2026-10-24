@@ -23,6 +23,19 @@ describe('notification destination (no writes)', () => {
     expect(update).not.toHaveBeenCalled()
   })
 
+  test.each(['/transfers/deleted/', '/transfers/deleted/receive/', '/transfers/new/receive'])('missing %s is checked, never treated as a list view', async (link) => {
+    getOne.mockResolvedValue(null)
+    await expect(notificationDestination(link, 'pizza')).rejects.toThrow('ไม่พบเอกสารโอนสินค้า')
+    expect(getOne).toHaveBeenCalledTimes(1)
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  test('receive subroute verifies the actual document id', async () => {
+    getOne.mockResolvedValue({ id: 'doc-123' })
+    expect(await notificationDestination('/transfers/doc-123/receive', 'pizza')).toBe('/transfers/doc-123/receive')
+    expect(getOne.mock.calls).toEqual([['pizza', COL.transfers, 'doc-123']])
+  })
+
   test('missing here never searches another brand or marks read', async () => {
     getOne.mockResolvedValue(null)
     await expect(notificationDestination('/logistics/other-brand-only', 'pizza')).rejects.toThrow('ไม่พบเอกสารโอนสินค้า')

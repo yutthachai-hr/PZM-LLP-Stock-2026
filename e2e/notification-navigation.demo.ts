@@ -87,7 +87,7 @@ for (const brand of ['pizza', 'lelapin', 'rnd']) {
   })
 }
 
-for (const link of ['https://evil.example/x', '/logistics/deleted', '/logistics/other-only']) {
+for (const link of ['https://evil.example/x', '/logistics/deleted', '/logistics/other-only', '/logistics/deleted/', '/transfers/deleted/receive/']) {
   test(`refused destination ${link}: stays unread and never changes stock`, async ({ page }) => {
     await stage(page, 'pizza', 'admin', link)
     await page.goto('/products')

@@ -72,7 +72,7 @@ export function NotificationHost() {
 function Host({ uid, role }: { uid: string; role: Role }) {
   const t = useT()
   const toast = useToast()
-  const [opening, setOpening] = useState(false)
+  const [opening, setOpening] = useState<string | null>(null)
   const navigate = useNavigate()
   const { notifications } = useData()
   const prefs = useNotificationPrefs(uid)
@@ -159,7 +159,7 @@ function Host({ uid, role }: { uid: string; role: Role }) {
   const open = useCallback(
     async (card: PopupCard, link: string) => {
       if (opening) return
-      setOpening(true)
+      setOpening(card.key)
       try {
         const url = await notificationDestination(link, getBrand())
         close(card.key)
@@ -173,7 +173,7 @@ function Host({ uid, role }: { uid: string; role: Role }) {
       } catch (e) {
         toast.error(e instanceof AppError ? errText(e, t) : t('เปิดการแจ้งเตือนนี้ไม่ได้ กรุณาลองอีกครั้ง'))
       } finally {
-        setOpening(false)
+        setOpening(null)
       }
     },
     [close, navigate, uid, opening, toast, t],
@@ -291,11 +291,11 @@ function Host({ uid, role }: { uid: string; role: Role }) {
                     className={`min-h-9 rounded-md px-3 text-xs font-medium ${
                       i === 0 ? 'bg-brand text-white hover:brightness-110' : 'border border-line-strong text-ink hover:bg-sunken'
                     }`}
-                    disabled={opening}
-                    aria-busy={opening}
+                    disabled={opening !== null}
+                    aria-busy={opening === card.key}
                     onClick={() => void open(card, a.url)}
                   >
-                    {opening ? t('กำลังเปิด...') : t(a.label)}
+                    {opening === card.key ? t('กำลังเปิด...') : t(a.label)}
                   </button>
                 ))
               )}

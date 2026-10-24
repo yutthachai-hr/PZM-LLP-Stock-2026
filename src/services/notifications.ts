@@ -23,8 +23,9 @@ const scoped = (brand: BrandId = getBrand()) => backend.forBrand(brand)
 export async function notificationDestination(link: unknown, brand: BrandId): Promise<string> {
   const url = canonicalLink(link)
   if (!url) throw new AppError('เปิดการแจ้งเตือนนี้ไม่ได้ ลิงก์ไม่ถูกต้อง')
-  const id = /^\/transfers\/([^/?#]+)(?:\/receive)?(?:[?#]|$)/.exec(url)?.[1]
-  if (id && id !== 'new' && id !== 'today') {
+  const path = url.split(/[?#]/)[0]
+  const id = /^\/transfers\/([^/]+)/.exec(path)?.[1]
+  if (id && path !== '/transfers/new' && path !== '/transfers/today') {
     const transfer = await scoped(brand).getOne<Transfer>(COL.transfers, decodeURIComponent(id))
     if (!transfer) throw new AppError('ไม่พบเอกสารโอนสินค้า')
   }
