@@ -1,0 +1,159 @@
+{
+ "since": "2026-10-24T10:30:00.000Z",
+ "sessions": 14,
+ "sessionsWithError": 1,
+ "compactionsOk": 0,
+ "compactionsFailed": 0,
+ "maxContextTokens": 162809,
+ "router9GeminiByStatus": [
+  {
+   "status": "ok",
+   "n": 854
+  }
+ ],
+ "rows": [
+  {
+   "at": "2026-10-24T11:00:06.321Z",
+   "title": "R66 Review PR55 f301f39 (fresh Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 106362,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T11:00:20.110Z",
+   "title": "R66 Review PR33 7c0505d (fresh Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 103769,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T11:09:43.330Z",
+   "title": "R66 Cross-model review PR55 (DeepSeek, single attempt)",
+   "model": "opencode/deepseek-v4.1-flash-free",
+   "outcome": "failed",
+   "maxCtx": 0,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": {
+    "at": "2026-10-24T11:09:44.464Z",
+    "status": null
+   }
+  },
+  {
+   "at": "2026-10-24T11:10:15.742Z",
+   "title": "R66 Extract PR19 standalone i18n slice",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 100806,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T11:22:09.426Z",
+   "title": "R66 Review PR19 extraction d0d4ab2 (fresh Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 76365,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T11:22:09.795Z",
+   "title": "R66 Review A2 682b1aa (cross-model Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 136266,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T11:40:02.952Z",
+   "title": "R66 A2 delta re-review 3b513ca (Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 74656,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T12:14:25.316Z",
+   "title": "R66 A2 delta2 re-review 297124f (Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 56753,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T12:44:10.162Z",
+   "title": "R67 A PR29 automated scanner QA",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 162809,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T13:14:52.405Z",
+   "title": "R67 B review PR59 staging tier (cross-model Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 116856,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T13:17:16.632Z",
+   "title": "R67 A review PR29 final diff + QA suite (Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 129904,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T13:32:14.565Z",
+   "title": "R67 B re-review PR59 round 2 (Gemini)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 81543,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T13:49:34.734Z",
+   "title": "R67 B review PR59 round 3 (secrets-gate delta)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 50986,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  },
+  {
+   "at": "2026-10-24T14:19:36.962Z",
+   "title": "R67 B review PR59 round 4 (key-material delta)",
+   "model": "9router/gemini-3.8-flash-high",
+   "outcome": "succeeded",
+   "maxCtx": 68441,
+   "compactions": 0,
+   "compactFail": 0,
+   "error": null
+  }
+ ]
+}

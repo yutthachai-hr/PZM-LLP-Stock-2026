@@ -1,0 +1,16 @@
+typecheck              exit=0  tsc functions/tsconfig.json OK tsc worker/tsconfig.json OK tsc e2e/tsconfig.json OK 
+lint                   exit=0  
+i18n                   exit=0  ✓ every Thai UI string is translated 
+unit                   exit=0   Test Files 145 passed (145)  Tests 1763 passed (1763) 
+rules                  exit=0   Test Files 9 passed (9)  Tests 237 passed (237) 
+build-budget           exit=0  ✓ within budget 
+e2e                    exit=0   2 skipped  90 passed (5.9m) 
+e2e-match              exit=0   2 passed (8.8s) 
+e2e-search             exit=0   12 passed (30.3s) 
+e2e-orders             exit=0   29 passed (1.0m) 
+e2e-sw                 exit=0   3 passed (1.6m) 
+e2e-toast              exit=0   16 passed (14.3s) 
+e2e-products-responsive exit=0   16 passed (35.0s) 
+e2e-transit            exit=0   13 passed (22.6s) 
+e2e-line-send          exit=0   54 passed (3.6m) 
+--- 1d51234
