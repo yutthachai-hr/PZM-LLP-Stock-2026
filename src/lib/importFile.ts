@@ -4,8 +4,9 @@
  * ones: lib/sheetLines for spreadsheets, services/billOcr for photos and PDFs.
  */
 
-/** The bill endpoint takes about 4 MB of base64: a PDF up to this size goes as it is. */
-export const MAX_PDF_BYTES = 2_900_000
+import { MAX_LOCAL_PDF_BYTES } from '../services/billOcr'
+
+export { MAX_LOCAL_PDF_BYTES }
 /** A spreadsheet is read in the browser; past this it is almost certainly not an order list. */
 export const MAX_SHEET_BYTES = 10_000_000
 /** Browser source-file cap before decoding/compression, separate from the OCR endpoint limit.
@@ -32,7 +33,7 @@ export function routeImportFile(
   if (sheet) {
     if (f.size > MAX_SHEET_BYTES) return { error: 'too-big' }
   } else if (PDF(f)) {
-    if (f.size > MAX_PDF_BYTES) return { error: 'too-big' }
+    if (f.size > MAX_LOCAL_PDF_BYTES) return { error: 'too-big' }
   } else if (f.size > MAX_IMAGE_BYTES) {
     return { error: 'too-big' }
   }

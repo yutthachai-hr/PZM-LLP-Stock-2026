@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from 'vitest'
 
 vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {} })
 
-import { MAX_IMAGE_BYTES, MAX_PDF_BYTES, MAX_SHEET_BYTES, routeImportFile } from '../src/lib/importFile'
+const { MAX_IMAGE_BYTES, MAX_LOCAL_PDF_BYTES, MAX_SHEET_BYTES, routeImportFile } = await import('../src/lib/importFile')
 const { readDocumentFile } = await import('../src/services/billOcr')
 
 const f = (name: string, type = '', size = 1000) => ({ name, type, size })
@@ -69,7 +69,9 @@ describe('routeImportFile', () => {
     expect(routeImportFile(f('order.xlsx', '', MAX_SHEET_BYTES), open)).toEqual({ kind: 'sheet' })
     expect(routeImportFile(f('bill.pdf', 'application/pdf', 3_000_000), open)).toEqual({ kind: 'document' })
     expect(routeImportFile(f('bill.pdf', 'application/pdf', 19_999_999), open)).toEqual({ kind: 'document' })
+    expect(routeImportFile(f('bill.pdf', 'application/pdf', MAX_LOCAL_PDF_BYTES), open)).toEqual({ kind: 'document' })
     expect(routeImportFile(f('bill.pdf', 'application/pdf', 20_000_001), open)).toEqual({ error: 'too-big' })
+    expect(routeImportFile(f('bill.pdf', 'application/pdf', MAX_LOCAL_PDF_BYTES + 1), open)).toEqual({ error: 'too-big' })
     expect(routeImportFile(f('bill.jpg', 'image/jpeg', MAX_IMAGE_BYTES + 1), open)).toEqual({ error: 'too-big' })
     expect(routeImportFile(f('bill.jpg', 'image/jpeg', MAX_IMAGE_BYTES), open)).toEqual({ kind: 'document' })
     expect(routeImportFile(f('bill.png', 'image/png', MAX_IMAGE_BYTES + 1), open)).toEqual({ error: 'too-big' })
