@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { PosImportForm } from './issue/PosImport'
 import { SiteSelect } from '../components/SiteChip'
 import { Icon, type IconName } from '../components/Icon'
@@ -31,9 +31,25 @@ export function IssuePage() {
   const t = useT()
   const { user } = useAuth()
   const manager = isManager(user?.role)
+  const location = useLocation()
   // /issue?mode=pos opens the POS-sales import directly (the recipes screen links here).
   const [params] = useSearchParams()
-  const [mode, setMode] = useState<Mode>(params.get('mode') === 'pos' ? 'pos' : manager ? 'transfer' : 'consume')
+  const defaultMode: Mode = manager ? 'transfer' : 'consume'
+  const initialMode: Mode =
+    params.get('import') === '1'
+      ? defaultMode
+      : params.get('mode') === 'pos'
+        ? 'pos'
+        : defaultMode
+  const [mode, setMode] = useState<Mode>(initialMode)
+
+  useEffect(() => {
+    if (params.get('import') === '1') {
+      setMode((current) => (current === 'pos' ? defaultMode : current))
+    } else if (params.get('mode') === 'pos') {
+      setMode('pos')
+    }
+  }, [location.key, params, defaultMode])
 
   return (
     <FramePage>

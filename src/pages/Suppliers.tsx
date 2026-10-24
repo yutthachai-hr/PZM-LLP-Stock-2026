@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
@@ -125,6 +125,7 @@ export function SuppliersPage() {
   const [sort, setSort] = useState<SortKey>('name')
   const [category, setCategory] = useState('')
   const [terms, setTerms] = useState('')
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const queryId = searchParams.get('id')
   // ?id=<supplier> opens its detail — the link a notification's "ดูผู้ขาย" button carries.
@@ -141,7 +142,7 @@ export function SuppliersPage() {
       setSelectedId(queryId)
       setSheetOpen(true)
     }
-  }, [queryId])
+  }, [queryId, location.key])
   const lastPicked = useRef<string | null>(null)
   const pillRoom = demoPillShown()
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
