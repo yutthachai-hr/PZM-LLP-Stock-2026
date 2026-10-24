@@ -1,0 +1,16 @@
+{
+ "checkedAt": "2026-10-24T11:02:13.661Z",
+ "origin": "https://pzmstock.pages.dev",
+ "appAsset": "assets/app-CoF6YBUt.js",
+ "swHandler": "index.html",
+ "checks": {
+  "rootHtml200": true,
+  "swJs200": true,
+  "navigationBoundToRoot": false,
+  "precacheHasRootNotIndexHtml": false,
+  "denylistApi": true,
+  "denylistSupplierPo": true,
+  "cleanupOutdatedCaches": true
+ },
+ "pass": false
+}
