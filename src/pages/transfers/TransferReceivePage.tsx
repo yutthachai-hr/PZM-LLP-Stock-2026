@@ -157,6 +157,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     const hasInvalid = lines.some((i) => !validateReceiveQty(use[i.idx].qty).valid)
     if (hasInvalid) return
 
+    // A failure was already shown in a toast; the rejection only reopens the gate.
     await submitGate.current.execute({
       confirm: unchecked.length > 0 ? async () => {
         return await confirm({
@@ -192,7 +193,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
           setBusy(false)
         }
       },
-    })
+    }).catch(() => {})
   }
 
   return (

@@ -44,16 +44,15 @@ export function createSubmitGate() {
       if (locked) return null
       locked = true
       try {
-        if (task.confirm) {
-          const ok = await task.confirm()
-          if (!ok) {
-            locked = false
-            return null
-          }
+        if (task.confirm && !(await task.confirm())) {
+          locked = false
+          return null
         }
+        // Success keeps the gate shut: the receipt is filed and the page is leaving.
         return await task.action()
-      } finally {
+      } catch (e) {
         locked = false
+        throw e
       }
     },
   }
