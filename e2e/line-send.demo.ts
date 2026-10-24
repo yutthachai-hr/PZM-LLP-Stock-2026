@@ -459,12 +459,27 @@ test('a batch with one PO already sent starts at the first unsent one', async ({
   await expect(wizard.getByText('ส่งใบสั่งซื้อ 1 / 2')).toBeVisible()
 })
 
+/** The supplier-link service, stubbed: a prepared link (version 7), and every "it went" mark recorded (A2). */
+const SUPPLIER_STUB = `
+  export async function supplierLink(order) { return { url: 'https://example.test/s/qa-link', order: { ...order, supplierLink: { version: 7, rev: 0, issuedAt: 1, issuedBy: 'u', expiresAt: 2, unsent: true } } }; }
+  export async function markSupplierRequested(order, version) { const k = 'stub-marks'; sessionStorage.setItem(k, JSON.stringify([...JSON.parse(sessionStorage.getItem(k) ?? '[]'), order.id + '@' + version])); return null; }
+  export async function revokeSupplierLink() { throw new Error('stub'); }
+  export async function decideSupplierDate() { throw new Error('stub'); }
+`
+const marks = (page: Page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('stub-marks') ?? '[]') as string[])
+
+test('A2: a share the person says did not go asks the supplier nothing', async ({ page }) => {
+  await page.route('**/src/services/supplierConfirmation.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: SUPPLIER_STUB }))
+  await stage(page)
+  const wizard = await openWizard(page, 'po1')
+  await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
+  await wizard.getByRole('button', { name: 'ยังไม่ได้ส่ง — ลองอีกครั้ง' }).click()
+  await expect(wizard.getByRole('button', { name: 'แชร์รูป' })).toBeVisible()
+  expect(await marks(page)).toEqual([])
+})
+
 test('phone share sheet: the picture goes alone; the confirmation link is copied for the same chat', async ({ page }) => {
-  await page.route('**/src/services/supplierConfirmation.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: `
-    export async function supplierLink(order) { return { url: 'https://example.test/s/qa-link', order }; }
-    export async function revokeSupplierLink() { throw new Error('stub'); }
-    export async function decideSupplierDate() { throw new Error('stub'); }
-  ` }))
+  await page.route('**/src/services/supplierConfirmation.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: SUPPLIER_STUB }))
   await page.addInitScript(() => {
     const w = window as unknown as { __clip: string[] }
     w.__clip = []
@@ -477,8 +492,10 @@ test('phone share sheet: the picture goes alone; the confirmation link is copied
   await wizard.getByRole('button', { name: 'แชร์รูป' }).click()
   expect((await shareLog(page)).texts.join('')).not.toContain('example.test')
   await expect(wizard.getByText('ส่งทั้งรูปและลิงก์ในแชทผู้ขายแล้วหรือยัง?')).toBeVisible()
+  expect(await marks(page)).toEqual([]) // copying the link and opening the share sheet ask nothing
   await wizard.getByRole('button', { name: 'ส่งแล้ว', exact: true }).click()
   await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
+  expect(await marks(page)).toEqual(['po1@7']) // A2: asked once, for the link that went
 })
 
 test('a LINE Login redirect is never recorded as opened, sent or attempted', async ({ page }) => {

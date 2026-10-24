@@ -6,7 +6,7 @@
 import { describe, expect, test, beforeEach } from 'vitest'
 import { memoryServerStore } from '../../functions/_lib/memoryStore'
 import { assertServerWrite, brandCollection } from '../../functions/_lib/serverStore'
-import { answerLink as postAnswer, decideDate, mintLink, revokeLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
+import { answerLink as postAnswer, decideDate, markLinkRequested, mintLink, revokeLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
 import { signSupplierToken, verifySupplierToken } from '../../functions/_lib/supplierToken'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/time'
 import type { PurchaseOrder } from '../../src/types'
@@ -125,10 +125,19 @@ async function answerLink(d: Deps, token: string, body: Record<string, unknown>)
   return postAnswer(d, token, { expectedState: row ? supplierStateOf(row.doc as unknown as PurchaseOrder) : undefined, ...body })
 }
 
-async function link(): Promise<string> {
+/** The link prepared for the sheet, not sent yet (A2). */
+async function prepared(): Promise<string> {
   const r = await mintLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })
   expect(r.status).toBe(200)
   return r.body.token as string
+}
+
+/** The sheet with its link went: prepared, then marked sent, as the wizard does. */
+async function link(): Promise<string> {
+  const token = await prepared()
+  const version = po().supplierLink!.version
+  expect((await markLinkRequested(deps, auth('staff1'), { brand: 'pizza', poId: 'po1', version })).status).toBe(200)
+  return token
 }
 
 describe('POST /api/supplier-po/link', () => {
@@ -140,7 +149,10 @@ describe('POST /api/supplier-po/link', () => {
   test('gives one link per order version, pointing at /supplier/po/', async () => {
     const r = await mintLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })
     expect(r.body.url).toBe(`https://pzmstock.pages.dev/supplier/po/${r.body.token}`)
-    expect(po().supplierConfirmationStatus).toBe('waiting')
+    // A2: preparing the sheet asks nothing yet; the send (or the supplier opening it) does.
+    expect(po().supplierConfirmationStatus).toBeUndefined()
+    expect(po().deliveryDateHistory ?? []).toEqual([])
+    expect(po().supplierLink).toMatchObject({ version: 1, unsent: true })
     const again = await mintLink(deps, auth('staff1'), { brand: 'pizza', poId: 'po1' })
     expect(again.body.token).toBe(r.body.token)
   })
@@ -721,5 +733,66 @@ describe('P0 PO-00003: an approved date stands at the endpoint', () => {
     const next = await link()
     expect(await postAnswer(deps, next, { action: 'accept', requestId: 'po3-q-old', expectedState: seen })).toEqual({ status: 409, body: { error: 'stale_state' } })
     expect(po()).toMatchObject({ supplierConfirmationStatus: 'waiting', confirmedDeliveryDate: day(7) })
+  })
+})
+
+describe('A2: POST /api/supplier-po/requested — asked only once the sheet went', () => {
+  const mark = (who: string | null, body: Record<string, unknown>) => markLinkRequested(deps, who ? auth(who) : null, body)
+
+  test('needs an active, unrevoked signed-in user and a link version', async () => {
+    await prepared()
+    for (const who of [null, 'nobody', 'gone', 'revoked']) expect((await mark(who, { brand: 'pizza', poId: 'po1', version: 1 })).status).toBe(401)
+    for (const body of [{ brand: 'pizza', poId: 'po1' }, { brand: 'pizza', poId: 'po1', version: '1' }, { brand: 'nope', poId: 'po1', version: 1 }, { brand: 'pizza', poId: '../x', version: 1 }]) {
+      expect((await mark('staff1', body)).status).toBe(400)
+    }
+    expect(po().supplierConfirmationStatus).toBeUndefined()
+  })
+
+  test('the sent sheet marks the order waiting once; a repeat writes nothing', async () => {
+    await prepared()
+    const r = await mark('staff1', { brand: 'pizza', poId: 'po1', version: 1 })
+    expect(r.status).toBe(200)
+    expect(po()).toMatchObject({ supplierConfirmationStatus: 'waiting', requestedDeliveryDate: day(3) })
+    expect(po().deliveryDateHistory?.map((h) => h.action)).toEqual(['requested'])
+    expect(po().supplierLink).not.toHaveProperty('unsent')
+    const writes = db.writes
+    expect((await mark('staff1', { brand: 'pizza', poId: 'po1', version: 1 })).status).toBe(200)
+    expect(db.writes).toBe(writes)
+  })
+
+  test('a wizard left open across an amendment cannot mark the new revision', async () => {
+    await prepared()
+    db.touch('purchaseOrders', 'po1', { revision: 1, revisions: [{ rev: 1, at: NOW, by: 'staff1', byName: 'Nok', reason: 'x', changes: [] }] })
+    expect(await mark('staff1', { brand: 'pizza', poId: 'po1', version: 1 })).toMatchObject({ status: 409, body: { error: 'stale' } })
+    expect(po().supplierConfirmationStatus).toBeUndefined()
+  })
+
+  test('the brands stay apart', async () => {
+    await mintLink(deps, auth('staff1'), { brand: 'lelapin', poId: 'po1' })
+    expect((await mark('staff1', { brand: 'pizza', poId: 'po1', version: 1 })).status).toBe(409)
+    expect((await mark('staff1', { brand: 'lelapin', poId: 'po1', version: 1 })).status).toBe(200)
+    expect(po().supplierConfirmationStatus).toBeUndefined()
+  })
+
+  test('the supplier opening a link proves it went: asked, then opened, in one write', async () => {
+    const token = await prepared()
+    const writes = db.writes
+    const r = await viewLink(deps, token)
+    expect(r.body.view).toMatchObject({ status: 'waiting', requestedDate: '2026-10-08' })
+    expect(db.writes).toBe(writes + 2) // one order write (asked + opened) and the first-view bell note
+    expect(notes()).toHaveLength(1)
+    expect(po().supplierConfirmationStatus).toBe('waiting')
+    expect(po().supplierLink).toMatchObject({ openedAt: NOW })
+    expect(po().supplierLink).not.toHaveProperty('unsent')
+    expect(po().supplierActivity?.map((a) => a.kind)).toEqual(['linkIssued', 'opened'])
+  })
+
+  test('an answer on a link nobody marked yet is recorded after the ask, never wiped by a later mark', async () => {
+    const token = await prepared()
+    const r = await answerLink(deps, token, { action: 'accept', requestId: 'req-a2-0001' })
+    expect(r.body).toMatchObject({ replayed: false, outcome: 'confirmed' })
+    expect(po().deliveryDateHistory?.map((h) => h.action)).toEqual(['requested', 'accepted'])
+    expect((await mark('staff1', { brand: 'pizza', poId: 'po1', version: 1 })).status).toBe(200)
+    expect(po().supplierConfirmationStatus).toBe('confirmed')
   })
 })

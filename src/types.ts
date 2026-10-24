@@ -614,6 +614,10 @@ export interface SupplierLinkState {
    *  until its order is received, cancelled or amended (linkProblem). Kept so old links verify. */
   expiresAt: number
   openedAt?: number
+  /** Prepared for a sheet that has not been sent yet: the supplier was not asked (A2, R66). */
+  unsent?: true
+  /** With `unsent`: the revision last actually asked for; absent when never asked. */
+  baseRev?: number
 }
 
 export type SupplierActivityKind =

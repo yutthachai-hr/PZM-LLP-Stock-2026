@@ -4,6 +4,7 @@ import type {
   SupplierActivity,
   SupplierConfirmationStatus,
   SupplierIdentity,
+  SupplierLinkState,
 } from '../types'
 import { bkkDayStart, bkkDaysBetween, BKK_OFFSET_MS, DAY_MS } from './inventoryRules/time'
 
@@ -241,36 +242,62 @@ export type IssueResult =
   | { ok: false; error: 'notOpen' }
 
 /**
- * The link to send with the sheet. The same link while the order is unchanged — sending the
- * sheet twice, or weeks later, gives the supplier the one link they already have. A new
- * version only once the order was amended (which also resets the answer: an amended order
- * has to be confirmed again). Elapsed time never re-issues.
+ * The link to put on the sheet (A2, R66). The same link while the order is unchanged — sending
+ * the sheet twice, or weeks later, gives the supplier the one link they already have. A new
+ * version only once the order was amended. Elapsed time never re-issues.
+ *
+ * Preparing is not asking: only `supplierLink` is written, marked `unsent`, and `baseRev`
+ * remembers the revision last actually asked for. Opening the send wizard and cancelling
+ * leaves the order's answer, dates and history as they were (markRequested does that part).
  */
-export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
+export function mintLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
   if (!orderTakesAnswers(o)) return { ok: false, error: 'notOpen' }
   const rev = o.revision ?? 0
   const link = o.supplierLink
   if (link && link.rev === rev && !ctx.reissue) {
     return { ok: true, patch: null, version: link.version, expiresAt: link.expiresAt }
   }
-
   const version = (link?.version ?? 0) + 1
   const expiresAt = ctx.now + Math.max(1, ctx.ttlDays) * DAY_MS
+  const baseRev = link?.unsent ? link.baseRev : link?.rev
+  const supplierLink: SupplierLinkState = { version, rev, issuedAt: ctx.now, issuedBy: ctx.actor.id ?? ctx.actor.name, expiresAt, unsent: true }
+  if (baseRev !== undefined) supplierLink.baseRev = baseRev
+  return { ok: true, patch: { supplierLink, updatedAt: ctx.now }, version, expiresAt }
+}
+
+export type MarkResult = { ok: true; patch: SupplierPatch | null } | { ok: false; error: 'notOpen' | 'stale' }
+
+/**
+ * The sheet carrying link `version` was sent: the supplier has now been asked (A2, R66). Only
+ * for the link the order holds now, at its revision — a wizard left open across an amendment
+ * cannot mark the newer revision. Writes nothing for a link already asked for.
+ */
+export function markRequested(
+  o: PurchaseOrder,
+  ctx: { now: number; actor: Actor; makeId: () => string; version: number; reissue?: boolean },
+): MarkResult {
+  if (!orderTakesAnswers(o)) return { ok: false, error: 'notOpen' }
+  const rev = o.revision ?? 0
+  const link = o.supplierLink
+  if (!link || link.version !== ctx.version || link.rev !== rev) return { ok: false, error: 'stale' }
+  if (!link.unsent) return { ok: true, patch: null }
+
+  const asked = link.baseRev
   const history = [...(o.deliveryDateHistory ?? [])]
   const activity = [...(o.supplierActivity ?? [])]
   const patch: SupplierPatch = {}
   const by = { byName: ctx.actor.name, byId: ctx.actor.id }
 
-  if (!link) {
+  if (asked === undefined) {
     const asked = requestedOf(o)
     if (asked !== undefined) {
       patch.requestedDeliveryDate = asked
       history.push({ id: ctx.makeId(), at: ctx.now, source: 'purchasing', action: 'requested', to: asked, ...by })
     }
     patch.supplierConfirmationStatus = 'waiting'
-  } else if (link.rev !== rev) {
+  } else if (asked !== rev) {
     const dateAmended = (o.revisions ?? []).some(
-      (r) => r.rev > link.rev && r.changes.some((c) => c.kind === 'expectedAt'),
+      (r) => r.rev > asked && r.changes.some((c) => c.kind === 'expectedAt'),
     )
     if (o.pendingDeliveryDate) {
       history.push({
@@ -310,13 +337,33 @@ export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
   }
 
   // Same order, same answer: only the link the supplier holds is replaced.
-  if (ctx.reissue && link && link.rev === rev) activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkRevoked', ...by })
+  if (ctx.reissue && asked === rev) activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkRevoked', ...by })
   activity.push({ id: ctx.makeId(), at: ctx.now, kind: 'linkIssued', ...by })
-  patch.supplierLink = { version, rev, issuedAt: ctx.now, issuedBy: ctx.actor.id ?? ctx.actor.name, expiresAt }
+  const { unsent: _u, baseRev: _b, ...sent } = link
+  patch.supplierLink = sent
   patch.deliveryDateHistory = history.slice(-SUPPLIER_LIST_MAX)
   patch.supplierActivity = activity.slice(-SUPPLIER_LIST_MAX)
   patch.updatedAt = ctx.now
-  return { ok: true, patch: clean(patch), version, expiresAt }
+  return { ok: true, patch: clean(patch) }
+}
+
+/**
+ * Prepare and ask in one step, for a หัวหน้า taking a leaked link back (R30): the new link
+ * is handed over at once, as before A2.
+ */
+export function issueLink(o: PurchaseOrder, ctx: IssueContext): IssueResult {
+  const m = mintLink(o, ctx)
+  if (!m.ok || !m.patch) return m
+  const r = markRequested(applyPatch(o, m.patch), { ...ctx, version: m.version })
+  if (!r.ok) return { ok: false, error: 'notOpen' }
+  return { ok: true, patch: { ...m.patch, ...r.patch }, version: m.version, expiresAt: m.expiresAt }
+}
+
+/** The date the sheet about to go out asks for: what markRequested records once it is sent. */
+export function askedOnSend(o: PurchaseOrder): number | undefined {
+  const link = o.supplierLink
+  const r = link ? markRequested(o, { now: 0, actor: { name: '' }, makeId: () => '', version: link.version }) : null
+  return requestedOf(r?.ok && r.patch ? applyPatch(o, r.patch) : o)
 }
 
 /** The first time a link version is opened, once. Later views write nothing. */

@@ -37,6 +37,33 @@ export async function supplierLink(order: PurchaseOrder): Promise<{ url: string;
   )
 }
 
+/**
+ * The sheet carrying link `version` went: the supplier is now asked (A2). Best effort like the
+ * link itself — `null` leaves the order unasked (never falsely asked), and the supplier
+ * opening the link records the ask on the server anyway.
+ */
+export async function markSupplierRequested(order: PurchaseOrder, version: number): Promise<PurchaseOrder | null> {
+  if (BACKEND_MODE === 'local' || order.status !== 'ordered') return null
+  const brand = getBrand()
+  return trackWrite(
+    (async () => {
+      try {
+        const res = await fetch('/api/supplier-po/requested', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...(await authHeader()) },
+          body: JSON.stringify({ brand, poId: order.id, version }),
+        })
+        if (!res.ok) return null
+        const body = (await res.json()) as { order: PurchaseOrder }
+        if (getBrand() === brand) orderCache.patch(body.order)
+        return body.order
+      } catch {
+        return null
+      }
+    })(),
+  )
+}
+
 /** A หัวหน้า/admin takes a leaked link back; the order keeps its answer. Throws the server's error code. */
 export async function revokeSupplierLink(order: PurchaseOrder): Promise<{ url: string; order: PurchaseOrder }> {
   const brand = getBrand()
