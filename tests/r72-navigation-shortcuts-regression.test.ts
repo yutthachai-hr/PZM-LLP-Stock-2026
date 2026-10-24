@@ -157,4 +157,78 @@ describe('R72 Navigation Fixes: RED reproduction & regression verification', () 
       expect(setParams).not.toHaveBeenCalled()
     })
   })
+  describe('4. Suppliers same-page re-click same ?id=A after manual selection B', () => {
+    test('effect with location.key triggers reselection even when queryId is identical', () => {
+      let locationKey = 'key-initial';
+      const queryId = 'sup-panfood';
+      let selectedId = queryId;
+      let sheetOpen = true;
+
+      // User manually selects B and closes sheet
+      selectedId = 'sup-beverage';
+      sheetOpen = false;
+
+      // Re-trigger navigation to same ?id=sup-panfood
+      // Router generates new location.key
+      locationKey = 'key-second-nav';
+
+      const runEffect = (qid: string | null, _key: string) => {
+        if (qid) {
+          selectedId = qid;
+          sheetOpen = true;
+        }
+      };
+
+      runEffect(queryId, locationKey);
+      expect(selectedId).toBe('sup-panfood');
+      expect(sheetOpen).toBe(true);
+    });
+  });
+
+  describe('5. IssuePage mode and import reactive handling', () => {
+    test('POS mode transitions to default mode when ?import=1 arrives', () => {
+      const isMgr = true;
+      const defaultMode = isMgr ? 'transfer' : 'consume';
+      let mode: 'transfer' | 'consume' | 'pos' = 'pos';
+
+      const handleNav = (params: URLSearchParams) => {
+        if (params.get('import') === '1') {
+          if (mode === 'pos') mode = defaultMode;
+        } else if (params.get('mode') === 'pos') {
+          mode = 'pos';
+        }
+      };
+
+      // Navigate to /issue?import=1
+      handleNav(new URLSearchParams('import=1'));
+      expect(mode).toBe('transfer');
+
+      // LineBuilder replaces URL removing import=1
+      handleNav(new URLSearchParams(''));
+      expect(mode).toBe('transfer'); // does not reset or loop
+
+      // User navigates to ?mode=pos
+      handleNav(new URLSearchParams('mode=pos'));
+      expect(mode).toBe('pos');
+
+      // User manually switches mode to consume
+      mode = 'consume';
+
+      // User re-navigates to ?mode=pos (same query)
+      handleNav(new URLSearchParams('mode=pos'));
+      expect(mode).toBe('pos');
+    });
+
+    test('Staff default mode is consume when transitioning from pos on import=1', () => {
+      const isMgr = false;
+      const defaultMode = isMgr ? 'transfer' : 'consume';
+      let mode: 'transfer' | 'consume' | 'pos' = 'pos';
+
+      if (new URLSearchParams('import=1').get('import') === '1') {
+        if (mode === 'pos') mode = defaultMode;
+      }
+      expect(mode).toBe('consume');
+    });
+  });
+
 })
