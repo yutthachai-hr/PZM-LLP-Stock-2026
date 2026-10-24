@@ -21,7 +21,7 @@ http.createServer((req, res) => {
     res.writeHead(308, { location: pretty + url.search }); return res.end()
   }
   const file = path.join(dir, rel)
-  if (file.startsWith(dir) && fs.existsSync(file) && fs.statSync(file).isFile()) return send(res, file)
+  if (file.startsWith(dir + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) return send(res, file)
   if (rel === '/supplier' || rel.startsWith('/supplier/po/')) return send(res, path.join(dir, 'supplier.html'))
   return send(res, path.join(dir, 'index.html'))
 }).listen(port, '127.0.0.1')

@@ -41,6 +41,8 @@ for (const everything of [false, true]) {
     expect(await dropCachedShell(page, everything)).not.toHaveLength(0)
     const res = await page.goto(LIFF_RETURN)
     expect(res?.status()).toBe(200)
+    // The worker answered it (not a page load that skipped the worker).
+    expect(await page.evaluate(() => navigator.serviceWorker.controller != null)).toBe(true)
     await expect(page.locator('#root')).not.toBeEmpty()
     // And the next ordinary page load works too: the worker is not left broken.
     const again = await page.goto('/orders')
