@@ -25,7 +25,7 @@ async function countFlour(page: Page, counted: string) {
   return input
 }
 
-test('a device whose screen already shows the new balance files the true difference, never overwriting', async ({ browser }) => {
+test('a count keeps the balance it was keyed against: a later change asks first, never rebases silently (R59)', async ({ browser }) => {
   await seedStage()
   await putDoc('stockLevels/wh__flour', { productId: 'flour', locationId: 'wh', qty: 10, updatedAt: Date.now() }, { stampId: false })
   const a = await signedIn(browser, 'manager', '/adjust')
@@ -38,9 +38,17 @@ test('a device whose screen already shows the new balance files the true differe
   await a.getByRole('button', { name: /บันทึกการปรับสต๊อก/ }).click()
   await expect(a.getByText(/ปรับสต๊อกเรียบร้อย/)).toBeVisible()
   await expect.poll(async () => (await getDoc('stockLevels/wh__flour'))?.qty).toBe(12)
-  // B's live listener moves its figure to 12 before it saves, so 15 counted files +3.
-  await expect(b.getByLabel('จำนวนที่ปรับของ "FLOUR"')).toHaveValue('3')
+  // B's live listener sees 12, but B counted against 10: the row says so and keeps +5 until B decides.
+  await expect(b.getByText('ยอดในระบบเปลี่ยนหลังนับ: 10 → 12')).toBeVisible()
+  await expect(b.getByLabel('จำนวนที่ปรับของ "FLOUR"')).toHaveValue('5')
   await expect(b.getByLabel('จำนวนที่นับได้ของ "FLOUR"')).toHaveValue('15')
+  await b.getByRole('button', { name: /บันทึกการปรับสต๊อก/ }).click()
+  await expect(b.getByText(/ยอดในระบบเปลี่ยนหลังจากนับ 1 รายการ/)).toBeVisible()
+  expect((await getDoc('stockLevels/wh__flour'))?.qty).toBe(12)
+  await expect(b.getByLabel('จำนวนที่นับได้ของ "FLOUR"')).toHaveValue('15')
+  // Taking the new figure is an explicit act; only then does 15 counted file +3.
+  await b.getByRole('button', { name: 'ใช้ยอดใหม่' }).click()
+  await expect(b.getByLabel('จำนวนที่ปรับของ "FLOUR"')).toHaveValue('3')
   await b.getByRole('button', { name: /บันทึกการปรับสต๊อก/ }).click()
   await expect(b.getByText(/ปรับสต๊อกเรียบร้อย/)).toBeVisible()
   await expect.poll(async () => (await getDoc('stockLevels/wh__flour'))?.qty).toBe(15)
@@ -79,11 +87,15 @@ test('a device whose screen is still stale is refused inside the transaction, wi
   expect(await adjusts()).toHaveLength(1)
   await expect(bInput).toHaveValue('15')
 
-  // After B refreshes (reload) and re-confirms, it posts against the fresh level
+  // After B refreshes (reload), the kept count still names the balance it was keyed against;
+  // B takes the new figure explicitly and only then posts against the fresh level (R59).
   await b.unrouteAll({ behavior: 'ignoreErrors' })
   await b.reload()
   const bInputReloaded = b.getByLabel('จำนวนที่นับได้ของ "FLOUR"')
   await expect(bInputReloaded).toHaveValue('15')
+  await expect(b.getByText('ยอดในระบบเปลี่ยนหลังนับ: 10 → 12')).toBeVisible()
+  await expect(b.getByLabel('จำนวนที่ปรับของ "FLOUR"')).toHaveValue('5')
+  await b.getByRole('button', { name: 'ใช้ยอดใหม่' }).click()
   await expect(b.getByLabel('จำนวนที่ปรับของ "FLOUR"')).toHaveValue('3')
   await b.getByRole('button', { name: /บันทึกการปรับสต๊อก/ }).click()
   await expect(b.getByText(/ปรับสต๊อกเรียบร้อย/)).toBeVisible()

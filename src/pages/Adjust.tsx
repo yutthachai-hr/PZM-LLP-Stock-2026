@@ -67,11 +67,18 @@ interface AdjRow {
   /** As keyed on a phone in another unit — only for a `delta` row. */
   entryUnit?: string
   entryQty?: number
+  /**
+   * A count row's figures as they stood when the count was first keyed (owner, R59): the
+   * figure it is compared with and the live balance. The difference is taken from these, never
+   * from a later screen — a receipt landing after the shelf was counted must not be counted
+   * away. When the balance moves, the row asks the person to confirm; nothing rebases silently.
+   */
+  seen?: { system: number; level: number }
 }
 
 function deltaOf(r: AdjRow, system: number): number {
   if (r.value === null) return 0
-  return roundQty(r.mode === 'count' ? r.value - system : r.value)
+  return roundQty(r.mode === 'count' ? r.value - (r.seen?.system ?? system) : r.value)
 }
 
 /**
@@ -189,6 +196,10 @@ export function AdjustPage() {
     if (!backdated) return qtyAt(locationId, productId)
     return laterReady ? asOf(productId, laterRows) : 0
   }
+  const seenNow = (productId: string) => ({ system: system(productId), level: locationId ? qtyAt(locationId, productId) : 0 })
+  /** A keyed count whose balance moved since it was keyed (or that has no record of it): needs the person's confirmation. */
+  const moved = (r: AdjRow) =>
+    r.mode === 'count' && r.value !== null && (!r.seen || roundQty(r.seen.system) !== roundQty(system(r.productId)) || roundQty(r.seen.level) !== roundQty(locationId ? qtyAt(locationId, r.productId) : 0))
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -200,6 +211,21 @@ export function AdjustPage() {
       .sort((a, b) => looseScore([b.name, b.sku], q) - looseScore([a.name, a.sku], q))
       .slice(0, MAX_MATCHES)
   }, [search, products, rows, phone])
+
+  /** "Changed since you counted" with the one way forward: take the new figure, explicitly. */
+  const movedNotice = (r: AdjRow) =>
+    moved(r) ? (
+      <div className="mt-1 flex flex-wrap items-center justify-end gap-2 text-xs text-warn">
+        <span>
+          {r.seen
+            ? t('ยอดในระบบเปลี่ยนหลังนับ: {from} → {to}', { from: fmtQty(r.seen.system), to: fmtQty(system(r.productId)) })
+            : t('ยังไม่ได้ยืนยันยอดในระบบของรายการนี้')}
+        </span>
+        <Button size="sm" variant="secondary" onClick={() => patch(r.productId, { seen: seenNow(r.productId) })}>
+          {t('ใช้ยอดใหม่')}
+        </Button>
+      </div>
+    ) : null
 
   function add(p: Product) {
     setSearch('')
@@ -228,6 +254,7 @@ export function AdjustPage() {
   const totalValue = rows.reduce((s, r) => s + valueOf(r), 0)
   const bad = rows.find((r) => r.mode === 'count' && r.value !== null && r.value < 0)
   const toFile = rows.filter((r) => deltaOf(r, system(r.productId)) !== 0)
+  const unconfirmed = rows.filter(moved)
 
   // ---- today, for the figures at the top ----
   const today = useMemo(() => {
@@ -254,9 +281,12 @@ export function AdjustPage() {
     if (bad) return toast.error(t('จำนวนที่นับได้ของ "{name}" ติดลบไม่ได้', { name: bad.productName }))
     if (toFile.length === 0) return toast.error(t('ยังไม่มีบรรทัดที่ยอดเปลี่ยน — ใส่จำนวนที่นับได้หรือจำนวนที่ปรับ'))
     if (!laterReady) return toast.error(t('กำลังโหลดยอด ณ วันที่เลือก — รอสักครู่'))
+    if (unconfirmed.length > 0) {
+      return toast.error(t('ยอดในระบบเปลี่ยนหลังจากนับ {count} รายการ ({names}) — ตรวจแล้วกด "ใช้ยอดใหม่" ก่อนบันทึก', { count: unconfirmed.length, names: unconfirmed.map((r) => r.productName).join(', ') }))
+    }
     // The brand these figures were keyed in, pinned before the fresh read below is awaited.
     const scope = captureFilingScope()
-    // Capture lines and optimistic concurrency expectedLevel at SUBMIT time from this render
+    // A count files against the balance it was keyed against (`seen`), checked again inside the transaction.
     const lines: AdjustLine[] = toFile.map((r) => {
       const d = deltaOf(r, system(r.productId))
       const base = {
@@ -272,7 +302,7 @@ export function AdjustPage() {
         return {
           ...base,
           mode: 'count' as const,
-          expectedLevel: qtyAt(locationId, r.productId),
+          expectedLevel: r.seen!.level,
         }
       }
       return {
@@ -452,9 +482,10 @@ export function AdjustPage() {
                   setRows((rs) => {
                     const next = [...rs]
                     for (const i of imported) {
-                      const row: AdjRow = { productId: i.product.id, productName: i.product.name, unit: i.product.unitType, mode: 'count', value: i.qty, reason: defaultReason, ...(i.note ? { note: i.note } : {}) }
+                      const seen = seenNow(i.product.id)
+                      const row: AdjRow = { productId: i.product.id, productName: i.product.name, unit: i.product.unitType, mode: 'count', value: i.qty, reason: defaultReason, seen, ...(i.note ? { note: i.note } : {}) }
                       const at = next.findIndex((r) => r.productId === i.product.id)
-                      if (at >= 0) next[at] = { ...next[at], mode: 'count', value: i.qty, entryUnit: undefined, entryQty: undefined }
+                      if (at >= 0) next[at] = { ...next[at], mode: 'count', value: i.qty, entryUnit: undefined, entryQty: undefined, seen }
                       else next.push(row)
                     }
                     return next
@@ -558,6 +589,7 @@ export function AdjustPage() {
                           <Icon name="x" size={18} />
                         </span>
                       </button>
+                      {moved(r) && <div className="px-3 pb-3">{movedNotice(r)}</div>}
                     </li>
                   )
                 })}
@@ -602,7 +634,8 @@ export function AdjustPage() {
                             </div>
                           </td>
                           <td className="num px-2 py-2 text-right text-ink-soft">
-                            {laterReady ? fmtQty(sys) : '…'} <span className="text-xs">{r.unit}</span>
+                            {laterReady ? fmtQty(r.mode === 'count' && r.seen ? r.seen.system : sys) : '…'} <span className="text-xs">{r.unit}</span>
+                            {movedNotice(r)}
                           </td>
                           <td className="px-2 py-2">
                             <Input
@@ -612,7 +645,12 @@ export function AdjustPage() {
                               min={0}
                               value={counted}
                               onWheel={blurOnWheel}
-                              onChange={(e) => patch(r.productId, { mode: 'count', value: e.target.value === '' ? null : Number(e.target.value), entryUnit: undefined, entryQty: undefined })}
+                              onChange={(e) => {
+                                const value = e.target.value === '' ? null : Number(e.target.value)
+                                // Locked when the count is first keyed; cleared with it, so re-keying from empty locks again.
+                                const seen = value === null ? undefined : r.mode === 'count' && r.seen ? r.seen : seenNow(r.productId)
+                                patch(r.productId, { mode: 'count', value, entryUnit: undefined, entryQty: undefined, seen })
+                              }}
                               className="num text-right"
                               aria-label={t('จำนวนที่นับได้ของ "{name}"', { name: r.productName })}
                             />
@@ -624,7 +662,7 @@ export function AdjustPage() {
                               step="any"
                               value={deltaText}
                               onWheel={blurOnWheel}
-                              onChange={(e) => patch(r.productId, { mode: 'delta', value: e.target.value === '' ? null : Number(e.target.value), entryUnit: undefined, entryQty: undefined })}
+                              onChange={(e) => patch(r.productId, { mode: 'delta', value: e.target.value === '' ? null : Number(e.target.value), entryUnit: undefined, entryQty: undefined, seen: undefined })}
                               className={`num text-right font-semibold ${d > 0 ? '!text-in' : d < 0 ? '!text-out' : ''}`}
                               aria-label={t('จำนวนที่ปรับของ "{name}"', { name: r.productName })}
                             />
