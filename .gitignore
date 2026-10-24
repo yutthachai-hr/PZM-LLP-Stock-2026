@@ -61,3 +61,6 @@ __pycache__/
 
 # e2e/sw-navigation.demo.ts build output
 dist-sw-e2e
+
+# Assembled upload of the dedicated staging deployment (scripts/deploy-staging.mjs)
+.staging-deploy/

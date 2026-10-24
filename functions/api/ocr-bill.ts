@@ -1,4 +1,4 @@
-import { demoKeyOk, json, verifyFirebaseToken, type Env } from '../_poImage'
+import { callerUid, demoKeyOk, json, type Env } from '../_poImage'
 import { pickReaderModel, type ListedModel } from '../_lib/geminiModel'
 
 /**
@@ -44,7 +44,7 @@ const PROMPT = [
 ].join('\n')
 
 export const onRequestPost: PagesFunction<OcrEnv> = async ({ request, env }) => {
-  const uid = (await verifyFirebaseToken(request.headers.get('authorization'))) ?? (demoKeyOk(request, env) ? 'demo' : null)
+  const uid = (await callerUid(request, env)) ?? (demoKeyOk(request, env) ? 'demo' : null)
   if (!uid) return json(401, { error: 'unauthorized' })
   const key = (env.GEMINI_API_KEY ?? '').trim()
   if (!key) return json(503, { error: 'not_configured' })

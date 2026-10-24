@@ -19,17 +19,27 @@
 export const PRODUCTION_BRANCH = 'main'
 /** The live Firebase project. A staging tier must name a different one. */
 export const PRODUCTION_PROJECT = 'pzm-stock-x5'
+/** Its project number (public, in the production web config); a staging config must not carry it. */
+const PRODUCTION_PROJECT_NUMBER = '789071579161'
 /** Production hosts. A custom domain is added through the PRODUCTION_HOSTS variable (production env only). */
 export const PRODUCTION_HOSTS: readonly string[] = ['pzmstock.pages.dev']
 
-export type BuildTier = 'production' | 'preview' | 'local'
+export type BuildTier = 'production' | 'staging' | 'preview' | 'local'
 
 /**
  * The build's tier from Cloudflare Pages' build variables. On Pages (CF_PAGES set), only the
  * production branch builds for production; everything else builds in demo mode; a missing
  * branch name is an error rather than a guess.
  */
-export function buildTier(env: { CF_PAGES?: string; CF_PAGES_BRANCH?: string }): BuildTier {
+export function buildTier(env: { CF_PAGES?: string; CF_PAGES_BRANCH?: string; DEPLOY_TIER?: string; VITE_STAGING_FIREBASE_CONFIG?: string }): BuildTier {
+  // Dedicated OCR staging (owner, 24 Oct 2026): asked for by name, built locally against a
+  // separate Firebase project, uploaded to its own Pages project. Never a Pages git build, so the
+  // production project's builds cannot be switched to it.
+  if ((env.DEPLOY_TIER ?? '').trim() === 'staging') {
+    if (env.CF_PAGES) throw new Error('A staging build is a direct upload (scripts/deploy-staging.mjs), never a Cloudflare Pages git build')
+    if (!stagingWebProject(env.VITE_STAGING_FIREBASE_CONFIG)) throw new Error('A staging build needs VITE_STAGING_FIREBASE_CONFIG for a separate, non-production Firebase project')
+    return 'staging'
+  }
   if (!env.CF_PAGES) return 'local'
   const branch = (env.CF_PAGES_BRANCH ?? '').trim()
   if (!branch) throw new Error('Cloudflare Pages build without CF_PAGES_BRANCH: refusing to guess the deployment tier (preview isolation fails closed)')
@@ -120,6 +130,35 @@ export function stagingAllowed(env: FunctionEnv): boolean {
 export function functionTier(hostname: string, env: FunctionEnv): FunctionTier {
   if (hostTier(hostname, extraHosts(env.PRODUCTION_HOSTS)) === 'production') return 'production'
   return stagingAllowed(env) ? 'staging' : 'preview'
+}
+
+/**
+ * The Firebase project of a staging build's web config, or null unless it is a complete config
+ * that names nothing of production (project id, auth domain, bucket, project number).
+ */
+export function stagingWebProject(json: string | undefined): string | null {
+  if (!json || json.includes(PRODUCTION_PROJECT) || json.includes(PRODUCTION_PROJECT_NUMBER)) return null
+  let c: Record<string, unknown>
+  try {
+    c = JSON.parse(json)
+  } catch {
+    return null
+  }
+  if (!c || typeof c !== 'object') return null
+  const str = (k: string) => (typeof c[k] === 'string' ? (c[k] as string).trim() : '')
+  if (!str('apiKey') || !str('authDomain') || !str('appId') || !str('projectId')) return null
+  return str('projectId')
+}
+
+/**
+ * The Firebase project whose ID tokens a function accepts. Production host: always the production
+ * project, whatever the variables say. A complete staging environment: its own project. Anything
+ * else (previews, an incomplete or production-keyed staging): none, so no token is accepted.
+ */
+export function firebaseProjectFor(url: string, env: FunctionEnv): string | null {
+  const tier = functionTier(new URL(url).hostname, env)
+  if (tier === 'production') return PRODUCTION_PROJECT
+  return tier === 'staging' ? (env.FIREBASE_PROJECT_ID ?? '').trim() : null
 }
 
 /** Function routes a preview may still serve: they read no secret, binding or database. */

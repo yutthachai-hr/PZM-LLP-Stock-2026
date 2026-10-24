@@ -6,8 +6,10 @@ interface ImportMetaEnv {
    * src/firebase/config.ts — do not test this string anywhere else.
    */
   readonly VITE_DEMO_MODE?: string
-  /** P0 preview isolation: production | preview | local, set by vite.config.ts from CF_PAGES_BRANCH. */
+  /** P0 preview isolation: production | staging | preview | local, set by vite.config.ts (src/lib/deployTier.ts). */
   readonly VITE_DEPLOY_TIER?: string
+  /** Staging builds only (scripts/deploy-staging.mjs): the separate staging project's public web config, JSON. */
+  readonly VITE_STAGING_FIREBASE_CONFIG?: string
   /** '1' under `vite --mode e2e`: the Playwright tests' local Firebase emulators (src/firebase/config.ts). */
   readonly VITE_USE_EMULATOR?: string
   /**

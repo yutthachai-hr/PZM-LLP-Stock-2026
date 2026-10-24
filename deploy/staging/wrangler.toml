@@ -1,0 +1,28 @@
+# Dedicated OCR staging (owner, 24 Oct 2026, R67) — the separate Cloudflare Pages project.
+# Used only by scripts/deploy-staging.mjs (a direct upload); the production project's own
+# wrangler.toml at the repository root is untouched. tests/staging-tier.test.ts pins that
+# nothing of production (project name, KV namespace, Firebase project) appears here.
+#
+# Secrets are set on THIS project only (never copied from production):
+#   npx wrangler pages secret put FIREBASE_SERVICE_ACCOUNT --project-name pzmstock-staging
+#   npx wrangler pages secret put GEMINI_API_KEY          --project-name pzmstock-staging
+name = "pzmstock-staging"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# functions/_lib/previewGuard.ts admits a staging request only when every condition of
+# stagingAllowed() holds: this tier, this project, and a service account of exactly this project.
+[vars]
+DEPLOY_TIER = "staging"
+FIREBASE_PROJECT_ID = "pzm-stock-staging"
+
+# Its own, empty order-sheet store. Replace with the id of the namespace created for staging;
+# scripts/deploy-staging.mjs refuses to deploy while this placeholder is here.
+[[kv_namespaces]]
+binding = "PO_IMAGES"
+id = "STAGING_KV_NAMESPACE_ID"
+
+# Workers AI fallback for bill reading, bound on this project.
+[ai]
+binding = "AI"
