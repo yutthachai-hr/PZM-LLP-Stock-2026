@@ -1,0 +1,73 @@
+{
+  "checkedAt": "2026-10-24T12:41:15.168Z",
+  "steps": [
+    {
+      "step": "first open /",
+      "url": "/",
+      "status": 200,
+      "rootRendered": true,
+      "finalPath": "/",
+      "navFailures": [],
+      "error": null,
+      "visible": "Inventory OS ไทย Pizza Mania Stock จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่ส"
+    },
+    {
+      "step": "reload (now controlled)",
+      "url": "/",
+      "status": 200,
+      "rootRendered": true,
+      "finalPath": "/",
+      "navFailures": [],
+      "error": null,
+      "visible": "Inventory OS ไทย Pizza Mania Stock จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่ส"
+    },
+    {
+      "step": "service worker",
+      "controlled": true,
+      "active": "activated",
+      "cachedShell": [
+        "/"
+      ]
+    },
+    {
+      "step": "offline launch /",
+      "url": "/",
+      "status": 200,
+      "rootRendered": true,
+      "finalPath": "/",
+      "navFailures": [],
+      "error": null,
+      "visible": "Inventory OS ไทย Pizza Mania Stock จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่ส"
+    },
+    {
+      "step": "offline deep link /orders",
+      "url": "/orders",
+      "status": 200,
+      "rootRendered": true,
+      "finalPath": "/orders",
+      "navFailures": [],
+      "error": null,
+      "visible": "Inventory OS ไทย Pizza Mania Stock จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่ส"
+    },
+    {
+      "step": "LIFF return /?liff.state=%2Forders",
+      "url": "/?liff.state=%2Forders",
+      "status": 200,
+      "rootRendered": true,
+      "finalPath": "/orders",
+      "navFailures": [],
+      "error": null,
+      "visible": "Inventory OS ไทย Pizza Mania Stock จัดการวัตถุดิบ ติดตามสต๊อก ให้ครัวเดินได้ไม่ส"
+    },
+    {
+      "step": "supplier page bypasses the shell /supplier/po/x",
+      "url": "/supplier/po/not-a-token",
+      "status": 200,
+      "rootRendered": true,
+      "finalPath": "/supplier/po/not-a-token",
+      "navFailures": [],
+      "error": null,
+      "visible": "ยืนยันวันส่งสินค้า EN 📄 ลิงก์นี้ไม่ถูกต้อง หรือถูกแทนที่ด้วยลิงก์ใหม่แล้ว"
+    }
+  ]
+}

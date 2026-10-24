@@ -1,0 +1,98 @@
+{
+  "checkedAt": "2026-10-24T12:40:21.087Z",
+  "steps": [
+    {
+      "round": 1,
+      "step": "open /",
+      "url": "/",
+      "status": 200,
+      "rootRendered": true,
+      "navFailures": [],
+      "error": null
+    },
+    {
+      "round": 1,
+      "step": "service worker",
+      "active": "activated",
+      "waiting": null,
+      "cachedShell": []
+    },
+    {
+      "round": 2,
+      "step": "open /",
+      "url": "/",
+      "status": 200,
+      "rootRendered": true,
+      "navFailures": [],
+      "error": null
+    },
+    {
+      "round": 2,
+      "step": "service worker",
+      "active": "activated",
+      "waiting": null,
+      "cachedShell": []
+    },
+    {
+      "round": 2,
+      "step": "offline launch /",
+      "url": "/",
+      "status": null,
+      "rootRendered": false,
+      "navFailures": [
+        "net::ERR_FAILED"
+      ],
+      "error": "page.goto: net::ERR_FAILED at https://pzmstock.pages.dev/"
+    },
+    {
+      "round": 2,
+      "step": "deep link /orders",
+      "url": "/orders",
+      "status": 200,
+      "rootRendered": true,
+      "navFailures": [],
+      "error": null
+    },
+    {
+      "round": 2,
+      "step": "LIFF return /?liff.state=",
+      "url": "/?liff.state=%2Forders%3Fresume%3Dsend",
+      "status": 200,
+      "rootRendered": false,
+      "navFailures": [],
+      "error": null
+    },
+    {
+      "round": 2,
+      "step": "shell evicted (P0 condition)",
+      "evicted": 0
+    },
+    {
+      "round": 2,
+      "step": "deep link /orders after eviction",
+      "url": "/orders",
+      "status": 200,
+      "rootRendered": true,
+      "navFailures": [],
+      "error": null
+    },
+    {
+      "round": 2,
+      "step": "open / after eviction",
+      "url": "/",
+      "status": 200,
+      "rootRendered": true,
+      "navFailures": [],
+      "error": null
+    },
+    {
+      "round": 2,
+      "step": "LIFF return after eviction",
+      "url": "/?liff.state=%2Forders",
+      "status": 200,
+      "rootRendered": false,
+      "navFailures": [],
+      "error": null
+    }
+  ]
+}

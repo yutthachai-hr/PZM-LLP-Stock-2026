@@ -1,0 +1,77 @@
+{
+  "mode": "verify",
+  "checkedAt": "2026-10-24T12:38:41.266Z",
+  "origin": "https://pzmstock.pages.dev",
+  "steps": [
+    {
+      "step": "open /",
+      "url": "/",
+      "status": 200,
+      "error": null,
+      "rootRendered": true,
+      "navFailures": []
+    },
+    {
+      "step": "reload after update",
+      "url": "/",
+      "status": 200,
+      "error": null,
+      "rootRendered": true,
+      "navFailures": []
+    },
+    {
+      "step": "shell evicted: open /",
+      "url": "/",
+      "status": 200,
+      "error": null,
+      "rootRendered": true,
+      "navFailures": []
+    },
+    {
+      "step": "deep link /orders",
+      "url": "/orders",
+      "status": null,
+      "error": "page.goto: net::ERR_FAILED at https://pzmstock.pages.dev/orders",
+      "rootRendered": false,
+      "navFailures": [
+        "https://pzmstock.pages.dev/orders net::ERR_FAILED"
+      ]
+    },
+    {
+      "step": "LIFF return /?liff.state=",
+      "url": "/?liff.state=%2Forders%3Fresume%3Dsend",
+      "status": 200,
+      "error": null,
+      "rootRendered": false,
+      "navFailures": []
+    },
+    {
+      "step": "offline launch /",
+      "url": "/",
+      "status": null,
+      "error": "page.goto: net::ERR_FAILED at https://pzmstock.pages.dev/",
+      "rootRendered": false,
+      "navFailures": [
+        "https://pzmstock.pages.dev/ net::ERR_FAILED"
+      ]
+    }
+  ],
+  "swBeforeUpdate": {
+    "controlled": true,
+    "active": "activated",
+    "waiting": null,
+    "installing": null,
+    "serverHandler": "/",
+    "caches": 1
+  },
+  "updateBanner": false,
+  "swAfterUpdate": {
+    "controlled": true,
+    "active": "activated",
+    "waiting": "installed",
+    "installing": null,
+    "serverHandler": "/",
+    "caches": 1
+  },
+  "evicted": 2
+}

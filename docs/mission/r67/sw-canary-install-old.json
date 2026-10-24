@@ -1,0 +1,23 @@
+{
+  "mode": "install",
+  "checkedAt": "2026-10-24T12:35:56.371Z",
+  "origin": "https://pzmstock.pages.dev",
+  "steps": [
+    {
+      "step": "open /",
+      "url": "/",
+      "status": 200,
+      "error": null,
+      "rootRendered": true,
+      "navFailures": []
+    }
+  ],
+  "sw": {
+    "controlled": true,
+    "active": "activated",
+    "waiting": null,
+    "installing": null,
+    "serverHandler": "index.html",
+    "caches": 1
+  }
+}
