@@ -6,15 +6,27 @@
 
 ## 2. Seven subagent actual statuses
 
-ยังไม่dispatch ณการเขียนcheckpointแรก; ดูtaskreceipts/updatesที่จะเติมภายหลัง ไม่อ้างว่า7runningจากแผนเพียงอย่างเดียว
+Dispatchทั้ง7พร้อมกันผ่านT3batchแล้ว ทุกreceiptเป็นrunning/workingและtarget/optionsตรงตามที่ขอ; snapshotOpenCode18:03:56Zทั้ง7กำลังทำงาน มีmodelcallsจริงแล้ว. ดูworker-receipts.json (taskId/branch/base/path/options) ไม่ใช้แผนแทนสถานะ
+
+|Agent|งาน|Worktree suffix|สถานะ ณ snapshot|
+|---|---|---|---|
+|01|notification PR55|t3-0e06f3b6|running,24closedmodelrequests|
+|02|mobileTransfercards|t3-f4cf0e44|running,38requests|
+|03|POpricing verification|t3-06670520|running,21requests|
+|04|navigationcontract|t3-5e83e1f2|running,15requests|
+|05|sharedresponsive|t3-309b4e37|running,16requests|
+|06|business/security|t3-720f3090|running,21requests|
+|07|visualE2Efixtures|t3-6983434b|running,13requests|
+
+Worktreesอยู่ใต้C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/. นับrequestsที่streamจบแล้ว ไม่รวมtooltime และไม่เอาจำนวนนี้สวมว่าทุกrequestไม่มีhiddenretry
 
 ## 3. Actual concurrent workers
 
-R72ยังไม่วัด. R70เคยวัด7OpenCoderequestlifecyclesทับกัน54ms, conservativeemission4; **upstream7inferenceUNVERIFIED** ไม่เอาตัวเลขเก่ามาสวมR72
+R72วัดเองแล้ว: **7modelrequestlifecycles**ทับกัน17:59:03.839–17:59:05.744Z (**1905ms**ในfirstpeak), conservativecontentemissionpeak4. Artifactconcurrency-initial.json + read-onlytools/model-request-overlap.cjsใช้assistant.created→streamed(จบgeneration) ไม่ใช่completedที่รวมtools. SQLเลือกเฉพาะmetadata ไม่เลือกuserprompts/text/toolarguments/auth. Assertทดสอบtouching/zero-durationintervalไม่ถูกนับพร้อมกัน. **upstream7inferenceยังUNVERIFIED** เพราะไม่มีwire/providerqueueexecutiontrace. ไม่ใช้ตัวเลขR70สวมR72
 
 ## 4. Provider/model per agent
 
-เลือกexplicit`opencode / 9router/gemini-3.8-flash-high`, `variant:high` ตามlivecatalog. ไม่เปิดAutoDispatch/HybridFailover ไม่แก้globalcompaction/nativepermissions
+ทั้ง7ได้รับactualT3receipt`providerInstanceId:opencode`, `model:9router/gemini-3.8-flash-high`, `options:[{id:variant,value:high}]` ตรงตามlivecatalog. ไม่มีforbiddenchild/fallback/nestedagents. ไม่เปิดAutoDispatch/HybridFailover ไม่แก้globalcompaction/nativepermissions
 
 ## 5. Root cause per issue
 
@@ -44,7 +56,7 @@ PENDING Agent02/05/07. WidthsตามOwnerทั้งหมด. Simulatedviewp
 
 ## 11. Business/security tests
 
-PENDING Agent06. KnownliveapprovedRulesbaselineAE39จาก01bb12c; latestAPIread401เพราะcachedtokenexpired ยังไม่สวมว่าดึงlivebytesล่าสุดได้. Emulatorsonly, noProductionstockwrites/Rulesdeploy
+Agent06testsยังPENDING. MAINแก้auditgapด้วยofficialcachedsessionrefresh(ไม่loginใหม่) แล้วGETproject/release/rulesetสำเร็จ18:06:12.949Z: rulesetcf5176f9, SHA256ae39c231c8c1dde879d1bba723275504ef8fb21c05894dd1e6e4335f9ac37270 ตรงknownbaseline01bb12c. CloudflareofficialCLIยืนยันProductionล่าสุดb82fd719/source6045b50ยังเดิม. ดูlive-baseline.json. ไม่มีbusinessdatarequest/write/Rulesdeployจากการตรวจนี้; testsเขียนemulatorเท่านั้น
 
 ## 12. Branch/commit/PR URLs
 
@@ -65,7 +77,7 @@ PR55/61มีฐานcandidateพร้อมและCI10/10; R72additionalgat
 ## 16. Remaining blockers / Owner actions
 
 - ยังไม่ขอOwnerทำReleaseAAdminLogisticsPASS/ReleaseBPR53mobilePASSซ้ำ
-- ไม่ขอFirebaseloginใหม่. APIcachedtokens401เป็นauditgap ไม่หยุดงานlocalทั้งหมด
+- ไม่ขอFirebaseloginใหม่; nativecachedOAuthrefreshและGETทางการปิดauditgap401ได้แล้ว ไม่rotateAPIkeys/แก้providercredentialsหรือdeploy
 - PhysicaliOS/Androidkeyboard/safeareaไม่อ้างจากdesktopemulation
 - ไม่มีrealLINEsend/Productionbusinesswrite/merge/deployจากR72
 
@@ -77,4 +89,5 @@ PR55/61มีฐานcandidateพร้อมและCI10/10; R72additionalgat
 - frontend-design `.../.agents/skills/frontend-design/SKILL.md`: loadedyes; directionเป็นoperational/contentfirstfourrowcards, ไม่rebrand/เปลี่ยนfontpalette/เพิ่มanimation
 - dispatching-parallel-agents `.../superpowers/skills/dispatching-parallel-agents/SKILL.md`: loadedyes; sourceowners/portsแยก, newchangesreview+integrateภายหลัง ไม่nestedagents
 - systematic-debugging: loadedในsession; backupพบtagduplicateเพราะdetachedworktreesแชร์HEAD. ตรวจtargetก่อนresumeเดิม ไม่force-tag/ลบข้อมูล. Snapshot196/46verified
-- ขั้นที่จะทำต่อ: dispatch, actualevidence, freshreviews, gates, CI. ห้ามนับการโหลดskillเป็นการทำstepsที่ยังPENDING
+- subagent-driven-development `.../superpowers/skills/subagent-driven-development/SKILL.md`: loadedyes; freshboundedtasks/ownreports/checkpointsและจะreview+integrateภายหลัง. ข้ามsequential-onlyrule/automaticmodelescalation/workspacedeletionตามOwner7parallel/strictallowlist/preservepolicy. ไม่อ้างว่าทำreviewหรือfinalgatesแล้ว
+- ขั้นที่จะทำต่อ: รับcheckpoint, actualvisual/businessevidence, freshreviews, combinedgates, CI. ห้ามนับการโหลดskillเป็นการทำstepsที่ยังPENDING

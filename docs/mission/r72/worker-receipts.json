@@ -1,0 +1,138 @@
+{
+  "recordedAt": "2026-10-24T18:08:46.147Z",
+  "workers": [
+    {
+      "agent": "01",
+      "taskId": "node:delegated-task:command%3Amcp%3Aa22abb7b-027d-4343-a1aa-d470483118bd%3Adelegate-task%3Ar72-agent01-round1",
+      "clientRequestId": "r72-agent01-round1",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "options": [
+        {
+          "id": "variant",
+          "value": "high"
+        }
+      ],
+      "dispatchReceipt": "running/working; target and options verified by MAIN",
+      "worktree": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-0e06f3b6",
+      "branch": "r72/agent01-notification",
+      "headAtSnapshot": "1651548aef5337d7caf786a081aefd7ee9a19a9a",
+      "openCodeOutcome": "running",
+      "metadataCapturedAt": "2026-10-24T18:03:56.735Z"
+    },
+    {
+      "agent": "02",
+      "taskId": "node:delegated-task:command%3Amcp%3Aa22abb7b-027d-4343-a1aa-d470483118bd%3Adelegate-task%3Ar72-agent02-round1",
+      "clientRequestId": "r72-agent02-round1",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "options": [
+        {
+          "id": "variant",
+          "value": "high"
+        }
+      ],
+      "dispatchReceipt": "running/working; target and options verified by MAIN",
+      "worktree": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-f4cf0e44",
+      "branch": "r72/agent02-logistics-mobile",
+      "headAtSnapshot": "6045b502171b1639d1e55c0f09e9a910e14ad064",
+      "openCodeOutcome": "running",
+      "metadataCapturedAt": "2026-10-24T18:03:56.735Z"
+    },
+    {
+      "agent": "03",
+      "taskId": "node:delegated-task:command%3Amcp%3Aa22abb7b-027d-4343-a1aa-d470483118bd%3Adelegate-task%3Ar72-agent03-round1",
+      "clientRequestId": "r72-agent03-round1",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "options": [
+        {
+          "id": "variant",
+          "value": "high"
+        }
+      ],
+      "dispatchReceipt": "running/working; target and options verified by MAIN",
+      "worktree": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-06670520",
+      "branch": "r72/agent03-price-verification",
+      "headAtSnapshot": "992f6defe8ebeeac62cec9993473b2d1aa836714",
+      "openCodeOutcome": "running",
+      "metadataCapturedAt": "2026-10-24T18:03:56.735Z"
+    },
+    {
+      "agent": "04",
+      "taskId": "node:delegated-task:command%3Amcp%3Aa22abb7b-027d-4343-a1aa-d470483118bd%3Adelegate-task%3Ar72-agent04-round1",
+      "clientRequestId": "r72-agent04-round1",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "options": [
+        {
+          "id": "variant",
+          "value": "high"
+        }
+      ],
+      "dispatchReceipt": "running/working; target and options verified by MAIN",
+      "worktree": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-5e83e1f2",
+      "branch": "r72/agent04-navigation-contract",
+      "headAtSnapshot": "1651548aef5337d7caf786a081aefd7ee9a19a9a",
+      "openCodeOutcome": "running",
+      "metadataCapturedAt": "2026-10-24T18:03:56.735Z"
+    },
+    {
+      "agent": "05",
+      "taskId": "node:delegated-task:command%3Amcp%3Aa22abb7b-027d-4343-a1aa-d470483118bd%3Adelegate-task%3Ar72-agent05-round1",
+      "clientRequestId": "r72-agent05-round1",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "options": [
+        {
+          "id": "variant",
+          "value": "high"
+        }
+      ],
+      "dispatchReceipt": "running/working; target and options verified by MAIN",
+      "worktree": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-309b4e37",
+      "branch": "r72/agent05-responsive-shared",
+      "headAtSnapshot": "6045b502171b1639d1e55c0f09e9a910e14ad064",
+      "openCodeOutcome": "running",
+      "metadataCapturedAt": "2026-10-24T18:03:56.735Z"
+    },
+    {
+      "agent": "06",
+      "taskId": "node:delegated-task:command%3Amcp%3Aa22abb7b-027d-4343-a1aa-d470483118bd%3Adelegate-task%3Ar72-agent06-round1",
+      "clientRequestId": "r72-agent06-round1",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "options": [
+        {
+          "id": "variant",
+          "value": "high"
+        }
+      ],
+      "dispatchReceipt": "running/working; target and options verified by MAIN",
+      "worktree": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-720f3090",
+      "branch": "r72/agent06-business-security",
+      "headAtSnapshot": "6045b502171b1639d1e55c0f09e9a910e14ad064",
+      "openCodeOutcome": "running",
+      "metadataCapturedAt": "2026-10-24T18:03:56.735Z"
+    },
+    {
+      "agent": "07",
+      "taskId": "node:delegated-task:command%3Amcp%3Aa22abb7b-027d-4343-a1aa-d470483118bd%3Adelegate-task%3Ar72-agent07-round1",
+      "clientRequestId": "r72-agent07-round1",
+      "providerInstanceId": "opencode",
+      "model": "9router/gemini-3.8-flash-high",
+      "options": [
+        {
+          "id": "variant",
+          "value": "high"
+        }
+      ],
+      "dispatchReceipt": "running/working; target and options verified by MAIN",
+      "worktree": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-6983434b",
+      "branch": "r72/agent07-logistics-visual",
+      "headAtSnapshot": "992f6defe8ebeeac62cec9993473b2d1aa836714",
+      "openCodeOutcome": "running",
+      "metadataCapturedAt": "2026-10-24T18:03:56.735Z"
+    }
+  ]
+}

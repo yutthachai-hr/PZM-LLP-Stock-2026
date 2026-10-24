@@ -1,0 +1,14 @@
+{
+  "firebaseCheckedAt": "2026-10-24T18:06:12.949Z",
+  "firebaseProject": "pzm-stock-x5",
+  "projectNumber": "789071579161",
+  "ruleset": "cf5176f9-7cba-4225-80f3-f19fb70824b0",
+  "rulesReleaseUpdatedAt": "2026-10-24T12:35:14.316608Z",
+  "rulesSha256": "ae39c231c8c1dde879d1bba723275504ef8fb21c05894dd1e6e4335f9ac37270",
+  "rulesEvidence": "Official Firebase CLI cached-session refresh, then project/release/ruleset GETs; no login prompt or business-data operation",
+  "cloudflareEvidence": "Official cached Wrangler pages deployment list --project-name pzmstock --environment production --json, after native cached OAuth refresh",
+  "latestProductionDeployment": "b82fd719-972e-44fe-be63-a9b5987f2bda",
+  "productionBranch": "main",
+  "productionSource": "6045b50",
+  "writes": "No Production business-data writes, Rules deployment, application release or LINE sends"
+}
