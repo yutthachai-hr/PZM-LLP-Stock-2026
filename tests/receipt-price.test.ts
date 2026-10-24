@@ -3,7 +3,6 @@ import {
   lineAmount,
   receiptTotal,
   resolveReceiptPrice,
-  type PriceSource,
   type ReceiptPrice,
 } from '../src/lib/receiptPrice'
 import type { Product, PurchaseOrderLine, SupplierItem } from '../src/types'
