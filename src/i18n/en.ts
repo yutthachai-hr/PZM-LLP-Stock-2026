@@ -18,6 +18,7 @@ export const EN: Record<string, string> = {
   'ยอดในระบบเปลี่ยนหลังนับ: {from} → {to}': 'Balance changed since you counted: {from} → {to}',
   'ยังไม่ได้ยืนยันยอดในระบบของรายการนี้': 'The balance for this row has not been confirmed yet',
   'ใช้ยอดใหม่': 'Use new figure',
+  'ใช้ยอดใหม่ของ "{name}"': 'Use new figure for "{name}"',
   'ไม่พบยอดคงเหลือเดิมของสินค้า "{name}" ที่ใช้เปรียบเทียบตอนนับ — กรุณาตรวจยอดใหม่': 'The previous balance of "{name}" for comparison could not be found — please check the count again',
   'ไม่พบยอดคงเหลือเดิมที่ใช้เปรียบเทียบตอนนับ — กรุณาตรวจยอดใหม่': 'The previous balance for comparison could not be found — please check the count again',
   'ลองใหม่': 'Try again',

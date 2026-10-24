@@ -555,6 +555,67 @@ describe('Stock count stale-level conflict (P0 C-02)', () => {
     expect(finalSheet.postedIds).toEqual(expect.arrayContaining(['p1', 'p2']))
   })
 
+  test('postMonthlyCount retry is idempotent: already committed items in postedIds are not re-filed even if re-sent by stale caller', async () => {
+    const sheetId = 'sheet-monthly-idempotent-retry'
+    seed('monthlyCounts', [
+      {
+        id: sheetId,
+        locationId: MAIN,
+        month: '2026-09',
+        countDate: Date.UTC(2026, 8, 30),
+        status: 'counting',
+        lines: {},
+        createdBy: ACTOR.id,
+        createdByName: ACTOR.name,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ])
+
+    // Current levels: p1 = 10, p2 = 20
+    // Part 0 has p1 (diff +2, expected 10).
+    // Part 1 has p2 (diff +5, expected 99 -> conflict!).
+    await expect(
+      postMonthlyCount({
+        id: sheetId,
+        actor: ACTOR,
+        note: 'monthly count part 1 conflict',
+        results: {},
+        parts: [
+          [{ productId: 'p1', productName: 'Bacon', unit: 'KG', diff: 2, expectedLevel: 10 }],
+          [{ productId: 'p2', productName: 'Mozzarella', unit: 'KG', diff: 5, expectedLevel: 99 }],
+        ],
+      }),
+    ).rejects.toThrow(StockLevelConflictError)
+
+    expect(getLevel(MAIN, 'p1')).toBe(12)
+    const movementsAfterPart0 = raw('stockMovements').filter((m) => m.productId === 'p1')
+    expect(movementsAfterPart0).toHaveLength(1)
+
+    // Conflict catch refreshes sheet from getMonthlyCount(id)
+    const sheetAfterConflict = (await (await import('../src/services/monthlyCounts')).getMonthlyCount(sheetId)) as MonthlyCount
+    expect(sheetAfterConflict.postedIds).toEqual(['p1'])
+    expect(sheetAfterConflict.status).toBe('posting')
+
+    // Stale caller retries without filtering out already-posted part 0, sending both parts again
+    const docNos = await postMonthlyCount({
+      id: sheetId,
+      actor: ACTOR,
+      note: 'monthly count retry with stale parts',
+      results: {},
+      parts: [
+        [{ productId: 'p1', productName: 'Bacon', unit: 'KG', diff: 2, expectedLevel: 10 }],
+        [{ productId: 'p2', productName: 'Mozzarella', unit: 'KG', diff: 5, expectedLevel: 20 }],
+      ],
+    })
+
+    // Service idempotency skips p1 because it was already recorded in sheet.postedIds
+    expect(docNos).toHaveLength(1)
+    expect(getLevel(MAIN, 'p1')).toBe(12) // Not incremented again to 14
+    expect(raw('stockMovements').filter((m) => m.productId === 'p1')).toHaveLength(1) // Still exactly 1
+    expect(getLevel(MAIN, 'p2')).toBe(25)
+  })
+
   test('postMonthlyCount: product present in sheet.lines with captured expectedLevel detects conflict on level change', async () => {
     const sheetId = 'sheet-monthly-untracked'
     seed('monthlyCounts', [

@@ -55,7 +55,7 @@ const MAX_MATCHES = 40
  * ("2 broken"). Whichever box the person typed in last is the one that holds; the other is
  * shown from it.
  */
-interface AdjRow {
+export interface AdjRow {
   productId: string
   productName: string
   unit: string
@@ -76,9 +76,45 @@ interface AdjRow {
   seen?: { system: number; level: number }
 }
 
-function deltaOf(r: AdjRow, system: number): number {
+export function deltaOf(r: AdjRow, system: number): number {
   if (r.value === null) return 0
   return roundQty(r.mode === 'count' ? r.value - (r.seen?.system ?? system) : r.value)
+}
+
+export function displayedSystemQty(r: Pick<AdjRow, 'mode' | 'seen'>, liveSystemQty: number): number {
+  return r.mode === 'count' && r.seen ? r.seen.system : liveSystemQty
+}
+
+export function isMoved(r: AdjRow, currentSystem: number, currentLevel: number): boolean {
+  return (
+    r.mode === 'count' &&
+    r.value !== null &&
+    (!r.seen || roundQty(r.seen.system) !== roundQty(currentSystem) || roundQty(r.seen.level) !== roundQty(currentLevel))
+  )
+}
+
+export function mergeAdjustImportRow(
+  existing: AdjRow | undefined,
+  imported: { product: { id: string; name: string; unitType: string }; qty: number; note?: string },
+  seenNow: { system: number; level: number },
+  defaultReason: string,
+): AdjRow {
+  if (existing) {
+    // Preserve existing count row seen (including legacy undefined baseline requiring confirm) on re-import;
+    // do not preserve seen if switching a delta row into a new count row.
+    const seen = existing.mode === 'count' ? existing.seen : seenNow
+    return { ...existing, mode: 'count', value: imported.qty, entryUnit: undefined, entryQty: undefined, seen }
+  }
+  return {
+    productId: imported.product.id,
+    productName: imported.product.name,
+    unit: imported.product.unitType,
+    mode: 'count',
+    value: imported.qty,
+    reason: defaultReason,
+    seen: seenNow,
+    ...(imported.note ? { note: imported.note } : {}),
+  }
 }
 
 /**
@@ -198,8 +234,7 @@ export function AdjustPage() {
   }
   const seenNow = (productId: string) => ({ system: system(productId), level: locationId ? qtyAt(locationId, productId) : 0 })
   /** A keyed count whose balance moved since it was keyed (or that has no record of it): needs the person's confirmation. */
-  const moved = (r: AdjRow) =>
-    r.mode === 'count' && r.value !== null && (!r.seen || roundQty(r.seen.system) !== roundQty(system(r.productId)) || roundQty(r.seen.level) !== roundQty(locationId ? qtyAt(locationId, r.productId) : 0))
+  const moved = (r: AdjRow) => isMoved(r, system(r.productId), locationId ? qtyAt(locationId, r.productId) : 0)
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -221,7 +256,12 @@ export function AdjustPage() {
             ? t('ยอดในระบบเปลี่ยนหลังนับ: {from} → {to}', { from: fmtQty(r.seen.system), to: fmtQty(system(r.productId)) })
             : t('ยังไม่ได้ยืนยันยอดในระบบของรายการนี้')}
         </span>
-        <Button size="sm" variant="secondary" onClick={() => patch(r.productId, { seen: seenNow(r.productId) })}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => patch(r.productId, { seen: seenNow(r.productId) })}
+          aria-label={t('ใช้ยอดใหม่ของ "{name}"', { name: r.productName })}
+        >
           {t('ใช้ยอดใหม่')}
         </Button>
       </div>
@@ -482,10 +522,9 @@ export function AdjustPage() {
                   setRows((rs) => {
                     const next = [...rs]
                     for (const i of imported) {
-                      const seen = seenNow(i.product.id)
-                      const row: AdjRow = { productId: i.product.id, productName: i.product.name, unit: i.product.unitType, mode: 'count', value: i.qty, reason: defaultReason, seen, ...(i.note ? { note: i.note } : {}) }
                       const at = next.findIndex((r) => r.productId === i.product.id)
-                      if (at >= 0) next[at] = { ...next[at], mode: 'count', value: i.qty, entryUnit: undefined, entryQty: undefined, seen }
+                      const row = mergeAdjustImportRow(at >= 0 ? next[at] : undefined, i, seenNow(i.product.id), defaultReason)
+                      if (at >= 0) next[at] = row
                       else next.push(row)
                     }
                     return next
@@ -562,7 +601,7 @@ export function AdjustPage() {
                           <div className="truncate text-sm font-medium text-ink">{r.productName}</div>
                           <div className="text-xs text-ink-soft">
                             {backdated ? t('ณ สิ้นวัน {date}', { date: formatThaiDateShort(dayStart) }) : t('ในระบบ')}{' '}
-                            <span className="num">{laterReady ? fmtQty(system(r.productId)) : '…'}</span> {r.unit} ·{' '}
+                            <span className="num">{laterReady ? fmtQty(displayedSystemQty(r, system(r.productId))) : '…'}</span> {r.unit} ·{' '}
                             {t(ADJUST_REASONS.find((x) => x.value === r.reason)?.label ?? r.reason)}
                           </div>
                         </div>
@@ -634,7 +673,7 @@ export function AdjustPage() {
                             </div>
                           </td>
                           <td className="num px-2 py-2 text-right text-ink-soft">
-                            {laterReady ? fmtQty(r.mode === 'count' && r.seen ? r.seen.system : sys) : '…'} <span className="text-xs">{r.unit}</span>
+                            {laterReady ? fmtQty(displayedSystemQty(r, sys)) : '…'} <span className="text-xs">{r.unit}</span>
                             {movedNotice(r)}
                           </td>
                           <td className="px-2 py-2">

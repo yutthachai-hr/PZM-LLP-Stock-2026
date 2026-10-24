@@ -313,8 +313,6 @@ export function MonthlyCountSheet() {
     } catch (e) {
       if (e instanceof StockLevelConflictError || e instanceof MissingExpectedLevelError) {
         setAsking(null)
-        toast.error(errText(e, t))
-        return
       }
       toast.error(errText(e, t))
       setSheet(await getMonthlyCount(id).catch(() => sheet))
