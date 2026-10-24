@@ -40,6 +40,16 @@ release/security gates take precedence over imported skill instructions.
   Existing Production authorization boundaries still apply. Templates are inert files,
   not startup hooks; do not run scripts merely because a skill was loaded.
 
+## R62 routing (Owner, 24 Oct 2026)
+
+MAIN is Pi Claude; Pi Codex is MAIN backup only. Never use ChatGPT/GPT/GPT-OSS/Codex/Claude
+as a child, including health probes, through any provider. Explicit manual selection only:
+Gemini 3.8 Flash High via OpenCode/9Router first, then available DeepSeek/GLM, then qualified
+local Qwen with enforced task restrictions. No silent fallback, Auto Dispatch or Hybrid Failover.
+The custom guard is retired through Pi resource configuration; native T3/Pi permissions and
+Production Release Approval remain. Historical guard failures below are not instructions to
+reinstall it. Local Qwen remains restricted until its task tools are qualified.
+
 ## Collision and update policy
 
 Keep pstack's `tdd` and `teach` authoritative. Exclude Matt's same-name skills from installs;
@@ -50,8 +60,9 @@ Before install/update: back up affected files, inspect the source and installer,
 all project/global names and confirm the target is safe. The inspected installer deletes
 existing target directories before copying: never use a bulk update over local customizations.
 Pin/record source SHA, compare files, review changes and reload only through supported
-interfaces. If Guard refuses a command, report BLOCKED instead of disguising it or copying
-files as an alternative route. See the installation record for the current blocked step.
+interfaces. If an active permission gate refuses a command, report BLOCKED instead of
+disguising it or copying files as an alternative route. The installation record preserves the
+historical blocked step; R62 does not authorize replaying installation or resurrecting Guard.
 
 Skill reporting remains exactly as required by AGENTS.md: loaded path, executed/skipped
 steps, reason and evidence. Installing or reading a skill alone is not full workflow use.
