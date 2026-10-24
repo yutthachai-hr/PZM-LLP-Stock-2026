@@ -81,7 +81,10 @@ export function resolveReceiptPrice(p: {
     }
   }
 
-  const factor = hasPreservedRate ? (line.baseQty as number) / line.orderedQty : 1
+  const factor =
+    cleanEntryUnit !== undefined && hasPreservedRate
+      ? (line.baseQty as number) / line.orderedQty
+      : 1
   if (!Number.isFinite(factor) || factor <= 0) {
     return {
       source: 'missing',

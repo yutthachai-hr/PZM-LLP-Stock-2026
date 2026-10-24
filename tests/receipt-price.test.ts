@@ -546,6 +546,27 @@ describe('R69 AGENT03: Receipt price resolver', () => {
       expect(res.unit).toBe('EA')
     })
 
+    test('line without entryUnit ignores baseQty and preserves factor 1 (unitEA, entryUnit undefined, orderedQty 2, baseQty 12, cost 20 -> unitPrice 20 and lineAmount 40, not 240)', () => {
+      const line: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-ea',
+        unit: 'EA',
+        entryUnit: undefined,
+        orderedQty: 2,
+        baseQty: 12,
+      }
+      const res = resolveReceiptPrice({
+        line,
+        supplierId: 'sup-1',
+        product: { id: 'prod-ea', cost: 20 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(res.unitPrice).toBe(20)
+      expect(res.basePrice).toBe(20)
+      expect(res.unit).toBe('EA')
+      expect(lineAmount(res, 2)).toBe(40)
+    })
+
     test('blank or whitespace entryUnit falls back to line.unit', () => {
       const lineEmpty: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
         productId: 'prod-1',

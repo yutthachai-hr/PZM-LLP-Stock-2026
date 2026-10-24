@@ -497,7 +497,7 @@ describe('R69 AGENT03: Receipt price unit-conversion consistency', () => {
   })
 
   describe('Finding documentation: legacy lines without baseQty', () => {
-    test('documents difference when baseQty is absent: resolver uses factor 1, filing falls back to resolveFactor', () => {
+    test('documents difference when baseQty is absent: resolver treats alternate unit without preserved rate as missing (null), while filing falls back to resolveFactor', () => {
       // Line created before baseQty was saved on PO line (legacy PO)
       const legacyLine: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
         productId: 'prod-legacy',
@@ -514,7 +514,7 @@ describe('R69 AGENT03: Receipt price unit-conversion consistency', () => {
         unitConversions: [{ label: 'Pack', size: 6, of: 'EA' }],
       }
 
-      // Resolver (pure, no dynamic lookup per contract §3.2):
+      // Resolver (pure, no dynamic lookup per contract §3.2; alternate unit without preserved rate returns missing/null):
       const res = resolveReceiptPrice({
         line: legacyLine,
         supplierId: 's',
@@ -522,7 +522,9 @@ describe('R69 AGENT03: Receipt price unit-conversion consistency', () => {
         supplierItems: [],
         asOf: 100,
       })
-      expect(res.unitPrice).toBe(20.0) // factor 1 fallback
+      expect(res.source).toBe('missing')
+      expect(res.unitPrice).toBeNull()
+      expect(res.basePrice).toBeNull()
 
       // Filing code (src/services/purchaseOrders.ts:614) queries product and uses resolveFactor:
       const filingQty = filingStockQty(legacyLine, product, 2)

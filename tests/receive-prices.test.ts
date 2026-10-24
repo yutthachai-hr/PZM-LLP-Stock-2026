@@ -26,8 +26,11 @@ describe('receive page prices: line pricing and source labels', () => {
     },
     {
       id: 'prod-cost-latest',
-      cost: 50,
       costHistory: [{ effectiveAt: asOf + 86400000, cost: 60 }],
+    },
+    {
+      id: 'prod-cost-master',
+      cost: 50,
     },
     {
       id: 'prod-missing',
@@ -67,6 +70,16 @@ describe('receive page prices: line pricing and source labels', () => {
     expect(res.price.unitPrice).toBe(60)
     expect(res.sourceLabel).toBe('ต้นทุนล่าสุด')
     expect(res.amount).toBe(90)
+  })
+
+  test('line with costLatest from master product cost: source label is "ต้นทุนล่าสุด"', () => {
+    const line = { productId: 'prod-cost-master', unit: 'KG', orderedQty: 4 }
+    const res = resolveLinePricing(line, supplierId, { qty: 1.5, reason: '' }, products, supplierItems, asOf)
+
+    expect(res.price.source).toBe('costLatest')
+    expect(res.price.unitPrice).toBe(50)
+    expect(res.sourceLabel).toBe('ต้นทุนล่าสุด')
+    expect(res.amount).toBe(75)
   })
 
   test('line with missing price: source label is "ยังไม่ระบุราคา", amount is null', () => {

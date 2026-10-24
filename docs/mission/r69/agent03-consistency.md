@@ -94,13 +94,13 @@ New test file: `tests/receipt-price-consistency.test.ts` (14 tests).
 ## 4. Findings
 
 ### Finding 1: Rate Source Consistency vs Legacy Fallback
-- **Location**: `src/services/purchaseOrders.ts:612-619` vs `src/lib/receiptPrice.ts:49-58`
+- **Location**: `src/services/purchaseOrders.ts:612-619` vs `src/lib/receiptPrice.ts:75-82`
 - **Analysis**:
   - For all modern purchase order lines (created since `baseQty` was introduced), both the filing code and the price resolver use the line's preserved rate: `factor = baseQty / orderedQty`. They strictly agree.
-  - For legacy purchase order lines created prior to `baseQty` persistence where `line.baseQty === undefined`:
+  - For legacy purchase order lines created prior to `baseQty` persistence where `line.baseQty === undefined` with alternate unit (`entryUnit` differs from `unit`):
     - Filing code (`src/services/purchaseOrders.ts:614`) falls back to querying the product and calling `resolveFactor(product, line.entryUnit)` at filing time.
-    - Receipt price resolver (`src/lib/receiptPrice.ts:58`) defaults to `factor = 1` because dynamic UOM resolution is strictly forbidden by contract §3.2 ("Dynamic conversion rates must NOT be looked up at receipt time, ensuring a later UOM definition change never reprices an already-placed purchase order").
-- **Recommendation**: Leave both as-is. All active orders carry `baseQty`.
+    - Receipt price resolver (`src/lib/receiptPrice.ts:75`) returns `source: 'missing'`, `unitPrice: null`, and `basePrice: null` because dynamic UOM resolution is strictly forbidden by contract §3.2 ("Dynamic conversion rates must NOT be looked up at receipt time, ensuring a later UOM definition change never reprices an already-placed purchase order"), and arbitrary fallback to factor 1 for unknown alternate units is forbidden to prevent financial distortion.
+- **Recommendation**: Retain intentional `missing` (null) for unpreserved legacy alternate-unit lines; all active modern orders carry `baseQty`.
 
 ### Finding 2: Precision Handling for Repeating / Non-Terminating UOM Factors
 - **Location**: `src/services/purchaseOrders.ts:620` (via `src/lib/inventoryRules/uom.ts:128-130`) vs `src/lib/receiptPrice.ts:162-163`
