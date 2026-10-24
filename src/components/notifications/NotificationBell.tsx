@@ -199,7 +199,7 @@ export function NotificationBell() {
           <button
             onClick={() => {
               setOpen(false)
-              navigate('/settings#notifications')
+              navigate('/settings/notifications')
             }}
             className="cursor-pointer text-xs text-ink-soft underline-offset-2 hover:underline"
           >

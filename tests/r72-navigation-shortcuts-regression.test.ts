@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, test, vi } from 'vitest'
 import { matchPath } from 'react-router-dom'
-import { APP_DECLARED_ROUTES } from './r72-navigation-contract.test'
 
 describe('R72 Navigation Fixes: RED reproduction & regression verification', () => {
   describe('1. NotificationBell settings link', () => {

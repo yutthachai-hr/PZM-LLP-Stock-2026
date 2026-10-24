@@ -46,6 +46,7 @@ describe('canonicalLink', () => {
     ['/orders?po=po6', '/orders?po=po6'],
     ['/calendar?item=task__e1', '/calendar?item=task__e1'],
     ['/requests/pr1', '/requests/pr1'],
+    ['/settings/notifications', '/settings/notifications'],
     ['/settings#notifications', '/settings#notifications'],
     ['/', '/'],
   ])('%s -> %s', (link, want) => {
