@@ -22,6 +22,7 @@ import { buildActivityLog, type ActivityInput } from '../src/lib/activityLog'
 import { recentActivity } from '../src/lib/sidebarLive'
 import { globalSearch } from '../src/lib/globalSearch'
 import { actionsFor, navFor, NAV, TAB_ITEMS } from '../src/components/nav/navItems'
+import { bkkDayStart } from '../src/lib/inventoryRules/time'
 import type {
   Product,
   PurchaseOrder,
@@ -65,6 +66,9 @@ export function resolveRoute(link: string): RouteResolution {
 }
 
 // Synthetic fixtures for building generator links
+const TEST_NOW = new Date('2026-10-19T02:30:00.000Z').getTime() // Monday 09:30 AM BKK
+const TEST_DAY_START = bkkDayStart(TEST_NOW)
+
 const syntheticSupplier: Supplier = {
   id: 'sup-panfood',
   code: 'PF',
@@ -88,7 +92,7 @@ const syntheticOrder: PurchaseOrder = {
   createdAt: 1000,
   updatedAt: 1000,
   orderedAt: 1000,
-  expectedAt: 2000,
+  expectedAt: TEST_DAY_START,
 }
 
 const syntheticRequest: PurchaseRequest = {
@@ -111,7 +115,7 @@ const syntheticTask: StockEvent = {
   title: 'Monthly Count',
   status: 'inProgress',
   priority: 'normal',
-  startAt: 1000,
+  startAt: TEST_NOW + 15 * 60_000,
   locationId: 'wh-main',
   assignedToAll: true,
   createdAt: 1000,
@@ -184,7 +188,7 @@ describe('ROUTE-CONTRACT: App.tsx Route Table & NOTIFICATION_ROUTES Integrity', 
 
 describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query Params', () => {
   const evaluatedDrafts = evaluate({
-    now: 1500,
+    now: TEST_NOW,
     jobs: ['tasks', 'purchasing', 'inventory', 'brief', 'weekly', 'risk'],
     events: [syntheticTask],
     orders: [syntheticOrder],
@@ -290,75 +294,119 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'taskSoon / taskOverdue / taskEscalated',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'taskSoon')?.link ?? '/calendar?item=task__task-fixture-001',
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'taskSoon')
+        if (!d) throw new Error('Missing taskSoon in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/calendar',
       expectedParams: ['item'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'poArriving / poDelayed',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'poArriving')?.link ?? `/orders?po=${syntheticOrder.id}`,
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'poArriving')
+        if (!d) throw new Error('Missing poArriving in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/orders',
       expectedParams: ['po'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'cutoffToday',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'cutoffToday')?.link ?? '/requests',
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'cutoffToday')
+        if (!d) throw new Error('Missing cutoffToday in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/requests',
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'lowStock',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'lowStock')?.link ?? `/calendar?item=lowStock__${syntheticProduct.id}__wh-main`,
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'lowStock')
+        if (!d) throw new Error('Missing lowStock in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/calendar',
       expectedParams: ['item'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'outOfStock',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'outOfStock')?.link ?? `/calendar?item=outOfStock__${syntheticProduct.id}__wh-main`,
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'outOfStock')
+        if (!d) throw new Error('Missing outOfStock in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/calendar',
       expectedParams: ['item'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'reorder',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'reorder')?.link ?? `/calendar?item=reorder__${syntheticProduct.id}__wh-main`,
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'reorder')
+        if (!d) throw new Error('Missing reorder in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/calendar',
       expectedParams: ['item'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'stockoutSoon',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'stockoutSoon')?.link ?? `/calendar?item=stockoutEstimate__${syntheticProduct.id}__wh-main`,
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'stockoutSoon')
+        if (!d) throw new Error('Missing stockoutSoon in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/calendar',
       expectedParams: ['item'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'dailyBrief',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'dailyBrief')?.link ?? '/calendar?filter=today',
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'dailyBrief')
+        if (!d) throw new Error('Missing dailyBrief in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/calendar',
       expectedParams: ['filter'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'weeklySummary',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'weeklySummary')?.link ?? '/reports',
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'weeklySummary')
+        if (!d) throw new Error('Missing weeklySummary in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/reports',
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'deliveryRisk',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'deliveryRisk')?.link ?? `/orders?po=${syntheticOrder.id}`,
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'deliveryRisk')
+        if (!d) throw new Error('Missing deliveryRisk in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/orders',
       expectedParams: ['po'],
     },
     {
       source: 'src/lib/inventoryRules/notifications.ts:evaluate',
       generator: 'stockoutRisk',
-      getLink: () => evaluatedDrafts.find((d) => d.kind === 'stockoutRisk')?.link ?? '/',
+      getLink: () => {
+        const d = evaluatedDrafts.find((x) => x.kind === 'stockoutRisk')
+        if (!d) throw new Error('Missing stockoutRisk in evaluatedDrafts')
+        return d.link
+      },
       expectedRoute: '/',
     },
 
@@ -514,7 +562,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           taskAction: () => '',
           t: (k) => k,
         })
-        return entries[0]?.link ?? `/movements?product=${syntheticMovement.productId}`
+        const entry = entries[0]
+        if (!entry) throw new Error('Missing movement entry in activity log')
+        return entry.link
       },
       expectedRoute: '/movements',
       expectedParams: ['product'],
@@ -540,7 +590,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           taskAction: () => '',
           t: (k) => k,
         })
-        return entries[0]?.link ?? `/orders?po=${syntheticOrder.id}`
+        const entry = entries[0]
+        if (!entry) throw new Error('Missing order entry in activity log')
+        return entry.link
       },
       expectedRoute: '/orders',
       expectedParams: ['po'],
@@ -566,7 +618,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           taskAction: () => '',
           t: (k) => k,
         })
-        return entries[0]?.link ?? `/requests/${syntheticRequest.id}`
+        const entry = entries[0]
+        if (!entry) throw new Error('Missing request entry in activity log')
+        return entry.link
       },
       expectedRoute: '/requests/:id',
     },
@@ -591,7 +645,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           taskAction: () => '',
           t: (k) => k,
         })
-        return entries[0]?.link ?? `/calendar?item=task__${syntheticTask.id}`
+        const entry = entries[0]
+        if (!entry) throw new Error('Missing task entry in activity log')
+        return entry.link
       },
       expectedRoute: '/calendar',
       expectedParams: ['item'],
@@ -601,14 +657,22 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
     {
       source: 'src/lib/sidebarLive.ts:recentActivity',
       generator: 'sidebarLive:movement',
-      getLink: () => recentActivity([syntheticMovement], [], 1500)[0]?.link ?? `/movements?doc=${syntheticMovement.docNo}`,
+      getLink: () => {
+        const item = recentActivity([syntheticMovement], [], 1500)[0]
+        if (!item) throw new Error('Missing movement item in recentActivity')
+        return item.link
+      },
       expectedRoute: '/movements',
       expectedParams: ['doc'],
     },
     {
       source: 'src/lib/sidebarLive.ts:recentActivity',
       generator: 'sidebarLive:order',
-      getLink: () => recentActivity([], [syntheticOrder], 1500)[0]?.link ?? `/orders?po=${syntheticOrder.id}`,
+      getLink: () => {
+        const item = recentActivity([], [syntheticOrder], 1500)[0]
+        if (!item) throw new Error('Missing order item in recentActivity')
+        return item.link
+      },
       expectedRoute: '/orders',
       expectedParams: ['po'],
     },
@@ -626,7 +690,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           movements: [syntheticMovement],
           label: (k) => k,
         })
-        return res.hits.find((h) => h.group === 'products')?.to ?? `/products/${syntheticProduct.id}/card`
+        const hit = res.hits.find((h) => h.group === 'products')
+        if (!hit) throw new Error('Missing product hit in globalSearch')
+        return hit.to
       },
       expectedRoute: '/products/:id/card',
     },
@@ -642,7 +708,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           movements: [syntheticMovement],
           label: (k) => k,
         })
-        return res.hits.find((h) => h.group === 'documents')?.to ?? `/movements?doc=${syntheticMovement.docNo}`
+        const hit = res.hits.find((h) => h.group === 'documents')
+        if (!hit) throw new Error('Missing document hit in globalSearch')
+        return hit.to
       },
       expectedRoute: '/movements',
       expectedParams: ['doc'],
@@ -659,7 +727,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           movements: [syntheticMovement],
           label: (k) => k,
         })
-        return res.hits.find((h) => h.group === 'suppliers')?.to ?? `/suppliers?id=${syntheticSupplier.id}`
+        const hit = res.hits.find((h) => h.group === 'suppliers')
+        if (!hit) throw new Error('Missing supplier hit in globalSearch')
+        return hit.to
       },
       expectedRoute: '/suppliers',
       expectedParams: ['id'],
@@ -676,7 +746,9 @@ describe('ROUTE-CONTRACT: All Link Generators Match Real Routes & Required Query
           movements: [syntheticMovement],
           label: (k) => k,
         })
-        return res.hits.find((h) => h.group === 'locations')?.to ?? `/movements?location=${syntheticLocation.id}`
+        const hit = res.hits.find((h) => h.group === 'locations')
+        if (!hit) throw new Error('Missing location hit in globalSearch')
+        return hit.to
       },
       expectedRoute: '/movements',
       expectedParams: ['location'],
