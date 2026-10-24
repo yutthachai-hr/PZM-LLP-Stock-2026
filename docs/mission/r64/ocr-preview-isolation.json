@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-10-24T10:01:10.468Z",
+  "host": "59c87cea.pzmstock.pages.dev",
+  "status": 503,
+  "tier": "preview",
+  "error": "preview_isolated",
+  "method": "GET",
+  "upstreamOcrInvoked": false
+}
