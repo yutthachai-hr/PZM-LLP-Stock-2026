@@ -14,6 +14,7 @@
  * This module is pure and does not query or write to backend or services.
  */
 
+import { sameUnit } from './units'
 import type { CostEntry, Product, PurchaseOrderLine, SupplierItem } from '../types'
 
 export type PriceSource = 'supplierPrice' | 'costAsOf' | 'costLatest' | 'missing'
@@ -29,6 +30,19 @@ export interface ReceiptPrice {
   effectiveAt?: number
 }
 
+function normalizeZero(n: number | null | undefined): number | null {
+  if (n === null || n === undefined) return null
+  return Object.is(n, -0) ? 0 : n
+}
+
+function isBetterCostEntry(candidate: CostEntry, current: CostEntry): boolean {
+  if (candidate.effectiveAt > current.effectiveAt) return true
+  if (candidate.effectiveAt < current.effectiveAt) return false
+  const candAt = typeof candidate.at === 'number' && Number.isFinite(candidate.at) ? candidate.at : -Infinity
+  const currAt = typeof current.at === 'number' && Number.isFinite(current.at) ? current.at : -Infinity
+  return candAt > currAt
+}
+
 /**
  * Resolves unit price and base price for a received PO line.
  * Brand scoping: Caller passes brand-scoped line, product, and supplierItems.
@@ -41,24 +55,44 @@ export function resolveReceiptPrice(p: {
   asOf: number
 }): ReceiptPrice {
   const { line, supplierId, product, supplierItems, asOf } = p
-  const displayedUnit = line.entryUnit ?? line.unit
 
-  // Displayed-unit conversion uses the PO's preserved rate (baseQty / orderedQty)
-  // ONLY when entryUnit is set and baseQty is a finite number and orderedQty > 0, else factor 1.
-  // Note: do NOT use current product.unitConversions - later rate changes must not reprice placed orders.
+  const cleanEntryUnit =
+    typeof line.entryUnit === 'string' && line.entryUnit.trim() !== ''
+      ? line.entryUnit.trim()
+      : undefined
+  const displayedUnit = cleanEntryUnit ?? line.unit
+
+  const isAlternateUnit = cleanEntryUnit !== undefined && !sameUnit(cleanEntryUnit, line.unit)
+
   const hasPreservedRate =
-    typeof line.entryUnit === 'string' &&
-    line.entryUnit.trim() !== '' &&
     typeof line.baseQty === 'number' &&
     Number.isFinite(line.baseQty) &&
+    line.baseQty > 0 &&
     typeof line.orderedQty === 'number' &&
     Number.isFinite(line.orderedQty) &&
     line.orderedQty > 0
 
+  if (isAlternateUnit && !hasPreservedRate) {
+    return {
+      source: 'missing',
+      basePrice: null,
+      unitPrice: null,
+      unit: displayedUnit,
+    }
+  }
+
   const factor = hasPreservedRate ? (line.baseQty as number) / line.orderedQty : 1
+  if (!Number.isFinite(factor) || factor <= 0) {
+    return {
+      source: 'missing',
+      basePrice: null,
+      unitPrice: null,
+      unit: displayedUnit,
+    }
+  }
 
   // 1) Active SupplierItem of THIS supplierId + productId with finite buyingPrice >= 0
-  const matchedSupplierItem = supplierItems.find(
+  const activeMatchingSupplierItems = supplierItems.filter(
     (item) =>
       item.active &&
       item.supplierId === supplierId &&
@@ -68,18 +102,32 @@ export function resolveReceiptPrice(p: {
       item.buyingPrice >= 0,
   )
 
-  if (matchedSupplierItem) {
-    const basePrice = matchedSupplierItem.buyingPrice as number
-    return {
-      source: 'supplierPrice',
-      basePrice,
-      unitPrice: basePrice * factor,
-      unit: displayedUnit,
+  if (activeMatchingSupplierItems.length > 0) {
+    const firstPrice = activeMatchingSupplierItems[0].buyingPrice
+    const allSamePrice = activeMatchingSupplierItems.every((item) => item.buyingPrice === firstPrice)
+    if (allSamePrice) {
+      const basePrice = normalizeZero(firstPrice) as number
+      const unitPrice = normalizeZero(basePrice * factor)
+      if (unitPrice !== null && Number.isFinite(unitPrice) && unitPrice >= 0) {
+        return {
+          source: 'supplierPrice',
+          basePrice,
+          unitPrice,
+          unit: displayedUnit,
+        }
+      }
     }
+    // Conflicting active supplier items: skip ambiguous supplier source, proceed to product fallback
   }
 
+  // Only use product cost and history when product.id === line.productId
+  const matchingProduct =
+    product && typeof line.productId === 'string' && line.productId !== '' && product.id === line.productId
+      ? product
+      : undefined
+
   // Filter valid costHistory entries
-  const validHistory = (product?.costHistory ?? []).filter(
+  const validHistory = (matchingProduct?.costHistory ?? []).filter(
     (entry): entry is CostEntry =>
       typeof entry.cost === 'number' &&
       Number.isFinite(entry.cost) &&
@@ -92,44 +140,58 @@ export function resolveReceiptPrice(p: {
   let bestAsOf: CostEntry | undefined
   for (const entry of validHistory) {
     if (entry.effectiveAt <= asOf) {
-      if (!bestAsOf || entry.effectiveAt >= bestAsOf.effectiveAt) {
+      if (!bestAsOf || isBetterCostEntry(entry, bestAsOf)) {
         bestAsOf = entry
       }
     }
   }
 
   if (bestAsOf) {
-    const basePrice = bestAsOf.cost
-    return {
-      source: 'costAsOf',
-      basePrice,
-      unitPrice: basePrice * factor,
-      unit: displayedUnit,
-      effectiveAt: bestAsOf.effectiveAt,
+    const basePrice = normalizeZero(bestAsOf.cost) as number
+    const unitPrice = normalizeZero(basePrice * factor)
+    if (unitPrice !== null && Number.isFinite(unitPrice) && unitPrice >= 0) {
+      return {
+        source: 'costAsOf',
+        basePrice,
+        unitPrice,
+        unit: displayedUnit,
+        effectiveAt: bestAsOf.effectiveAt,
+      }
     }
   }
 
   // 3) product.cost (or newest history when all entries are after asOf) -> 'costLatest'
+  // Prefer valid product.cost before newest future history if both exist
+  const hasProductCost =
+    typeof matchingProduct?.cost === 'number' &&
+    Number.isFinite(matchingProduct.cost) &&
+    matchingProduct.cost >= 0
+
   let newestHistory: CostEntry | undefined
-  for (const entry of validHistory) {
-    if (!newestHistory || entry.effectiveAt >= newestHistory.effectiveAt) {
-      newestHistory = entry
+  if (!hasProductCost) {
+    for (const entry of validHistory) {
+      if (!newestHistory || isBetterCostEntry(entry, newestHistory)) {
+        newestHistory = entry
+      }
     }
   }
 
-  const latestCost =
-    newestHistory !== undefined
+  const latestCost = hasProductCost
+    ? matchingProduct!.cost
+    : newestHistory !== undefined
       ? newestHistory.cost
-      : typeof product?.cost === 'number' && Number.isFinite(product.cost) && product.cost >= 0
-        ? product.cost
-        : undefined
+      : undefined
 
   if (latestCost !== undefined) {
-    return {
-      source: 'costLatest',
-      basePrice: latestCost,
-      unitPrice: latestCost * factor,
-      unit: displayedUnit,
+    const basePrice = normalizeZero(latestCost) as number
+    const unitPrice = normalizeZero(basePrice * factor)
+    if (unitPrice !== null && Number.isFinite(unitPrice) && unitPrice >= 0) {
+      return {
+        source: 'costLatest',
+        basePrice,
+        unitPrice,
+        unit: displayedUnit,
+      }
     }
   }
 
@@ -144,7 +206,7 @@ export function resolveReceiptPrice(p: {
 
 /**
  * Calculates line amount for entered quantity rounded to 2 decimal places (satang).
- * Returns null when qty is null (not entered), invalid, or price is missing.
+ * Returns null when qty is null (not entered), invalid, overflow, or price is missing.
  */
 export function lineAmount(price: ReceiptPrice, qty: number | null): number | null {
   if (qty === null || typeof qty !== 'number' || !Number.isFinite(qty) || qty < 0) {
@@ -160,7 +222,13 @@ export function lineAmount(price: ReceiptPrice, qty: number | null): number | nu
   }
 
   const raw = qty * price.unitPrice
+  if (!Number.isFinite(raw) || raw < 0) {
+    return null
+  }
   const rounded = Math.round((raw + Number.EPSILON) * 100) / 100
+  if (!Number.isFinite(rounded) || rounded < 0) {
+    return null
+  }
   return Object.is(rounded, -0) ? 0 : rounded
 }
 
@@ -180,7 +248,7 @@ export function receiptTotal(rows: readonly { price: ReceiptPrice; qty: number |
   let unenteredLines = 0
 
   for (const row of rows) {
-    if (row.qty === null || typeof row.qty !== 'number' || !Number.isFinite(row.qty)) {
+    if (row.qty === null || typeof row.qty !== 'number' || !Number.isFinite(row.qty) || row.qty < 0) {
       unenteredLines++
     } else {
       const amt = lineAmount(row.price, row.qty)
@@ -193,8 +261,9 @@ export function receiptTotal(rows: readonly { price: ReceiptPrice; qty: number |
     }
   }
 
+  const roundedTotal = Math.round((total + Number.EPSILON) * 100) / 100
   return {
-    total: Math.round((total + Number.EPSILON) * 100) / 100,
+    total: Object.is(roundedTotal, -0) || !Number.isFinite(roundedTotal) ? 0 : roundedTotal,
     pricedLines,
     missingLines,
     unenteredLines,
