@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { memoryServerStore } from '../functions/_lib/memoryStore'
-import { answerLink, decideDate, mintLink, viewLink, type Deps } from '../functions/_lib/supplierPo'
+import { answerLink, decideDate, markLinkRequested, mintLink, viewLink, type Deps } from '../functions/_lib/supplierPo'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../src/lib/inventoryRules/time'
 import { msToDateKey } from '../src/lib/supplierConfirmation'
 import type { PurchaseOrder } from '../src/types'
@@ -50,10 +50,14 @@ async function approvedOrder(brand: keyof typeof COLLECTION) {
       return route.fulfill({ status: r.status, json: r.body })
     })
   }
-  // Purchasing amends the quantity only (owner, 22 Oct 2026): a new link for the revised order.
+  // Purchasing amends the quantity only (owner, 22 Oct 2026) and sends the revised order with its new link:
+  // the wizard prepares the link, then the send marks the supplier asked (A2).
   async function reviseQty() {
     db.touch(COLLECTION[brand], 'po3', { revision: 1, revisions: [{ rev: 1, at: NOW, by: 'staff1', byName: 'Nok', reason: 'more', changes: [{ kind: 'qty', productName: 'มอสซาเรลล่า', unit: 'kg', from: 10, to: 12 }] }] })
-    return (await mintLink(deps, 'Bearer staff1', { brand, poId: 'po3' })).body.token as string
+    const token = (await mintLink(deps, 'Bearer staff1', { brand, poId: 'po3' })).body.token as string
+    expect(order().supplierConfirmationStatus).toBe('changed') // preparing alone asks nothing
+    expect((await markLinkRequested(deps, 'Bearer staff1', { brand, poId: 'po3', version: order().supplierLink!.version })).status).toBe(200)
+    return token
   }
   return { token, attach, posts, order, reviseQty }
 }
