@@ -1,0 +1,33 @@
+{
+  "capturedAt": "2026-10-24T16:14:59.447Z",
+  "failures": [
+    {
+      "title": "R69 Agent01 notification link integrity (PR55)",
+      "start": "2026-10-24T15:39:09.846Z",
+      "updated": "2026-10-24T15:40:36.369Z",
+      "observedElapsedMs": 86523,
+      "reason": "auto",
+      "state": "failed",
+      "error": {
+        "type": "provider.internal",
+        "status": "502"
+      },
+      "exactUpstreamException": "not retained in these records; unknown",
+      "latencyCaveat": "elapsed local compaction interval, not a packet-level upstream latency"
+    },
+    {
+      "title": "R69 Agent02 Receive page prices UI",
+      "start": "2026-10-24T16:03:00.118Z",
+      "updated": "2026-10-24T16:04:25.222Z",
+      "observedElapsedMs": 85104,
+      "reason": "auto",
+      "state": "failed",
+      "error": {
+        "type": "provider.internal",
+        "status": "502"
+      },
+      "exactUpstreamException": "not retained in these records; unknown",
+      "latencyCaveat": "elapsed local compaction interval, not a packet-level upstream latency"
+    }
+  ]
+}

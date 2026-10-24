@@ -1,0 +1,306 @@
+{
+ "window": "2026-10-24T15:00:00.000Z .. 2026-10-24T16:37:28.930Z",
+ "r69Sessions": 16,
+ "peakSessionsAliveTogether": 7,
+ "peakSessionsAliveAt": "15:59:47",
+ "peakSessionsWithCallInFlight": 7,
+ "at": "15:59:49",
+ "peakInFlightModelCalls": 7,
+ "peakCallsAt": "15:59:49",
+ "totalModelCalls": 1219,
+ "peakRequestEvidence": [
+  {
+   "title": "R69 Agent01 r2 finish link contract + repro e2e",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-81117abc",
+   "submittedAt": "2026-10-24T15:59:46.645Z",
+   "streamEndedAt": "2026-10-24T15:59:49.809Z"
+  },
+  {
+   "title": "R69 Agent02 Receive page prices UI",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-2c317f12",
+   "submittedAt": "2026-10-24T15:59:49.100Z",
+   "streamEndedAt": "2026-10-24T15:59:52.587Z"
+  },
+  {
+   "title": "R69 Agent04 LINE PR52/PR57 release packages",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-59cdc83b",
+   "submittedAt": "2026-10-24T15:59:46.759Z",
+   "streamEndedAt": "2026-10-24T15:59:57.609Z"
+  },
+  {
+   "title": "R69 Agent07 barcode + backlog board",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-ddc21e9a",
+   "submittedAt": "2026-10-24T15:59:48.422Z",
+   "streamEndedAt": "2026-10-24T15:59:52.162Z"
+  },
+  {
+   "title": "R69 Agent05 stock/security closure matrix",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-5a9037de",
+   "submittedAt": "2026-10-24T15:59:48.152Z",
+   "streamEndedAt": "2026-10-24T15:59:53.380Z"
+  },
+  {
+   "title": "R69 Agent03 r2 unit-conversion consistency",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-6092b7bc",
+   "submittedAt": "2026-10-24T15:59:49.755Z",
+   "streamEndedAt": "2026-10-24T15:59:53.907Z"
+  },
+  {
+   "title": "R69 Agent06 PR24 drop-file on PR39 (20MB)",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-8678a854",
+   "submittedAt": "2026-10-24T15:59:47.860Z",
+   "streamEndedAt": "2026-10-24T15:59:57.486Z"
+  }
+ ],
+ "peakSessionsStreamingTogether": 4,
+ "streamingPeakAt": "2026-10-24T16:04:09.612Z",
+ "requestIntervals": "assistant.time.created -> assistant.time.streamed (stream end, NOT first token); excludes tool execution until time.completed",
+ "tokenIntervals": "earliest content[].time.created -> assistant.time.streamed (conservative emission window)",
+ "submittedToStreamEndMayIncludeQueueWait": true,
+ "upstreamGoogleConcurrencyCeiling": "not observable from these local records",
+ "router9Gemini38": {
+  "byStatus": {
+   "ok": 1219
+  },
+  "busiestMinutes": [
+   [
+    "16:00",
+    65
+   ],
+   [
+    "16:02",
+    56
+   ],
+   [
+    "16:10",
+    53
+   ]
+  ]
+ },
+ "sessions": [
+  {
+   "title": "R69 Agent03 receipt price resolver",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-745cea1a",
+   "start": "15:27:53",
+   "startAt": "2026-10-24T15:27:53.860Z",
+   "endAt": "2026-10-24T15:39:42.720Z",
+   "lastCall": "15:39:42",
+   "calls": 54,
+   "maxCtx": 130727,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent01 notification link integrity (PR55)",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-4bfeb92a",
+   "start": "15:27:55",
+   "startAt": "2026-10-24T15:27:55.175Z",
+   "endAt": "2026-10-24T15:40:36.371Z",
+   "lastCall": "15:39:09",
+   "calls": 83,
+   "maxCtx": 165420,
+   "compactions": "0/1",
+   "outcome": "failed",
+   "error": null
+  },
+  {
+   "title": "R69 Agent01 r2 finish link contract + repro e2e",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-81117abc",
+   "start": "15:46:58",
+   "startAt": "2026-10-24T15:46:58.682Z",
+   "endAt": "2026-10-24T16:05:01.974Z",
+   "lastCall": "16:05:01",
+   "calls": 130,
+   "maxCtx": 147713,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent02 Receive page prices UI",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-2c317f12",
+   "start": "15:46:59",
+   "startAt": "2026-10-24T15:46:59.442Z",
+   "endAt": "2026-10-24T16:04:25.225Z",
+   "lastCall": "16:02:59",
+   "calls": 150,
+   "maxCtx": 168453,
+   "compactions": "0/1",
+   "outcome": "failed",
+   "error": null
+  },
+  {
+   "title": "R69 Agent04 LINE PR52/PR57 release packages",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-59cdc83b",
+   "start": "15:59:31",
+   "startAt": "2026-10-24T15:59:31.358Z",
+   "endAt": "2026-10-24T16:11:20.023Z",
+   "lastCall": "16:11:19",
+   "calls": 48,
+   "maxCtx": 91285,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent07 barcode + backlog board",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-ddc21e9a",
+   "start": "15:59:31",
+   "startAt": "2026-10-24T15:59:31.775Z",
+   "endAt": "2026-10-24T16:11:46.962Z",
+   "lastCall": "16:11:46",
+   "calls": 99,
+   "maxCtx": 162647,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent05 stock/security closure matrix",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-5a9037de",
+   "start": "15:59:31",
+   "startAt": "2026-10-24T15:59:31.892Z",
+   "endAt": "2026-10-24T16:05:48.033Z",
+   "lastCall": "16:05:47",
+   "calls": 65,
+   "maxCtx": 74509,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent03 r2 unit-conversion consistency",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-6092b7bc",
+   "start": "15:59:32",
+   "startAt": "2026-10-24T15:59:32.674Z",
+   "endAt": "2026-10-24T16:08:56.682Z",
+   "lastCall": "16:08:56",
+   "calls": 65,
+   "maxCtx": 104799,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent06 PR24 drop-file on PR39 (20MB)",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-8678a854",
+   "start": "15:59:43",
+   "startAt": "2026-10-24T15:59:43.224Z",
+   "endAt": "2026-10-24T16:10:54.686Z",
+   "lastCall": "16:10:54",
+   "calls": 107,
+   "maxCtx": 98159,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent02 r2 finish receive prices (recovery)",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-906a8bea",
+   "start": "16:09:39",
+   "startAt": "2026-10-24T16:09:39.890Z",
+   "endAt": "2026-10-24T16:20:56.633Z",
+   "lastCall": "16:20:56",
+   "calls": 74,
+   "maxCtx": 116700,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 review receipt price resolver 934cbfa",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-23c2eb73",
+   "start": "16:09:40",
+   "startAt": "2026-10-24T16:09:40.329Z",
+   "endAt": "2026-10-24T16:16:47.523Z",
+   "lastCall": "16:16:47",
+   "calls": 52,
+   "maxCtx": 107280,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 review route-contract tests 1651548",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-cfda0c17",
+   "start": "16:09:40",
+   "startAt": "2026-10-24T16:09:40.337Z",
+   "endAt": "2026-10-24T16:18:55.916Z",
+   "lastCall": "16:18:55",
+   "calls": 61,
+   "maxCtx": 88975,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 correct receipt price trust boundaries",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-5eb63966",
+   "start": "16:18:49",
+   "startAt": "2026-10-24T16:18:49.481Z",
+   "endAt": "2026-10-24T16:30:47.209Z",
+   "lastCall": "16:30:47",
+   "calls": 92,
+   "maxCtx": 129866,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 independent Receive pricing UI review",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-773a5794",
+   "start": "16:25:13",
+   "startAt": "2026-10-24T16:25:13.115Z",
+   "endAt": "2026-10-24T16:37:20.687Z",
+   "lastCall": "16:37:20",
+   "calls": 69,
+   "maxCtx": 119208,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 review PDF20MB import drop reconciliation",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-6103496d",
+   "start": "16:25:13",
+   "startAt": "2026-10-24T16:25:13.265Z",
+   "endAt": "2026-10-24T16:32:36.753Z",
+   "lastCall": "16:32:36",
+   "calls": 52,
+   "maxCtx": 83349,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 assemble corrected Receive pricing exact source",
+   "model": "9router/gemini-3.8-flash-high",
+   "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-517057f3",
+   "start": "16:35:58",
+   "startAt": "2026-10-24T16:35:58.954Z",
+   "endAt": null,
+   "lastCall": "16:37:24",
+   "calls": 18,
+   "maxCtx": 34916,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  }
+ ]
+}

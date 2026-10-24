@@ -14,7 +14,7 @@
 
 CI `secrets` (gitleaks) failed on commit `3d48ad1` because the public Firebase web apiKey of production was duplicated into `src/lib/deployTier.ts` at line 25 (triggering rule `gcp-api-key`). Because `3d48ad1` was already pushed to the remote branch and history rewrite/force-push is forbidden, commit `6b8707b` resolves this by:
 1. Adding an exact fingerprint entry to `.gitleaksignore` for commit `3d48ad1`.
-2. Truncating the key in `src/lib/deployTier.ts` to a 20-character prefix (`PRODUCTION_WEB_API_KEY_PREFIX = 'AIzaSyB2cQL0G-OLibdo'`), keeping the full key exclusively in `src/firebase/config.ts`.
+2. Historically truncating the public client identifier to a prefix (redacted in this copy), keeping the full identifier exclusively in `src/firebase/config.ts`. The final implementation no longer holds the prefix either.
 3. Updating tests to dynamically read the full key from `src/firebase/config.ts` to pin the prefix.
 
 ---
@@ -52,9 +52,9 @@ CI `secrets` (gitleaks) failed on commit `3d48ad1` because the public Firebase w
 
 ## 4. Check 3: Soundness of 20-Character Prefix Recognition
 
-- Prefix defined: `PRODUCTION_WEB_API_KEY_PREFIX = 'AIzaSyB2cQL0G-OLibdo'` (20 characters).
+- Historical prefix: redacted in this copy; removed from the final implementation.
 - Matching logic: `values.some((v) => ... || v.startsWith(PRODUCTION_WEB_API_KEY_PREFIX.toLowerCase()))`.
-- **False accepts**: Any configuration containing the production web API key (`AIza…(public web key, see src/firebase/config.ts)`) starts with `aizasyb2cql0g-olibdo` (case-insensitive). It evaluates `startsWith(...) === true` and returns `null`. Production key is guaranteed to be refused. False accepts = 0.
+- **False accepts**: Any configuration containing the production web API key (`AIza…(public web key, see src/firebase/config.ts)`) starts with that historical prefix (case-insensitive; prefix redacted). It evaluates `startsWith(...) === true` and returns `null`. Production key is guaranteed to be refused. False accepts = 0.
 - **False refusals**: The prefix comprises `AIzaSy` followed by 14 random base64url characters. An independent Google Cloud / Firebase project generating an API key with the identical 14-character prefix has collision probability $64^{-14} \approx 2.2 \times 10^{-25}$. Accidental collision with a legitimate staging project key is negligible. False refusals = 0.
 - **Finding**: **SOUND**.
 

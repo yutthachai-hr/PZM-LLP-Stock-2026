@@ -1,0 +1,7 @@
+// R70 read-only compaction failure metadata only; no prompts, response bodies, headers or credential tables.
+const path=require('path'); const D=require(path.join(process.env.APPDATA,'npm/node_modules/better-sqlite3'));
+const db=new D(path.join(process.env.USERPROFILE,'.local/share/opencode/opencode.db'),{readonly:true});
+const rows=db.prepare("select s.title,m.time_created,m.time_updated,m.data from session_message m join session_v2 s on s.id=m.session_id where s.title like 'R69%' and m.type='compaction'").all();
+const allowed=new Set(['_tag','name','type','status','statusCode','isRetryable','code']);
+const summary=(o,p='',out={})=>{if(o&&typeof o==='object')for(const [k,v] of Object.entries(o)){const q=p?`${p}.${k}`:k;if(allowed.has(k)&&['string','number','boolean'].includes(typeof v)) out[q]=String(v).slice(0,70);else if(v&&typeof v==='object'&& !['headers','request','responseBody','body'].includes(k))summary(v,q,out);}return out;};
+console.log(JSON.stringify({capturedAt:new Date().toISOString(),failures:rows.map(r=>{const d=JSON.parse(r.data);return {title:r.title,start:new Date(r.time_created).toISOString(),updated:new Date(r.time_updated).toISOString(),observedElapsedMs:r.time_updated-r.time_created,reason:d.reason,state:d.status,error:summary(d.error),exactUpstreamException:'not retained in these records; unknown',latencyCaveat:'elapsed local compaction interval, not a packet-level upstream latency'};})},null,2));

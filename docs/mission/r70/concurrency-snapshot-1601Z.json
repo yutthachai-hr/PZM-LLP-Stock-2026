@@ -1,0 +1,131 @@
+{
+ "window": "2026-10-24T15:00:00.000Z .. 2026-10-24T16:01:11.913Z",
+ "r69Sessions": 9,
+ "peakSessionsAliveTogether": 7,
+ "peakSessionsAliveAt": "15:59:47",
+ "peakSessionsWithCallInFlight": 7,
+ "at": "15:59:47",
+ "peakInFlightModelCalls": 7,
+ "peakCallsAt": "15:59:47",
+ "totalModelCalls": 476,
+ "router9Gemini38": {
+  "byStatus": {
+   "ok": 476
+  },
+  "busiestMinutes": [
+   [
+    "16:00",
+    65
+   ],
+   [
+    "15:48",
+    34
+   ],
+   [
+    "15:59",
+    29
+   ]
+  ]
+ },
+ "sessions": [
+  {
+   "title": "R69 Agent03 receipt price resolver",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:27:53",
+   "lastCall": "15:39:42",
+   "calls": 54,
+   "maxCtx": 130727,
+   "compactions": "0/0",
+   "outcome": "succeeded",
+   "error": null
+  },
+  {
+   "title": "R69 Agent01 notification link integrity (PR55)",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:27:55",
+   "lastCall": "15:39:09",
+   "calls": 83,
+   "maxCtx": 165420,
+   "compactions": "0/1",
+   "outcome": "failed",
+   "error": null
+  },
+  {
+   "title": "R69 Agent01 r2 finish link contract + repro e2e",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:46:58",
+   "lastCall": "16:01:08",
+   "calls": 114,
+   "maxCtx": 130804,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  },
+  {
+   "title": "R69 Agent02 Receive page prices UI",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:46:59",
+   "lastCall": "16:01:09",
+   "calls": 139,
+   "maxCtx": 157663,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  },
+  {
+   "title": "R69 Agent04 LINE PR52/PR57 release packages",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:59:31",
+   "lastCall": "16:01:08",
+   "calls": 18,
+   "maxCtx": 40268,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  },
+  {
+   "title": "R69 Agent07 barcode + backlog board",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:59:31",
+   "lastCall": "16:00:41",
+   "calls": 12,
+   "maxCtx": 39337,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  },
+  {
+   "title": "R69 Agent05 stock/security closure matrix",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:59:31",
+   "lastCall": "16:01:09",
+   "calls": 19,
+   "maxCtx": 46030,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  },
+  {
+   "title": "R69 Agent03 r2 unit-conversion consistency",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:59:32",
+   "lastCall": "16:01:09",
+   "calls": 19,
+   "maxCtx": 47153,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  },
+  {
+   "title": "R69 Agent06 PR24 drop-file on PR39 (20MB)",
+   "model": "9router/gemini-3.8-flash-high",
+   "start": "15:59:43",
+   "lastCall": "16:01:09",
+   "calls": 18,
+   "maxCtx": 38652,
+   "compactions": "0/0",
+   "outcome": "running",
+   "error": null
+  }
+ ]
+}
