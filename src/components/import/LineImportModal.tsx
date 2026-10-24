@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { type OcrLine } from '../../lib/billOcr'
@@ -95,19 +95,50 @@ export function LineImportModal({
     }
   }
 
+  const ocrAbortRef = useRef<AbortController | null>(null)
+  const ocrRequestIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrRequestIdRef.current++
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current?.abort()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current = null
+    }
+  }, [])
+
+  function cancelReading() {
+    ocrRequestIdRef.current++
+    ocrAbortRef.current?.abort()
+    ocrAbortRef.current = null
+    setStep('pick')
+  }
+
   async function pickDocument(file: File | undefined) {
     if (!file) return
     setError(null)
     setStep('reading')
+    const reqId = ++ocrRequestIdRef.current
+    ocrAbortRef.current?.abort()
+    const controller = new AbortController()
+    ocrAbortRef.current = controller
     try {
-      const bill = await readDocumentFile(file)
+      const bill = await readDocumentFile(file, { signal: controller.signal })
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       if (!bill.lines.length) throw new Error(t('AI ({model}) ไม่พบรายการสินค้าในเอกสารนี้ — ลองรูปที่ชัดขึ้น หรือใช้ Excel', { model: bill.model ?? '?' }))
       setSource([file.name, bill.supplier, bill.invoiceNo].filter(Boolean).join(' · '))
       setRows(toRows(bill.lines.map((line) => ({ ...line, source: 'ocr' as const }))))
       setStep('review')
     } catch (e) {
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       setError(errText(e, t))
       setStep('pick')
+    } finally {
+      if (ocrAbortRef.current === controller) {
+        ocrAbortRef.current = null
+      }
     }
   }
 
@@ -139,8 +170,15 @@ export function LineImportModal({
     }
   }
 
+  function handleClose() {
+    ocrRequestIdRef.current++
+    ocrAbortRef.current?.abort()
+    ocrAbortRef.current = null
+    onClose()
+  }
+
   return (
-    <Modal open wide onClose={onClose} title={title ?? t('นำเข้ารายการสินค้า')}>
+    <Modal open wide onClose={handleClose} title={title ?? t('นำเข้ารายการสินค้า')}>
       <input ref={sheetInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => void pickSheet(e.target.files?.[0])} />
       <input ref={docInput} type="file" accept="image/*,application/pdf,.pdf" className="hidden" onChange={(e) => void pickDocument(e.target.files?.[0])} />
 
@@ -173,10 +211,15 @@ export function LineImportModal({
       )}
 
       {step === 'reading' && (
-        <p className="flex items-center justify-center gap-2 py-10 text-sm text-ink-soft">
-          <Icon name="refresh" size={16} className="animate-spin" />
-          {t('กำลังอ่านไฟล์...')}
-        </p>
+        <div className="flex flex-col items-center justify-center gap-3 py-10">
+          <p className="flex items-center justify-center gap-2 text-sm text-ink-soft">
+            <Icon name="refresh" size={16} className="animate-spin" />
+            {t('กำลังอ่านไฟล์...')}
+          </p>
+          <Button variant="secondary" onClick={cancelReading}>
+            {t('ยกเลิก')}
+          </Button>
+        </div>
       )}
 
       {step === 'review' && (

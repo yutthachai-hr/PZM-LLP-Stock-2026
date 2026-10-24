@@ -145,6 +145,8 @@ jobs:
         run: npx playwright test -c playwright.sw.config.ts
       - name: Toast notifications on an isolated browser-storage demo
         run: npx playwright test -c playwright.toast.config.ts
+      - name: OCR PDF fallback under production CSP on an isolated demo
+        run: npx playwright test -c playwright.ocr.config.ts
       - name: Product pricing, accessible grid and responsive SKU on isolated demo
         run: npx playwright test -c playwright.products-responsive.config.ts
       - name: Stock buckets on an isolated browser-storage demo (port 5201)

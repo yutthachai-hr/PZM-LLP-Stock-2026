@@ -48,4 +48,3 @@ export function mergeWizardOrders(
     return patch ? ({ ...o, ...patch } as PurchaseOrder) : o
   })
 }
-

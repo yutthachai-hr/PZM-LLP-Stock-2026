@@ -34,6 +34,7 @@
     "jose": "^6.2.12",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "pdfjs-dist": "4.10.38",
     "pdfmake": "0.3.11",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

@@ -64,7 +64,7 @@ describe('answers as models actually shape them (6 Oct 2026)', () => {
   test('a separate unit field wins over one inside the quantity; thousands and decimals', () => {
     expect(cleanOcr({ lines: [{ name: 'Flour', qty: '1,250.5 g', unit: 'KG' }] }).lines).toEqual([{ name: 'Flour', qty: 1250.5, unit: 'KG' }])
   })
-  test('a bare array of rows is read too; rows with no number are dropped', () => {
-    expect(cleanOcr([{ name: 'Ham', qty: 'two' }, { name: 'Bacon', qty: 4 }]).lines).toEqual([{ name: 'Bacon', qty: 4, unit: undefined }])
+  test('a bare array of rows is read too; a named row with no number is kept at 0 for the person (R58)', () => {
+    expect(cleanOcr([{ name: 'Ham', qty: 'two' }, { name: 'Bacon', qty: 4 }]).lines).toEqual([{ name: 'Ham', qty: 0, unit: undefined }, { name: 'Bacon', qty: 4, unit: undefined }])
   })
 })

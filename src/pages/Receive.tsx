@@ -366,24 +366,57 @@ export function ReceivePage() {
   // A bill read by AI (Automation Plan Phase 4): it only fills the form; the person checks.
   const [reading, setReading] = useState(false)
   const [ocr, setOcr] = useState<OcrFill | null>(null)
+  const ocrAbortRef = useRef<AbortController | null>(null)
+  const ocrRequestIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrRequestIdRef.current++
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current?.abort()
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ocrAbortRef.current = null
+    }
+  }, [])
+
+  function cancelReadBill() {
+    ocrRequestIdRef.current++
+    ocrAbortRef.current?.abort()
+    ocrAbortRef.current = null
+    setReading(false)
+  }
+
   async function readBill(file?: File) {
     if (!photo && !file) return
     setReading(true)
+    const reqId = ++ocrRequestIdRef.current
+    ocrAbortRef.current?.abort()
+    const controller = new AbortController()
+    ocrAbortRef.current = controller
     try {
-      const bill = file ? await readDocumentFile(file) : await readBillPhoto(photo!)
+      const bill = file
+        ? await readDocumentFile(file, { signal: controller.signal })
+        : await readBillPhoto(photo!, { signal: controller.signal })
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       const filled = ocrFill(bill, ocrCandidates(bill), { draft: d, order, suppliers })
       const fromBill = filled.patch.supplierId
       patch({ ...filled.patch, ...(fromBill ? { supplierPick: fromBill === OTHER_SUPPLIER ? 'manual' : 'ocr' } : {}) })
       setOcr(filled)
       toast.success(t('AI อ่านบิลแล้ว — ใส่ให้ {n} รายการ ตรวจก่อนยืนยันทุกครั้ง', { n: filled.filled }))
     } catch (e) {
+      if (ocrRequestIdRef.current !== reqId || controller.signal.aborted) return
       toast.error(errText(e, t))
     } finally {
-      setReading(false)
+      if (ocrAbortRef.current === controller) {
+        ocrAbortRef.current = null
+        setReading(false)
+      }
     }
   }
 
   async function pickPhoto(file: File | null) {
+    cancelReadBill()
     if (!file) return setPhoto(null)
     try {
       setPhoto(await compressImage(file))
@@ -393,6 +426,7 @@ export function ReceivePage() {
   }
 
   function discardDraft() {
+    cancelReadBill()
     linkRef.current = null
     setD({ ...emptyDraft(), toLocationId: d.toLocationId, dateStr: msToDateInput(todayMs()) })
     setPhoto(null)
@@ -534,6 +568,7 @@ export function ReceivePage() {
               invalid={{ supplier: tried && problem === 'noSupplier', invoice: tried && problem === 'noInvoice' }}
               onReadBill={billReaderAvailable() ? () => void readBill() : undefined}
               onReadFile={billReaderAvailable() ? (f) => void readBill(f) : undefined}
+              onCancelRead={cancelReadBill}
               reading={reading}
             />
           )}
@@ -557,6 +592,8 @@ export function ReceivePage() {
                     {s.name} —{' '}
                     {s.why === 'noProduct'
                       ? t('AI ไม่เลือกสินค้าให้เอง — เลือกสินค้าเอง')
+                      : s.why === 'noQty'
+                        ? t('บิลไม่ได้ระบุจำนวน — คีย์จำนวนเอง')
                       : s.why === 'notOnOrder'
                         ? t('ไม่อยู่ในใบสั่งซื้อนี้')
                         : s.why === 'unit'

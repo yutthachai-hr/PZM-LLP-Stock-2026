@@ -55,6 +55,9 @@ dist-demo
 # Cloudflare local secrets (wrangler pages dev)
 .dev.vars
 
+# OCR test build artifacts and large synthetic scan generated at test time
+dist-ocr-test/
+*-large-*.pdf
 # Python bytecode from local tooling (never project files)
 __pycache__/
 *.pyc
