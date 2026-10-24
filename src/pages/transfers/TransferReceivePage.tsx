@@ -19,19 +19,20 @@ import { DISCREPANCY_REASON_KEYS, canReceive } from '../../lib/transferStatus'
 import { roundQty } from '../../lib/validate'
 import { confirmReceive, expectedQty, getTransfer, openReceiving, saveDiscrepancyPhoto, type ReceivedLineInput } from '../../services/transfers'
 import type { DiscrepancyReason, Transfer, TransferItem } from '../../types'
+import { createSubmitGate, formatDecimalInput, parseDecimalInput, validateReceiveQty } from './receiveHelpers'
 
 /**
  * `/transfers/:id/receive` — the destination checks in a delivery, standing at the door
  * with a phone, a tablet or a barcode scanner.
  *
- * One page, no dialogs: every line shows what was sent and what was counted, with − and +
- * for pieces and a box for a weight. A scan (camera, or a scanner typing into the box and
- * pressing Enter) finds the line, marks it counted, highlights it and scrolls it into view.
- * A line that does not match asks for a reason right there. Nothing moves until "ยืนยัน".
+ * Four deliberate mobile rows: (1) >=44px checkbox + full-width identity/SKU; (2) sent quantity/status;
+ * (3) separate stepper with 48px buttons, flex input, >=8px gaps; (4) variance/reason/validation/photo.
+ * Synchronous double-submit gate protects confirmation await.
  */
 
 interface Count {
   qty: number
+  rawQty?: string
   checked: boolean
   reason?: DiscrepancyReason
   note: string
@@ -76,8 +77,12 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
   const { products } = useData()
   const actor = useMemo(() => ({ id: user!.id, name: user!.name, role: user!.role, siteIds: user!.siteIds }), [user])
   const lines = transfer.items.filter((i) => !i.removed)
+  const submitGate = useRef(createSubmitGate())
   const [counts, setCounts] = useState<Record<number, Count>>(() =>
-    Object.fromEntries(lines.map((i) => [i.idx, { qty: expectedQty(i), checked: false, note: '' }])),
+    Object.fromEntries(lines.map((i) => {
+      const exp = expectedQty(i)
+      return [i.idx, { qty: exp, rawQty: String(exp), checked: false, note: '' }]
+    })),
   )
   const [scan, setScan] = useState('')
   const [camera, setCamera] = useState(false)
@@ -93,8 +98,15 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     setCounts((c) => ({ ...c, [idx]: { ...c[idx], ...patch } }))
   }
 
+  function handleQtyChange(idx: number, raw: string) {
+    const parsed = parseDecimalInput(raw)
+    set(idx, { qty: parsed, rawQty: raw, checked: true })
+  }
+
   function bump(i: TransferItem, by: number) {
-    set(i.idx, { qty: Math.max(0, roundQty((counts[i.idx]?.qty ?? 0) + by)), checked: true })
+    const cur = counts[i.idx]?.qty ?? 0
+    const next = Math.max(0, roundQty(cur + by))
+    set(i.idx, { qty: next, rawQty: String(next), checked: true })
   }
 
   /** A scan: find the line, mark it counted, bring it into view. */
@@ -130,43 +142,56 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
    * one by one below.
    */
   async function receiveAllAsSent() {
-    const all = Object.fromEntries(lines.map((i) => [i.idx, { ...counts[i.idx], qty: expectedQty(i), checked: true }]))
+    const all = Object.fromEntries(lines.map((i) => {
+      const exp = expectedQty(i)
+      return [i.idx, { ...counts[i.idx], qty: exp, rawQty: String(exp), checked: true }]
+    }))
     setCounts(all)
     await submit(all)
   }
 
   async function submit(use: Record<number, Count> = counts) {
+    if (submitGate.current.isLocked() || busy) return
     const unchecked = lines.filter((i) => !use[i.idx].checked)
-    if (unchecked.length > 0) {
-      const ok = await confirm({
-        title: t('ยืนยันรับสินค้า'),
-        message: t('ยังไม่ได้ติ๊กตรวจ {n} รายการ — ใช้จำนวนตามที่ส่งมาสำหรับรายการเหล่านั้น?', { n: unchecked.length }),
-        confirmText: t('ยืนยันรับสินค้า'),
-      })
-      if (!ok) return
-    }
-    setBusy(true)
-    try {
-      const receivedLines: ReceivedLineInput[] = []
-      for (const i of lines) {
-        const c = use[i.idx]
-        const diff = roundQty(c.qty - expectedQty(i)) !== 0
-        const photoId = diff && c.photo ? await saveDiscrepancyPhoto(transfer.docNo, i.idx, c.photo) : undefined
-        receivedLines.push({
-          idx: i.idx,
-          receivedQty: c.qty,
-          ...(diff ? { discrepancy: { reason: c.reason ?? (c.qty < expectedQty(i) ? 'SHORT' : 'OVER'), note: c.note.trim() || undefined, photoId } } : {}),
+    const hasInvalid = lines.some((i) => !validateReceiveQty(use[i.idx].qty).valid)
+    if (hasInvalid) return
+
+    await submitGate.current.execute({
+      confirm: unchecked.length > 0 ? async () => {
+        return await confirm({
+          title: t('ยืนยันรับสินค้า'),
+          message: t('ยังไม่ได้ติ๊กตรวจ {n} รายการ — ใช้จำนวนตามที่ส่งมาสำหรับรายการเหล่านั้น?', { n: unchecked.length }),
+          confirmText: t('ยืนยันรับสินค้า'),
         })
-      }
-      const next = await confirmReceive({ transferId: transfer.id, actor, receivedLines })
-      transferCache.patch(next)
-      toast.success(next.status === 'completed' ? t('รับสินค้าครบ เอกสารเสร็จสิ้น') : t('บันทึกการรับแล้ว — มีผลต่างรอหัวหน้าพิจารณา'))
-      navigate(`/transfers/${transfer.id}`, { replace: true })
-    } catch (e) {
-      toast.error(errText(e, t))
-    } finally {
-      setBusy(false)
-    }
+      } : undefined,
+      action: async () => {
+        setBusy(true)
+        try {
+          const receivedLines: ReceivedLineInput[] = []
+          for (const i of lines) {
+            const c = use[i.idx]
+            const exp = expectedQty(i)
+            const diff = roundQty(c.qty - exp) !== 0
+            const photoId = diff && c.photo ? await saveDiscrepancyPhoto(transfer.docNo, i.idx, c.photo) : undefined
+            receivedLines.push({
+              idx: i.idx,
+              receivedQty: c.qty,
+              ...(diff ? { discrepancy: { reason: c.reason ?? (c.qty < exp ? 'SHORT' : 'OVER'), note: c.note.trim() || undefined, photoId } } : {}),
+            })
+          }
+          const next = await confirmReceive({ transferId: transfer.id, actor, receivedLines })
+          transferCache.patch(next)
+          toast.success(next.status === 'completed' ? t('รับสินค้าครบ เอกสารเสร็จสิ้น') : t('บันทึกการรับแล้ว — มีผลต่างรอหัวหน้าพิจารณา'))
+          navigate(`/transfers/${transfer.id}`, { replace: true })
+          return next
+        } catch (e) {
+          toast.error(errText(e, t))
+          throw e
+        } finally {
+          setBusy(false)
+        }
+      },
+    })
   }
 
   return (
@@ -222,59 +247,99 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
         </div>
       </SectionCard>
 
-      <div className="space-y-3">
+      <div className="space-y-3 pb-32 md:pb-8">
         {lines.map((i) => {
           const c = counts[i.idx]
           const exp = expectedQty(i)
           const variance = roundQty(c.qty - exp)
           const reasons = variance < 0 ? SHORT_REASONS : OVER_REASONS
+          const qtyValidation = validateReceiveQty(c.qty)
+          const isInvalid = !qtyValidation.valid
+
           return (
             <div
               key={i.idx}
               ref={(el) => {
                 rowRefs.current[i.idx] = el
               }}
-              className={`rounded-2xl border bg-surface p-3 transition-colors md:p-4 ${lit === i.idx ? 'border-brand ring-2 ring-brand' : variance !== 0 ? 'border-warn' : 'border-line'}`}
+              className={`rounded-2xl border bg-surface p-3 transition-colors md:p-4 ${
+                lit === i.idx
+                  ? 'border-brand ring-2 ring-brand'
+                  : isInvalid
+                    ? 'border-out ring-1 ring-out'
+                    : variance !== 0
+                      ? 'border-warn'
+                      : 'border-line'
+              }`}
             >
-              <div className="flex flex-wrap items-start gap-3">
-                <label className="mt-1 inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center">
-                  <input
-                    type="checkbox"
-                    className="h-6 w-6"
-                    checked={c.checked}
-                    onChange={(e) => set(i.idx, { checked: e.target.checked })}
-                    aria-label={t('ตรวจแล้ว')}
-                  />
-                </label>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-ink">{i.productName}</div>
-                  <div className="text-xs text-ink-faint">{i.sku}</div>
-                  <div className="mt-1 text-sm text-ink-soft">
-                    {t('ส่งมา')}: <b className="num text-ink">{fmtQty(exp)} {i.unit}</b>
-                    {i.dispatchEntryUnit && i.dispatchEntryQty && exp === i.dispatchQty ? ` (${fmtQty(i.dispatchEntryQty)} ${i.dispatchEntryUnit})` : ''}
-                    {exp !== i.dispatchQty && <span className="ml-1 text-warn">· {t('ส่วนหนึ่งถูกรายงานว่าอยู่สาขาอื่น')}</span>}
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {/* Mobile Row 1 (Identity) & Row 2 (Dispatched) */}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-start gap-3">
+                    <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg touch-manipulation hover:bg-sunken">
+                      <input
+                        type="checkbox"
+                        className="h-6 w-6 rounded border-line text-brand focus:ring-brand"
+                        checked={c.checked}
+                        onChange={(e) => set(i.idx, { checked: e.target.checked })}
+                        aria-label={t('ตรวจแล้ว')}
+                      />
+                    </label>
+                    <div className="min-w-0 flex-1 pt-1.5">
+                      <div className="font-semibold text-ink text-base leading-snug break-words">{i.productName}</div>
+                      <div className="text-xs text-ink-faint break-all">{i.sku}</div>
+                      <div className="mt-1 text-sm text-ink-soft">
+                        {t('ส่งมา')}: <b className="num font-semibold text-ink">{fmtQty(exp)} {i.unit}</b>
+                        {i.dispatchEntryUnit && i.dispatchEntryQty && exp === i.dispatchQty ? ` (${fmtQty(i.dispatchEntryQty)} ${i.dispatchEntryUnit})` : ''}
+                        {exp !== i.dispatchQty && <span className="ml-1 text-warn font-medium">· {t('ส่วนหนึ่งถูกรายงานว่าอยู่สาขาอื่น')}</span>}
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="outline" size="sm" className="!h-12 !w-12 !px-0 text-lg" onClick={() => bump(i, -1)} aria-label={t('ลด')}>
-                    −
-                  </Button>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    step="any"
-                    min={0}
-                    className="!h-12 w-24 text-center text-lg font-semibold"
-                    value={String(c.qty)}
-                    onChange={(e) => set(i.idx, { qty: Math.max(0, Number(e.target.value) || 0), checked: true })}
-                    aria-label={t('รับจริง')}
-                  />
-                  <Button variant="outline" size="sm" className="!h-12 !w-12 !px-0 text-lg" onClick={() => bump(i, 1)} aria-label={t('เพิ่ม')}>
-                    +
-                  </Button>
-                  <span className="w-10 text-sm text-ink-soft">{i.unit}</span>
+
+                {/* Mobile Row 3: Stepper with 48px minus/plus, flex input, >=8px gaps */}
+                <div className="w-full md:w-auto shrink-0 pt-1 md:pt-0">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="!h-12 !w-12 shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
+                      onClick={() => bump(i, -1)}
+                      aria-label={t('ลด')}
+                    >
+                      −
+                    </Button>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min={0}
+                      className="!h-12 min-w-0 flex-1 md:w-28 text-center text-lg font-semibold"
+                      value={formatDecimalInput(c.qty, c.rawQty)}
+                      onChange={(e) => handleQtyChange(i.idx, e.target.value)}
+                      aria-label={t('รับจริง')}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="!h-12 !w-12 shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
+                      onClick={() => bump(i, 1)}
+                      aria-label={t('เพิ่ม')}
+                    >
+                      +
+                    </Button>
+                    <span className="shrink-0 text-sm font-medium text-ink-soft min-w-[2.5rem] pl-1 text-left">{i.unit}</span>
+                  </div>
                 </div>
               </div>
+
+              {/* Mobile Row 4: Validation error and Discrepancy block */}
+              {isInvalid && qtyValidation.error && (
+                <div className="mt-2 text-xs font-semibold text-out pl-1">
+                  {t(qtyValidation.error)}
+                </div>
+              )}
+
               {variance !== 0 && (
                 <div className="mt-3 grid gap-2 border-t border-line pt-3 md:grid-cols-[auto_1fr_1fr_auto] md:items-center">
                   <div className={`num text-sm font-semibold ${variance < 0 ? 'text-out' : 'text-warn'}`}>
@@ -289,7 +354,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                     ))}
                   </Select>
                   <Textarea rows={1} value={c.note} onChange={(e) => set(i.idx, { note: e.target.value })} placeholder={t('หมายเหตุ เช่น น้ำหนักที่ชั่งได้')} />
-                  <label className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-line px-3 text-sm text-ink-soft hover:bg-sunken">
+                  <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-sm text-ink-soft hover:bg-sunken touch-manipulation">
                     <Icon name="camera" size={16} />
                     {c.photo ? t('มีรูปแล้ว') : t('แนบรูป')}
                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => void addPhoto(i.idx, e.target.files?.[0])} />
@@ -302,18 +367,22 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
       </div>
 
       <FormActions>
-        <div className="mr-auto self-center text-xs text-ink-soft sm:text-sm">
-          {t('ตรวจแล้ว {n}/{total}', { n: lines.length - unchecked.length, total: lines.length })}
-          {diffs.length > 0 && <span className="ml-2 text-warn">· {t('มีผลต่าง {n} รายการ', { n: diffs.length })}</span>}
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <div className="text-xs text-ink-soft sm:text-sm">
+            {t('ตรวจแล้ว {n}/{total}', { n: lines.length - unchecked.length, total: lines.length })}
+            {diffs.length > 0 && <span className="ml-2 text-warn">· {t('มีผลต่าง {n} รายการ', { n: diffs.length })}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            {/* On a phone the top bar's back arrow does this; the bar keeps room for the count. */}
+            <Button variant="outline" className="max-sm:hidden" onClick={() => navigate(`/transfers/${transfer.id}`)} disabled={busy}>
+              {t('ย้อนกลับ')}
+            </Button>
+            <Button onClick={() => void submit()} disabled={busy || !allowed || lines.some((i) => !validateReceiveQty(counts[i.idx].qty).valid)}>
+              <Icon name="check" size={18} />
+              {busy ? t('กำลังบันทึก...') : diffs.length ? t('ยืนยันรับและส่งผลต่างให้หัวหน้า') : t('ยืนยันรับสินค้า')}
+            </Button>
+          </div>
         </div>
-        {/* On a phone the top bar's back arrow does this; the bar keeps room for the count. */}
-        <Button variant="outline" className="max-sm:hidden" onClick={() => navigate(`/transfers/${transfer.id}`)} disabled={busy}>
-          {t('ย้อนกลับ')}
-        </Button>
-        <Button onClick={() => void submit()} disabled={busy || !allowed}>
-          <Icon name="check" size={18} />
-          {busy ? t('กำลังบันทึก...') : diffs.length ? t('ยืนยันรับและส่งผลต่างให้หัวหน้า') : t('ยืนยันรับสินค้า')}
-        </Button>
       </FormActions>
 
       <BarcodeScanner open={camera} onClose={() => setCamera(false)} onRead={(code) => { setCamera(false); found(code) }} title={t('สแกนบาร์โค้ดสินค้า')} />

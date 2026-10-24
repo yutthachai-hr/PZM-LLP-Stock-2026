@@ -51,7 +51,7 @@ describe('TransferReceivePage: synchronous double-submit gate', () => {
 
     // Second tap occurs immediately while confirmation is pending
     const call2 = gate.execute({ confirm: slowConfirm, action: submitService })
-    expect(call2).resolves.toBe(null) // blocked by synchronous gate
+    expect(await call2).toBe(null) // blocked by synchronous gate
     expect(slowConfirm).toHaveBeenCalledTimes(1)
 
     // Resolve confirmation

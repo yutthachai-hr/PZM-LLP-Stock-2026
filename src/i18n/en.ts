@@ -597,6 +597,7 @@ export const EN: Record<string, string> = {
   // ---- stock service errors ----------------------------------------------------
   ตั้งยอดคงเหลือ: 'Set balance',
   จำนวนต้องไม่ติดลบ: 'Quantity cannot be negative',
+  ระบุจำนวนที่ถูกต้อง: 'Please enter a valid quantity',
   รายการนี้ถูกยกเลิกแล้ว: 'This movement has already been voided',
   ไม่มีรายการสินค้า: 'No items',
   'สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})':
