@@ -114,11 +114,11 @@ CI snapshot ดู `pr-status.json`; HEAD เปลี่ยนเมื่อ�
 | #54 R61 | 01bb12c | CI10/10; Gemini approve+nits; Rules251/251 | BLOCKED live Rules comparison/backup + Rules approval |
 | #55 R63 | 62fa3ba | CI10/10; Gemini R2 APPROVE; browser14/14; real Preview PASS | READY_FOR_RELEASE_APPROVAL หลัง #53 แยกปล่อย |
 | #33 | 7c0505d | CI10/10; Gemini R2 APPROVE; unit1739/1739; concurrency E2E3/3 | baseline เจ้าของอนุมัติแล้ว; รอ release approval |
-| #29 | b850d3a | Gemini R2 APPROVE; scanner E2E10/10; full unit1792/1792; CI e2e ยัง running ณ checkpoint | physical scanner QA400ms cadence ก่อน release |
+| #29 | b850d3a | **CI10/10**; Gemini R2 APPROVE; scanner E2E10/10; full unit1792/1792 | physical scanner QA400ms cadence ก่อน release |
 | #52 | d785ae8 | CI10/10; GLM reviewเดิม | real-device LINE QA หลัง #53; A2 แยกจาก #52 |
 | #51 | 634edd7 | CI10/10; combined Gemini APPROVE; Rules305/305 | Rules-first/App-second approval แยก; transit fix อยู่แล้ว |
 | #39 | 75bf9f4 | CI10/10; DeepSeekเดิม; fixture31 rows | ยังขาด isolated staging OCR write-path; 3 missing-qty rows ต้องไม่เข้า stock |
-| #45 | R62 docs/policy update บนฐาน e3e50dc | docs-only; owner uncommitted AGENTS backup/protected | เตรียม policy+reports โดยไม่ทับส่วน Agent skills; CI ของ docs head ใหม่ต้องรอ |
+| #45 | policy/report commit f38e317 (ตามด้วยเอกสาร checkpoint เท่านั้น) | docs-only; owner uncommitted AGENTS backup/protected | policy+reports อยู่บน PRแล้ว ไม่ทับส่วน Agent skills; CI/review ของ docs head ใหม่ต้องรอ |
 | #24 | 330e312 | baseเก่า/conflicting; reconciliationเดิม | ยังไม่ extract: drag-drop/type-list port บน current importReview หลังจัด dependency#39; ไม่ปิดก่อน port |
 | #19 | aee0968 | baseเก่า/conflicting; reconciliationเดิม | ยังไม่ extract: artwork/context wording residual; ไม่ปิดก่อน port |
 | #1 | 4898dbb | giantRC/conflicting; old CI19 ไม่ใช่ current-main proof | ห้าม merge; extract Security/Integrity และ R&D เป็น PRเล็ก; G25 Rulesต้องมี transit invariant |
@@ -177,3 +177,6 @@ blocker ปลอม; เป็นงาน dev ถัดไปตาม depende
 | blast-radius — `~/.agents/skills/blast-radius/SKILL.md` | yes, partial | พิสูจน์namespace/invalid destinationไม่writeผ่านจริง; ไม่ทำmulti-model arena/why historyเต็ม เพราะ bounded hotfix; ไม่อ้างcomplete skill workflow |
 
 หลักฐานเต็มใน mission r61/r62/r63 logs; ส่วนที่เป็น credential/session cookie ไม่ถูกเผยแพร่.
+Final software checkpoint: #29/#33/#51/#53/#54/#55 exact source heads ด้านบน CI10/10.
+#45 docs-only CI ยังวิ่งและ review ที่ `r62-policy-doc-review-1` ยังไม่จบ ณ checkpoint;
+A2 `r62-a2-implementation-1` ยังทำงานใน isolated worktree. ไม่ประกาศปิดงานสองตัวนี้ล่วงหน้า.
