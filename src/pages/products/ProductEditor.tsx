@@ -39,6 +39,7 @@ import { useT } from '../../i18n/I18nContext'
 import { isWipCategory, nextWipCode, type WipBrand } from '../../lib/wipCode'
 import { WIP_ITEMS } from '../../seed/wip'
 import { errText } from '../../i18n/AppError'
+import { formatThaiDateTime } from '../../lib/format'
 
 
 /** The supplier select's "add a new one" choice — never a real supplier id. */
@@ -61,7 +62,9 @@ export function ProductEditor({
   const t = useT()
   const toast = useToast()
   const confirm = useConfirm()
-  const { locations, qtyAt, products } = useData()
+  const { locations, qtyAt, products, levels } = useData()
+  // Same stock-level timestamp as the list's Last updated column; no additional read.
+  const lastStockUpdate = product ? Math.max(0, ...levels.filter(l => l.productId === product.id).map(l => l.updatedAt)) : 0
   const { user } = useAuth()
   const { brand } = useBrand()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -303,6 +306,12 @@ export function ProductEditor({
 
   return (
     <Modal open onClose={onClose} title={product ? t("แก้ไขสินค้า") : t("เพิ่มสินค้า")} wide>
+      {product && (
+        <dl className="mb-4 flex flex-wrap gap-x-2 text-sm text-ink-soft">
+          <dt>{t('อัปเดตล่าสุด')}</dt>
+          <dd>{lastStockUpdate ? <time dateTime={new Date(lastStockUpdate).toISOString()}>{formatThaiDateTime(lastStockUpdate)}</time> : '–'}</dd>
+        </dl>
+      )}
       {!canEdit && product && (
         <div className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-sunken/60 p-3 text-sm">
           <Icon name="info" size={18} className="mt-0.5 shrink-0 text-ink-faint" />
@@ -545,7 +554,7 @@ export function ProductEditor({
                 try {
                   const entry = await setProductCost({ productId: product.id, ...d, actor: { id: user.id, name: user.name } })
                   setCostHistory((h) => [...h, entry])
-                  toast.success(t('บันทึกราคาแล้ว — ฿{cost} ต่อ {unit}', { cost: entry.cost, unit: form.unitType }))
+                  toast.success({ title: t('บันทึกราคาแล้ว'), description: t('฿{cost} ต่อ {unit}', { cost: entry.cost, unit: form.unitType }) })
                 } catch (e) {
                   toast.error(errText(e, t))
                 }

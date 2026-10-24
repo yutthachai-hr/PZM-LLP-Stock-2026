@@ -34,6 +34,7 @@ import { COL, type BatchGroup, type BatchRow, type PurchaseBatch, type PurchaseO
 import { badgeColor, batchStatusText, groupStateText, historyText, issueText, openIssues, rowStateText } from './issues'
 import { ResolveRowModal, type ResolveResult } from './ResolveRowModal'
 import { SendWizard } from './SendWizard'
+import { LineBadge } from '../orders/LineBadge'
 import { useAssessContext } from './useAssessContext'
 
 /**
@@ -293,9 +294,7 @@ export function PurchaseBatchReviewPage() {
                     <Badge color={placed ? 'green' : badgeColor(state)}>
                       {placed ? t('อนุมัติแล้ว') : order ? t('ร่าง') : groupStateText(state, t)}
                     </Badge>
-                    {order?.shareStatus === 'sent' && <Badge color="green">{t('ส่งเข้า LINE แล้ว')}</Badge>}
-                    {order?.shareStatus === 'skipped' && <Badge>{t('ข้ามการส่ง')}</Badge>}
-                    {order?.shareStatus === 'failed' && <Badge color="red">{t('ส่งไม่สำเร็จ')}</Badge>}
+                    {order && <LineBadge order={order} />}
                   </div>
                   <div className="mt-1 text-xs text-ink-soft">{t('{count} รายการ', { count: g.rowIdx.length })}</div>
                   <ul className="mt-2 space-y-0.5 text-sm">

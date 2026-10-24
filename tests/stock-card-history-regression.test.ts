@@ -35,6 +35,7 @@ let mockParams = { id: 'prod-1' }
 let mockBrand = 'brand-a'
 let mockMovements: StockMovement[] = []
 let mockLoading = false
+let mockTransit = 0
 let mockHistory = { rows: [] as StockMovement[], ready: false, status: 'loading', error: '', retry: () => {} }
 
 vi.mock('../src/i18n/I18nContext', () => ({
@@ -60,6 +61,8 @@ vi.mock('../src/data/DataContext', () => ({
     rawLocations: [{ id: 'loc-1', name: 'Main Kitchen' }],
     locationById: (id: string) => ({ id, name: 'Main Kitchen' }),
     qtyAt: () => 20,
+    companyQty: () => 20,
+    transitQty: () => mockTransit,
     minFor: () => 10,
     movements: mockMovements,
     loading: mockLoading,
@@ -79,7 +82,16 @@ describe('stock-card-history-regression', () => {
     mockParams = { id: 'prod-1' }
     mockMovements = []
     mockLoading = false
+    mockTransit = 0
     mockHistory = { rows: [], ready: false, status: 'loading', error: '', retry: () => {} }
+  })
+
+  test('company-owned goods entirely in transit do not mark branch availability normal', () => {
+    mockTransit = 20
+    const html = ReactDOMServer.renderToStaticMarkup(React.createElement(StockCardPage))
+    expect(html).toContain('รวมระหว่างขนส่ง 20 KG')
+    expect(html).toMatch(/text-lg font-bold[^>]*>หมดสต๊อก</)
+    expect(html).toContain('3,000.00') // company valuation: 20 * 150, despite nothing available
   })
 
   test('loading state: must not render partial movement totals from live 7-day window while ledger is null', () => {

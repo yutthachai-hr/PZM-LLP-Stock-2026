@@ -429,11 +429,11 @@ export function RequestReview({ initial, onChange }: { initial: PurchaseRequest;
                   <>
                     <Button variant="secondary" onClick={() => void exportFile('pdf')} disabled={!!busy}>
                       <Icon name="download" size={16} />
-                      PDF
+                      {busy === 'pdf' ? t('กำลังสร้าง...') : 'PDF'}
                     </Button>
                     <Button variant="secondary" onClick={() => void exportFile('excel')} disabled={!!busy}>
                       <Icon name="download" size={16} />
-                      Excel
+                      {busy === 'excel' ? t('กำลังสร้าง...') : 'Excel'}
                     </Button>
                   </>
                 )}

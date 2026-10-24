@@ -1,0 +1,24 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/pzm-toast-ux-20261015
+
+ ❯ tests/toast-queue.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/toast-queue.test.ts [ tests/toast-queue.test.ts ]
+Error: Cannot find module '../src/lib/toastQueue' imported from C:/Users/Yutthachai/pzm-toast-ux-20261015/tests/toast-queue.test.ts
+ ❯ tests/toast-queue.test.ts:2:1
+      1| import { describe, expect, it } from 'vitest'
+      2| import { enqueueToast, normalizeToast, visibleToasts, TOAST_DURATION, …
+       | ^
+      3|
+      4| const notice = (id: number, title = `Message ${id}`, kind: ToastRecord…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  10:54:35
+   Duration  172ms (worker 95%, environment 5%)
+
