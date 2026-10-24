@@ -546,7 +546,7 @@ export function transferSubmittedDraft(
       to: locationName(t.toLocationId),
       n: t.items.filter((i) => !i.removed).length,
     },
-    link: `/logistics/${t.id}`,
+    link: `/transfers/${t.id}`,
     locationId: t.fromLocationId,
   }
 }
@@ -566,7 +566,7 @@ export function transferArrivingDraft(
       to: locationName(t.toLocationId),
       n: t.items.filter((i) => !i.removed).length,
     },
-    link: `/logistics/${t.id}`,
+    link: `/transfers/${t.id}`,
     locationId: t.toLocationId,
   }
 }
@@ -586,7 +586,7 @@ export function transferIssueDraft(
       by: reportedBy,
       to: locationName(t.toLocationId),
     },
-    link: `/logistics/${t.id}`,
+    link: `/transfers/${t.id}`,
     locationId: t.toLocationId,
   }
 }

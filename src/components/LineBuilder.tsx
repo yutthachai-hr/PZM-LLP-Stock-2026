@@ -96,12 +96,12 @@ export function LineBuilder({
   const [importing, setImporting] = useState(() => importable && params.get('import') === '1')
   useEffect(() => {
     if (importable && params.get('import') === '1') {
+      setImporting(true)
       const next = new URLSearchParams(params)
       next.delete('import')
       setParams(next, { replace: true })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [importable, params, setParams])
   const [search, setSearch] = useState('')
   const [scanning, setScanning] = useState(false)
   const searchBox = useRef<HTMLInputElement>(null)
