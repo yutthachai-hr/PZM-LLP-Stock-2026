@@ -20,7 +20,7 @@ import { roundQty } from '../../lib/validate'
 import { confirmReceive, expectedQty, getTransfer, openReceiving, saveDiscrepancyPhoto, type ReceivedLineInput } from '../../services/transfers'
 import type { DiscrepancyReason, Transfer, TransferItem } from '../../types'
 import { createSubmitGate, formatDecimalInput, parseDecimalInput, validateReceiveQty } from './receiveHelpers'
-import './transfer-receive.css'
+
 
 /**
  * `/transfers/:id/receive` — the destination checks in a delivery, standing at the door
@@ -277,7 +277,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                 {/* Mobile Row 1 (Identity) & Row 2 (Dispatched) */}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-start gap-3">
-                    <label className="receive-checkbox-target flex h-[44px] w-[44px] min-h-[44px] min-w-[44px] shrink-0 cursor-pointer items-center justify-center rounded-lg touch-manipulation hover:bg-sunken">
+                    <label className="flex h-[44px] w-[44px] min-h-[44px] min-w-[44px] shrink-0 cursor-pointer items-center justify-center rounded-lg touch-manipulation hover:bg-sunken">
                       <input
                         type="checkbox"
                         className="h-[24px] w-[24px] rounded border-line text-brand focus:ring-brand"
@@ -298,37 +298,40 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                   </div>
                 </div>
 
-                {/* Mobile Row 3: Stepper with fixed-px 48px touch targets, flex input, unit wrap */}
+                {/* Mobile Row 3: Stepper with fixed 8px gaps, fixed 8px input padding, min-w-[96px] input, unit wrap */}
                 <div className="w-full md:w-auto shrink-0 pt-1 md:pt-0">
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="receive-stepper-btn !h-[48px] !w-[48px] shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
-                      onClick={() => bump(i, -1)}
-                      aria-label={t('ลด')}
-                    >
-                      −
-                    </Button>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      min={0}
-                      className="!h-[48px] min-w-0 flex-1 md:w-28 text-center text-lg font-semibold"
-                      value={formatDecimalInput(c.qty, c.rawQty)}
-                      onChange={(e) => handleQtyChange(i.idx, e.target.value)}
-                      aria-label={t('รับจริง')}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="receive-stepper-btn !h-[48px] !w-[48px] shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
-                      onClick={() => bump(i, 1)}
-                      aria-label={t('เพิ่ม')}
-                    >
-                      +
-                    </Button>
+                  <div className="flex flex-wrap items-center gap-[8px]">
+                    <div className="flex items-center gap-[8px] flex-1 sm:flex-none">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="!h-[48px] !w-[48px] !min-h-[48px] !min-w-[48px] shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
+                        onClick={() => bump(i, -1)}
+                        aria-label={t('ลด')}
+                      >
+                        −
+                      </Button>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        min={0}
+                        style={{ paddingLeft: '8px', paddingRight: '8px' }}
+                        className="!h-[48px] !min-w-[96px] flex-1 md:w-28 text-center text-lg font-semibold !px-[8px]"
+                        value={formatDecimalInput(c.qty, c.rawQty)}
+                        onChange={(e) => handleQtyChange(i.idx, e.target.value)}
+                        aria-label={t('รับจริง')}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="!h-[48px] !w-[48px] !min-h-[48px] !min-w-[48px] shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
+                        onClick={() => bump(i, 1)}
+                        aria-label={t('เพิ่ม')}
+                      >
+                        +
+                      </Button>
+                    </div>
                     <span className="shrink-0 text-sm font-medium text-ink-soft pl-1 text-left">{i.unit}</span>
                   </div>
                 </div>

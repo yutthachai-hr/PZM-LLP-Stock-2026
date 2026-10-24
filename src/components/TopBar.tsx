@@ -304,11 +304,11 @@ export function TopBar({ title }: { title: string }) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
-      <div className="flex items-center gap-2 px-2 py-2 sm:px-4 lg:px-6 xl:py-2.5">
+      <div className="flex items-center gap-1 sm:gap-2 px-2 py-1.5 sm:px-4 lg:px-6 xl:py-2.5">
         {/* On a phone the open brand's logo is the way to the other two (a tablet has it at the
             top of its rail, a desktop at the top of its menu). */}
         {!mobileSearch && (
-          <span className="md:hidden">
+          <span className="md:hidden shrink-0 [&_button]:!h-[44px] [&_button]:!w-[44px]">
             <BrandSwitcher variant="compact" />
           </span>
         )}
@@ -317,16 +317,16 @@ export function TopBar({ title }: { title: string }) {
         <div className={`min-w-0 flex-1 ${mobileSearch ? '' : 'hidden sm:block'}`}>{search}</div>
 
         {!mobileSearch && (
-          <span className="truncate text-base font-bold text-ink sm:hidden">{title}</span>
+          <span className="min-w-0 flex-1 truncate text-base font-bold text-ink sm:hidden">{title}</span>
         )}
 
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1 [&_button.h-11]:!h-[44px] [&_button.w-11]:!w-[44px]">
           <button
             onClick={() => {
               setMobileSearch((v) => !v)
               setTimeout(() => input.current?.focus(), 0)
             }}
-            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 sm:hidden"
+            className="inline-flex h-[44px] w-[44px] min-h-[44px] min-w-[44px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40 sm:hidden"
             aria-label={t('ค้นหา')}
           >
             <Icon name={mobileSearch ? 'x' : 'search'} size={20} />
@@ -401,9 +401,9 @@ function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t('บัญชีผู้ใช้')}
-        className="inline-flex h-11 cursor-pointer items-center gap-1 rounded-lg pl-1 pr-1.5 text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
+        className="inline-flex h-[44px] min-h-[44px] shrink-0 cursor-pointer items-center gap-1 rounded-lg pl-1 pr-1.5 text-ink-soft outline-none hover:bg-sunken focus-visible:ring-2 focus-visible:ring-brand/40"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft font-bold text-brand">
+        <span className="flex h-[36px] w-[36px] min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-full bg-brand-soft font-bold text-brand">
           {user.name.charAt(0).toUpperCase() || '?'}
         </span>
         {/* Which account this tablet is on, readable without opening the menu (mock-up). */}

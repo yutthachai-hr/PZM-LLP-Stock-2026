@@ -2,7 +2,7 @@ import { chromium } from '@playwright/test'
 import * as path from 'path'
 import * as fs from 'fs'
 
-const PORT = 5214
+const PORT = 5221
 const BASE_URL = `http://localhost:${PORT}`
 
 const items = [
@@ -101,6 +101,8 @@ export async function runChecks(options = {}) {
   const report = {
     normal: [],
     root200: [],
+    decimalTyping: null,
+    headerPollution: null,
   }
 
   const outDir = options.outDir || 'docs/mission/r72/artifacts/reflow'
@@ -116,14 +118,30 @@ export async function runChecks(options = {}) {
       const computedFont = window.getComputedStyle(document.documentElement).fontSize
       const scrollWidth = document.documentElement.scrollWidth
       const innerWidth = window.innerWidth
-      const firstCard = document.querySelector('.space-y-3 > div')
+      const lineContainer = document.querySelector('.space-y-3.pb-32') || document.querySelector('.space-y-3')
+      const firstCard = lineContainer?.firstElementChild
       const checkboxLabel = firstCard?.querySelector('label')
       const cbRect = checkboxLabel?.getBoundingClientRect()
       const buttons = Array.from(firstCard?.querySelectorAll('button') || [])
       const minus = buttons.find(b => b.textContent?.trim() === '−')
       const minusRect = minus?.getBoundingClientRect()
-      const input = firstCard?.querySelector('input[type="number"]')
+      const plus = buttons.find(b => b.textContent?.trim() === '+')
+      const plusRect = plus?.getBoundingClientRect()
+      const input = firstCard?.querySelector('input[type="number"]') || document.querySelector('input[type="number"]')
       const inputRect = input?.getBoundingClientRect()
+      const inputCS = input ? window.getComputedStyle(input) : null
+      const padLeft = inputCS ? parseFloat(inputCS.paddingLeft) : 0
+      const padRight = inputCS ? parseFloat(inputCS.paddingRight) : 0
+      const borderLeft = inputCS ? parseFloat(inputCS.borderLeftWidth) : 0
+      const borderRight = inputCS ? parseFloat(inputCS.borderRightWidth) : 0
+      const contentWidth = inputRect ? (inputRect.width - padLeft - padRight - borderLeft - borderRight) : 0
+
+      // Canvas text measurement
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const font = inputCS ? `${inputCS.fontWeight} ${inputCS.fontSize} ${inputCS.fontFamily}` : '18px sans-serif'
+      ctx.font = font
+      const textMetrics = ctx.measureText('1.063')
 
       return {
         computedFont,
@@ -133,7 +151,12 @@ export async function runChecks(options = {}) {
         overflow: scrollWidth - innerWidth,
         cbSize: cbRect ? { w: Math.round(cbRect.width), h: Math.round(cbRect.height) } : null,
         minusSize: minusRect ? { w: Math.round(minusRect.width), h: Math.round(minusRect.height) } : null,
+        plusSize: plusRect ? { w: Math.round(plusRect.width), h: Math.round(plusRect.height) } : null,
         inputSize: inputRect ? { w: Math.round(inputRect.width), h: Math.round(inputRect.height) } : null,
+        inputPaddingH: Math.round(padLeft + padRight),
+        contentWidth: Math.round(contentWidth * 10) / 10,
+        canvasTextWidth: Math.round(textMetrics.width * 10) / 10,
+        isClipped: contentWidth < textMetrics.width,
       }
     })
     report.normal.push({ width: w, ...res })
@@ -155,7 +178,6 @@ export async function runChecks(options = {}) {
       const scrollWidth = document.documentElement.scrollWidth
       const innerWidth = window.innerWidth
 
-      // Find leaf elements causing horizontal expansion
       const leafOverflows = []
       document.querySelectorAll('*').forEach(el => {
         if (el.children.length === 0 || Array.from(el.children).every(c => c.getBoundingClientRect().width === 0)) {
@@ -173,14 +195,30 @@ export async function runChecks(options = {}) {
         }
       })
 
-      const firstCard = document.querySelector('.space-y-3 > div')
+      const lineContainer = document.querySelector('.space-y-3.pb-32') || document.querySelector('.space-y-3')
+      const firstCard = lineContainer?.firstElementChild
       const checkboxLabel = firstCard?.querySelector('label')
       const cbRect = checkboxLabel?.getBoundingClientRect()
       const buttons = Array.from(firstCard?.querySelectorAll('button') || [])
       const minus = buttons.find(b => b.textContent?.trim() === '−')
       const minusRect = minus?.getBoundingClientRect()
-      const input = firstCard?.querySelector('input[type="number"]')
+      const plus = buttons.find(b => b.textContent?.trim() === '+')
+      const plusRect = plus?.getBoundingClientRect()
+      const input = firstCard?.querySelector('input[type="number"]') || document.querySelector('input[type="number"]')
       const inputRect = input?.getBoundingClientRect()
+      const inputCS = input ? window.getComputedStyle(input) : null
+      const padLeft = inputCS ? parseFloat(inputCS.paddingLeft) : 0
+      const padRight = inputCS ? parseFloat(inputCS.paddingRight) : 0
+      const borderLeft = inputCS ? parseFloat(inputCS.borderLeftWidth) : 0
+      const borderRight = inputCS ? parseFloat(inputCS.borderRightWidth) : 0
+      const contentWidth = inputRect ? (inputRect.width - padLeft - padRight - borderLeft - borderRight) : 0
+
+      // Canvas text measurement under root 200%
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const font = inputCS ? `${inputCS.fontWeight} ${inputCS.fontSize} ${inputCS.fontFamily}` : '36px sans-serif'
+      ctx.font = font
+      const textMetrics = ctx.measureText('1.063')
 
       return {
         computedFont,
@@ -191,18 +229,27 @@ export async function runChecks(options = {}) {
         leafOverflows,
         cbSize: cbRect ? { w: Math.round(cbRect.width), h: Math.round(cbRect.height) } : null,
         minusSize: minusRect ? { w: Math.round(minusRect.width), h: Math.round(minusRect.height) } : null,
+        plusSize: plusRect ? { w: Math.round(plusRect.width), h: Math.round(plusRect.height) } : null,
         inputSize: inputRect ? { w: Math.round(inputRect.width), h: Math.round(inputRect.height) } : null,
+        inputPaddingH: Math.round(padLeft + padRight),
+        contentWidth: Math.round(contentWidth * 10) / 10,
+        canvasTextWidth: Math.round(textMetrics.width * 10) / 10,
+        isClipped: contentWidth < textMetrics.width,
       }
     })
     report.root200.push({ width: w, ...res })
 
-    if (w === 320 || w === 390) {
-      await page.screenshot({ path: path.join(outDir, `receive-${w}-root200.png`) })
+    await page.screenshot({ path: path.join(outDir, `green-receive-${w}-root200.png`) })
+    if (w === 320 || w === 360) {
+      const inputLocator = page.locator('input[type="number"]').nth(1)
+      if (await inputLocator.count() > 0) {
+        await inputLocator.screenshot({ path: path.join(outDir, `green-input-qty-${w}-root200.png`) })
+      }
     }
   }
 
-  // 3. Test sequential typing 1.063 under root 200% at 390px
-  await page.setViewportSize({ width: 390, height: 750 })
+  // 3. Test sequential typing 1.063 under root 200% at 360px
+  await page.setViewportSize({ width: 360, height: 750 })
   await page.goto(`${BASE_URL}/transfers/${transferDoc.id}/receive`, { waitUntil: 'networkidle' })
   await page.waitForSelector('.space-y-3', { timeout: 10000 })
   await page.evaluate(() => {
@@ -211,13 +258,35 @@ export async function runChecks(options = {}) {
   await page.waitForTimeout(100)
 
   // Find second card (item 1: Mozzarella Cheese)
-  const cards = await page.$$('.space-y-3 > div')
-  const cheeseInput = await cards[1].$('input[type="number"]')
+  const cheeseInput = page.locator('input[type="number"]').nth(1)
   await cheeseInput.click()
   await cheeseInput.fill('')
   await cheeseInput.type('1.063', { delay: 30 })
   const finalVal = await cheeseInput.inputValue()
   report.decimalTyping = { expected: '1.063', actual: finalVal, passed: finalVal === '1.063' }
+
+  // 4. Test cross route header pollution:
+  // After visiting /transfers/id/receive, navigate to / and check header buttons
+  await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' })
+  await page.waitForTimeout(200)
+  const headerCheck = await page.evaluate(() => {
+    const headerBtns = Array.from(document.querySelectorAll('header button'))
+    const polluted = headerBtns.map(btn => {
+      const cs = window.getComputedStyle(btn)
+      return {
+        text: btn.textContent?.trim().slice(0, 20),
+        maxWidth: cs.maxWidth,
+        maxHeight: cs.maxHeight,
+        isPolluted: cs.maxWidth === '44px' && cs.maxHeight === '44px',
+      }
+    })
+    return {
+      hasHeader: headerBtns.length > 0,
+      buttons: polluted,
+      isPolluted: polluted.some(b => b.isPolluted),
+    }
+  })
+  report.headerPollution = headerCheck
 
   await browser.close()
   return report
