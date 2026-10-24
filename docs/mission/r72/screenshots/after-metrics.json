@@ -1,0 +1,1157 @@
+[
+  {
+    "screen": "TransferDetail",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferDetail_320.png"
+  },
+  {
+    "screen": "TransferDetail",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferDetail_375.png"
+  },
+  {
+    "screen": "TransferDetail",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferDetail_390.png"
+  },
+  {
+    "screen": "TransferDetail",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferDetail_414.png"
+  },
+  {
+    "screen": "TransferDetail",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferDetail_768.png"
+  },
+  {
+    "screen": "TransferDetail",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferDetail_1024.png"
+  },
+  {
+    "screen": "TransferDetail",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferDetail_1440.png"
+  },
+  {
+    "screen": "TransferReceive",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferReceive_320.png"
+  },
+  {
+    "screen": "TransferReceive",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferReceive_375.png"
+  },
+  {
+    "screen": "TransferReceive",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferReceive_390.png"
+  },
+  {
+    "screen": "TransferReceive",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferReceive_414.png"
+  },
+  {
+    "screen": "TransferReceive",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferReceive_768.png"
+  },
+  {
+    "screen": "TransferReceive",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferReceive_1024.png"
+  },
+  {
+    "screen": "TransferReceive",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/TransferReceive_1440.png"
+  },
+  {
+    "screen": "POReceive",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 1309,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/POReceive_320.png"
+  },
+  {
+    "screen": "POReceive",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 1340,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/POReceive_375.png"
+  },
+  {
+    "screen": "POReceive",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 1112,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/POReceive_390.png"
+  },
+  {
+    "screen": "POReceive",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 1039,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/POReceive_414.png"
+  },
+  {
+    "screen": "POReceive",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 78
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/POReceive_768.png"
+  },
+  {
+    "screen": "POReceive",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 78
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/POReceive_1024.png"
+  },
+  {
+    "screen": "POReceive",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 0
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/POReceive_1440.png"
+  },
+  {
+    "screen": "ManualReceive",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 166,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/ManualReceive_320.png"
+  },
+  {
+    "screen": "ManualReceive",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 99,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/ManualReceive_375.png"
+  },
+  {
+    "screen": "ManualReceive",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/ManualReceive_390.png"
+  },
+  {
+    "screen": "ManualReceive",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/ManualReceive_414.png"
+  },
+  {
+    "screen": "ManualReceive",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 78
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/ManualReceive_768.png"
+  },
+  {
+    "screen": "ManualReceive",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 78
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/ManualReceive_1024.png"
+  },
+  {
+    "screen": "ManualReceive",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 0
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/ManualReceive_1440.png"
+  },
+  {
+    "screen": "Issue",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Issue_320.png"
+  },
+  {
+    "screen": "Issue",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Issue_375.png"
+  },
+  {
+    "screen": "Issue",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Issue_390.png"
+  },
+  {
+    "screen": "Issue",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Issue_414.png"
+  },
+  {
+    "screen": "Issue",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Issue_768.png"
+  },
+  {
+    "screen": "Issue",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Issue_1024.png"
+  },
+  {
+    "screen": "Issue",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Issue_1440.png"
+  },
+  {
+    "screen": "StockCount",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/StockCount_320.png"
+  },
+  {
+    "screen": "StockCount",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/StockCount_375.png"
+  },
+  {
+    "screen": "StockCount",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/StockCount_390.png"
+  },
+  {
+    "screen": "StockCount",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/StockCount_414.png"
+  },
+  {
+    "screen": "StockCount",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 114
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/StockCount_768.png"
+  },
+  {
+    "screen": "StockCount",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/StockCount_1024.png"
+  },
+  {
+    "screen": "StockCount",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/StockCount_1440.png"
+  },
+  {
+    "screen": "Barcode",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 166,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Barcode_320.png"
+  },
+  {
+    "screen": "Barcode",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 99,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Barcode_375.png"
+  },
+  {
+    "screen": "Barcode",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Barcode_390.png"
+  },
+  {
+    "screen": "Barcode",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": 73
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Barcode_414.png"
+  },
+  {
+    "screen": "Barcode",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 78
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Barcode_768.png"
+  },
+  {
+    "screen": "Barcode",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 78
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Barcode_1024.png"
+  },
+  {
+    "screen": "Barcode",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": 0
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Barcode_1440.png"
+  },
+  {
+    "screen": "Requests",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Requests_320.png"
+  },
+  {
+    "screen": "Requests",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Requests_375.png"
+  },
+  {
+    "screen": "Requests",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Requests_390.png"
+  },
+  {
+    "screen": "Requests",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Requests_414.png"
+  },
+  {
+    "screen": "Requests",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Requests_768.png"
+  },
+  {
+    "screen": "Requests",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Requests_1024.png"
+  },
+  {
+    "screen": "Requests",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Requests_1440.png"
+  },
+  {
+    "screen": "Orders",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Orders_320.png"
+  },
+  {
+    "screen": "Orders",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Orders_375.png"
+  },
+  {
+    "screen": "Orders",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Orders_390.png"
+  },
+  {
+    "screen": "Orders",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Orders_414.png"
+  },
+  {
+    "screen": "Orders",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Orders_768.png"
+  },
+  {
+    "screen": "Orders",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Orders_1024.png"
+  },
+  {
+    "screen": "Orders",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Orders_1440.png"
+  },
+  {
+    "screen": "Notifications",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Notifications_320.png"
+  },
+  {
+    "screen": "Notifications",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Notifications_375.png"
+  },
+  {
+    "screen": "Notifications",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Notifications_390.png"
+  },
+  {
+    "screen": "Notifications",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Notifications_414.png"
+  },
+  {
+    "screen": "Notifications",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Notifications_768.png"
+  },
+  {
+    "screen": "Notifications",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Notifications_1024.png"
+  },
+  {
+    "screen": "Notifications",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Notifications_1440.png"
+  },
+  {
+    "screen": "Modals_BottomSheet",
+    "width": 320,
+    "label": "320",
+    "metrics": {
+      "scrollW": 320,
+      "clientW": 320,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Modals_BottomSheet_320.png"
+  },
+  {
+    "screen": "Modals_BottomSheet",
+    "width": 375,
+    "label": "375",
+    "metrics": {
+      "scrollW": 375,
+      "clientW": 375,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Modals_BottomSheet_375.png"
+  },
+  {
+    "screen": "Modals_BottomSheet",
+    "width": 390,
+    "label": "390",
+    "metrics": {
+      "scrollW": 390,
+      "clientW": 390,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Modals_BottomSheet_390.png"
+  },
+  {
+    "screen": "Modals_BottomSheet",
+    "width": 414,
+    "label": "414",
+    "metrics": {
+      "scrollW": 414,
+      "clientW": 414,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 77,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Modals_BottomSheet_414.png"
+  },
+  {
+    "screen": "Modals_BottomSheet",
+    "width": 768,
+    "label": "768",
+    "metrics": {
+      "scrollW": 768,
+      "clientW": 768,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Modals_BottomSheet_768.png"
+  },
+  {
+    "screen": "Modals_BottomSheet",
+    "width": 1024,
+    "label": "1024",
+    "metrics": {
+      "scrollW": 1024,
+      "clientW": 1024,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Modals_BottomSheet_1024.png"
+  },
+  {
+    "screen": "Modals_BottomSheet",
+    "width": 1440,
+    "label": "1440",
+    "metrics": {
+      "scrollW": 1440,
+      "clientW": 1440,
+      "hasHorizScroll": false,
+      "plusProtrusion": 0,
+      "faOverlap": 0,
+      "navHeight": 0,
+      "faHeight": null
+    },
+    "screenshotRel": "docs/mission/r72/screenshots/after/Modals_BottomSheet_1440.png"
+  }
+]

@@ -52,7 +52,7 @@ export function BottomTabBar() {
             type="button"
             onClick={() => setSheet(true)}
             aria-label={t('ทำรายการ')}
-            className="absolute -top-6 flex h-16 w-16 cursor-pointer items-center justify-center rounded-full bg-brand text-white shadow-lg outline-none active:brightness-110 focus-visible:ring-2 focus-visible:ring-brand/40"
+            className="absolute -top-px flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-brand text-white shadow-lg outline-none active:brightness-110 focus-visible:ring-2 focus-visible:ring-brand/40"
           >
             <Icon name="plus" size={32} />
           </button>
