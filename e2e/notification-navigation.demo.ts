@@ -6,7 +6,7 @@ async function stage(
   brand = 'pizza',
   role = 'admin',
   link = '/logistics/tr-fixture',
-  opts?: { lang?: string; fromName?: string; toName?: string; n?: number; by?: string },
+  opts?: { lang?: string; fromName?: string; toName?: string; n?: number; by?: string; kind?: string; priority?: string },
 ) {
   await page.addInitScript(
     ({ brand, role, link, opts }) => {
@@ -65,9 +65,9 @@ async function stage(
       store(`${prefix}notifications`, {
         old: {
           id: 'old',
-          kind: 'transferSubmitted',
+          kind: opts?.kind ?? 'transferSubmitted',
           category: 'inventory',
-          priority: 'medium',
+          priority: opts?.priority ?? 'medium',
           to: { all: true },
           audienceKeys: ['all'],
           params: {
@@ -249,4 +249,35 @@ test('owner TR-00001: legacy /logistics/:id notification navigates to /transfers
   expect((await readBy(page))['r63-user']).toBeTruthy()
 
   await page.screenshot({ path: 'docs/mission/r69/repro-tr-00001-legacy-link-resolved.png' })
+  await page.screenshot({ path: 'docs/mission/r72/repro-tr-00001-legacy-link-resolved.png' })
+})
+
+test('R72: transferArriving notification navigates to /transfers/:id and marks read with screenshot', async ({ page }) => {
+  await stage(page, 'pizza', 'admin', '/transfers/tr-fixture', {
+    lang: 'th',
+    kind: 'transferArriving',
+    priority: 'high',
+    fromName: 'คลังหลัก',
+    toName: 'สาขาสารสิน',
+    n: 21,
+  })
+  await page.goto('/products')
+  await openBell(page)
+
+  const notifItem = page.getByRole('button').filter({ hasText: 'TR-00001' }).last()
+  await expect(notifItem).toBeVisible()
+  await expect(notifItem).toContainText('สินค้ากำลังมาส่ง: TR-00001')
+  await expect(notifItem).toContainText(/จาก\s*คลังหลัก มา สาขาสารสิน · 21 รายการ/)
+
+  expect((await readBy(page))['r63-user']).toBeFalsy()
+
+  await notifItem.click()
+
+  await expect(page).toHaveURL(/\/transfers\/tr-fixture$/)
+  expect(page.url()).not.toMatch(/\/$/)
+  await expect(page.locator('main')).toContainText('TR-00001')
+
+  expect((await readBy(page))['r63-user']).toBeTruthy()
+
+  await page.screenshot({ path: 'docs/mission/r72/r72-agent01-transfer-notification.png' })
 })
