@@ -143,6 +143,8 @@ jobs:
         run: npx playwright test -c playwright.orders.config.ts
       - name: Transfer notification navigation on isolated browser-storage fixtures
         run: npx playwright test -c playwright.notification.config.ts
+      - name: Service worker page loads behind a Pages-shaped server (port 5207)
+        run: npx playwright test -c playwright.sw.config.ts
       - name: Toast notifications on an isolated browser-storage demo
         run: npx playwright test -c playwright.toast.config.ts
       - name: Product pricing, accessible grid and responsive SKU on isolated demo

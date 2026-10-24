@@ -71,6 +71,14 @@ export default defineConfig({
         // The supplier's page (/supplier/po/<token>) is its own entry, and /api is the server: a
         // staff phone with the app installed must not answer either from the app shell.
         navigateFallbackDenylist: [/^\/supplier\/po\//, /^\/api\//],
+        // The app shell is cached as `/`, not `index.html`: Cloudflare Pages answers `/index.html` with a 308 to `/`,
+        // and when the cached copy was gone the worker fetched that redirect and answered a page load with it, which
+        // the browser refuses (ERR_FAILED on every page, LINE's return included — P0, 24 Oct 2026).
+        // e2e/sw-navigation.demo.ts.
+        navigateFallback: '/',
+        manifestTransforms: [
+          async (entries) => ({ manifest: entries.map((e) => (e.url === 'index.html' ? { ...e, url: '/' } : e)), warnings: [] }),
+        ],
       },
     }),
   ],
