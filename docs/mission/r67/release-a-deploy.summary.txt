@@ -1,0 +1,3 @@
++  cloud.firestore: rules file firestore.rules compiled successfully
++  firestore: released rules firestore.rules to cloud.firestore
++  Deploy complete!

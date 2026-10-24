@@ -1,0 +1,9 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-517057f3
+
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  03:11:26
+   Duration  218ms (transform 65%, import 18%, tests 11%, worker 5%)
+

@@ -1,0 +1,139 @@
+{
+  "capturedAt": "2026-10-24T18:03:56.735Z",
+  "since": "2026-10-24T17:45:00.000Z",
+  "sprint": "R72",
+  "observedSessions": 7,
+  "modelRequestLifecyclePeak": {
+    "peak": 7,
+    "at": "2026-10-24T17:59:03.839Z"
+  },
+  "conservativeContentEmissionPeak": {
+    "peak": 4,
+    "at": "2026-10-24T17:58:45.440Z"
+  },
+  "peakEvidence": [
+    {
+      "title": "R72 Agent02 P0 mobile Transfer receiving cards",
+      "requestedAt": "2026-10-24T17:59:00.169Z",
+      "streamEndedAt": "2026-10-24T17:59:05.744Z"
+    },
+    {
+      "title": "R72 Agent03 reuse PO pricing and authorization proof",
+      "requestedAt": "2026-10-24T17:59:03.839Z",
+      "streamEndedAt": "2026-10-24T17:59:06.485Z"
+    },
+    {
+      "title": "R72 Agent01 P0 Logistics notification repair",
+      "requestedAt": "2026-10-24T17:59:01.184Z",
+      "streamEndedAt": "2026-10-24T17:59:06.784Z"
+    },
+    {
+      "title": "R72 Agent04 system navigation contract audit",
+      "requestedAt": "2026-10-24T17:58:58.326Z",
+      "streamEndedAt": "2026-10-24T17:59:06.573Z"
+    },
+    {
+      "title": "R72 Agent05 rendered responsive audit and shared fixes",
+      "requestedAt": "2026-10-24T17:59:01.360Z",
+      "streamEndedAt": "2026-10-24T17:59:08.960Z"
+    },
+    {
+      "title": "R72 Agent07 mobile logistics visual E2E regressions",
+      "requestedAt": "2026-10-24T17:59:03.764Z",
+      "streamEndedAt": "2026-10-24T17:59:15.557Z"
+    },
+    {
+      "title": "R72 Agent06 stock business and security emulator QA",
+      "requestedAt": "2026-10-24T17:59:03.655Z",
+      "streamEndedAt": "2026-10-24T17:59:16.947Z"
+    }
+  ],
+  "methodology": "request-lifecycle = assistant.created -> streamed (generation end), excluding subsequent tool execution; may include local setup/provider queue; emission = first content-part timestamp -> streamed",
+  "upstreamActualInferenceConcurrency": "UNVERIFIED; no wire/upstream queue trace",
+  "sessions": [
+    {
+      "title": "R72 Agent02 P0 mobile Transfer receiving cards",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-f4cf0e44",
+      "createdAt": "2026-10-24T17:58:34.783Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 38,
+      "maxContext": 66064,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent03 reuse PO pricing and authorization proof",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-06670520",
+      "createdAt": "2026-10-24T17:58:37.089Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 21,
+      "maxContext": 49752,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent01 P0 Logistics notification repair",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-0e06f3b6",
+      "createdAt": "2026-10-24T17:58:37.385Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 24,
+      "maxContext": 52081,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent04 system navigation contract audit",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-5e83e1f2",
+      "createdAt": "2026-10-24T17:58:37.391Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 15,
+      "maxContext": 34263,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent05 rendered responsive audit and shared fixes",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-309b4e37",
+      "createdAt": "2026-10-24T17:58:39.670Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 16,
+      "maxContext": 39499,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent07 mobile logistics visual E2E regressions",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-6983434b",
+      "createdAt": "2026-10-24T17:58:56.711Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 13,
+      "maxContext": 40291,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent06 stock business and security emulator QA",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-720f3090",
+      "createdAt": "2026-10-24T17:58:56.717Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 21,
+      "maxContext": 44017,
+      "failures": [],
+      "compactions": []
+    }
+  ]
+}

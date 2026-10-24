@@ -1,0 +1,13 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-517057f3
+
+
+ Test Files  153 passed (153)
+      Tests  2053 passed (2053)
+   Start at  03:08:46
+   Duration  15.12s (tests 38%, transform 38%, import 23%, worker 2%)
+
+  Transform  transforming modules took 21.89s · 38% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+

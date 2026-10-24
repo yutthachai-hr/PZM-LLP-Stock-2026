@@ -1,0 +1,126 @@
+{
+  "capturedAt": "2026-10-24T16:37:30.018Z",
+  "authority": "git objects, not prose handoffs",
+  "checkpoints": [
+    {
+      "ref": "934cbfa",
+      "sha": "934cbfaa05f1c8b97a12e70a8d2a1490b34cebf8",
+      "parents": [
+        "70db1b775c4baa12d11a26928d596aaaf03e0fcf"
+      ],
+      "committedAt": "2026-10-24T22:39:24+07:00"
+    },
+    {
+      "ref": "70db1b7",
+      "sha": "70db1b775c4baa12d11a26928d596aaaf03e0fcf",
+      "parents": [
+        "2a1e9a6db4fe0acb185e38c6b56dd16c6164041f"
+      ],
+      "committedAt": "2026-10-24T22:38:40+07:00"
+    },
+    {
+      "ref": "2a1e9a6",
+      "sha": "2a1e9a6db4fe0acb185e38c6b56dd16c6164041f",
+      "parents": [
+        "6045b502171b1639d1e55c0f09e9a910e14ad064"
+      ],
+      "committedAt": "2026-10-24T22:37:16+07:00"
+    },
+    {
+      "ref": "8e9108e",
+      "sha": "8e9108ebd9e9cd088f300643c6f6e0f218ca7e38",
+      "parents": [
+        "a5298146af55b46d7bb7abdb06fdfc69c5e1be69"
+      ],
+      "committedAt": "2026-10-24T23:02:30+07:00"
+    },
+    {
+      "ref": "3b32f1b",
+      "sha": "3b32f1ba914cd2e49c0d5a33df4bd80e6e761c99",
+      "parents": [
+        "aac58790e5edce82b4635d4a44f9f53c5edb9dde"
+      ],
+      "committedAt": "2026-10-24T23:20:35+07:00"
+    },
+    {
+      "ref": "e1753fe",
+      "sha": "e1753fe0708cb13585910d52d905b65abe262532",
+      "parents": [
+        "934cbfaa05f1c8b97a12e70a8d2a1490b34cebf8"
+      ],
+      "committedAt": "2026-10-24T23:08:41+07:00"
+    },
+    {
+      "ref": "eac2b73",
+      "sha": "eac2b73b7262a0e4ead3bf26bb4c3d20349e52f2",
+      "parents": [
+        "312f8a7dc60556eb506f59ff5a58d9b4c1d5ce55"
+      ],
+      "committedAt": "2026-10-24T23:05:15+07:00"
+    },
+    {
+      "ref": "2574414",
+      "sha": "2574414b06d4d4557b39ea543177f446e75bd4a1",
+      "parents": [
+        "568d26fd92e2cb641b6c528f71f18a27f104a043"
+      ],
+      "committedAt": "2026-10-24T23:10:59+07:00"
+    },
+    {
+      "ref": "d57be60",
+      "sha": "d57be6083bc1a91c53520b6218da700b34e0d2a3",
+      "parents": [
+        "acf2949bfb6298fd0f219df222b100c7d4b205c5"
+      ],
+      "committedAt": "2026-10-24T23:09:56+07:00"
+    },
+    {
+      "ref": "f5f51ce",
+      "sha": "f5f51cea33df22cfa245b8388c1556fa1456a797",
+      "parents": [
+        "6045b502171b1639d1e55c0f09e9a910e14ad064"
+      ],
+      "committedAt": "2026-10-24T23:10:08+07:00"
+    },
+    {
+      "ref": "d8293a0",
+      "sha": "d8293a0a62cdcafb031b3f488f20a9c279de52dd",
+      "parents": [
+        "6045b502171b1639d1e55c0f09e9a910e14ad064"
+      ],
+      "committedAt": "2026-10-24T23:11:23+07:00"
+    },
+    {
+      "ref": "f1b8a0a",
+      "sha": "f1b8a0abc2033ceb2cedc1418a2822b14bc76adf",
+      "parents": [
+        "934cbfaa05f1c8b97a12e70a8d2a1490b34cebf8"
+      ],
+      "committedAt": "2026-10-24T23:16:05+07:00"
+    },
+    {
+      "ref": "410429f",
+      "sha": "410429f63cfb66da12dba2ec0a4bbfd67c355ba9",
+      "parents": [
+        "1651548aef5337d7caf786a081aefd7ee9a19a9a"
+      ],
+      "committedAt": "2026-10-24T23:18:28+07:00"
+    },
+    {
+      "ref": "ee0be5d",
+      "sha": "ee0be5de9bd58e2f1de788c8d90740f7ee8f8002",
+      "parents": [
+        "63f44da82640e3998f981e5cfe38d8ed40807604"
+      ],
+      "committedAt": "2026-10-24T23:29:57+07:00"
+    },
+    {
+      "ref": "1651548",
+      "sha": "1651548aef5337d7caf786a081aefd7ee9a19a9a",
+      "parents": [
+        "35403c19b657f5b5ab3be6c29f878f0f0937c0d9"
+      ],
+      "committedAt": "2026-10-24T23:04:33+07:00"
+    }
+  ]
+}

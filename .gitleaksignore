@@ -9,3 +9,7 @@ d0dd8b2e15d0a1f6ef88f23afd42671844c62547:tests/functions/supplier-po.test.ts:gen
 # 17 Jul: the Firebase *web* apiKey, a public client identifier shipped in every bundle; access
 # is enforced by Firestore Rules and authorized domains, not by keeping it secret.
 08e0dbd35a6ab589cc0aeb093ef159f95de7c516:src/firebase/config.ts:gcp-api-key:24
+# PR56 review report quoted a prefix of that same public client identifier; now redacted.
+# Immutable historical lines only: no path/rule-wide allowlist, no history rewrite.
+133081260d404fc5c3405222502d6ed2f382b277:docs/mission/r67/review-pr59-round3.md:generic-api-key:17
+133081260d404fc5c3405222502d6ed2f382b277:docs/mission/r67/review-pr59-round3.md:generic-api-key:55

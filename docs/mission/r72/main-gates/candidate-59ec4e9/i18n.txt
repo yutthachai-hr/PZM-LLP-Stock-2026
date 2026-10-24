@@ -1,0 +1,7 @@
+
+⚠ 3 entry/entries in en.ts that nothing uses:
+  "วันที่ / เวลา"
+  "ลิงก์ยืนยันของผู้ขายใช้ได้นานสุด (วัน)"
+  "ลิงก์ยังหมดอายุหลังวันส่งด้วย"
+
+✓ every Thai UI string is translated

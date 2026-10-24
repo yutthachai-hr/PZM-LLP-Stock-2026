@@ -1,0 +1,32 @@
+{
+  "capturedAt": "2026-10-24T17:15:43.665Z",
+  "head": "992f6defe8ebeeac62cec9993473b2d1aa836714",
+  "reviewedAppHead": "cb7176a8d27e12d39e2c4273c649619ae1c43acf",
+  "appSrcTree": "a88795b958642b86ca0b4e8775c4637b38e49980",
+  "reviewedSrcTree": "a88795b958642b86ca0b4e8775c4637b38e49980",
+  "lockfileUnchanged": true,
+  "pinned": {
+    "playwright": "1.63.0",
+    "vitest": "5.0.0"
+  },
+  "gates": {
+    "unit": 1783,
+    "unitFiles": 144,
+    "focused": 69,
+    "e2e": 4,
+    "types": "PASS (app/functions/worker/e2e)",
+    "build": "PASS",
+    "i18n": "PASS",
+    "lint": "0 errors; 50 baseline warnings, 0 in changed files"
+  },
+  "e2eEnvironment": "demo-pzm-e2e only; ports8080/9099; no Production requests",
+  "firstE2eAttempt": "blocked before browser launch: floating Playwright1.64.1 revision1248 missing; private npm ci restored lock; pinned rerun4/4",
+  "priceEstimateNotStockValuation": {
+    "factor": 2.72,
+    "qty": 0.333,
+    "perBase": 1000,
+    "estimate": 905.76,
+    "filedQty3dp": 0.906,
+    "roundedStockTimesPrice": 906
+  }
+}

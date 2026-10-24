@@ -1,0 +1,34 @@
+
+ RUN  v5.0.0 C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-517057f3
+
+ ❯ tests/transfer-receive-card.test.ts (8 tests | 1 failed) 14ms
+   ❯ TransferReceivePage: synchronous double-submit gate (4)
+     × synchronous gate blocks concurrent calls during confirmation await 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/transfer-receive-card.test.ts > TransferReceivePage: synchronous double-submit gate > synchronous gate blocks concurrent calls during confirmation await
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/transfer-receive-card.test.ts:63:29
+     61|     expect(submitService).toHaveBeenCalledTimes(1)
+     62|     // A filed receipt is final: the page navigates away, so a late ta…
+     63|     expect(gate.isLocked()).toBe(true)
+       |                             ^
+     64|     expect(await gate.execute({ action: submitService })).toBe(null)
+     65|     expect(submitService).toHaveBeenCalledTimes(1)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  03:10:44
+   Duration  213ms (transform 59%, import 19%, tests 17%, worker 5%)
+

@@ -1,0 +1,16 @@
+{
+ "checkedAt": "2026-10-24T11:02:59.103Z",
+ "origin": "http://localhost:5218",
+ "appAsset": "assets/app-BX910u3E.js",
+ "swHandler": "/",
+ "checks": {
+  "rootHtml200": true,
+  "swJs200": true,
+  "navigationBoundToRoot": true,
+  "precacheHasRootNotIndexHtml": true,
+  "denylistApi": true,
+  "denylistSupplierPo": true,
+  "cleanupOutdatedCaches": true
+ },
+ "pass": true
+}

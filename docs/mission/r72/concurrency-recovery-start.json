@@ -1,0 +1,269 @@
+{
+  "capturedAt": "2026-10-24T18:49:32.494Z",
+  "since": "2026-10-24T17:45:00.000Z",
+  "sprint": "R72",
+  "observedSessions": 12,
+  "modelRequestLifecyclePeak": {
+    "peak": 7,
+    "at": "2026-10-24T17:59:03.839Z"
+  },
+  "conservativeContentEmissionPeak": {
+    "peak": 6,
+    "at": "2026-10-24T18:13:15.291Z"
+  },
+  "peakEvidence": [
+    {
+      "title": "R72 Agent02 P0 mobile Transfer receiving cards",
+      "requestedAt": "2026-10-24T17:59:00.169Z",
+      "streamEndedAt": "2026-10-24T17:59:05.744Z"
+    },
+    {
+      "title": "R72 Agent03 reuse PO pricing and authorization proof",
+      "requestedAt": "2026-10-24T17:59:03.839Z",
+      "streamEndedAt": "2026-10-24T17:59:06.485Z"
+    },
+    {
+      "title": "R72 Agent01 P0 Logistics notification repair",
+      "requestedAt": "2026-10-24T17:59:01.184Z",
+      "streamEndedAt": "2026-10-24T17:59:06.784Z"
+    },
+    {
+      "title": "R72 Agent04 system navigation contract audit",
+      "requestedAt": "2026-10-24T17:58:58.326Z",
+      "streamEndedAt": "2026-10-24T17:59:06.573Z"
+    },
+    {
+      "title": "R72 Agent05 rendered responsive audit and shared fixes",
+      "requestedAt": "2026-10-24T17:59:01.360Z",
+      "streamEndedAt": "2026-10-24T17:59:08.960Z"
+    },
+    {
+      "title": "R72 Agent07 mobile logistics visual E2E regressions",
+      "requestedAt": "2026-10-24T17:59:03.764Z",
+      "streamEndedAt": "2026-10-24T17:59:15.557Z"
+    },
+    {
+      "title": "R72 Agent06 stock business and security emulator QA",
+      "requestedAt": "2026-10-24T17:59:03.655Z",
+      "streamEndedAt": "2026-10-24T17:59:16.947Z"
+    }
+  ],
+  "methodology": "request-lifecycle = assistant.created -> streamed (generation end), excluding subsequent tool execution; may include local setup/provider queue; emission = first content-part timestamp -> streamed",
+  "upstreamActualInferenceConcurrency": "UNVERIFIED; no wire/upstream queue trace",
+  "sessions": [
+    {
+      "title": "R72 Agent02 P0 mobile Transfer receiving cards",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-f4cf0e44",
+      "createdAt": "2026-10-24T17:58:34.783Z",
+      "idleAt": "2026-10-24T18:19:05.138Z",
+      "outcome": "succeeded",
+      "calls": 131,
+      "maxContext": 169575,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent03 reuse PO pricing and authorization proof",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-06670520",
+      "createdAt": "2026-10-24T17:58:37.089Z",
+      "idleAt": "2026-10-24T18:16:35.380Z",
+      "outcome": "failed",
+      "calls": 106,
+      "maxContext": 168057,
+      "failures": [
+        {
+          "type": "provider.internal",
+          "httpStatus": 502,
+          "at": "2026-10-24T18:16:35.376Z"
+        }
+      ],
+      "compactions": [
+        {
+          "state": "failed",
+          "reason": "auto",
+          "start": "2026-10-24T18:15:13.953Z",
+          "end": "2026-10-24T18:16:35.376Z",
+          "httpStatus": 502
+        }
+      ]
+    },
+    {
+      "title": "R72 Agent01 P0 Logistics notification repair",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-0e06f3b6",
+      "createdAt": "2026-10-24T17:58:37.385Z",
+      "idleAt": "2026-10-24T18:20:51.859Z",
+      "outcome": "succeeded",
+      "calls": 149,
+      "maxContext": 165463,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent04 system navigation contract audit",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-5e83e1f2",
+      "createdAt": "2026-10-24T17:58:37.391Z",
+      "idleAt": "2026-10-24T18:18:19.422Z",
+      "outcome": "failed",
+      "calls": 131,
+      "maxContext": 169990,
+      "failures": [
+        {
+          "type": "provider.internal",
+          "httpStatus": 502,
+          "at": "2026-10-24T18:18:19.420Z"
+        }
+      ],
+      "compactions": [
+        {
+          "state": "failed",
+          "reason": "auto",
+          "start": "2026-10-24T18:16:49.974Z",
+          "end": "2026-10-24T18:18:19.420Z",
+          "httpStatus": 502
+        }
+      ]
+    },
+    {
+      "title": "R72 Agent05 rendered responsive audit and shared fixes",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-309b4e37",
+      "createdAt": "2026-10-24T17:58:39.670Z",
+      "idleAt": "2026-10-24T18:23:37.877Z",
+      "outcome": "failed",
+      "calls": 120,
+      "maxContext": 166801,
+      "failures": [
+        {
+          "type": "provider.internal",
+          "httpStatus": 502,
+          "at": "2026-10-24T18:23:37.875Z"
+        }
+      ],
+      "compactions": [
+        {
+          "state": "failed",
+          "reason": "auto",
+          "start": "2026-10-24T18:22:13.318Z",
+          "end": "2026-10-24T18:23:37.875Z",
+          "httpStatus": 502
+        }
+      ]
+    },
+    {
+      "title": "R72 Agent07 mobile logistics visual E2E regressions",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-6983434b",
+      "createdAt": "2026-10-24T17:58:56.711Z",
+      "idleAt": "2026-10-24T18:28:11.865Z",
+      "outcome": "failed",
+      "calls": 113,
+      "maxContext": 169557,
+      "failures": [
+        {
+          "type": "provider.internal",
+          "httpStatus": 502,
+          "at": "2026-10-24T18:28:11.863Z"
+        }
+      ],
+      "compactions": [
+        {
+          "state": "failed",
+          "reason": "auto",
+          "start": "2026-10-24T18:26:47.774Z",
+          "end": "2026-10-24T18:28:11.863Z",
+          "httpStatus": 502
+        }
+      ]
+    },
+    {
+      "title": "R72 Agent06 stock business and security emulator QA",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-720f3090",
+      "createdAt": "2026-10-24T17:58:56.717Z",
+      "idleAt": "2026-10-24T18:16:17.674Z",
+      "outcome": "failed",
+      "calls": 116,
+      "maxContext": 169625,
+      "failures": [
+        {
+          "type": "provider.internal",
+          "httpStatus": 502,
+          "at": "2026-10-24T18:16:17.668Z"
+        }
+      ],
+      "compactions": [
+        {
+          "state": "failed",
+          "reason": "auto",
+          "start": "2026-10-24T18:14:50.160Z",
+          "end": "2026-10-24T18:16:17.668Z",
+          "httpStatus": 502
+        }
+      ]
+    },
+    {
+      "title": "R72 Agent04 r2 finalize preserved navigation matrix",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-c683a9fe",
+      "createdAt": "2026-10-24T18:36:27.655Z",
+      "idleAt": "2026-10-24T18:42:22.713Z",
+      "outcome": "succeeded",
+      "calls": 25,
+      "maxContext": 77650,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent07 r2 finish preserved visual regression harness",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-228605bf",
+      "createdAt": "2026-10-24T18:36:27.686Z",
+      "idleAt": "2026-10-24T18:43:58.231Z",
+      "outcome": "succeeded",
+      "calls": 26,
+      "maxContext": 66563,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent03 r2 finalize saved pricing proof (one recovery)",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-933603f7",
+      "createdAt": "2026-10-24T18:36:27.702Z",
+      "idleAt": "2026-10-24T18:43:18.929Z",
+      "outcome": "succeeded",
+      "calls": 31,
+      "maxContext": 65261,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent05 r2 implement measured shared footer fixes",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-ca4271d2",
+      "createdAt": "2026-10-24T18:36:46.779Z",
+      "idleAt": null,
+      "outcome": "running",
+      "calls": 55,
+      "maxContext": 89012,
+      "failures": [],
+      "compactions": []
+    },
+    {
+      "title": "R72 Agent06 r2 exact-live Rules evidence only",
+      "model": "9router/gemini-3.8-flash-high",
+      "directory": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-ec1d5221",
+      "createdAt": "2026-10-24T18:36:46.785Z",
+      "idleAt": "2026-10-24T18:47:19.044Z",
+      "outcome": "succeeded",
+      "calls": 48,
+      "maxContext": 66681,
+      "failures": [],
+      "compactions": []
+    }
+  ]
+}

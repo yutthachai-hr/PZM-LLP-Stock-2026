@@ -1,0 +1,19 @@
+{
+  "fetchedAt": "2026-10-24T12:35:23.919Z",
+  "projectId": "pzm-stock-x5",
+  "projectNumber": "789071579161",
+  "projectState": "ACTIVE",
+  "releaseId": "projects/pzm-stock-x5/releases/cloud.firestore",
+  "rulesetId": "projects/pzm-stock-x5/rulesets/cf5176f9-7cba-4225-80f3-f19fb70824b0",
+  "releaseCreateTime": "2026-07-16T02:31:58.995356Z",
+  "releaseUpdateTime": "2026-10-24T12:35:14.316608Z",
+  "rulesetCreateTime": "2026-10-24T12:35:10.894287Z",
+  "files": [
+    {
+      "apiName": "firestore.rules",
+      "backupFile": "0-firestore.rules",
+      "bytes": 92222,
+      "sha256": "ae39c231c8c1dde879d1bba723275504ef8fb21c05894dd1e6e4335f9ac37270"
+    }
+  ]
+}

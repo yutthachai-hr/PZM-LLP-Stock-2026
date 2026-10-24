@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-10-24T11:01:09.498Z",
+  "project": "pzm-stock-x5",
+  "api": "firebaserules.projects.test",
+  "httpStatus": 200,
+  "rulesFile": "rollback/firestore.rules",
+  "sha256": "eee07cf82bc0b187cd1c9bd43afa2bf8090fd3b5006dd5415d25fa53aaec22b2",
+  "errors": 0,
+  "warnings": 0,
+  "issues": []
+}

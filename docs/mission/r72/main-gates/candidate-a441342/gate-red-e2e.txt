@@ -1,0 +1,55 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e\r72-logistics-ux.demo.ts:306:3 › R72 Agent07: Logistics mobile layout & visual invariants › rapid double-click on confirm submits only once without racing
+[WebServer] 3:10:49 AM [vite] (client) [Unhandled rejection] AppError: เอกสารไม่ได้อยู่ในสถานะพร้อมตรวจรับ
+[WebServer]  > src/services/transfers.ts:637:72
+[WebServer]     635 |      // ---- reads ----
+[WebServer]     636 |      const { cur, legs, parent, siblings } = await readFamily(tx, transferId)
+[WebServer]     637 |  ...status !== 'inTransit' && cur.status !== 'receiving') throw new AppError('เอกสารไม่ได้อยู่ในสถานะพร้อมตรวจรับ')
+[WebServer]         |                                                                 ^
+[WebServer]     638 |      if (!canReceive(cur, actor)) throw new AppError('ไม่มีสิทธิ์ตรวจรับสินค้าที่สาขานี้')
+[WebServer]     639 |      const byIdx = new Map(receivedLines.map((r) => [r.idx, r]))
+[WebServer]  > src/backend/local.ts:420:23
+[WebServer] 
+
+  1) e2e\r72-logistics-ux.demo.ts:306:3 › R72 Agent07: Logistics mobile layout & visual invariants › rapid double-click on confirm submits only once without racing 
+
+    Error: no unhandled rejection from a late second tap
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "เอกสารไม่ได้อยู่ในสถานะพร้อมตรวจรับ",
+    + ]
+
+      327 |     expect(received, 'exactly one receipt filed').toBe(1)
+      328 |     await expect(page.getByText('เอกสารไม่ได้อยู่ในสถานะพร้อมตรวจรับ')).toHaveCount(0)
+    > 329 |     expect(pageErrors, 'no unhandled rejection from a late second tap').toEqual([])
+          |                                                                         ^
+      330 |   })
+      331 |
+      332 |   test('last item (row 21) is scrollable completely above sticky CTA and bottom nav', async ({ page }) => {
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:329:73
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-fc846-ts-only-once-without-racing\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-fc846-ts-only-once-without-racing\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-fc846-ts-only-once-without-racing\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-fc846-ts-only-once-without-racing\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    e2e\r72-logistics-ux.demo.ts:306:3 › R72 Agent07: Logistics mobile layout & visual invariants › rapid double-click on confirm submits only once without racing 

@@ -1,0 +1,5 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e\r72-logistics-ux.demo.ts:171:3 › R72 Agent07: Logistics mobile layout & visual invariants › name and SKU have useful width and natural wrap across all 6 phone widths
+  1 passed (9.5s)

@@ -1,0 +1,90 @@
+{
+  "checkedAt": "2026-10-24T12:34:39.073Z",
+  "project": "pzm-stock-x5",
+  "api": "firebaserules.projects.test",
+  "mode": "baseline",
+  "rulesSha256": "eee07cf82bc0b187cd1c9bd43afa2bf8090fd3b5006dd5415d25fa53aaec22b2",
+  "issues": [],
+  "passed": 13,
+  "total": 13,
+  "results": [
+    {
+      "case": "admin creates canonical transit (pizza)",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "admin creates canonical transit (lelapin)",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "admin creates canonical transit (rnd)",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "admin: imported transit under another id",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "admin: warehouse may not take the id transit",
+      "expected": "ALLOW",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "admin: ordinary warehouse (no regression)",
+      "expected": "ALLOW",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "manager creates transit",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "staff creates transit",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "inactive admin creates transit",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "unknown signed-in user creates transit",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "signed-out creates transit",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "admin: unknown type rejected",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    },
+    {
+      "case": "admin: extra field rejected",
+      "expected": "DENY",
+      "state": "SUCCESS",
+      "debug": []
+    }
+  ]
+}
