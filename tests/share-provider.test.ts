@@ -55,6 +55,21 @@ describe('the LINE (LIFF) provider', () => {
     expect(statusFor(out)).toBe('sent')
   })
 
+  // R38: once the SDK is up (it is initialised when the wizard opens, by isAvailable), the tap
+  // reaches the picker without waiting on a timer or the network — the activation is still live.
+  test('the picker is called before any timer fires once the SDK is ready', async () => {
+    await lineLiffProvider.isAvailable()
+    let timerFired = false
+    setTimeout(() => (timerFired = true), 0)
+    const pending = lineLiffProvider.share(payload())
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sdk.shareTargetPicker).toHaveBeenCalledTimes(1)
+    expect(timerFired).toBe(false)
+    await pending
+  })
+
   test('a closed picker is cancelled, and records nothing', async () => {
     sdk.shareTargetPicker.mockResolvedValueOnce(undefined)
     const out = await lineLiffProvider.share(payload())
@@ -100,6 +115,47 @@ describe('the LINE (LIFF) provider', () => {
       expect(sdk.login).not.toHaveBeenCalled()
       expect(here.href).toBe(liffUrl('o1'))
       expect(here.href).toBe('https://liff.line.me/1234567890-abcdefgh/orders?send=o1&brand=pizza')
+      vi.unstubAllGlobals()
+    })
+
+    // R40 P0: a batch comes back whole, and connecting LINE is never a share.
+    test('connect() goes to LINE Login carrying the batch, without opening the picker', async () => {
+      vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev' })
+      await lineLiffProvider.isAvailable() // initialises the SDK, as the wizard does on opening
+      sdk.isLoggedIn.mockReturnValue(false)
+      expect(lineLiffProvider.needsLogin?.()).toBe(true)
+      lineLiffProvider.connect?.({ kind: 'order', id: 'o1', batch: '1.S1.1800000000000.o1~o2' })
+      const { redirectUri } = sdk.login.mock.calls[0][0] as { redirectUri: string }
+      expect(redirectUri).toBe('https://pzmstock.pages.dev/orders?send=o1&brand=pizza&batch=1.S1.1800000000000.o1%7Eo2')
+      expect(sdk.shareTargetPicker).not.toHaveBeenCalled()
+      sdk.isLoggedIn.mockReturnValue(true)
+      expect(lineLiffProvider.needsLogin?.()).toBe(false)
+      sdk.isInClient.mockReturnValue(true)
+      sdk.isLoggedIn.mockReturnValue(false)
+      expect(lineLiffProvider.needsLogin?.()).toBe(false) // inside LINE it is signed in already
+      vi.unstubAllGlobals()
+    })
+
+    // R40 review: the wizard must know, in the same tick, that this share() left for LINE Login,
+    // so no attempt or "opened" is kept for it — even if login lapsed after needsLogin() said no.
+    test('a share that leaves for LINE Login says so synchronously; a real share does not', async () => {
+      vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev' })
+      await lineLiffProvider.isAvailable()
+      sdk.isLoggedIn.mockReturnValue(false)
+      const left = lineLiffProvider.share(payload())
+      expect(lineLiffProvider.leftForLogin?.()).toBe(true)
+      expect(await left).toBe('cancelled')
+      expect(sdk.shareTargetPicker).not.toHaveBeenCalled()
+      sdk.isLoggedIn.mockReturnValue(true)
+      const sent = lineLiffProvider.share(payload())
+      expect(lineLiffProvider.leftForLogin?.()).toBe(false)
+      expect(await sent).toBe('sent')
+      vi.unstubAllGlobals()
+    })
+
+    test('the LIFF address for a home-screen hand-over carries the batch too', () => {
+      vi.stubGlobal('location', { href: 'https://pzmstock.pages.dev/orders', pathname: '/orders', hostname: 'pzmstock.pages.dev' })
+      expect(liffUrl('o1', RESUME_PARAM, '1.S1.1800000000000.o1~o2')).toBe('https://liff.line.me/1234567890-abcdefgh/orders?send=o1&brand=pizza&batch=1.S1.1800000000000.o1~o2')
       vi.unstubAllGlobals()
     })
 

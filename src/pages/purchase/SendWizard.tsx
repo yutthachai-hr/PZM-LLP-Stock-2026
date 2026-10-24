@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { useBrand } from '../../brand/BrandContext'
-import { brandDef, getBrand } from '../../brand/brand'
+import { brandDef, brandEpoch, getBrand } from '../../brand/brand'
 import { orderCache } from '../../data/orderCache'
 import { LineBadge } from '../orders/LineBadge'
 import { createOutcomeTracker, mergeWizardOrders } from './outcomeOrder'
@@ -12,18 +12,38 @@ import { useSuppliers } from '../../services/suppliers'
 import { PoSheet, SheetLangToggle } from '../../components/PoSheet'
 import { Badge, Button, Modal } from '../../components/ui'
 import { translatorFor, useI18n, useT, type Lang, type TFn } from '../../i18n/I18nContext'
-import { errText } from '../../i18n/AppError'
+import { AppError, errText } from '../../i18n/AppError'
 import { paginateLines, renderElementToJpeg, sheetFileName } from '../../lib/poImage'
-import { imageHostAvailable, uploadPoImage } from '../../services/poImages'
-import { setShareStatus } from '../../services/purchaseOrders'
+import { imageHostAvailable, uploadPoImage, type HostedImage } from '../../services/poImages'
+import { setShareStatus, type SharePatch } from '../../services/purchaseOrders'
 import { deliver } from '../../services/notifications'
 import { poSentDraft } from '../../lib/inventoryRules/notifications'
 import { supplierLink } from '../../services/supplierConfirmation'
 import { requestedOf, supplierDateLabel } from '../../lib/supplierConfirmation'
-import { pickShareProvider, statusFor, type PurchaseShareProvider } from '../../share'
-import { liffNeedsLogin } from '../../share/lineLiffProvider'
+import { pickShareProvider, type PurchaseShareProvider } from '../../share'
 import { isStandalone } from '../../share/liffResume'
 import type { PurchaseOrder } from '../../types'
+import { beginShareAttempt, clearPageProgress, clearShareAttempt, confirmShareAttempt, orderFingerprint, pageToResume, savePageProgress, shareToRecover, type ProgressScope } from './sendProgress'
+import { settleShare } from './shareSettle'
+import { encodeSession, sessionDone, type SendSession } from './sendSession'
+
+/**
+ * Everything a share needs, made before the tap (owner P0, 22 Oct 2026). The share sheet and
+ * LINE's picker (a window, outside LINE) need the tap that asked for them to still be "active";
+ * rendering a sheet took 3.6 s at 4x CPU and 43 s at 16x in R36 measurements, all inside the
+ * tap. Now the tap only shares; `key` ties the payload to what it shows, so an order revised
+ * while the wizard is open is prepared again rather than sent stale.
+ */
+interface Prepared {
+  key: string
+  file: File
+  hosted?: HostedImage
+  caption: string
+  card?: { altText: string; contents: Record<string, unknown> }
+  /** The supplier's confirmation link, for copying into the chat as its own message (R40). */
+  link?: string
+  version: number
+}
 
 /**
  * "ส่ง LINE ทั้งหมด": one supplier at a time, in order, until the list is done.
@@ -43,6 +63,7 @@ export function SendWizard({
   onStatus,
   onClose,
   resend = false,
+  session,
 }: {
   /** The batch's placed orders, in the order they should be sent. */
   orders: PurchaseOrder[]
@@ -51,12 +72,18 @@ export function SendWizard({
   onClose: () => void
   /** Send again even if already marked sent — a corrected order, or one sent from the list. */
   resend?: boolean
+  /**
+   * Several orders as one session (R40 P0): what is finished is read from the orders, so a
+   * reload or LINE Login picks up at the next supplier and never offers a delivered one again.
+   */
+  session?: SendSession
 }) {
   const t = useT()
   const { lang: screenLang } = useI18n()
   const toast = useToast()
   const { user } = useAuth()
   const { brand } = useBrand()
+  const openedInEpoch = useRef(brandEpoch()).current
   const { locationById } = useData()
   const company = brand ? brandDef(brand).name : ''
   // Which LINE group each supplier's orders go to (owner, 2 Oct 2026). The list is read once
@@ -64,15 +91,22 @@ export function SendWizard({
   const suppliers = useSuppliers()
 
   // ponytail: keep local map of patched orders in wizard state so completion summary and rows reflect outcome immediately
-  const [patchedOrders, setPatchedOrders] = useState<Record<string, PurchaseOrder>>({})
+  // Only the status fields this wizard wrote: a full copy here would hide an amendment that
+  // arrives afterwards (R38 review: the sheet showed Rev.1 with the old quantities).
+  const [patchedOrders, setPatchedOrders] = useState<Record<string, SharePatch>>({})
+  const ordersRef = useRef(orders)
+  ordersRef.current = orders
   const effectiveOrders = useMemo(() => mergeWizardOrders(orders, patchedOrders), [orders, patchedOrders])
 
   // Once an order has been sent (or skipped) in THIS wizard it is done; `resend` only
   // decides whether one that was already sent before the wizard opened is offered again.
   const doneHere = useRef(new Set<string>())
   const pending = useMemo(
-    () => effectiveOrders.filter((o) => !doneHere.current.has(o.id) && (resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped'))),
-    [effectiveOrders, resend],
+    () =>
+      effectiveOrders.filter(
+        (o) => !doneHere.current.has(o.id) && (session ? !sessionDone(o, session) : resend || (o.shareStatus !== 'sent' && o.shareStatus !== 'skipped')),
+      ),
+    [effectiveOrders, resend, session],
   )
   const [provider, setProvider] = useState<PurchaseShareProvider | null>(null)
   const [currentId, setCurrentId] = useState<string | null>(pending[0]?.id ?? null)
@@ -80,6 +114,16 @@ export function SendWizard({
   const [sheetLang, setSheetLang] = useState<Lang>(screenLang)
   const [busy, setBusy] = useState<'' | 'render' | 'share'>('')
   const [askOutcome, setAskOutcome] = useState(false)
+  const [prepared, setPrepared] = useState<Prepared | null>(null)
+  const [prepareError, setPrepareError] = useState('')
+  const [prepareTick, setPrepareTick] = useState(0)
+  // A share that failed: what went wrong, and the ways forward (retry, download, copy, later).
+  const [failure, setFailure] = useState('')
+  // LINE confirmed the message went but the order could not be updated: save again, never resend.
+  const [unsaved, setUnsaved] = useState<{ order: PurchaseOrder; version: number; error: string } | null>(null)
+  const progressFp = useRef('')
+  // A second tap while the share sheet is opening opens nothing (stops before React re-renders).
+  const sharing = useRef(false)
   // One outcome is written at a time. A double tap on "sent" or "skip" used to write the
   // order twice and ring the bell twice; the ref stops the second tap before React can
   // re-render, the state greys the buttons out for the person.
@@ -91,13 +135,15 @@ export function SendWizard({
   const [recordingNow, setRecordingNow] = useState(false)
   const sheet = useRef<HTMLDivElement>(null)
 
+  // LIFF before LINE Login: the button connects LINE instead of sharing (R40 P0, finding C).
   const [needsLogin, setNeedsLogin] = useState(false)
   useEffect(() => {
-    void pickShareProvider().then(async (p) => {
+    void pickShareProvider().then((p) => {
       setProvider(p)
-      if (p.id === 'line-liff') setNeedsLogin(await liffNeedsLogin())
+      setNeedsLogin(p.needsLogin?.() ?? false)
     })
   }, [])
+  const batch = session ? encodeSession(session) || undefined : undefined
 
   // Follow the list as orders get their status: the current one is the first still pending.
   // Keyed on WHICH orders are pending, not on the array: the parent re-renders while a
@@ -107,33 +153,70 @@ export function SendWizard({
   const pendingRef = useRef(pending)
   pendingRef.current = pending
   useEffect(() => {
-    setCurrentId(pendingRef.current[0]?.id ?? null)
-    setPageIdx(0)
-    setAskOutcome(false)
+    const first = pendingRef.current[0]
+    setCurrentId(first?.id ?? null)
+    setFailure('')
+    // Back after the page was dropped while LINE was in front: a multi-page order goes on from
+    // the page not yet shared; an order whose share sheet was opened asks whether it went,
+    // instead of quietly starting the send again.
+    const count = first ? paginateLines(first.lines).length : 0
+    const attempt = first && user ? shareToRecover(scopeOf(first), count) : null
+    const nextPage = !!attempt?.confirmed && attempt.page < count - 1
+    const resumeAt = attempt ? attempt.page + (nextPage ? 1 : 0) : first && user ? pageToResume(scopeOf(first), count) : 0
+    if (nextPage && first) savePageProgress(scopeOf(first), resumeAt)
+    progressFp.current = first ? orderFingerprint(first) : ''
+    setPageIdx(resumeAt)
+    setUnsaved(first && attempt?.confirmed && !nextPage ? { order: first, version: attempt.version, error: t('บันทึกสถานะไม่สำเร็จ') } : null)
+    setAskOutcome(attempt ? !attempt.confirmed : !!first && resumeAt === 0 && first.shareStatus === 'shareOpened')
   }, [pendingKey])
 
   // Always the order as it now stands: its status fields move while it is being sent.
   const current = currentId ? (effectiveOrders.find((o) => o.id === currentId) ?? null) : null
+
+  // The order content the pages shared so far belong to (R38 review, finding A). If the order is
+  // amended mid-send — or a fresher copy arrives after the wizard resumed from a cached one — the
+  // pages already shared are of the old order: start again at page 1 rather than skip the change.
+  const currentFp = current ? orderFingerprint(current) : ''
+  useEffect(() => {
+    if (!current || !currentFp) return
+    if (progressFp.current && currentFp !== progressFp.current && pageIdx > 0) {
+      clearPageProgress(scopeOf(current))
+      setPageIdx(0)
+      toast.info(t('ใบสั่งซื้อถูกแก้ไขระหว่างส่ง — เริ่มส่งใหม่ที่รูปที่ 1'))
+    }
+    progressFp.current = currentFp
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFp])
   const pages = useMemo(() => (current ? paginateLines(current.lines) : []), [current])
   const doneCount = effectiveOrders.length - pending.length
   const position = doneCount + 1
 
+  function scopeOf(order: PurchaseOrder): ProgressScope {
+    return { brand: getBrand(), userId: user?.id ?? '', orderId: order.id, fingerprint: orderFingerprint(order) }
+  }
+
   async function record(order: PurchaseOrder, status: 'shareOpened' | 'sent' | 'skipped' | 'failed', version?: number) {
     if (!user || recording.current) return
+    if (brandEpoch() !== openedInEpoch) throw new AppError('บริบทการส่งเปลี่ยนแล้ว — กรุณาเปิดใบสั่งซื้อใหม่')
     recording.current = true
     setRecordingNow(true)
     try {
       const brand = getBrand()
-      const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version)
-      if (status === 'sent' || status === 'skipped') doneHere.current.add(order.id)
+      const written = await setShareStatus(order.id, status, { id: user.id, name: user.name }, version, order.revision ?? 0)
+      if (status === 'sent' || status === 'skipped') {
+        doneHere.current.add(order.id)
+        clearPageProgress(scopeOf(order))
+      }
       // The bell's record that it went (info, no popup); best effort like every deliver().
       if (status === 'sent') void deliver(poSentDraft(order, { id: user.id, name: user.name }, version ?? (order.imageVersion ?? 0) + 1), { id: user.id })
       // Exactly what was written, so the list, the sheet and the batch agree at once — and
       // the device's copy too, so coming back to the list does not show the old badge.
       // Only the written fields go into the device cache, onto the row it holds now (R29).
       const held = getBrand() === brand ? await orderCache.patchFields(order.id, written) : undefined
-      const next = tracker.afterWrite(order, written, held)
-      setPatchedOrders((prev) => ({ ...prev, [next.id]: next }))
+      // Built on the order as the parent holds it now, so the caller's row keeps any amendment.
+      const base = ordersRef.current.find((o) => o.id === order.id) ?? order
+      const next = tracker.afterWrite(base, written, held)
+      setPatchedOrders((prev) => ({ ...prev, [order.id]: { ...prev[order.id], ...written } }))
       await onStatus(next)
     } finally {
       recording.current = false
@@ -141,75 +224,198 @@ export function SendWizard({
     }
   }
 
-  async function send() {
-    if (!current || !sheet.current || !provider || !user) return
-    const page = { n: pageIdx + 1, of: pages.length }
+  // What the sheet shows; the order's status fields move while it is being sent and are not part of it.
+  const payloadKey = current && provider
+    ? JSON.stringify([current.id, current.revision ?? 0, current.expectedAt ?? 0, current.note ?? '', current.lines.map((l) => [l.productId, l.orderedQty, l.unit]), pageIdx, sheetLang, provider.id])
+    : ''
+
+  // Prepare: render (and, for LINE, host) the picture and fetch the supplier link, in the background.
+  useEffect(() => {
+    if (!payloadKey || !current || !provider || askOutcome) return
+    let stale = false
+    setPrepared((p) => (p?.key === payloadKey ? p : null))
+    setPrepareError('')
+    void (async () => {
+      // Let the sheet for this page and language paint before it is captured.
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+      if (stale || !sheet.current) return
+      const page = { n: pageIdx + 1, of: pages.length }
+      try {
+        setBusy('render')
+        const original = await renderElementToJpeg(sheet.current, { scale: 2 })
+        const file = new File([original], sheetFileName(current.docNo, page), { type: 'image/jpeg' })
+        const version = (current.imageVersion ?? 0) + 1
+        let hosted: HostedImage | undefined
+        if (provider.needsHosting) {
+          if (!imageHostAvailable()) throw new Error(t('เครื่องนี้ยังไม่ได้ตั้งค่าที่เก็บรูปสำหรับส่ง LINE'))
+          const preview = await renderElementToJpeg(sheet.current, { scale: 1, quality: 0.8 })
+          hosted = await uploadPoImage({ poId: current.id, original, preview, version })
+        }
+        // The new-order message and the supplier's confirmation link go with the first page
+        // (5 Oct 2026): text, then the [ยืนยันวันจัดส่ง] card, then the sheet. Still the
+        // person's own LINE through the picker — which takes plain text only, so a real @All
+        // mention cannot be made here and none is faked as text. No link (not set up yet,
+        // or offline) → the sheet goes out exactly as before.
+        const link = pageIdx === 0 ? await supplierLink(current) : null
+        if (stale) return
+        if (link) tracker.observe(link.order)
+        const st = translatorFor(sheetLang)
+        const asked = requestedOf(link?.order ?? current)
+        const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''
+        const caption = link
+          ? newOrderMessage(st, {
+              company,
+              docNo: current.docNo + pageTag,
+              supplier: current.supplierName,
+              date: asked !== undefined ? supplierDateLabel(asked, sheetLang) : undefined,
+              url: link.url,
+            })
+          : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + pageTag
+        setPrepared({ key: payloadKey, file, hosted, caption, card: link ? confirmCard(link.url, current.docNo, st) : undefined, link: link?.url, version })
+      } catch (e) {
+        if (!stale) setPrepareError(errText(e, t))
+      } finally {
+        if (!stale) setBusy('')
+      }
+    })()
+    return () => {
+      stale = true
+    }
+    // `current` is read through payloadKey: re-preparing on every status write would re-upload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payloadKey, prepareTick, askOutcome])
+
+  // Share: the first thing the tap does. Status writes and the outcome follow the share sheet.
+  // LINE Login, then back to this order (and batch). Not a share: no attempt, no status (R40 P0).
+  function connect() {
+    if (!current || !provider?.connect) return
+    provider.connect({ kind: 'order', id: current.id, batch })
+  }
+
+  function send() {
+    if (!current || !provider || !user || sharing.current) return
+    if (provider.needsLogin?.()) return connect()
+    const p = prepared
+    if (!p || p.key !== payloadKey) return
+    sharing.current = true
+    setBusy('share')
+    setFailure('')
+    const order = current
     const isLast = pageIdx === pages.length - 1
+    const scope = scopeOf(order)
+    if (!beginShareAttempt(scope, pageIdx, p.version)) {
+      sharing.current = false
+      setBusy('')
+      setFailure(t('บันทึกความคืบหน้าการส่งไม่ได้ — โปรดเปิดที่เก็บข้อมูลของเบราว์เซอร์ก่อนส่ง'))
+      return
+    }
+    let shared: ReturnType<PurchaseShareProvider['share']>
     try {
-      setBusy('render')
-      const original = await renderElementToJpeg(sheet.current, { scale: 2 })
-      const file = new File([original], sheetFileName(current.docNo, page), { type: 'image/jpeg' })
-      const version = (current.imageVersion ?? 0) + 1
-      let hosted
-      if (provider.needsHosting) {
-        if (!imageHostAvailable()) throw new Error(t('เครื่องนี้ยังไม่ได้ตั้งค่าที่เก็บรูปสำหรับส่ง LINE'))
-        const preview = await renderElementToJpeg(sheet.current, { scale: 1, quality: 0.8 })
-        hosted = await uploadPoImage({ poId: current.id, original, preview, version })
+      shared = provider.share({ subject: { kind: 'order', id: order.id, batch }, file: p.file, hosted: p.hosted, caption: p.caption, card: p.card })
+    } catch (e) {
+      shared = Promise.reject(e)
+    }
+    if (provider.leftForLogin?.()) {
+      // LINE Login after all (it lapsed since the screen was drawn): not a send, keep nothing.
+      clearShareAttempt(scope)
+      sharing.current = false
+      setBusy('')
+      return
+    }
+    shared = shared.then((outcome) => {
+      if (outcome === 'sent') confirmShareAttempt(scope)
+      return outcome
+    })
+    // Opened is still written, just after the share sheet was asked for rather than before.
+    const opened = order.shareStatus !== 'shareOpened' ? record(order, 'shareOpened') : Promise.resolve()
+    void (async () => {
+      try {
+        const settled = await settleShare({
+          shared,
+          opened,
+          isLast,
+          recordSent: () => record(order, 'sent', p.version),
+          recordFailed: () => record(order, 'failed'),
+        })
+        if (settled.kind === 'nextPage') {
+          // More pages of the same order: stay on it, move to the next page, and remember that.
+          savePageProgress(scopeOf(order), pageIdx + 1)
+          progressFp.current = orderFingerprint(order)
+          setPageIdx(pageIdx + 1)
+        } else if (settled.kind === 'ask') {
+          // The share sheet told us nothing. Ask the one person who knows.
+          setAskOutcome(true)
+        } else if (settled.kind === 'sentUnsaved') {
+          setUnsaved({ order, version: p.version, error: errText(settled.error, t) })
+        } else if (settled.kind === 'failed') {
+          clearShareAttempt(scope)
+          setFailure(errText(settled.error, t))
+        } else if (settled.kind === 'cancelled') clearShareAttempt(scope)
+      } finally {
+        sharing.current = false
+        setBusy('')
       }
-      // Opened is written before the picker, so a tab closed mid-way still shows the
-      // truth: this one was started and not finished.
-      if (current.shareStatus !== 'shareOpened') await record(current, 'shareOpened')
-      // The new-order message and the supplier's confirmation link go with the first page
-      // (5 Oct 2026): text, then the [ยืนยันวันจัดส่ง] card, then the sheet. Still the
-      // person's own LINE through the picker — which takes plain text only, so a real @All
-      // mention cannot be made here and none is faked as text. No link (not set up yet,
-      // or offline) → the sheet goes out exactly as before.
-      const link = pageIdx === 0 ? await supplierLink(current) : null
-      if (link) tracker.observe(link.order)
-      const st = translatorFor(sheetLang)
-      const asked = requestedOf(link?.order ?? current)
-      const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''
-      const caption = link
-        ? newOrderMessage(st, {
-            company,
-            docNo: current.docNo + pageTag,
-            supplier: current.supplierName,
-            date: asked !== undefined ? supplierDateLabel(asked, sheetLang) : undefined,
-            url: link.url,
-          })
-        : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + pageTag
-      setBusy('share')
-      const outcome = await provider.share({
-        subject: { kind: 'order', id: current.id },
-        file,
-        hosted,
-        caption,
-        card: link ? confirmCard(link.url, current.docNo, st) : undefined,
-      })
-      if (outcome === 'cancelled') return
-      if (!isLast) {
-        // More pages of the same order: stay on it, move to the next page.
-        setPageIdx(pageIdx + 1)
-        return
-      }
-      const status = statusFor(outcome)
-      if (status === 'sent') {
-        await record(current, 'sent', version)
-      } else {
-        // The share sheet told us nothing. Ask the one person who knows.
-        setAskOutcome(true)
-      }
+    })()
+  }
+
+  function confirmPage() {
+    if (!current) return
+    if (pageIdx < pages.length - 1) {
+      savePageProgress(scopeOf(current), pageIdx + 1)
+      setPageIdx(pageIdx + 1)
+      setAskOutcome(false)
+    } else void confirmSent(current, (current.imageVersion ?? 0) + 1)
+  }
+
+  async function confirmSent(order: PurchaseOrder, version: number) {
+    try {
+      await record(order, 'sent', version)
+      setUnsaved(null)
+    } catch (e) {
+      // The message went; only the record failed. Keep this question on screen to try again.
+      toast.error(t('บันทึกสถานะไม่สำเร็จ: {e}', { e: errText(e, t) }))
+    }
+  }
+
+  function downloadPicture() {
+    if (!prepared) return
+    const url = URL.createObjectURL(prepared.file)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = prepared.file.name
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+
+  async function copyMessage() {
+    if (!prepared) return
+    try {
+      await navigator.clipboard.writeText(prepared.caption)
+      toast.success(t('คัดลอกข้อความแล้ว'))
     } catch (e) {
       toast.error(errText(e, t))
-      await record(current, 'failed').catch(() => {})
-    } finally {
-      setBusy('')
+    }
+  }
+
+  // Called straight from the tap: Safari only lets the clipboard be written inside one.
+  async function copyLink() {
+    if (!prepared?.link) return
+    try {
+      await navigator.clipboard.writeText(prepared.link)
+      toast.success(t('คัดลอกลิงก์แล้ว — วางในแชทเดียวกับรูป'))
+    } catch (e) {
+      toast.error(errText(e, t))
     }
   }
 
   async function skip() {
-    if (!current) return
-    await record(current, 'skipped')
+    // A delivered-but-unsaved page must not become "skipped": that drops its receipt (R40 review).
+    if (!current || unsaved) return
+    try {
+      await record(current, 'skipped')
+    } catch (e) {
+      toast.error(errText(e, t))
+    }
   }
 
   if (!current) {
@@ -266,45 +472,120 @@ export function SendWizard({
           id="send-sheet"
           lang={sheetLang}
         />
+        {prepareError && !askOutcome && (
+          <div role="alert" className="rounded-lg border border-danger/40 bg-danger-soft p-3 text-sm text-danger">
+            <p className="mb-2">{t('เตรียมรูปไม่สำเร็จ: {e}', { e: prepareError })}</p>
+            <Button variant="secondary" onClick={() => setPrepareTick((n) => n + 1)}>
+              {t('ลองเตรียมใหม่')}
+            </Button>
+          </div>
+        )}
+        {unsaved && (
+          <div role="alert" className="rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm">
+            <p className="mb-2 text-ink">
+              <strong>{t('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ')}</strong> — {t('ห้ามส่งซ้ำ')} ({unsaved.error})
+            </p>
+            <Button onClick={() => void confirmSent(unsaved.order, unsaved.version)} disabled={recordingNow}>
+              {t('บันทึกสถานะอีกครั้ง')}
+            </Button>
+          </div>
+        )}
+        {failure && !askOutcome && !unsaved && (
+          <div role="group" aria-label={t('ส่งไม่สำเร็จ')} className="rounded-lg border border-danger/40 bg-danger-soft p-3">
+            <p className="mb-2 text-sm text-danger">
+              <strong>{t('ส่งไม่สำเร็จ')}</strong> — {failure}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => send()} disabled={!!busy || !prepared}>
+                {t('ลองอีกครั้ง')}
+              </Button>
+              <Button variant="secondary" onClick={downloadPicture} disabled={!prepared}>
+                {t('ดาวน์โหลดรูป')}
+              </Button>
+              <Button variant="secondary" onClick={() => void copyMessage()} disabled={!prepared}>
+                {t('คัดลอกข้อความ')}
+              </Button>
+              <Button variant="secondary" onClick={onClose}>
+                {t('ไว้ส่งทีหลัง')}
+              </Button>
+            </div>
+          </div>
+        )}
         {askOutcome ? (
           <div className="rounded-lg border border-line bg-sunken p-3">
-            <p className="mb-2 text-sm text-ink">{t('ส่งใน LINE เรียบร้อยหรือไม่?')}</p>
+            <p className="mb-2 text-sm text-ink">
+              {provider?.id === 'web-share' && prepared?.link ? t('ส่งทั้งรูปและลิงก์ในแชทผู้ขายแล้วหรือยัง?') : t('ส่งใน LINE เรียบร้อยหรือไม่?')}
+            </p>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void record(current, 'sent', (current.imageVersion ?? 0) + 1)} disabled={recordingNow}>
+              <Button onClick={confirmPage} disabled={recordingNow}>
                 <Icon name="check" size={16} />
                 {t('ส่งแล้ว')}
               </Button>
-              <Button variant="secondary" onClick={() => setAskOutcome(false)}>
+              <Button variant="secondary" onClick={() => setAskOutcome(false)} disabled={recordingNow}>
                 {t('ยังไม่ได้ส่ง — ลองอีกครั้ง')}
               </Button>
             </div>
           </div>
         ) : (
+          <>
+          {provider?.id === 'web-share' && !unsaved && (
+            // The phone's share sheet cannot be trusted to carry the link beside the picture: the
+            // picture, then the link, as two steps into the same chat (R40 P0, mode B).
+            <div className="rounded-lg border border-line bg-sunken p-3 text-sm">
+              <ol className="mb-2 list-decimal space-y-1 pl-5 text-ink">
+                <li>{t('แชร์รูปไปที่แชท LINE ของผู้ขาย')}</li>
+                {prepared?.link && <li>{t('คัดลอกลิงก์ยืนยันวันส่ง แล้ววางในแชทเดียวกัน')}</li>}
+                <li>{t('กลับมาที่นี่แล้วยืนยันว่าส่งแล้ว')}</li>
+              </ol>
+              <div className="flex flex-wrap gap-2">
+                {prepared?.link && (
+                  <Button variant="secondary" className="min-h-11" onClick={() => void copyLink()}>
+                    <Icon name="clipboardList" size={16} />
+                    {t('คัดลอกลิงก์ยืนยันวันส่ง')}
+                  </Button>
+                )}
+                <Button variant="secondary" className="min-h-11" onClick={() => void copyMessage()} disabled={!prepared}>
+                  {t('คัดลอกข้อความ')}
+                </Button>
+                <Button variant="secondary" className="min-h-11" onClick={downloadPicture} disabled={!prepared}>
+                  {t('ดาวน์โหลดรูป')}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="secondary" onClick={onClose} disabled={!!busy}>
               {t('พักไว้ก่อน')}
             </Button>
-            <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow}>
+            <Button variant="secondary" onClick={() => void skip()} disabled={!!busy || recordingNow || !!unsaved}>
               {t('ข้าม')}
             </Button>
-            <Button onClick={() => void send()} disabled={!!busy || !provider}>
+            {needsLogin ? (
+              <Button className="min-h-11" onClick={connect} disabled={!!busy || !!unsaved}>
+                <Icon name="share" size={16} />
+                {t('เชื่อมต่อ LINE')}
+              </Button>
+            ) : (
+            <Button className="min-h-11" onClick={() => send()} disabled={!!busy || !!unsaved || !provider || !prepared || prepared.key !== payloadKey}>
               <Icon name="share" size={16} />
               {busy === 'render'
-                ? t('กำลังสร้างรูป...')
+                ? t('กำลังเตรียมรูป…')
                 : busy === 'share'
                   ? t('กำลังเปิด LINE...')
                   : provider
                     ? t(provider.label)
                     : t('กำลังเตรียม…')}
             </Button>
+            )}
           </div>
+          </>
         )}
         <p className="text-xs text-ink-faint">
           {provider?.id === 'line-liff'
             ? needsLogin
               ? isStandalone()
-                ? t('ครั้งแรกจะเปิดใบนี้ในแอป LINE ให้ (แอปจากหน้าจอโฮมเข้าสู่ระบบ LINE เองไม่ได้) — กด "ส่ง LINE" ที่นั่นอีกครั้ง')
-                : t('ครั้งแรกจะพาไปเข้าสู่ระบบ LINE แล้วกลับมาที่ใบนี้ — กด "ส่ง LINE" อีกครั้งเพื่อเลือกแชท')
+                ? t('แอปจากหน้าจอโฮมเข้าสู่ระบบ LINE เองไม่ได้ — กด "เชื่อมต่อ LINE" ระบบจะเปิดรายการส่งนี้ในแอป LINE แล้วส่งต่อได้ที่นั่น')
+                : t('เชื่อมต่อ LINE ครั้งเดียว แล้วกลับมาที่รายการส่งนี้ — จากนั้นกด "ส่ง LINE" ครั้งเดียวต่อผู้ขาย')
               : t('กด "ส่ง LINE" → เลือกแชทของผู้ขาย → ส่ง แล้วกลับมาที่นี่ ระบบจะไปรายถัดไปเอง')
             : t('เครื่องนี้ไม่มี LINE (LIFF) — จะเปิดเมนูแชร์ของเครื่องแทน เลือก LINE แล้วเลือกแชทของผู้ขาย')}
         </p>

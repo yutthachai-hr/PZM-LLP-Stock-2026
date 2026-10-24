@@ -55,7 +55,8 @@ import { requestedOf } from '../lib/supplierConfirmation'
 import { QUICK_FILTERS, matchesStateFilter, presentOrderStatus, stateFilterCounts, type OrderStateFilter, type QuickFilter } from './orders/presentation'
 import { LineBadge } from './orders/LineBadge'
 import { RowMenu, type RowMenuItem } from '../components/frame/RowMenu'
-import { RESUME_PARAM } from '../share/liffResume'
+import { BATCH_PARAM, RESUME_PARAM } from '../share/liffResume'
+import { activeSession, clearSession, decodeSession, queueFor, saveSession, sessionDone, sessionFinished, startSession, type SendSession } from './purchase/sendSession'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
 import { renderElementToJpeg, sheetFileName } from '../lib/poImage'
@@ -196,8 +197,18 @@ export function OrdersPage() {
   // screens use, so what is recorded on the order is the same (owner, 21 Sep 2026).
   const [sending, setSending] = useState<PurchaseOrder | null>(null)
   // Several orders to LINE in one go — ticked in the list (owner's mock-up 09); the wizard
-  // walks them one supplier at a time, as it does for a request's orders.
-  const [sendingMany, setSendingMany] = useState<PurchaseOrder[] | null>(null)
+  // walks them one supplier at a time. One session that outlives the page (R40 P0): LINE Login
+  // brings it back in the URL, a reload offers to continue it from this device's storage.
+  const [batch, setBatch] = useState<SendSession | null>(null)
+  // Orders of a session that fall outside the list's date window, read one by one.
+  const [batchExtra, setBatchExtra] = useState<PurchaseOrder[]>([])
+  const [leftover, setLeftover] = useState<SendSession | null>(null)
+  // The wizard is handed the order as the list now holds it, not the copy captured at the tap:
+  // an amendment arriving mid-send (another device, the device cache catching up after a reload)
+  // must reach the sheet being shared (R38 review, finding A).
+  const live = (o: PurchaseOrder) => orders.find((x) => x.id === o.id) ?? o
+  const sessionOrders = (s: SendSession) =>
+    s.orderIds.map((id) => orders.find((o) => o.id === id) ?? batchExtra.find((o) => o.id === id)).filter((o): o is PurchaseOrder => !!o)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [supplierFilter, setSupplierFilter] = useState('')
   const [stateFilter, setStateFilter] = useState<OrderStateFilter>('')
@@ -247,8 +258,54 @@ export function OrdersPage() {
   // Back from LINE Login (or opened inside LINE): ?send=<id> reopens the send wizard on
   // that order (share/liffResume.ts). Consumed once the list is here, and cleared so a
   // refresh does not reopen it.
+  // Open a session on each order as the server holds it now, not the list's cached copy: another
+  // device may have sent, cancelled or amended one meanwhile (R40 P0). One read per order (≤ 50).
+  const openBatch = useCallback(async (s: SendSession) => {
+    let fresh: PurchaseOrder[]
+    try {
+      // An order that cannot be read must not drop out of the batch unseen (R40 review): no
+      // wizard until every one was read; one that no longer exists is simply not there.
+      fresh = (await Promise.all(s.orderIds.map((id) => getPurchaseOrder(id)))).filter((o): o is PurchaseOrder => !!o)
+    } catch (e) {
+      if (mounted.current) toast.error(t('ตรวจสถานะใบสั่งซื้อไม่ได้ — ลองกด "ส่งต่อ" อีกครั้ง ({e})', { e: errText(e, t) }))
+      if (mounted.current && getBrand() === s.brand) {
+        saveSession(s)
+        setLeftover(s)
+      }
+      return
+    }
+    if (!mounted.current || getBrand() !== s.brand) return
+    for (const o of fresh) orderCache.patch(o)
+    setOrders((cur) => cur.map((o) => fresh.find((f) => f.id === o.id) ?? o))
+    setBatchExtra(fresh.filter((f) => !orders.some((o) => o.id === f.id)))
+    saveSession(s)
+    setLeftover(null)
+    setBatch(s)
+  }, [orders, toast, t])
+
+  // Back from LINE Login (or opened in LINE) with ?batch=: the whole session, at its next supplier.
+  // Otherwise an unfinished session this person left on this device is offered, not forced.
   useEffect(() => {
-    if (loading) return
+    if (loading || !user || !brand) return
+    const raw = params.get(BATCH_PARAM)
+    if (raw) {
+      const s = decodeSession(raw, brand)
+      const next = new URLSearchParams(params)
+      for (const p of [BATCH_PARAM, RESUME_PARAM, 'po', 'receive']) next.delete(p)
+      setParams(next, { replace: true })
+      if (s) void openBatch({ ...s, userId: user.id })
+      else toast.error(t('ลิงก์ส่งต่อไม่ถูกต้องหรือหมดอายุ — เลือกใบสั่งซื้อใหม่'))
+      return
+    }
+    if (batch) return
+    const s = activeSession(brand, user.id)
+    const rows = s ? s.orderIds.map((id) => orders.find((o) => o.id === id)) : []
+    setLeftover(s && rows.some((o) => !o || !sessionDone(o, s)) ? s : null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user, brand, params, batch])
+
+  useEffect(() => {
+    if (loading || params.get(BATCH_PARAM)) return
     const po = params.get('po')
     const receive = params.get('receive')
     const send = params.get(RESUME_PARAM)
@@ -320,6 +377,18 @@ export function OrdersPage() {
     return [...m].sort((a, b) => a[1].localeCompare(b[1]))
   }, [orders])
   const toSend = useMemo(() => orders.filter((o) => selected.has(o.id) && o.status === 'ordered'), [orders, selected])
+
+  function startBatch() {
+    if (!user || !brand) return
+    // Already delivered for what they now say: not sent again by a batch (the row's own
+    // "ส่ง PO ใหม่" still resends one on purpose). An amended order counts as not delivered.
+    const queue = queueFor(toSend)
+    if (!queue.length) {
+      toast.info(t('ใบที่เลือกส่งครบแล้ว'))
+      return
+    }
+    void openBatch(startSession(brand, user.id, queue.map((o) => o.id)))
+  }
   const filtersOn = !!(search.trim() || supplierFilter || stateFilter || lateOnly)
 
   async function closeShort(order: PurchaseOrder, reason: string) {
@@ -544,6 +613,25 @@ export function OrdersPage() {
         </AlertBanner>
       )}
 
+      {leftover && !batch && (() => {
+        const done = leftover.orderIds.filter((id) => {
+          const o = orders.find((x) => x.id === id)
+          return !!o && sessionDone(o, leftover)
+        }).length
+        return (
+          <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-brand/30 bg-brand-soft px-4 py-3">
+            <span className="mr-auto text-sm font-semibold text-ink">
+              {t('ส่งใบสั่งซื้อค้างอยู่ ส่งแล้ว {done} จาก {n} ใบ', { done, n: leftover.orderIds.length })}
+            </span>
+            <Button size="sm" className="min-h-11" onClick={() => void openBatch(leftover)}>
+              {t('ส่งต่อ')}
+            </Button>
+            <Button size="sm" variant="ghost" className="min-h-11" onClick={() => { clearSession(leftover); setLeftover(null) }}>
+              {t('เลิกส่งชุดนี้')}
+            </Button>
+          </div>
+        )
+      })()}
       <div className={`${frameCard} flex flex-wrap items-center gap-3 p-3 md:p-4`}>
         <div className="min-w-0 flex-1">
           <ChipRow<Tab>
@@ -670,7 +758,7 @@ export function OrdersPage() {
                 minWidth={640}
                 onRowClick={setViewing}
                 rowLabel={(o) => t('เปิดใบสั่งซื้อ {docNo} ของ {supplier}', { docNo: o.docNo, supplier: o.supplierName })}
-                selection={tab === 'open' ? { selected, onChange: setSelected } : undefined}
+                selection={tab === 'open' ? { selected, onChange: setSelected, phone: true } : undefined}
                 empty={
                   <EmptyState
                     icon="truck"
@@ -684,9 +772,10 @@ export function OrdersPage() {
           </Card>
           <Pagination {...paged.pager} />
           {tab === 'open' && toSend.length > 0 && (
-            <div className="sticky bottom-4 z-20 mt-3 hidden flex-wrap items-center gap-2 rounded-2xl border border-brand/30 bg-surface px-4 py-3 shadow-lg md:flex">
+            // Phones and tablets are where orders are sent from (R40 P0): shown at every width.
+            <div className="sticky bottom-4 z-20 mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-brand/30 bg-surface px-4 py-3 shadow-lg">
               <span className="mr-auto text-sm font-semibold text-ink">{t('เลือก {n} ใบ', { n: toSend.length })}</span>
-              <Button size="sm" variant="success" onClick={() => setSendingMany(toSend)}>
+              <Button size="sm" variant="success" className="min-h-11" onClick={startBatch}>
                 <Icon name="share" size={16} />
                 {t('ส่ง LINE ({n} ใบ)', { n: toSend.length })}
               </Button>
@@ -720,20 +809,25 @@ export function OrdersPage() {
           }}
         />
       )}
-      {sendingMany && (
+      {batch && (
         <SendWizard
-          orders={sendingMany}
-          resend
-          onStatus={async (o) => setOrders((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))}
+          orders={sessionOrders(batch)}
+          session={batch}
+          onStatus={async (o) => {
+            setOrders((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))
+            setBatchExtra((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))
+          }}
           onClose={() => {
-            setSendingMany(null)
+            // Finished: forgotten. Put aside: offered again ("continue") until it is finished.
+            if (sessionFinished(batch, sessionOrders(batch))) clearSession(batch)
+            setBatch(null)
             setSelected(new Set())
           }}
         />
       )}
       {sending && (
         <SendWizard
-          orders={[sending]}
+          orders={[live(sending)]}
           resend
           onStatus={async (o) => setOrders((cur) => cur.map((x) => (x.id === o.id ? { ...x, ...o } : x)))}
           onClose={() => setSending(null)}

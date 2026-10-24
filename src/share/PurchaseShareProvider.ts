@@ -28,6 +28,8 @@ export interface ShareSubject {
   /** 'digest' — the dashboard's daily summary (Automation Plan Phase 5, 25 Sep 2026). */
   kind: 'order' | 'announcement' | 'digest'
   id: string
+  /** A multi-order send in progress (pages/purchase/sendSession), so LINE Login brings back all of it. */
+  batch?: string
 }
 
 export interface SharePayload {
@@ -69,6 +71,16 @@ export interface PurchaseShareProvider {
   /** Whether `share` needs `hosted` filled in. */
   needsHosting: boolean
   share(payload: SharePayload): Promise<ShareOutcome>
+  /**
+   * LIFF in an ordinary browser before LINE Login (R40 P0). While true a share must not start:
+   * the login redirect is not a send, and treating it as one wrote "opened" for nothing.
+   * Synchronous, so a tap can check it without spending the gesture.
+   */
+  needsLogin?(): boolean
+  /** Off to LINE Login (or to the LINE app from a home-screen app), back to `subject`. Writes nothing. */
+  connect?(subject: ShareSubject): void
+  /** True straight after a share() call that left for LINE Login instead of sharing (same tick). */
+  leftForLogin?(): boolean
 }
 
 /** The order status an outcome is recorded as, or null when nothing should be written. */

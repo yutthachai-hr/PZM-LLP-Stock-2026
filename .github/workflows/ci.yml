@@ -147,6 +147,8 @@ jobs:
         run: npx playwright test -c playwright.toast.config.ts
       - name: Product pricing, accessible grid and responsive SKU on isolated demo
         run: npx playwright test -c playwright.products-responsive.config.ts
+      - name: PO send prepare-share-verify on isolated demo (Chromium desktop and Android)
+        run: npx playwright test -c playwright.line-send.config.ts --project=desktop-chromium --project=android-chromium
       - name: Stock buckets on an isolated browser-storage demo (port 5201)
         run: npx playwright test -c playwright.transit.config.ts
       - if: failure()
