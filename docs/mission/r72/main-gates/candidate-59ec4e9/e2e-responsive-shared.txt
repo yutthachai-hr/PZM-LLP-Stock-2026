@@ -1,0 +1,26 @@
+
+Running 5 tests using 1 worker
+
+[1/5] e2e\responsive-shared.demo.ts:268:3 › Audit Matrix Capture › capture before matrix screenshots and geometry data
+e2e\responsive-shared.demo.ts:268:3 › Audit Matrix Capture › capture before matrix screenshots and geometry data
+[AUDIT] Saved 77 records to C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\docs\mission\r72\screenshots\before-metrics.json
+
+[2/5] e2e\responsive-shared.demo.ts:355:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: Floating plus button protrudes 24px above BottomTabBar
+e2e\responsive-shared.demo.ts:355:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: Floating plus button protrudes 24px above BottomTabBar
+[MEASUREMENT PROOF] BottomTabBar y: 767.5, plus y: 767.5, protrusion: 0px
+
+[3/5] e2e\responsive-shared.demo.ts:379:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: Floating plus button overlaps FormActions and sits above it in z-index
+e2e\responsive-shared.demo.ts:379:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: Floating plus button overlaps FormActions and sits above it in z-index
+[MEASUREMENT PROOF] FormActions bottom: 767.5, Plus top: 767.5, Vertical Overlap: 0px
+
+[MEASUREMENT PROOF] FormActions z-index: 20
+
+[4/5] e2e\responsive-shared.demo.ts:413:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: Safe-area inset squeezes BottomTabBar content when height is fixed at 4.5rem
+e2e\responsive-shared.demo.ts:413:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: Safe-area inset squeezes BottomTabBar content when height is fixed at 4.5rem
+[MEASUREMENT PROOF] Safe Area: totalH=110.5px, padBottom=34px, availableContentH=76.5px, linkH=75.5px
+
+[5/5] e2e\responsive-shared.demo.ts:443:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: FormActions flex-wrap on narrow viewports
+e2e\responsive-shared.demo.ts:443:3 › RED Geometry Proofs (Pre-Fix Baseline) › PROOF: FormActions flex-wrap on narrow viewports
+[MEASUREMENT PROOF] FormActions flex-wrap: wrap
+
+  5 passed (1.2m)

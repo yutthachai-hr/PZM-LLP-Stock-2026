@@ -1,0 +1,46 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e\r72-logistics-ux.demo.ts:229:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px
+e2e\r72-logistics-ux.demo.ts:229:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px
+minusBox: { x: 30.75, y: 565.3125, width: 33.546875, height: 51 }
+
+plusBox: { x: 294.09375, y: 565.3125, width: 33.546875, height: 51 }
+
+inputBox: { x: 68.546875, y: 565.3125, width: 221.296875, height: 51 }
+
+labelBox: { x: 30.75, y: 415.78125, width: 29.75, height: 29.75 }
+
+  1) e2e\r72-logistics-ux.demo.ts:229:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px 
+
+    Error: expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 44
+    Received:    33.546875
+
+      259 |
+      260 |     // Stepper buttons touch target >= 44px
+    > 261 |     expect(minusBox.width).toBeGreaterThanOrEqual(44)
+          |                            ^
+      262 |     expect(minusBox.height).toBeGreaterThanOrEqual(44)
+      263 |     expect(plusBox.width).toBeGreaterThanOrEqual(44)
+      264 |     expect(plusBox.height).toBeGreaterThanOrEqual(44)
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:261:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    e2e\r72-logistics-ux.demo.ts:229:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px 

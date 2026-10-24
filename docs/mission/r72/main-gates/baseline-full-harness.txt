@@ -1,0 +1,246 @@
+
+Running 17 tests using 1 worker
+
+[1/17] e2e\r72-logistics-ux.demo.ts:27:3 › R72 Agent07: Notification routing & security contracts › canonical notification navigates to TransferReceivePage with correct docNo
+[2/17] e2e\r72-logistics-ux.demo.ts:49:3 › R72 Agent07: Notification routing & security contracts › legacy notification resolves to transfer doc rather than redirecting to dashboard
+  1) e2e\r72-logistics-ux.demo.ts:49:3 › R72 Agent07: Notification routing & security contracts › legacy notification resolves to transfer doc rather than redirecting to dashboard 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/transfers\/transfer-r72-internal-id-998877/
+    Received string:  "http://127.0.0.1:5217/"
+    Timeout: 10000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 10000ms
+        23 × locator resolved to <html lang="th">…</html>
+           - unexpected value "http://127.0.0.1:5217/"
+
+
+      66 |
+      67 |     await expect(page).not.toHaveURL(/^http:\/\/127\.0\.0\.1:5217\/?$/)
+    > 68 |     await expect(page).toHaveURL(new RegExp(`/transfers/${R72_TRANSFER_INTERNAL_ID}`))
+         |                        ^
+      69 |     await expect(page.locator('body')).toContainText(R72_TRANSFER_DOC_NO)
+      70 |   })
+      71 |
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:68:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a04a9-an-redirecting-to-dashboard\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a04a9-an-redirecting-to-dashboard\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a04a9-an-redirecting-to-dashboard\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a04a9-an-redirecting-to-dashboard\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[3/17] e2e\r72-logistics-ux.demo.ts:72:3 › R72 Agent07: Notification routing & security contracts › docNo-only notification fails closed without guessing the internal transfer ID
+  2) e2e\r72-logistics-ux.demo.ts:72:3 › R72 Agent07: Notification routing & security contracts › docNo-only notification fails closed without guessing the internal transfer ID 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected: "http://127.0.0.1:5217/"
+    Received: "http://127.0.0.1:5217/transfers/TR-00001"
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 10000ms
+        23 × locator resolved to <html lang="th">…</html>
+           - unexpected value "http://127.0.0.1:5217/transfers/TR-00001"
+
+
+      83 |     await modal.locator('ul li button').first().click()
+      84 |     await expect(page.getByText('ไม่พบเอกสารโอนสินค้า').first()).toBeVisible()
+    > 85 |     await expect(page).toHaveURL(originalURL)
+         |                        ^
+      86 |     await expect(modal).toBeVisible()
+      87 |     const readAt = await page.evaluate(({ actorId }) => {
+      88 |       const notifications = JSON.parse(localStorage.getItem('pmstock:v1:notifications') || '{}')
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:85:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d3eab-ng-the-internal-transfer-ID\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d3eab-ng-the-internal-transfer-ID\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d3eab-ng-the-internal-transfer-ID\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d3eab-ng-the-internal-transfer-ID\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[4/17] e2e\r72-logistics-ux.demo.ts:94:3 › R72 Agent07: Notification routing & security contracts › invalid or denied notification does not redirect to dashboard while marking read
+  3) e2e\r72-logistics-ux.demo.ts:94:3 › R72 Agent07: Notification routing & security contracts › invalid or denied notification does not redirect to dashboard while marking read 
+
+    Error: Invalid notification must remain unread in storage when navigation is invalid
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      119 |     }, { actorId: R72_ACTOR_ID })
+      120 |
+    > 121 |     expect(unreadInStore, 'Invalid notification must remain unread in storage when navigation is invalid').toBe(true)
+          |                                                                                                            ^
+      122 |   })
+      123 |
+      124 |   test('cross-brand query parameter in notification is blocked from brand switching', async ({ page }) => {
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:121:108
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d20a4-ashboard-while-marking-read\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d20a4-ashboard-while-marking-read\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d20a4-ashboard-while-marking-read\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-d20a4-ashboard-while-marking-read\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/17] e2e\r72-logistics-ux.demo.ts:124:3 › R72 Agent07: Notification routing & security contracts › cross-brand query parameter in notification is blocked from brand switching
+  4) e2e\r72-logistics-ux.demo.ts:124:3 › R72 Agent07: Notification routing & security contracts › cross-brand query parameter in notification is blocked from brand switching 
+
+    Error: URL must not retain foreign brand query parameter
+
+    expect(received).not.toContain(expected) // indexOf
+
+    Expected substring: not "brand=lelapin"
+    Received string:        "http://127.0.0.1:5217/transfers/transfer-r72-internal-id-998877?brand=lelapin"
+
+      142 |     const currentBrand = await page.evaluate(() => localStorage.getItem('pmstock:v1:lastBrand'))
+      143 |     expect(currentBrand, 'Cross-brand notification link must not switch active brand').toBe('pizza')
+    > 144 |     expect(page.url(), 'URL must not retain foreign brand query parameter').not.toContain('brand=lelapin')
+          |                                                                                 ^
+      145 |     await expect(modal).toBeVisible()
+      146 |     const readAt = await page.evaluate(({ actorId }) => {
+      147 |       const notifications = JSON.parse(localStorage.getItem('pmstock:v1:notifications') || '{}')
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:144:81
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-16898-locked-from-brand-switching\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-16898-locked-from-brand-switching\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-16898-locked-from-brand-switching\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-16898-locked-from-brand-switching\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[6/17] e2e\r72-logistics-ux.demo.ts:155:3 › R72 Agent07: Logistics mobile layout & visual invariants › all 21 rows are accessible and survive page refresh
+[7/17] e2e\r72-logistics-ux.demo.ts:177:3 › R72 Agent07: Logistics mobile layout & visual invariants › name and SKU have useful width and natural wrap across all 6 phone widths
+[8/17] e2e\r72-logistics-ux.demo.ts:235:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px
+e2e\r72-logistics-ux.demo.ts:235:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px
+minusBox: { x: 30.75, y: 565.3125, width: 33.546875, height: 51 }
+
+plusBox: { x: 294.09375, y: 565.3125, width: 33.546875, height: 51 }
+
+inputBox: { x: 68.546875, y: 565.3125, width: 221.296875, height: 51 }
+
+labelBox: { x: 30.75, y: 415.78125, width: 29.75, height: 29.75 }
+
+  5) e2e\r72-logistics-ux.demo.ts:235:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px 
+
+    Error: expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 44
+    Received:    33.546875
+
+      265 |
+      266 |     // Stepper buttons touch target >= 44px
+    > 267 |     expect(minusBox.width).toBeGreaterThanOrEqual(44)
+          |                            ^
+      268 |     expect(minusBox.height).toBeGreaterThanOrEqual(44)
+      269 |     expect(plusBox.width).toBeGreaterThanOrEqual(44)
+      270 |     expect(plusBox.height).toBeGreaterThanOrEqual(44)
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:267:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-a3bc9--and-touch-targets-are-44px\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[9/17] e2e\r72-logistics-ux.demo.ts:279:3 › R72 Agent07: Logistics mobile layout & visual invariants › decimal 1.063 KG quantity is preserved without rounding during typing and ± toggle
+[10/17] e2e\r72-logistics-ux.demo.ts:306:3 › R72 Agent07: Logistics mobile layout & visual invariants › rapid double-click on confirm submits only once without racing
+[11/17] e2e\r72-logistics-ux.demo.ts:333:3 › R72 Agent07: Logistics mobile layout & visual invariants › last item (row 21) is scrollable completely above sticky CTA and bottom nav
+e2e\r72-logistics-ux.demo.ts:333:3 › R72 Agent07: Logistics mobile layout & visual invariants › last item (row 21) is scrollable completely above sticky CTA and bottom nav
+Row 21 bottom: 661, Footer top: 678, diff: -17
+
+[12/17] e2e\r72-logistics-ux.demo.ts:369:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › 200% font scale and landscape orientation keep document accessible without overflow
+  6) e2e\r72-logistics-ux.demo.ts:369:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › 200% font scale and landscape orientation keep document accessible without overflow 
+
+    Error: 200% font scale must not blow out horizontal container
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      387 |
+      388 |     const font200Overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
+    > 389 |     expect(font200Overflow, '200% font scale must not blow out horizontal container').toBe(false)
+          |                                                                                       ^
+      390 |   })
+      391 |
+      392 |   test('shrunk viewport simulates keyboard without hiding active input behind footer', async ({ page }) => {
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-517057f3\e2e\r72-logistics-ux.demo.ts:389:87
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-5ac8c-accessible-without-overflow\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-5ac8c-accessible-without-overflow\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-5ac8c-accessible-without-overflow\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-5ac8c-accessible-without-overflow\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[13/17] e2e\r72-logistics-ux.demo.ts:392:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › shrunk viewport simulates keyboard without hiding active input behind footer
+[14/17] e2e\r72-logistics-ux.demo.ts:409:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › iOS safe area insets via CDP is probed with honest gap reporting if unsupported
+[15/17] e2e\r72-logistics-ux.demo.ts:429:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › Android browser navigation bar simulation documented as browser-level not OS-level
+[16/17] e2e\r72-logistics-ux.demo.ts:441:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › PO price spec reuse: no financial/monetary fields written to stock movements and honest null vs 0
+[17/17] e2e\r72-logistics-ux.demo.ts:473:3 › R72 Agent07: Visual screenshots & baseline capture › capture before evidence screenshots across mobile viewports
+  6 failed
+    e2e\r72-logistics-ux.demo.ts:49:3 › R72 Agent07: Notification routing & security contracts › legacy notification resolves to transfer doc rather than redirecting to dashboard 
+    e2e\r72-logistics-ux.demo.ts:72:3 › R72 Agent07: Notification routing & security contracts › docNo-only notification fails closed without guessing the internal transfer ID 
+    e2e\r72-logistics-ux.demo.ts:94:3 › R72 Agent07: Notification routing & security contracts › invalid or denied notification does not redirect to dashboard while marking read 
+    e2e\r72-logistics-ux.demo.ts:124:3 › R72 Agent07: Notification routing & security contracts › cross-brand query parameter in notification is blocked from brand switching 
+    e2e\r72-logistics-ux.demo.ts:235:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px 
+    e2e\r72-logistics-ux.demo.ts:369:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › 200% font scale and landscape orientation keep document accessible without overflow 
+  11 passed (1.1m)

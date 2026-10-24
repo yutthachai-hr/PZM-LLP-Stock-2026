@@ -1,0 +1,33 @@
+
+Running 17 tests using 1 worker
+
+[1/17] e2e\r72-logistics-ux.demo.ts:28:3 › R72 Agent07: Notification routing & security contracts › canonical notification navigates to TransferReceivePage with correct docNo
+[2/17] e2e\r72-logistics-ux.demo.ts:50:3 › R72 Agent07: Notification routing & security contracts › legacy notification resolves to transfer doc rather than redirecting to dashboard
+[3/17] e2e\r72-logistics-ux.demo.ts:73:3 › R72 Agent07: Notification routing & security contracts › docNo-only notification fails closed without guessing the internal transfer ID
+[4/17] e2e\r72-logistics-ux.demo.ts:95:3 › R72 Agent07: Notification routing & security contracts › invalid or denied notification does not redirect to dashboard while marking read
+[5/17] e2e\r72-logistics-ux.demo.ts:125:3 › R72 Agent07: Notification routing & security contracts › cross-brand query parameter in notification is blocked from brand switching
+[6/17] e2e\r72-logistics-ux.demo.ts:156:3 › R72 Agent07: Logistics mobile layout & visual invariants › all 21 rows are accessible and survive page refresh
+[7/17] e2e\r72-logistics-ux.demo.ts:178:3 › R72 Agent07: Logistics mobile layout & visual invariants › name and SKU have useful width and natural wrap across all 6 phone widths
+[8/17] e2e\r72-logistics-ux.demo.ts:236:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px
+e2e\r72-logistics-ux.demo.ts:236:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px
+minusBox: { x: 30.75, y: 582.25, width: 48, height: 48 }
+
+plusBox: { x: 277.546875, y: 582.25, width: 48, height: 48 }
+
+inputBox: { x: 86.75, y: 582.25, width: 182.796875, height: 48 }
+
+labelBox: { x: 30.75, y: 405.90625, width: 44, height: 44 }
+
+[9/17] e2e\r72-logistics-ux.demo.ts:280:3 › R72 Agent07: Logistics mobile layout & visual invariants › decimal 1.063 KG quantity is preserved without rounding during typing and ± toggle
+[10/17] e2e\r72-logistics-ux.demo.ts:307:3 › R72 Agent07: Logistics mobile layout & visual invariants › rapid double-click on confirm submits only once without racing
+[11/17] e2e\r72-logistics-ux.demo.ts:333:3 › R72 Agent07: Logistics mobile layout & visual invariants › last item (row 21) is scrollable completely above sticky CTA and bottom nav
+e2e\r72-logistics-ux.demo.ts:333:3 › R72 Agent07: Logistics mobile layout & visual invariants › last item (row 21) is scrollable completely above sticky CTA and bottom nav
+Row 21 bottom: 499, Footer top: 691, diff: -192
+
+[12/17] e2e\r72-logistics-ux.demo.ts:369:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › 200% font scale and landscape orientation keep document accessible without overflow
+[13/17] e2e\r72-logistics-ux.demo.ts:392:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › shrunk viewport simulates keyboard without hiding active input behind footer
+[14/17] e2e\r72-logistics-ux.demo.ts:409:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › iOS safe area insets via CDP is probed with honest gap reporting if unsupported
+[15/17] e2e\r72-logistics-ux.demo.ts:429:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › Android browser navigation bar simulation documented as browser-level not OS-level
+[16/17] e2e\r72-logistics-ux.demo.ts:441:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › PO price spec reuse: no financial/monetary fields written to stock movements and honest null vs 0
+[17/17] e2e\r72-logistics-ux.demo.ts:473:3 › R72 Agent07: Visual screenshots & baseline capture › capture before evidence screenshots across mobile viewports
+  17 passed (40.5s)

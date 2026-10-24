@@ -1,0 +1,167 @@
+
+Running 19 tests using 1 worker
+
+[1/19] e2e\notification-navigation.demo.ts:107:3 › desktop: legacy bell click opens document id, Back works, no stock writes
+[WebServer] 3:14:18 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:18 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[2/19] e2e\notification-navigation.demo.ts:107:3 › mobile: legacy bell click opens document id, Back works, no stock writes
+[WebServer] 3:14:19 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:19 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[3/19] e2e\notification-navigation.demo.ts:126:3 › pizza: canonical link opens only the current namespace
+[WebServer] 3:14:21 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:21 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[4/19] e2e\notification-navigation.demo.ts:126:3 › lelapin: canonical link opens only the current namespace
+[WebServer] 3:14:22 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:22 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[5/19] e2e\notification-navigation.demo.ts:126:3 › rnd: canonical link opens only the current namespace
+[WebServer] 3:14:24 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:24 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[6/19] e2e\notification-navigation.demo.ts:138:3 › refused destination https://evil.example/x: stays unread and never changes stock
+[WebServer] 3:14:25 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:25 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[7/19] e2e\notification-navigation.demo.ts:138:3 › refused destination /logistics/deleted: stays unread and never changes stock
+[WebServer] 3:14:26 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:26 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[8/19] e2e\notification-navigation.demo.ts:138:3 › refused destination /logistics/other-only: stays unread and never changes stock
+[WebServer] 3:14:27 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:27 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[9/19] e2e\notification-navigation.demo.ts:138:3 › refused destination /logistics/deleted/: stays unread and never changes stock
+[WebServer] 3:14:29 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:29 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[10/19] e2e\notification-navigation.demo.ts:138:3 › refused destination /transfers/deleted/receive/: stays unread and never changes stock
+[WebServer] 3:14:30 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:30 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[11/19] e2e\notification-navigation.demo.ts:138:3 › refused destination /orders?po=%00: stays unread and never changes stock
+[WebServer] 3:14:31 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:31 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[12/19] e2e\notification-navigation.demo.ts:151:1 › popup legacy action opens the transfer (and only marks that notification)
+[WebServer] 3:14:33 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:33 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[13/19] e2e\notification-navigation.demo.ts:173:3 › popup /logistics/deleted is not marked opened
+[WebServer] 3:14:37 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:37 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[14/19] e2e\notification-navigation.demo.ts:173:3 › popup https://evil.example/x is not marked opened
+[WebServer] 3:14:41 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:41 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[15/19] e2e\notification-navigation.demo.ts:197:1 › a bookmarked missing transfer shows the existing empty state
+[16/19] e2e\notification-navigation.demo.ts:203:1 › rapid double click on bell notification navigates once without race
+[WebServer] 3:14:47 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:47 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[17/19] e2e\notification-navigation.demo.ts:213:1 › order notification navigates to /orders?po=PO-1 directly and marks read
+[WebServer] 3:14:48 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:48 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[18/19] e2e\notification-navigation.demo.ts:222:1 › owner TR-00001: legacy /logistics/:id notification navigates to /transfers/:id and marks read
+[WebServer] 3:14:49 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:49 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+[19/19] e2e\notification-navigation.demo.ts:255:1 › R72: transferArriving notification navigates to /transfers/:id and marks read with screenshot
+[WebServer] 3:14:51 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `select`. It was passed a child from ProductsPage. See https://react.dev/link/warning-keys for more information.
+
+[WebServer] 3:14:51 AM [vite] (client) [console.error] Each child in a list should have a unique "key" prop.
+[WebServer] 
+[WebServer] Check the render method of `ChipRow`. See https://react.dev/link/warning-keys for more information.
+
+  19 passed (37.5s)

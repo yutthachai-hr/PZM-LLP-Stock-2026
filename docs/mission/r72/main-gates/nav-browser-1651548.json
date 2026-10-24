@@ -1,0 +1,89 @@
+{
+  "at": "2026-10-24T20:07:23.513Z",
+  "checkout": "C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-517057f3",
+  "port": "5219",
+  "passed": 7,
+  "total": 13,
+  "results": [
+    {
+      "name": "suppliers deep link ?id=A opens A",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "name": "suppliers SPA ?id=A -> ?id=B shows B",
+      "pass": false,
+      "detail": {}
+    },
+    {
+      "name": "suppliers drawer closes manually and stays closed",
+      "pass": true,
+      "detail": {
+        "url": "http://127.0.0.1:5219/suppliers?id=sup-b"
+      }
+    },
+    {
+      "name": "suppliers SPA same ?id=B after close reopens B",
+      "pass": false,
+      "detail": {}
+    },
+    {
+      "name": "suppliers manual pick A then explicit SPA same ?id=B shows B",
+      "pass": false,
+      "detail": {
+        "manualA": true
+      }
+    },
+    {
+      "name": "issue initial ?import=1 opens import",
+      "pass": true,
+      "detail": {
+        "url": "http://127.0.0.1:5219/issue"
+      }
+    },
+    {
+      "name": "issue one-shot import flag removed from URL",
+      "pass": true,
+      "detail": {
+        "url": "http://127.0.0.1:5219/issue"
+      }
+    },
+    {
+      "name": "issue manual POS selected",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "name": "issue POS -> SPA ?import=1 switches to transfer and opens import",
+      "pass": false,
+      "detail": {
+        "url": "http://127.0.0.1:5219/issue?import=1"
+      }
+    },
+    {
+      "name": "issue no URL/state loop after flag removal",
+      "pass": false,
+      "detail": {
+        "urlAfter": "http://127.0.0.1:5219/issue?import=1",
+        "later": "http://127.0.0.1:5219/issue?import=1"
+      }
+    },
+    {
+      "name": "issue SPA ?mode=pos switches to POS",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "name": "issue manual transfer kept while URL still ?mode=pos",
+      "pass": true,
+      "detail": {
+        "url": "http://127.0.0.1:5219/issue?mode=pos"
+      }
+    },
+    {
+      "name": "issue explicit SPA same ?mode=pos after manual switch returns POS",
+      "pass": false,
+      "detail": {}
+    }
+  ]
+}
