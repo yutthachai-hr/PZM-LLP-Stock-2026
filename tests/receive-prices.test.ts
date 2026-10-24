@@ -186,14 +186,14 @@ describe('receive page prices: summary calculation', () => {
   })
 })
 
-function renderPanel(facts: Omit<ReceiptFacts, 'date' | 'docDate' | 'hasPhoto' | 'note'> & { pricedLines?: number }) {
+function renderPanel(facts: Omit<ReceiptFacts, 'date' | 'docDate' | 'hasPhoto' | 'note'>) {
   return ReactDOMServer.renderToStaticMarkup(
     React.createElement(
       I18nProvider,
       null,
       React.createElement(ReceiptPanel, {
         mode: 'po',
-        facts: facts as any,
+        facts,
         pending: 0,
         problem: null,
         busy: false,
@@ -203,7 +203,7 @@ function renderPanel(facts: Omit<ReceiptFacts, 'date' | 'docDate' | 'hasPhoto' |
   )
 }
 
-function renderReviewModal(facts: ReceiptFacts & { pricedLines?: number }) {
+function renderReviewModal(facts: ReceiptFacts) {
   return ReactDOMServer.renderToStaticMarkup(
     React.createElement(
       I18nProvider,
@@ -211,7 +211,7 @@ function renderReviewModal(facts: ReceiptFacts & { pricedLines?: number }) {
       React.createElement(ReviewModal, {
         open: true,
         mode: 'po',
-        facts: facts as any,
+        facts,
         exceptions: [],
         canCloseShort: false,
         closeShort: false,

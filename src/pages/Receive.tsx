@@ -301,6 +301,7 @@ export function ReceivePage() {
     short: summary?.short ?? 0,
     over: summary?.over ?? 0,
     estimatedTotal: priceSummary?.estimatedTotal,
+    pricedLines: priceSummary?.pricedLines,
     missingLines: priceSummary?.missingLines,
   }
 

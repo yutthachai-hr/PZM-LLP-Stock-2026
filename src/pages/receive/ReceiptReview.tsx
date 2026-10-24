@@ -22,6 +22,7 @@ export interface ReceiptFacts {
   short: number
   over: number
   estimatedTotal?: number
+  pricedLines?: number
   missingLines?: number
 }
 
@@ -76,7 +77,7 @@ export function ReceiptPanel({
           {facts.estimatedTotal !== undefined && (
             <Row label={t('มูลค่าประมาณการ')}>
               <div>
-                <span className="num">฿{fmtMoney(facts.estimatedTotal)}</span> {/* ฿ is a currency symbol — i18n-key */}
+                <span className="num">{(facts.pricedLines ?? 0) > 0 ? `฿${fmtMoney(facts.estimatedTotal)}` : '—'}</span> {/* ฿ is a currency symbol — i18n-key */}
                 {facts.missingLines !== undefined && facts.missingLines > 0 && (
                   <span className="block text-xs font-normal text-amber">
                     {t('ยังไม่ระบุราคา {n} รายการ', { n: facts.missingLines })}
@@ -194,7 +195,7 @@ export function ReviewModal({
           {facts.estimatedTotal !== undefined && (
             <Row label={t('มูลค่าประมาณการ')}>
               <div>
-                <span className="num">฿{fmtMoney(facts.estimatedTotal)}</span> {/* ฿ is a currency symbol — i18n-key */}
+                <span className="num">{(facts.pricedLines ?? 0) > 0 ? `฿${fmtMoney(facts.estimatedTotal)}` : '—'}</span> {/* ฿ is a currency symbol — i18n-key */}
                 {facts.missingLines !== undefined && facts.missingLines > 0 && (
                   <span className="block text-xs font-normal text-amber">
                     {t('ยังไม่ระบุราคา {n} รายการ', { n: facts.missingLines })}
