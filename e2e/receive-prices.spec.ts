@@ -104,12 +104,19 @@ test('receive prices: 3 lines (supplier price, cost-only, no price) and 2 quanti
   await expect(sauceRow.getByText('ยังไม่ระบุราคา').filter({ visible: true })).toBeVisible()
   await expect(sauceRow.getByText('฿0.00')).toHaveCount(0)
 
-  // Enter 2 quantities:
-  // 1. FLOUR = 2 -> 2 * 120 = 240
-  await flourInput.fill('2')
+  const panel = page.locator('aside', { hasText: 'ใบรับนี้' })
+  const estimate = panel.getByText('มูลค่าประมาณการ', { exact: true }).locator('..')
+  await expect(estimate.getByText('—', { exact: true })).toBeVisible()
+  await expect(estimate.getByText('฿0.00')).toHaveCount(0)
 
-  // 2. PIZZA SAUCE = 3 -> unpriced line entered
+  // An entered but unpriced receipt is unknown, never free goods.
   await sauceInput.fill('3')
+  await expect(estimate.getByText('—', { exact: true })).toBeVisible()
+  await expect(estimate.getByText('฿0.00')).toHaveCount(0)
+  await expect(panel.getByText('ยังไม่ระบุราคา 1 รายการ')).toBeVisible()
+
+  // Add the priced line: 2 * 120 = 240, excluding the unpriced line.
+  await flourInput.fill('2')
 
   // CHEESE is left unentered
 
@@ -127,7 +134,6 @@ test('receive prices: 3 lines (supplier price, cost-only, no price) and 2 quanti
   // "ใบรับนี้" card verification:
   // Estimated total should be ฿240.00
   // Missing price count should be "ยังไม่ระบุราคา 1 รายการ"
-  const panel = page.locator('aside', { hasText: 'ใบรับนี้' })
   await expect(panel.getByText('฿240.00')).toBeVisible()
   await expect(panel.getByText('ยังไม่ระบุราคา 1 รายการ')).toBeVisible()
 

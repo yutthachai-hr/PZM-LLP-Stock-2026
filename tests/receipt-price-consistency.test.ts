@@ -496,6 +496,21 @@ describe('R69 AGENT03: Receipt price unit-conversion consistency', () => {
     })
   })
 
+  test('documents 3dp stock rounding versus an entry-quantity price estimate for a fractional block', () => {
+    const line = { productId: 'fractional-block', unit: 'KG', entryUnit: 'Block', orderedQty: 5, baseQty: 13.6 }
+    const price = resolveReceiptPrice({
+      line,
+      supplierId: 'sup-1',
+      supplierItems: [{ supplierId: 'sup-1', productId: line.productId, buyingPrice: 1000, active: true }],
+      asOf: 1000,
+    })
+    const filedQty = filingStockQty(line, undefined, 0.333)
+    expect(filedQty).toBe(0.906)
+    expect(lineAmount(price, 0.333)).toBe(905.76)
+    expect(round2((price.basePrice as number) * filedQty)).toBe(906)
+    // This estimate prices entered units; it is not a valuation of 3dp-rounded stock.
+  })
+
   describe('Finding documentation: legacy lines without baseQty', () => {
     test('documents difference when baseQty is absent: resolver treats alternate unit without preserved rate as missing (null), while filing falls back to resolveFactor', () => {
       // Line created before baseQty was saved on PO line (legacy PO)
