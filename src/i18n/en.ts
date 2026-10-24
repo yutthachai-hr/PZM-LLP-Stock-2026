@@ -597,6 +597,7 @@ export const EN: Record<string, string> = {
   // ---- stock service errors ----------------------------------------------------
   ตั้งยอดคงเหลือ: 'Set balance',
   จำนวนต้องไม่ติดลบ: 'Quantity cannot be negative',
+  ระบุจำนวนที่ถูกต้อง: 'Please enter a valid quantity',
   รายการนี้ถูกยกเลิกแล้ว: 'This movement has already been voided',
   ไม่มีรายการสินค้า: 'No items',
   'สต๊อกไม่พอสำหรับ "{name}" (คงเหลือ {qty} {unit})':
@@ -1999,6 +2000,11 @@ export const EN: Record<string, string> = {
   'สั่ง / ค้างรับ': 'Ordered / owed',
   'รับครั้งนี้': 'This delivery',
   'ส่วนต่าง': 'Variance',
+  'ราคา': 'Price',
+  'ราคาผู้ขาย': 'Supplier price',
+  'ต้นทุน ณ {date}': 'Cost as of {date}',
+  'ยังไม่ระบุราคา': 'Unpriced',
+  'ยังไม่ระบุราคา {n} รายการ': 'Unpriced: {n} items',
   'รับครั้งนี้: {name}': 'This delivery: {name}',
   'เหตุผลที่ของมาไม่ครบ (บังคับ)': 'Why it is short (required)',
   'เหตุผลที่ของมาเกิน (บังคับ)': 'Why it is over (required)',
@@ -2292,6 +2298,10 @@ export const EN: Record<string, string> = {
   // ---- logistics, second pass (24 Sep 2026) ----------------------------------
   'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า / บาร์โค้ด)': 'Search to add a line (name / code / barcode)',
   'ระบบส่งสินค้า': 'Logistics',
+  'เปิดการแจ้งเตือนนี้ไม่ได้ ลิงก์ไม่ถูกต้อง': 'Cannot open this notification: invalid link',
+  'เปิดการแจ้งเตือนนี้ไม่ได้ กรุณาลองอีกครั้ง': 'Cannot open this notification. Please try again',
+  'บริษัทเปลี่ยนแล้ว กรุณาเปิดการแจ้งเตือนอีกครั้ง': 'Company changed. Please open the notification again',
+  'กำลังเปิด...': 'Opening…',
   'เปิดใช้ระบบส่งสินค้าแล้ว': 'Logistics switched on',
   'สร้างคลัง "ระหว่างขนส่ง" ของแต่ละบริษัท ก่อนอนุมัติการโอนครั้งแรก': 'Create each company\'s "in transit" location before the first transfer is approved',
   'เปิดใช้แล้ว': 'On',

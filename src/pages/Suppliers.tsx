@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
@@ -124,14 +125,24 @@ export function SuppliersPage() {
   const [sort, setSort] = useState<SortKey>('name')
   const [category, setCategory] = useState('')
   const [terms, setTerms] = useState('')
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const queryId = searchParams.get('id')
   // ?id=<supplier> opens its detail — the link a notification's "ดูผู้ขาย" button carries.
-  const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(location.search).get('id'))
+  const [selectedId, setSelectedId] = useState<string | null>(queryId)
   // Master–detail (owner, 9 Oct 2026). From 1280px the details sit beside the list and stay
   // on screen while it scrolls; below that a pick opens them in a drawer over the list, which
   // keeps its place. A deep link (?id=) opens the drawer too.
   const viewport = useViewport()
   const desktop = viewport === 'desktop'
-  const [sheetOpen, setSheetOpen] = useState(() => !!new URLSearchParams(location.search).get('id'))
+  const [sheetOpen, setSheetOpen] = useState(() => !!queryId)
+
+  useEffect(() => {
+    if (queryId) {
+      setSelectedId(queryId)
+      setSheetOpen(true)
+    }
+  }, [queryId, location.key])
   const lastPicked = useRef<string | null>(null)
   const pillRoom = demoPillShown()
   const [orders, setOrders] = useState<PurchaseOrder[]>([])

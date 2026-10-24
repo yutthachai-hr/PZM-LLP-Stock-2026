@@ -1,11 +1,20 @@
 import { SectionCard, StatusChip } from '../../components/frame'
 import { Button, Input } from '../../components/ui'
 import { Icon } from '../../components/Icon'
-import { fmtQty } from '../../lib/format'
+import { fmtMoney, fmtQty } from '../../lib/format'
 import { shownUnit } from '../../lib/ledger'
 import { useT } from '../../i18n/I18nContext'
-import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
-import { needsReason, outstanding, owedLines, receiveAll, variance, type PoLineEntry, type Variance } from './receipt'
+import type { Product, PurchaseOrder, PurchaseOrderLine, SupplierItem } from '../../types'
+import {
+  needsReason,
+  outstanding,
+  owedLines,
+  receiveAll,
+  resolveLinePricing,
+  variance,
+  type PoLineEntry,
+  type Variance,
+} from './receipt'
 
 export function VarianceChip({ v, diff }: { v: Variance; diff: number }) {
   const t = useT()
@@ -37,12 +46,18 @@ export function PoLines({
   entries,
   onChange,
   invalid,
+  products = [],
+  supplierItems = [],
+  asOf,
 }: {
   order: PurchaseOrder
   entries: Record<string, PoLineEntry>
   onChange: (entries: Record<string, PoLineEntry>) => void
   /** After a refused review: outline the lines still missing something. */
   invalid: boolean
+  products?: readonly Pick<Product, 'id' | 'cost' | 'costHistory'>[]
+  supplierItems?: readonly Pick<SupplierItem, 'supplierId' | 'productId' | 'buyingPrice' | 'active'>[]
+  asOf?: number
 }) {
   const t = useT()
   const owed = owedLines(order)
@@ -65,11 +80,12 @@ export function PoLines({
         </Button>
       }
     >
-      <div className="hidden grid-cols-[minmax(0,1fr)_8rem_8rem_5.5rem_7rem] gap-3 border-b border-line pb-2 text-xs font-semibold text-ink-soft lg:grid">
+      <div className="hidden grid-cols-[minmax(0,1fr)_7.5rem_7.5rem_4.5rem_8.5rem_6.5rem] gap-3 border-b border-line pb-2 text-xs font-semibold text-ink-soft lg:grid">
         <span>{t('สินค้า')}</span>
         <span className="text-right">{t('สั่ง / ค้างรับ')}</span>
         <span className="text-right">{t('รับครั้งนี้')}</span>
         <span>{t('หน่วย')}</span>
+        <span className="text-right">{t('ราคา')}</span>
         <span>{t('ส่วนต่าง')}</span>
       </div>
       <ul className="divide-y divide-line">
@@ -81,11 +97,35 @@ export function PoLines({
           const missingReason = needsReason(due, e)
           const flag = invalid && (v === 'pending' || missingReason)
           const base = qty !== null ? inBase(l, qty) : null
+          const { price, sourceLabel, amount } = resolveLinePricing(
+            l,
+            order.supplierId,
+            e,
+            products,
+            supplierItems,
+            asOf ?? Date.now(),
+            t,
+          )
           return (
             <li key={l.productId} className={`py-3 ${flag ? '-mx-2 rounded-lg bg-danger-soft/40 px-2' : ''}`}>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 lg:grid-cols-[minmax(0,1fr)_8rem_8rem_5.5rem_7rem]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 lg:grid-cols-[minmax(0,1fr)_7.5rem_7.5rem_4.5rem_8.5rem_6.5rem]">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-ink">{l.productName}</div>
+                  <div className="mt-0.5 text-xs lg:hidden">
+                    {price.unitPrice !== null ? (
+                      <div className="flex flex-wrap items-baseline gap-x-1.5">
+                        <span className="text-ink-soft">
+                          ฿{fmtMoney(price.unitPrice)} / {price.unit} {/* ฿ is a currency symbol — i18n-key */}
+                          <span className="text-ink-faint">({sourceLabel})</span>
+                        </span>
+                        {amount !== null && (
+                          <span className="num font-semibold text-ink">· ฿{fmtMoney(amount)}</span> /* ฿ is a currency symbol — i18n-key */
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-ink-faint">{sourceLabel}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="num text-right text-sm text-ink-soft lg:order-none">
                   <span className="text-xs lg:hidden">{t('สั่ง / ค้างรับ')} </span>
@@ -105,6 +145,25 @@ export function PoLines({
                   {base && <span className="text-xs text-ink-faint lg:mt-1 lg:block lg:text-right">{base}</span>}
                 </div>
                 <div className="text-sm text-ink-soft">{shownUnit(l)}</div>
+                <div className="hidden text-right lg:block">
+                  {price.unitPrice !== null ? (
+                    <>
+                      {amount !== null && (
+                        <div className="num text-sm font-semibold text-ink">
+                          ฿{fmtMoney(amount)} {/* ฿ is a currency symbol — i18n-key */}
+                        </div>
+                      )}
+                      <div className="text-xs text-ink-soft">
+                        ฿{fmtMoney(price.unitPrice)} / {price.unit} {/* ฿ is a currency symbol — i18n-key */}
+                      </div>
+                      <div className="text-[11px] text-ink-faint">
+                        {sourceLabel}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-xs text-ink-faint">{sourceLabel}</div>
+                  )}
+                </div>
                 <div className="col-span-2 lg:col-span-1">
                   <VarianceChip v={v} diff={Math.abs((qty ?? 0) - due)} />
                 </div>

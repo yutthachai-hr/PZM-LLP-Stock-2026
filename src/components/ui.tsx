@@ -488,7 +488,7 @@ export function SectionHeader({
  */
 export function FormActions({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky -mx-4 mt-2 flex justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur [bottom:var(--tabbar-h)] md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-filter-none">
+    <div className="sticky -mx-4 mt-2 flex flex-wrap justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur z-20 [bottom:var(--tabbar-h)] md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-filter-none">
       {children}
     </div>
   )

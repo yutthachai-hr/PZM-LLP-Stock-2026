@@ -14,7 +14,8 @@ import { Icon, type IconName } from '../components/Icon'
 import { receiveStock } from '../services/stock'
 import { listOpenOrders, receivePurchaseOrder } from '../services/purchaseOrders'
 import { findDuplicateDocument, type DuplicateDoc } from '../services/receiptDocs'
-import { useSuppliers } from '../services/suppliers'
+import { listSupplierItems, useSuppliers } from '../services/suppliers'
+import { brandEpoch, onBrandChange } from '../brand/brand'
 import { compressImage } from '../lib/image'
 import { ocrCandidates } from '../lib/billOcr'
 import { billReaderAvailable, readBillPhoto, readDocumentFile } from '../services/billOcr'
@@ -28,7 +29,7 @@ import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
-import type { PurchaseOrder } from '../types'
+import type { PurchaseOrder, SupplierItem } from '../types'
 import { PoPicker } from './receive/PoPicker'
 import { PoLines } from './receive/PoLines'
 import { DocumentCard, OTHER_SUPPLIER } from './receive/DocumentCard'
@@ -45,6 +46,7 @@ import {
   poProblem,
   restoreReceipt,
   summarise,
+  summariseReceiptPrices,
   variance,
   type Mode,
   type ReceiptDraft,
@@ -91,6 +93,7 @@ export function ReceivePage() {
   const patch = useCallback((p: Partial<ReceiptDraft>) => setD((cur) => ({ ...cur, ...p })), [])
   const [photo, setPhoto] = useState<string | null>(null)
   const [orders, setOrders] = useState<PurchaseOrder[] | null>(null)
+  const [supplierItems, setSupplierItems] = useState<SupplierItem[]>([])
   const [dup, setDup] = useState<{ key: string; hit: DuplicateDoc | null } | null>(null)
   const [reviewing, setReviewing] = useState(false)
   const [closeShort, setCloseShort] = useState(false)
@@ -155,6 +158,28 @@ export function ReceivePage() {
   const order = d.mode === 'po' && orders ? (orders.find((o) => o.id === d.poId) ?? null) : null
   const orderMissing = d.mode === 'po' && !!d.poId && orders !== null && !order
   const summary = order ? summarise(order, d.entries) : null
+
+  // Load supplier items once per opened order. Ignore results if brand changed (brandEpoch).
+  useEffect(() => {
+    if (!order) {
+      setSupplierItems([])
+      return
+    }
+    const epoch = brandEpoch()
+    let alive = true
+    listSupplierItems()
+      .then((items) => {
+        if (alive && brandEpoch() === epoch) setSupplierItems(items)
+      })
+      .catch(() => {
+        if (alive && brandEpoch() === epoch) setSupplierItems([])
+      })
+    return () => {
+      alive = false
+    }
+  }, [order])
+
+  useEffect(() => onBrandChange(() => setSupplierItems([])), [])
 
   const kitchen = d.mode === 'kitchen'
   const supplierName = order ? order.supplierName : kitchen ? KITCHEN_SUPPLIER : d.supplierName.trim()
@@ -257,6 +282,11 @@ export function ReceivePage() {
         .filter((x): x is Exception => x !== null)
     : []
 
+  const priceSummary = useMemo(() => {
+    if (!order) return null
+    return summariseReceiptPrices(order, d.entries, products, supplierItems, date)
+  }, [order, d.entries, products, supplierItems, date])
+
   const facts: ReceiptFacts = {
     supplierName,
     poDocNo: order?.docNo,
@@ -270,6 +300,9 @@ export function ReceivePage() {
     matched: summary?.matched ?? 0,
     short: summary?.short ?? 0,
     over: summary?.over ?? 0,
+    estimatedTotal: priceSummary?.estimatedTotal,
+    pricedLines: priceSummary?.pricedLines,
+    missingLines: priceSummary?.missingLines,
   }
 
   async function openReview() {
@@ -471,7 +504,15 @@ export function ReceivePage() {
               {order && (
                 <>
                   <ReceiveWhere warehouse={warehouseName} dateStr={d.dateStr} onDate={(v) => patch({ dateStr: v })} />
-                  <PoLines order={order} entries={d.entries} onChange={(entries) => patch({ entries })} invalid={tried} />
+                  <PoLines
+                    order={order}
+                    entries={d.entries}
+                    onChange={(entries) => patch({ entries })}
+                    invalid={tried}
+                    products={products}
+                    supplierItems={supplierItems}
+                    asOf={date}
+                  />
                 </>
               )}
             </>

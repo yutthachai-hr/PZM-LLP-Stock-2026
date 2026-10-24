@@ -1,0 +1,401 @@
+{
+  "normal": [
+    {
+      "width": 320,
+      "computedFont": "17px",
+      "scrollWidth": 320,
+      "innerWidth": 320,
+      "hasHScroll": false,
+      "overflow": 0,
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 113,
+        "h": 48
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 94.8,
+      "canvasTextWidth": 38.2,
+      "isClipped": false
+    },
+    {
+      "width": 360,
+      "computedFont": "17px",
+      "scrollWidth": 360,
+      "innerWidth": 360,
+      "hasHScroll": false,
+      "overflow": 0,
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 153,
+        "h": 48
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 134.8,
+      "canvasTextWidth": 38.2,
+      "isClipped": false
+    },
+    {
+      "width": 375,
+      "computedFont": "17px",
+      "scrollWidth": 375,
+      "innerWidth": 375,
+      "hasHScroll": false,
+      "overflow": 0,
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 168,
+        "h": 48
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 149.8,
+      "canvasTextWidth": 38.2,
+      "isClipped": false
+    },
+    {
+      "width": 390,
+      "computedFont": "17px",
+      "scrollWidth": 390,
+      "innerWidth": 390,
+      "hasHScroll": false,
+      "overflow": 0,
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 183,
+        "h": 48
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 164.8,
+      "canvasTextWidth": 38.2,
+      "isClipped": false
+    },
+    {
+      "width": 414,
+      "computedFont": "17px",
+      "scrollWidth": 414,
+      "innerWidth": 414,
+      "hasHScroll": false,
+      "overflow": 0,
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 207,
+        "h": 48
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 188.8,
+      "canvasTextWidth": 38.2,
+      "isClipped": false
+    },
+    {
+      "width": 430,
+      "computedFont": "17px",
+      "scrollWidth": 430,
+      "innerWidth": 430,
+      "hasHScroll": false,
+      "overflow": 0,
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 223,
+        "h": 48
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 204.8,
+      "canvasTextWidth": 38.2,
+      "isClipped": false
+    }
+  ],
+  "root200": [
+    {
+      "width": 320,
+      "computedFont": "32px",
+      "scrollWidth": 320,
+      "innerWidth": 320,
+      "hasHScroll": false,
+      "overflow": 0,
+      "leafOverflows": [],
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 96,
+        "h": 88
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 78,
+      "canvasTextWidth": 71.8,
+      "isClipped": false
+    },
+    {
+      "width": 360,
+      "computedFont": "32px",
+      "scrollWidth": 360,
+      "innerWidth": 360,
+      "hasHScroll": false,
+      "overflow": 0,
+      "leafOverflows": [],
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 134,
+        "h": 88
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 116,
+      "canvasTextWidth": 71.8,
+      "isClipped": false
+    },
+    {
+      "width": 375,
+      "computedFont": "32px",
+      "scrollWidth": 375,
+      "innerWidth": 375,
+      "hasHScroll": false,
+      "overflow": 0,
+      "leafOverflows": [],
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 149,
+        "h": 88
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 131,
+      "canvasTextWidth": 71.8,
+      "isClipped": false
+    },
+    {
+      "width": 390,
+      "computedFont": "32px",
+      "scrollWidth": 390,
+      "innerWidth": 390,
+      "hasHScroll": false,
+      "overflow": 0,
+      "leafOverflows": [],
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 108,
+        "h": 88
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 89.6,
+      "canvasTextWidth": 71.8,
+      "isClipped": false
+    },
+    {
+      "width": 414,
+      "computedFont": "32px",
+      "scrollWidth": 414,
+      "innerWidth": 414,
+      "hasHScroll": false,
+      "overflow": 0,
+      "leafOverflows": [],
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 132,
+        "h": 88
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 113.6,
+      "canvasTextWidth": 71.8,
+      "isClipped": false
+    },
+    {
+      "width": 430,
+      "computedFont": "32px",
+      "scrollWidth": 430,
+      "innerWidth": 430,
+      "hasHScroll": false,
+      "overflow": 0,
+      "leafOverflows": [],
+      "cbSize": {
+        "w": 44,
+        "h": 44
+      },
+      "minusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "plusSize": {
+        "w": 48,
+        "h": 48
+      },
+      "inputSize": {
+        "w": 148,
+        "h": 88
+      },
+      "inputPaddingH": 16,
+      "contentWidth": 129.6,
+      "canvasTextWidth": 71.8,
+      "isClipped": false
+    }
+  ],
+  "decimalTyping": {
+    "expected": "1.063",
+    "actual": "1.063",
+    "passed": true
+  },
+  "headerPollution": {
+    "hasHeader": true,
+    "buttons": [
+      {
+        "text": "",
+        "maxWidth": "none",
+        "maxHeight": "none",
+        "isPolluted": false
+      },
+      {
+        "text": "",
+        "maxWidth": "none",
+        "maxHeight": "none",
+        "isPolluted": false
+      },
+      {
+        "text": "21",
+        "maxWidth": "none",
+        "maxHeight": "none",
+        "isPolluted": false
+      },
+      {
+        "text": "42",
+        "maxWidth": "none",
+        "maxHeight": "none",
+        "isPolluted": false
+      },
+      {
+        "text": "",
+        "maxWidth": "none",
+        "maxHeight": "none",
+        "isPolluted": false
+      },
+      {
+        "text": "TH",
+        "maxWidth": "none",
+        "maxHeight": "none",
+        "isPolluted": false
+      },
+      {
+        "text": "LLogistics Receiver",
+        "maxWidth": "none",
+        "maxHeight": "none",
+        "isPolluted": false
+      }
+    ],
+    "isPolluted": false
+  }
+}

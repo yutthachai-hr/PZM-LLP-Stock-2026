@@ -2,7 +2,9 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { backend } from '../backend'
 import { getBrand, onBrandChange, type BrandId } from '../brand/brand'
 import { audienceKeysOf, toDoc, type NotificationDraft, type WritePlan } from '../lib/inventoryRules/notifications'
-import { COL, type AppNotification, type NotificationCategory, type NotificationPrefs, type NotificationPriority } from '../types'
+import { canonicalLink } from '../lib/notificationLink'
+import { AppError } from '../i18n/AppError'
+import { COL, type AppNotification, type NotificationCategory, type NotificationPrefs, type NotificationPriority, type Transfer } from '../types'
 
 /**
  * Notifications as the app writes them.
@@ -17,17 +19,43 @@ import { COL, type AppNotification, type NotificationCategory, type Notification
 // nothing it reads or writes after an await can land in a brand switched to meanwhile.
 const scoped = (brand: BrandId = getBrand()) => backend.forBrand(brand)
 
-export async function markRead(n: AppNotification, uid: string, now = Date.now()): Promise<void> {
-  if (n.readBy?.[uid]) return
-  await scoped().update(COL.notifications, n.id, { [`readBy.${uid}`]: now, updatedAt: now })
+/** Resolve without writing. A missing transfer must not make its notification appear opened. */
+export async function notificationDestination(link: unknown, brand: BrandId): Promise<string> {
+  const url = canonicalLink(link)
+  if (!url) throw new AppError('เปิดการแจ้งเตือนนี้ไม่ได้ ลิงก์ไม่ถูกต้อง')
+  const path = url.split(/[?#]/)[0]
+  const id = /^\/transfers\/([^/]+)/.exec(path)?.[1]
+  if (id && path !== '/transfers/new' && path !== '/transfers/today') {
+    const transfer = await scoped(brand).getOne<Transfer>(COL.transfers, decodeURIComponent(id))
+    if (!transfer) throw new AppError('ไม่พบเอกสารโอนสินค้า')
+  }
+  if (getBrand() !== brand) throw new AppError('บริษัทเปลี่ยนแล้ว กรุณาเปิดการแจ้งเตือนอีกครั้ง')
+  return url
 }
 
-export async function markAllRead(list: readonly AppNotification[], uid: string): Promise<number> {
+const readInflight = new Set<string>()
+
+export async function markRead(n: AppNotification, uid: string, now = Date.now(), brand: BrandId = getBrand()): Promise<void> {
+  if (n.readBy?.[uid]) return
+  if (getBrand() !== brand) return
+  const key = `${brand}:${n.id}:${uid}`
+  if (readInflight.has(key)) return
+  readInflight.add(key)
+  try {
+    if (getBrand() !== brand) return
+    await scoped(brand).update(COL.notifications, n.id, { [`readBy.${uid}`]: now, updatedAt: now })
+  } finally {
+    readInflight.delete(key)
+  }
+}
+
+export async function markAllRead(list: readonly AppNotification[], uid: string, brand: BrandId = getBrand()): Promise<number> {
   const now = Date.now()
   let n = 0
   for (const item of list) {
+    if (getBrand() !== brand) break
     if (item.readBy?.[uid]) continue
-    await markRead(item, uid, now)
+    await markRead(item, uid, now, brand)
     n++
   }
   return n
