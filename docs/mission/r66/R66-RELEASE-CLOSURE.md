@@ -51,7 +51,8 @@ branch เก่าอีก ~60 อัน (R13–R47) มี local-only commit 
 | #53 SW hotfix | `df34558` | DeepSeek APPROVE (R56) + R64 Gemini verify | 10/10 | SW e2e 3/3, Preview 9789240e, prod verifier RED→local GREEN | — | **READY_FOR_OWNER_HOTFIX** (Release B) | ไม่มี (draft) | คำอนุมัติ + มือถือ | Owner ข้อ B |
 | #55 notification | `f301f39` | R66 Gemini ใหม่ **APPROVE** (separate-agent); cross-model **ค้าง** (DeepSeek quota) | 10/10 | unit 1781, browser 17/17, Preview d0b7e87f | — | REVIEW_PENDING (cross-model) | ไม่มี | ไม่มี reviewer ต่าง family ที่มี quota | Owner ข้อ E |
 | #52 LINE send | `d785ae8` | GLM APPROVE_WITH_FOLLOWUPS (R57) + R64 verify | 10/10 | send 45 + PO 61, line-send e2e 46/46 (R66 บน A2) | #53 | BLOCKED: มือถือจริง | ไม่มี (draft) | หลัง #53 เสถียร | Owner ข้อ B' แล้ว device QA |
-| A2 (ใหม่) | `682b1aa` | Gemini cross-model **(ข้อ 5)** | local: ดูข้อ 5 | e2e RED→GREEN | #52 | ดูข้อ 5 | ยังไม่ push | review | push + draft PR ฐาน #52 |
+| **#57 A2** (ใหม่) | `297124f` | Gemini cross-model **APPROVE** ทุก commit (`682b1aa`, `3b513ca`, `297124f`) | **10/10** (ครั้งแรก e2e FAIL 2 จากเทสเก่าที่ยืนยันบั๊ก → แก้แล้ว) | unit 1763, emulator 237, test:e2e 90, line-send 54, configs ทั้งหมด | #52 | READY หลัง #52 (ต้อง retarget main + CI ใหม่) | draft ฐาน #52 | ต้องรอ #53→#52 | ดู `docs/mission/r65/R65-A2-RECOVERY.md` |
+| **#58 i18n audit** (จาก #19) | `e0d4803` | Gemini separate-agent APPROVE | **10/10** | 3/3, full 1717 | — | READY (dev tooling, gate เข้มขึ้น) | draft | คำอนุมัติ merge | merge ได้หลัง Release B |
 | #51 void reason | `634edd7` | Gemini combined APPROVE | 10/10 | Rules 305/305 | #54 | OWNER_HOLD (Release E แยก) | ไม่มี | อนุมัติแยก | rebase หลัง #54 แล้วรัน Rules ใหม่ |
 | #33 count lock | `7c0505d` | R66 Gemini ใหม่ **APPROVE** (cross-model, code โดย MAIN) + R62 | 10/10 (ฐาน main) | concurrency 3/3, unit 1739, focused 95 | — | **READY_FOR_OWNER_RELEASE** (Release F) | ไม่มี | คำอนุมัติ merge | merge window หลัง B |
 | #29 barcode | `b850d3a` | R62 Gemini R2 APPROVE + R64 verify | 10/10 | scanner e2e 10, focused 92 | — | BLOCKED: เครื่องสแกนจริง 400ms | ไม่มี | อุปกรณ์จริง | Owner ข้อ C |
@@ -60,7 +61,7 @@ branch เก่าอีก ~60 อัน (R13–R47) มี local-only commit 
 | #56 R64 reports | `e31e032`→(R66) | docs | 10/10 | — | — | READY (report-only) | ไม่มี | คำอนุมัติ | เพิ่มรายงาน R66 แล้ว |
 | #46 R25 batching | `0f7d035` | — | 10/10 | — | — | **OWNER_HOLD** | ไม่มี | Owner | คงไว้ |
 | #24 smart import | `330e312` | — | conflicting | `2d96cd8` แยกได้บางส่วน | #39 | FIX_REQUIRED | ไม่มี | ต้องรอ PR39 (PDF ≤20MB) | rebase `2d96cd8` ให้ใช้ `MAX_LOCAL_PDF_BYTES` + เทส 2.9–20MB แล้วเปิด PR |
-| #19 LINE i18n | `aee0968` | — | conflicting | `d0d4ab2` (i18n audit) | #52 (artwork) | FIX_REQUIRED | ไม่มี | ส่วนที่เหลือผูกกับ #52 | ข้อ 7 |
+| #19 LINE i18n | `aee0968` | — | conflicting | audit แยกออกเป็น #58 แล้ว | #52 (artwork) | FIX_REQUIRED | ไม่มี | ส่วนที่เหลือผูกกับ #52 | แยก artwork หลัง #52 · คำกิจกรรมตามบริบท |
 | #1 RC | `4898dbb` | — | conflicting | — | — | **ห้าม merge** | ไม่มี | giant RC | แตกเป็น PR เล็กตาม R64 outline; Rules ใหม่ทุกชุดต้องคง invariant transit ของ #54 |
 
 ## 4. Wave 1 — Release A (PR54 Rules-only): READY_FOR_RULES_DEPLOY
@@ -150,8 +151,10 @@ QA matrix ที่จะรันทันทีเมื่อมี staging: 
 | PR55 `f301f39` | Gemini session ใหม่ | separate-agent (patch `6c17c98` เขียนโดย Gemini) | **APPROVE** ไม่มี finding | `review-pr55.md` (`7f8ae9f`) 102/102, full 1781 |
 | PR55 `f301f39` | DeepSeek free | cross-model | **ไม่ได้รัน: quota หมด** (ลองครั้งเดียว ไม่ retry) | task failed "Free usage limit reached" |
 | PR33 `7c0505d` | Gemini session ใหม่ | **cross-model** (code โดย MAIN) | **APPROVE** ไม่มี finding | `review-pr33.md` (`4475ba2`) 95/95, full 1739 |
-| A2 `682b1aa` | Gemini session ใหม่ | **cross-model** (code โดย MAIN/Claude) | _รอผล_ | `review-a2.md` |
-| PR19 extraction `d0d4ab2` | Gemini session ใหม่ | separate-agent | _รอผล_ | `review-pr19-extraction.md` |
+| A2 `682b1aa` | Gemini session ใหม่ | **cross-model** (code โดย MAIN/Claude) | **APPROVE** (Should 1 แก้แล้วใน `3b513ca`) | `review-a2.md` (`2ef165e`) |
+| A2 `3b513ca` | Gemini session ใหม่ | cross-model delta | **APPROVE** | `review-a2-delta.md` (`646d315`) |
+| A2 `297124f` | Gemini session ใหม่ | cross-model test-only delta | **APPROVE** | `review-a2-delta2.md` (`46afa67`) |
+| PR19 extraction `d0d4ab2` | Gemini session ใหม่ | separate-agent | **APPROVE** (Should 2 ข้อเล็ก, ไม่แก้) | `review-pr19-extraction.md` (`412dee9`) |
 
 ไม่มีการนับ review ของ MAIN เป็น approval · ไม่มีการเรียก GPT/Codex/Claude เป็น subagent
 
