@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
-import { errText } from '../../i18n/AppError'
+import { AppError, errText } from '../../i18n/AppError'
+import { getBrand } from '../../brand/brand'
 import { useT } from '../../i18n/I18nContext'
 import { formatThaiDateTime } from '../../lib/format'
 import { CATEGORY_LABEL, NOTIFICATION_BODY, NOTIFICATION_TITLE, tidyCopy } from '../../lib/inventoryRules/copy'
 import { isFor, isUnread } from '../../lib/inventoryRules/notifications'
-import { markAllRead, markRead, useNotificationPrefs } from '../../services/notifications'
+import { markAllRead, markRead, notificationDestination, useNotificationPrefs } from '../../services/notifications'
 import type { AppNotification, NotificationCategory, Role } from '../../types'
 import { Icon } from '../Icon'
 import { useToast } from '../Toast'
@@ -47,7 +48,11 @@ export function NotificationBell() {
   const { user } = useAuth()
   const { notifications, olderNotifications } = useData()
   const prefs = useNotificationPrefs(user?.id)
+  const openingRef = useRef(false)
   const [open, setOpen] = useState(false)
+  const [opening, setOpening] = useState<string | null>(null)
+  const readingAllRef = useRef(false)
+  const [readingAll, setReadingAll] = useState(false)
   const [tab, setTab] = useState<Tab>('all')
 
   // A popup summarising several new ones opens the bell on their category.
@@ -70,22 +75,36 @@ export function NotificationBell() {
   const shown = mine.filter((n) => (tab === 'all' ? true : tab === 'critical' ? n.priority === 'critical' : n.category === tab))
 
   async function openOne(n: AppNotification) {
-    if (!user) return
-    setOpen(false)
-    navigate(n.link)
+    if (!user || openingRef.current) return
+    openingRef.current = true
+    setOpening(n.id)
+    const brand = getBrand()
     try {
-      await markRead(n, user.id)
-    } catch {
-      // Reading it is what matters; the mark will be retried next time it is opened.
+      const url = await notificationDestination(n.link, brand)
+      if (getBrand() !== brand) throw new AppError('บริษัทเปลี่ยนแล้ว กรุณาเปิดการแจ้งเตือนอีกครั้ง')
+      setOpen(false)
+      navigate(url)
+      await markRead(n, user.id, undefined, brand).catch(() => {})
+    } catch (e) {
+      // Left unread: nothing was opened. Never expose raw backend errors.
+      toast.error(e instanceof AppError ? errText(e, t) : t('เปิดการแจ้งเตือนนี้ไม่ได้ กรุณาลองอีกครั้ง'))
+    } finally {
+      openingRef.current = false
+      setOpening(null)
     }
   }
 
   async function readAll() {
-    if (!user) return
+    if (!user || readingAllRef.current || openingRef.current) return
+    readingAllRef.current = true
+    setReadingAll(true)
     try {
-      await markAllRead(unread, user.id)
+      await markAllRead(unread, user.id, getBrand())
     } catch (e) {
       toast.error(errText(e, t))
+    } finally {
+      readingAllRef.current = false
+      setReadingAll(false)
     }
   }
 
@@ -129,7 +148,7 @@ export function NotificationBell() {
             </button>
           </span>
           {unread.length > 0 && (
-            <Button variant="secondary" onClick={readAll}>
+            <Button variant="secondary" onClick={readAll} disabled={readingAll || opening !== null}>
               <Icon name="check" size={14} />
               {t('อ่านทั้งหมดแล้ว')}
             </Button>
@@ -145,6 +164,8 @@ export function NotificationBell() {
                 <li key={n.id}>
                   <button
                     onClick={() => void openOne(n)}
+                    disabled={opening !== null}
+                    aria-busy={opening === n.id}
                     className={`flex w-full cursor-pointer items-start gap-3 px-5 py-3 text-left row-hover ${fresh ? '' : 'opacity-70'}`}
                   >
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${fresh ? TONE[n.priority] : 'bg-line-strong'}`} aria-hidden />
@@ -154,7 +175,8 @@ export function NotificationBell() {
                       </span>
                       <span className="block text-xs text-ink-soft">{tidy(t(NOTIFICATION_BODY[n.kind] ?? '', n.params))}</span>
                       <span className="mt-0.5 block text-[11px] text-ink-faint">
-                        {t(CATEGORY_LABEL[n.category])} · {formatThaiDateTime(n.createdAt)}
+                        {n.kind.startsWith('transfer') ? t('ระบบส่งสินค้า') : t(CATEGORY_LABEL[n.category])} · {formatThaiDateTime(n.createdAt)}
+                        {opening === n.id && ` · ${t('กำลังเปิด...')}`}
                       </span>
                     </span>
                   </button>
