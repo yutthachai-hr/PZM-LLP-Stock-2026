@@ -31,7 +31,7 @@ export function PhoneHome() {
   const t = useT()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { products, locations, qtyAt, minFor, tracksProduct } = useData()
+  const { products, locations, qtyAt, companyQty, transitQty, minFor, tracksProduct } = useData()
   const [now] = useState(() => Date.now())
   const range = useMemo(() => ({ from: bkkDayStart(now) - 7 * DAY_MS, to: bkkDayEnd(now) + 14 * DAY_MS }), [now])
   const feed = useCalendarFeed(range, now)
@@ -54,15 +54,17 @@ export function PhoneHome() {
   const byCategory = useMemo(() => {
     const map = new Map<string, number>()
     for (const p of products) {
-      const q = locations.reduce((sum, l) => sum + qtyAt(l.id, p.id), 0)
+      // What the company owns, goods in transit included (lib/inventoryRules/stockView.ts).
+      const q = companyQty(p.id)
       const v = q * (p.cost ?? 0)
-      if (v > 0) map.set(p.category, (map.get(p.category) ?? 0) + v)
+      if (v !== 0) map.set(p.category, (map.get(p.category) ?? 0) + v)
     }
-    return [...map.entries()].map(([category, value]) => ({ category, value: Math.round(value) })).sort((a, b) => b.value - a.value)
-  }, [products, locations, qtyAt])
+    return [...map.entries()].map(([category, value]) => ({ category, value })).sort((a, b) => b.value - a.value)
+  }, [products, companyQty])
+  const transitValue = products.reduce((sum, p) => sum + transitQty(p.id) * (p.cost ?? 0), 0)
   const [allCategories, setAllCategories] = useState(false)
   const shownCategories = allCategories ? byCategory : byCategory.slice(0, 6)
-  const maxValue = byCategory[0]?.value ?? 0
+  const maxValue = Math.max(0, byCategory[0]?.value ?? 0)
 
   return (
     <div className="space-y-5">
@@ -114,6 +116,9 @@ export function PhoneHome() {
         startOpen
       />
 
+      {transitValue !== 0 && (
+        <p className="text-xs text-ink-soft">{t('อิงต้นทุนที่กรอก · รวมระหว่างขนส่ง ฿ {value}', { value: fmtMoney(transitValue) })}</p>
+      )}
       {byCategory.length > 0 && (
         <Card className="p-4">
           <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -128,7 +133,7 @@ export function PhoneHome() {
                   <span className="num shrink-0 font-semibold text-ink">฿ {fmtMoney(c.value)}</span> {/* i18n-key */}
                 </div>
                 <div className="h-2.5 overflow-hidden rounded-full bg-sunken">
-                  <div className="h-full rounded-full bg-brand" style={{ width: `${maxValue ? Math.max(2, (c.value / maxValue) * 100) : 0}%` }} />
+                  <div className="h-full rounded-full bg-brand" style={{ width: `${maxValue && c.value > 0 ? Math.max(2, (c.value / maxValue) * 100) : 0}%` }} />
                 </div>
               </li>
             ))}

@@ -1,3 +1,4 @@
+import { stockValue } from '../../lib/inventoryRules/stockView'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useData, useLedgerWindow } from '../../data/DataContext'
@@ -29,7 +30,7 @@ const DEFAULT_DAYS = 14
 
 export function ReportsOverview() {
   const t = useT()
-  const { movements, movementsFrom, products, locations, qtyAt, minFor, tracksProduct } = useData()
+  const { movements, movementsFrom, products, locations, qtyAt, companyQty, transitQty, minFor, tracksProduct } = useData()
   // Every figure here is compared with the period before it.
   useLedgerWindow()
   const suppliers = useSuppliers()
@@ -66,6 +67,12 @@ export function ReportsOverview() {
         .filter((p) => !supplierId || p.supplierId === supplierId)
         .map((p) => p.id),
     )
+    // The company figure covers the catalogue the filters select, not only the products still
+    // shown as active: hiding a product does not dispose of its stock.
+    const owned = products
+      .filter((p) => !category || p.category === category)
+      .filter((p) => !supplierId || p.supplierId === supplierId)
+    const ownedIds = new Set(owned.map((p) => p.id))
     const byId = new Map(products.map((p) => [p.id, p]))
     const sites = locationId ? locations.filter((l) => l.id === locationId) : locations.filter((l) => l.active !== false)
     const siteIds = new Set(sites.map((l) => l.id))
@@ -86,8 +93,12 @@ export function ReportsOverview() {
       return v
     }
     const siteValues = sites.map((l) => ({ location: l, value: valueAt(l.id) }))
-    const valueNow = siteValues.reduce((s, x) => s + x.value, 0)
-    const valueBefore = valueAsOf(valueNow, scoped, from, movementsFrom, cost, siteIds)
+    const transitValue = locationId ? 0 : stockValue(owned, transitQty)
+    const valueNow = locationId ? siteValues.reduce((s, x) => s + x.value, 0) : stockValue(owned, companyQty)
+    // Company comparisons include transit-only losses/receipts and closed sites, not just the
+    // active branch rows shown below. For a selected branch, preserve its scoped comparison.
+    const valueMovements = locationId ? scoped : movements.filter((m) => !m.voided && ownedIds.has(m.productId))
+    const valueBefore = valueAsOf(valueNow, valueMovements, from, movementsFrom, cost, locationId ? siteIds : undefined)
 
     const low = shortages({ products: products.filter((p) => inProducts.has(p.id)), locations: sites, qtyAt, minFor, tracksProduct })
 
@@ -144,6 +155,7 @@ export function ReportsOverview() {
       usedNow: usedNow.length,
       usedBefore,
       valueNow,
+      transitValue,
       valueBefore,
       low: [...low].sort((a, b) => a.qty / a.min - b.qty / b.min),
       trend: perDay.map((p) => {
@@ -164,7 +176,7 @@ export function ReportsOverview() {
         lowCount: low.length,
       }),
     }
-  }, [fromStr, toStr, locationId, category, supplierId, movements, movementsFrom, products, locations, qtyAt, minFor, tracksProduct, t])
+  }, [fromStr, toStr, locationId, category, supplierId, movements, movementsFrom, products, locations, qtyAt, companyQty, transitQty, minFor, tracksProduct, t])
 
   const trend = (now: number, before: number | null, goodWhenUp = true) => {
     if (before === null) return undefined
@@ -285,7 +297,7 @@ export function ReportsOverview() {
           label={t('มูลค่าสินค้าคงคลัง')}
           value={`฿ ${fmtMoney(r.valueNow)}`} /* ฿ is a currency symbol — i18n-key */
           trend={valueTrend && !valueTrend.flat ? { text: valueTrend.text, up: valueTrend.up, suffix: t('จากต้นช่วง') } : undefined}
-          hint={t('อิงต้นทุนที่กรอก')}
+          hint={r.transitValue !== 0 ? t('อิงต้นทุนที่กรอก · รวมระหว่างขนส่ง ฿ {value}', { value: fmtMoney(r.transitValue) }) : t('อิงต้นทุนที่กรอก')}
         />
         <StatTile icon="warning" tone="red" valueTone={r.low.length ? 'red' : undefined} label={t('สินค้าคงเหลือน้อย')} value={r.low.length} unit={t('รายการ')} hint={t('ต่ำกว่าหรือเท่าขั้นต่ำ')} />
       </StatRow>
@@ -375,6 +387,10 @@ export function ReportsOverview() {
                 </tr>
               </tfoot>
             </table>
+            {/* The company tile counts more than these rows; say so where the totals differ (R40 review). */}
+            {!locationId && Math.abs(totals.value - r.valueNow) >= 0.005 && (
+              <p className="mt-2 text-xs text-ink-faint">{t('เฉพาะสาขาที่เปิดอยู่ มูลค่าบริษัทด้านบนรวมของระหว่างขนส่ง สาขาที่ปิด และสินค้าที่ซ่อนไว้ด้วย')}</p>
+            )}
           </div>
         </SectionCard>
 
