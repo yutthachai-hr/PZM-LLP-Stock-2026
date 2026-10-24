@@ -2812,6 +2812,10 @@ export const EN: Record<string, string> = {
   "ไฟล์ PDF ใหญ่เกินไป (สูงสุดประมาณ {mb} MB) — ลองส่งเฉพาะหน้าที่มีรายการ": "PDF too large (about {mb} MB max) — send only the pages with lines",
   "อ่านไฟล์ไม่ได้": "Could not read the file",
   "อ่านรูปไม่ได้": "Could not read the picture",
+  "ไฟล์ว่างเปล่า": "The file is empty",
+  "ไฟล์ใหญ่เกินกำหนด": "The file is too large",
+  "ระบบกำลังทำงาน": "The system is busy",
+  "รองรับเฉพาะ Excel, CSV, รูปภาพ หรือ PDF": "Only Excel, CSV, photos, or PDFs are supported",
   // Supplier intelligence (5 Oct 2026)
   "ซ่อนรายการ": "Hide list",
   "แสดงรายการ": "Show list",

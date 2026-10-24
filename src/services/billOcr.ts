@@ -289,7 +289,8 @@ async function readDocumentFileNow(file: File, signal: AbortSignal): Promise<Ocr
     }
   }
 
-  if (!file.type.startsWith('image/')) {
+  const isImage = file.type.startsWith('image/') || ((!file.type || file.type === 'application/octet-stream') && /\.(jpe?g|png|webp)$/i.test(file.name))
+  if (!isImage) {
     throw new OcrAppError('invalid_format', ocrErrorMessage('invalid_format'))
   }
   const shrunk = await raceAbort(shrinkImage(file, 2000), signal)

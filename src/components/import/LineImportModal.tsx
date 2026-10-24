@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { errText } from '../../i18n/AppError'
 import { useT } from '../../i18n/I18nContext'
 import { type OcrLine } from '../../lib/billOcr'
+import { routeImportFile } from '../../lib/importFile'
 import { blockedReason, choose as chooseRow, importable, planRows, setInclude } from '../../lib/importReview'
 import { fmtQty } from '../../lib/format'
 import { buildMatchIndex } from '../../lib/productMatch'
@@ -142,6 +143,21 @@ export function LineImportModal({
     }
   }
 
+  function handleFile(file: File | undefined) {
+    if (!file) return
+    const route = routeImportFile(file, { documents: aiReady, busy: step === 'reading' || busy })
+    if ('error' in route) {
+      if (route.error === 'empty') setError(t('ไฟล์ว่างเปล่า'))
+      else if (route.error === 'too-big') setError(t('ไฟล์ใหญ่เกินกำหนด'))
+      else if (route.error === 'no-reader') setError(t('ใช้ได้บนระบบจริงเท่านั้น'))
+      else if (route.error === 'busy') setError(t('ระบบกำลังทำงาน'))
+      else setError(t('รองรับเฉพาะ Excel, CSV, รูปภาพ หรือ PDF'))
+      return
+    }
+    if (route.kind === 'sheet') void pickSheet(file)
+    else void pickDocument(file)
+  }
+
   function choose(key: number, product: Product | null) {
     setRows((cur) => cur.map((r) => (r.key === key ? (chooseRow(r, product) as Row) : r)))
   }
@@ -179,11 +195,18 @@ export function LineImportModal({
 
   return (
     <Modal open wide onClose={handleClose} title={title ?? t('นำเข้ารายการสินค้า')}>
-      <input ref={sheetInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => void pickSheet(e.target.files?.[0])} />
-      <input ref={docInput} type="file" accept="image/*,application/pdf,.pdf" className="hidden" onChange={(e) => void pickDocument(e.target.files?.[0])} />
+      <input ref={sheetInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
+      <input ref={docInput} type="file" accept="image/*,application/pdf,.pdf" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
 
       {step === 'pick' && (
-        <div className="space-y-3">
+        <div
+          className="space-y-3"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault()
+            handleFile(e.dataTransfer.files?.[0])
+          }}
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <button
               className="flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-xl border border-line-strong bg-surface p-4 text-center hover:bg-sunken"
