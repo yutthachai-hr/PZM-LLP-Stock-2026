@@ -11,6 +11,8 @@
 
 ## 2. หลักฐาน concurrency ที่วัดจริง
 
+**สถานะ: `REQUEST_LIFECYCLE_7_VERIFIED`; `UPSTREAM_7_INFERENCE_UNVERIFIED`.** ไม่สวมว่าการมี7localrequestlifecyclesพิสูจน์ว่าGoogleเริ่มประมวลผล7งานพร้อมกัน ถ้าเกณฑ์R70หมายถึงupstreamexecutionจริงโดยเคร่งครัด ข้อนั้นยังไม่ปิด
+
 Artifact: `concurrency-detailed.json` (read-only OpenCode SQLite + 9Router usageHistory)
 
 | สิ่งที่วัด | ผล |
@@ -21,7 +23,7 @@ Artifact: `concurrency-detailed.json` (read-only OpenCode SQLite + 9Router usage
 | Peak in-flight local model requests | **7** (`assistant.time.created`→`time.streamed`; streamedคือจบstream ไม่ใช่firsttoken) |
 | งานซ้อนเวลากันครบ7 | 01รอบ2 + 02รอบ1 + 03รอบ2 + 04 + 05 + 06 + 07 |
 | Queue | ไม่พบ T3 task ค้าง queued ใน snapshot ที่ตรวจ; ไม่มีตัวเลข queue ภายใน 9Router/Google ให้ยืนยันว่าเป็น 0 |
-| Provider ceiling | พิสูจน์ว่าเส้นทางที่ใช้อยู่รองรับอย่างน้อย7; **ไม่ทราบเพดานสูงสุดของ upstream Google** |
+| Provider ceiling | พิสูจน์7in-flightlifecyclesฝั่งOpenCode; **ไม่ทราบเพดาน/queue/executionconcurrencyภายในGoogle** |
 
 เวลาจบราย session, start/end ISO, worktree และ counters อยู่ใน JSON พร้อม `peakRequestEvidence` เจ็ดrequestที่คร่อมเวลาเดียวกัน ไม่ใช่นับจำนวน assignments แล้วอ้าง PASS. จุดpeakแรกมีcommoninterval **15:59:49.755–49.809Z (54ms)**; เป็นpeakของOpenCodemodel-requestlifecycle ไม่ใช่หลักฐานว่าmaintain7ตลอดเวลา หรือpackettraceของ7requestที่Googleเริ่มประมวลผลพร้อมกัน (ช่วงก่อนfirsttokenอาจมีqueue/setupอยู่)
 

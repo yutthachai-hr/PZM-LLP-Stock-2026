@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-10-24T17:34:29.541Z",
+  "bundle": "C:/Users/Yutthachai/r64-backup/r70-source-final-20261024T173426Z/all-local.bundle",
+  "sha256": "19b642c885459bb8e96d65af142f07e77a6a8cf2ceadcfbdb4eb9881c780061c",
+  "bundleVerify": "PASS",
+  "sourceRefs": {
+    "pricing": "992f6defe8ebeeac62cec9993473b2d1aa836714",
+    "ocrDrop": "d57be6083bc1a91c53520b6218da700b34e0d2a3",
+    "activity": "f5f51cea33df22cfa245b8388c1556fa1456a797",
+    "notification": "1651548aef5337d7caf786a081aefd7ee9a19a9a",
+    "main": "6045b502171b1639d1e55c0f09e9a910e14ad064"
+  },
+  "note": "All Git refs as of capture; later docs commits remain in local and remote PR56. Owner dirty source/untracked artifacts were not reset or removed."
+}
