@@ -13,6 +13,7 @@ import { transferCache } from '../../data/transferCache'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
 import { useScanGate } from '../../lib/useScanGate'
+import { isImeComposing, shouldScanOnTab } from '../../lib/barcodeSelection'
 import { fmtQty } from '../../lib/format'
 import { compressImage } from '../../lib/image'
 import { DISCREPANCY_REASON_KEYS, canReceive } from '../../lib/transferStatus'
@@ -241,10 +242,14 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
             placeholder={t('ยิงบาร์โค้ด แล้วกด Enter')}
             onChange={(e) => setScan(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && scan.trim()) {
-                e.preventDefault()
-                found(scan)
-              }
+              if (isImeComposing(e)) return
+              if (e.key !== 'Enter' && e.key !== 'Tab') return
+              if (e.key === 'Tab' && e.shiftKey) return
+              const raw = scan.trim()
+              if (!raw) return
+              if (e.key === 'Tab' && !shouldScanOnTab(products, raw, false)) return
+              e.preventDefault()
+              found(raw)
             }}
             autoComplete="off"
             spellCheck={false}

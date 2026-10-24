@@ -41,7 +41,7 @@ import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
 import { searchFields } from '../lib/barcode'
 import { useScanGate } from '../lib/useScanGate'
-import { shouldScanOnTab } from '../lib/barcodeSelection'
+import { isImeComposing, shouldScanOnTab } from '../lib/barcodeSelection'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { useConfirm } from '../components/Confirm'
 import { useViewport } from '../lib/viewport'
@@ -489,6 +489,7 @@ export function AdjustPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
+                  if (isImeComposing(e)) return
                   if (e.key !== 'Enter' && e.key !== 'Tab') return
                   // Shift+Tab stays the way out of the box; a bare Tab after a code is the
                   // scanner's terminator, exactly as on the receipt rows (R19).

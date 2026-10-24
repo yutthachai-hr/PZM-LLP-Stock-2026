@@ -17,7 +17,7 @@ import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
 import { searchFields } from '../lib/barcode'
 import { useScanGate } from '../lib/useScanGate'
-import { shouldScanOnTab } from '../lib/barcodeSelection'
+import { isImeComposing, shouldScanOnTab } from '../lib/barcodeSelection'
 import { BarcodeScanner } from './BarcodeScanner'
 import { useToast } from './Toast'
 import { useConfirm } from './Confirm'
@@ -292,6 +292,7 @@ export function LineBuilder({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
+            if (isImeComposing(e)) return
             if (e.key !== 'Enter' && e.key !== 'Tab') return
             // Shift+Tab stays the way out of the box; a bare Tab after a code is the scanner's
             // terminator, exactly as Enter is.

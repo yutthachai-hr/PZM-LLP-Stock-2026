@@ -47,6 +47,20 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     }
   })
 
+  for (const path of ['/issue', '/adjust']) {
+    test(`IME Enter keeps the in-progress scan text on ${path}`, async ({ browser }) => {
+      await seedStage()
+      const page = await signedIn(browser, 'admin', path)
+      openedPages.push(page)
+      const input = page.getByPlaceholder(path === '/issue' ? SEARCH : 'ค้นหาสินค้าเพื่อเพิ่มรายการ (ชื่อ / รหัสสินค้า)')
+      await input.fill('FLOUR')
+      await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true })
+      await expect(input).toHaveValue('FLOUR')
+      await input.dispatchEvent('keydown', { key: 'Enter', keyCode: 229 })
+      await expect(input).toHaveValue('FLOUR')
+    })
+  }
+
   test('manual barcode entry allows typing alphanumeric Code 128 characters', async ({ browser }) => {
     await seedStage()
     const page = await signedIn(browser, 'staffA', '/issue')
@@ -62,6 +76,9 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
 
     // Can type alphanumeric Code 128
     await input.fill('CODE128-ALPHANUM-01')
+    await expect(input).toHaveValue('CODE128-ALPHANUM-01')
+    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true })
+    await expect(input).toBeVisible()
     await expect(input).toHaveValue('CODE128-ALPHANUM-01')
   })
 
@@ -227,6 +244,12 @@ test.describe('Barcode Scanner & Search Safety Fences', () => {
     // Terminal: no SKU confirmation dialog, no fuzzy fallback — just the not-found notice.
     await expect(page.getByText(/ไม่พบบาร์โค้ด UNKNOWN-BARCODE-999 ในระบบ/)).toBeVisible()
     await expect(page.getByText(/ยืนยันรหัสสินค้า/)).toHaveCount(0)
+    await scanInput.fill('UNKNOWN-BARCODE-998')
+    await scanInput.press('Tab')
+    await expect(page.getByText(/ไม่พบบาร์โค้ด UNKNOWN-BARCODE-998 ในระบบ/)).toBeVisible()
+    await scanInput.fill('IME-IN-PROGRESS')
+    await scanInput.dispatchEvent('keydown', { key: 'Enter', isComposing: true })
+    await expect(scanInput).toHaveValue('IME-IN-PROGRESS')
   })
 
   test('scan made before catalogue is server-synced shows loading message, not not-found', async ({ browser }) => {

@@ -3,8 +3,7 @@ import type { Product } from '../types'
 /**
  * Barcode resolution outcome (Workstream A P0 safety contract).
  *
- * Exact verified: exactly one active product with verified barcode.
- * Legacy unverified: single active candidate found, but lacks explicit verification proof; requires confirmation.
+ * Legacy unverified: single active candidate found; all exact matches currently resolve as legacy unverified and require human confirmation.
  * Duplicate: 2 or more products carry this barcode; fail-closed, requires human choice.
  * Inactive: product is retired/inactive; rejected.
  * Not found: unknown barcode (link request candidate); no fallback to fuzzy/name/SKU.

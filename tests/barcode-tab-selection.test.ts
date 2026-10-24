@@ -1,6 +1,6 @@
 // R23/R29: Tab is both a keyboard user's navigation key and a wedge scanner's terminator.
 import { describe, expect, test } from 'vitest'
-import { shouldScanOnTab } from '../src/lib/barcodeSelection'
+import { isImeComposing, shouldScanOnTab } from '../src/lib/barcodeSelection'
 import type { Product } from '../src/types'
 
 const p = (id: string, over: Partial<Product> = {}): Product => ({
@@ -28,4 +28,11 @@ describe('shouldScanOnTab', () => {
     expect(shouldScanOnTab([...products, p('old', { barcode: '8858888000000', active: false })], '8858888000000', true)).toBe(true)
     expect(shouldScanOnTab([...products, p('twin', { barcode: CODE })], CODE, true)).toBe(true)
   })
+})
+
+test('IME candidate selection and Safari 229 are not scan terminators', () => {
+  expect(isImeComposing({ nativeEvent: { isComposing: true } })).toBe(true)
+  expect(isImeComposing({ nativeEvent: { keyCode: 229 } })).toBe(true)
+  expect(isImeComposing({ nativeEvent: { isComposing: false, keyCode: 13 } })).toBe(false)
+  expect(isImeComposing({ nativeEvent: { keyCode: 9 } })).toBe(false)
 })

@@ -4,6 +4,7 @@ import { useT } from '../i18n/I18nContext'
 import { Button, Input, Modal } from './ui'
 import { Icon } from './Icon'
 import { CameraScanController, type DetectorCtor } from '../lib/cameraScan'
+import { isImeComposing } from '../lib/barcodeSelection'
 
 /**
  * Read a barcode with the device's camera (spec §3).
@@ -125,6 +126,7 @@ export function BarcodeScanner({ open, onClose, onRead, title }: { open: boolean
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={(e) => {
+            if (isImeComposing(e)) return
             if (e.key === 'Enter' && typed.trim()) {
               e.preventDefault()
               finish(typed)

@@ -56,15 +56,24 @@ export function shouldScanOnTab(products: readonly Product[], code: string, hasS
 }
 
 /**
+ * Detect whether a keydown event is part of an IME composition session (e.g. Japanese/Chinese
+ * candidate selection, or Safari's keyCode 229 during composition). Enter/Tab during composition
+ * must not trigger premature scans.
+ */
+export function isImeComposing(e: { nativeEvent: { isComposing?: boolean; keyCode?: number } }): boolean {
+  return Boolean(e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229)
+}
+
+/**
  * Re-run the exact resolution when the person answers the confirmation, against the catalog
  * as it is THEN — not the array captured when the dialog opened.
  *
  * The old `products.find(p => p.id === prodId && p.active !== false)` could not tell that the
  * product had been deactivated, that its barcode had been rebound to another code, or that a
  * second product had since claimed the same code: the stale array still showed the first
- * product, active, with the old barcode (R3 C2). Requiring a fresh `verified_exact` /
- * `legacy_unverified` for the SAME product id and the SAME code, against the live catalog,
- * refuses every one of those.
+ * product, active, with the old barcode (R3 C2). Requiring a fresh `legacy_unverified`
+ * for the SAME product id and the SAME code, against the live catalog, refuses every one of those
+ * (all exact matches resolve as legacy_unverified and require human confirm).
  *
  * A non-null result is the fresh product to add; the caller must re-derive its unit from this
  * object (and the balance/scope it is being added to stays the caller's own check).
