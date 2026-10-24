@@ -118,7 +118,7 @@ CI snapshot ดู `pr-status.json`; HEAD เปลี่ยนเมื่อ�
 | #52 | d785ae8 | CI10/10; GLM reviewเดิม | real-device LINE QA หลัง #53; A2 แยกจาก #52 |
 | #51 | 634edd7 | CI10/10; combined Gemini APPROVE; Rules305/305 | Rules-first/App-second approval แยก; transit fix อยู่แล้ว |
 | #39 | 75bf9f4 | CI10/10; DeepSeekเดิม; fixture31 rows | ยังขาด isolated staging OCR write-path; 3 missing-qty rows ต้องไม่เข้า stock |
-| #45 | policy/report commit f38e317 (ตามด้วยเอกสาร checkpoint เท่านั้น) | docs-only; owner uncommitted AGENTS backup/protected | policy+reports อยู่บน PRแล้ว ไม่ทับส่วน Agent skills; CI/review ของ docs head ใหม่ต้องรอ |
+| #45 | policy/report commit f38e317 (ตามด้วยเอกสาร checkpoint เท่านั้น) | docs-only; owner uncommitted AGENTS backup/protected | policy Gemini APPROVE; ส่วน Agent skills ยังอยู่; exact docs-head CI ต้องรอ |
 | #24 | 330e312 | baseเก่า/conflicting; reconciliationเดิม | ยังไม่ extract: drag-drop/type-list port บน current importReview หลังจัด dependency#39; ไม่ปิดก่อน port |
 | #19 | aee0968 | baseเก่า/conflicting; reconciliationเดิม | ยังไม่ extract: artwork/context wording residual; ไม่ปิดก่อน port |
 | #1 | 4898dbb | giantRC/conflicting; old CI19 ไม่ใช่ current-main proof | ห้าม merge; extract Security/Integrity และ R&D เป็น PRเล็ก; G25 Rulesต้องมี transit invariant |
@@ -136,9 +136,15 @@ Reviewer R1 เสนอ refresh monthly sheet หลัง conflict โดย�
 
 PR29 coding worker HTTP502 กลางงาน: เก็บ partial patch `pr29-partial-502.patch` และ checkout เดิม,
 MAIN ตรวจ diff/ทำต่อ; ไม่มี retry/silent fallback ไป forbidden model.
-A2 เริ่ม Gemini isolated implementation แล้วหลัง coding qualification; ณ checkpoint ยังทำงาน.
-local scaffold `ddcd495` เดิมเก็บไว้ ไม่ลบ. A2 ต้องผ่าน MAIN verification + independent review
-และ CI ก่อนเปิด release; ยังไม่ถือว่าจบ. งาน extract #1/#24/#19 ยังไม่เสร็จ ไม่ใช่ Owner approval
+A2 Gemini isolated implementation หยุดด้วย **HTTP502** เช่นกัน; task terminal failed และไม่มี
+pending child runs. MAIN ตรวจพบ 6 tracked files ที่แก้และ 1 endpoint ใหม่ยัง untracked; HEAD ยัง
+`312f8a7` ไม่มี commit/push จาก worker. เก็บ tracked binary patch พร้อม untracked endpoint ใน
+`a2-502-backup/` (local evidence) และคง worktree `t3-abb9af93` ไม่ reset/ลบ.
+Focused pure/endpoint tests ที่ MAIN รันได้ **126/126 ผ่าน** แต่ยังไม่ใช่ feature complete:
+`markSupplierRequested` มีเพียง definition ไม่มี caller; SendWizard และ SupplierConfirmationPanel
+ยังเรียก supplierLink แบบเดิม. ห้ามนำ partial patch ไปปล่อย เพราะ prepare/send/request integration
+ยังไม่ครบ. ต้องทำ caller wiring + cancel/success/version/brand tests และ independent review ต่อ.
+ไม่มี retry/silent fallback ไป GPT/Codex/Claude. local scaffold `ddcd495` เดิมเก็บไว้เช่นเดิม. งาน extract #1/#24/#19 ยังไม่เสร็จ ไม่ใช่ Owner approval
 blocker ปลอม; เป็นงาน dev ถัดไปตาม dependency ไม่ปิด PR ทิ้งเพื่อให้ board ดูสะอาด.
 
 ## 5. เฉพาะสิ่งที่ต้องใช้ Owner จริง
@@ -178,5 +184,7 @@ blocker ปลอม; เป็นงาน dev ถัดไปตาม depende
 
 หลักฐานเต็มใน mission r61/r62/r63 logs; ส่วนที่เป็น credential/session cookie ไม่ถูกเผยแพร่.
 Final software checkpoint: #29/#33/#51/#53/#54/#55 exact source heads ด้านบน CI10/10.
-#45 docs-only CI ยังวิ่งและ review ที่ `r62-policy-doc-review-1` ยังไม่จบ ณ checkpoint;
-A2 `r62-a2-implementation-1` ยังทำงานใน isolated worktree. ไม่ประกาศปิดงานสองตัวนี้ล่วงหน้า.
+#45 policy ที่ `f38e317` ได้ Gemini **APPROVE** (P3 wording nit ที่ไม่ block); ไม่เปลี่ยน policy code
+หลัง review มีเพียงเอกสาร checkpoint. Exact-head docs CI ต้องตรวจใหม่เมื่อเอกสารขยับ SHA.
+A2 `r62-a2-implementation-1` terminal **FAILED HTTP502**; partial work preserved, development
+และ independent review ยังไม่จบ. ไม่มี worker ตัวนี้ค้างหรือมี forbidden fallback.
