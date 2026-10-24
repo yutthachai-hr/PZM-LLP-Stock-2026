@@ -141,6 +141,8 @@ jobs:
         run: npx playwright test -c playwright.search.config.ts
       - name: Orders UX on an isolated browser-storage demo
         run: npx playwright test -c playwright.orders.config.ts
+      - name: Transfer notification navigation on isolated browser-storage fixtures
+        run: npx playwright test -c playwright.notification.config.ts
       - name: Toast notifications on an isolated browser-storage demo
         run: npx playwright test -c playwright.toast.config.ts
       - name: Product pricing, accessible grid and responsive SKU on isolated demo

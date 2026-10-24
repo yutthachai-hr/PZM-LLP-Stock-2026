@@ -1,4 +1,5 @@
 import type { AppNotification, NotificationKind } from '../types'
+import { canonicalLink } from './notificationLink'
 
 /**
  * How a stored notification is shown as it arrives (5 Oct 2026): severity, whether it pops
@@ -78,12 +79,12 @@ export function severityOf(n: Pick<AppNotification, 'kind' | 'priority'>): Sever
   return 'info'
 }
 
-function entityOf(n: AppNotification): { type: EntityType; id: string | null } {
-  const po = /[?&]po=([^&]+)/.exec(n.link)?.[1]
+function entityOf(n: AppNotification, link: string): { type: EntityType; id: string | null } {
+  const po = /[?&]po=([^&]+)/.exec(link)?.[1]
   if (po) return { type: 'po', id: decodeURIComponent(po) }
-  const req = /^\/requests\/([^/?]+)/.exec(n.link)?.[1]
+  const req = /^\/requests\/([^/?]+)/.exec(link)?.[1]
   if (req) return { type: 'request', id: req }
-  const tr = /^\/transfers\/([^/?]+)/.exec(n.link)?.[1]
+  const tr = /^\/transfers\/([^/?#]+)/.exec(link)?.[1]
   if (tr && tr !== 'today' && tr !== 'new') return { type: 'transfer', id: tr }
   if (n.productId) return { type: 'product', id: n.productId }
   if (n.supplierId) return { type: 'supplier', id: n.supplierId }
@@ -103,14 +104,16 @@ const PRIMARY_LABEL: Record<EntityType, string> = {
 
 export function presentNotification(n: AppNotification): PresentedNotification {
   const severity = severityOf(n)
-  const entity = entityOf(n)
-  const actions: NotificationAction[] = [{ label: PRIMARY_LABEL[entity.type], url: n.link }]
+  // '' when the stored link goes nowhere the app has: no button rather than a click to the dashboard.
+  const link = canonicalLink(n.link) ?? ''
+  const entity = entityOf(n, link)
+  const actions: NotificationAction[] = link ? [{ label: PRIMARY_LABEL[entity.type], url: link }] : []
   // A supplier's answer: the supplier itself is the next thing people look at.
   if (n.supplierId && entity.type === 'po' && n.category === 'supplier') {
     actions.push({ label: 'ดูผู้ขาย', url: `/suppliers?id=${encodeURIComponent(n.supplierId)}` }) // i18n-key
   }
   if (n.kind === 'stockoutRisk') {
-    actions.splice(0, actions.length, { label: 'ดูความเสี่ยง', url: n.link }) // i18n-key
+    actions.splice(0, actions.length, ...(link ? [{ label: 'ดูความเสี่ยง', url: link }] : [])) // i18n-key
     actions.push({ label: 'ตัวเลือกโอนของ', url: '/transfers/new' }) // i18n-key
   }
   // A delivery-risk level below the one reached is history the moment it is written.
@@ -126,7 +129,7 @@ export function presentNotification(n: AppNotification): PresentedNotification {
     soundCategory: SOUND_CATEGORY[n.kind] ?? (severity === 'info' ? 'informational' : 'deliveryRisks'),
     entityType: entity.type,
     entityId: entity.id,
-    actionUrl: n.link,
+    actionUrl: link,
     actions,
     metadata: n.params,
     createdAt: n.createdAt,

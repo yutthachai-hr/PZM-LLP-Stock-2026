@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
 import { useT } from '../../i18n/I18nContext'
+import { AppError, errText } from '../../i18n/AppError'
+import { getBrand } from '../../brand/brand'
+import { useToast } from '../Toast'
 import { CATEGORY_LABEL, NOTIFICATION_BODY, NOTIFICATION_TITLE, tidyCopy } from '../../lib/inventoryRules/copy'
 import { isFor } from '../../lib/inventoryRules/notifications'
 import { presentNotification, type Severity } from '../../lib/notificationPresentation'
 import { BURST_WINDOW_MS, dismiss, dueCards, emptyQueue, expire, LEAVE_MS, receive, soundFor, type PopupCard, type QueueState } from '../../lib/notificationQueue'
 import { notificationSound } from '../../lib/notificationSound'
 import { logNotification } from '../../lib/notificationLog'
-import { markRead, useNotificationPrefs } from '../../services/notifications'
+import { markRead, notificationDestination, useNotificationPrefs } from '../../services/notifications'
 import type { AppNotification, Role } from '../../types'
 import { Icon, type IconName } from '../Icon'
 import { OperationalNotices } from './NoticeViewport'
@@ -68,6 +71,8 @@ export function NotificationHost() {
 
 function Host({ uid, role }: { uid: string; role: Role }) {
   const t = useT()
+  const toast = useToast()
+  const [opening, setOpening] = useState(false)
   const navigate = useNavigate()
   const { notifications } = useData()
   const prefs = useNotificationPrefs(uid)
@@ -152,17 +157,26 @@ function Host({ uid, role }: { uid: string; role: Role }) {
   }, [timed, close])
 
   const open = useCallback(
-    (card: PopupCard, url: string) => {
-      close(card.key)
-      navigate(url)
-      logNotification('opened', { card: card.key, url })
-      // Opening it is reading it; a dismissed popup stays unread in the bell.
-      for (const item of card.items) {
-        const n = byId.current.get(item.id)
-        if (n) void markRead(n, uid).catch(() => {})
+    async (card: PopupCard, link: string) => {
+      if (opening) return
+      setOpening(true)
+      try {
+        const url = await notificationDestination(link, getBrand())
+        close(card.key)
+        navigate(url)
+        logNotification('opened', { card: card.key, url })
+        // Opening it is reading it; an invalid destination stays unread.
+        for (const item of card.items) {
+          const n = byId.current.get(item.id)
+          if (n) void markRead(n, uid).catch(() => {})
+        }
+      } catch (e) {
+        toast.error(e instanceof AppError ? errText(e, t) : t('เปิดการแจ้งเตือนนี้ไม่ได้ กรุณาลองอีกครั้ง'))
+      } finally {
+        setOpening(false)
       }
     },
-    [close, navigate, uid],
+    [close, navigate, uid, opening, toast, t],
   )
 
   async function enableSound() {
@@ -230,7 +244,7 @@ function Host({ uid, role }: { uid: string; role: Role }) {
               <div className="min-w-0 flex-1">
                 <p className={`text-xs font-medium ${ui.text}`}>
                   {t(ui.label)}
-                  {card.category && <span className="font-normal text-ink-faint"> · {t(CATEGORY_LABEL[card.category])}</span>}
+                  {card.category && <span className="font-normal text-ink-faint"> · {first.type.startsWith('transfer') ? t('ระบบส่งสินค้า') : t(CATEGORY_LABEL[card.category])}</span>}
                 </p>
                 {burst ? (
                   <>
@@ -277,9 +291,11 @@ function Host({ uid, role }: { uid: string; role: Role }) {
                     className={`min-h-9 rounded-md px-3 text-xs font-medium ${
                       i === 0 ? 'bg-brand text-white hover:brightness-110' : 'border border-line-strong text-ink hover:bg-sunken'
                     }`}
-                    onClick={() => open(card, a.url)}
+                    disabled={opening}
+                    aria-busy={opening}
+                    onClick={() => void open(card, a.url)}
                   >
-                    {t(a.label)}
+                    {opening ? t('กำลังเปิด...') : t(a.label)}
                   </button>
                 ))
               )}
