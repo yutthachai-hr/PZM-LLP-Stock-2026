@@ -592,7 +592,7 @@ describe('Stock count stale-level conflict (P0 C-02)', () => {
     const movementsAfterPart0 = raw('stockMovements').filter((m) => m.productId === 'p1')
     expect(movementsAfterPart0).toHaveLength(1)
 
-    // Conflict catch refreshes sheet from getMonthlyCount(id)
+    // Committed chunk progress lives in the sheet, independent of a stale caller's UI.
     const sheetAfterConflict = (await (await import('../src/services/monthlyCounts')).getMonthlyCount(sheetId)) as MonthlyCount
     expect(sheetAfterConflict.postedIds).toEqual(['p1'])
     expect(sheetAfterConflict.status).toBe('posting')
