@@ -21,10 +21,6 @@ export const PRODUCTION_BRANCH = 'main'
 export const PRODUCTION_PROJECT = 'pzm-stock-x5'
 /** Its project number (public, in the production web config); a staging config must not carry it. */
 const PRODUCTION_PROJECT_NUMBER = '789071579161'
-/** The first 20 characters of the production web API key — enough to recognise it (sign-in goes
- *  to the project of the API key), without a second copy of the key: it lives only in
- *  src/firebase/config.ts, and tests/staging-tier.test.ts pins that this prefix is that key's. */
-export const PRODUCTION_WEB_API_KEY_PREFIX = 'AIzaSyB2cQL0G-OLibdo'
 /** Production hosts. A custom domain is added through the PRODUCTION_HOSTS variable (production env only). */
 export const PRODUCTION_HOSTS: readonly string[] = ['pzmstock.pages.dev']
 
@@ -138,9 +134,11 @@ export function functionTier(hostname: string, env: FunctionEnv): FunctionTier {
 
 /**
  * The Firebase project of a staging build's web config, or null unless it is a complete config
- * that names nothing of production (project id, auth domain, bucket, project number).
+ * that names nothing of production (project id, auth domain, bucket, project number) and uses
+ * none of `forbiddenApiKeys` — sign-in goes to the project of the API key. The production key is
+ * passed in by its one owner, src/firebase/config.ts, so this module holds no copy of it.
  */
-export function stagingWebProject(json: string | undefined): string | null {
+export function stagingWebProject(json: string | undefined, forbiddenApiKeys: readonly string[] = []): string | null {
   if (!json) return null
   let c: unknown
   try {
@@ -153,7 +151,8 @@ export function stagingWebProject(json: string | undefined): string | null {
   // Judged on the parsed values, never the text: a JSON escape (`x\u0035`) or other capitals
   // would otherwise decode to production after the check (R67 review of PR #59).
   const values = Object.values(o).map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
-  if (values.some((v) => v.includes(PRODUCTION_PROJECT) || v.includes(PRODUCTION_PROJECT_NUMBER) || v.startsWith(PRODUCTION_WEB_API_KEY_PREFIX.toLowerCase()))) return null
+  const forbidden = forbiddenApiKeys.map((k) => k.trim().toLowerCase()).filter(Boolean)
+  if (values.some((v) => v.includes(PRODUCTION_PROJECT) || v.includes(PRODUCTION_PROJECT_NUMBER) || forbidden.includes(v))) return null
   const str = (k: string) => (typeof o[k] === 'string' ? (o[k] as string).trim() : '')
   if (!str('apiKey') || !str('authDomain') || !str('appId')) return null
   // The shape of an id Firebase issues: lowercase letters, digits and hyphens, 6–30 long.

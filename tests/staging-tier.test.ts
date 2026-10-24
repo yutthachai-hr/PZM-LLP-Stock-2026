@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { buildTier, firebaseProjectFor, functionTier, PRODUCTION_PROJECT, PRODUCTION_WEB_API_KEY_PREFIX, stagingWebProject } from '../src/lib/deployTier'
+import { buildTier, firebaseProjectFor, functionTier, PRODUCTION_PROJECT, stagingWebProject } from '../src/lib/deployTier'
 
 const ROOT = join(__dirname, '..')
 const web = (project: string, over: Record<string, unknown> = {}) =>
@@ -36,18 +36,22 @@ describe('the staging web config', () => {
     ['production number written with a JSON escape', web('pzm-stock-staging', { appId: '1:789071579161:web:x' }).replace('789071579161', '789\\u003071579161')],
     ['production id in capitals', web('PZM-STOCK-X5')],
     ['production auth domain in capitals', web('pzm-stock-staging', { authDomain: 'PZM-Stock-X5.firebaseapp.com' })],
-    // Sign-in goes to the project of the API key: production's key would reach production Auth.
-    ['the production web API key', web('pzm-stock-staging', { apiKey: productionKey() })],
     ['a project id Firebase would never issue', web('Pzm_Staging')],
   ])('refused: %s', (_, value) => {
     expect(stagingWebProject(value)).toBeNull()
   })
 
-  test('the production identifiers it refuses are the ones the app ships', async () => {
+  // Sign-in goes to the project of the API key: production's key would reach production Auth.
+  test('a forbidden web API key is refused, in any letters', () => {
+    const key = productionKey()
+    expect(stagingWebProject(web('pzm-stock-staging', { apiKey: key }), [key])).toBeNull()
+    expect(stagingWebProject(web('pzm-stock-staging', { apiKey: ` ${key.toUpperCase()} ` }), [key])).toBeNull()
+    expect(stagingWebProject(web('pzm-stock-staging', { apiKey: 'another-key' }), [key])).toBe('pzm-stock-staging')
+  })
+  test('the production identifiers it refuses are the ones the app ships', () => {
     const src = readFileSync(join(ROOT, 'src/firebase/config.ts'), 'utf8')
-    expect(productionKey().startsWith(PRODUCTION_WEB_API_KEY_PREFIX)).toBe(true)
-    expect(productionKey().length).toBeGreaterThan(PRODUCTION_WEB_API_KEY_PREFIX.length)
     expect(src).toContain(`projectId: '${PRODUCTION_PROJECT}'`)
+    expect(productionKey()).toMatch(/^AIza/)
   })
 })
 
@@ -92,6 +96,9 @@ describe('the browser of a staging build opens only the staging project', () => 
   test('never the production project: not BUILT_IN, not a saved config, not a production config baked in', async () => {
     expect(await load('pzmstock-staging.pages.dev', undefined)).toBeNull()
     expect(await load('pzmstock-staging.pages.dev', web(PRODUCTION_PROJECT))).toBeNull()
+  })
+  test('never the production web API key, even with a staging project id', async () => {
+    expect(await load('pzmstock-staging.pages.dev', web('pzm-stock-staging', { apiKey: productionKey() }))).toBeNull()
   })
   test('a staging bundle served on the production host gets no project', async () => {
     expect(await load('pzmstock.pages.dev', STG_WEB)).toBeNull()

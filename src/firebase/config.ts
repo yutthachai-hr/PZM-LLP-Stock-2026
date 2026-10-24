@@ -81,7 +81,9 @@ export function getFirebaseConfig(): FirebaseConfig | null {
   // never a config saved in this browser, and nothing at all on the production host.
   if (import.meta.env.VITE_DEPLOY_TIER === 'staging') {
     const raw = import.meta.env.VITE_STAGING_FIREBASE_CONFIG
-    if (typeof location === 'undefined' || hostTier(location.hostname) === 'production' || !stagingWebProject(raw)) return null
+    // Production's own web key would send sign-in to production Auth whatever the project id says.
+    const productionKeys = BUILT_IN ? [BUILT_IN.apiKey] : []
+    if (typeof location === 'undefined' || hostTier(location.hostname) === 'production' || !stagingWebProject(raw, productionKeys)) return null
     return JSON.parse(raw as string) as FirebaseConfig
   }
   // P0 preview isolation: a production build opened anywhere but the production host (a

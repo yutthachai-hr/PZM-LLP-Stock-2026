@@ -13,3 +13,6 @@ d0dd8b2e15d0a1f6ef88f23afd42671844c62547:tests/functions/supplier-po.test.ts:gen
 # web apiKey, briefly copied into src/lib/deployTier.ts; the next commit keeps it only in
 # src/firebase/config.ts and recognises it by a 20-character prefix.
 3d48ad17400e6f31a47a29bd4e433776a8ec1414:src/lib/deployTier.ts:gcp-api-key:25
+# R67 PR #59 commit 6b8707b (pushed): a 20-character prefix of that same public web apiKey, read by
+# the generic rule; the next commit removes it — the key is passed in from src/firebase/config.ts.
+6b8707b52c57a675104e5ca1ae167033eb3b70dc:src/lib/deployTier.ts:generic-api-key:27

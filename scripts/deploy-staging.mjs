@@ -19,9 +19,12 @@ const dryRun = process.argv.includes('--dry-run')
 const fail = (m) => { console.error(`deploy-staging: REFUSED — ${m}`); process.exit(1) }
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32', ...opts })
 
-// 1. The staging web config names a separate project.
+// 1. The staging web config names a separate project and not production's web key, read from
+// the one file that holds it (no copy here).
 const web = process.env.VITE_STAGING_FIREBASE_CONFIG
-const project = stagingWebProject(web)
+const productionKey = readFileSync(join(ROOT, 'src/firebase/config.ts'), 'utf8').match(/apiKey:\s*'([^']+)'/)?.[1]
+if (!productionKey) fail('could not read the production web config from src/firebase/config.ts')
+const project = stagingWebProject(web, [productionKey])
 if (!project) fail('VITE_STAGING_FIREBASE_CONFIG must be a complete web config of a separate, non-production project')
 
 // 2. The staging Pages config is the staging project's, with its own bindings.
