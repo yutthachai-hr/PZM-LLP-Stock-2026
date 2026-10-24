@@ -174,8 +174,8 @@ export const R72_ITEMS: R72ItemSpec[] = [
   {
     idx: 15,
     productId: 'pzm-item-16',
-    sku: 'SKU-PZM-OIL-OLIVE-EVOO-5L-LOT20261025-016',
-    productName: 'น้ำมันมะกอก (Olive Oil)',
+    sku: 'O1',
+    productName: 'OIL',
     unit: 'KG',
     unitType: 'KG',
     qty: 5.0,
@@ -194,8 +194,8 @@ export const R72_ITEMS: R72ItemSpec[] = [
   {
     idx: 17,
     productId: 'pzm-item-18',
-    sku: 'SKU-PZM-BAKE-SALT-1KG-LOT20261025-018',
-    productName: 'เกลือทะเล (Sea Salt)',
+    sku: 'S1',
+    productName: 'เกลือ',
     unit: 'KG',
     unitType: 'KG',
     qty: 15.0,
@@ -204,8 +204,8 @@ export const R72_ITEMS: R72ItemSpec[] = [
   {
     idx: 18,
     productId: 'pzm-item-19',
-    sku: 'SKU-PZM-BAKE-SUGAR-1KG-LOT20261025-019',
-    productName: 'น้ำตาลทรายขาวบริสุทธิ์พิเศษ (Special Pure White Refined Granulated Sugar 1kg)',
+    sku: 'S2',
+    productName: 'SUGAR',
     unit: 'KG',
     unitType: 'KG',
     qty: 10.0,

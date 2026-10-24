@@ -69,26 +69,26 @@ test.describe('R72 Agent07: Notification routing & security contracts', () => {
     await expect(page.locator('body')).toContainText(R72_TRANSFER_DOC_NO)
   })
 
-  test('legacy notification with docNo resolves to internal transfer ID', async ({ page }) => {
+  test('docNo-only notification fails closed without guessing the internal transfer ID', async ({ page }) => {
     await stageLogisticsFixture(page, { notifCase: 'legacy-docno' })
     await page.goto('/')
     await waitForFontsAndData(page)
 
-    const bell = page.locator('button[aria-label*="การแจ้งเตือน"]')
-    await bell.click()
-
+    await page.locator('button[aria-label*="การแจ้งเตือน"]').click()
     const modal = page.getByRole('dialog', { name: 'การแจ้งเตือน' })
     await expect(modal).toBeVisible()
+    const originalURL = page.url()
 
-    // Notification seeded with link: `/transfers/${R72_TRANSFER_DOC_NO}` (e.g. /transfers/TR-00001)
-    // On 992f6de baseline, getTransfer(TR-00001) returns null because ID is transfer-r72-internal-id-998877.
-    // The R72 contract requires resolving docNo to internal ID without showing "ไม่พบเอกสารโอนสินค้า" (RED).
-    const item = modal.locator('ul li button').first()
-    await expect(item).toBeVisible()
-    await item.click()
-
-    await expect(page.getByText('ไม่พบเอกสารโอนสินค้า')).not.toBeVisible()
-    await expect(page.locator('body')).toContainText(R72_TRANSFER_DOC_NO)
+    // A display number is not the fixture's database ID; no approved docNo lookup exists.
+    await modal.locator('ul li button').first().click()
+    await expect(page.getByText('ไม่พบเอกสารโอนสินค้า').first()).toBeVisible()
+    await expect(page).toHaveURL(originalURL)
+    await expect(modal).toBeVisible()
+    const readAt = await page.evaluate(({ actorId }) => {
+      const notifications = JSON.parse(localStorage.getItem('pmstock:v1:notifications') || '{}')
+      return notifications['notif-legacy-docno']?.readBy?.[actorId]
+    }, { actorId: R72_ACTOR_ID })
+    expect(readAt).toBeFalsy()
   })
 
   test('invalid or denied notification does not redirect to dashboard while marking read', async ({ page }) => {
@@ -142,6 +142,12 @@ test.describe('R72 Agent07: Notification routing & security contracts', () => {
     const currentBrand = await page.evaluate(() => localStorage.getItem('pmstock:v1:lastBrand'))
     expect(currentBrand, 'Cross-brand notification link must not switch active brand').toBe('pizza')
     expect(page.url(), 'URL must not retain foreign brand query parameter').not.toContain('brand=lelapin')
+    await expect(modal).toBeVisible()
+    const readAt = await page.evaluate(({ actorId }) => {
+      const notifications = JSON.parse(localStorage.getItem('pmstock:v1:notifications') || '{}')
+      return notifications['notif-crossbrand']?.readBy?.[actorId]
+    }, { actorId: R72_ACTOR_ID })
+    expect(readAt, 'A rejected cross-brand link must remain unread').toBeFalsy()
   })
 })
 
@@ -199,11 +205,13 @@ test.describe('R72 Agent07: Logistics mobile layout & visual invariants', () => 
         expect(identityBox, `Row ${i} identity bounding box missing on ${width}px`).not.toBeNull()
         expect(stepperBox, `Row ${i} stepper bounding box missing on ${width}px`).not.toBeNull()
 
-        // Derive identity width from card content minus checkbox touch target (~44px) and gaps (~12px):
-        // Card content width is roughly cardBox.width - 24px.
-        // At 320px viewport, legitimate expected identity width is ~199px (not arbitrary 220px).
-        const cardInnerWidth = cardBox.width - 24
-        const expectedIdentityWidth = Math.max(160, Math.floor(cardInnerWidth - 44 - 12))
+        const identityRow = identity.locator('..')
+        const rowBox = await identityRow.boundingBox()
+        const checkboxBox = await card.locator('input[aria-label="ตรวจแล้ว"]').locator('..').boundingBox()
+        expect(rowBox, `Row ${i} identity row missing on ${width}px`).not.toBeNull()
+        expect(checkboxBox, `Row ${i} checkbox label missing on ${width}px`).not.toBeNull()
+        const gap = await identityRow.evaluate((el) => parseFloat(getComputedStyle(el).columnGap) || 0)
+        const expectedIdentityWidth = rowBox!.width - checkboxBox!.width - gap - 1
         expect(
           identityBox.width,
           `Row ${i} identity width (${Math.round(identityBox.width)}) must be >= derived width (${expectedIdentityWidth}) on ${width}px`,
