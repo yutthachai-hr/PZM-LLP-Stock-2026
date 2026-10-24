@@ -72,7 +72,9 @@ export function cleanOcr(raw: unknown): OcrBill {
         const unit = str(pick(o, ['unit', 'uom']), 20) ?? read.unit
         return { name: str(pick(o, ['name', 'product', 'item', 'description']), 200) ?? '', qty: roundQty(read.qty), unit }
       })
-      .filter((l) => l.name && l.qty > 0),
+      // A named row with no number ("-", "ตาม") is kept at 0, not dropped: it is the person's to key in, and a
+      // dropped row is an item nobody is told about (31-row fixture, R58). 0 never imports (importReview bad-qty).
+      .filter((l) => l.name && l.qty >= 0),
   }
 }
 

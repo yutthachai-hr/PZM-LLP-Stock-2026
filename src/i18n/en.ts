@@ -2732,6 +2732,7 @@ export const EN: Record<string, string> = {
   'AI อ่านบิลแล้ว — ใส่ให้ {n} รายการ ตรวจก่อนยืนยันทุกครั้ง': 'AI read the bill — {n} lines filled in. Always check before confirming',
   'AI อ่านได้แต่ยังไม่ได้ใส่ให้ {n} รายการ — คีย์เอง': 'AI read {n} lines it could not fill in — key them yourself',
   'AI ไม่เลือกสินค้าให้เอง — เลือกสินค้าเอง': 'AI does not choose products — pick it yourself',
+  'บิลไม่ได้ระบุจำนวน — คีย์จำนวนเอง': 'No quantity on the bill — key it in yourself',
   'ไม่อยู่ในใบสั่งซื้อนี้': 'not on this order',
   'หน่วยในบิลไม่ตรงกับหน่วยที่สั่ง/หน่วยสินค้า': 'the bill\'s unit is not the ordered/product unit',
   'มีในรายการแล้ว': 'already on the list',

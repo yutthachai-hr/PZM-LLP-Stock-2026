@@ -592,6 +592,8 @@ export function ReceivePage() {
                     {s.name} —{' '}
                     {s.why === 'noProduct'
                       ? t('AI ไม่เลือกสินค้าให้เอง — เลือกสินค้าเอง')
+                      : s.why === 'noQty'
+                        ? t('บิลไม่ได้ระบุจำนวน — คีย์จำนวนเอง')
                       : s.why === 'notOnOrder'
                         ? t('ไม่อยู่ในใบสั่งซื้อนี้')
                         : s.why === 'unit'

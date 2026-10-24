@@ -13,7 +13,7 @@ export interface OcrFill {
   /** Lines put on the form. */
   filled: number
   /** What was read but not put on the form, and why — shown to the person. */
-  skipped: { name: string; why: 'noProduct' | 'notOnOrder' | 'unit' | 'already' }[]
+  skipped: { name: string; why: 'noProduct' | 'noQty' | 'notOnOrder' | 'unit' | 'already' }[]
 }
 
 /**
@@ -29,7 +29,7 @@ export function ocrFill(
 ): OcrFill {
   const { draft, order } = ctx
   const patch: Partial<ReceiptDraft> = {}
-  const skipped: OcrFill['skipped'] = match.unmatched.map((l) => ({ name: l.name, why: 'noProduct' as const }))
+  const skipped: OcrFill['skipped'] = match.unmatched.map((l) => ({ name: l.name, why: l.qty > 0 ? ('noProduct' as const) : ('noQty' as const) }))
   let filled = 0
 
   if (bill.invoiceNo && !draft.invoiceNo.trim()) patch.invoiceNo = bill.invoiceNo
