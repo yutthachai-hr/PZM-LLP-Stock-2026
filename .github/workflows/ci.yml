@@ -145,6 +145,8 @@ jobs:
         run: npx playwright test -c playwright.toast.config.ts
       - name: Product pricing, accessible grid and responsive SKU on isolated demo
         run: npx playwright test -c playwright.products-responsive.config.ts
+      - name: Stock buckets on an isolated browser-storage demo (port 5201)
+        run: npx playwright test -c playwright.transit.config.ts
       - name: Voiding a movement requires a reason, on isolated demo
         run: npx playwright test -c playwright.void-reason.config.ts
       - if: failure()

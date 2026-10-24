@@ -30,14 +30,14 @@ type Filter = 'all' | 'changed' | 'nocost'
 export function CostReport() {
   const t = useT()
   const toast = useToast()
-  const { products, locations, qtyAt } = useData()
+  const { products, companyQty, transitQty } = useData()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [busyExport, setBusyExport] = useState(false)
 
   const rows = useMemo<Row[]>(() => {
     return products
-      .filter((p) => p.active !== false)
+      .filter((p) => p.active !== false || companyQty(p.id) !== 0)
       .map((p) => {
         const hist = [...(p.costHistory ?? [])].sort((a, b) => b.effectiveAt - a.effectiveAt || b.at - a.at)
         const latest = hist[0]
@@ -48,9 +48,10 @@ export function CostReport() {
       .filter((r) => looseMatch([r.p.name, r.p.sku, r.p.category], q))
       .filter((r) => (filter === 'changed' ? r.changes >= 2 : filter === 'nocost' ? r.p.cost === undefined : true))
       .sort((a, b) => (b.latest?.at ?? 0) - (a.latest?.at ?? 0) || a.p.name.localeCompare(b.p.name))
-  }, [products, q, filter])
+  }, [products, q, filter, companyQty])
 
-  const onHand = (p: Product) => locations.reduce((s, l) => s + qtyAt(l.id, p.id), 0)
+  // Valuation is what the company owns: every site plus goods in transit, shown separately.
+  const onHand = (p: Product) => companyQty(p.id)
 
   const columns = useMemo<Column<Row>[]>(
     () => [
@@ -114,11 +115,19 @@ export function CostReport() {
         align: 'right',
         className: 'num',
         card: 'hidden',
-        cell: (r) => (r.p.cost !== undefined ? `฿${fmtMoney(onHand(r.p) * r.p.cost)}` : ''), // ฿ is a currency symbol — i18n-key
+        cell: (r) => (
+          <>
+            {r.p.cost !== undefined && `฿${fmtMoney(onHand(r.p) * r.p.cost)}`}{/* ฿ is a currency symbol — i18n-key */}
+            {/* Shown without a cost too: stock in transit stays visible (R40 review). */}
+            {transitQty(r.p.id) !== 0 && (
+              <div className="text-xs text-ink-faint">{t('รวมระหว่างขนส่ง {qty} {unit}', { qty: fmtQty(transitQty(r.p.id)), unit: r.p.unitType })}</div>
+            )}
+          </>
+        ),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, locations, qtyAt],
+    [t, companyQty, transitQty],
   )
 
   async function exportXlsx() {
@@ -128,8 +137,9 @@ export function CostReport() {
       const out: Record<string, string | number>[] = []
       for (const r of rows) {
         const hist = [...(r.p.costHistory ?? [])].sort((a, b) => a.effectiveAt - b.effectiveAt)
+        const balances = { [t('คงเหลือ')]: fmtQty(onHand(r.p)), [t('ระหว่างขนส่ง')]: fmtQty(transitQty(r.p.id)) }
         if (hist.length === 0) {
-          out.push({ [t('สินค้า')]: r.p.name, SKU: r.p.sku, [t('หมวดหมู่')]: r.p.category, [t('หน่วย')]: r.p.unitType, [t('ต้นทุนตอนนี้')]: r.p.cost ?? '' })
+          out.push({ [t('สินค้า')]: r.p.name, SKU: r.p.sku, [t('หมวดหมู่')]: r.p.category, [t('หน่วย')]: r.p.unitType, [t('ต้นทุนตอนนี้')]: r.p.cost ?? '', ...balances })
           continue
         }
         for (const h of hist) {
@@ -144,7 +154,7 @@ export function CostReport() {
             [t('ต้นทุน/หน่วยหลัก')]: h.cost,
             [t('โดย')]: h.byName,
             [t('หมายเหตุ')]: h.note ?? '',
-            [t('คงเหลือ')]: fmtQty(onHand(r.p)),
+            ...balances,
           })
         }
       }
