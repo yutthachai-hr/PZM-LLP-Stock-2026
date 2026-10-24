@@ -80,12 +80,12 @@ export function severityOf(n: Pick<AppNotification, 'kind' | 'priority'>): Sever
 }
 
 function entityOf(n: AppNotification, link: string): { type: EntityType; id: string | null } {
-  const po = /[?&]po=([^&]+)/.exec(link)?.[1]
+  const po = /[?&]po=([^&#]+)/.exec(link)?.[1]
   if (po) return { type: 'po', id: decodeURIComponent(po) }
-  const req = /^\/requests\/([^/?]+)/.exec(link)?.[1]
-  if (req) return { type: 'request', id: req }
+  const req = /^\/requests\/([^/?#]+)/.exec(link)?.[1]
+  if (req) return { type: 'request', id: decodeURIComponent(req) }
   const tr = /^\/transfers\/([^/?#]+)/.exec(link)?.[1]
-  if (tr && tr !== 'today' && tr !== 'new') return { type: 'transfer', id: tr }
+  if (tr && tr !== 'today' && tr !== 'new') return { type: 'transfer', id: decodeURIComponent(tr) }
   if (n.productId) return { type: 'product', id: n.productId }
   if (n.supplierId) return { type: 'supplier', id: n.supplierId }
   if (n.category === 'task') return { type: 'task', id: null }
@@ -110,11 +110,13 @@ export function presentNotification(n: AppNotification): PresentedNotification {
   const actions: NotificationAction[] = link ? [{ label: PRIMARY_LABEL[entity.type], url: link }] : []
   // A supplier's answer: the supplier itself is the next thing people look at.
   if (n.supplierId && entity.type === 'po' && n.category === 'supplier') {
-    actions.push({ label: 'ดูผู้ขาย', url: `/suppliers?id=${encodeURIComponent(n.supplierId)}` }) // i18n-key
+    const supUrl = canonicalLink(`/suppliers?id=${encodeURIComponent(n.supplierId)}`)
+    if (supUrl) actions.push({ label: 'ดูผู้ขาย', url: supUrl }) // i18n-key
   }
   if (n.kind === 'stockoutRisk') {
     actions.splice(0, actions.length, ...(link ? [{ label: 'ดูความเสี่ยง', url: link }] : [])) // i18n-key
-    actions.push({ label: 'ตัวเลือกโอนของ', url: '/transfers/new' }) // i18n-key
+    const newTransferUrl = canonicalLink('/transfers/new')
+    if (newTransferUrl) actions.push({ label: 'ตัวเลือกโอนของ', url: newTransferUrl }) // i18n-key
   }
   // A delivery-risk level below the one reached is history the moment it is written.
   const notCurrent = n.kind === 'deliveryRisk' && n.params.current !== 1

@@ -19,7 +19,8 @@ export function canonicalLink(link: unknown): string | null {
   let path = cut < 0 ? link : link.slice(0, cut)
   const rest = cut < 0 ? '' : link.slice(cut)
   try {
-    decodeURI(link) // malformed percent encoding must not crash presentation or the router
+    const decodedUri = decodeURI(link) // malformed percent encoding must not crash presentation or the router
+    if (/[\\\p{Cc}]/u.test(decodedUri)) return null
     if (path.split('/').slice(1).some((p) => {
       const decoded = decodeURIComponent(p)
       return decoded === '.' || decoded === '..' || /[%/\\\s?#\p{Cc}]/u.test(decoded)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { useData } from '../../data/DataContext'
@@ -48,8 +48,11 @@ export function NotificationBell() {
   const { user } = useAuth()
   const { notifications, olderNotifications } = useData()
   const prefs = useNotificationPrefs(user?.id)
+  const openingRef = useRef(false)
   const [open, setOpen] = useState(false)
   const [opening, setOpening] = useState<string | null>(null)
+  const readingAllRef = useRef(false)
+  const [readingAll, setReadingAll] = useState(false)
   const [tab, setTab] = useState<Tab>('all')
 
   // A popup summarising several new ones opens the bell on their category.
@@ -72,27 +75,36 @@ export function NotificationBell() {
   const shown = mine.filter((n) => (tab === 'all' ? true : tab === 'critical' ? n.priority === 'critical' : n.category === tab))
 
   async function openOne(n: AppNotification) {
-    if (!user || opening) return
+    if (!user || openingRef.current) return
+    openingRef.current = true
     setOpening(n.id)
+    const brand = getBrand()
     try {
-      const url = await notificationDestination(n.link, getBrand())
+      const url = await notificationDestination(n.link, brand)
+      if (getBrand() !== brand) throw new AppError('บริษัทเปลี่ยนแล้ว กรุณาเปิดการแจ้งเตือนอีกครั้ง')
       setOpen(false)
       navigate(url)
-      await markRead(n, user.id).catch(() => {})
+      await markRead(n, user.id, undefined, brand).catch(() => {})
     } catch (e) {
       // Left unread: nothing was opened. Never expose raw backend errors.
       toast.error(e instanceof AppError ? errText(e, t) : t('เปิดการแจ้งเตือนนี้ไม่ได้ กรุณาลองอีกครั้ง'))
     } finally {
+      openingRef.current = false
       setOpening(null)
     }
   }
 
   async function readAll() {
-    if (!user) return
+    if (!user || readingAllRef.current || openingRef.current) return
+    readingAllRef.current = true
+    setReadingAll(true)
     try {
-      await markAllRead(unread, user.id)
+      await markAllRead(unread, user.id, getBrand())
     } catch (e) {
       toast.error(errText(e, t))
+    } finally {
+      readingAllRef.current = false
+      setReadingAll(false)
     }
   }
 
@@ -136,7 +148,7 @@ export function NotificationBell() {
             </button>
           </span>
           {unread.length > 0 && (
-            <Button variant="secondary" onClick={readAll}>
+            <Button variant="secondary" onClick={readAll} disabled={readingAll || opening !== null}>
               <Icon name="check" size={14} />
               {t('อ่านทั้งหมดแล้ว')}
             </Button>

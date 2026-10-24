@@ -33,17 +33,29 @@ export async function notificationDestination(link: unknown, brand: BrandId): Pr
   return url
 }
 
-export async function markRead(n: AppNotification, uid: string, now = Date.now()): Promise<void> {
+const readInflight = new Set<string>()
+
+export async function markRead(n: AppNotification, uid: string, now = Date.now(), brand: BrandId = getBrand()): Promise<void> {
   if (n.readBy?.[uid]) return
-  await scoped().update(COL.notifications, n.id, { [`readBy.${uid}`]: now, updatedAt: now })
+  if (getBrand() !== brand) return
+  const key = `${brand}:${n.id}:${uid}`
+  if (readInflight.has(key)) return
+  readInflight.add(key)
+  try {
+    if (getBrand() !== brand) return
+    await scoped(brand).update(COL.notifications, n.id, { [`readBy.${uid}`]: now, updatedAt: now })
+  } finally {
+    readInflight.delete(key)
+  }
 }
 
-export async function markAllRead(list: readonly AppNotification[], uid: string): Promise<number> {
+export async function markAllRead(list: readonly AppNotification[], uid: string, brand: BrandId = getBrand()): Promise<number> {
   const now = Date.now()
   let n = 0
   for (const item of list) {
+    if (getBrand() !== brand) break
     if (item.readBy?.[uid]) continue
-    await markRead(item, uid, now)
+    await markRead(item, uid, now, brand)
     n++
   }
   return n

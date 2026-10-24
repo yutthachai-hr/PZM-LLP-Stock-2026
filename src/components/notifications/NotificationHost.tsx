@@ -72,6 +72,7 @@ export function NotificationHost() {
 function Host({ uid, role }: { uid: string; role: Role }) {
   const t = useT()
   const toast = useToast()
+  const openingRef = useRef(false)
   const [opening, setOpening] = useState<string | null>(null)
   const navigate = useNavigate()
   const { notifications } = useData()
@@ -158,25 +159,29 @@ function Host({ uid, role }: { uid: string; role: Role }) {
 
   const open = useCallback(
     async (card: PopupCard, link: string) => {
-      if (opening) return
+      if (openingRef.current) return
+      openingRef.current = true
       setOpening(card.key)
+      const brand = getBrand()
       try {
-        const url = await notificationDestination(link, getBrand())
+        const url = await notificationDestination(link, brand)
+        if (getBrand() !== brand) throw new AppError('บริษัทเปลี่ยนแล้ว กรุณาเปิดการแจ้งเตือนอีกครั้ง')
         close(card.key)
         navigate(url)
         logNotification('opened', { card: card.key, url })
         // Opening it is reading it; an invalid destination stays unread.
         for (const item of card.items) {
           const n = byId.current.get(item.id)
-          if (n) void markRead(n, uid).catch(() => {})
+          if (n) void markRead(n, uid, undefined, brand).catch(() => {})
         }
       } catch (e) {
         toast.error(e instanceof AppError ? errText(e, t) : t('เปิดการแจ้งเตือนนี้ไม่ได้ กรุณาลองอีกครั้ง'))
       } finally {
+        openingRef.current = false
         setOpening(null)
       }
     },
-    [close, navigate, uid, opening, toast, t],
+    [close, navigate, uid, toast, t],
   )
 
   async function enableSound() {

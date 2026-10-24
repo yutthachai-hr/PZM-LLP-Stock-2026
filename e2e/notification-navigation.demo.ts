@@ -87,7 +87,7 @@ for (const brand of ['pizza', 'lelapin', 'rnd']) {
   })
 }
 
-for (const link of ['https://evil.example/x', '/logistics/deleted', '/logistics/other-only', '/logistics/deleted/', '/transfers/deleted/receive/']) {
+for (const link of ['https://evil.example/x', '/logistics/deleted', '/logistics/other-only', '/logistics/deleted/', '/transfers/deleted/receive/', '/orders?po=%00']) {
   test(`refused destination ${link}: stays unread and never changes stock`, async ({ page }) => {
     await stage(page, 'pizza', 'admin', link)
     await page.goto('/products')
@@ -95,7 +95,7 @@ for (const link of ['https://evil.example/x', '/logistics/deleted', '/logistics/
     await openBell(page)
     await row(page).click()
     await expect(page).toHaveURL(/\/products$/)
-    await expect(page.getByText(link.startsWith('https:') ? /Cannot open this notification: invalid link/ : /Transfer not found|Transfer document not found|No transfer document found/)).toBeVisible()
+    await expect(page.getByText(link.startsWith('https:') || link.includes('%') ? /Cannot open this notification: invalid link/ : /Transfer not found|Transfer document not found|No transfer document found/)).toBeVisible()
     expect(await readBy(page)).toEqual({})
     expect(await stock(page)).toEqual(before)
   })
@@ -151,4 +151,23 @@ test('a bookmarked missing transfer shows the existing empty state', async ({ pa
   await stage(page)
   await page.goto('/transfers/deleted')
   await expect(page.locator('main')).toContainText('Transfer document not found')
+})
+
+test('rapid double click on bell notification navigates once without race', async ({ page }) => {
+  await stage(page)
+  await page.goto('/products')
+  await openBell(page)
+  await row(page).dblclick()
+  await expect(page).toHaveURL(/\/transfers\/tr-fixture$/)
+  await expect(page.locator('main')).toContainText('TR-00001')
+  expect((await readBy(page))['r63-user']).toBeTruthy()
+})
+
+test('order notification navigates to /orders?po=PO-1 directly and marks read', async ({ page }) => {
+  await stage(page, 'pizza', 'admin', '/orders?po=PO-1')
+  await page.goto('/products')
+  await openBell(page)
+  await row(page).click()
+  await expect(page).toHaveURL(/\/orders\?po=PO-1$/)
+  expect((await readBy(page))['r63-user']).toBeTruthy()
 })
