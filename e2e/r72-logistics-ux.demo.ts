@@ -10,7 +10,8 @@ import {
   stageLogisticsFixture,
 } from './r72-logistics-fixtures'
 
-const EVIDENCE_DIR = path.resolve(process.cwd(), 'docs/evidence/r72-logistics/before')
+// R72_EVIDENCE=after-<sha> keeps a candidate run from overwriting the committed baseline images.
+const EVIDENCE_DIR = path.resolve(process.cwd(), 'docs/evidence/r72-logistics', process.env.R72_EVIDENCE || 'before')
 
 async function ensureEvidenceDir() {
   if (!fs.existsSync(EVIDENCE_DIR)) {
@@ -313,21 +314,20 @@ test.describe('R72 Agent07: Logistics mobile layout & visual invariants', () => 
     const receiveAllBtn = page.getByRole('button', { name: 'รับครบตามใบส่ง' })
     await expect(receiveAllBtn).toBeVisible()
 
-    // Track how many times confirmReceive / transaction runs
-    let duplicateSubmissionError = false
-    page.on('console', (msg) => {
-      if (msg.text().includes('AppError') || msg.text().includes('Transaction')) {
-        duplicateSubmissionError = true
-      }
-    })
+    const pageErrors: string[] = []
+    page.on('pageerror', (e) => pageErrors.push(e.message))
 
-    // Rapid double click
-    await Promise.all([
-      receiveAllBtn.click({ clickCount: 2 }),
-    ])
+    await receiveAllBtn.click({ clickCount: 2 })
+    await page.waitForTimeout(800)
 
-    await page.waitForTimeout(500)
-    expect(duplicateSubmissionError, 'Double confirm must be gated synchronously to prevent racing').toBe(false)
+    // The service refuses a second receipt by status, so count what reached it, not just what was filed.
+    const received = await page.evaluate((id) => {
+      const transfers = JSON.parse(localStorage.getItem('pmstock:v1:transfers') || '{}')
+      return (transfers[id]?.history ?? []).filter((h: { action: string }) => h.action === 'received').length
+    }, R72_TRANSFER_INTERNAL_ID)
+    expect(received, 'exactly one receipt filed').toBe(1)
+    await expect(page.getByText('เอกสารไม่ได้อยู่ในสถานะพร้อมตรวจรับ')).toHaveCount(0)
+    expect(pageErrors, 'no unhandled rejection from a late second tap').toEqual([])
   })
 
   test('last item (row 21) is scrollable completely above sticky CTA and bottom nav', async ({ page }) => {

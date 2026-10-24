@@ -59,6 +59,16 @@ describe('TransferReceivePage: synchronous double-submit gate', () => {
     await call1
 
     expect(submitService).toHaveBeenCalledTimes(1)
+    // A filed receipt is final: the page navigates away, so a late tap must not file again.
+    expect(gate.isLocked()).toBe(true)
+    expect(await gate.execute({ action: submitService })).toBe(null)
+    expect(submitService).toHaveBeenCalledTimes(1)
+  })
+
+  test('a confirmation that throws releases the gate', async () => {
+    const gate = createSubmitGate()
+    const brokenConfirm = vi.fn(async (): Promise<boolean> => { throw new Error('dialog failed') })
+    await expect(gate.execute({ confirm: brokenConfirm, action: vi.fn() })).rejects.toThrow('dialog failed')
     expect(gate.isLocked()).toBe(false)
   })
 
