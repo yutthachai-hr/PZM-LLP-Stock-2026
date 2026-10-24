@@ -1,4 +1,7 @@
 import type { Line } from '../../components/LineBuilder'
+import type { ExperimentalLine, ExperimentalReceiptInput } from '../../services/experimentalReceipt'
+import { isKnownOtherSupplier } from '../../lib/otherItem'
+import type { Role, Supplier } from '../../types'
 import { roundQty } from '../../lib/validate'
 import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
 
@@ -127,12 +130,45 @@ export function kitchenProblem(lines: readonly Line[]): ReceiptProblem | null {
   return null
 }
 
-export function manualProblem(lines: readonly Line[], supplierName: string, invoiceNo: string): ReceiptProblem | null {
-  if (lines.length === 0) return 'noLines'
+export function manualProblem(lines: readonly Line[], supplierName: string, invoiceNo: string, extraCount = 0): ReceiptProblem | null {
+  if (lines.length + extraCount === 0) return 'noLines'
   if (lines.some((l) => !(l.qty > 0))) return 'badQty'
   if (!supplierName.trim()) return 'noSupplier'
   if (!invoiceNo.trim()) return 'noInvoice'
   return null
+}
+
+/** R&D experimental receiving is opt-in: brand rnd, manual mode and a real OTHER supplier record.
+ *  The typed `__other` sentinel is never a supplier record, so it can never unlock this. */
+export function experimentalEligible(
+  mode: Mode,
+  brand: string,
+  supplier: Pick<Supplier, 'id' | 'name' | 'active'> | null | undefined,
+  role: Role | undefined,
+): boolean {
+  // Admin-only like the server's catalogue authority (experimentalReceipt.ts).
+  return role === 'admin' && mode === 'manual' && brand === 'rnd' && isKnownOtherSupplier(supplier)
+}
+
+/** The frozen commit request for one experimental receipt; the server rechecks every authority. */
+export function experimentalInput(
+  d: ReceiptDraft,
+  base: { operationId: string; toLocationId: string; date: number; docDate: number; photoDataUrl?: string },
+): ExperimentalReceiptInput {
+  return {
+    brand: 'rnd',
+    mode: 'manual',
+    operationId: base.operationId,
+    supplierId: d.supplierId,
+    toLocationId: base.toLocationId,
+    date: base.date,
+    docDate: base.docDate,
+    invoiceNo: d.invoiceNo,
+    note: d.note.trim() || undefined,
+    photoDataUrl: base.photoDataUrl,
+    lines: d.lines,
+    experimental: d.experimental ?? [],
+  }
 }
 
 /** One bill's worth of a draft this screen saved before it went PO-first. */
@@ -146,6 +182,9 @@ const PICKS: readonly SupplierPick[] = ['', 'auto', 'ocr', 'manual']
 
 /** Everything the screen keeps across leaving it (lib/useDraft). The photo never is. */
 export interface ReceiptDraft {
+  /** Local-only proposals. No catalogue/stock record exists until final confirmation. */
+  experimental?: ExperimentalLine[]
+  experimentalOperationId?: string
   mode: Mode
   poId: string
   entries: Record<string, PoLineEntry>
@@ -175,8 +214,8 @@ export function emptyDraft(): ReceiptDraft {
 }
 
 /** Whether a draft holds anything someone keyed. */
-export function draftIsEmpty(d: Pick<ReceiptDraft, 'poId' | 'lines' | 'invoiceNo' | 'note' | 'queue'>): boolean {
-  return !d.poId && d.lines.length === 0 && !d.invoiceNo.trim() && !d.note.trim() && d.queue.length === 0
+export function draftIsEmpty(d: Pick<ReceiptDraft, 'poId' | 'lines' | 'invoiceNo' | 'note' | 'queue' | 'experimental'>): boolean {
+  return !d.poId && d.lines.length === 0 && !(d.experimental?.length) && !d.invoiceNo.trim() && !d.note.trim() && d.queue.length === 0
 }
 
 function isLine(x: unknown): x is Line {
@@ -248,6 +287,8 @@ export function restoreReceipt(saved: unknown): ReceiptDraft {
       note: str(d.note),
       lines: linesOf(d.lines),
       queue: billsOf(d.queue),
+      ...(Array.isArray(d.experimental) ? { experimental: d.experimental.slice(0,30).filter((x): x is ExperimentalLine => !!x && typeof x === 'object' && typeof x.draftId === 'string' && typeof x.parentId === 'string' && typeof x.name === 'string' && typeof x.spec === 'string' && typeof x.unit === 'string' && typeof x.qty === 'number' && typeof x.expectedBaseQty === 'number') } : {}),
+      ...(typeof d.experimentalOperationId === 'string' ? { experimentalOperationId: d.experimentalOperationId } : {}),
     }
   }
   if (typeof d.note === 'string' || Array.isArray(d.lines)) {

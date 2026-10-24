@@ -33,9 +33,15 @@ import { PoPicker } from './receive/PoPicker'
 import { PoLines } from './receive/PoLines'
 import { DocumentCard, OTHER_SUPPLIER } from './receive/DocumentCard'
 import { ReceiptDone, ReceiptPanel, ReviewModal, type Exception, type ReceiptFacts } from './receive/ReceiptReview'
+import { ExperimentalItems } from './receive/ExperimentalItems'
+import { submitExperimental, ExperimentalClientError } from '../services/experimentalClient'
+import { isOtherPlaceholder } from '../lib/otherItem'
+import { useBrand } from '../brand/BrandContext'
 import {
   draftIsEmpty,
   emptyDraft,
+  experimentalEligible,
+  experimentalInput,
   KITCHEN_SUPPLIER,
   kitchenProblem,
   manualProblem,
@@ -108,6 +114,8 @@ export function ReceivePage() {
   // the link was read (StrictMode re-runs effects; the brand or the person can resolve
   // late), so the link is held here and laid over whatever comes back.
   const linkRef = useRef<string | null>(null)
+  // `busy` is state, so two taps in one frame both see it false; this ref refuses the second at once.
+  const confirmingRef = useRef(false)
   const withLink = useCallback((r: ReceiptDraft): ReceiptDraft => {
     const id = linkRef.current
     return id ? { ...r, mode: 'po', poId: id, entries: r.poId === id ? r.entries : {} } : r
@@ -161,6 +169,12 @@ export function ReceivePage() {
   const supplierId = order ? order.supplierId : !kitchen && d.supplierId && d.supplierId !== OTHER_SUPPLIER ? d.supplierId : ''
   const toLocationId = order ? order.locationId : d.toLocationId
 
+  // R&D experimental rows are an opt-in affordance of a real OTHER supplier in brand rnd (receive/receipt.ts).
+  // An OTHER-category placeholder picked in the normal builder opens the experimental form instead of an ordinary line.
+  const { brand } = useBrand()
+  const xpEligible = experimentalEligible(d.mode, brand ?? '', suppliers.find((s) => s.id === supplierId), user?.role)
+  const [xpRequest, setXpRequest] = useState<string | null>(null)
+
   // Smart supplier resolution (owner, 7 Oct 2026), from what is already in memory — no read.
   // An order locks it; by hand, the products (and the bill, when read) suggest or pick it.
   const resolveCtx = useMemo(() => ({ products, suppliers, movements }), [products, suppliers, movements])
@@ -205,7 +219,7 @@ export function ReceivePage() {
       ? poProblem(order, d.entries, d.invoiceNo)
       : kitchen
         ? kitchenProblem(d.lines)
-        : manualProblem(d.lines, supplierName, d.invoiceNo)
+        : manualProblem(d.lines, supplierName, d.invoiceNo, d.experimental?.length ?? 0)
 
   function problemText(p: ReceiptProblem): string {
     switch (p) {
@@ -266,7 +280,7 @@ export function ReceivePage() {
     docDate,
     hasPhoto: !!photo,
     note: d.note.trim(),
-    items: order ? (summary?.items ?? 0) : d.lines.length,
+    items: order ? (summary?.items ?? 0) : d.lines.length + (d.experimental?.length ?? 0),
     matched: summary?.matched ?? 0,
     short: summary?.short ?? 0,
     over: summary?.over ?? 0,
@@ -278,6 +292,8 @@ export function ReceivePage() {
       return toast.error(problemText(problem))
     }
     if (!toLocationId) return toast.error(t('เลือกคลังปลายทาง'))
+    // Rows keyed under R&D + OTHER are hidden once the mode or supplier changes; never drop or misfile them.
+    if (d.experimental?.length && !xpEligible) return toast.error(t('มีสินค้าทดลองในร่าง — รับได้เฉพาะ "รับนอกใบสั่งซื้อ" กับผู้ขาย OTHER ของ R&D กลับไปเลือกให้ถูก หรือลบรายการทดลองก่อน'))
     if (!kitchen) await checkDuplicate()
     setCloseShort(false)
     setCloseReason('')
@@ -285,7 +301,9 @@ export function ReceivePage() {
   }
 
   async function confirm() {
-    const actor = { id: user!.id, name: user!.name }
+    if (confirmingRef.current) return
+    const actor = { id: user!.id, name: user!.name } // before the latch, so a throw cannot leave it set
+    confirmingRef.current = true
     setBusy(true)
     try {
       if (order) {
@@ -309,6 +327,26 @@ export function ReceivePage() {
           ...(closeShort && facts.short > 0 ? { closeRemainder: { reason: closeReason } } : {}),
         })
         setDone({ docNo: result.docNo, facts, exceptions: exceptions.length, outstandingLines: result.outstandingLines })
+      } else if (d.experimental?.length) {
+        // One atomic trusted command for the whole receipt; the server rechecks every authority.
+        const opId = d.experimentalOperationId ?? crypto.randomUUID()
+        if (!d.experimentalOperationId) patch({ experimentalOperationId: opId })
+        try {
+          const result = await submitExperimental(
+            experimentalInput(d, { operationId: opId, toLocationId, date, docDate, photoDataUrl: photo ?? undefined }),
+            user!.id,
+          )
+          setDone({ docNo: result.docNo, facts, exceptions: 0 })
+        } catch (e) {
+          // Unknown network outcome: the draft stays frozen with the pinned operation id, so the
+          // same confirm replays the same operation instead of filing stock twice.
+          setReviewing(false)
+          if (e instanceof ExperimentalClientError && e.unknownOutcome) {
+            toast.error(t('บันทึกไม่ชัดเจน — ร่างถูกเก็บไว้ ตรวจยอดแล้วกดยืนยันอีกครั้ง (ระบบจะไม่บันทึกซ้ำ)'))
+            return
+          }
+          throw e
+        }
       } else {
         const docNo = await receiveStock({
           lines: d.lines,
@@ -334,6 +372,7 @@ export function ReceivePage() {
     } catch (e) {
       toast.error(t('บันทึกไม่สำเร็จ:') + ' ' + errText(e, t))
     } finally {
+      confirmingRef.current = false
       setBusy(false)
     }
   }
@@ -508,8 +547,22 @@ export function ReceivePage() {
                   lineNotes
                   importable
                   rankFirst={rankFirst}
+                  onSelectProduct={(p) => {
+                    if (!xpEligible || !isOtherPlaceholder(p)) return false
+                    setXpRequest(p.id)
+                    return true
+                  }}
                 />
               </SectionCard>
+              {xpEligible && (
+                <ExperimentalItems
+                  products={products}
+                  items={d.experimental ?? []}
+                  onChange={(items) => patch({ experimental: items })}
+                  requestedParentId={xpRequest}
+                  onConsumedRequest={() => setXpRequest(null)}
+                />
+              )}
             </>
           )}
 
@@ -594,6 +647,7 @@ export function ReceivePage() {
           busy={busy}
           onBack={() => setReviewing(false)}
           onConfirm={() => void confirm()}
+          experimental={d.experimental?.length ? d.experimental : undefined}
         />
       )}
 
