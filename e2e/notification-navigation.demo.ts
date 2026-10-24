@@ -1,52 +1,99 @@
 import { test, expect, type Page } from '@playwright/test'
 
 // Controlled TR-00001 fixture, browser storage only. Same document id in another brand is a decoy.
-async function stage(page: Page, brand = 'pizza', role = 'admin', link = '/logistics/tr-fixture') {
-  await page.addInitScript(({ brand, role, link }) => {
-    if (sessionStorage.getItem('r63-fixture')) return
-    sessionStorage.setItem('r63-fixture', '1')
-    const now = Date.now()
-    const prefix = brand === 'pizza' ? '' : `${brand}__`
-    const store = (c: string, rows: unknown) => localStorage.setItem(`pmstock:v1:${c}`, JSON.stringify(rows))
-    const user = { id: 'r63-user', email: 'r63@inventory-pzm.local', name: 'R63 QA', role, active: true, createdAt: now }
-    store('users', { [user.id]: user })
-    localStorage.setItem('pmstock:v1:session', user.id)
-    localStorage.setItem('pmstock:v1:lastBrand', brand)
-    sessionStorage.setItem('pmstock:v1:tabBrand', brand)
-    localStorage.setItem('pmstock:lang', 'en')
-    const locations = {
-      wh: { id: 'wh', name: 'R63 warehouse', type: 'warehouse', active: true, createdAt: now },
-      br: { id: 'br', name: 'R63 branch', type: 'branch', active: true, createdAt: now },
-    }
-    store(`${prefix}locations`, locations)
-    store(`${prefix}products`, { p1: { id: 'p1', sku: 'R63', name: 'R63 synthetic flour', unitType: 'KG', unit: 'KG', active: true, createdAt: now, updatedAt: now, minStock: 0 } })
-    const transfer = {
-      id: 'tr-fixture', docNo: 'TR-00001', status: 'pendingApproval', revision: 1,
-      fromLocationId: 'wh', toLocationId: 'br', dispatchDate: now,
-      requestedBy: user.id, requestedByName: user.name, createdAt: now, updatedAt: now,
-      submittedAt: now, items: [], history: [], note: 'R63 controlled fixture',
-    }
-    store(`${prefix}transfers`, { 'tr-fixture': transfer })
-    const other = brand === 'rnd' ? 'lelapin__' : 'rnd__'
-    store(`${other}transfers`, {
-      'tr-fixture': { ...transfer, docNo: 'TR-WRONG-BRAND' },
-      'other-only': { ...transfer, id: 'other-only', docNo: 'TR-OTHER-ONLY' },
-    })
-    store(`${prefix}stockLevels`, {})
-    store(`${prefix}stockMovements`, {})
-    store(`${prefix}notifications`, {
-      old: {
-        id: 'old', kind: 'transferSubmitted', category: 'inventory', priority: 'medium',
-        to: { all: true }, audienceKeys: ['all'], params: { docNo: 'TR-00001', by: 'R63 QA', from: 'wh', to: 'br', n: 0 },
-        link, active: true, readBy: {}, source: 'client', createdBy: user.id,
-        createdAt: now - 10_000, updatedAt: now - 10_000, expiresAt: now + 86_400_000,
-      },
-    })
-  }, { brand, role, link })
+async function stage(
+  page: Page,
+  brand = 'pizza',
+  role = 'admin',
+  link = '/logistics/tr-fixture',
+  opts?: { lang?: string; fromName?: string; toName?: string; n?: number; by?: string },
+) {
+  await page.addInitScript(
+    ({ brand, role, link, opts }) => {
+      if (sessionStorage.getItem('r63-fixture')) return
+      sessionStorage.setItem('r63-fixture', '1')
+      const now = Date.now()
+      const prefix = brand === 'pizza' ? '' : `${brand}__`
+      const store = (c: string, rows: unknown) => localStorage.setItem(`pmstock:v1:${c}`, JSON.stringify(rows))
+      const user = { id: 'r63-user', email: 'r63@inventory-pzm.local', name: 'R63 QA', role, active: true, createdAt: now }
+      store('users', { [user.id]: user })
+      localStorage.setItem('pmstock:v1:session', user.id)
+      localStorage.setItem('pmstock:v1:lastBrand', brand)
+      sessionStorage.setItem('pmstock:v1:tabBrand', brand)
+      localStorage.setItem('pmstock:lang', opts?.lang ?? 'en')
+      const locations = {
+        wh: { id: 'wh', name: opts?.fromName ?? 'R63 warehouse', type: 'warehouse', active: true, createdAt: now },
+        br: { id: 'br', name: opts?.toName ?? 'R63 branch', type: 'branch', active: true, createdAt: now },
+      }
+      store(`${prefix}locations`, locations)
+      const itemCount = opts?.n ?? 0
+      const prods: Record<string, unknown> = { p1: { id: 'p1', sku: 'R63', name: 'R63 synthetic flour', unitType: 'KG', unit: 'KG', active: true, createdAt: now, updatedAt: now, minStock: 0 } }
+      for (let i = 2; i <= itemCount; i++) {
+        prods[`p${i}`] = { id: `p${i}`, sku: `SKU-${i}`, name: `Item ${i}`, unitType: 'KG', unit: 'KG', active: true, createdAt: now, updatedAt: now, minStock: 0 }
+      }
+      store(`${prefix}products`, prods)
+      const transfer = {
+        id: 'tr-fixture',
+        docNo: 'TR-00001',
+        status: 'pendingApproval',
+        revision: 1,
+        fromLocationId: 'wh',
+        toLocationId: 'br',
+        dispatchDate: now,
+        requestedBy: user.id,
+        requestedByName: user.name,
+        createdAt: now,
+        updatedAt: now,
+        submittedAt: now,
+        items: Array.from({ length: itemCount }, (_, i) => ({
+          idx: i + 1,
+          productId: `p${i + 1}`,
+          requestedQty: 1,
+          unit: 'KG',
+        })),
+        history: [],
+        note: 'R63 controlled fixture',
+      }
+      store(`${prefix}transfers`, { 'tr-fixture': transfer })
+      const other = brand === 'rnd' ? 'lelapin__' : 'rnd__'
+      store(`${other}transfers`, {
+        'tr-fixture': { ...transfer, docNo: 'TR-WRONG-BRAND' },
+        'other-only': { ...transfer, id: 'other-only', docNo: 'TR-OTHER-ONLY' },
+      })
+      store(`${prefix}stockLevels`, {})
+      store(`${prefix}stockMovements`, {})
+      store(`${prefix}notifications`, {
+        old: {
+          id: 'old',
+          kind: 'transferSubmitted',
+          category: 'inventory',
+          priority: 'medium',
+          to: { all: true },
+          audienceKeys: ['all'],
+          params: {
+            docNo: 'TR-00001',
+            by: opts?.by !== undefined ? opts.by : 'R63 QA',
+            from: opts?.fromName ?? 'wh',
+            to: opts?.toName ?? 'br',
+            n: itemCount,
+          },
+          link,
+          active: true,
+          readBy: {},
+          source: 'client',
+          createdBy: user.id,
+          createdAt: now - 10_000,
+          updatedAt: now - 10_000,
+          expiresAt: now + 86_400_000,
+        },
+      })
+    },
+    { brand, role, link, opts },
+  )
 }
 
 async function openBell(page: Page) {
-  await page.getByRole('button', { name: /Notifications \(/ }).first().click()
+  await page.getByRole('button', { name: /Notifications \(|การแจ้งเตือน \(/ }).first().click()
 }
 const row = (page: Page) => page.getByRole('button').filter({ hasText: 'TR-00001' }).last()
 async function readBy(page: Page, brand = 'pizza', id = 'old') {
@@ -170,4 +217,36 @@ test('order notification navigates to /orders?po=PO-1 directly and marks read', 
   await row(page).click()
   await expect(page).toHaveURL(/\/orders\?po=PO-1$/)
   expect((await readBy(page))['r63-user']).toBeTruthy()
+})
+
+test('owner TR-00001: legacy /logistics/:id notification navigates to /transfers/:id and marks read', async ({ page }) => {
+  await stage(page, 'pizza', 'admin', '/logistics/tr-fixture', {
+    lang: 'th',
+    fromName: 'คลังหลัก',
+    toName: 'สาขาสารสิน',
+    n: 21,
+    by: '',
+  })
+  await page.goto('/products')
+  await openBell(page)
+
+  const notifItem = page.getByRole('button').filter({ hasText: 'TR-00001' }).last()
+  await expect(notifItem).toBeVisible()
+  await expect(notifItem).toContainText('คำขอโอนสินค้ารออนุมัติ TR-00001')
+  await expect(notifItem).toContainText(/จาก\s*คลังหลัก ไป สาขาสารสิน · 21 รายการ/)
+
+  // Notification is initially unread
+  expect((await readBy(page))['r63-user']).toBeFalsy()
+
+  await notifItem.click()
+
+  // Bell click → URL /transfers/<id> showing TR-00001 (never '/')
+  await expect(page).toHaveURL(/\/transfers\/tr-fixture$/)
+  expect(page.url()).not.toMatch(/\/$/)
+  await expect(page.locator('main')).toContainText('TR-00001')
+
+  // The notification becomes read only after that success
+  expect((await readBy(page))['r63-user']).toBeTruthy()
+
+  await page.screenshot({ path: 'docs/mission/r69/repro-tr-00001-legacy-link-resolved.png' })
 })
