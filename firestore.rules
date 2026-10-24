@@ -325,12 +325,14 @@ service cloud.firestore {
         && epochMs(d.createdAt) && epochMs(d.updatedAt);
     }
 
+    // `transit` is the in-transit location (Settings → ระบบส่งสินค้า); its canonical id holds
+    // nothing else. A transit location under another id comes from an imported backup.
     function validLocation(d) {
       return d.keys().hasAll(['id', 'name', 'type', 'active', 'createdAt'])
         && d.keys().hasOnly(['id', 'name', 'nameEn', 'type', 'active', 'createdAt'])
         && text(d.name, 200)
         && (!('nameEn' in d) || text(d.nameEn, 200))
-        && d.type in ['warehouse', 'branch']
+        && (d.type == 'transit' || (d.type in ['warehouse', 'branch'] && d.id != 'transit'))
         && d.active is bool
         && epochMs(d.createdAt);
     }
