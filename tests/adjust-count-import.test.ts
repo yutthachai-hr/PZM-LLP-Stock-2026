@@ -89,6 +89,13 @@ describe('Adjust CSV re-import row baseline preservation (R59 / Reviewer Gemini 
     expect(isMoved(merged, 10, 10)).toBe(false)
   })
 
+  test('the first imported count on an empty row captures the current baseline', () => {
+    const empty: AdjRow = { productId: 'p1', productName: 'Bacon', unit: 'KG', mode: 'count', value: null, reason: 'count' }
+    const merged = mergeAdjustImportRow(empty, { product, qty: 8 }, { system: 10, level: 10 }, defaultReason)
+    expect(merged.seen).toEqual({ system: 10, level: 10 })
+    expect(isMoved(merged, 10, 10)).toBe(false)
+  })
+
   test('initializes seen with seenNow for a newly imported product', () => {
     const seenNow = { system: 10, level: 10 }
     const merged = mergeAdjustImportRow(undefined, { product, qty: 8 }, seenNow, defaultReason)

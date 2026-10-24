@@ -100,9 +100,8 @@ export function mergeAdjustImportRow(
   defaultReason: string,
 ): AdjRow {
   if (existing) {
-    // Preserve existing count row seen (including legacy undefined baseline requiring confirm) on re-import;
-    // do not preserve seen if switching a delta row into a new count row.
-    const seen = existing.mode === 'count' ? existing.seen : seenNow
+    // Re-import keeps a keyed count's baseline; an empty row is still its first count.
+    const seen = existing.mode === 'count' && existing.value !== null ? existing.seen : seenNow
     return { ...existing, mode: 'count', value: imported.qty, entryUnit: undefined, entryQty: undefined, seen }
   }
   return {
