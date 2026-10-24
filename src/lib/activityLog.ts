@@ -1,6 +1,7 @@
 import type { MovementEditField, PurchaseOrder, PurchaseRequest, StockEvent, StockMovement } from '../types'
 import { describeQty } from './inventoryRules/uom'
 import { movementNote } from './receiptLabel'
+import { voidActor, voidReasonText } from './voidAudit'
 
 /**
  * Everything that happened in the system, as one list nobody can edit.
@@ -94,8 +95,9 @@ export function buildActivityLog(input: ActivityInput): ActivityEntry[] {
         : e.changed.map((c) => t(c)).join(', ')
       push({ key: `mv:${m.id}:e${i}`, at: e.at, area: 'stock', kind, docNo: m.docNo, action: t('แก้ไขรายการ'), subject, detail, by: e.byName, link })
     })
-    if (m.voided && m.updatedAt) {
-      push({ key: `mv:${m.id}:void`, at: m.updatedAt, area: 'stock', kind, docNo: m.docNo, action: t('ยกเลิกรายการ (คืนสต๊อก)'), subject, detail: '', by: m.updatedByName ?? '', link })
+    const cancelled = voidActor(m)
+    if (m.voided && cancelled.at) {
+      push({ key: `mv:${m.id}:void`, at: cancelled.at, area: 'stock', kind, docNo: m.docNo, action: t('ยกเลิกรายการ (คืนสต๊อก)'), subject, detail: voidReasonText(m, t), by: cancelled.by, link })
     }
   }
 

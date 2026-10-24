@@ -15,6 +15,7 @@ import {
   type MovementEditField,
 } from '../types'
 import { genId } from '../lib/id'
+import { normaliseVoidReason } from '../lib/voidAudit'
 import { brandEpoch, getBrand, type BrandId } from '../brand/brand'
 import { sameUnit } from '../lib/units'
 import { describeQty, factorOf, isLegacyUnitRow, resolveFactor, toBase } from '../lib/uom'
@@ -1228,8 +1229,13 @@ export async function rebuildProductLevels(
  * permanently and "recalculate balances" could not fix it either. A movement whose effect has
  * already been consumed downstream needs a correcting adjustment, not a quiet deletion of the
  * history that explains the stock.
+ *
+ * A reason is required (owner P0, 22 Oct 2026) and is written with who and when in the same
+ * transaction as the reversal. Voiding an already-voided row changes nothing, so a double tap
+ * or a retry after a lost response can neither reverse twice nor overwrite the first reason.
  */
-export async function voidMovement(movementId: string, actor: Actor): Promise<void> {
+export async function voidMovement(movementId: string, actor: Actor, reason: string): Promise<void> {
+  const voidReason = normaliseVoidReason(reason)
   const db = scoped()
   const epoch = brandEpoch()
   let noted = () => {}
@@ -1272,7 +1278,16 @@ export async function voidMovement(movementId: string, actor: Actor): Promise<vo
         levelDoc(mv.toLocationId, mv.productId, next, actor, now, levelRef(mv.toLocationId, mv).unit),
       )
     }
-    const patchDoc = { voided: true, updatedBy: actor.id, updatedByName: actor.name, updatedAt: now }
+    const patchDoc = {
+      voided: true,
+      voidReason,
+      voidedAt: now,
+      voidedBy: actor.id,
+      voidedByName: actor.name,
+      updatedBy: actor.id,
+      updatedByName: actor.name,
+      updatedAt: now,
+    }
     tx.update(COL.movements, movementId, patchDoc)
     noted = () => noteChanged(mv, patchDoc, epoch)
   })

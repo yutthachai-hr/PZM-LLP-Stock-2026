@@ -219,6 +219,14 @@ export interface StockMovement {
    */
   edits?: MovementEdit[]
   voided?: boolean
+  /**
+   * Why, who and when it was cancelled (owner P0, 22 Oct 2026). Written once with `voided` and
+   * never changed; rows cancelled before then have none and are shown as legacy data.
+   */
+  voidReason?: string
+  voidedAt?: number
+  voidedBy?: string
+  voidedByName?: string
   /** When this movement came from a branch transfer (transfers/{id}). */
   transferId?: string
 }
