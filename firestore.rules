@@ -1334,9 +1334,11 @@ service cloud.firestore {
         && d.voidedBy == request.auth.uid
         // When and by whom are the database's own facts, not the client's: the time is within
         // ten minutes of the server's clock (phone clocks drift a little, never backdate a
-        // cancellation) and the name is the caller's profile name (R57 security review).
+        // cancellation) and the name is the caller's profile name at that moment; voidedBy is the
+        // identity that counts (R57 security review).
         && epochMs(d.voidedAt)
         && math.abs(d.voidedAt - request.time.toMillis()) <= 600000
+        && text(d.voidedByName, 200)
         && d.voidedByName == profile().get('name', '');
     }
 

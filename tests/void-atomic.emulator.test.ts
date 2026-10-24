@@ -163,7 +163,8 @@ describe.each(['pizza', 'lelapin'] as const)('%s', (brand) => {
     const mgr = env.authenticatedContext('r57-manager').firestore({ ignoreUndefinedProperties: true })
     const b = writeBatch(mgr)
     b.update(doc(mgr, mvCol(), mv.id), { ...voidPatch(), voidedBy: 'r57-manager', voidedByName: 'Synthetic manager', updatedBy: 'r57-manager', updatedByName: 'Synthetic manager' })
-    b.set(doc(mgr, lvCol(), 'wh__p1'), levelDoc('wh__p1', 'wh', 0))
+    // The balance row is stamped by the manager, so only the role can be what refuses this.
+    b.set(doc(mgr, lvCol(), 'wh__p1'), { ...levelDoc('wh__p1', 'wh', 0), updatedBy: 'r57-manager' })
     expect(await decision(b.commit())).toBe('DENY')
   })
 

@@ -32,8 +32,9 @@ Tests: `tests/void-reason.test.ts`, `tests/void-reason-rules.test.ts`, `e2e/void
 ## R57 security review (DeepSeek v4.1 flash, independent) — changes and accepted risk
 - `voidedAt` must be within 10 minutes of the server's `request.time`: a cancellation cannot be
   backdated. A phone clock more than 10 minutes off gets "permission denied" and must fix its clock.
-- `voidedByName` must equal the caller's profile `name` (the app's `actor.name` is that profile,
-  subscribed live): "cancelled by" cannot name a colleague.
+- `voidedByName` must equal the caller's profile `name` at that moment (the app's `actor.name` is
+  that profile, subscribed live), max 200 characters. This stops a client typing any name; it does
+  not stop someone who first renames their own profile. `voidedBy` (the uid) is the identity that counts.
 - The balance key trims the unit exactly like `levelId()`; a movement stored with `'KG '` was
   unvoidable before (fail closed) and now cancels against its real row.
 - Tests: `tests/void-atomic.emulator.test.ts` checks each of blank reason, another admin's uid,
