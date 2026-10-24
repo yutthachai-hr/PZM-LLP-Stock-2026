@@ -20,6 +20,7 @@ import { roundQty } from '../../lib/validate'
 import { confirmReceive, expectedQty, getTransfer, openReceiving, saveDiscrepancyPhoto, type ReceivedLineInput } from '../../services/transfers'
 import type { DiscrepancyReason, Transfer, TransferItem } from '../../types'
 import { createSubmitGate, formatDecimalInput, parseDecimalInput, validateReceiveQty } from './receiveHelpers'
+import './transfer-receive.css'
 
 /**
  * `/transfers/:id/receive` — the destination checks in a delivery, standing at the door
@@ -276,10 +277,10 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                 {/* Mobile Row 1 (Identity) & Row 2 (Dispatched) */}
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-start gap-3">
-                    <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg touch-manipulation hover:bg-sunken">
+                    <label className="receive-checkbox-target flex h-[44px] w-[44px] min-h-[44px] min-w-[44px] shrink-0 cursor-pointer items-center justify-center rounded-lg touch-manipulation hover:bg-sunken">
                       <input
                         type="checkbox"
-                        className="h-6 w-6 rounded border-line text-brand focus:ring-brand"
+                        className="h-[24px] w-[24px] rounded border-line text-brand focus:ring-brand"
                         checked={c.checked}
                         onChange={(e) => set(i.idx, { checked: e.target.checked })}
                         aria-label={t('ตรวจแล้ว')}
@@ -297,13 +298,13 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                   </div>
                 </div>
 
-                {/* Mobile Row 3: Stepper with 48px minus/plus, flex input, >=8px gaps */}
+                {/* Mobile Row 3: Stepper with fixed-px 48px touch targets, flex input, unit wrap */}
                 <div className="w-full md:w-auto shrink-0 pt-1 md:pt-0">
-                  <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="!h-12 !w-12 shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
+                      className="receive-stepper-btn !h-[48px] !w-[48px] shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
                       onClick={() => bump(i, -1)}
                       aria-label={t('ลด')}
                     >
@@ -314,7 +315,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                       inputMode="decimal"
                       step="any"
                       min={0}
-                      className="!h-12 min-w-0 flex-1 md:w-28 text-center text-lg font-semibold"
+                      className="!h-[48px] min-w-0 flex-1 md:w-28 text-center text-lg font-semibold"
                       value={formatDecimalInput(c.qty, c.rawQty)}
                       onChange={(e) => handleQtyChange(i.idx, e.target.value)}
                       aria-label={t('รับจริง')}
@@ -322,13 +323,13 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="!h-12 !w-12 shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
+                      className="receive-stepper-btn !h-[48px] !w-[48px] shrink-0 !px-0 text-xl font-bold select-none touch-manipulation"
                       onClick={() => bump(i, 1)}
                       aria-label={t('เพิ่ม')}
                     >
                       +
                     </Button>
-                    <span className="shrink-0 text-sm font-medium text-ink-soft min-w-[2.5rem] pl-1 text-left">{i.unit}</span>
+                    <span className="shrink-0 text-sm font-medium text-ink-soft pl-1 text-left">{i.unit}</span>
                   </div>
                 </div>
               </div>
@@ -354,7 +355,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
                     ))}
                   </Select>
                   <Textarea rows={1} value={c.note} onChange={(e) => set(i.idx, { note: e.target.value })} placeholder={t('หมายเหตุ เช่น น้ำหนักที่ชั่งได้')} />
-                  <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-sm text-ink-soft hover:bg-sunken touch-manipulation">
+                  <label className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-sm text-ink-soft hover:bg-sunken touch-manipulation">
                     <Icon name="camera" size={16} />
                     {c.photo ? t('มีรูปแล้ว') : t('แนบรูป')}
                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => void addPhoto(i.idx, e.target.files?.[0])} />
@@ -372,12 +373,12 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
             {t('ตรวจแล้ว {n}/{total}', { n: lines.length - unchecked.length, total: lines.length })}
             {diffs.length > 0 && <span className="ml-2 text-warn">· {t('มีผลต่าง {n} รายการ', { n: diffs.length })}</span>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
             {/* On a phone the top bar's back arrow does this; the bar keeps room for the count. */}
             <Button variant="outline" className="max-sm:hidden" onClick={() => navigate(`/transfers/${transfer.id}`)} disabled={busy}>
               {t('ย้อนกลับ')}
             </Button>
-            <Button onClick={() => void submit()} disabled={busy || !allowed || lines.some((i) => !validateReceiveQty(counts[i.idx].qty).valid)}>
+            <Button onClick={() => void submit()} disabled={busy || !allowed || lines.some((i) => !validateReceiveQty(counts[i.idx].qty).valid)} className="w-full sm:w-auto">
               <Icon name="check" size={18} />
               {busy ? t('กำลังบันทึก...') : diffs.length ? t('ยืนยันรับและส่งผลต่างให้หัวหน้า') : t('ยืนยันรับสินค้า')}
             </Button>

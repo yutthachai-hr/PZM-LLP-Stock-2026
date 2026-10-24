@@ -154,6 +154,25 @@ export async function runChecks(options = {}) {
       const computedFont = window.getComputedStyle(document.documentElement).fontSize
       const scrollWidth = document.documentElement.scrollWidth
       const innerWidth = window.innerWidth
+
+      // Find leaf elements causing horizontal expansion
+      const leafOverflows = []
+      document.querySelectorAll('*').forEach(el => {
+        if (el.children.length === 0 || Array.from(el.children).every(c => c.getBoundingClientRect().width === 0)) {
+          const r = el.getBoundingClientRect()
+          if (r.right > innerWidth) {
+            leafOverflows.push({
+              tag: el.tagName,
+              text: el.textContent?.slice(0, 30),
+              className: typeof el.className === 'string' ? el.className : '',
+              right: Math.round(r.right),
+              left: Math.round(r.left),
+              width: Math.round(r.width),
+            })
+          }
+        }
+      })
+
       const firstCard = document.querySelector('.space-y-3 > div')
       const checkboxLabel = firstCard?.querySelector('label')
       const cbRect = checkboxLabel?.getBoundingClientRect()
@@ -169,6 +188,7 @@ export async function runChecks(options = {}) {
         innerWidth,
         hasHScroll: scrollWidth > innerWidth,
         overflow: scrollWidth - innerWidth,
+        leafOverflows,
         cbSize: cbRect ? { w: Math.round(cbRect.width), h: Math.round(cbRect.height) } : null,
         minusSize: minusRect ? { w: Math.round(minusRect.width), h: Math.round(minusRect.height) } : null,
         inputSize: inputRect ? { w: Math.round(inputRect.width), h: Math.round(inputRect.height) } : null,

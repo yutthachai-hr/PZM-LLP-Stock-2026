@@ -1,0 +1,28 @@
+/* Local stylesheet scoped to TransferReceivePage mobile font reflow */
+
+/* Stepper and tap targets: fixed px boundaries prevent rem explosion under root font 200% */
+.receive-stepper-btn {
+  height: 48px !important;
+  width: 48px !important;
+  min-height: 48px !important;
+  min-width: 48px !important;
+}
+
+.receive-checkbox-target {
+  height: 44px !important;
+  width: 44px !important;
+  min-height: 44px !important;
+  min-width: 44px !important;
+}
+
+/* Ensure mobile header controls don't inflate beyond phone viewport under 200% root font */
+@media (max-width: 640px) {
+  header button {
+    max-width: 44px !important;
+    max-height: 44px !important;
+  }
+  header span.h-9.w-9 {
+    height: 36px !important;
+    width: 36px !important;
+  }
+}
