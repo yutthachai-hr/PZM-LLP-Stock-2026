@@ -33,13 +33,17 @@ import {
   rewindTicket,
   type RewindState,
 } from '../lib/monthlyHistory'
+import { appendLineOnce } from '../lib/lines'
 import { describeQty } from '../lib/uom'
 import { ADJUST_REASONS, type Product, type StockMovement } from '../types'
 import { useT } from '../i18n/I18nContext'
 import { errText } from '../i18n/AppError'
 import { looseMatch, looseScore } from '../lib/search'
-import { findByBarcode, searchFields } from '../lib/barcode'
+import { searchFields } from '../lib/barcode'
+import { useScanGate } from '../lib/useScanGate'
+import { isImeComposing, shouldScanOnTab } from '../lib/barcodeSelection'
 import { BarcodeScanner } from '../components/BarcodeScanner'
+import { useConfirm } from '../components/Confirm'
 import { useViewport } from '../lib/viewport'
 import { useDraft } from '../lib/useDraft'
 import { DraftNotice } from '../components/DraftNotice'
@@ -55,7 +59,7 @@ const MAX_MATCHES = 40
  * ("2 broken"). Whichever box the person typed in last is the one that holds; the other is
  * shown from it.
  */
-interface AdjRow {
+export interface AdjRow {
   productId: string
   productName: string
   unit: string
@@ -79,13 +83,36 @@ function deltaOf(r: AdjRow, system: number): number {
  * no approval step (owner, 22 Sep) — and every row is still its own `adjust` movement,
  * all under one ADJ- number (services/stock.ts adjustStockLines).
  */
+export function appendAdjRow(
+  rows: readonly AdjRow[],
+  p: Product,
+  defaultReason: string,
+): AdjRow[] {
+  return appendLineOnce(rows, {
+    productId: p.id,
+    productName: p.name,
+    unit: p.unitType,
+    mode: 'count',
+    value: null,
+    reason: defaultReason,
+  })
+}
+
 export function AdjustPage() {
   const t = useT()
-  const { products, locations, qtyAt, movements } = useData()
+  const { products, productsServerSynced, productsListenerError, locations, qtyAt, movements } = useData()
   const { user } = useAuth()
   const toast = useToast()
+  const confirm = useConfirm()
   const { settings } = useScheduleConfig()
   const phone = useViewport() === 'phone'
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const active = useMemo(() => locations.filter((l) => l.active !== false), [locations])
   const [locationId, setLocationId] = useState('')
@@ -210,15 +237,21 @@ export function AdjustPage() {
       setSheetFor(p)
       return
     }
-    setRows((rs) => [...rs, { productId: p.id, productName: p.name, unit: p.unitType, mode: 'count', value: null, reason: defaultReason }])
+    setRows((rs) => appendAdjRow(rs, p, defaultReason))
     setTimeout(() => searchRef.current?.focus(), 0)
   }
 
+  /**
+   * One scan entry point (camera + Enter in the box), shared with the other screens (R4).
+   * `add` writes through a functional state update, so a confirmation can never clobber a
+   * row keyed while it was open.
+   */
+  const gate = useScanGate({ products, productsServerSynced, productsListenerError, onAdd: add, confirm, toast, t })
+
   function scanned(code: string) {
     setScanning(false)
-    const hit = findByBarcode(products, code)
-    if (hit) add(hit)
-    else setSearch(code)
+    // The camera decodes the printed code itself — no keyboard layout is involved.
+    gate(code, { literal: true })
   }
 
   const patch = (id: string, p: Partial<AdjRow>) => setRows((rs) => rs.map((r) => (r.productId === id ? { ...r, ...p } : r)))
@@ -456,10 +489,21 @@ export function AdjustPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && matches[0]) {
-                    e.preventDefault()
-                    add(matches[0])
-                  }
+                  if (isImeComposing(e)) return
+                  if (e.key !== 'Enter' && e.key !== 'Tab') return
+                  // Shift+Tab stays the way out of the box; a bare Tab after a code is the
+                  // scanner's terminator, exactly as on the receipt rows (R19).
+                  if (e.key === 'Tab' && e.shiftKey) return
+                  const raw = search.trim()
+                  if (!raw) return
+                  if (e.key === 'Tab' && !shouldScanOnTab(products, raw, matches.length > 0)) return
+                  // Enter means "this is a code" (a wedge scanner ends with Enter). It is
+                  // resolved exactly as a barcode; a human picks a product by clicking it.
+                  e.preventDefault()
+                  // A refused code must not stay in the box: the next scan would append to it
+                  // and the pair is unknown for a reason that has nothing to do with the scan.
+                  setSearch('')
+                  gate(raw)
                 }}
                 autoComplete="off"
                 spellCheck={false}

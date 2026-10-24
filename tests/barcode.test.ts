@@ -1,6 +1,7 @@
 // Finding a product from what a scanner read (spec §3).
 import { describe, expect, test } from 'vitest'
-import { findByBarcode, pickOnEnter, searchFields } from '../src/lib/barcode'
+import { resolveBarcode, searchFields } from '../src/lib/barcode'
+import { decideScan } from '../src/lib/barcodeSelection'
 import type { Product } from '../src/types'
 
 const p = (id: string, over: Partial<Product> = {}): Product => ({
@@ -15,18 +16,20 @@ const products = [
   p('plain', { name: 'NO BARCODE' }),
 ]
 
-test('an exact match, with the newline and the case a reader may add', () => {
-  expect(findByBarcode(products, '8851000654321')?.id).toBe('cheese')
-  expect(findByBarcode(products, ' 8851000654321\n')?.id).toBe('cheese')
-  expect(findByBarcode(products, 'abc-128')?.id).toBe('flour')
+test('an exact match, with the newline a reader may add', () => {
+  expect(resolveBarcode(products, '8851000654321')).toMatchObject({ status: 'legacy_unverified', product: { id: 'cheese' } })
+  expect(resolveBarcode(products, ' 8851000654321\n')).toMatchObject({ status: 'legacy_unverified', product: { id: 'cheese' } })
+  // Code 128 is case-significant: a lowercased token is a different code, never a match.
+  expect(resolveBarcode(products, 'abc-128').status).toBe('not_found')
+  expect(resolveBarcode(products, 'ABC-128')).toMatchObject({ status: 'legacy_unverified', product: { id: 'flour' } })
 })
 
 test('near misses, hidden products and empty scans find nothing', () => {
-  expect(findByBarcode(products, '885100065432')).toBeUndefined()
-  expect(findByBarcode(products, '88510006543210')).toBeUndefined()
-  expect(findByBarcode(products, '9999999999999')).toBeUndefined()
-  expect(findByBarcode(products, '   ')).toBeUndefined()
-  expect(findByBarcode([], '8851000654321')).toBeUndefined()
+  expect(resolveBarcode(products, '885100065432').status).toBe('not_found')
+  expect(resolveBarcode(products, '88510006543210').status).toBe('not_found')
+  expect(resolveBarcode(products, '9999999999999')).toMatchObject({ status: 'inactive', product: { id: 'old' } })
+  expect(resolveBarcode(products, '   ').status).toBe('empty')
+  expect(resolveBarcode([], '8851000654321').status).toBe('not_found')
 })
 
 test('the barcode is one of the fields a product is searched by', () => {
@@ -40,13 +43,13 @@ describe('Enter in a search box (a scanner in keyboard mode ends with Enter)', (
   const lookalike = box({ id: 'b', sku: 'BEV-02', name: 'PACK 8851959132012 PROMO' })
   const products = [lookalike, scanned]
 
-  test('an exact barcode wins over a loose match that ranks first', () => {
-    expect(pickOnEnter(products, '8851959132012\n', [lookalike, scanned])?.id).toBe('a')
+  test('an exact barcode resolves to legacy confirmation on Enter, even against a better-ranked loose match', () => {
+    expect(decideScan(products, '8851959132012\n')).toMatchObject({ kind: 'legacy', product: { id: 'a' } })
   })
 
-  test('then the product code exactly, then the best loose match', () => {
-    expect(pickOnEnter(products, 'bev-02', [scanned, lookalike])?.id).toBe('b')
-    expect(pickOnEnter(products, 'coke', [scanned])?.id).toBe('a')
-    expect(pickOnEnter(products, '   ', [scanned])).toBeUndefined()
+  test('default Enter never authorizes an SKU or a loose suggestion', () => {
+    expect(decideScan(products, 'bev-02')).toMatchObject({ kind: 'reject', reason: 'not_found' })
+    expect(decideScan(products, 'coke')).toMatchObject({ kind: 'reject', reason: 'not_found' })
+    expect(decideScan(products, '   ')).toMatchObject({ kind: 'reject', reason: 'empty' })
   })
 })

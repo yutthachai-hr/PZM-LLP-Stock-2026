@@ -2,6 +2,7 @@ import {
   collection as fbCollection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   getDocsFromServer,
   setDoc,
@@ -127,6 +128,11 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
             noteReadOp({ label, collection: c, kind: 'listen.bootstrap', docs: snap.size, billed: resumed ? changes : Math.max(1, snap.size) })
             fromServer = true
             epoch = currentResumeEpoch()
+            try {
+              opts?.onServerSync?.()
+            } catch (e) {
+              console.error(`[firestore] onServerSync ${c} failed`, e)
+            }
           } else if (currentResumeEpoch() !== epoch) {
             noteReadOp({ label, collection: c, kind: 'listen.resume', docs: snap.size, billed: Math.max(1, snap.size) })
             epoch = currentResumeEpoch()
@@ -188,7 +194,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
     async getAll<T>(collection: string, opts?: ReadOptions): Promise<T[]> {
       const db = getDb()
       const c = resolve(collection)
-      const snap = await getDocs(fbCollection(db, c))
+      const snap = await (opts?.server ? getDocsFromServer(fbCollection(db, c)) : getDocs(fbCollection(db, c)))
       noteReadOp({ label: opts?.label ?? `${collection}.all`, collection: c, kind: 'all', docs: snap.size, fromCache: snap.metadata.fromCache })
       return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)
     },
@@ -208,7 +214,7 @@ export function createFirestoreBackend(brand?: BrandId): Backend {
     async getOne<T>(collection: string, id: string, opts?: ReadOptions): Promise<T | null> {
       const db = getDb()
       const c = resolve(collection)
-      const snap = await getDoc(doc(db, c, id))
+      const snap = await (opts?.server ? getDocFromServer(doc(db, c, id)) : getDoc(doc(db, c, id)))
       noteReadOp({ label: opts?.label ?? `${collection}.one`, collection: c, kind: 'one', docs: snap.exists() ? 1 : 0, fromCache: snap.metadata.fromCache })
       return snap.exists() ? ({ ...snap.data(), id: snap.id } as T) : null
     },

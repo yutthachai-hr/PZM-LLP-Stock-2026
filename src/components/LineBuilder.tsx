@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useViewport } from '../lib/viewport'
-import { lineOf, upsertLine } from '../lib/lines'
+import { lineOf, upsertLine, appendLineOnce } from '../lib/lines'
 import { unitUsage, usualUnit } from '../lib/usualUnit'
 import { useData } from '../data/DataContext'
 import { QtySheet } from './QtySheet'
@@ -15,8 +15,12 @@ import { Icon } from './Icon'
 import { fmtQty } from '../lib/format'
 import { useT } from '../i18n/I18nContext'
 import { looseMatch, looseScore } from '../lib/search'
-import { findByBarcode, pickOnEnter, searchFields } from '../lib/barcode'
+import { searchFields } from '../lib/barcode'
+import { useScanGate } from '../lib/useScanGate'
+import { isImeComposing, shouldScanOnTab } from '../lib/barcodeSelection'
 import { BarcodeScanner } from './BarcodeScanner'
+import { useToast } from './Toast'
+import { useConfirm } from './Confirm'
 import { describeQty, entryFor, type QtyEntry } from '../lib/uom'
 
 export interface Line {
@@ -91,6 +95,8 @@ export function LineBuilder({
   rankFirst?: (p: Product) => number
 }) {
   const t = useT()
+  const toast = useToast()
+  const confirm = useConfirm()
   // Arriving from the quick menu's "import a file" (?import=1) opens the import at once.
   const [params, setParams] = useSearchParams()
   const [importing, setImporting] = useState(() => importable && params.get('import') === '1')
@@ -112,8 +118,19 @@ export function LineBuilder({
   // How each product is usually keyed, and how often it is used at all, from the movements
   // already in memory (owner, 29 Sep 2026) — a new line starts in its usual unit, and among
   // equally good matches the product people use most is listed first. No read.
-  const { movements } = useData()
+  const { movements, productsServerSynced, productsListenerError } = useData()
   const usage = useMemo(() => unitUsage(movements), [movements])
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  // The latest lines, read at confirm time: a confirmation dialog that opens, then a line
+  // added on another path, must not lose that line when the answer comes back (R3 C3).
+  const linesRef = useRef(lines)
+  linesRef.current = lines
 
   useEffect(() => {
     if (focusOn > 0) searchBox.current?.focus()
@@ -145,7 +162,7 @@ export function LineBuilder({
       return
     }
     // Scanned again: the line is already there (the list hides chosen products, a scan does not).
-    if (!lines.some((l) => l.productId === p.id)) onChange([...lines, firstLine(p)])
+    onChange(appendLineOnce(linesRef.current, firstLine(p)))
     setSearch('')
     // Straight on to the next line: the cursor stays in the search box after every add.
     setTimeout(() => searchBox.current?.focus(), 0)
@@ -164,15 +181,26 @@ export function LineBuilder({
     return { productId: p.id, productName: p.name, unit: p.unitType, qty: 1 }
   }
 
+  /**
+   * One entry point for a camera scan and for Enter in the search box, so the two can never
+   * disagree (R4). The exact resolution, the legacy confirmation with its live revalidation,
+   * and every terminal rejection live in useScanGate.
+   */
+  const gate = useScanGate({
+    products,
+    productsServerSynced,
+    productsListenerError,
+    onAdd: addProduct,
+    confirm,
+    toast,
+    t,
+  })
+
   /** A scan is a decision, not a suggestion: the line goes on as soon as it reads. */
   function scanned(code: string) {
     setScanning(false)
-    const hit = findByBarcode(products, code)
-    if (!hit) {
-      setSearch(code)
-      return
-    }
-    addProduct(hit)
+    // The camera decodes the printed code itself — no keyboard layout is involved.
+    gate(code, { literal: true })
   }
 
   function sheetSubmit(e: QtyEntry) {
@@ -264,14 +292,22 @@ export function LineBuilder({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
-            // A scanner in keyboard mode types the code and presses Enter: an exact barcode
-            // (or product code) is what it meant, before any loose match.
-            if (e.key !== 'Enter') return
-            const hit = pickOnEnter(products, search, matches)
-            if (hit) {
-              e.preventDefault()
-              addProduct(hit)
-            }
+            if (isImeComposing(e)) return
+            if (e.key !== 'Enter' && e.key !== 'Tab') return
+            // Shift+Tab stays the way out of the box; a bare Tab after a code is the scanner's
+            // terminator, exactly as Enter is.
+            if (e.key === 'Tab' && e.shiftKey) return
+            const raw = search.trim()
+            if (!raw) return
+            if (e.key === 'Tab' && !shouldScanOnTab(products, raw, matches.length > 0)) return
+            // Enter means "this is a code". A hardware wedge scanner and a human typing in
+            // the same box cannot be told apart, so it is resolved exactly as a barcode and
+            // never as a loose name or an SKU; a human picks a product by clicking it.
+            e.preventDefault()
+            // A code that is refused must not stay in the box: the next scan appends to it and
+            // the pair is then unknown for a reason that has nothing to do with the scan (R18).
+            setSearch('')
+            gate(raw)
           }}
           autoComplete="off"
           // Product codes and names are not prose; the browser's dictionary only gets in

@@ -22,8 +22,10 @@ const SKIP = /catalog\.generated|sarabunFont|[\\/]i18n[\\/]/
 // data it reads, never copy it shows. lib/siteTone.ts matches the sites' own Thai names;
 // lib/inventoryRules/uom.ts the Thai spellings of gram / kilogram / litre it accepts;
 // lib/productMatch.ts the Thai unit words it ignores when ranking names.
+// lib/barcode.ts the digit-row glyphs a Thai keyboard layout sends for a scanned code (data,
+// never copy: the scan box shows what the scanner typed).
 // seed/wip.ts is the work-in-process catalogue: names and units as the workbook writes them.
-const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]seed[\\/](products|wip)\.ts$|[\\/]lib[\\/](orderSheet|sheetLines|productSuggest|productMatch|siteTone)\.ts$|[\\/]inventoryRules[\\/]uom\.ts$/
+const DATA_ONLY = /types\.ts$|[\\/]services[\\/]|[\\/]seed[\\/](products|wip)\.ts$|[\\/]lib[\\/](orderSheet|sheetLines|productSuggest|productMatch|siteTone|barcode)\.ts$|[\\/]inventoryRules[\\/]uom\.ts$/
 
 const THAI = /[฀-๿]/
 

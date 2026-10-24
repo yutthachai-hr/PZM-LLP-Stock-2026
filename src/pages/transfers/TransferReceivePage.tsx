@@ -12,13 +12,14 @@ import { FramePage, PageHero, SectionCard } from '../../components/frame'
 import { transferCache } from '../../data/transferCache'
 import { useT } from '../../i18n/I18nContext'
 import { errText } from '../../i18n/AppError'
-import { pickOnEnter } from '../../lib/barcode'
+import { useScanGate } from '../../lib/useScanGate'
+import { isImeComposing, shouldScanOnTab } from '../../lib/barcodeSelection'
 import { fmtQty } from '../../lib/format'
 import { compressImage } from '../../lib/image'
 import { DISCREPANCY_REASON_KEYS, canReceive } from '../../lib/transferStatus'
 import { roundQty } from '../../lib/validate'
 import { confirmReceive, expectedQty, getTransfer, openReceiving, saveDiscrepancyPhoto, type ReceivedLineInput } from '../../services/transfers'
-import type { DiscrepancyReason, Transfer, TransferItem } from '../../types'
+import type { DiscrepancyReason, Product, Transfer, TransferItem } from '../../types'
 
 /**
  * `/transfers/:id/receive` — the destination checks in a delivery, standing at the door
@@ -73,7 +74,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
   const confirm = useConfirm()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { products } = useData()
+  const { products, productsServerSynced, productsListenerError } = useData()
   const actor = useMemo(() => ({ id: user!.id, name: user!.name, role: user!.role, siteIds: user!.siteIds }), [user])
   const lines = transfer.items.filter((i) => !i.removed)
   const [counts, setCounts] = useState<Record<number, Count>>(() =>
@@ -85,9 +86,15 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
   const [busy, setBusy] = useState(false)
   const rowRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const scanBox = useRef<HTMLInputElement>(null)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const allowed = canReceive(transfer, actor)
-  const lineProducts = useMemo(() => products.filter((p) => lines.some((l) => l.productId === p.id)), [products, lines])
 
   function set(idx: number, patch: Partial<Count>) {
     setCounts((c) => ({ ...c, [idx]: { ...c[idx], ...patch } }))
@@ -97,11 +104,8 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     set(i.idx, { qty: Math.max(0, roundQty((counts[i.idx]?.qty ?? 0) + by)), checked: true })
   }
 
-  /** A scan: find the line, mark it counted, bring it into view. */
-  function found(code: string) {
-    const hit = pickOnEnter(lineProducts, code, [])
-    const line = hit && lines.find((l) => l.productId === hit.id)
-    setScan('')
+  function markProductReceived(p: Product) {
+    const line = lines.find((l) => l.productId === p.id)
     if (!line) {
       toast.error(t('ไม่พบสินค้านี้ในเอกสาร {docNo}', { docNo: transfer.docNo }))
       return
@@ -110,6 +114,37 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
     setLit(line.idx)
     rowRefs.current[line.idx]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setTimeout(() => setLit((cur) => (cur === line.idx ? null : cur)), 2500)
+  }
+
+  const linesRef = useRef(lines)
+  linesRef.current = lines
+
+  /**
+   * A scan: find the line, mark it counted, bring it into view.
+   *
+   * Camera and box share this one gate (R4). Both are scan origins — a wedge scanner typing
+   * into the box is indistinguishable from a human — so an unknown code is terminal here and
+   * NEVER falls back to an SKU confirmation (R3 C5). A person who wants a product by its
+   * code picks it from the list, not with Enter.
+   */
+  const gate = useScanGate({
+    products,
+    productsServerSynced,
+    productsListenerError,
+    onAdd: markProductReceived,
+    confirm,
+    toast,
+    t,
+    confirmText: t('ตรวจรับรายการนี้'),
+    legacyMessage: (product, code) =>
+      t('พบสินค้า "{name}" จากบาร์โค้ด {code} — ยืนยันตรวจรับรายการนี้?', { name: product.name, code }),
+    isEligible: (p) => linesRef.current.some((l) => l.productId === p.id),
+    onIneligible: () => toast.error(t('ไม่พบสินค้านี้ในเอกสาร {docNo}', { docNo: transfer.docNo })),
+  })
+
+  function found(code: string, literal = false) {
+    setScan('')
+    gate(code, { literal })
   }
 
   async function addPhoto(idx: number, file?: File) {
@@ -204,13 +239,17 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
             autoFocus
             inputMode="text"
             value={scan}
-            placeholder={t('ยิงบาร์โค้ดหรือพิมพ์รหัสสินค้า แล้วกด Enter')}
+            placeholder={t('ยิงบาร์โค้ด แล้วกด Enter')}
             onChange={(e) => setScan(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && scan.trim()) {
-                e.preventDefault()
-                found(scan)
-              }
+              if (isImeComposing(e)) return
+              if (e.key !== 'Enter' && e.key !== 'Tab') return
+              if (e.key === 'Tab' && e.shiftKey) return
+              const raw = scan.trim()
+              if (!raw) return
+              if (e.key === 'Tab' && !shouldScanOnTab(products, raw, false)) return
+              e.preventDefault()
+              found(raw)
             }}
             autoComplete="off"
             spellCheck={false}
@@ -316,7 +355,7 @@ function ReceiveForm({ transfer }: { transfer: Transfer }) {
         </Button>
       </FormActions>
 
-      <BarcodeScanner open={camera} onClose={() => setCamera(false)} onRead={(code) => { setCamera(false); found(code) }} title={t('สแกนบาร์โค้ดสินค้า')} />
+      <BarcodeScanner open={camera} onClose={() => setCamera(false)} onRead={(code) => { setCamera(false); found(code, true) }} title={t('สแกนบาร์โค้ดสินค้า')} />
     </FramePage>
   )
 }

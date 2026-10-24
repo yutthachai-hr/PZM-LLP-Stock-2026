@@ -23,6 +23,10 @@ import { useNotificationInbox, type Inbox } from './notificationInbox'
 
 interface DataState {
   products: Product[]
+  /** Acknowledged by the server in this session for the current brand. */
+  productsServerSynced?: boolean
+  /** Listener error if products subscription failed. */
+  productsListenerError?: unknown | null
   /** Named for the interface language: the English name when the screen is in English. */
   locations: StockLocation[]
   /** Virtual in-transit location (if created). */
@@ -111,7 +115,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // be rejected, and the only screen that reads `users` is the admin section of Settings.
   const isAdmin = user?.role === 'admin'
 
-  const { data: products, loading: pLoading } = useSynced<Product>(COL.products, { label: 'products', fullEvery: 7 * DAY })
+  const { data: products, loading: pLoading, serverSynced: productsServerSynced, error: productsListenerError } = useSynced<Product>(COL.products, { label: 'products', fullEvery: 7 * DAY })
   const { data: rawLocations, loading: lLoading } = useLive<StockLocation>(COL.locations, { label: 'locations.bootstrap' })
   const { lang } = useI18n()
   const transitLocation = useMemo(
@@ -202,6 +206,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     return {
       products,
+      productsServerSynced,
+      productsListenerError,
       locations,
       transitLocation,
       rawLocations,
@@ -225,6 +231,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [
     products,
+    productsServerSynced,
+    productsListenerError,
     locations,
     transitLocation,
     rawLocations,

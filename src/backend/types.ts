@@ -43,6 +43,8 @@ export interface SubscribeOptions {
   label?: string
   /** Told when the listener fails (refused by the rules, network) instead of waiting forever. */
   onError?: (e: unknown) => void
+  /** Called the first time a snapshot arrives acknowledged from the server (!fromCache). */
+  onServerSync?: () => void
   /** Filters, order and limit on top of `since` — run by the server (querySpec.ts). */
   query?: QuerySpec
 }
@@ -50,7 +52,7 @@ export interface SubscribeOptions {
 /** For one-shot reads: the read meter's label. */
 export interface ReadOptions {
   label?: string
-  /** Completeness-sensitive history must be acknowledged by the server, never offline cache. */
+  /** Completeness-sensitive history and scan verification must be acknowledged by the server, never offline cache. */
   server?: boolean
 }
 
