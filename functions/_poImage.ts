@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { firebaseProjectFor, type FunctionEnv } from '../src/lib/deployTier'
 
 /**
  * Order-sheet picture hosting: a Pages Function over a KV namespace. (Until 17 Sep 2026
@@ -18,7 +19,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
  * `tests/image-host.test.ts` pins the constants the app relies on.
  */
 
-export interface Env {
+export interface Env extends FunctionEnv {
   PO_IMAGES: KVNamespace
   /** Demo deployments only: a shared key accepted in place of a Firebase token. */
   PO_IMAGE_DEMO_KEY?: string
@@ -49,11 +50,11 @@ const JWKS = createRemoteJWKSet(
 )
 
 /**
- * The uid of a valid Firebase ID token in an Authorization header. `projectId` defaults to
- * the pinned production project; a function may pass FIREBASE_PROJECT_ID from its own
- * environment instead (a deployment pointed at another project) — never the token's claim.
+ * The uid of a valid Firebase ID token in an Authorization header, for exactly `projectId`
+ * — never the token's own claim. No default: every caller names the project it trusts, from
+ * firebaseProjectFor() (production host → the pinned production project; staging → its own).
  */
-export async function verifyFirebaseToken(header: string | null, projectId: string = PROJECT_ID): Promise<string | null> {
+export async function verifyFirebaseToken(header: string | null, projectId: string): Promise<string | null> {
   const m = header?.match(/^Bearer (.+)$/i)
   if (!m) return null
   try {
@@ -65,6 +66,12 @@ export async function verifyFirebaseToken(header: string | null, projectId: stri
   } catch {
     return null
   }
+}
+
+/** The signed-in caller of this request, in the project this deployment trusts (null if none). */
+export async function callerUid(request: Request, env: Env): Promise<string | null> {
+  const project = firebaseProjectFor(request.url, env)
+  return project ? verifyFirebaseToken(request.headers.get('authorization'), project) : null
 }
 
 export function demoKeyOk(req: Request, env: Env): boolean {

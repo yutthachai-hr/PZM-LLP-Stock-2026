@@ -1,4 +1,5 @@
-import { PROJECT_ID, verifyFirebaseToken } from '../_poImage'
+import { verifyFirebaseToken } from '../_poImage'
+import { firebaseProjectFor } from '../../src/lib/deployTier'
 import { memoryServerStore } from './memoryStore'
 import { restServerStore } from './serverStore'
 import type { Deps } from './supplierPo'
@@ -18,6 +19,8 @@ export interface SupplierEnv {
   FIREBASE_SERVICE_ACCOUNT?: string
   SUPPLIER_LINK_SECRET?: string
   FIREBASE_PROJECT_ID?: string
+  DEPLOY_TIER?: string
+  PRODUCTION_HOSTS?: string
   /** Local preview only (`.dev.vars`): an in-memory database with one sample order. */
   SUPPLIER_DEV_FIXTURE?: string
 }
@@ -46,7 +49,9 @@ export function liveDeps(env: SupplierEnv, request: Request): Deps | null {
   }
 
   if (!env.FIREBASE_SERVICE_ACCOUNT) return null
-  const projectId = (env.FIREBASE_PROJECT_ID ?? '').trim() || PROJECT_ID
+  // Production host: the production project, whatever FIREBASE_PROJECT_ID says; staging: its own.
+  const projectId = firebaseProjectFor(request.url, env)
+  if (!projectId) return null
   return {
     ...base,
     store: restServerStore(projectId, env.FIREBASE_SERVICE_ACCOUNT),

@@ -5,8 +5,8 @@ import {
   TTL_SECONDS,
   demoKeyOk,
   json,
+  callerUid,
   randomToken,
-  verifyFirebaseToken,
   type Env,
 } from '../_poImage'
 
@@ -16,7 +16,7 @@ import {
  * kept without expiry → { url }.
  */
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  const uid = (await verifyFirebaseToken(request.headers.get('authorization'))) ?? (demoKeyOk(request, env) ? 'demo' : null)
+  const uid = (await callerUid(request, env)) ?? (demoKeyOk(request, env) ? 'demo' : null)
   if (!uid) return json(401, { error: 'unauthorized' })
 
   const url = new URL(request.url)
