@@ -2,6 +2,9 @@ import type { MonthlyCountLine, MonthlyCountResult } from '../types'
 import { bkkDayStart, DAY_MS } from './inventoryRules/time'
 import { roundQty } from './validate'
 
+import { MissingExpectedLevelError } from '../i18n/AppError'
+export { MissingExpectedLevelError } from '../i18n/AppError'
+
 /**
  * The monthly count's arithmetic (owner, 29 Sep 2026), kept pure so it is tested alone.
  *
@@ -126,3 +129,51 @@ export function postingPlan(rows: readonly CountRow[], postedIds: readonly strin
   for (let i = 0; i < todo.length; i += POST_CHUNK) parts.push(todo.slice(i, i + POST_CHUNK))
   return parts
 }
+
+/**
+ * Capture optimistic concurrency expected levels at submit time for monthly count rows.
+ * Computes over productIds ∪ lines so every row that can be posted has a defined expected level.
+ */
+export function countExpectedLevels(
+  productIds: readonly string[],
+  lines: Readonly<Record<string, unknown>>,
+  qtyAt: (productId: string) => number,
+): Map<string, number> {
+  const ids = new Set([...productIds, ...Object.keys(lines)])
+  const map = new Map<string, number>()
+  for (const id of ids) {
+    map.set(id, qtyAt(id))
+  }
+  return map
+}
+
+export interface PostableCountAdjustment {
+  productId: string
+  productName: string
+  unit: string
+  diff: number
+  expectedLevel: number
+}
+
+export function toPostingParts(
+  parts: readonly (readonly CountRow[])[],
+  expectedLevels: ReadonlyMap<string, number>,
+  byId: ReadonlyMap<string, { name?: string; unitType?: string }>,
+): PostableCountAdjustment[][] {
+  return parts.map((part) =>
+    part.map((r) => {
+      const expected = expectedLevels.get(r.productId)
+      if (expected === undefined) {
+        throw new MissingExpectedLevelError(r.productId, byId.get(r.productId)?.name ?? r.productId)
+      }
+      return {
+        productId: r.productId,
+        productName: byId.get(r.productId)?.name ?? r.productId,
+        unit: byId.get(r.productId)?.unitType ?? '',
+        diff: r.diff ?? 0,
+        expectedLevel: expected,
+      }
+    }),
+  )
+}
+

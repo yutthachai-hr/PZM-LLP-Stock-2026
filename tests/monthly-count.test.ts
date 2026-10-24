@@ -6,8 +6,10 @@
 import { describe, expect, test } from 'vitest'
 import {
   countDayOf,
+  countExpectedLevels,
   countRows,
   isBig,
+  MissingExpectedLevelError,
   monthBefore,
   monthOf,
   monthlyCountId,
@@ -15,6 +17,7 @@ import {
   postingPlan,
   previousMonth,
   resultsOf,
+  toPostingParts,
 } from '../src/lib/monthlyCount'
 import type { MonthlyCountLine } from '../src/types'
 
@@ -97,3 +100,53 @@ describe('postingPlan', () => {
     expect(parts.flat().some((r) => r.productId === 'p0' || r.productId === 'same')).toBe(false)
   })
 })
+
+describe('countExpectedLevels and toPostingParts', () => {
+  test('posted row for product present only in sheet.lines has defined expectedLevel equal to level at submit', () => {
+    const productIds = ['p1']
+    const lines = {
+      p1: line(10),
+      p_imported: line(5), // present only in sheet.lines (e.g. branch does not track product)
+    }
+    const currentQty: Record<string, number> = { p1: 10, p_imported: 3 }
+    const expectedLevels = countExpectedLevels(productIds, lines, (id) => currentQty[id] ?? 0)
+
+    const { rows } = countRows({
+      productIds,
+      lines,
+      systemQty: (id) => currentQty[id] ?? 0,
+      cost: () => 10,
+    })
+
+    const byId = new Map([
+      ['p1', { name: 'P1', unitType: 'KG' }],
+      ['p_imported', { name: 'P Imported', unitType: 'KG' }],
+    ])
+
+    const parts = toPostingParts(postingPlan(rows), expectedLevels, byId)
+    const flat = parts.flat()
+    const importedRow = flat.find((r) => r.productId === 'p_imported')
+
+    expect(importedRow).toBeDefined()
+    expect(importedRow?.expectedLevel).toBeDefined()
+    expect(importedRow?.expectedLevel).toBe(3)
+  })
+
+  test('toPostingParts refuses (throws MissingExpectedLevelError) when a row is absent from captured expectedLevels', () => {
+    const rows: CountRow[] = [
+      {
+        productId: 'p_untracked',
+        systemQty: 10,
+        countedQty: 8,
+        diff: -2,
+        value: -20,
+        big: false,
+      },
+    ]
+    const expectedLevels = new Map<string, number>() // p_untracked missing from map
+    const byId = new Map([['p_untracked', { name: 'P Untracked', unitType: 'KG' }]])
+
+    expect(() => toPostingParts(postingPlan(rows), expectedLevels, byId)).toThrow(MissingExpectedLevelError)
+  })
+})
+

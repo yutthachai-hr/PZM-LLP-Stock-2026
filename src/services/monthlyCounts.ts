@@ -1,6 +1,6 @@
 import { backend } from '../backend'
 import { getBrand } from '../brand/brand'
-import { AppError } from '../i18n/AppError'
+import { AppError, MissingExpectedLevelError } from '../i18n/AppError'
 import { countDayOf, monthlyCountId } from '../lib/monthlyCount'
 import { COL, type MonthlyCount, type MonthlyCountLine, type MonthlyCountQuestion, type MonthlyCountResult } from '../types'
 import { captureFilingScope, filing, planAdjust, type FilingScope } from './stock'
@@ -131,6 +131,7 @@ export interface CountAdjustment {
   productName: string
   unit: string
   diff: number
+  expectedLevel: number
 }
 
 /**
@@ -171,6 +172,11 @@ export async function postMonthlyCount(params: {
       const todo = part.filter((a) => !done.has(a.productId))
       let filed: string | null = null
       if (todo.length > 0) {
+        for (const a of todo) {
+          if (a.expectedLevel === undefined || typeof a.expectedLevel !== 'number') {
+            throw new MissingExpectedLevelError(a.productId, a.productName)
+          }
+        }
         const planned = await planAdjust(
           tx,
           {
@@ -185,6 +191,8 @@ export async function postMonthlyCount(params: {
               qty: Math.abs(a.diff),
               direction: a.diff > 0 ? ('in' as const) : ('out' as const),
               reason,
+              mode: 'count' as const,
+              expectedLevel: a.expectedLevel,
             })),
           },
           file,

@@ -15,7 +15,16 @@ import { useT } from '../../i18n/I18nContext'
 import { fmtMoney, fmtQty, formatThaiDateShort } from '../../lib/format'
 import { bkkDayStart, DAY_MS } from '../../lib/inventoryRules/time'
 import { balanceAtDayEnd } from '../../lib/ledger'
-import { countRows, monthBefore, monthlyCountId, postingPlan, resultsOf, type CountRow } from '../../lib/monthlyCount'
+import {
+  countExpectedLevels,
+  countRows,
+  monthBefore,
+  monthlyCountId,
+  postingPlan,
+  resultsOf,
+  toPostingParts,
+  type CountRow,
+} from '../../lib/monthlyCount'
 import { mergeReportMovements } from '../../lib/reportHistory'
 import {
   acceptRewind,
@@ -27,7 +36,7 @@ import {
   rewindTicket,
   type RewindState,
 } from '../../lib/monthlyHistory'
-import { captureFilingScope, listMovementsInRange } from '../../services/stock'
+import { captureFilingScope, listMovementsInRange, StockLevelConflictError, MissingExpectedLevelError } from '../../services/stock'
 import { looseMatch } from '../../lib/search'
 import { useDraft } from '../../lib/useDraft'
 import { getMonthlyCount, postMonthlyCount, recordMonthlyCount, saveCountLines } from '../../services/monthlyCounts'
@@ -265,6 +274,7 @@ export function MonthlyCountSheet() {
   }
 
   async function confirm(kind: 'record' | 'post') {
+    if (busy) return
     if (!user || !sheet) return
     // Owner's rule: the result is never computed from incomplete later movements.
     if (!ready) {
@@ -273,6 +283,8 @@ export function MonthlyCountSheet() {
     }
     // The brand this sheet was confirmed in, pinned before the fresh read below is awaited.
     const scope = captureFilingScope()
+    // Capture optimistic concurrency expected levels at submit time from this render
+    const expectedLevels = countExpectedLevels(productIds, lines, (pid) => qtyAt(locationId, pid))
     setBusy(true)
     try {
       const now = await freshRows()
@@ -282,14 +294,7 @@ export function MonthlyCountSheet() {
         await recordMonthlyCount({ id, results, actor, scope })
         toast.success(t('บันทึกผลนับไว้แล้ว — สต๊อกไม่ถูกปรับ'))
       } else {
-        const parts = postingPlan(now, sheet.postedIds).map((part) =>
-          part.map((r) => ({
-            productId: r.productId,
-            productName: byId.get(r.productId)?.name ?? r.productId,
-            unit: byId.get(r.productId)?.unitType ?? '',
-            diff: r.diff ?? 0,
-          })),
-        )
+        const parts = toPostingParts(postingPlan(now, sheet.postedIds), expectedLevels, byId)
         const docs = await postMonthlyCount({
           scope,
           id,
@@ -306,6 +311,11 @@ export function MonthlyCountSheet() {
       setAsking(null)
       setSheet(await getMonthlyCount(id))
     } catch (e) {
+      if (e instanceof StockLevelConflictError || e instanceof MissingExpectedLevelError) {
+        setAsking(null)
+        toast.error(errText(e, t))
+        return
+      }
       toast.error(errText(e, t))
       setSheet(await getMonthlyCount(id).catch(() => sheet))
     } finally {

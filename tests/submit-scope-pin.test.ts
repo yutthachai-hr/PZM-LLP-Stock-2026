@@ -50,7 +50,7 @@ describe('a submit files into the brand it was pressed in', () => {
     const scope = pressedInPizzaThenSwitched()
     await postMonthlyCount({
       id: sheetId, actor, note: 'synthetic', results: {}, scope,
-      parts: [[{ productId: 'p1', productName: 'pizza-p1', unit: 'EA', diff: 4 }]],
+      parts: [[{ productId: 'p1', productName: 'pizza-p1', unit: 'EA', diff: 4, expectedLevel: 0 }]],
     })
     expect(raw(resolveCollection(COL.movements, 'pizza')).map((m) => m.qty)).toEqual([4])
     expect(raw(resolveCollection(COL.movements, 'lelapin'))).toEqual([])
@@ -68,7 +68,7 @@ describe('a submit files into the brand it was pressed in', () => {
     const scope = pressedInPizzaThenSwitched()
     await adjustStockLines({
       scope, locationId, date, actor,
-      lines: [{ productId: 'p1', productName: 'pizza-p1', unit: 'EA', direction: 'in', qty: 2, reason: 'count' }],
+      lines: [{ productId: 'p1', productName: 'pizza-p1', unit: 'EA', direction: 'in', qty: 2, reason: 'count', expectedLevel: 0 }],
     })
     expect(raw(resolveCollection(COL.movements, 'pizza')).map((m) => m.qty)).toEqual([2])
     expect(raw(resolveCollection(COL.movements, 'lelapin'))).toEqual([])

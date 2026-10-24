@@ -91,8 +91,8 @@ describe('actual multipart monthly posting across brand generations', () => {
     const posting = postMonthlyCount({
       id: sheetId, actor, note: 'synthetic monthly count', results: {},
       parts: [
-        [{ productId: 'p1', productName: `${source}-p1`, unit: 'EA', diff: 3 }],
-        [{ productId: 'p2', productName: `${source}-p2`, unit: 'EA', diff: 5 }],
+        [{ productId: 'p1', productName: `${source}-p1`, unit: 'EA', diff: 3, expectedLevel: 0 }],
+        [{ productId: 'p2', productName: `${source}-p2`, unit: 'EA', diff: 5, expectedLevel: 0 }],
       ],
     })
     try {
