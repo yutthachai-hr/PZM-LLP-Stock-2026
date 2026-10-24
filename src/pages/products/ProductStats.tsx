@@ -16,6 +16,7 @@ export function ProductStats({
   hidden,
   counts,
   value,
+  transitValue,
   valueBefore,
   selected,
   onSelect,
@@ -24,6 +25,7 @@ export function ProductStats({
   hidden: number
   counts: Record<StockState, number>
   value: number
+  transitValue: number
   /** Stock value 7 days ago, or null when the ledger window does not reach back that far. */
   valueBefore: number | null
   selected: StockState | null
@@ -83,7 +85,7 @@ export function ProductStats({
         label={t('มูลค่าสินค้าคงคลัง (โดยประมาณ)')}
         value={`฿ ${fmtMoney(value)}`} /* ฿ is a currency symbol — i18n-key */
         trend={trend && !trend.flat ? { text: trend.text, up: trend.up, suffix: t('จาก 7 วันก่อน') } : undefined}
-        hint={t('อิงต้นทุนที่กรอก')}
+        hint={transitValue !== 0 ? t('อิงต้นทุนที่กรอก · รวมระหว่างขนส่ง ฿ {value}', { value: fmtMoney(transitValue) }) : t('อิงต้นทุนที่กรอก')}
       />
     </StatRow>
   )

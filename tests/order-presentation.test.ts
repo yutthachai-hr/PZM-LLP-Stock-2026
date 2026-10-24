@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PurchaseOrder, SupplierConfirmationStatus } from '../src/types'
-import { presentOrderStatus } from '../src/pages/orders/presentation'
+import { presentOrderStatus, QUICK_FILTERS, stateFilterCounts } from '../src/pages/orders/presentation'
 
 const order: PurchaseOrder = {
   id: 'one', docNo: 'PO-00001', supplierId: 'supplier', supplierName: 'Supplier',
@@ -82,5 +82,17 @@ describe('R29: an order that needs resending says so on its row, not only on the
     const result = presentOrderStatus({ ...partial, ...revised, receipts: partial.receipts, supplierConfirmationStatus: 'pending_date_approval' }, true)
     expect(result.secondary).toContain('ต้องส่ง PO ใหม่')
     expect(presentOrderStatus(order, false).secondary).not.toContain('ต้องส่ง PO ใหม่')
+  })
+})
+
+describe('P0 (22 Oct 2026): orders waiting for a delivery-date decision are one tap away', () => {
+  it('is the first quick filter and counts only the loaded orders that wait', () => {
+    expect(QUICK_FILTERS[0]).toBe('datePending')
+    const waiting = { ...order, id: 'w', supplierConfirmationStatus: 'pending_date_approval' } as PurchaseOrder
+    const decided = { ...order, id: 'd', supplierConfirmationStatus: 'changed' } as PurchaseOrder
+    const draftWaiting = { ...waiting, id: 'x', status: 'draft' } as PurchaseOrder
+    expect(stateFilterCounts([waiting, decided, draftWaiting], () => false).datePending).toBe(1)
+    // After approval the same order no longer counts (the list row is replaced by the server's copy).
+    expect(stateFilterCounts([{ ...waiting, supplierConfirmationStatus: 'changed' } as PurchaseOrder], () => false).datePending).toBe(0)
   })
 })

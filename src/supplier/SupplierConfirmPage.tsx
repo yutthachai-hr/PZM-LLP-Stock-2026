@@ -26,6 +26,8 @@ interface View {
   requestedDate: string | null
   confirmedDate: string | null
   agreedDate: string | null
+  /** The agreed date is purchasing's approval of this supplier's proposal (server state). */
+  agreedByPurchasing?: boolean
   effectiveDate: string | null
   pending: { date: string | null; note: string | null } | null
   rejection: { date: string | null; reason: string } | null
@@ -75,6 +77,7 @@ const ERRORS: Record<string, string> = {
   closed: 'ใบสั่งซื้อนี้ปิดแล้ว (รับของแล้วหรือยกเลิก)', // i18n-key
   not_configured: 'ระบบยืนยันวันส่งยังไม่เปิดใช้งาน', // i18n-key
   past: 'เลือกวันที่ผ่านมาแล้วไม่ได้', // i18n-key
+  agreed: 'วันที่ตกลงไว้ล่าสุดยังใช้อยู่ — ถ้าต้องการเปลี่ยน กด "ขอเปลี่ยนวันส่งอีกครั้ง"', // i18n-key
   tooFar: 'วันที่ไกลเกินไป กรุณาตรวจสอบอีกครั้ง', // i18n-key
   invalid: 'กรุณาเลือกวันที่', // i18n-key
   noRequestedDate: 'ใบสั่งซื้อนี้ไม่ได้ระบุวันส่ง กรุณาเลือกวันที่', // i18n-key
@@ -260,7 +263,10 @@ export function SupplierConfirmPage() {
   // The date asked for is already agreed, with nothing waiting and no refusal to answer:
   // pressing "confirm" again would say nothing new, so the page says it is done instead.
   const alreadyAgreed = v.status === 'confirmed' && !!v.requestedDate && v.confirmedDate === v.requestedDate && !v.pending && !v.rejection
-  const canAccept = !!v.requestedDate && v.requestedDate >= v.today && !alreadyAgreed
+  // A different date already stands (purchasing approved the supplier's proposal, or the supplier
+  // moved it): the date asked for is no longer an ordinary 'confirm' (PO-00003, 22 Oct 2026).
+  const otherAgreed = !!v.agreedDate && v.agreedDate !== v.requestedDate
+  const canAccept = !!v.requestedDate && v.requestedDate >= v.today && !alreadyAgreed && !otherAgreed
   // The date already standing (agreed, or waiting for approval): picking it again changes nothing.
   const standing = v.pending?.date ?? v.agreedDate
   const sameAsStanding = !!date && date === standing && !v.rejection
@@ -337,7 +343,9 @@ export function SupplierConfirmPage() {
           </p>
           {v.rejection.reason && <p className="mt-1 text-ink-soft">{v.rejection.reason}</p>}
           {/* A passed asked-for date cannot be accepted (askedGone card above): ask for another only. */}
-          <p className="mt-1 text-ink-soft">{askedGone ? t('กรุณาเลือกวันอื่น') : t('กรุณายืนยันวันที่ขอ หรือเลือกวันอื่น')}</p>
+          <p className="mt-1 text-ink-soft">
+            {otherAgreed ? t('วันที่ตกลงไว้เดิมยังใช้อยู่ — ไม่ต้องทำอะไร หรือขอเปลี่ยนวันส่งอีกครั้ง') : askedGone ? t('กรุณาเลือกวันอื่น') : t('กรุณายืนยันวันที่ขอ หรือเลือกวันอื่น')}
+          </p>
         </Card>
       )}
 
@@ -391,6 +399,12 @@ export function SupplierConfirmPage() {
 
         {mode === 'choose' ? (
           <div className="grid gap-2">
+            {otherAgreed && !v.pending && (
+              <div role="status" className="rounded-lg bg-in-soft px-3 py-2 text-center text-in">
+                <p className="text-base font-semibold">{t('วันที่ตกลงล่าสุด: {date}', { date: label(v.agreedDate) })}</p>
+                <p className="text-sm">{v.agreedByPurchasing ? t('ฝ่ายจัดซื้ออนุมัติแล้ว ไม่ต้องยืนยันซ้ำ') : t('ยืนยันไว้แล้ว ไม่ต้องยืนยันซ้ำ')}</p>
+              </div>
+            )}
             {alreadyAgreed && (
               <p className="flex min-h-12 items-center justify-center rounded-lg bg-in-soft px-3 text-center text-base font-medium text-in">
                 ✅ {t('ยืนยันส่งวันที่ {date} แล้ว', { date: label(v.confirmedDate) })}
@@ -417,7 +431,7 @@ export function SupplierConfirmPage() {
                 setError(null)
               }}
             >
-              📅 {t('เลือกวันส่งอื่น')}
+              📅 {otherAgreed ? t('ขอเปลี่ยนวันส่งอีกครั้ง') : t('เลือกวันส่งอื่น')}
             </Button>
           </div>
         ) : (

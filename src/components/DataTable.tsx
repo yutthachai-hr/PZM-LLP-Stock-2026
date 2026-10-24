@@ -51,6 +51,7 @@ export function DataTable<T>({
   rowKey,
   empty,
   minWidth = 640,
+  compactTablet = false,
   maxHeight,
   onRowClick,
   rowLabel,
@@ -65,6 +66,8 @@ export function DataTable<T>({
   empty?: ReactNode
   /** Width below which the desktop table scrolls sideways rather than crushing columns. */
   minWidth?: number
+  /** Reduce horizontal cell padding below desktop width without hiding any values. */
+  compactTablet?: boolean
   /** e.g. 'calc(100vh-260px)'. Omit for a table that grows with the page. */
   maxHeight?: string
   onRowClick?: (row: T) => void
@@ -107,6 +110,7 @@ export function DataTable<T>({
     }
     selection.onChange(next)
   }
+  const cellPadding = compactTablet ? 'px-2 xl:px-4' : 'px-4'
   const box = 'h-[18px] w-[18px] cursor-pointer rounded accent-[var(--color-brand)]'
   function activate(event: MouseEvent<HTMLElement>, row: T) {
     if (!onRowClick || event.defaultPrevented || !event.currentTarget.contains(event.target as Node)) return
@@ -170,7 +174,7 @@ export function DataTable<T>({
           <thead className="sticky top-0 z-10 bg-sunken text-left text-[13px] text-ink-soft shadow-[inset_0_-1px_0_var(--color-line)]">
             <tr>
               {selection && (
-                <th scope="col" className="w-12 px-4 py-3">
+                <th scope="col" className={`w-12 ${cellPadding} py-3`}>
                   <input
                     type="checkbox"
                     className={box}
@@ -187,13 +191,13 @@ export function DataTable<T>({
                 <th
                   key={c.key}
                   scope="col"
-                  className={`whitespace-nowrap px-4 py-3 font-semibold ${c.align === 'right' ? 'text-right' : ''} ${c.headerClassName ?? ''}`}
+                  className={`whitespace-nowrap ${cellPadding} py-3 font-semibold ${c.align === 'right' ? 'text-right' : ''} ${c.headerClassName ?? ''}`}
                 >
                   {c.header}
                 </th>
               ))}
               {rowMenu && (
-                <th scope="col" className="w-16 px-4 py-3 text-center font-semibold">
+                <th scope="col" className={`w-16 ${cellPadding} py-3 text-center font-semibold`}>
                   {t('จัดการ')}
                 </th>
               )}
@@ -209,7 +213,7 @@ export function DataTable<T>({
                 onClick={onRowClick ? (event) => activate(event, row) : undefined}
               >
                 {selection && (
-                  <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
+                  <td className={`${cellPadding} py-3 align-middle`} onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       className={box}
@@ -222,13 +226,13 @@ export function DataTable<T>({
                 {columns.map((c) => (
                   <td
                     key={c.key}
-                    className={`px-4 py-3 align-middle ${c.align === 'right' ? 'text-right' : ''} ${c.className ?? ''}`}
+                    className={`${cellPadding} py-3 align-middle ${c.align === 'right' ? 'text-right' : ''} ${c.className ?? ''}`}
                   >
                     {c.cell(row)}
                   </td>
                 ))}
                 {rowMenu && (
-                  <td className="px-4 py-3 text-center align-middle">
+                  <td className={`${cellPadding} py-3 text-center align-middle`}>
                     <RowMenu items={rowMenu(row)} />
                   </td>
                 )}

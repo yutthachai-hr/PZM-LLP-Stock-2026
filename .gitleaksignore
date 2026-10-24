@@ -1,4 +1,11 @@
-# Exact gitleaks fingerprints only (commit:file:rule:line). Each entry is a fake test fixture,
-# never a credential; any other finding still fails the `secrets` job.
+# Exact gitleaks fingerprints only (commit:file:rule:line). Each entry is a fake test fixture
+# or a public client identifier, never a secret credential; any other finding still fails the
+# `secrets` job.
 # PR #42 first commit: the synthetic HMAC key for supplier-link tests (since replaced by 'k'.repeat(40)).
 e2c18780661e5f541656b02a6c8da64664973a3e:tests/functions/supplier-link-lifecycle.test.ts:generic-api-key:15
+# Found only by full-history scans (workflow_dispatch runs `gitleaks detect` over `git log --all`).
+# 5 Oct: the synthetic supplier-token HMAC key, 'test-secret-...' letters, never a credential.
+d0dd8b2e15d0a1f6ef88f23afd42671844c62547:tests/functions/supplier-po.test.ts:generic-api-key:14
+# 17 Jul: the Firebase *web* apiKey, a public client identifier shipped in every bundle; access
+# is enforced by Firestore Rules and authorized domains, not by keeping it secret.
+08e0dbd35a6ab589cc0aeb093ef159f95de7c516:src/firebase/config.ts:gcp-api-key:24

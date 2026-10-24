@@ -10,6 +10,7 @@ import { fmtQty, formatThaiDateTime } from '../../lib/format'
 import type { Product } from '../../types'
 import type { TFn } from '../../i18n/I18nContext'
 import { STATE_LOOK, type StockState } from './productStatus'
+import { fmtCostAmount, getCostHint } from './productCostDisplay'
 
 /** One product as the list shows it, with everything the columns need worked out once. */
 export interface ProductRow {
@@ -47,22 +48,64 @@ export function QtyFigure({ r, t }: { r: ProductRow; t: TFn }) {
   )
 }
 
+export function CostFigure({ p, t, showLabel }: { p: Product; t: TFn; showLabel?: boolean }) {
+  const cost = p.cost
+  if (cost === undefined || cost === null || !Number.isFinite(cost)) {
+    return (
+      <span className="text-xs text-ink-faint">
+        {showLabel && <span>{t('ต้นทุน/หน่วย')}: </span>}
+        {t('ยังไม่ระบุ')}
+      </span>
+    )
+  }
+  const figure = (
+    <>
+      {showLabel && <span className="text-xs text-ink-faint">{t('ต้นทุน/หน่วย')}: </span>}
+      <span className="num font-semibold text-ink">฿{fmtCostAmount(cost)}</span> {/* i18n-key */}
+      <span className="text-xs font-normal text-ink-soft"> / {p.unitType}</span>
+    </>
+  )
+  const hint = getCostHint(p, t)
+  if (!hint) return <div className="inline-block whitespace-nowrap">{figure}</div>
+  // A printed second line wrapped the column to six lines at 1440 and pushed Location off the
+  // right edge, but a title reaches neither a touch reader nor a keyboard. So the phone card,
+  // which has the room, prints the words; the table keeps one line and puts the same words
+  // behind a native disclosure: Tab reaches the summary, Enter/Space or a tap opens it.
+  return (
+    <>
+      <div className="inline-block whitespace-nowrap md:hidden">{figure}</div>
+      <span className="mt-0.5 block whitespace-normal break-words text-xs font-normal text-ink-faint md:hidden">
+        {hint.text}
+      </span>
+      <details className="hidden text-left md:block">
+        <summary className="cursor-pointer whitespace-nowrap text-right">{figure}</summary>
+        <span className="mt-0.5 block max-w-[220px] whitespace-normal break-words text-xs font-normal text-ink-faint">
+          {hint.text}
+        </span>
+      </details>
+    </>
+  )
+}
+
 export function productColumns(t: TFn, siteName: (id: string) => string, locId: string): Column<ProductRow>[] {
   return [
     {
       key: 'product',
       header: t('สินค้า'),
       primary: true,
-      // Long catalogue names truncate rather than pushing the figures off the right edge.
-      className: 'md:max-w-[260px] 2xl:max-w-[340px]',
+      // Option C: use the space released by Last updated for readable product names.
+      // Smaller tablets use complete cards; the desktop name wraps instead of clipping.
+      className: 'md:max-w-[200px] xl:max-w-[280px] 2xl:max-w-[340px]',
       cell: (r) => {
         const look = categoryIcon(r.p.category)
         return (
           <ItemCell
             title={r.p.name}
+            wrap
             sub={
               <>
-                <span className="doc-no md:hidden">{r.p.sku} · </span>
+                {/* Below 3xl the SKU column is gone from the table, so it rides here. */}
+                <span className="doc-no block text-ink-soft 3xl:hidden">{r.p.sku}</span>
                 {r.p.category} · {r.p.unitType}
                 {r.p.barcode ? <span className="doc-no"> · {r.p.barcode}</span> : null}
               </>
@@ -75,19 +118,32 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
         )
       },
     },
-    { key: 'sku', header: 'SKU', card: 'hidden', className: 'doc-no whitespace-nowrap text-ink-soft', cell: (r) => r.p.sku },
+    {
+      key: 'sku',
+      header: 'SKU',
+      card: 'hidden',
+      // The SKU costs ~150 px of the table, and the name's second line already carries it
+      // below 3xl (measured: 1193 px needed in a 1190 px container at 1536 without this gate).
+      className: 'doc-no hidden whitespace-nowrap text-ink-soft 3xl:table-cell',
+      headerClassName: 'hidden 3xl:table-cell',
+      cell: (r) => r.p.sku,
+    },
     {
       key: 'category',
       header: t('หมวดหมู่'),
       card: 'hidden',
+      // Below 3xl the category is already on the name's second line, so its own column can go.
+      // 1536/1600 cannot hold it: measured 1352 px needed in a 1190 px container.
+      className: 'hidden 3xl:table-cell',
+      headerClassName: 'hidden 3xl:table-cell',
       cell: (r) => (
         <StatusChip tone={categoryIcon(r.p.category).tone} icon={null} size="sm">
           {r.p.category}
         </StatusChip>
       ),
     },
-    // Below 2xl the unit rides in the name's second line, so its own column can go.
-    { key: 'unit', header: t('หน่วย'), card: 'hidden', className: 'hidden text-ink-soft 2xl:table-cell', headerClassName: 'hidden 2xl:table-cell', cell: (r) => r.p.unitType },
+    // Below 3xl the unit rides in the name's second line, so its own column can go.
+    { key: 'unit', header: t('หน่วย'), card: 'hidden', className: 'hidden text-ink-soft 3xl:table-cell', headerClassName: 'hidden 3xl:table-cell', cell: (r) => r.p.unitType },
     {
       key: 'qty',
       header: locId ? t('คงเหลือ') : t('คงเหลือรวม'),
@@ -95,6 +151,13 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       align: 'right',
       className: 'num',
       cell: (r) => <QtyFigure r={r} t={t} />,
+    },
+    {
+      key: 'cost',
+      header: t('ต้นทุน/หน่วย'),
+      align: 'right',
+      className: 'num',
+      cell: (r) => <CostFigure p={r.p} t={t} />,
     },
     { key: 'min', header: t('จุดสั่งซื้อ'), align: 'right', className: 'num text-ink-soft', cell: (r) => fmtQty(r.min) },
     {
@@ -128,8 +191,8 @@ export function productColumns(t: TFn, siteName: (id: string) => string, locId: 
       key: 'updated',
       header: t('อัปเดตล่าสุด'),
       card: 'hidden',
-      className: 'hidden whitespace-nowrap text-xs text-ink-soft 2xl:table-cell',
-      headerClassName: 'hidden 2xl:table-cell',
+      className: 'hidden whitespace-nowrap text-xs text-ink-soft 3xl:table-cell',
+      headerClassName: 'hidden 3xl:table-cell',
       cell: (r) => (r.updatedAt ? formatThaiDateTime(r.updatedAt) : '–'),
     },
   ]
@@ -181,11 +244,11 @@ export function ProductGrid({ rows, onOpen, t }: { rows: ProductRow[]; onOpen: (
       {rows.map((r) => {
         const look = categoryIcon(r.p.category)
         return (
+          <article key={r.p.id} aria-label={r.p.name} className={`${frameCard} flex flex-col gap-3 p-4 transition-colors hover:border-line-strong`}>
           <button
-            key={r.p.id}
             type="button"
             onClick={() => onOpen(r.p)}
-            className={`${frameCard} flex cursor-pointer flex-col gap-3 p-4 text-left outline-none transition-colors hover:border-line-strong focus-visible:ring-2 focus-visible:ring-brand/40`}
+            className="flex cursor-pointer flex-col gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
           >
             <div className="flex items-start gap-3">
               {r.p.hasImage ? (
@@ -215,6 +278,10 @@ export function ProductGrid({ rows, onOpen, t }: { rows: ProductRow[]; onOpen: (
               </StatusChip>
             </div>
           </button>
+          <div className="text-xs text-ink-soft">
+            <CostFigure p={r.p} t={t} showLabel />
+          </div>
+          </article>
         )
       })}
     </div>
