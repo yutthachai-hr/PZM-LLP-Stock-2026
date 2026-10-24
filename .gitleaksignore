@@ -9,3 +9,7 @@ d0dd8b2e15d0a1f6ef88f23afd42671844c62547:tests/functions/supplier-po.test.ts:gen
 # 17 Jul: the Firebase *web* apiKey, a public client identifier shipped in every bundle; access
 # is enforced by Firestore Rules and authorized domains, not by keeping it secret.
 08e0dbd35a6ab589cc0aeb093ef159f95de7c516:src/firebase/config.ts:gcp-api-key:24
+# R67 PR #59 commit 3d48ad1 (already pushed; history is not rewritten): the same public Firebase
+# web apiKey, briefly copied into src/lib/deployTier.ts; the next commit keeps it only in
+# src/firebase/config.ts and recognises it by a 20-character prefix.
+3d48ad17400e6f31a47a29bd4e433776a8ec1414:src/lib/deployTier.ts:gcp-api-key:25

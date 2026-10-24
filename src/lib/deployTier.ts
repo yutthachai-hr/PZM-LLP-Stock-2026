@@ -19,10 +19,12 @@
 export const PRODUCTION_BRANCH = 'main'
 /** The live Firebase project. A staging tier must name a different one. */
 export const PRODUCTION_PROJECT = 'pzm-stock-x5'
-/** Its project number and web API key (both public, in the production web config); a staging
- *  config must carry neither — sign-in goes to the project of the API key. */
+/** Its project number (public, in the production web config); a staging config must not carry it. */
 const PRODUCTION_PROJECT_NUMBER = '789071579161'
-export const PRODUCTION_WEB_API_KEY = 'AIzaSyB2cQL0G-OLibdoe5HPAhTJhmHnmLQCLlo'
+/** The first 20 characters of the production web API key — enough to recognise it (sign-in goes
+ *  to the project of the API key), without a second copy of the key: it lives only in
+ *  src/firebase/config.ts, and tests/staging-tier.test.ts pins that this prefix is that key's. */
+export const PRODUCTION_WEB_API_KEY_PREFIX = 'AIzaSyB2cQL0G-OLibdo'
 /** Production hosts. A custom domain is added through the PRODUCTION_HOSTS variable (production env only). */
 export const PRODUCTION_HOSTS: readonly string[] = ['pzmstock.pages.dev']
 
@@ -151,7 +153,7 @@ export function stagingWebProject(json: string | undefined): string | null {
   // Judged on the parsed values, never the text: a JSON escape (`x\u0035`) or other capitals
   // would otherwise decode to production after the check (R67 review of PR #59).
   const values = Object.values(o).map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
-  if (values.some((v) => v.includes(PRODUCTION_PROJECT) || v.includes(PRODUCTION_PROJECT_NUMBER) || v === PRODUCTION_WEB_API_KEY.toLowerCase())) return null
+  if (values.some((v) => v.includes(PRODUCTION_PROJECT) || v.includes(PRODUCTION_PROJECT_NUMBER) || v.startsWith(PRODUCTION_WEB_API_KEY_PREFIX.toLowerCase()))) return null
   const str = (k: string) => (typeof o[k] === 'string' ? (o[k] as string).trim() : '')
   if (!str('apiKey') || !str('authDomain') || !str('appId')) return null
   // The shape of an id Firebase issues: lowercase letters, digits and hyphens, 6–30 long.

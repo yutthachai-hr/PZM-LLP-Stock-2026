@@ -4,12 +4,14 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { buildTier, firebaseProjectFor, functionTier, PRODUCTION_PROJECT, PRODUCTION_WEB_API_KEY, stagingWebProject } from '../src/lib/deployTier'
+import { buildTier, firebaseProjectFor, functionTier, PRODUCTION_PROJECT, PRODUCTION_WEB_API_KEY_PREFIX, stagingWebProject } from '../src/lib/deployTier'
 
 const ROOT = join(__dirname, '..')
 const web = (project: string, over: Record<string, unknown> = {}) =>
   JSON.stringify({ apiKey: 'k', authDomain: `${project}.firebaseapp.com`, projectId: project, storageBucket: `${project}.firebasestorage.app`, appId: 'a', ...over })
 const STG_WEB = web('pzm-stock-staging')
+/** The production web API key, read from the one place it lives (no copy in this file). */
+const productionKey = () => readFileSync(join(ROOT, 'src/firebase/config.ts'), 'utf8').match(/apiKey: '([^']+)'/)![1]
 
 // A fake key, assembled so no scanner mistakes this file for a credential.
 const KEY = ['-----BEGIN', 'PRIVATE KEY-----', 'AA==', '-----END', 'PRIVATE KEY-----'].join(' ')
@@ -35,7 +37,7 @@ describe('the staging web config', () => {
     ['production id in capitals', web('PZM-STOCK-X5')],
     ['production auth domain in capitals', web('pzm-stock-staging', { authDomain: 'PZM-Stock-X5.firebaseapp.com' })],
     // Sign-in goes to the project of the API key: production's key would reach production Auth.
-    ['the production web API key', web('pzm-stock-staging', { apiKey: PRODUCTION_WEB_API_KEY })],
+    ['the production web API key', web('pzm-stock-staging', { apiKey: productionKey() })],
     ['a project id Firebase would never issue', web('Pzm_Staging')],
   ])('refused: %s', (_, value) => {
     expect(stagingWebProject(value)).toBeNull()
@@ -43,7 +45,8 @@ describe('the staging web config', () => {
 
   test('the production identifiers it refuses are the ones the app ships', async () => {
     const src = readFileSync(join(ROOT, 'src/firebase/config.ts'), 'utf8')
-    expect(src).toContain(`apiKey: '${PRODUCTION_WEB_API_KEY}'`)
+    expect(productionKey().startsWith(PRODUCTION_WEB_API_KEY_PREFIX)).toBe(true)
+    expect(productionKey().length).toBeGreaterThan(PRODUCTION_WEB_API_KEY_PREFIX.length)
     expect(src).toContain(`projectId: '${PRODUCTION_PROJECT}'`)
   })
 })
