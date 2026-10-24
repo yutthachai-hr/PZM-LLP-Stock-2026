@@ -152,7 +152,8 @@ function firstAnswerAt(o: PurchaseOrder): number | null {
 
 function linkSentAt(o: PurchaseOrder): number | null {
   const a = (o.supplierActivity ?? []).find((x) => x.kind === 'linkIssued')
-  return a?.at ?? o.supplierLink?.issuedAt ?? null
+  // A link only prepared in the send wizard was never sent (A2).
+  return a?.at ?? (o.supplierLink?.unsent ? null : o.supplierLink?.issuedAt) ?? null
 }
 
 export function deliveryOutcome(o: PurchaseOrder): DeliveryOutcome {

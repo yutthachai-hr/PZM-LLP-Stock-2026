@@ -229,4 +229,8 @@ describe('cancelled, drafts and the supplier response', () => {
   test('never answered: no response time', () => {
     expect(deliveryOutcome(po({ supplierActivity: [{ id: 'a', at: day(-3), kind: 'linkIssued', byName: 'U' }] })).supplierResponseMinutes).toBeNull()
   })
+  test('a link prepared but never sent is not when the supplier was asked (A2)', () => {
+    const o = po({ supplierLink: { version: 1, rev: 0, issuedAt: day(-3, '09:00'), issuedBy: 'U', expiresAt: day(30), unsent: true }, supplierConfirmedAt: day(-3, '10:30') })
+    expect(deliveryOutcome(o).supplierResponseMinutes).toBeNull()
+  })
 })

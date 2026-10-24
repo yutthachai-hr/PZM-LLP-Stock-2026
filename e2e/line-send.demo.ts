@@ -528,3 +528,74 @@ test('an order cancelled while its batch was put aside is not offered when the b
   await expect(page.getByRole('dialog').getByText('SUPPLIER C', { exact: true }).first()).toBeVisible()
   await expect(page.getByRole('dialog').getByText('SUPPLIER B', { exact: true })).toHaveCount(0)
 })
+
+// A2 with LINE (LIFF) itself reporting the outcome: the picker is resolved by the test.
+const PICKER_STUB = `
+  export { statusFor } from '/src/share/PurchaseShareProvider.ts';
+  export async function pickShareProvider() {
+    return { id: 'line-liff', label: 'ส่ง LINE', needsHosting: false,
+      share: () => new Promise((resolve, reject) => { window.__finishPicker = resolve; window.__failPicker = reject; }) };
+  }`
+
+async function a2Stage(page: Page) {
+  await page.route('**/src/share/index.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: PICKER_STUB }))
+  await page.route('**/src/services/supplierConfirmation.ts*', (route) => route.fulfill({ contentType: 'application/javascript', body: SUPPLIER_STUB }))
+  await stage(page)
+}
+
+/** Tap ส่ง LINE and wait until the picker is open. */
+async function tapSend(page: Page, wizard: ReturnType<Page['getByRole']>) {
+  await page.evaluate(() => { (window as unknown as { __finishPicker?: unknown }).__finishPicker = undefined })
+  await wizard.getByRole('button', { name: 'ส่ง LINE', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => typeof (window as unknown as { __finishPicker?: unknown }).__finishPicker)).toBe('function')
+}
+const finish = (page: Page, outcome: string) => page.evaluate((o) => (window as unknown as { __finishPicker: (o: string) => void }).__finishPicker(o), outcome)
+
+test('A2: LINE reports the sheet sent: the supplier is asked once, for that link', async ({ page }) => {
+  await a2Stage(page)
+  const wizard = await openWizard(page, 'po1')
+  await tapSend(page, wizard)
+  expect(await marks(page)).toEqual([]) // the picker being open is not a send
+  await finish(page, 'sent')
+  await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('sent')
+  await expect.poll(() => marks(page)).toEqual(['po1@7'])
+})
+
+test('A2: a cancelled or failed LINE share asks nobody', async ({ page }) => {
+  await a2Stage(page)
+  const wizard = await openWizard(page, 'po1')
+  await tapSend(page, wizard)
+  await finish(page, 'cancelled')
+  await expect(wizard.getByRole('button', { name: 'ส่ง LINE', exact: true })).toBeEnabled()
+  await tapSend(page, wizard)
+  await page.evaluate(() => (window as unknown as { __failPicker: (e: Error) => void }).__failPicker(new Error('stub: LINE refused')))
+  await expect.poll(async () => (await stored(page, 'po1')).shareStatus).toBe('failed')
+  expect(await marks(page)).toEqual([])
+})
+
+test('A2: a two-page order asks once its first page (with the link) went, even if page 2 is then cancelled', async ({ page }) => {
+  await a2Stage(page)
+  const wizard = await openWizard(page, 'big')
+  await tapSend(page, wizard)
+  await finish(page, 'sent')
+  await expect.poll(() => marks(page)).toEqual(['big@7'])
+  await tapSend(page, wizard)
+  await finish(page, 'cancelled')
+  await expect(wizard.getByRole('button', { name: 'ส่ง LINE', exact: true })).toBeEnabled()
+  expect(await marks(page)).toEqual(['big@7'])
+  expect((await stored(page, 'big')).shareStatus).not.toBe('sent')
+})
+
+test('A2: a brand switch while the picker is open asks no supplier in either brand', async ({ page }) => {
+  await a2Stage(page)
+  const wizard = await openWizard(page, 'po1')
+  await tapSend(page, wizard)
+  await page.evaluate(async () => {
+    const path = '/src/brand/brand.ts'
+    const brand = await import(/* @vite-ignore */ path)
+    brand.setActiveBrand('lelapin')
+  })
+  await finish(page, 'sent')
+  await expect(wizard.getByText('LINE ส่งแล้ว แต่บันทึกสถานะไม่สำเร็จ', { exact: true }).or(wizard.getByText('ส่งครบทุกรายแล้ว', { exact: true }))).toBeVisible()
+  expect(await marks(page)).toEqual([])
+})

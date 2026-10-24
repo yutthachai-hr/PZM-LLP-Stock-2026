@@ -153,7 +153,7 @@ export function assessDeliveryRisk(order: PurchaseOrder, ctx: RiskContext): Deli
   }
 
   // The link went out and nobody has answered.
-  const sent = order.supplierActivity?.find((a) => a.kind === 'linkIssued')?.at ?? order.supplierLink?.issuedAt
+  const sent = order.supplierActivity?.find((a) => a.kind === 'linkIssued')?.at ?? (order.supplierLink?.unsent ? undefined : order.supplierLink?.issuedAt)
   if (sent !== undefined && self.supplierResponseMinutes === null) {
     const hours = Math.floor((now - sent) / 3_600_000)
     if (hours >= RISK_CONFIG.slowConfirmationHours) add('slowConfirmation', P.slowConfirmation, { hours })
