@@ -45,6 +45,7 @@ describe('receive page prices: line pricing and source labels', () => {
     expect(res.price.source).toBe('supplierPrice')
     expect(res.price.unitPrice).toBe(100)
     expect(res.sourceLabel).toBe('ราคาผู้ขาย')
+    expect(priceSourceLabel(res.price)).toBe('ราคาผู้ขาย')
     expect(res.amount).toBe(300)
   })
 

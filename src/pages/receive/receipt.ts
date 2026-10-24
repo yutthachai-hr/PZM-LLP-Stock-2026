@@ -1,6 +1,13 @@
 import type { Line } from '../../components/LineBuilder'
 import { roundQty } from '../../lib/validate'
-import type { PurchaseOrder, PurchaseOrderLine } from '../../types'
+import type { Product, PurchaseOrder, PurchaseOrderLine, SupplierItem } from '../../types'
+import { formatThaiDate } from '../../lib/format'
+import {
+  lineAmount,
+  receiptTotal,
+  resolveReceiptPrice,
+  type ReceiptPrice,
+} from '../../lib/receiptPrice'
 
 /**
  * The receiving screen's arithmetic, kept out of the page so it can be tested.
@@ -262,3 +269,84 @@ export function nextQueued(d: ReceiptDraft): ReceiptDraft | null {
   if (!first) return null
   return { ...fromBill({ ...emptyDraft(), toLocationId: d.toLocationId, dateStr: d.dateStr }, first), queue: rest }
 }
+
+export type TranslateFn = (key: string, vars?: Record<string, string | number>) => string
+
+const defaultTranslate: TranslateFn = (key, vars) =>
+  key === 'ต้นทุน ณ {date}' ? `ต้นทุน ณ ${vars?.date ?? ''}` : key // i18n-key
+
+export function priceSourceLabel(
+  price: Pick<ReceiptPrice, 'source' | 'effectiveAt'>,
+  t: TranslateFn = defaultTranslate,
+): string {
+  switch (price.source) {
+    case 'supplierPrice':
+      return t('ราคาผู้ขาย')
+    case 'costAsOf':
+      return t('ต้นทุน ณ {date}', {
+        date: price.effectiveAt !== undefined ? formatThaiDate(price.effectiveAt) : '',
+      })
+    case 'costLatest':
+      return t('ต้นทุนล่าสุด')
+    case 'missing':
+      return t('ยังไม่ระบุราคา')
+  }
+}
+
+export function resolveLinePricing(
+  line: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'>,
+  supplierId: string,
+  entry: PoLineEntry | undefined,
+  products: readonly Pick<Product, 'id' | 'cost' | 'costHistory'>[],
+  supplierItems: readonly Pick<SupplierItem, 'supplierId' | 'productId' | 'buyingPrice' | 'active'>[],
+  asOf: number,
+  t?: TranslateFn,
+): {
+  price: ReceiptPrice
+  sourceLabel: string
+  amount: number | null
+} {
+  const product = products.find((p) => p.id === line.productId)
+  const price = resolveReceiptPrice({ line, supplierId, product, supplierItems, asOf })
+  const qty = entry?.qty ?? null
+  const amount = lineAmount(price, qty)
+  const sourceLabel = priceSourceLabel(price, t)
+  return { price, sourceLabel, amount }
+}
+
+export interface ReceiptPriceSummary {
+  estimatedTotal: number
+  pricedLines: number
+  missingLines: number
+  unenteredLines: number
+}
+
+export function summariseReceiptPrices(
+  order: Pick<PurchaseOrder, 'supplierId' | 'lines'>,
+  entries: Readonly<Record<string, PoLineEntry>>,
+  products: readonly Pick<Product, 'id' | 'cost' | 'costHistory'>[],
+  supplierItems: readonly Pick<SupplierItem, 'supplierId' | 'productId' | 'buyingPrice' | 'active'>[],
+  asOf: number,
+): ReceiptPriceSummary {
+  const productMap = new Map(products.map((p) => [p.id, p]))
+  const owed = owedLines(order)
+  const rows = owed.map((l) => {
+    const price = resolveReceiptPrice({
+      line: l,
+      supplierId: order.supplierId,
+      product: productMap.get(l.productId),
+      supplierItems,
+      asOf,
+    })
+    const qty = entries[l.productId]?.qty ?? null
+    return { price, qty }
+  })
+  const res = receiptTotal(rows)
+  return {
+    estimatedTotal: res.total,
+    pricedLines: res.pricedLines,
+    missingLines: res.missingLines,
+    unenteredLines: res.unenteredLines,
+  }
+}
+

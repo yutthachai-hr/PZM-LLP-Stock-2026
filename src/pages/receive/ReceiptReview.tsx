@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { SectionCard, StatusChip } from '../../components/frame'
 import { Button, Modal, Textarea } from '../../components/ui'
 import { Icon } from '../../components/Icon'
-import { fmtQty, formatThaiDate } from '../../lib/format'
+import { fmtMoney, fmtQty, formatThaiDate } from '../../lib/format'
 import { useT } from '../../i18n/I18nContext'
 import type { DuplicateDoc } from '../../services/receiptDocs'
 import { DuplicateWarning } from './DocumentCard'
@@ -21,6 +21,8 @@ export interface ReceiptFacts {
   matched: number
   short: number
   over: number
+  estimatedTotal?: number
+  missingLines?: number
 }
 
 export interface Exception {
@@ -36,7 +38,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1.5">
       <dt className="shrink-0 text-sm text-ink-soft">{label}</dt>
-      <dd className="min-w-0 truncate text-right text-sm font-semibold text-ink">{children}</dd>
+      <dd className="min-w-0 text-right text-sm font-semibold text-ink">{children}</dd>
     </div>
   )
 }
@@ -71,6 +73,18 @@ export function ReceiptPanel({
           </Row>
           <Row label={t('คลัง')}>{mode === 'po' && !facts.poDocNo ? '—' : facts.warehouse || '—'}</Row>
           <Row label={t('จำนวนรายการ')}>{t('{n} รายการ', { n: facts.items })}</Row>
+          {facts.estimatedTotal !== undefined && (
+            <Row label={t('มูลค่าประมาณการ')}>
+              <div>
+                <span className="num">฿{fmtMoney(facts.estimatedTotal)}</span> {/* ฿ is a currency symbol — i18n-key */}
+                {facts.missingLines !== undefined && facts.missingLines > 0 && (
+                  <span className="block text-xs font-normal text-amber">
+                    {t('ยังไม่ระบุราคา {n} รายการ', { n: facts.missingLines })}
+                  </span>
+                )}
+              </div>
+            </Row>
+          )}
           {/* Counts of LINES, said as such: a line's own figure (over by 0.5 KG) sits on the
               line, and a bare "over 1" here read as a different quantity (owner, 25 Sep 2026). */}
           {mode === 'po' && (
@@ -177,6 +191,18 @@ export function ReviewModal({
             </>
           )}
           <Row label={t('จำนวนรายการ')}>{t('{n} รายการ', { n: facts.items })}</Row>
+          {facts.estimatedTotal !== undefined && (
+            <Row label={t('มูลค่าประมาณการ')}>
+              <div>
+                <span className="num">฿{fmtMoney(facts.estimatedTotal)}</span> {/* ฿ is a currency symbol — i18n-key */}
+                {facts.missingLines !== undefined && facts.missingLines > 0 && (
+                  <span className="block text-xs font-normal text-amber">
+                    {t('ยังไม่ระบุราคา {n} รายการ', { n: facts.missingLines })}
+                  </span>
+                )}
+              </div>
+            </Row>
+          )}
           {facts.note && <Row label={t('หมายเหตุ')}>{facts.note}</Row>}
         </dl>
 
