@@ -689,7 +689,7 @@ describe('the ledger is append-only', () => {
     // Voiding is the one amendment staff may not make. The UI only ever offered the button
     // to admins; now the database agrees, so the API cannot be used to skip that.
     // Since 22 Oct 2026 an admin's cancellation also carries a reason, signed and timed.
-    const cancel = (uid: string) => ({ voided: true, voidReason: 'keyed twice', voidedAt: ts(), voidedBy: uid, voidedByName: uid })
+    const cancel = (uid: string) => ({ voided: true, voidReason: 'keyed twice', voidedAt: ts(), voidedBy: uid, voidedByName: ({ [ADMIN]: 'Admin', [STAFF]: 'Staff' } as Record<string, string>)[uid] })  // the caller's profile name (R57)
     await assertFails(updateDoc(doc(as(STAFF), 'stockMovements/m1'), cancel(STAFF)))
     await assertFails(updateDoc(doc(as(ADMIN), 'stockMovements/m1'), { voided: true }))
     // Accepted only with the 9 taken back off the balance in the same commit (R40).

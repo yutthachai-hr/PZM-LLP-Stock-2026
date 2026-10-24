@@ -123,6 +123,58 @@ describe.each(['pizza', 'lelapin'] as const)('%s', (brand) => {
     test('the exact reversal is what the database accepts', async () => {
       expect(await write([['wh__p1', levelDoc('wh__p1', 'wh', 0)]])).toBe('ALLOW')
     })
+
+    // R57 security review: with the exact reversal present, each of these is denied for its own reason only.
+    const writeWith = async (patch: Record<string, unknown>) => {
+      const [mv] = await movements()
+      const b = writeBatch(connection.db!)
+      b.update(doc(connection.db!, mvCol(), mv.id), { ...voidPatch(), ...patch })
+      b.set(doc(connection.db!, lvCol(), 'wh__p1'), levelDoc('wh__p1', 'wh', 0))
+      return decision(b.commit())
+    }
+
+    test('SECURITY: a blank reason is denied even with the reversal', async () => {
+      expect(await writeWith({ voidReason: '   ' })).toBe('DENY')
+    })
+
+    test('SECURITY: a cancellation filed under another admin is denied even with the reversal', async () => {
+      expect(await writeWith({ voidedBy: 'someone-else' })).toBe('DENY')
+    })
+
+    test('SECURITY: a backdated cancellation is denied', async () => {
+      expect(await writeWith({ voidedAt: now() - 24 * 3600_000 })).toBe('DENY')
+    })
+
+    test('SECURITY: a cancellation naming a colleague is denied', async () => {
+      expect(await writeWith({ voidedByName: 'A colleague' })).toBe('DENY')
+    })
+
+    test('a phone clock a few minutes off is still accepted', async () => {
+      expect(await writeWith({ voidedAt: now() - 3 * 60_000 })).toBe('ALLOW')
+    })
+  })
+
+  test('SECURITY: a manager cannot cancel, even with the exact reversal', async () => {
+    await S.receiveStock({ lines: [line(5)], toLocationId: 'wh', date: now(), actor })
+    const [mv] = await movements()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'r57-manager'), { name: 'Synthetic manager', role: 'manager', active: true })
+    })
+    const mgr = env.authenticatedContext('r57-manager').firestore({ ignoreUndefinedProperties: true })
+    const b = writeBatch(mgr)
+    b.update(doc(mgr, mvCol(), mv.id), { ...voidPatch(), voidedBy: 'r57-manager', voidedByName: 'Synthetic manager', updatedBy: 'r57-manager', updatedByName: 'Synthetic manager' })
+    b.set(doc(mgr, lvCol(), 'wh__p1'), levelDoc('wh__p1', 'wh', 0))
+    expect(await decision(b.commit())).toBe('DENY')
+  })
+
+  test('a movement whose unit was stored with a stray space can still be cancelled honestly', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const f = ctx.firestore()
+      await setDoc(doc(f, mvCol(), 'spaced'), { id: 'spaced', docNo: 'RC-00010', type: 'receive', productId: 'p1', productName: 'Synthetic flour', unit: 'KG ', qty: 3, toLocationId: 'wh', date: 1, byUserId: actor.id, byUserName: actor.name, createdAt: 1 })
+      await setDoc(doc(f, lvCol(), 'wh__p1'), levelDoc('wh__p1', 'wh', 3))
+    })
+    await S.voidMovement('spaced', actor, 'keyed twice')
+    expect(await qty('wh__p1')).toBe(0)
   })
 
   test('SECURITY: a direct move cancelled with only one leg reversed is denied', async () => {

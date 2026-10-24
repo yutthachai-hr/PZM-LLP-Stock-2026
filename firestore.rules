@@ -1332,8 +1332,12 @@ service cloud.firestore {
         && d.voidReason.trim().size() > 0
         && d.voidReason.size() <= 500
         && d.voidedBy == request.auth.uid
+        // When and by whom are the database's own facts, not the client's: the time is within
+        // ten minutes of the server's clock (phone clocks drift a little, never backdate a
+        // cancellation) and the name is the caller's profile name (R57 security review).
         && epochMs(d.voidedAt)
-        && text(d.voidedByName, 200);
+        && math.abs(d.voidedAt - request.time.toMillis()) <= 600000
+        && d.voidedByName == profile().get('name', '');
     }
 
     /**
@@ -1343,8 +1347,9 @@ service cloud.firestore {
      */
     function balanceMovedBack(name, m, loc, delta) {
       let eu = m.get('entryUnit', '');
-      let filed = eu is string && eu.trim() != '' && !('entryQty' in m) ? eu.trim() : m.unit;
-      let id = loc + '__' + m.productId + (filed == m.unit.trim() ? '' : '#' + filed);
+      // Trimmed exactly as levelId() trims, or a unit stored with a stray space files elsewhere.
+      let filed = eu is string && eu.trim() != '' && !('entryQty' in m) ? eu.trim() : m.unit.trim();
+      let id = loc + '__' + m.productId + (filed == '' || filed == m.unit.trim() ? '' : '#' + filed);
       let p = /databases/$(database)/documents/$(name.replace('stockMovements$', 'stockLevels'))/$(id);
       let before = exists(p) ? get(p).data.qty : 0;
       return math.abs(getAfter(p).data.qty - (before + delta)) < 0.001;

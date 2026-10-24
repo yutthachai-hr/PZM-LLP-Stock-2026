@@ -28,3 +28,20 @@ client transaction; proving it server-side is the trusted stock-command work (r3
   which voided rows never could be anyway. No data migration either way.
 
 Tests: `tests/void-reason.test.ts`, `tests/void-reason-rules.test.ts`, `e2e/void-reason.demo.ts`.
+
+## R57 security review (DeepSeek v4.1 flash, independent) — changes and accepted risk
+- `voidedAt` must be within 10 minutes of the server's `request.time`: a cancellation cannot be
+  backdated. A phone clock more than 10 minutes off gets "permission denied" and must fix its clock.
+- `voidedByName` must equal the caller's profile `name` (the app's `actor.name` is that profile,
+  subscribed live): "cancelled by" cannot name a colleague.
+- The balance key trims the unit exactly like `levelId()`; a movement stored with `'KG '` was
+  unvoidable before (fail closed) and now cancels against its real row.
+- Tests: `tests/void-atomic.emulator.test.ts` checks each of blank reason, another admin's uid,
+  backdated time, forged name and manager role **with the exact reversal present**, so each denial
+  has one cause. RED on the pre-R57 Rules (backdate, name, spaced unit), GREEN after; Rules suite 291/291.
+- **Accepted risk (needs the trusted server, r33):** the reversal check proves the end state of the
+  commit, not that this commit made the change — an admin who first moves the balance in a separate
+  write can then cancel bare. The same batch may also carry unrelated balance writes. Rules cannot
+  prove the balance was right to begin with.
+- Deploy order unchanged: both mismatched states fail closed (void refused, nothing written), so the
+  only cost of the window is that voiding is briefly unavailable. Rules first, then the app, together.
