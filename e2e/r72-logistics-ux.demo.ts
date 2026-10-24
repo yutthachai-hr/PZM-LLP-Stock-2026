@@ -173,40 +173,55 @@ test.describe('R72 Agent07: Logistics mobile layout & visual invariants', () => 
     await page.goto(`/transfers/${R72_TRANSFER_INTERNAL_ID}/receive`)
     await waitForFontsAndData(page)
 
-    const brokenWidths: string[] = []
-
     for (const width of PHONE_WIDTHS) {
       await page.setViewportSize({ width, height: 844 })
       await page.waitForTimeout(50)
 
       // Ensure no horizontal window scrolling/overflow
       const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
-      if (hasHorizontalScroll) {
-        brokenWidths.push(`${width}px: horizontal scroll detected (scrollWidth > clientWidth)`)
+      expect(hasHorizontalScroll, `Horizontal scroll detected on ${width}px`).toBe(false)
+
+      const cards = page.locator('div.rounded-2xl').filter({ has: page.locator('input[aria-label="ตรวจแล้ว"]') })
+      const cardCount = await cards.count()
+      expect(cardCount, 'All 21 item cards must be rendered').toBe(21)
+
+      // Check all 21 rows for identity width, controls below identity, and no overlap
+      for (let i = 0; i < cardCount; i++) {
+        const card = cards.nth(i)
+        const identity = card.locator('div.min-w-0.flex-1').first()
+        const stepper = card.locator('button[aria-label="ลด"]').locator('..')
+
+        const cardBox = (await card.boundingBox())!
+        const identityBox = (await identity.boundingBox())!
+        const stepperBox = (await stepper.boundingBox())!
+
+        expect(cardBox, `Row ${i} card bounding box missing on ${width}px`).not.toBeNull()
+        expect(identityBox, `Row ${i} identity bounding box missing on ${width}px`).not.toBeNull()
+        expect(stepperBox, `Row ${i} stepper bounding box missing on ${width}px`).not.toBeNull()
+
+        // Derive identity width from card content minus checkbox touch target (~44px) and gaps (~12px):
+        // Card content width is roughly cardBox.width - 24px.
+        // At 320px viewport, legitimate expected identity width is ~199px (not arbitrary 220px).
+        const cardInnerWidth = cardBox.width - 24
+        const expectedIdentityWidth = Math.max(160, Math.floor(cardInnerWidth - 44 - 12))
+        expect(
+          identityBox.width,
+          `Row ${i} identity width (${Math.round(identityBox.width)}) must be >= derived width (${expectedIdentityWidth}) on ${width}px`,
+        ).toBeGreaterThanOrEqual(expectedIdentityWidth)
+
+        // R72 mobile layout contract: controls must be below identity, not crammed on the same line
+        expect(
+          stepperBox.y,
+          `Row ${i} controls (y=${Math.round(stepperBox.y)}) must be below identity bottom (y=${Math.round(identityBox.y + identityBox.height)}) on ${width}px`,
+        ).toBeGreaterThanOrEqual(identityBox.y + identityBox.height - 1)
+
+        // Controls must not overlap identity
+        const overlapX = Math.max(0, Math.min(identityBox.x + identityBox.width, stepperBox.x + stepperBox.width) - Math.max(identityBox.x, stepperBox.x))
+        const overlapY = Math.max(0, Math.min(identityBox.y + identityBox.height, stepperBox.y + stepperBox.height) - Math.max(identityBox.y, stepperBox.y))
+        const isOverlapping = overlapX > 0 && overlapY > 0
+        expect(isOverlapping, `Row ${i} controls must not overlap identity on ${width}px`).toBe(false)
       }
-
-      // In the R72 4-row layout: Row 1 is `checkbox 44px + fullwidth identity/name/SKU`.
-      // The name container must have a useful width >= 180px at 320px, and >= 200px at 360px+.
-      // On 992f6de baseline, checkbox + name + stepper are crammed on one flex row,
-      // squishing the name column to < 120px at 320px (RED).
-      const rowCard = page.locator('div.rounded-2xl').filter({ has: page.locator('input[aria-label="ตรวจแล้ว"]') }).first()
-      const titleCol = rowCard.locator('div.min-w-0.flex-1').first()
-      const stepper = rowCard.locator('button[aria-label="ลด"]').locator('..')
-      const cardBox = await rowCard.boundingBox()
-      const titleBox = await titleCol.boundingBox()
-      const stepperBox = await stepper.boundingBox()
-
-      // R72 4-row mobile layout requirement:
-      // Row 1: checkbox 44px + fullwidth identity/name/SKU.
-      // Row 2: sent quantity / unit / status.
-      // Row 3: stepper separated.
-      // In the 390px paradox: on 992f6de, stepper fits alongside titleCol (stepper.y === titleCol.y),
-      // squishing the title column to a tiny flex width (< 160px) while card width is 358px!
-      // In the proper 4-row layout, titleCol takes full row width (width >= 220px across all mobile widths).
-      brokenWidths.push(`INFO [${width}px]: title.w=${Math.round(titleBox?.width ?? 0)}, stepper.w=${Math.round(stepperBox?.width ?? 0)}, title.y=${Math.round(titleBox?.y ?? 0)}, stepper.y=${Math.round(stepperBox?.y ?? 0)}`)
     }
-
-    expect(brokenWidths, `Mobile title width failed on widths: ${brokenWidths.join('; ')}`).toEqual([])
   })
 
   test('qty minus/input/plus rectangles do not intersect and touch targets are >= 44px', async ({ page }) => {
@@ -313,13 +328,19 @@ test.describe('R72 Agent07: Logistics mobile layout & visual invariants', () => 
     await page.goto(`/transfers/${R72_TRANSFER_INTERNAL_ID}/receive`)
     await waitForFontsAndData(page)
 
-    // Scroll to the absolute bottom of the document
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-    await page.waitForTimeout(100)
-
-    // Locate the 21st item card
     const lastCard = page.locator('div.rounded-2xl').filter({ hasText: 'ถุงพลาสติกหูหิ้วชีวภาพ' }).first()
     await expect(lastCard).toBeVisible()
+
+    // Scroll to max and settle frames BEFORE asserting viewport geometry
+    await page.evaluate(async () => {
+      window.scrollTo(0, document.documentElement.scrollHeight || document.body.scrollHeight)
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    })
+    await lastCard.scrollIntoViewIfNeeded()
+    await page.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    })
+    await page.waitForTimeout(100)
 
     // Locate sticky bottom action bar (FormActions)
     const formActions = page.locator('button:has-text("ยืนยันรับ")').first().locator('..')

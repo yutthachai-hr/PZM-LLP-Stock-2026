@@ -1,0 +1,5 @@
+
+Error: Process from config.webServer was not able to start. Exit code: 1
+
+[WebServer] 'vite' is not recognized as an internal or external command,
+[WebServer] operable program or batch file.

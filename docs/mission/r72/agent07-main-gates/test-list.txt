@@ -1,0 +1,19 @@
+Listing tests:
+  r72-logistics-ux.demo.ts:27:3 › R72 Agent07: Notification routing & security contracts › canonical notification navigates to TransferReceivePage with correct docNo
+  r72-logistics-ux.demo.ts:49:3 › R72 Agent07: Notification routing & security contracts › legacy notification resolves to transfer doc rather than redirecting to dashboard
+  r72-logistics-ux.demo.ts:72:3 › R72 Agent07: Notification routing & security contracts › legacy notification with docNo resolves to internal transfer ID
+  r72-logistics-ux.demo.ts:94:3 › R72 Agent07: Notification routing & security contracts › invalid or denied notification does not redirect to dashboard while marking read
+  r72-logistics-ux.demo.ts:124:3 › R72 Agent07: Notification routing & security contracts › cross-brand query parameter in notification is blocked from brand switching
+  r72-logistics-ux.demo.ts:149:3 › R72 Agent07: Logistics mobile layout & visual invariants › all 21 rows are accessible and survive page refresh
+  r72-logistics-ux.demo.ts:171:3 › R72 Agent07: Logistics mobile layout & visual invariants › name and SKU have useful width and natural wrap across all 6 phone widths
+  r72-logistics-ux.demo.ts:227:3 › R72 Agent07: Logistics mobile layout & visual invariants › qty minus/input/plus rectangles do not intersect and touch targets are >= 44px
+  r72-logistics-ux.demo.ts:271:3 › R72 Agent07: Logistics mobile layout & visual invariants › decimal 1.063 KG quantity is preserved without rounding during typing and ± toggle
+  r72-logistics-ux.demo.ts:298:3 › R72 Agent07: Logistics mobile layout & visual invariants › rapid double-click on confirm submits only once without racing
+  r72-logistics-ux.demo.ts:325:3 › R72 Agent07: Logistics mobile layout & visual invariants › last item (row 21) is scrollable completely above sticky CTA and bottom nav
+  r72-logistics-ux.demo.ts:361:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › 200% font scale and landscape orientation keep document accessible without overflow
+  r72-logistics-ux.demo.ts:384:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › shrunk viewport simulates keyboard without hiding active input behind footer
+  r72-logistics-ux.demo.ts:401:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › iOS safe area insets via CDP is probed with honest gap reporting if unsupported
+  r72-logistics-ux.demo.ts:421:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › Android browser navigation bar simulation documented as browser-level not OS-level
+  r72-logistics-ux.demo.ts:433:3 › R72 Agent07: Responsive adaptations, keyboard & device emulation › PO price spec reuse: no financial/monetary fields written to stock movements and honest null vs 0
+  r72-logistics-ux.demo.ts:465:3 › R72 Agent07: Visual screenshots & baseline capture › capture before evidence screenshots across mobile viewports
+Total: 17 tests in 1 file

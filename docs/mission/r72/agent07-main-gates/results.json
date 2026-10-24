@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-24T19:37:46.367Z",
+  "privateDependencies": true,
+  "results": [
+    {
+      "name": "types-invalid-path-initial-attempt",
+      "exit": 1
+    },
+    {
+      "name": "test-list",
+      "exit": 0
+    },
+    {
+      "name": "types-e2e-correct-project",
+      "exit": 0
+    },
+    {
+      "name": "baseline-mixed-21-name-layout",
+      "exit": 1
+    },
+    {
+      "name": "baseline-mixed-21-layout-direct-node",
+      "exit": 1
+    }
+  ]
+}

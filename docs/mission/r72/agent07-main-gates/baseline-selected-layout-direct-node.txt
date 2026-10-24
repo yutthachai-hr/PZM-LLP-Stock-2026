@@ -1,0 +1,122 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e\r72-logistics-ux.demo.ts:171:3 › R72 Agent07: Logistics mobile layout & visual invariants › name and SKU have useful width and natural wrap across all 6 phone widths
+
+  1) e2e\r72-logistics-ux.demo.ts:171:3 › R72 Agent07: Logistics mobile layout & visual invariants › name and SKU have useful width and natural wrap across all 6 phone widths 
+
+    Error: All 21 item cards must be rendered
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 21
+    Received: 0
+
+      184 |       const cards = page.locator('div.rounded-2xl').filter({ has: page.locator('input[aria-label="ตรวจแล้ว"]') })
+      185 |       const cardCount = await cards.count()
+    > 186 |       expect(cardCount, 'All 21 item cards must be rendered').toBe(21)
+          |                                                               ^
+      187 |
+      188 |       // Check all 21 rows for identity width, controls below identity, and no overlap
+      189 |       for (let i = 0; i < cardCount; i++) {
+        at C:\Users\Yutthachai\.t3\worktrees\PZM-LLP-Stock-2026\t3-228605bf\e2e\r72-logistics-ux.demo.ts:186:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-658a5-p-across-all-6-phone-widths\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-658a5-p-across-all-6-phone-widths\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-658a5-p-across-all-6-phone-widths\trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-results\r72-logistics\r72-logistics-ux.demo.ts-R-658a5-p-across-all-6-phone-widths\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  1 failed
+    e2e\r72-logistics-ux.demo.ts:171:3 › R72 Agent07: Logistics mobile layout & visual invariants › name and SKU have useful width and natural wrap across all 6 phone widths 
+[WebServer] file:///C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-228605bf/node_modules/rolldown/dist/shared/error-BHRSI0R7.mjs:48
+[WebServer] 	const wrapper = new Error(summary);
+[WebServer] 	                ^
+[WebServer] 
+[WebServer] Error: Error during dependency optimization:
+[WebServer] 
+[WebServer] Build failed with 135 errors:
+[WebServer] 
+[WebServer] [UNRESOLVED_IMPORT] Could not resolve '../dist/compat/object/get.mjs' in node_modules/es-toolkit/compat/get.mjs
+[WebServer]    ╭─[ node_modules/es-toolkit/compat/get.mjs:1:32 ]
+[WebServer]    │
+[WebServer]  1 │ export { get as default } from '../dist/compat/object/get.mjs';
+[WebServer]    │                                ───────────────┬───────────────  
+[WebServer]    │                                               ╰───────────────── Module not found.
+[WebServer]    │ 
+[WebServer]    │ Help: 'node_modules/es-toolkit/compat/get.mjs' is imported by the following path:
+[WebServer]    │         - node_modules/es-toolkit/compat/get.mjs
+[WebServer]    │         - node_modules/recharts/es6/util/DataUtils.js
+[WebServer]    │         - node_modules/recharts/es6/index.js
+[WebServer] ───╯
+[WebServer] 
+[WebServer] [UNRESOLVED_IMPORT] Could not resolve '../dist/compat/function/throttle.mjs' in node_modules/es-toolkit/compat/throttle.mjs
+[WebServer]    ╭─[ node_modules/es-toolkit/compat/throttle.mjs:1:37 ]
+[WebServer]    │
+[WebServer]  1 │ export { throttle as default } from '../dist/compat/function/throttle.mjs';
+[WebServer]    │                                     ───────────────────┬──────────────────  
+[WebServer]    │                                                        ╰──────────────────── Module not found.
+[WebServer]    │ 
+[WebServer]    │ Help: 'node_modules/es-toolkit/compat/throttle.mjs' is imported by the following path:
+[WebServer]    │         - node_modules/es-toolkit/compat/throttle.mjs
+[WebServer]    │         - node_modules/recharts/es6/component/ResponsiveContainer.js
+[WebServer]    │         - node_modules/recharts/es6/index.js
+[WebServer] ───╯
+[WebServer] 
+[WebServer] [UNRESOLVED_IMPORT] Could not resolve '../dist/compat/array/sortBy.mjs' in node_modules/es-toolkit/compat/sortBy.mjs
+[WebServer]    ╭─[ node_modules/es-toolkit/compat/sortBy.mjs:1:35 ]
+[WebServer]    │
+[WebServer]  1 │ export { sortBy as default } from '../dist/compat/array/sortBy.mjs';
+[WebServer]    │                                   ────────────────┬────────────────  
+[WebServer]    │                                                   ╰────────────────── Module not found.
+[WebServer]    │ 
+[WebServer]    │ Help: 'node_modules/es-toolkit/compat/sortBy.mjs' is imported by the following path:
+[WebServer]    │         - node_modules/es-toolkit/compat/sortBy.mjs
+[WebServer]    │         - node_modules/recharts/es6/component/DefaultTooltipContent.js
+[WebServer]    │         - node_modules/recharts/es6/index.js
+[WebServer] ───╯
+[WebServer] 
+[WebServer] [UNRESOLVED_IMPORT] Could not resolve '../dist/compat/array/last.mjs' in node_modules/es-toolkit/compat/last.mjs
+[WebServer]    ╭─[ node_modules/es-toolkit/compat/last.mjs:1:33 ]
+[WebServer]    │
+[WebServer]  1 │ export { last as default } from '../dist/compat/array/last.mjs';
+[WebServer]    │                                 ───────────────┬───────────────  
+[WebServer]    │                                                ╰───────────────── Module not found.
+[WebServer]    │ 
+[WebServer]    │ Help: 'node_modules/es-toolkit/compat/last.mjs' is imported by the following path:
+[WebServer]    │         - node_modules/es-toolkit/compat/last.mjs
+[WebServer]    │         - node_modules/recharts/es6/polar/Radar.js
+[WebServer]    │         - node_modules/recharts/es6/index.js
+[WebServer] ───╯
+[WebServer] 
+[WebServer] [UNRESOLVED_IMPORT] Could not resolve '../dist/compat/math/maxBy.mjs' in node_modules/es-toolkit/compat/maxBy.mjs
+[WebServer]    ╭─[ node_modules/es-toolkit/compat/maxBy.mjs:1:34 ]
+[WebServer]    │
+[WebServer]  1 │ export { maxBy as default } from '../dist/compat/math/maxBy.mjs';
+[WebServer]    │                                  ───────────────┬───────────────  
+[WebServer]    │                                                 ╰───────────────── Module not found.
+[WebServer]    │ 
+[WebServer]    │ Help: 'node_modules/es-toolkit/compat/maxBy.mjs' is imported by the following path:
+[WebServer]    │         - node_modules/es-toolkit/compat/maxBy.mjs
+[WebServer]    │         - node_modules/recharts/es6/polar/PolarRadiusAxis.js
+[WebServer]    │         - node_modules/recharts/es6/index.js
+[WebServer] ───╯
+[WebServer] 
+[WebServer] ...
+[WebServer]     at aggregateBindingErrorsIntoJsError (file:///C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-228605bf/node_modules/rolldown/dist/shared/error-BHRSI0R7.mjs:48:18)
+[WebServer]     at unwrapBindingResult (file:///C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-228605bf/node_modules/rolldown/dist/shared/error-BHRSI0R7.mjs:18:128)
+[WebServer]     at #build (file:///C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-228605bf/node_modules/rolldown/dist/shared/rolldown-build-CtPvmZgJ.mjs:3276:34)
+[WebServer]     at async Object.build (file:///C:/Users/Yutthachai/.t3/worktrees/PZM-LLP-Stock-2026/t3-228605bf/node_modules/vite/dist/node/chunks/node.js:31622:11) {
+[WebServer]   errors: [Getter/Setter]
+[WebServer] }
+[WebServer] 
+[WebServer] Node.js v24.18.0

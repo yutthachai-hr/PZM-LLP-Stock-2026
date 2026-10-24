@@ -23,7 +23,7 @@ export default defineConfig({
     screenshot: { mode: 'on', fullPage: true },
   },
   webServer: {
-    command: 'npx vite --mode demo --host 127.0.0.1 --port 5217 --strictPort',
+    command: 'node node_modules/vite/bin/vite.js --mode demo --host 127.0.0.1 --port 5217 --strictPort',
     url: 'http://127.0.0.1:5217',
     reuseExistingServer: false,
     timeout: 60_000,
