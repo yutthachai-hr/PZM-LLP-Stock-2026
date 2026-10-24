@@ -105,7 +105,7 @@ export function buildActivityLog(input: ActivityInput): ActivityEntry[] {
     const subject = `${o.supplierName} · ${t('{n} รายการ', { n: o.lines.length })} · ${input.locationName(o.locationId)}`
     const link = `/orders?po=${o.id}`
     const base = { area: 'order' as const, kind, docNo: o.docNo, subject, link }
-    push({ ...base, key: `po:${o.id}:0`, at: o.createdAt, action: o.status === 'draft' || o.batchId || o.approvedAt ? t('สร้างร่าง') : t('สั่งซื้อ'), detail: o.requestId ? t('จากรายการขอสั่งซื้อ') : '', by: o.createdByName })
+    push({ ...base, key: `po:${o.id}:0`, at: o.createdAt, action: o.status === 'draft' || o.batchId || o.approvedAt ? t('สร้างร่าง') : t('สั่งซื้อเรียบร้อย'), detail: o.requestId ? t('จากรายการขอสั่งซื้อ') : '', by: o.createdByName })
     if (o.approvedAt) push({ ...base, key: `po:${o.id}:ap`, at: o.approvedAt, action: t('อนุมัติและสั่ง'), detail: '', by: o.approvedByName ?? '' })
     if (o.sentAt) push({ ...base, key: `po:${o.id}:sent`, at: o.sentAt, action: t('ส่งเข้า LINE แล้ว'), detail: '', by: o.sentByName ?? '' })
     for (const r of o.revisions ?? []) {
@@ -172,7 +172,7 @@ export function buildActivityLog(input: ActivityInput): ActivityEntry[] {
       })
     }
     if (o.status === 'cancelled' && o.cancelledAt) {
-      push({ ...base, key: `po:${o.id}:x`, at: o.cancelledAt, action: t('ยกเลิกใบสั่งซื้อ'), detail: o.cancelReason ?? '', by: o.cancelledByName ?? '' })
+      push({ ...base, key: `po:${o.id}:x`, at: o.cancelledAt, action: t('ยกเลิกใบสั่งซื้อแล้ว'), detail: o.cancelReason ?? '', by: o.cancelledByName ?? '' })
     }
   }
 
