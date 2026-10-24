@@ -58,3 +58,6 @@ dist-demo
 # Python bytecode from local tooling (never project files)
 __pycache__/
 *.pyc
+
+# e2e/sw-navigation.demo.ts build output
+dist-sw-e2e
