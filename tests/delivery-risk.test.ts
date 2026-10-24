@@ -116,6 +116,12 @@ describe('reasons', () => {
     expect(assessDeliveryRisk(o, ctx([]))!.reasons.find((x) => x.code === 'slowConfirmation')!.params).toEqual({ hours: 30 })
   })
 
+  // A2 (R66 review): a link prepared in the send wizard but never sent asked nobody.
+  test('a prepared link that was never sent is not a slow confirmation', () => {
+    const o = open({ supplierLink: { version: 1, rev: 0, issuedAt: NOW - 30 * 3_600_000, issuedBy: 'u', expiresAt: NOW, unsent: true } })
+    expect(codes(assessDeliveryRisk(o, ctx([])))).not.toContain('slowConfirmation')
+  })
+
   test('a date changed after the last calculation changes the next one', () => {
     const o = open({ expectedAt: day(-1) })
     expect(assessDeliveryRisk(o, ctx([]))!.level).toBe('MEDIUM')

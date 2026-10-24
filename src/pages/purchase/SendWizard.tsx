@@ -18,8 +18,8 @@ import { imageHostAvailable, uploadPoImage, type HostedImage } from '../../servi
 import { setShareStatus, type SharePatch } from '../../services/purchaseOrders'
 import { deliver } from '../../services/notifications'
 import { poSentDraft } from '../../lib/inventoryRules/notifications'
-import { supplierLink } from '../../services/supplierConfirmation'
-import { requestedOf, supplierDateLabel } from '../../lib/supplierConfirmation'
+import { markSupplierRequested, supplierLink } from '../../services/supplierConfirmation'
+import { askedOnSend, supplierDateLabel } from '../../lib/supplierConfirmation'
 import { pickShareProvider, type PurchaseShareProvider } from '../../share'
 import { isStandalone } from '../../share/liffResume'
 import type { PurchaseOrder } from '../../types'
@@ -42,6 +42,8 @@ interface Prepared {
   card?: { altText: string; contents: Record<string, unknown> }
   /** The supplier's confirmation link, for copying into the chat as its own message (R40). */
   link?: string
+  /** That link's version: once this page is sent, the supplier is asked for it (A2). */
+  linkVersion?: number
   version: number
 }
 
@@ -260,7 +262,8 @@ export function SendWizard({
         if (stale) return
         if (link) tracker.observe(link.order)
         const st = translatorFor(sheetLang)
-        const asked = requestedOf(link?.order ?? current)
+        // The date this sheet asks for: recorded on the order only once it is sent (A2).
+        const asked = askedOnSend(link?.order ?? current)
         const pageTag = page.of > 1 ? ` (${page.n}/${page.of})` : ''
         const caption = link
           ? newOrderMessage(st, {
@@ -271,7 +274,7 @@ export function SendWizard({
               url: link.url,
             })
           : t('ใบสั่งซื้อ {docNo} — {company}', { docNo: current.docNo, company }) + pageTag
-        setPrepared({ key: payloadKey, file, hosted, caption, card: link ? confirmCard(link.url, current.docNo, st) : undefined, link: link?.url, version })
+        setPrepared({ key: payloadKey, file, hosted, caption, card: link ? confirmCard(link.url, current.docNo, st) : undefined, link: link?.url, linkVersion: link?.order.supplierLink?.version, version })
       } catch (e) {
         if (!stale) setPrepareError(errText(e, t))
       } finally {
@@ -337,6 +340,8 @@ export function SendWizard({
           recordSent: () => record(order, 'sent', p.version),
           recordFailed: () => record(order, 'failed'),
         })
+        // LINE delivered the page that carried the link (saved or not): the supplier was asked.
+        if (settled.kind === 'nextPage' || settled.kind === 'sent' || settled.kind === 'sentUnsaved') requestLink(order, p.linkVersion)
         if (settled.kind === 'nextPage') {
           // More pages of the same order: stay on it, move to the next page, and remember that.
           savePageProgress(scopeOf(order), pageIdx + 1)
@@ -358,8 +363,18 @@ export function SendWizard({
     })()
   }
 
+  // Only a sent sheet asks the supplier (A2): opening the wizard, cancelling or failing asks nothing.
+  function requestLink(order: PurchaseOrder, linkVersion: number | undefined) {
+    if (linkVersion === undefined || brandEpoch() !== openedInEpoch) return
+    void markSupplierRequested(order, linkVersion).then((next) => {
+      if (next) tracker.observe(next)
+    })
+  }
+
   function confirmPage() {
     if (!current) return
+    // The person says this page went; the first page carries the link.
+    if (prepared?.key === payloadKey) requestLink(current, prepared.linkVersion)
     if (pageIdx < pages.length - 1) {
       savePageProgress(scopeOf(current), pageIdx + 1)
       setPageIdx(pageIdx + 1)

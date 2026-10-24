@@ -8,7 +8,7 @@
 
 import { beforeAll, describe, expect, test } from 'vitest'
 import { restServerStore } from '../../functions/_lib/serverStore'
-import { answerLink, decideDate, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
+import { answerLink, decideDate, markLinkRequested, mintLink, viewLink, type Deps } from '../../functions/_lib/supplierPo'
 import { encodeFields } from '../../worker/src/codec'
 import { bkkAtTime, bkkDayStart, DAY_MS } from '../../src/lib/inventoryRules/time'
 import { msToDateKey } from '../../src/lib/supplierConfirmation'
@@ -430,6 +430,12 @@ describe('the supplier answer on a real Firestore (emulator)', () => {
     expect(mint2.status).toBe(200)
     const token2 = mint2.body.token as string
     expect(token2).not.toBe(token1)
+
+    // A2: preparing the amended sheet asks nothing yet; the agreed answer stands until it is sent.
+    const prepared = await readOrder('rnd__purchaseOrders', id)
+    expect(prepared.supplierConfirmationStatus).toBe('changed')
+    expect(prepared.supplierLink).toMatchObject({ version: 2, unsent: true })
+    expect((await markLinkRequested(deps(), 'Bearer staff1', { brand: 'rnd', poId: id, version: 2 })).status).toBe(200)
 
     const oAmended = await readOrder('rnd__purchaseOrders', id)
     expect(oAmended.supplierConfirmationStatus).toBe('waiting')

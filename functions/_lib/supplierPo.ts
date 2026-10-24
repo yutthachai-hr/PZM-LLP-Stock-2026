@@ -13,6 +13,8 @@ import {
   isReplay,
   lastRejection,
   linkProblem,
+  markRequested,
+  mintLink as prepareLink,
   msToDateKey,
   openLink,
   requestedOf,
@@ -31,6 +33,7 @@ import { signSupplierToken, verifySupplierSignature, type SupplierClaims, type T
  * functions/api/ only wire the real ones in (see `liveDeps`).
  *
  *   POST /api/supplier-po/link     signed-in staff: the link to send with the sheet
+ *   POST /api/supplier-po/requested signed-in staff: that sheet went — the supplier is asked (A2)
  *   GET  /api/supplier/<token>     anyone holding the link: what the page shows
  *   POST /api/supplier/<token>     anyone holding the link: accept, or propose a date
  *   POST /api/supplier-po/decide   หัวหน้า/admin: approve or refuse a date beyond the range
@@ -126,7 +129,7 @@ export async function mintLink(deps: Deps, authorization: string | null, body: u
   const { ttlDays } = await settingsOf(deps.store, brand)
   const now = deps.now()
   const res = await writeOrder(deps, brandCollection(brand, 'purchaseOrders'), poId, (o) => {
-    const r = issueLink(o, { now, actor: { id: user.id, name: user.name }, ttlDays, makeId: deps.makeId })
+    const r = prepareLink(o, { now, actor: { id: user.id, name: user.name }, ttlDays, makeId: deps.makeId })
     if (!r.ok) return fail(409, 'not_open')
     return { patch: r.patch, reply: { version: r.version, expiresAt: r.expiresAt } }
   })
@@ -140,6 +143,33 @@ export async function mintLink(deps: Deps, authorization: string | null, body: u
   }
   const token = await signSupplierToken(claims, deps.secret)
   return ok({ url: `${deps.origin}/supplier/po/${token}`, token, order: res.order })
+}
+
+/**
+ * POST /api/supplier-po/requested { brand, poId, version } — the sheet carrying link `version`
+ * was sent, so the supplier has been asked (A2). Refused for any other link or revision.
+ */
+export async function markLinkRequested(deps: Deps, authorization: string | null, body: unknown): Promise<Reply> {
+  const user = await caller(deps, authorization)
+  if (!user) return fail(401, 'unauthorized')
+  const { brand, poId, version } = (body ?? {}) as { brand?: unknown; poId?: unknown; version?: unknown }
+  if (!isBrand(brand) || !isId(poId) || !Number.isInteger(version)) return fail(400, 'bad_request')
+  const now = deps.now()
+  const res = await writeOrder(deps, brandCollection(brand, 'purchaseOrders'), poId, (o) => {
+    const r = markRequested(o, { now, actor: { id: user.id, name: user.name }, makeId: deps.makeId, version: version as number })
+    if (!r.ok) return fail(409, r.error === 'stale' ? 'stale' : 'not_open')
+    return { patch: r.patch, reply: null }
+  })
+  if (isReply(res)) return res
+  return ok({ order: res.order })
+}
+
+/** A supplier holding a link proves it was sent: ask first if the sender's mark never landed (A2). */
+function askedByHolder(o: PurchaseOrder, now: number, makeId: () => string): SupplierPatch | null {
+  const link = o.supplierLink
+  if (!link?.unsent) return null
+  const r = markRequested(o, { now, actor: { id: link.issuedBy, name: '' }, makeId, version: link.version })
+  return r.ok ? r.patch : null
 }
 
 /**
@@ -216,7 +246,10 @@ export async function viewLink(deps: Deps, token: string): Promise<Reply> {
   if (problem) return fail(410, problem, { docNo: got.doc.docNo, company: COMPANY[claims.brand] })
 
   let order = got.doc
-  const opened = openLink(order, claims.version, now, deps.makeId)
+  const asked = askedByHolder(order, now, deps.makeId)
+  const afterAsk = asked ? applyPatch(order, asked) : order
+  const firstView = openLink(afterAsk, claims.version, now, deps.makeId)
+  const opened = asked || firstView ? { ...asked, ...firstView } : null
   if (opened) {
     // Recording the first view is worth one write, not a failed page: ignore a lost race.
     try {
@@ -258,8 +291,9 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
     if (b.expectedState !== supplierStateOf(o)) return fail(409, 'stale_state')
     // This check is inside writeOrder: a lost updateTime race rechecks the original
     // expected state, never silently recomputing an unseen state-changing answer.
+    const asked = askedByHolder(o, now, deps.makeId)
     const r = respond(
-      o,
+      asked ? applyPatch(o, asked) : o,
       {
         action: b.action as 'accept' | 'propose',
         date,
@@ -270,8 +304,8 @@ export async function answerLink(deps: Deps, token: string, body: unknown): Prom
       { now, maxPostponeDays, makeId: deps.makeId },
     )
     if (!r.ok) return fail(422, r.error)
-    if (r.replayed) return { patch: null, reply: { replayed: true, unchanged: r.unchanged === true } }
-    return { patch: r.patch, reply: { replayed: false, outcome: r.outcome, change: r.change } }
+    if (r.replayed) return { patch: asked, reply: { replayed: true, unchanged: r.unchanged === true } }
+    return { patch: { ...asked, ...r.patch }, reply: { replayed: false, outcome: r.outcome, change: r.change } }
   })
   if (isReply(res)) return res
 
