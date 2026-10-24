@@ -111,6 +111,27 @@ describe('R69 AGENT03: Receipt price resolver', () => {
       expect(res.effectiveAt).toBeUndefined()
     })
 
+    test('3c) prefers valid product.cost before newest future history if both exist', () => {
+      const product: Pick<Product, 'id' | 'cost' | 'costHistory'> = {
+        id: 'prod-1',
+        cost: 30, // current master cost
+        costHistory: [
+          { price: 80, unit: 'EA', factor: 1, cost: 80, effectiveAt: 5000, at: 5000, by: 'u', byName: 'U' },
+        ],
+      }
+      const res = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product,
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(res.source).toBe('costLatest')
+      expect(res.unitPrice).toBe(30)
+      expect(res.basePrice).toBe(30)
+      expect(res.unit).toBe('EA')
+    })
+
     test('4) missing when no supplier price and no product cost -> missing (unitPrice null, never 0)', () => {
       const res = resolveReceiptPrice({
         line: baseLine,
@@ -239,6 +260,109 @@ describe('R69 AGENT03: Receipt price resolver', () => {
       expect(res.unitPrice).toBe(25)
     })
 
+    test('conflicting active supplier records are skipped and invariant to array order', () => {
+      const item40: Pick<SupplierItem, 'supplierId' | 'productId' | 'buyingPrice' | 'active'> = {
+        supplierId: 'sup-1',
+        productId: 'prod-1',
+        buyingPrice: 40,
+        active: true,
+      }
+      const item50: Pick<SupplierItem, 'supplierId' | 'productId' | 'buyingPrice' | 'active'> = {
+        supplierId: 'sup-1',
+        productId: 'prod-1',
+        buyingPrice: 50,
+        active: true,
+      }
+      const product: Pick<Product, 'id' | 'cost' | 'costHistory'> = {
+        id: 'prod-1',
+        cost: 35,
+      }
+
+      // Order [40, 50]
+      const res1 = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product,
+        supplierItems: [item40, item50],
+        asOf: 2000,
+      })
+      expect(res1.source).toBe('costLatest')
+      expect(res1.unitPrice).toBe(35) // falls back to product.cost
+
+      // Order [50, 40]
+      const res2 = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product,
+        supplierItems: [item50, item40],
+        asOf: 2000,
+      })
+      expect(res2.source).toBe('costLatest')
+      expect(res2.unitPrice).toBe(35) // invariant to array order
+
+      // Conflicting active supplier items without product fallback -> missing
+      const resNoFallback = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product: undefined,
+        supplierItems: [item40, item50],
+        asOf: 2000,
+      })
+      expect(resNoFallback.source).toBe('missing')
+      expect(resNoFallback.unitPrice).toBeNull()
+
+      // Identical-price duplicates are accepted
+      const resIdentical = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product,
+        supplierItems: [item40, { ...item40 }],
+        asOf: 2000,
+      })
+      expect(resIdentical.source).toBe('supplierPrice')
+      expect(resIdentical.unitPrice).toBe(40)
+    })
+
+    test('only uses product cost and history when product.id === line.productId', () => {
+      const line: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-correct',
+        unit: 'EA',
+        orderedQty: 5,
+      }
+      const mismatchedProduct: Pick<Product, 'id' | 'cost' | 'costHistory'> = {
+        id: 'prod-wrong',
+        cost: 50,
+        costHistory: [{ price: 40, unit: 'EA', factor: 1, cost: 40, effectiveAt: 1000, at: 1000, by: 'u', byName: 'U' }],
+      }
+      const res = resolveReceiptPrice({
+        line,
+        supplierId: 'sup-1',
+        product: mismatchedProduct,
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(res.source).toBe('missing')
+      expect(res.unitPrice).toBeNull()
+      expect(res.basePrice).toBeNull()
+    })
+
+    test('normalizes monetary -0 to 0', () => {
+      const product: Pick<Product, 'id' | 'cost' | 'costHistory'> = {
+        id: 'prod-1',
+        cost: -0,
+      }
+      const res = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product,
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(Object.is(res.unitPrice, 0)).toBe(true)
+      expect(Object.is(res.basePrice, 0)).toBe(true)
+      expect(Object.is(res.unitPrice, -0)).toBe(false)
+    })
+
     test('ignores NaN, negative, non-number buyingPrice in supplier items', () => {
       const res = resolveReceiptPrice({
         line: baseLine,
@@ -322,6 +446,59 @@ describe('R69 AGENT03: Receipt price resolver', () => {
       expect(res.unitPrice).toBe(15)
       expect(res.effectiveAt).toBe(300)
     })
+
+    test('equal history effectiveAt uses latest finite entry.at for deterministic correction regardless of array order', () => {
+      const entryOriginal = {
+        price: 40,
+        unit: 'EA',
+        factor: 1,
+        cost: 40,
+        effectiveAt: 1000,
+        at: 1000,
+        by: 'u',
+        byName: 'U',
+      }
+      const entryCorrected = {
+        price: 50,
+        unit: 'EA',
+        factor: 1,
+        cost: 50,
+        effectiveAt: 1000,
+        at: 1200, // corrected later
+        by: 'u',
+        byName: 'U',
+      }
+
+      // Order [entryOriginal, entryCorrected]
+      const resA = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product: {
+          id: 'prod-1',
+          costHistory: [entryOriginal, entryCorrected],
+        },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resA.source).toBe('costAsOf')
+      expect(resA.unitPrice).toBe(50)
+      expect(resA.effectiveAt).toBe(1000)
+
+      // Reversed order [entryCorrected, entryOriginal]
+      const resB = resolveReceiptPrice({
+        line: baseLine,
+        supplierId: 'sup-1',
+        product: {
+          id: 'prod-1',
+          costHistory: [entryCorrected, entryOriginal],
+        },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resB.source).toBe('costAsOf')
+      expect(resB.unitPrice).toBe(50)
+      expect(resB.effectiveAt).toBe(1000)
+    })
   })
 
   describe('Unit Conversions via PO Preserved Rate (baseQty / orderedQty)', () => {
@@ -369,41 +546,185 @@ describe('R69 AGENT03: Receipt price resolver', () => {
       expect(res.unit).toBe('EA')
     })
 
-    test('falls back to factor 1 when baseQty is not a number or orderedQty <= 0', () => {
-      const lineNoBaseQty: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+    test('blank or whitespace entryUnit falls back to line.unit', () => {
+      const lineEmpty: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-1',
+        unit: 'EA',
+        entryUnit: '',
+        orderedQty: 10,
+        baseQty: 10,
+      }
+      const resEmpty = resolveReceiptPrice({
+        line: lineEmpty,
+        supplierId: 'sup-1',
+        product: { id: 'prod-1', cost: 25 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resEmpty.unit).toBe('EA')
+      expect(resEmpty.unitPrice).toBe(25)
+
+      const lineSpaces: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-1',
+        unit: 'EA',
+        entryUnit: '   ',
+        orderedQty: 10,
+        baseQty: 10,
+      }
+      const resSpaces = resolveReceiptPrice({
+        line: lineSpaces,
+        supplierId: 'sup-1',
+        product: { id: 'prod-1', cost: 25 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resSpaces.unit).toBe('EA')
+      expect(resSpaces.unitPrice).toBe(25)
+
+      const linePadded: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-1',
+        unit: 'EA',
+        entryUnit: '  Pack  ',
+        orderedQty: 10,
+        baseQty: 60,
+      }
+      const resPadded = resolveReceiptPrice({
+        line: linePadded,
+        supplierId: 'sup-1',
+        product: { id: 'prod-1', cost: 25 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resPadded.unit).toBe('Pack')
+      expect(resPadded.unitPrice).toBe(150)
+    })
+
+    test('alternate unit without finite positive preserved rate returns missing and null prices', () => {
+      // Legacy PO without baseQty (legacyPack)
+      const legacyPack: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
         productId: 'prod-x',
         unit: 'EA',
         entryUnit: 'Pack',
         orderedQty: 5,
         baseQty: undefined,
       }
-
-      const res1 = resolveReceiptPrice({
-        line: lineNoBaseQty,
+      const resLegacy = resolveReceiptPrice({
+        line: legacyPack,
         supplierId: 'sup-1',
         product: { id: 'prod-x', cost: 20 },
         supplierItems: [],
         asOf: 2000,
       })
-      expect(res1.unitPrice).toBe(20)
-      expect(res1.unit).toBe('Pack')
+      expect(resLegacy.source).toBe('missing')
+      expect(resLegacy.unitPrice).toBeNull()
+      expect(resLegacy.basePrice).toBeNull()
+      expect(resLegacy.unit).toBe('Pack')
 
-      const lineZeroOrdered: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+      // baseQty 0 must NOT collapse price to 0
+      const baseQtyZero: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-x',
+        unit: 'EA',
+        entryUnit: 'Pack',
+        orderedQty: 5,
+        baseQty: 0,
+      }
+      const resZero = resolveReceiptPrice({
+        line: baseQtyZero,
+        supplierId: 'sup-1',
+        product: { id: 'prod-x', cost: 100 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resZero.source).toBe('missing')
+      expect(resZero.unitPrice).toBeNull()
+      expect(resZero.basePrice).toBeNull()
+
+      // baseQty negative must NOT produce negative unit price
+      const baseQtyNeg: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-x',
+        unit: 'EA',
+        entryUnit: 'Pack',
+        orderedQty: 5,
+        baseQty: -5,
+      }
+      const resNeg = resolveReceiptPrice({
+        line: baseQtyNeg,
+        supplierId: 'sup-1',
+        product: { id: 'prod-x', cost: 100 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resNeg.source).toBe('missing')
+      expect(resNeg.unitPrice).toBeNull()
+      expect(resNeg.basePrice).toBeNull()
+
+      // baseQty NaN
+      const baseQtyNan: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-x',
+        unit: 'EA',
+        entryUnit: 'Pack',
+        orderedQty: 5,
+        baseQty: NaN,
+      }
+      const resNan = resolveReceiptPrice({
+        line: baseQtyNan,
+        supplierId: 'sup-1',
+        product: { id: 'prod-x', cost: 100 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(resNan.source).toBe('missing')
+      expect(resNan.unitPrice).toBeNull()
+
+      // orderedQty 0
+      const orderedQtyZero: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
         productId: 'prod-x',
         unit: 'EA',
         entryUnit: 'Pack',
         orderedQty: 0,
         baseQty: 24,
       }
-
-      const res2 = resolveReceiptPrice({
-        line: lineZeroOrdered,
+      const resOrderedZero = resolveReceiptPrice({
+        line: orderedQtyZero,
         supplierId: 'sup-1',
-        product: { id: 'prod-x', cost: 20 },
+        product: { id: 'prod-x', cost: 100 },
         supplierItems: [],
         asOf: 2000,
       })
-      expect(res2.unitPrice).toBe(20)
+      expect(resOrderedZero.source).toBe('missing')
+      expect(resOrderedZero.unitPrice).toBeNull()
+
+      // valid zero cost does NOT stay 0 when conversion is unknown
+      const zeroCostUnknownConv = resolveReceiptPrice({
+        line: legacyPack,
+        supplierId: 'sup-1',
+        product: { id: 'prod-x', cost: 0 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(zeroCostUnknownConv.source).toBe('missing')
+      expect(zeroCostUnknownConv.unitPrice).toBeNull()
+      expect(zeroCostUnknownConv.basePrice).toBeNull()
+    })
+
+    test('sameUnit (case/space variant of line.unit) uses factor 1 when no preserved ratio', () => {
+      const lineSameUnit: Pick<PurchaseOrderLine, 'productId' | 'unit' | 'entryUnit' | 'orderedQty' | 'baseQty'> = {
+        productId: 'prod-1',
+        unit: 'EA',
+        entryUnit: 'ea',
+        orderedQty: 5,
+      }
+      const res = resolveReceiptPrice({
+        line: lineSameUnit,
+        supplierId: 'sup-1',
+        product: { id: 'prod-1', cost: 20 },
+        supplierItems: [],
+        asOf: 2000,
+      })
+      expect(res.source).toBe('costLatest')
+      expect(res.unitPrice).toBe(20)
+      expect(res.basePrice).toBe(20)
+      expect(res.unit).toBe('ea')
     })
 
     test('KG decimal products maintain full precision', () => {
@@ -482,6 +803,22 @@ describe('R69 AGENT03: Receipt price resolver', () => {
       }
       expect(lineAmount(pFractional, 3)).toBe(10) // (10/3) * 3 = 10, not (3.33 * 3 = 9.99)
     })
+
+    test('rejects overflow, NaN, and negative line amounts', () => {
+      const priceOverflow: ReceiptPrice = { source: 'costLatest', unitPrice: 1e308, unit: 'EA', basePrice: 1e308 }
+      expect(lineAmount(priceOverflow, 10)).toBeNull()
+
+      const nanPrice: ReceiptPrice = { source: 'costLatest', unitPrice: NaN, unit: 'EA', basePrice: NaN }
+      expect(lineAmount(nanPrice, 5)).toBeNull()
+
+      const negPrice: ReceiptPrice = { source: 'costLatest', unitPrice: -10, unit: 'EA', basePrice: -10 }
+      expect(lineAmount(negPrice, 5)).toBeNull()
+
+      const validPrice: ReceiptPrice = { source: 'costLatest', unitPrice: 20, unit: 'EA', basePrice: 20 }
+      expect(lineAmount(validPrice, -5)).toBeNull()
+      expect(lineAmount(validPrice, NaN)).toBeNull()
+      expect(lineAmount(validPrice, 1e308)).toBeNull()
+    })
   })
 
   describe('Multiple Rounds and Partial Receipt Qty', () => {
@@ -549,6 +886,15 @@ describe('R69 AGENT03: Receipt price resolver', () => {
       expect(res.pricedLines).toBe(2)
       expect(res.missingLines).toBe(0)
       expect(res.unenteredLines).toBe(0)
+    })
+
+    test('negative qty counts as unentered, not missingLines', () => {
+      const priced: ReceiptPrice = { source: 'supplierPrice', unitPrice: 50, unit: 'EA', basePrice: 50 }
+      const res = receiptTotal([{ price: priced, qty: -5 }])
+      expect(res.unenteredLines).toBe(1)
+      expect(res.missingLines).toBe(0)
+      expect(res.pricedLines).toBe(0)
+      expect(res.total).toBe(0)
     })
 
     test('empty rows return zeros', () => {
